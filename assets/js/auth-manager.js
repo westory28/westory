@@ -1,13 +1,16 @@
 
-// Menu Configurations (Dashboard removed from nav list as per requirement)
+// Menu Configurations
 const MENUS = {
     student: [
-        { id: "menu-assess", name: "평가", url: "student/assessment/list.html", icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" },
-        { id: "menu-score", name: "점수", url: "student/score/report.html", icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" },
-        { id: "menu-lesson", name: "수업자료", url: "student/lesson/list.html", icon: "M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" }
+        { name: "수업 자료", url: "student/lesson/note.html", icon: "M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" },
+        { name: "평가", url: "student/quiz.html", icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" },
+        { name: "점수", url: "student/score.html", icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" }
     ],
     teacher: [
-        // Teacher nav links removed from header as per new design requirement (Dashboard serves as hub)
+        { name: "수업 자료 관리", url: "teacher/manage_lesson.html", icon: "M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" },
+        { name: "평가 관리", url: "teacher/manage_quiz.html", icon: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" },
+        { name: "점수 관리", url: "teacher/manage_exam.html", icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" },
+        { name: "학생 명단 관리", url: "teacher/student-list.html", icon: "M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" }
     ]
 };
 
@@ -23,7 +26,6 @@ class AuthManager {
     calculateRootPrefix() {
         const path = window.location.pathname;
         if (path.includes('/student/lesson/') || path.includes('/student/assessment/') || path.includes('/student/score/') || path.includes('/teacher/')) return '../';
-        // Adjust logic for deeper nesting if needed
         if (path.match(/\/student\/[a-z]+\/[a-z]+\//)) return '../../'; 
         if (path.includes('/student/') || path.includes('/teacher/')) return '../';
         return './';
@@ -141,12 +143,46 @@ class AuthManager {
 
         const menuItems = MENUS[this.userType] || [];
         const resolve = (url) => this.rootPrefix + url;
-        const isActive = (url) => window.location.pathname.includes(url.split('/').pop());
+        const currentPath = window.location.pathname;
+        const isActive = (url) => currentPath.includes(url.split('/').pop());
+        
+        // Determine if current page is Dashboard
+        const isDashboard = currentPath.endsWith('dashboard.html');
 
-        // Decide Dashboard Link based on Role
+        // Build Nav HTML only if NOT dashboard
+        let navHtml = '';
+        let mobileNavHtml = '';
+        let mobileToggleBtn = '';
+
+        if (!isDashboard) {
+            navHtml = `
+                <nav class="desktop-nav">
+                    ${menuItems.map(item => `
+                        <a href="${resolve(item.url)}" class="nav-link ${isActive(item.url) ? 'active' : ''}">${item.name}</a>
+                    `).join('')}
+                </nav>
+            `;
+            
+            mobileNavHtml = `
+                <div id="mobile-menu">
+                    ${menuItems.map(item => `
+                        <a href="${resolve(item.url)}" class="mobile-link ${isActive(item.url) ? 'active' : ''}">
+                            <svg class="mobile-icon" viewBox="0 0 24 24"><path d="${item.icon}"></path></svg>
+                            ${item.name}
+                        </a>
+                    `).join('')}
+                </div>
+            `;
+
+            mobileToggleBtn = `
+                <button id="mobile-menu-toggle" class="mobile-menu-btn"><i class="fas fa-bars"></i></button>
+            `;
+        }
+
+        // Dashboard Link based on Role
         const dashboardLink = this.userType === 'teacher' ? resolve('teacher/dashboard.html') : resolve('student/dashboard.html');
 
-        // Teacher Specific Right Side
+        // Right Side Content
         let rightSideHtml = '';
         if (this.userType === 'teacher') {
             rightSideHtml = `
@@ -160,20 +196,17 @@ class AuthManager {
                         <button id="btn-extend-session" class="ml-2 text-[10px] bg-white border border-gray-300 rounded px-1 hover:bg-gray-50 text-blue-600">연장</button>
                     </div>
                     <span id="header-greeting" class="text-sm font-bold text-blue-600 hidden md:inline"></span>
-                    <button id="logout-btn" class="text-gray-500 hover:text-gray-800 text-sm font-bold">로그아웃</button>
+                    <button id="logout-btn" class="text-gray-500 hover:text-gray-800 text-sm font-bold whitespace-nowrap">로그아웃</button>
+                    ${mobileToggleBtn}
                 </div>
             `;
         } else {
             // Student
-            const navHtml = menuItems.map(item => `
-                <a href="${resolve(item.url)}" class="nav-link ${isActive(item.url) ? 'active' : ''}">${item.name}</a>
-            `).join('');
-            
             rightSideHtml = `
                 <div class="flex items-center gap-4">
-                    <nav class="hidden lg:flex h-full">${navHtml}</nav>
                     <span id="header-greeting" class="text-sm font-bold text-gray-600 hidden md:inline"></span>
-                    <button id="logout-btn" class="text-gray-500 hover:text-gray-800 text-sm font-bold">로그아웃</button>
+                    <button id="logout-btn" class="text-gray-500 hover:text-gray-800 text-sm font-bold whitespace-nowrap">로그아웃</button>
+                    ${mobileToggleBtn}
                 </div>
             `;
         }
@@ -184,20 +217,40 @@ class AuthManager {
                     <a href="${dashboardLink}" class="logo-text">
                         <span class="logo-we">We</span><span class="logo-story">story</span>
                     </a>
+                    ${navHtml}
                     ${rightSideHtml}
                 </div>
+                ${mobileNavHtml}
             </header>
         `;
 
         document.body.insertAdjacentHTML('afterbegin', headerHtml);
+        
+        // Bind Events
         document.getElementById('logout-btn').addEventListener('click', () => this.logout());
         
-        // Teacher Setting & Timer Events
         if (this.userType === 'teacher') {
-            document.getElementById('btn-extend-session').addEventListener('click', () => this.extendSession());
-            document.getElementById('header-settings-btn').addEventListener('click', () => {
-                // Dispatch event for dashboard to handle, or open modal if global
+            const extendBtn = document.getElementById('btn-extend-session');
+            if(extendBtn) extendBtn.addEventListener('click', () => this.extendSession());
+            
+            const settingsBtn = document.getElementById('header-settings-btn');
+            if(settingsBtn) settingsBtn.addEventListener('click', () => {
                 document.dispatchEvent(new Event('open-settings'));
+            });
+        }
+
+        // Mobile Menu Events
+        const mobileBtn = document.getElementById('mobile-menu-toggle');
+        const mobileMenu = document.getElementById('mobile-menu');
+        if (mobileBtn && mobileMenu) {
+            mobileBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                mobileMenu.classList.toggle('open');
+            });
+            document.addEventListener('click', (e) => {
+                if (mobileMenu.classList.contains('open') && !mobileMenu.contains(e.target) && !mobileBtn.contains(e.target)) {
+                    mobileMenu.classList.remove('open');
+                }
             });
         }
     }
