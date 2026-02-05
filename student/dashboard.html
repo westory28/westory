@@ -18,25 +18,28 @@
     <script src="../assets/js/auth-manager.js"></script>
 
     <style>
-        .dashboard-container { max-width: 800px; margin: 0 auto; padding: 24px; }
+        .dashboard-container { max-width: 1280px; margin: 0 auto; padding: 24px 40px; width: 100%; }
         
-        .tab-nav { display: flex; border-bottom: 2px solid #e5e7eb; margin-bottom: 24px; }
-        .tab-btn { flex: 1; padding: 16px; text-align: center; font-weight: 700; color: #9ca3af; cursor: pointer; transition: all 0.2s; border-bottom: 3px solid transparent; }
-        .tab-btn:hover { color: #4b5563; }
-        .tab-btn.active { color: #2563eb; border-bottom-color: #2563eb; }
+        .tab-nav { display: flex; border-bottom: 2px solid #e5e7eb; margin-bottom: 32px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .tab-btn { flex: 1; padding: 16px 24px; text-align: center; font-weight: 700; font-size: 1.1rem; color: #9ca3af; cursor: pointer; transition: all 0.2s; border-bottom: 3px solid transparent; white-space: nowrap; min-width: fit-content; }
+        .tab-btn:hover { color: #4b5563; background-color: #f9fafb; }
+        .tab-btn.active { color: #2563eb; border-bottom-color: #2563eb; background-color: transparent; }
         
         .section-content { display: none; animation: fadeIn 0.3s ease-out; }
         .section-content.active { display: block; }
 
         /* Accordion for Lessons */
-        .accordion-item { border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 8px; overflow: hidden; background: white; }
-        .accordion-header { padding: 16px; background: #f9fafb; font-weight: 700; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
-        .accordion-body { display: none; padding: 12px; background: white; border-top: 1px solid #e5e7eb; }
+        .accordion-item { border: 1px solid #e5e7eb; border-radius: 12px; margin-bottom: 12px; overflow: hidden; background: white; transition: shadow 0.2s; }
+        .accordion-item:hover { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
+        .accordion-header { padding: 20px; background: #fff; font-weight: 700; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 1.05rem; }
+        .accordion-header:hover { background-color: #f8fafc; }
+        .accordion-body { display: none; padding: 16px 20px; background: #f8fafc; border-top: 1px solid #e5e7eb; }
         .accordion-item.open .accordion-body { display: block; }
         .accordion-item.open .accordion-header i { transform: rotate(180deg); }
 
-        .lesson-link { display: block; padding: 12px; margin-bottom: 6px; border-radius: 6px; background: #f3f4f6; color: #4b5563; font-weight: 500; transition: background 0.2s; text-decoration: none; }
-        .lesson-link:hover { background: #e5e7eb; color: #1f2937; }
+        .lesson-link { display: flex; align-items: center; padding: 14px 16px; margin-bottom: 8px; border-radius: 8px; background: white; border: 1px solid #e2e8f0; color: #4b5563; font-weight: 600; transition: all 0.2s; text-decoration: none; }
+        .lesson-link:hover { border-color: #3b82f6; color: #2563eb; transform: translateX(4px); box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .lesson-link i { margin-right: 12px; font-size: 1.1em; }
 
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
     </style>
@@ -45,70 +48,84 @@
     <!-- Header injected by AuthManager -->
 
     <main class="dashboard-container">
-        <div class="mb-6 flex justify-between items-end">
+        <div class="mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
             <div>
-                <h1 class="text-2xl font-bold text-gray-900" id="welcome-text">환영합니다!</h1>
-                <p class="text-sm text-gray-500" id="semester-badge">2025학년도 1학기</p>
+                <h1 class="text-3xl font-extrabold text-gray-900 tracking-tight" id="welcome-text">환영합니다!</h1>
+                <div class="flex items-center gap-2 mt-2">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800" id="semester-badge">
+                        2025학년도 1학기
+                    </span>
+                </div>
             </div>
         </div>
 
         <!-- 3 Main Tabs -->
         <div class="tab-nav">
-            <div class="tab-btn active" onclick="switchTab('assess')">🧩 평가</div>
-            <div class="tab-btn" onclick="switchTab('score')">📝 점수</div>
-            <div class="tab-btn" onclick="switchTab('lesson')">📚 수업자료</div>
+            <div class="tab-btn active" onclick="switchTab('assess')"><i class="fas fa-gamepad mr-2"></i>평가</div>
+            <div class="tab-btn" onclick="switchTab('score')"><i class="fas fa-chart-bar mr-2"></i>점수</div>
+            <div class="tab-btn" onclick="switchTab('lesson')"><i class="fas fa-book-reader mr-2"></i>수업자료</div>
         </div>
 
         <!-- 1. Assessment -->
         <div id="tab-assess" class="section-content active">
-            <div class="grid gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <!-- Linked to actual quiz.html -->
-                <div onclick="location.href='quiz.html'" class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:border-blue-400 cursor-pointer flex items-center justify-between transition-colors">
-                    <div class="flex items-center gap-4">
-                        <div class="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xl"><i class="fas fa-gamepad"></i></div>
-                        <div>
-                            <h3 class="font-bold text-gray-800">형성평가 퀴즈</h3>
-                            <p class="text-xs text-gray-500">배운 내용을 퀴즈로 확인해보세요.</p>
+                <div onclick="location.href='quiz.html'" class="group bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:border-blue-500 hover:shadow-md cursor-pointer flex flex-col justify-between transition-all h-full">
+                    <div class="flex justify-between items-start mb-4">
+                        <div class="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center text-2xl group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                            <i class="fas fa-gamepad"></i>
                         </div>
+                        <i class="fas fa-arrow-right text-gray-300 group-hover:text-blue-500 transition-transform group-hover:translate-x-1"></i>
                     </div>
-                    <i class="fas fa-chevron-right text-gray-300"></i>
+                    <div>
+                        <h3 class="font-bold text-xl text-gray-900 mb-1 group-hover:text-blue-700">형성평가 퀴즈</h3>
+                        <p class="text-sm text-gray-500 leading-relaxed word-keep">배운 내용을 퀴즈로 재미있게 확인해보세요.</p>
+                    </div>
                 </div>
             </div>
         </div>
 
         <!-- 2. Score -->
         <div id="tab-score" class="section-content">
-            <div class="grid gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <!-- Linked to mark-exam.html -->
-                <div onclick="location.href='mark-exam.html'" class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:border-amber-400 cursor-pointer flex items-center justify-between transition-colors">
-                    <div class="flex items-center gap-4">
-                        <div class="w-12 h-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center text-xl"><i class="fas fa-pen-nib"></i></div>
-                        <div>
-                            <h3 class="font-bold text-gray-800">시험 자가채점</h3>
-                            <p class="text-xs text-gray-500">OMR 답안 입력 및 확인</p>
+                <div onclick="location.href='mark-exam.html'" class="group bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:border-amber-500 hover:shadow-md cursor-pointer flex flex-col justify-between transition-all h-full relative overflow-hidden">
+                    <div class="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl shadow-sm z-10">시험 기간</div>
+                    <div class="flex justify-between items-start mb-4">
+                        <div class="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center text-2xl group-hover:bg-amber-600 group-hover:text-white transition-colors">
+                            <i class="fas fa-pen-nib"></i>
                         </div>
+                        <i class="fas fa-arrow-right text-gray-300 group-hover:text-amber-500 transition-transform group-hover:translate-x-1"></i>
                     </div>
-                    <span class="text-xs font-bold text-red-500 bg-red-50 px-2 py-1 rounded">D-Day</span>
+                    <div>
+                        <h3 class="font-bold text-xl text-gray-900 mb-1 group-hover:text-amber-700">시험 자가채점</h3>
+                        <p class="text-sm text-gray-500 leading-relaxed word-keep">지필평가 직후 OMR 답안을 입력하고 점수를 확인하세요.</p>
+                    </div>
                 </div>
                 <!-- Linked to score.html -->
-                <div onclick="location.href='score.html'" class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:border-green-400 cursor-pointer flex items-center justify-between transition-colors">
-                    <div class="flex items-center gap-4">
-                        <div class="w-12 h-12 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-xl"><i class="fas fa-chart-pie"></i></div>
-                        <div>
-                            <h3 class="font-bold text-gray-800">나의 성적표</h3>
-                            <p class="text-xs text-gray-500">종합 성적 확인하기</p>
+                <div onclick="location.href='score.html'" class="group bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:border-green-500 hover:shadow-md cursor-pointer flex flex-col justify-between transition-all h-full">
+                    <div class="flex justify-between items-start mb-4">
+                        <div class="w-14 h-14 rounded-2xl bg-green-50 text-green-600 flex items-center justify-center text-2xl group-hover:bg-green-600 group-hover:text-white transition-colors">
+                            <i class="fas fa-chart-pie"></i>
                         </div>
+                        <i class="fas fa-arrow-right text-gray-300 group-hover:text-green-500 transition-transform group-hover:translate-x-1"></i>
                     </div>
-                    <i class="fas fa-chevron-right text-gray-300"></i>
+                    <div>
+                        <h3 class="font-bold text-xl text-gray-900 mb-1 group-hover:text-green-700">나의 성적표</h3>
+                        <p class="text-sm text-gray-500 leading-relaxed word-keep">수행평가와 지필평가를 합산한 최종 성적을 관리하세요.</p>
+                    </div>
                 </div>
             </div>
         </div>
 
         <!-- 3. Lesson (Hierarchical) -->
         <div id="tab-lesson" class="section-content">
-            <div id="lesson-container" class="space-y-2">
+            <div id="lesson-container" class="space-y-4 max-w-4xl mx-auto">
                 <!-- Dynamically populated -->
-                <div class="p-8 text-center text-gray-400">로딩 중...</div>
+                <div class="py-20 text-center text-gray-400">
+                    <div class="loader-spinner mx-auto mb-4"></div>
+                    <p>수업 자료를 불러오는 중입니다...</p>
+                </div>
             </div>
         </div>
 
@@ -128,7 +145,7 @@
 
         function switchTab(name) {
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            event.target.classList.add('active');
+            event.currentTarget.classList.add('active'); // Changed to currentTarget to handle icon click
             document.querySelectorAll('.section-content').forEach(s => s.classList.remove('active'));
             document.getElementById('tab-' + name).classList.add('active');
         }
@@ -170,7 +187,7 @@
                             <i class="fas fa-chevron-down text-gray-400 transition-transform duration-200"></i>
                         </div>
                         <div class="accordion-body">
-                            ${unit.lessons.map(l => `<a href="lesson/note.html" class="lesson-link"><i class="far fa-file-alt mr-2 text-blue-500"></i>${l.title}</a>`).join('')}
+                            ${unit.lessons.map(l => `<a href="lesson/note.html" class="lesson-link"><i class="far fa-file-alt text-blue-500"></i><span>${l.title}</span></a>`).join('')}
                         </div>
                     </div>
                 `;
