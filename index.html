@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Westory: 우리들의 이야기</title>
+    <!-- Tailwind -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-analytics-compat.js"></script>
+    <!-- Config -->
+    <script src="assets/js/firebase-config.js"></script>
+    
+    <style>
+        body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; display: flex; flex-direction: column; min-height: 100vh; }
+        .main-container { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; }
+        .logo { font-size: 4rem; font-weight: 800; margin-bottom: 10px; letter-spacing: -1px; }
+        .we { color: #2563eb; } .story { color: #f59e0b; }
+        .subtitle { font-size: 1.6rem; color: #606770; margin-bottom: 50px; font-weight: 500; }
+        .login-btn { 
+            background: #fff; border: 1px solid #dadce0; padding: 14px 36px; border-radius: 40px; 
+            font-size: 18px; font-weight: 600; color: #3c4043; cursor: pointer; display: flex; align-items: center; gap: 12px; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05); transition: all 0.2s;
+        }
+        .login-btn:hover { background: #f7f8f8; box-shadow: 0 4px 8px rgba(0,0,0,0.1); transform: translateY(-1px); }
+        .teacher-link { margin-top: 20px; color: #9ca3af; font-size: 0.9rem; text-decoration: underline; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <div class="logo"><span class="we">We</span><span class="story">story</span></div>
+        <div class="subtitle">: 우리들의 이야기</div>
+        
+        <button class="login-btn" onclick="handleGoogleLogin()">
+            <img src="https://fonts.gstatic.com/s/i/productlogos/googleg/v6/24px.svg" width="24" alt="G">
+            Google 계정으로 시작하기
+        </button>
+
+        <a href="teacher/dashboard.html" class="teacher-link">선생님 로그인 바로가기 (관리자)</a>
+    </div>
+
+    <script>
+        // Auth Logic
+        const TEACHER_EMAIL = "westoria28@gmail.com";
+
+        // Use firebase.auth() directly to avoid variable collision
+        firebase.auth().onAuthStateChanged((user) => {
+            if (user) {
+                if (user.email === TEACHER_EMAIL) {
+                    window.location.href = 'teacher/dashboard.html';
+                } else {
+                    window.location.href = 'student/dashboard.html';
+                }
+            }
+        });
+
+        function handleGoogleLogin() {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            firebase.auth().signInWithPopup(provider).catch((error) => {
+                alert("로그인 실패: " + error.message);
+            });
+        }
+    </script>
+</body>
+</html>
