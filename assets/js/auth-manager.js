@@ -38,18 +38,41 @@ class AuthManager {
             if (user) {
                 this.currentUser = user;
                 
-                // Teacher Security Check
+                // 1. Teacher Security Check
                 if (type === 'teacher' && user.email !== TEACHER_EMAIL) {
                     alert("교사 전용 페이지입니다. 학생 대시보드로 이동합니다.");
                     window.location.href = this.rootPrefix + 'student/dashboard.html';
                     return;
                 }
 
-                await this.checkPrivacyConsent(user);
+                // 2. Fetch Firestore Profile (To get Real Name)
+                let realName = user.displayName;
+                let privacyAgreed = false;
+
+                try {
+                    const doc = await window.db.collection('users').doc(user.uid).get();
+                    if (doc.exists) {
+                        const data = doc.data();
+                        if (data.name) realName = data.name;
+                        privacyAgreed = data.privacyAgreed;
+                    }
+                } catch (e) {
+                    console.error("Failed to fetch user profile", e);
+                }
+
+                // Default Name Fallback
+                if (!realName) realName = (type === 'teacher' ? '선생님' : '학생');
+
+                // 3. Privacy Check (Student Only)
+                if (type === 'student' && !privacyAgreed) {
+                    this.showPrivacyModal(user.uid);
+                }
+
+                // 4. Load UI
                 await this.loadHeader();
                 this.loadFooter();
-                this.updateUserInfo(user);
-                this.initSessionTimer(); // Start timer for everyone
+                this.updateUserInfo(realName);
+                this.initSessionTimer();
 
                 document.dispatchEvent(new CustomEvent('auth-ready', { detail: user }));
             } else {
@@ -58,19 +81,6 @@ class AuthManager {
                 }
             }
         });
-    }
-
-    async checkPrivacyConsent(user) {
-        if (user.email === TEACHER_EMAIL) return;
-        try {
-            const doc = await window.db.collection('users').doc(user.uid).get();
-            if (doc.exists) {
-                const data = doc.data();
-                if (!data.privacyAgreed) {
-                    this.showPrivacyModal(user.uid);
-                }
-            }
-        } catch (e) { console.error(e); }
     }
 
     showPrivacyModal(uid) {
@@ -155,29 +165,21 @@ class AuthManager {
         }
 
         const dashboardLink = this.userType === 'teacher' ? resolve('teacher/dashboard.html') : resolve('student/dashboard.html');
-
-        // Teacher Settings Icon
-        let settingsIcon = '';
-        if (this.userType === 'teacher') {
-            settingsIcon = `
-                <span id="header-settings-btn" class="text-gray-400 hover:text-blue-600 cursor-pointer transition p-1 mr-2" title="설정">
-                    <i class="fas fa-cog fa-lg"></i>
-                </span>
-            `;
-        }
+        let settingsIcon = this.userType === 'teacher' ? `
+            <span id="header-settings-btn" class="text-gray-400 hover:text-blue-600 cursor-pointer transition p-1 mr-2" title="설정"><i class="fas fa-cog fa-lg"></i></span>` : '';
 
         const headerHtml = `
             <header>
                 <div class="header-container">
-                    <div class="flex items-center gap-6">
+                    <div class="flex items-center gap-4 md:gap-6">
                         <a href="${dashboardLink}" class="logo-text">
                             <span class="logo-we">We</span><span class="logo-story">story</span>
                         </a>
                         
-                        <!-- 60 Min Timer (Visible for all) -->
-                        <div class="hidden md:flex items-center gap-2 px-3 py-1 bg-stone-100 rounded-full border border-stone-200">
-                            <i class="fas fa-stopwatch text-stone-400 text-xs"></i>
-                            <span id="session-timer-display" class="font-mono font-bold text-stone-600 text-sm w-[42px] text-center">60:00</span>
+                        <!-- 60 Min Timer (Always Visible) -->
+                        <div class="flex items-center gap-1 md:gap-2 px-2 md:px-3 py-1 bg-stone-100 rounded-full border border-stone-200">
+                            <i class="fas fa-stopwatch text-stone-400 text-xs hidden sm:inline"></i>
+                            <span id="session-timer-display" class="font-mono font-bold text-stone-600 text-sm w-[40px] text-center">60:00</span>
                             <button id="btn-extend-session" class="ml-1 text-stone-400 hover:text-blue-600 transition p-1" title="시간 초기화">
                                 <i class="fas fa-redo-alt text-xs"></i>
                             </button>
@@ -186,10 +188,10 @@ class AuthManager {
                         ${navHtml}
                     </div>
 
-                    <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-2 md:gap-4">
                         ${settingsIcon}
-                        <span id="header-greeting" class="text-sm font-bold text-stone-700 hidden md:inline"></span>
-                        <button id="logout-btn" class="text-stone-400 hover:text-stone-800 text-sm font-bold whitespace-nowrap">로그아웃</button>
+                        <span id="header-greeting" class="text-sm font-bold text-stone-700 whitespace-nowrap hidden sm:inline"></span>
+                        <button id="logout-btn" class="text-stone-400 hover:text-stone-800 text-sm font-bold whitespace-nowrap ml-2">로그아웃</button>
                         ${mobileToggleBtn}
                     </div>
                 </div>
@@ -220,29 +222,11 @@ class AuthManager {
         }
     }
 
-    loadFooter() {
-        const existingFooter = document.querySelector('footer');
-        if(existingFooter) existingFooter.remove();
-        const footerHtml = `
-            <footer class="bg-white border-t border-stone-200 py-8 mt-auto">
-                <div class="container mx-auto text-center">
-                    <p class="text-stone-400 text-xs font-bold font-mono">Copyright © 용신중학교 역사교사 방재석. All rights reserved.</p>
-                </div>
-            </footer>
-        `;
-        document.body.insertAdjacentHTML('beforeend', footerHtml);
-    }
-
-    updateUserInfo(user) {
+    updateUserInfo(name) {
         const greetingEl = document.getElementById('header-greeting');
         if (greetingEl) {
-            let displayName = user.displayName;
-            // If name is not in Auth profile, try to use "학생" or "선생님" default, 
-            // but usually we want to fetch from DB if possible or rely on Auth display name.
-            if(!displayName) displayName = this.userType === 'teacher' ? '선생님' : '학생';
-            
             const suffix = (this.userType === 'teacher') ? ' 교사' : ' 학생';
-            greetingEl.textContent = displayName + suffix;
+            greetingEl.textContent = name + suffix;
         }
     }
 
@@ -282,7 +266,6 @@ class AuthManager {
                     const s = Math.floor((diff % 60000) / 1000);
                     display.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
                     
-                    // Visual warning for last 5 mins
                     if(m < 5) display.classList.add('text-red-500');
                     else display.classList.remove('text-red-500');
                 }
