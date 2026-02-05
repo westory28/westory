@@ -4,11 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>학생 관리 - Westory Admin</title>
-    <!-- Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
@@ -16,7 +14,7 @@
     <link rel="stylesheet" href="../assets/css/style.css">
     <script src="../assets/js/auth-manager.js"></script>
 </head>
-<body>
+<body class="bg-gray-50">
     <!-- Header injected by AuthManager -->
 
     <main class="max-w-7xl mx-auto px-4 py-8">
@@ -27,8 +25,8 @@
                     <i class="fas fa-users text-blue-500 mr-2"></i> 학생 명단 <span id="std-count" class="text-sm font-normal text-gray-500"></span>
                 </h2>
                 <div class="flex gap-2">
-                    <input type="text" id="search-input" placeholder="이름 검색" class="border rounded px-3 py-2 text-sm">
-                    <button onclick="app.filterList()" class="bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold">검색</button>
+                    <input type="text" id="search-input" placeholder="이름 또는 반(숫자) 검색" class="border rounded px-3 py-2 text-sm w-64 focus:outline-none focus:border-blue-500">
+                    <button onclick="app.filterList()" class="bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-blue-700">검색</button>
                 </div>
             </div>
             
@@ -38,13 +36,13 @@
                         <tr>
                             <th class="p-4 w-20 text-center">반</th>
                             <th class="p-4 w-20 text-center">번호</th>
-                            <th class="p-4">이름</th>
+                            <th class="p-4">이름 (클릭하여 기록 조회)</th>
                             <th class="p-4">이메일</th>
                             <th class="p-4 text-center w-32">관리</th>
                         </tr>
                     </thead>
                     <tbody id="std-list" class="divide-y divide-gray-100 bg-white">
-                        <tr><td colspan="5" class="p-8 text-center text-gray-400">로딩 중...</td></tr>
+                        <tr><td colspan="5" class="p-8 text-center text-gray-400">데이터를 불러오는 중...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -52,9 +50,22 @@
 
     </main>
 
+    <!-- Student History Modal -->
+    <div id="history-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center">
+        <div class="bg-black bg-opacity-50 absolute inset-0" onclick="document.getElementById('history-modal').classList.add('hidden')"></div>
+        <div class="bg-white rounded-lg shadow-xl z-10 w-full max-w-2xl p-6 mx-4 max-h-[80vh] flex flex-col">
+            <div class="flex justify-between items-center mb-4 border-b pb-2">
+                <h3 class="font-bold text-lg" id="history-title">학습 기록</h3>
+                <button onclick="document.getElementById('history-modal').classList.add('hidden')"><i class="fas fa-times"></i></button>
+            </div>
+            <div id="history-content" class="overflow-y-auto flex-1 space-y-2"></div>
+        </div>
+    </div>
+
     <!-- Edit Modal -->
-    <div id="edit-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
-        <div class="bg-white p-6 rounded-lg w-80 shadow-xl">
+    <div id="edit-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center">
+        <div class="bg-black bg-opacity-50 absolute inset-0" onclick="document.getElementById('edit-modal').classList.add('hidden')"></div>
+        <div class="bg-white p-6 rounded-lg w-80 shadow-xl z-10">
             <h3 class="font-bold mb-4">학생 정보 수정</h3>
             <input type="hidden" id="edit-id">
             <div class="space-y-3">
@@ -76,9 +87,18 @@
             students: [],
             
             init: function() {
-                window.db.collection('users').orderBy('class').orderBy('number').get().then(snap => {
+                // Fetch all students
+                window.db.collection('users').get().then(snap => {
                     this.students = [];
-                    snap.forEach(doc => this.students.push({ ...doc.data(), id: doc.id }));
+                    snap.forEach(doc => {
+                        const d = doc.data();
+                        // Ensure numeric types for sorting
+                        d.class = parseInt(d.class) || 0;
+                        d.number = parseInt(d.number) || 0;
+                        this.students.push({ ...d, id: doc.id });
+                    });
+                    // Sort by Class then Number
+                    this.students.sort((a,b) => (a.class - b.class) || (a.number - b.number));
                     this.render(this.students);
                 });
             },
@@ -88,18 +108,23 @@
                 const tbody = document.getElementById('std-list');
                 
                 if(list.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center">학생 데이터가 없습니다.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-gray-400">학생 데이터가 없습니다.</td></tr>';
                     return;
                 }
 
                 tbody.innerHTML = list.map(s => `
-                    <tr class="hover:bg-blue-50 transition">
+                    <tr class="hover:bg-blue-50 transition group">
                         <td class="p-4 text-center font-bold text-gray-600">${s.class}</td>
                         <td class="p-4 text-center font-bold text-gray-600">${s.number}</td>
-                        <td class="p-4 font-bold text-gray-800">${s.name}</td>
-                        <td class="p-4 text-gray-500">${s.email}</td>
+                        <td class="p-4">
+                            <span onclick="app.showHistory('${s.id}', '${s.name}', ${s.class}, ${s.number})" 
+                                  class="font-bold text-gray-800 cursor-pointer hover:text-blue-600 hover:underline">
+                                ${s.name} <i class="fas fa-search-plus text-xs text-gray-300 group-hover:text-blue-400 ml-1"></i>
+                            </span>
+                        </td>
+                        <td class="p-4 text-gray-500 text-sm font-mono">${s.email}</td>
                         <td class="p-4 text-center">
-                            <button onclick="app.openEdit('${s.id}')" class="text-blue-500 hover:text-blue-700 mr-2"><i class="fas fa-edit"></i></button>
+                            <button onclick="app.openEdit('${s.id}')" class="text-blue-500 hover:text-blue-700 mr-3"><i class="fas fa-edit"></i></button>
                             <button onclick="app.deleteStudent('${s.id}')" class="text-red-400 hover:text-red-600"><i class="fas fa-trash"></i></button>
                         </td>
                     </tr>
@@ -108,8 +133,63 @@
 
             filterList: function() {
                 const q = document.getElementById('search-input').value.trim();
-                const filtered = this.students.filter(s => s.name.includes(q) || String(s.class) === q);
+                if(!q) {
+                    this.render(this.students);
+                    return;
+                }
+                const filtered = this.students.filter(s => 
+                    s.name.includes(q) || String(s.class) === q
+                );
                 this.render(filtered);
+            },
+
+            // Fix: Load history by UID mostly, or use composite query correctly
+            showHistory: async function(uid, name, cls, num) {
+                document.getElementById('history-title').innerText = `${cls}반 ${num}번 ${name}의 기록`;
+                const content = document.getElementById('history-content');
+                content.innerHTML = '<div class="text-center p-4">로딩 중...</div>';
+                document.getElementById('history-modal').classList.remove('hidden');
+
+                try {
+                    // Try querying by UID first (most reliable)
+                    let snap = await window.db.collection('quiz_results')
+                        .where('uid', '==', uid)
+                        .orderBy('timestamp', 'desc')
+                        .get();
+
+                    // Fallback to name/class/number if UID strategy fails (legacy data)
+                    if (snap.empty) {
+                        snap = await window.db.collection('quiz_results')
+                            .where('name', '==', name)
+                            .where('class', '==', cls) // Ensure type match (int vs int)
+                            .orderBy('timestamp', 'desc')
+                            .get();
+                    }
+
+                    if (snap.empty) {
+                        content.innerHTML = '<div class="text-center p-8 text-gray-400">기록이 없습니다.</div>';
+                        return;
+                    }
+
+                    let html = '';
+                    snap.forEach(doc => {
+                        const d = doc.data();
+                        html += `
+                            <div class="bg-gray-50 p-4 rounded border flex justify-between items-center">
+                                <div>
+                                    <div class="text-xs text-gray-500">${d.timeString}</div>
+                                    <div class="font-bold text-gray-800">${d.score}점</div>
+                                </div>
+                                <div class="text-xs px-2 py-1 bg-white border rounded">${d.status || '완료'}</div>
+                            </div>
+                        `;
+                    });
+                    content.innerHTML = html;
+
+                } catch (e) {
+                    console.error(e);
+                    content.innerHTML = `<div class="text-center p-4 text-red-500">데이터 로드 실패 (인덱스 문제 가능성)<br>${e.message}</div>`;
+                }
             },
 
             openEdit: function(id) {
@@ -135,7 +215,7 @@
             },
 
             deleteStudent: function(id) {
-                if(confirm("정말 삭제하시겠습니까?")) {
+                if(confirm("정말 삭제하시겠습니까? (복구 불가)")) {
                     window.db.collection('users').doc(id).delete().then(() => this.init());
                 }
             }

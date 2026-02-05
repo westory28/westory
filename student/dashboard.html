@@ -12,94 +12,63 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-    <!-- Config (Path corrected for student/ folder) -->
+    <!-- Config -->
     <script src="../assets/js/firebase-config.js"></script>
     <link rel="stylesheet" href="../assets/css/style.css">
     <script src="../assets/js/auth-manager.js"></script>
 
     <style>
-        .dashboard-container { max-width: 1024px; margin: 0 auto; padding: 24px; }
+        .dashboard-container { max-width: 800px; margin: 0 auto; padding: 24px; }
         
-        /* Filter Styles */
-        .filter-bar { display: flex; gap: 12px; margin-bottom: 24px; background: white; padding: 16px; border-radius: 12px; border: 1px solid #e5e7eb; align-items: center; }
-        .filter-select { padding: 8px 16px; border-radius: 8px; border: 1px solid #d1d5db; font-weight: 600; color: #374151; background-color: #f9fafb; cursor: pointer; transition: all 0.2s; }
-        .filter-select:hover { border-color: #2563eb; }
-        
-        /* Tab Styles */
-        .tab-container { display: flex; gap: 8px; margin-bottom: 24px; border-bottom: 2px solid #e5e7eb; }
-        .tab-btn { padding: 12px 24px; font-weight: 700; color: #6b7280; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.2s; margin-bottom: -2px; }
-        .tab-btn:hover { color: #111827; }
+        .tab-nav { display: flex; border-bottom: 2px solid #e5e7eb; margin-bottom: 24px; }
+        .tab-btn { flex: 1; padding: 16px; text-align: center; font-weight: 700; color: #9ca3af; cursor: pointer; transition: all 0.2s; border-bottom: 3px solid transparent; }
+        .tab-btn:hover { color: #4b5563; }
         .tab-btn.active { color: #2563eb; border-bottom-color: #2563eb; }
-        .tab-content { display: none; animation: fadeIn 0.3s ease-out; }
-        .tab-content.active { display: block; }
-
-        /* Item List Styles */
-        .item-card { background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; margin-bottom: 12px; transition: transform 0.2s, box-shadow 0.2s; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
-        .item-card:hover { transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-color: #2563eb; }
-        .item-icon { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; margin-right: 16px; flex-shrink: 0; }
         
-        /* Colors for types */
-        .icon-quiz { background-color: #eff6ff; color: #2563eb; }
-        .icon-exam { background-color: #fef3c7; color: #d97706; }
-        .icon-lesson { background-color: #ecfdf5; color: #059669; }
+        .section-content { display: none; animation: fadeIn 0.3s ease-out; }
+        .section-content.active { display: block; }
+
+        /* Accordion for Lessons */
+        .accordion-item { border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 8px; overflow: hidden; background: white; }
+        .accordion-header { padding: 16px; background: #f9fafb; font-weight: 700; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+        .accordion-body { display: none; padding: 12px; background: white; border-top: 1px solid #e5e7eb; }
+        .accordion-item.open .accordion-body { display: block; }
+        .accordion-item.open .accordion-header i { transform: rotate(180deg); }
+
+        .lesson-link { display: block; padding: 12px; margin-bottom: 6px; border-radius: 6px; background: #f3f4f6; color: #4b5563; font-weight: 500; transition: background 0.2s; text-decoration: none; }
+        .lesson-link:hover { background: #e5e7eb; color: #1f2937; }
 
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
-<body>
+<body class="bg-gray-50">
     <!-- Header injected by AuthManager -->
 
     <main class="dashboard-container">
-        <!-- Welcome Section -->
-        <div class="mb-8">
-            <h1 class="text-2xl font-bold text-gray-900" id="welcome-text">환영합니다! 👋</h1>
-            <p class="text-gray-500 text-sm mt-1">오늘 학습할 내용을 확인해보세요.</p>
-        </div>
-
-        <!-- Filter Bar -->
-        <div class="filter-bar">
-            <div class="flex items-center gap-2">
-                <i class="fas fa-filter text-gray-400"></i>
-                <span class="font-bold text-sm text-gray-600">학기 선택:</span>
+        <div class="mb-6 flex justify-between items-end">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900" id="welcome-text">환영합니다!</h1>
+                <p class="text-sm text-gray-500" id="semester-badge">2025학년도 1학기</p>
             </div>
-            <select id="year-select" class="filter-select">
-                <option value="2025">2025학년도</option>
-                <option value="2026">2026학년도</option>
-            </select>
-            <select id="semester-select" class="filter-select">
-                <option value="2">2학기</option>
-                <option value="1">1학기</option>
-            </select>
         </div>
 
-        <!-- Tabs -->
-        <div class="tab-container">
-            <button class="tab-btn active" onclick="switchTab('quiz')">🧩 형성평가</button>
-            <button class="tab-btn" onclick="switchTab('exam')">📝 시험대비</button>
-            <button class="tab-btn" onclick="switchTab('lesson')">📚 수업활동</button>
+        <!-- 3 Main Tabs -->
+        <div class="tab-nav">
+            <div class="tab-btn active" onclick="switchTab('assess')">🧩 평가</div>
+            <div class="tab-btn" onclick="switchTab('score')">📝 점수</div>
+            <div class="tab-btn" onclick="switchTab('lesson')">📚 수업자료</div>
         </div>
 
-        <!-- Tab Contents -->
-        
-        <!-- 1. Quiz Tab -->
-        <div id="tab-quiz" class="tab-content active">
-            <div class="grid gap-3">
-                <div class="item-card" onclick="location.href='quiz/list.html'">
-                    <div class="flex items-center">
-                        <div class="item-icon icon-quiz"><i class="fas fa-puzzle-piece"></i></div>
+        <!-- 1. Assessment -->
+        <div id="tab-assess" class="section-content active">
+            <div class="grid gap-4">
+                <!-- Example Item -->
+                <div onclick="location.href='assessment/list.html'" class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:border-blue-400 cursor-pointer flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xl"><i class="fas fa-gamepad"></i></div>
                         <div>
-                            <h3 class="font-bold text-gray-800">4단원: 제국주의 침략</h3>
-                            <p class="text-xs text-gray-500">형성평가 | 총 10문항</p>
-                        </div>
-                    </div>
-                    <i class="fas fa-chevron-right text-gray-300"></i>
-                </div>
-                <div class="item-card" onclick="location.href='quiz/list.html'">
-                    <div class="flex items-center">
-                        <div class="item-icon icon-quiz"><i class="fas fa-puzzle-piece"></i></div>
-                        <div>
-                            <h3 class="font-bold text-gray-800">5단원: 세계 대전</h3>
-                            <p class="text-xs text-gray-500">형성평가 | 총 15문항</p>
+                            <h3 class="font-bold text-gray-800">형성평가 퀴즈</h3>
+                            <p class="text-xs text-gray-500">배운 내용을 퀴즈로 확인해보세요.</p>
                         </div>
                     </div>
                     <i class="fas fa-chevron-right text-gray-300"></i>
@@ -107,25 +76,25 @@
             </div>
         </div>
 
-        <!-- 2. Exam Tab -->
-        <div id="tab-exam" class="tab-content">
-            <div class="grid gap-3">
-                <div class="item-card" onclick="location.href='exam/mark.html'">
-                    <div class="flex items-center">
-                        <div class="item-icon icon-exam"><i class="fas fa-pen-alt"></i></div>
+        <!-- 2. Score -->
+        <div id="tab-score" class="section-content">
+            <div class="grid gap-4">
+                <div onclick="location.href='score/mark.html'" class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:border-amber-400 cursor-pointer flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center text-xl"><i class="fas fa-pen-nib"></i></div>
                         <div>
-                            <h3 class="font-bold text-gray-800">2학기 기말고사 자가채점</h3>
-                            <p class="text-xs text-gray-500">OMR 마킹 및 오답 확인</p>
+                            <h3 class="font-bold text-gray-800">시험 자가채점</h3>
+                            <p class="text-xs text-gray-500">OMR 답안 입력 및 확인</p>
                         </div>
                     </div>
                     <span class="text-xs font-bold text-red-500 bg-red-50 px-2 py-1 rounded">D-Day</span>
                 </div>
-                <div class="item-card" onclick="location.href='score.html'">
-                    <div class="flex items-center">
-                        <div class="item-icon icon-exam"><i class="fas fa-chart-line"></i></div>
+                <div onclick="location.href='score/report.html'" class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:border-green-400 cursor-pointer flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-xl"><i class="fas fa-chart-pie"></i></div>
                         <div>
-                            <h3 class="font-bold text-gray-800">나의 성적표 확인</h3>
-                            <p class="text-xs text-gray-500">수행평가 및 지필고사 합산</p>
+                            <h3 class="font-bold text-gray-800">나의 성적표</h3>
+                            <p class="text-xs text-gray-500">종합 성적 확인하기</p>
                         </div>
                     </div>
                     <i class="fas fa-chevron-right text-gray-300"></i>
@@ -133,28 +102,11 @@
             </div>
         </div>
 
-        <!-- 3. Lesson Tab -->
-        <div id="tab-lesson" class="tab-content">
-            <div class="grid gap-3">
-                <div class="item-card" onclick="location.href='lesson/note.html'">
-                    <div class="flex items-center">
-                        <div class="item-icon icon-lesson"><i class="fas fa-book-open"></i></div>
-                        <div>
-                            <h3 class="font-bold text-gray-800">1910년대 무단 통치와 토지 조사 사업</h3>
-                            <p class="text-xs text-gray-500">빈칸 채우기 핵심 노트</p>
-                        </div>
-                    </div>
-                    <i class="fas fa-chevron-right text-gray-300"></i>
-                </div>
-                <div class="item-card disabled opacity-50 cursor-not-allowed">
-                    <div class="flex items-center">
-                        <div class="item-icon bg-gray-100 text-gray-400"><i class="fas fa-lock"></i></div>
-                        <div>
-                            <h3 class="font-bold text-gray-500">3.1 운동과 대한민국 임시 정부</h3>
-                            <p class="text-xs text-gray-400">오픈 예정</p>
-                        </div>
-                    </div>
-                </div>
+        <!-- 3. Lesson (Hierarchical) -->
+        <div id="tab-lesson" class="section-content">
+            <div id="lesson-container" class="space-y-2">
+                <!-- Dynamically populated -->
+                <div class="p-8 text-center text-gray-400">로딩 중...</div>
             </div>
         </div>
 
@@ -165,23 +117,81 @@
     </footer>
 
     <script>
-        // Init Auth
         window.AuthManager.init('student');
 
         document.addEventListener('auth-ready', (e) => {
             const user = e.detail;
-            document.getElementById('welcome-text').innerText = `${user.displayName || '학생'}님, 환영합니다! 👋`;
+            document.getElementById('welcome-text').innerText = `${user.displayName || '학생'}님, 환영합니다!`;
+            loadConfig();
+            loadLessons();
         });
 
-        // Tab Switching Logic
-        function switchTab(tabName) {
-            // Update Buttons
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        function switchTab(name) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             event.target.classList.add('active');
+            document.querySelectorAll('.section-content').forEach(s => s.classList.remove('active'));
+            document.getElementById('tab-' + name).classList.add('active');
+        }
 
-            // Update Content
-            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-            document.getElementById(`tab-${tabName}`).classList.add('active');
+        async function loadConfig() {
+            try {
+                const doc = await window.db.collection('site_settings').doc('config').get();
+                if (doc.exists) {
+                    const data = doc.data();
+                    document.getElementById('semester-badge').innerText = 
+                        (data.currentSemester || '2025-1').replace('-', '학년도 ') + '학기';
+                    
+                    // Optional: Hide tabs if disabled by teacher
+                    if(data.showQuiz === false) document.querySelector('[onclick="switchTab(\'assess\')"]').style.display = 'none';
+                    if(data.showScore === false) document.querySelector('[onclick="switchTab(\'score\')"]').style.display = 'none';
+                    if(data.showLesson === false) document.querySelector('[onclick="switchTab(\'lesson\')"]').style.display = 'none';
+                }
+            } catch(e) {}
+        }
+
+        // Mock Hierarchical Data Fetch (Replace with DB fetch later)
+        async function loadLessons() {
+            const container = document.getElementById('lesson-container');
+            
+            // Mock Data for Structure
+            const units = [
+                {
+                    title: "I. 문명의 발생과 고대 세계의 형성",
+                    lessons: [
+                        { id: "L1", title: "1. 역사의 의미와 역사 학습의 목적" },
+                        { id: "L2", title: "2. 세계의 선사 문화와 고대 문명" }
+                    ]
+                },
+                {
+                    title: "IV. 제국주의 침략과 국민 국가 건설 운동",
+                    lessons: [
+                        { id: "L3", title: "1. 제국주의의 등장과 식민지 확대" },
+                        { id: "L4", title: "2. 동아시아의 국민 국가 건설 운동" }
+                    ]
+                }
+            ];
+
+            // In real app: Fetch from 'lessons' collection and group by 'unit'
+            
+            let html = '';
+            units.forEach((unit, idx) => {
+                html += `
+                    <div class="accordion-item" id="acc-${idx}">
+                        <div class="accordion-header" onclick="toggleAccordion('acc-${idx}')">
+                            <span>${unit.title}</span>
+                            <i class="fas fa-chevron-down text-gray-400 transition-transform duration-200"></i>
+                        </div>
+                        <div class="accordion-body">
+                            ${unit.lessons.map(l => `<a href="lesson/view.html?id=${l.id}" class="lesson-link"><i class="far fa-file-alt mr-2 text-blue-500"></i>${l.title}</a>`).join('')}
+                        </div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        function toggleAccordion(id) {
+            document.getElementById(id).classList.toggle('open');
         }
     </script>
 </body>
