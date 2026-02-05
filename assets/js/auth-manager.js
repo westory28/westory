@@ -34,45 +34,25 @@ class AuthManager {
     init(type, requireAuth = true) {
         this.userType = type;
         
-        window.auth.onAuthStateChanged(async (user) => {
+        window.auth.onAuthStateChanged((user) => {
             if (user) {
                 this.currentUser = user;
                 
-                // 1. Teacher Security Check
+                // 1. Render Header IMMEDIATELY (Don't wait for DB)
+                this.loadHeader(); 
+                this.loadFooter();
+                this.initSessionTimer(); // Start timer right away
+                this.updateUserInfo(user.displayName || (type==='teacher'?'선생님':'학생')); // Temporary name
+
+                // 2. Security Check (Teacher)
                 if (type === 'teacher' && user.email !== TEACHER_EMAIL) {
                     alert("교사 전용 페이지입니다. 학생 대시보드로 이동합니다.");
                     window.location.href = this.rootPrefix + 'student/dashboard.html';
                     return;
                 }
 
-                // 2. Fetch Firestore Profile (To get Real Name)
-                let realName = user.displayName;
-                let privacyAgreed = false;
-
-                try {
-                    const doc = await window.db.collection('users').doc(user.uid).get();
-                    if (doc.exists) {
-                        const data = doc.data();
-                        if (data.name) realName = data.name;
-                        privacyAgreed = data.privacyAgreed;
-                    }
-                } catch (e) {
-                    console.error("Failed to fetch user profile", e);
-                }
-
-                // Default Name Fallback
-                if (!realName) realName = (type === 'teacher' ? '선생님' : '학생');
-
-                // 3. Privacy Check (Student Only)
-                if (type === 'student' && !privacyAgreed) {
-                    this.showPrivacyModal(user.uid);
-                }
-
-                // 4. Load UI
-                await this.loadHeader();
-                this.loadFooter();
-                this.updateUserInfo(realName);
-                this.initSessionTimer();
+                // 3. Fetch Real Name & Privacy Check (Async)
+                this.fetchAdditionalUserData(user, type);
 
                 document.dispatchEvent(new CustomEvent('auth-ready', { detail: user }));
             } else {
@@ -81,6 +61,27 @@ class AuthManager {
                 }
             }
         });
+    }
+
+    async fetchAdditionalUserData(user, type) {
+        try {
+            const doc = await window.db.collection('users').doc(user.uid).get();
+            if (doc.exists) {
+                const data = doc.data();
+                
+                // Update Name with Real DB Name
+                if (data.name) {
+                    this.updateUserInfo(data.name);
+                }
+
+                // Check Privacy Agreement
+                if (type === 'student' && !data.privacyAgreed) {
+                    this.showPrivacyModal(user.uid);
+                }
+            }
+        } catch (e) {
+            console.error("DB Error:", e);
+        }
     }
 
     showPrivacyModal(uid) {
@@ -129,7 +130,7 @@ class AuthManager {
         });
     }
 
-    async loadHeader() {
+    loadHeader() {
         const existingHeader = document.querySelector('header');
         if (existingHeader) existingHeader.remove();
 
@@ -145,7 +146,7 @@ class AuthManager {
 
         if (!isDashboard) {
             navHtml = `
-                <nav class="desktop-nav">
+                <nav class="desktop-nav flex items-center h-full ml-6">
                     ${menuItems.map(item => `
                         <a href="${resolve(item.url)}" class="nav-link ${isActive(item.url) ? 'active' : ''}">${item.name}</a>
                     `).join('')}
@@ -171,15 +172,15 @@ class AuthManager {
         const headerHtml = `
             <header>
                 <div class="header-container">
-                    <div class="flex items-center gap-4 md:gap-6">
+                    <div class="flex items-center gap-4">
                         <a href="${dashboardLink}" class="logo-text">
                             <span class="logo-we">We</span><span class="logo-story">story</span>
                         </a>
                         
-                        <!-- 60 Min Timer (Always Visible) -->
-                        <div class="flex items-center gap-1 md:gap-2 px-2 md:px-3 py-1 bg-stone-100 rounded-full border border-stone-200">
-                            <i class="fas fa-stopwatch text-stone-400 text-xs hidden sm:inline"></i>
-                            <span id="session-timer-display" class="font-mono font-bold text-stone-600 text-sm w-[40px] text-center">60:00</span>
+                        <!-- 60 Min Timer (Visible via inline style to prevent overriding) -->
+                        <div class="flex items-center gap-1 md:gap-2 px-3 py-1 bg-stone-100 rounded-full border border-stone-200" style="display: flex !important;">
+                            <i class="fas fa-stopwatch text-stone-400 text-xs"></i>
+                            <span id="session-timer-display" class="font-mono font-bold text-stone-600 text-sm w-[42px] text-center">60:00</span>
                             <button id="btn-extend-session" class="ml-1 text-stone-400 hover:text-blue-600 transition p-1" title="시간 초기화">
                                 <i class="fas fa-redo-alt text-xs"></i>
                             </button>
@@ -188,9 +189,11 @@ class AuthManager {
                         ${navHtml}
                     </div>
 
-                    <div class="flex items-center gap-2 md:gap-4">
+                    <div class="flex items-center gap-3">
                         ${settingsIcon}
-                        <span id="header-greeting" class="text-sm font-bold text-stone-700 whitespace-nowrap hidden sm:inline"></span>
+                        <!-- Name Display (No 'hidden' class, forced visibility) -->
+                        <span id="header-greeting" class="text-sm font-bold text-stone-700 whitespace-nowrap" style="display: inline-block !important;"></span>
+                        
                         <button id="logout-btn" class="text-stone-400 hover:text-stone-800 text-sm font-bold whitespace-nowrap ml-2">로그아웃</button>
                         ${mobileToggleBtn}
                     </div>
@@ -222,9 +225,22 @@ class AuthManager {
         }
     }
 
+    loadFooter() {
+        const existingFooter = document.querySelector('footer');
+        if(existingFooter) existingFooter.remove();
+        const footerHtml = `
+            <footer class="bg-white border-t border-stone-200 py-8 mt-auto">
+                <div class="container mx-auto text-center">
+                    <p class="text-stone-400 text-xs font-bold font-mono">Copyright © 용신중학교 역사교사 방재석. All rights reserved.</p>
+                </div>
+            </footer>
+        `;
+        document.body.insertAdjacentHTML('beforeend', footerHtml);
+    }
+
     updateUserInfo(name) {
         const greetingEl = document.getElementById('header-greeting');
-        if (greetingEl) {
+        if (greetingEl && name) {
             const suffix = (this.userType === 'teacher') ? ' 교사' : ' 학생';
             greetingEl.textContent = name + suffix;
         }
@@ -244,33 +260,46 @@ class AuthManager {
         const expiry = now + (60 * 60 * 1000); // 60 mins
         localStorage.setItem('sessionExpiry', expiry);
         this.startTimerInterval();
-        alert("세션이 60분으로 초기화되었습니다.");
+        // Optional alert removal to make UX smoother, or keep it if requested
+        // alert("세션이 60분으로 초기화되었습니다."); 
+        const display = document.getElementById('session-timer-display');
+        if(display) {
+             display.textContent = "60:00";
+             display.classList.remove('text-red-500');
+        }
     }
 
     startTimerInterval() {
         if (this.timerInterval) clearInterval(this.timerInterval);
         const display = document.getElementById('session-timer-display');
         
-        this.timerInterval = setInterval(() => {
-            const expiry = parseInt(localStorage.getItem('sessionExpiry') || '0');
-            const now = Date.now();
-            const diff = expiry - now;
+        // Run once immediately to set text
+        this.updateTimerDisplay(display);
 
-            if (diff <= 0) {
-                clearInterval(this.timerInterval);
-                alert("세션이 만료되어 자동 로그아웃됩니다.");
-                this.logout();
-            } else {
-                if(display) {
-                    const m = Math.floor(diff / 60000);
-                    const s = Math.floor((diff % 60000) / 1000);
-                    display.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-                    
-                    if(m < 5) display.classList.add('text-red-500');
-                    else display.classList.remove('text-red-500');
-                }
-            }
+        this.timerInterval = setInterval(() => {
+            this.updateTimerDisplay(display);
         }, 1000);
+    }
+
+    updateTimerDisplay(display) {
+        if(!display) return;
+        
+        const expiry = parseInt(localStorage.getItem('sessionExpiry') || '0');
+        const now = Date.now();
+        const diff = expiry - now;
+
+        if (diff <= 0) {
+            clearInterval(this.timerInterval);
+            alert("세션이 만료되어 자동 로그아웃됩니다.");
+            this.logout();
+        } else {
+            const m = Math.floor(diff / 60000);
+            const s = Math.floor((diff % 60000) / 1000);
+            display.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+            
+            if(m < 5) display.classList.add('text-red-500');
+            else display.classList.remove('text-red-500');
+        }
     }
 
     logout() {
