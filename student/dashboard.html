@@ -3,150 +3,183 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Westory - 학생 대시보드</title>
-    
+    <title>학생 대시보드 - Westory</title>
+    <!-- Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
+    <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-    
+    <!-- Config -->
     <script src="../assets/js/firebase-config.js"></script>
     <link rel="stylesheet" href="../assets/css/style.css">
+    <script src="../assets/js/auth-manager.js"></script>
 
     <style>
-        body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; }
+        .dashboard-container { max-width: 800px; margin: 0 auto; padding: 24px; }
         
-        /* 카드 호버 효과 */
-        .menu-card {
-            transition: all 0.2s ease-in-out;
-            cursor: pointer;
-        }
-        .menu-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-            border-color: #3b82f6; /* blue-500 */
-        }
+        .tab-nav { display: flex; border-bottom: 2px solid #e5e7eb; margin-bottom: 24px; }
+        .tab-btn { flex: 1; padding: 16px; text-align: center; font-weight: 700; color: #9ca3af; cursor: pointer; transition: all 0.2s; border-bottom: 3px solid transparent; }
+        .tab-btn:hover { color: #4b5563; }
+        .tab-btn.active { color: #2563eb; border-bottom-color: #2563eb; }
+        
+        .section-content { display: none; animation: fadeIn 0.3s ease-out; }
+        .section-content.active { display: block; }
+
+        /* Accordion for Lessons */
+        .accordion-item { border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 8px; overflow: hidden; background: white; }
+        .accordion-header { padding: 16px; background: #f9fafb; font-weight: 700; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+        .accordion-body { display: none; padding: 12px; background: white; border-top: 1px solid #e5e7eb; }
+        .accordion-item.open .accordion-body { display: block; }
+        .accordion-item.open .accordion-header i { transform: rotate(180deg); }
+
+        .lesson-link { display: block; padding: 12px; margin-bottom: 6px; border-radius: 6px; background: #f3f4f6; color: #4b5563; font-weight: 500; transition: background 0.2s; text-decoration: none; }
+        .lesson-link:hover { background: #e5e7eb; color: #1f2937; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
-<body class="flex flex-col min-h-screen">
+<body class="bg-gray-50">
+    <!-- Header injected by AuthManager -->
 
-    <header class="bg-white border-b border-gray-200 sticky top-0 z-50 h-16">
-        <div class="max-w-5xl mx-auto px-4 h-full flex justify-between items-center">
-            <div class="text-xl font-extrabold tracking-tighter cursor-pointer select-none" onclick="location.reload()">
-                <span class="text-blue-600">We</span><span class="text-amber-500">story</span>
-            </div>
-
-            <div class="flex items-center gap-4">
-                <span id="header-user-msg" class="text-gray-700 font-bold text-sm hidden md:inline-block">
-                    </span>
-                <button onclick="handleLogout()" class="bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-bold px-3 py-2 rounded-lg transition-colors">
-                    로그아웃
-                </button>
+    <main class="dashboard-container">
+        <div class="mb-6 flex justify-between items-end">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900" id="welcome-text">환영합니다!</h1>
+                <p class="text-sm text-gray-500" id="semester-badge">2025학년도 1학기</p>
             </div>
         </div>
-    </header>
 
-    <main class="flex-grow w-full max-w-5xl mx-auto px-4 py-10">
-        
-        <div class="md:hidden mb-6">
-            <h2 id="mobile-user-msg" class="text-xl font-bold text-gray-800">반갑습니다! 👋</h2>
+        <!-- 3 Main Tabs -->
+        <div class="tab-nav">
+            <div class="tab-btn active" onclick="switchTab('assess')">🧩 평가</div>
+            <div class="tab-btn" onclick="switchTab('score')">📝 점수</div>
+            <div class="tab-btn" onclick="switchTab('lesson')">📚 수업자료</div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            
-            <div onclick="location.href='lesson/list.html'" class="menu-card bg-white p-8 rounded-2xl shadow-sm border border-gray-200 flex flex-col items-center text-center h-64 justify-center group">
-                <div class="w-16 h-16 bg-green-50 text-green-600 rounded-full flex items-center justify-center text-3xl mb-4 group-hover:bg-green-100 transition-colors">
-                    <i class="fas fa-book-open"></i>
+        <!-- 1. Assessment -->
+        <div id="tab-assess" class="section-content active">
+            <div class="grid gap-4">
+                <!-- Linked to actual quiz.html -->
+                <div onclick="location.href='quiz.html'" class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:border-blue-400 cursor-pointer flex items-center justify-between transition-colors">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xl"><i class="fas fa-gamepad"></i></div>
+                        <div>
+                            <h3 class="font-bold text-gray-800">형성평가 퀴즈</h3>
+                            <p class="text-xs text-gray-500">배운 내용을 퀴즈로 확인해보세요.</p>
+                        </div>
+                    </div>
+                    <i class="fas fa-chevron-right text-gray-300"></i>
                 </div>
-                <h3 class="text-xl font-bold text-gray-800 mb-2">수업 자료</h3>
-                <p class="text-sm text-gray-500 break-keep">
-                    빈칸 채우기 노트 및<br>수업 영상을 확인합니다.
-                </p>
             </div>
-
-            <div onclick="location.href='quiz.html'" class="menu-card bg-white p-8 rounded-2xl shadow-sm border border-gray-200 flex flex-col items-center text-center h-64 justify-center group">
-                <div class="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center text-3xl mb-4 group-hover:bg-blue-100 transition-colors">
-                    <i class="fas fa-pen-to-square"></i>
-                </div>
-                <h3 class="text-xl font-bold text-gray-800 mb-2">평가</h3>
-                <p class="text-sm text-gray-500 break-keep">
-                    형성평가 및 퀴즈를 풀고<br>실력을 확인해보세요.
-                </p>
-            </div>
-
-            <div onclick="location.href='score.html'" class="menu-card bg-white p-8 rounded-2xl shadow-sm border border-gray-200 flex flex-col items-center text-center h-64 justify-center group">
-                <div class="w-16 h-16 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center text-3xl mb-4 group-hover:bg-amber-100 transition-colors">
-                    <i class="fas fa-chart-pie"></i>
-                </div>
-                <h3 class="text-xl font-bold text-gray-800 mb-2">점수</h3>
-                <p class="text-sm text-gray-500 break-keep">
-                    나의 성적표와<br>시험 채점 결과를 확인합니다.
-                </p>
-            </div>
-
         </div>
+
+        <!-- 2. Score -->
+        <div id="tab-score" class="section-content">
+            <div class="grid gap-4">
+                <!-- Linked to mark-exam.html -->
+                <div onclick="location.href='mark-exam.html'" class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:border-amber-400 cursor-pointer flex items-center justify-between transition-colors">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center text-xl"><i class="fas fa-pen-nib"></i></div>
+                        <div>
+                            <h3 class="font-bold text-gray-800">시험 자가채점</h3>
+                            <p class="text-xs text-gray-500">OMR 답안 입력 및 확인</p>
+                        </div>
+                    </div>
+                    <span class="text-xs font-bold text-red-500 bg-red-50 px-2 py-1 rounded">D-Day</span>
+                </div>
+                <!-- Linked to score.html -->
+                <div onclick="location.href='score.html'" class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:border-green-400 cursor-pointer flex items-center justify-between transition-colors">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-xl"><i class="fas fa-chart-pie"></i></div>
+                        <div>
+                            <h3 class="font-bold text-gray-800">나의 성적표</h3>
+                            <p class="text-xs text-gray-500">종합 성적 확인하기</p>
+                        </div>
+                    </div>
+                    <i class="fas fa-chevron-right text-gray-300"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. Lesson (Hierarchical) -->
+        <div id="tab-lesson" class="section-content">
+            <div id="lesson-container" class="space-y-2">
+                <!-- Dynamically populated -->
+                <div class="p-8 text-center text-gray-400">로딩 중...</div>
+            </div>
+        </div>
+
     </main>
 
-    <footer class="text-center py-8 text-gray-400 text-xs border-t bg-white">
-        Copyright © 역사교사 방재석. All rights reserved.
-    </footer>
+    <!-- Footer injected by AuthManager -->
 
     <script>
-        // Firebase 설정이 로드되지 않았을 경우를 대비한 안전 장치
-        if (!firebase.apps.length) {
-            console.error("Firebase Config Not Found. auth-manager.js 또는 firebase-config.js 연결을 확인하세요.");
-        }
-        
-        const auth = firebase.auth();
-        const db = firebase.firestore();
+        window.AuthManager.init('student');
 
-        // 로그인 상태 감지
-        auth.onAuthStateChanged(async (user) => {
-            if (user) {
-                // 로그인 됨: 사용자 정보 불러오기
-                await loadUserName(user);
-            } else {
-                // 로그인 안 됨: 메인 페이지로 튕겨내기
-                alert("로그인이 필요합니다.");
-                location.href = '../index.html';
-            }
+        document.addEventListener('auth-ready', (e) => {
+            const user = e.detail;
+            document.getElementById('welcome-text').innerText = `${user.displayName || '학생'}님, 환영합니다!`;
+            loadConfig();
+            loadLessons();
         });
 
-        // 사용자 이름 로드 함수
-        async function loadUserName(user) {
-            try {
-                // users 컬렉션에서 UID로 조회
-                const docRef = db.collection('users').doc(user.uid);
-                const docSnap = await docRef.get();
-
-                let name = "학생";
-                if (docSnap.exists) {
-                    name = docSnap.data().name || "학생";
-                } else {
-                    // 문서가 없으면 구글 프로필 이름 사용
-                    name = user.displayName || "학생";
-                }
-
-                // PC 화면 문구 (우측 상단)
-                document.getElementById('header-user-msg').innerHTML = `<span class="text-blue-600">${name}</span> 학생, 반가워요!`;
-                
-                // 모바일 화면 문구 (본문 상단)
-                document.getElementById('mobile-user-msg').innerHTML = `반갑습니다, <span class="text-blue-600">${name}</span> 학생님 👋`;
-
-            } catch (error) {
-                console.error("사용자 정보 로드 실패:", error);
-            }
+        function switchTab(name) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+            document.querySelectorAll('.section-content').forEach(s => s.classList.remove('active'));
+            document.getElementById('tab-' + name).classList.add('active');
         }
 
-        // 로그아웃 함수
-        function handleLogout() {
-            if(confirm("로그아웃 하시겠습니까?")) {
-                auth.signOut().then(() => {
-                    location.href = '../index.html';
-                });
-            }
+        async function loadConfig() {
+            try {
+                const doc = await window.db.collection('site_settings').doc('config').get();
+                if (doc.exists) {
+                    const data = doc.data();
+                    document.getElementById('semester-badge').innerText = 
+                        (data.currentSemester || '2025-1').replace('-', '학년도 ') + '학기';
+                    
+                    if(data.showQuiz === false) document.querySelector('[onclick="switchTab(\'assess\')"]').style.display = 'none';
+                    if(data.showScore === false) document.querySelector('[onclick="switchTab(\'score\')"]').style.display = 'none';
+                    if(data.showLesson === false) document.querySelector('[onclick="switchTab(\'lesson\')"]').style.display = 'none';
+                }
+            } catch(e) {}
+        }
+
+        async function loadLessons() {
+            const container = document.getElementById('lesson-container');
+            
+            // Mock Data for Structure (linking to note.html as an example)
+            const units = [
+                {
+                    title: "I. 문명의 발생과 고대 세계의 형성",
+                    lessons: [
+                        { id: "L1", title: "1. 1910년대 무단 통치와 토지 조사 사업" }, // Example title matching note.html
+                    ]
+                }
+            ];
+
+            let html = '';
+            units.forEach((unit, idx) => {
+                html += `
+                    <div class="accordion-item open" id="acc-${idx}">
+                        <div class="accordion-header" onclick="toggleAccordion('acc-${idx}')">
+                            <span>${unit.title}</span>
+                            <i class="fas fa-chevron-down text-gray-400 transition-transform duration-200"></i>
+                        </div>
+                        <div class="accordion-body">
+                            ${unit.lessons.map(l => `<a href="lesson/note.html" class="lesson-link"><i class="far fa-file-alt mr-2 text-blue-500"></i>${l.title}</a>`).join('')}
+                        </div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        function toggleAccordion(id) {
+            document.getElementById(id).classList.toggle('open');
         }
     </script>
 </body>

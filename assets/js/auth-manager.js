@@ -25,9 +25,16 @@ class AuthManager {
 
     calculateRootPrefix() {
         const path = window.location.pathname;
-        if (path.includes('/student/lesson/') || path.includes('/student/assessment/') || path.includes('/student/score/') || path.includes('/teacher/')) return '../';
-        if (path.match(/\/student\/[a-z]+\/[a-z]+\//)) return '../../'; 
+        
+        // Depth 2 (e.g. /student/lesson/note.html)
+        if (path.includes('/student/lesson/')) return '../../';
+        if (path.includes('/student/assessment/')) return '../../'; // Just in case
+        if (path.includes('/student/score/')) return '../../';      // Just in case
+        
+        // Depth 1 (e.g. /student/dashboard.html, /teacher/dashboard.html)
         if (path.includes('/student/') || path.includes('/teacher/')) return '../';
+        
+        // Root (index.html)
         return './';
     }
 
@@ -49,6 +56,7 @@ class AuthManager {
                 await this.checkPrivacyConsent(user);
 
                 await this.loadHeader();
+                this.loadFooter(); // Inject Footer
                 this.updateUserInfo(user);
                 
                 // Initialize Session Timer for Teacher
@@ -66,15 +74,13 @@ class AuthManager {
     }
 
     async checkPrivacyConsent(user) {
-        // Skip for admin/teacher
-        if (user.email === TEACHER_EMAIL) return;
+        if (user.email === TEACHER_EMAIL) return; // Skip for teacher
 
         try {
             const doc = await window.db.collection('users').doc(user.uid).get();
             if (doc.exists) {
                 const data = doc.data();
                 if (!data.privacyAgreed) {
-                    // Trigger Privacy Modal in the current page
                     this.showPrivacyModal(user.uid);
                 }
             }
@@ -84,7 +90,6 @@ class AuthManager {
     }
 
     showPrivacyModal(uid) {
-        // Dynamic Modal Injection
         const modalHtml = `
             <div id="global-privacy-modal" class="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-70 backdrop-blur-sm">
                 <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-8 mx-4">
@@ -144,10 +149,10 @@ class AuthManager {
         const menuItems = MENUS[this.userType] || [];
         const resolve = (url) => this.rootPrefix + url;
         const currentPath = window.location.pathname;
-        const isActive = (url) => currentPath.includes(url.split('/').pop());
+        const isActive = (url) => currentPath.endsWith(url.split('/').pop()); // Improved active check
         
         // Determine if current page is Dashboard
-        const isDashboard = currentPath.endsWith('dashboard.html');
+        const isDashboard = currentPath.includes('dashboard.html');
 
         // Build Nav HTML only if NOT dashboard
         let navHtml = '';
@@ -253,6 +258,20 @@ class AuthManager {
                 }
             });
         }
+    }
+
+    loadFooter() {
+        const existingFooter = document.querySelector('footer');
+        if(existingFooter) existingFooter.remove();
+
+        const footerHtml = `
+            <footer class="bg-white border-t border-stone-200 py-8 mt-auto">
+                <div class="container mx-auto text-center">
+                    <p class="text-stone-400 text-xs font-bold font-mono">Copyright © 용신중학교 역사교사 방재석. All rights reserved.</p>
+                </div>
+            </footer>
+        `;
+        document.body.insertAdjacentHTML('beforeend', footerHtml);
     }
 
     updateUserInfo(user) {
