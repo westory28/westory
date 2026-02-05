@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>용신중학교 역사 평가(최종)</title>
+    <!-- Tailwind & Chart.js -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    
+    <!-- Config & Styles -->
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <script src="../assets/js/firebase-config.js"></script>
+    <script src="../assets/js/auth-manager.js"></script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Noto+Serif+KR:wght@700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Quiz Specific Styles */
+        .serif { font-family: 'Noto Serif KR', serif; }
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        .timer-bar { transition: width 1s linear; }
+        .timer-urgent { background-color: #ef4444 !important; animation: pulse 1s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .choice-btn { width: 100%; text-align: left; padding: 1rem; border-radius: 0.5rem; border: 1px solid #e5e7eb; background-color: white; transition: all 0.2s; display: flex; align-items: center; cursor: pointer; }
+        .choice-btn:hover { background-color: #f5f5f4; }
+        .choice-btn.selected { border: 2px solid #d97706; background-color: #fffbeb; color: #92400e; font-weight: bold; }
+        .choice-badge { width: 1.5rem; height: 1.5rem; border-radius: 9999px; background-color: #e5e7eb; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: bold; margin-right: 0.75rem; }
+        .choice-btn.selected .choice-badge { background-color: #d97706; color: white; }
+        .ox-btn { height: 80px; font-size: 2.5rem; font-weight: 900; border-radius: 12px; transition: all 0.2s; border: 2px solid transparent; width: 100%; cursor: pointer;}
+        .ox-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .btn-o { background-color: #e0f2fe; color: #0284c7; border-color: #0284c7; }
+        .btn-o.selected { background-color: #0284c7; color: white; border: 2px solid #0c4a6e;}
+        .btn-x { background-color: #fee2e2; color: #dc2626; border-color: #dc2626; }
+        .btn-x.selected { background-color: #dc2626; color: white; border: 2px solid #7f1d1d;}
+        .seq-btn { padding: 8px 12px; border-radius: 6px; font-weight: bold; border: 1px solid #d1d5db; transition: all 0.2s; cursor: pointer; margin: 4px; }
+        .seq-btn-default { background-color: #ffffff !important; color: #1f2937 !important; }
+        .seq-btn-selected { background-color: #d97706 !important; color: #ffffff !important; border-color: #b45309 !important; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        #loading-overlay { display: flex; position: fixed; inset: 0; background: rgba(255,255,255,1); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; }
+        .q-image-thumb { max-width: 100%; max-height: 250px; border-radius: 8px; margin: 10px auto; border: 1px solid #e5e7eb; display: block; object-fit: contain; cursor: zoom-in; transition: transform 0.2s; }
+        #image-zoom-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 10000; justify-content: center; align-items: center; cursor: zoom-out; }
+        #image-zoom-content { max-width: 95%; max-height: 95%; border-radius: 4px; }
+    </style>
+</head>
+<body class="text-stone-800 min-h-screen flex flex-col bg-stone-50">
+    <!-- Header injected by JS -->
+    <div id="loading-overlay"><div class="animate-spin rounded-full h-16 w-16 border-t-4 border-amber-600 border-solid mb-4"></div><p class="text-xl font-bold text-stone-700" id="loading-text">인증 확인 중...</p></div>
+    <div id="image-zoom-modal" onclick="document.getElementById('image-zoom-modal').style.display='none'"><img id="image-zoom-content" src=""></div>
+
+    <main class="flex-grow container mx-auto px-4 py-6">
+        <section id="view-login" class="hidden max-w-md mx-auto bg-white p-8 rounded-xl shadow-lg fade-in mt-8 border-t-4 border-amber-500 text-center">
+            <div class="mb-8">
+                <span class="bg-amber-100 text-amber-900 text-sm font-bold px-3 py-1 rounded-full">로그인 필요</span>
+                <h2 class="text-2xl font-bold serif text-stone-900 mt-4">WeStory 접속</h2>
+                <p class="text-stone-500 mt-2 text-sm">로그인이 필요한 서비스입니다.<br>메인 화면으로 이동합니다.</p>
+            </div>
+            <button onclick="location.href='../index.html'" class="w-full bg-stone-900 text-white font-bold py-4 rounded-lg hover:bg-stone-700 transition shadow-sm">
+                메인으로 이동
+            </button>
+        </section>
+
+        <section id="view-register" class="hidden max-w-md mx-auto bg-white p-8 rounded-xl shadow-lg fade-in mt-8 border-t-4 border-blue-500">
+            <h2 class="text-xl font-bold text-stone-900 mb-2">👋 첫 방문이시군요!</h2>
+            <p class="text-stone-500 text-sm mb-6">본인 확인을 위해 정보를 입력해주세요.<br>(한 번만 입력하면 됩니다)</p>
+            <div class="space-y-4">
+                <div class="flex gap-2">
+                    <div class="w-1/4 bg-stone-100 border border-stone-300 rounded flex items-center justify-center font-bold text-stone-600">2학년</div>
+                    <select id="reg-class" class="w-2/4 p-3 border border-stone-300 rounded"><option value="">반</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option></select>
+                    <select id="reg-number" class="w-1/4 p-3 border border-stone-300 rounded text-center"><option value="">번호</option></select>
+                </div>
+                <input type="text" id="reg-name" placeholder="이름 (한글 2~4자)" class="w-full p-3 border border-stone-300 rounded">
+                <button onclick="app.registerUser()" class="w-full bg-blue-600 text-white font-bold py-4 rounded-lg hover:bg-blue-700 transition shadow-lg">정보 등록 완료</button>
+            </div>
+        </section>
+
+        <section id="view-ready" class="hidden max-w-md mx-auto bg-white p-8 rounded-xl shadow-lg fade-in mt-8 border-t-4 border-green-500 text-center">
+            <h2 class="text-2xl font-bold text-stone-900 mb-2">환영합니다!</h2>
+            <p class="text-xl font-bold text-amber-600 mb-6"><span id="user-info-display"></span> 학생</p>
+            
+            <p class="text-stone-500 text-sm mb-6 bg-stone-50 p-3 rounded">⚠️ <strong>주의사항</strong><br>시작 버튼을 누르면 <strong>10분간 재응시가 불가능</strong>합니다.<br>준비되면 시작하세요.</p>
+            
+            <button onclick="app.startQuiz()" class="w-full bg-green-600 text-white font-bold py-4 rounded-lg hover:bg-green-700 transition shadow-lg text-lg">도전 시작 <i class="fas fa-play ml-2"></i></button>
+            <div class="mt-4 text-xs text-stone-400">총 도전 횟수: <span id="live-count-text">...</span></div>
+        </section>
+
+        <section id="view-quiz" class="hidden max-w-2xl mx-auto fade-in">
+            <div class="bg-white rounded-lg shadow-sm mb-6 sticky top-20 z-30 overflow-hidden border border-stone-200">
+                <div class="flex justify-between items-center px-4 py-2 bg-stone-50 border-b border-stone-100">
+                    <span class="text-sm font-bold text-stone-600" id="quiz-progress-text">1 / 5</span>
+                    <span class="text-lg font-bold text-red-600 font-mono" id="timer-text">60초</span>
+                </div>
+                <div class="w-full bg-stone-200 h-2"><div id="timer-bar" class="bg-amber-500 h-full timer-bar" style="width: 100%"></div></div>
+            </div>
+            <div class="bg-white p-6 md:p-10 rounded-lg min-h-[400px] flex flex-col relative shadow-md">
+                <div class="mb-4"><span id="student-question-unit" class="inline-block bg-stone-100 text-stone-500 text-xs font-bold px-2 py-1 rounded mb-1 border border-stone-200"></span><span id="question-badge" class="ml-2 bg-amber-100 text-amber-800 text-xs font-bold px-2 py-1 rounded border border-amber-200"></span></div>
+                <div id="question-image-area" class="mb-4 hidden text-center"><img id="question-image" src="" class="q-image-thumb" onclick="document.getElementById('image-zoom-content').src=this.src;document.getElementById('image-zoom-modal').style.display='flex'"></div>
+                <h3 id="question-text" class="text-xl md:text-2xl font-bold mt-2 mb-8 text-stone-900 leading-relaxed serif break-keep"></h3>
+                <div id="answer-area" class="flex-grow mb-6"></div>
+                <div class="flex gap-3 mt-auto">
+                    <button id="btn-prev" onclick="app.prevQuestion()" class="hidden w-1/3 bg-stone-200 text-stone-700 font-bold py-4 rounded-lg hover:bg-stone-300">이전</button>
+                    <button id="btn-next" onclick="app.submitAnswer()" class="w-full bg-amber-600 text-white font-bold py-4 rounded-lg hover:bg-amber-700 shadow-md">다음</button>
+                </div>
+            </div>
+        </section>
+
+        <section id="view-results" class="hidden max-w-lg mx-auto fade-in mt-6">
+            <div class="bg-white p-8 rounded-xl shadow-xl text-center border-t-8 border-amber-500">
+                <h2 class="text-3xl font-bold serif mb-2 text-stone-800">평가 종료</h2>
+                <p class="text-stone-500 mb-6"><span id="result-name" class="font-bold text-stone-900"></span> 학생의 최종 기록</p>
+                <div class="relative w-48 h-48 mx-auto mb-4"><canvas id="scoreChart"></canvas><div class="absolute inset-0 flex items-center justify-center flex-col"><span class="text-5xl font-bold text-amber-600 font-mono" id="score-text">0</span><span class="text-xs text-stone-400">점</span></div></div>
+                <div id="submission-status" class="bg-stone-50 p-3 rounded text-sm mb-6 border border-stone-200 text-stone-500"><i class="fas fa-circle-notch fa-spin"></i> 데이터 저장 중...</div>
+                <div class="grid grid-cols-2 gap-3">
+                    <button onclick="document.getElementById('review-section').classList.toggle('hidden')" class="bg-white border-2 border-stone-200 text-stone-700 font-bold py-3 rounded hover:bg-stone-50">오답노트</button>
+                    <button onclick="location.reload()" class="bg-stone-900 text-white font-bold py-3 rounded hover:bg-stone-700 shadow-lg">다시 도전</button>
+                </div>
+                <button onclick="location.href='history.html'" class="w-full mt-3 bg-white border border-stone-300 text-stone-700 font-bold py-3 rounded-lg hover:bg-stone-50 transition shadow-sm">
+                    📊 내 기록장 보기
+                </button>
+            </div>
+            <div id="review-section" class="hidden mt-6 bg-white p-6 rounded-xl shadow-lg border border-red-200">
+                <h3 class="font-bold text-lg mb-4 text-red-600 border-b pb-2">오답 확인</h3>
+                <div id="review-list" class="space-y-4 text-left"></div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="bg-white border-t border-stone-200 py-8 mt-auto">
+        <div class="container mx-auto text-center">
+            <p class="text-stone-400 text-xs font-bold font-mono">Copyright © 용신중학교 역사교사 방재석.</p>
+        </div>
+    </footer>
+
+    <script>
+        // Init AuthManager (Handles Header & Auth)
+        window.AuthManager.init('student');
+
+        const app = {
+            state: { currentUser: null, userProfile: null, questions:[], allQuestions:[], currentIndex:0, answers:{}, score:0, timer:null, timeLeft:60, isTimeOut:false, isQuizActive: false },
+            
+            init: function() { 
+                window.addEventListener('beforeunload', (e) => { if (this.state.isQuizActive) { e.preventDefault(); e.returnValue = ''; } });
+                
+                const numSelect = document.getElementById('reg-number');
+                for(let i=1; i<=35; i++) { const opt = document.createElement('option'); opt.value = i; opt.innerText = i; numSelect.appendChild(opt); }
+
+                this.updateVisitCount();
+                
+                // AuthManager emits auth-ready when user is logged in
+                document.addEventListener('auth-ready', (e) => {
+                    const user = e.detail;
+                    this.state.currentUser = user;
+                    this.checkUserProfile(user.uid);
+                });
+            },
+
+            checkUserProfile: async function(uid) {
+                document.getElementById('loading-text').innerText = "학생 정보 확인 중...";
+                const doc = await window.db.collection('users').doc(uid).get();
+                
+                if (doc.exists) {
+                    this.state.userProfile = doc.data();
+                    const name = this.state.userProfile.name;
+                    document.getElementById('user-info-display').innerText = `${this.state.userProfile.class}반 ${this.state.userProfile.number}번 ${name}`;
+                    this.showView('view-ready');
+                } else {
+                    this.showView('view-register');
+                }
+                this.showLoading(false);
+            },
+
+            registerUser: async function() {
+                const cls = document.getElementById('reg-class').value;
+                const num = document.getElementById('reg-number').value;
+                const name = document.getElementById('reg-name').value.trim();
+
+                if(!cls || !num || !name) { alert("정보를 모두 입력해주세요."); return; }
+                const nameRegex = /^[가-힣]{2,4}$/;
+                if (!nameRegex.test(name)) { alert("이름은 2~4글자 한글만 가능합니다."); return; }
+
+                this.showLoading(true, "등록 중...");
+                try {
+                    const checkSnapshot = await window.db.collection('users').where('class', '==', cls).where('number', '==', num).limit(1).get();
+                    if (!checkSnapshot.empty) {
+                        this.showLoading(false);
+                        alert(`❌ 가입 불가\n\n${cls}반 ${num}번은 이미 등록된 학생이 있습니다.\n본인의 번호가 맞다면 선생님께 문의하세요.`);
+                        return;
+                    }
+                    const profile = { class: cls, number: num, name: name, email: this.state.currentUser.email };
+                    await window.db.collection('users').doc(this.state.currentUser.uid).set(profile);
+                    this.state.userProfile = profile;
+                    document.getElementById('user-info-display').innerText = `${cls}반 ${num}번 ${name}`;
+                    this.showView('view-ready');
+                } catch(e) {
+                    if(e.code === 'failed-precondition') { alert("시스템 초기화가 필요합니다 (Index). 관리자에게 문의하세요."); } 
+                    else { alert("등록 오류: " + e.message); }
+                }
+                this.showLoading(false);
+            },
+
+            updateVisitCount: function() {
+                const badgeText = document.getElementById("live-count-text");
+                const sessionKey = 'quiz_visited_session'; 
+                if (!sessionStorage.getItem(sessionKey)) {
+                    fetch('https://api.counterapi.dev/v1/westory28-history-quiz/visits/up').then(res=>res.json()).then(d=>{ badgeText.innerText = `${d.count}명`; sessionStorage.setItem(sessionKey, 'true'); }).catch(()=>{});
+                } else {
+                    fetch('https://api.counterapi.dev/v1/westory28-history-quiz/visits/').then(res=>res.json()).then(d=>{ badgeText.innerText = `${d.count}명`; }).catch(()=>{});
+                }
+            },
+
+            showLoading: function(show, msg="로딩 중...") { 
+                document.getElementById('loading-overlay').style.display = show ? 'flex' : 'none'; 
+                if(msg) document.getElementById('loading-text').innerText = msg;
+            },
+
+            goHome: function() {
+                if (this.state.isQuizActive) { if (confirm("포기하고 나가시겠습니까?\n(10분간 재응시 불가)")) location.reload(); } 
+                else location.reload();
+            },
+
+            startQuiz: async function() {
+                this.showLoading(true, "응시 가능 여부 확인 중...");
+                try {
+                    const userDoc = await window.db.collection('users').doc(this.state.currentUser.uid).get();
+                    const userData = userDoc.data();
+                    const blockedUntil = userData.blockedUntil || 0;
+                    const now = new Date().getTime();
+
+                    if (now < blockedUntil) {
+                        const leftMins = Math.ceil((blockedUntil - now) / (1000 * 60));
+                        this.showLoading(false);
+                        alert(`⛔ 재응시 불가!\n\n${leftMins}분 뒤에 다시 시도할 수 있습니다.`);
+                        return;
+                    }
+
+                    await this.loadRandomQuestions();
+                    if(!this.state.allQuestions || this.state.allQuestions.length === 0) throw new Error("문제 없음");
+
+                    await window.db.collection('users').doc(this.state.currentUser.uid).update({ blockedUntil: now + (10 * 60 * 1000) });
+                } catch(e) {
+                    this.showLoading(false);
+                    alert("오류 발생: " + e.message);
+                    return;
+                }
+
+                this.state.student = this.state.userProfile;
+                this.state.questions = this.state.allQuestions; 
+                this.state.currentIndex = 0; 
+                this.state.answers = {}; 
+                this.state.score = 0; 
+                this.state.timeLeft = 60; 
+                this.state.isTimeOut = false; 
+                this.state.isQuizActive = true; 
+                
+                this.showLoading(false);
+                this.showView('view-quiz'); 
+                this.renderQuestion(); 
+                this.startTimer();
+            },
+
+            loadRandomQuestions: async function() {
+                if(!window.db) return;
+                let totalCount = 189; 
+                try { const metaDoc = await window.db.collection("metadata").doc("count_info").get(); if (metaDoc.exists) totalCount = metaDoc.data().total_questions || 189; } catch(e) {}
+                
+                const randomIds = new Set();
+                const pickCount = Math.min(5, totalCount); 
+                
+                if (totalCount >= 5) {
+                    const recentRange = 50; const startOfRecent = Math.max(1, totalCount - recentRange + 1);
+                    while(randomIds.size < 3) { const rand = Math.floor(Math.random() * (totalCount - startOfRecent + 1)) + startOfRecent; randomIds.add(rand.toString()); }
+                }
+                while(randomIds.size < pickCount) { const rand = Math.floor(Math.random() * totalCount) + 1; randomIds.add(rand.toString()); }
+                
+                const targetIds = Array.from(randomIds);
+                const qSnapshot = await window.db.collection("quiz_questions").where(firebase.firestore.FieldPath.documentId(), 'in', targetIds).get();
+                const loadedData = [];
+                qSnapshot.forEach((doc) => { let data = doc.data(); data.id = parseInt(doc.id); loadedData.push(data); });
+                this.state.allQuestions = this.shuffleArray(loadedData);
+            },
+
+            shuffleArray: function(array) { for (let i = array.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [array[i], array[j]] = [array[j], array[i]]; } return array; },
+            
+            startTimer: function() { 
+                if(this.state.timer) clearInterval(this.state.timer); 
+                const bar = document.getElementById('timer-bar'), txt = document.getElementById('timer-text'); 
+                bar.style.width='100%'; txt.innerText='60초'; 
+                this.state.timer = setInterval(() => { 
+                    this.state.timeLeft--; 
+                    txt.innerText = this.state.timeLeft + '초'; 
+                    bar.style.width = (this.state.timeLeft/60)*100 + '%'; 
+                    if(this.state.timeLeft<=10) { bar.classList.add('timer-urgent'); txt.classList.add('animate-pulse'); } 
+                    if(this.state.timeLeft<=0) { clearInterval(this.state.timer); this.state.isTimeOut=true; alert("종료"); this.finishQuiz(); } 
+                }, 1000); 
+            },
+
+            renderQuestion: function() {
+                const q = this.state.questions[this.state.currentIndex];
+                this.tempAnswer = this.state.answers[q.id] || null;
+                document.getElementById('quiz-progress-text').innerText = `${this.state.currentIndex+1}/${this.state.questions.length}`;
+                document.getElementById('question-badge').innerText = {'choice':'객관식','blank':'단답','word':'단답','order':'순서','ox':'O/X'}[q.type];
+                document.getElementById('student-question-unit').innerText = q.unit || "기타";
+                const img = document.getElementById('question-image'); 
+                if(q.image) { img.src=q.image; img.parentNode.classList.remove('hidden'); } else img.parentNode.classList.add('hidden');
+                document.getElementById('question-text').innerHTML = this.linkify(q.question);
+                
+                const area = document.getElementById('answer-area'); area.innerHTML = ''; 
+                document.getElementById('btn-prev').classList.toggle('hidden', this.state.currentIndex === 0);
+                document.getElementById('btn-next').className = this.state.currentIndex === 0 ? "w-full bg-amber-600 text-white font-bold py-4 rounded-lg hover:bg-amber-700 transition shadow-md" : "w-2/3 bg-amber-600 text-white font-bold py-4 rounded-lg hover:bg-amber-700 transition shadow-md";
+                
+                if(q.type === 'choice') { 
+                    const grid = document.createElement('div'); grid.className="grid grid-cols-1 gap-3"; 
+                    q.options.forEach((opt,i) => { 
+                        const btn = document.createElement('div'); const isSelected = this.tempAnswer === opt; 
+                        btn.className = `choice-btn ${isSelected ? 'selected' : ''}`; 
+                        btn.innerHTML = `<span class="choice-badge">${i+1}</span> ${this.linkify(opt)}`; 
+                        btn.onclick = () => { this.state.answers[q.id] = opt; this.renderQuestion(); }; 
+                        grid.appendChild(btn); 
+                    }); area.appendChild(grid); 
+                } else if(q.type === 'ox') { 
+                    const box = document.createElement('div'); box.className="flex gap-4 h-40"; 
+                    const btnO = document.createElement('button'); btnO.className=`flex-1 ox-btn btn-o ${this.tempAnswer==='O'?'selected':''}`; btnO.innerText="O"; btnO.onclick=()=>{ this.state.answers[q.id]='O'; this.renderQuestion(); }; 
+                    const btnX = document.createElement('button'); btnX.className=`flex-1 ox-btn btn-x ${this.tempAnswer==='X'?'selected':''}`; btnX.innerText="X"; btnX.onclick=()=>{ this.state.answers[q.id]='X'; this.renderQuestion(); }; 
+                    box.append(btnO,btnX); area.appendChild(box); 
+                } else if(q.type === 'order') { 
+                    this.orderTemp = this.tempAnswer ? this.tempAnswer.split('-') : []; 
+                    const box = document.createElement('div'); box.className="border-2 dashed border-amber-300 rounded p-4 mb-3 bg-amber-50 min-h-[50px] flex flex-wrap gap-2"; 
+                    const opts = document.createElement('div'); opts.className="flex flex-wrap gap-2"; 
+                    this.orderTemp.forEach(opt => { const btn = document.createElement('button'); btn.className="seq-btn seq-btn-selected"; btn.innerText=opt; btn.onclick = () => { this.orderTemp = this.orderTemp.filter(x=>x!==opt); this.state.answers[q.id] = this.orderTemp.join('-'); this.renderQuestion(); }; box.appendChild(btn); }); 
+                    q.options.filter(o => !this.orderTemp.includes(o)).forEach(opt => { const btn = document.createElement('button'); btn.className="seq-btn seq-btn-default"; btn.innerText=opt; btn.onclick = () => { this.orderTemp.push(opt); this.state.answers[q.id] = this.orderTemp.join('-'); this.renderQuestion(); }; opts.appendChild(btn); }); 
+                    area.append(box, opts); 
+                } else { 
+                    const inp = document.createElement('input'); inp.type="text"; inp.className="w-full p-4 border-b-2 border-stone-300 focus:border-amber-500 text-center text-lg outline-none"; inp.placeholder="정답 입력"; 
+                    if(this.tempAnswer) inp.value = this.tempAnswer; inp.oninput = (e) => { this.tempAnswer=e.target.value; this.state.answers[q.id] = e.target.value; }; inp.onkeydown = (e) => { if(e.key==='Enter') this.submitAnswer(); }; area.appendChild(inp); 
+                }
+            },
+
+            linkify: function(text) {
+                if(!text) return "";
+                const urlRegex = /(https?:\/\/[^\s]+)/g;
+                return text.replace(urlRegex, function(url) {
+                    return '<a href="' + url + '" target="_blank" class="text-blue-600 underline font-bold" onclick="event.stopPropagation()">링크 열기</a>';
+                });
+            },
+
+            prevQuestion: function() { const q = this.state.questions[this.state.currentIndex]; if (this.state.currentIndex > 0) { this.state.currentIndex--; this.renderQuestion(); } },
+            
+            submitAnswer: function() { const q = this.state.questions[this.state.currentIndex]; let ans = this.state.answers[q.id]; if(q.type==='order') { if(!ans || ans.split('-').length !== q.options.length) { alert("순서를 완성하세요"); return; } } else if(!ans) { alert("정답을 입력하세요"); return; } if(this.state.currentIndex < 4) { this.state.currentIndex++; this.renderQuestion(); } else this.finishQuiz(); },
+            
+            finishQuiz: function() {
+                clearInterval(this.state.timer); this.state.isQuizActive = false;
+                let correct = 0; let details = []; let detailLogs = [];
+                this.state.questions.forEach(q => {
+                    const u = (this.state.answers[q.id]||"").toString().replace(/\s+/g,'').trim(); const a = q.answer.toString().replace(/\s+/g,'').trim();
+                    let isC = false; if(u.length > 0) { isC = (q.type === 'word' || q.type === 'blank') ? (u.includes(a)||a.includes(u)) : (u === a); }
+                    if(isC) correct++; else details.push({q:q.question, u:u||"미입력", a:q.answer, exp:q.explanation});
+                    detailLogs.push({ id: q.id, correct: isC, u: u });
+                });
+                this.state.score = correct * 20; this.state.incorrectDetails = details;
+                this.showView('view-results'); this.renderResults(); this.saveToFirebase(detailLogs);
+            },
+            
+            renderResults: function() { 
+                document.getElementById('result-name').innerText = this.state.student.name; 
+                document.getElementById('score-text').innerText = this.state.score; 
+                const ctx = document.getElementById('scoreChart').getContext('2d'); 
+                if(window.myChart) window.myChart.destroy(); 
+                window.myChart = new Chart(ctx, { type:'doughnut', data:{labels:['정답','오답'], datasets:[{data:[this.state.score, 100-this.state.score], backgroundColor:['#d97706','#e5e7eb'], borderWidth:0}]}, options:{cutout:'80%', plugins:{legend:{display:false}}} }); 
+                const list = document.getElementById('review-list'); 
+                list.innerHTML = this.state.incorrectDetails.length===0 ? '<div class="text-center py-4">만점입니다! 🎉</div>' : this.state.incorrectDetails.map(d => `<div class="border-b pb-3 last:border-0"><p class="font-bold text-stone-800 mb-1">Q. ${this.linkify(d.q)}</p><div class="flex gap-2 text-xs mb-2"><span class="text-red-600 bg-red-50 px-2 py-1 rounded">내 답: ${d.u}</span><span class="text-green-600 bg-green-50 px-2 py-1 rounded font-bold">정답: ${d.a}</span></div><p class="text-xs text-stone-500 bg-stone-50 p-2 rounded">${this.linkify(d.exp)}</p></div>`).join(''); 
+            },
+            
+            saveToFirebase: function(detailLogs = []) {
+                const status = document.getElementById('submission-status');
+                if(!window.db) { status.innerHTML = "⚠️ DB 연결 실패"; return; }
+                const data = { timestamp: firebase.firestore.FieldValue.serverTimestamp(), timeString: new Date().toLocaleString(), class: this.state.student.class, number: this.state.student.number, name: this.state.student.name, score: this.state.score, status: this.state.isTimeOut ? "시간초과" : "완료", details: detailLogs, uid: this.state.currentUser.uid };
+                window.db.collection("metadata").doc("stats").set({ total_plays: firebase.firestore.FieldValue.increment(1) }, { merge: true });
+                window.db.collection("quiz_results").add(data).then(() => { status.className = "bg-green-100 text-green-700 p-3 rounded text-sm mb-6 border border-green-200 font-bold"; status.innerHTML = '<i class="fas fa-check-circle"></i> 제출 완료!'; }).catch((error) => { console.error("Error: ", error); status.className = "bg-red-100 text-red-700 p-3 rounded text-sm mb-6 border border-red-200"; status.innerHTML = '⚠️ 전송 실패'; });
+            },
+            
+            showView: function(id) { document.querySelectorAll('main > section').forEach(el => el.classList.add('hidden')); document.getElementById(id).classList.remove('hidden'); window.scrollTo(0,0); }
+        };
+        window.onload = function() { app.init(); };
+    </script>
+</body>
+</html>

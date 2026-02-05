@@ -1,0 +1,44 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper: Check if user is the specific teacher
+    function isTeacher() {
+      return request.auth.token.email == 'westoria28@gmail.com';
+    }
+
+    // Helper: Check if user is accessing their own data
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    // 1. Users Collection
+    match /users/{userId} {
+      // Teacher can read/write all users
+      // Students can only read/write their own profile
+      allow read, update: if isTeacher() || isOwner(userId);
+      allow create: if request.auth != null; // Allow signup
+      allow delete: if isTeacher();
+    }
+
+    // 2. Quiz Questions (Public Read, Teacher Write)
+    match /quiz_questions/{questionId} {
+      allow read: if request.auth != null;
+      allow write: if isTeacher();
+    }
+
+    // 3. Quiz Results
+    match /quiz_results/{resultId} {
+      // Teacher sees all, Student sees own (based on uid field in document)
+      allow read: if isTeacher() || resource.data.uid == request.auth.uid;
+      allow create: if request.auth != null;
+      allow update, delete: if isTeacher();
+    }
+
+    // 4. Site Settings (Config)
+    match /site_settings/{docId} {
+      allow read: if request.auth != null; // Students need to read menu config
+      allow write: if isTeacher();
+    }
+  }
+}

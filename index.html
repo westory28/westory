@@ -6,6 +6,7 @@
     <title>Westory: 우리들의 이야기</title>
     <!-- Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
@@ -27,6 +28,10 @@
         }
         .login-btn:hover { background: #f7f8f8; box-shadow: 0 4px 8px rgba(0,0,0,0.1); transform: translateY(-1px); }
         .teacher-link { margin-top: 20px; color: #9ca3af; font-size: 0.9rem; text-decoration: underline; cursor: pointer; }
+
+        /* Modal */
+        #register-modal { display: none; }
+        .modal-overlay { background: rgba(0,0,0,0.5); }
     </style>
 </head>
 <body>
@@ -39,29 +44,117 @@
             Google 계정으로 시작하기
         </button>
 
-        <a href="teacher/dashboard.html" class="teacher-link">선생님 로그인 바로가기 (관리자)</a>
+        <a href="javascript:alert('교사 계정으로 로그인하시면 자동으로 대시보드로 이동합니다.');" class="teacher-link">선생님 로그인 (관리자)</a>
+    </div>
+
+    <!-- Registration Modal -->
+    <div id="register-modal" class="fixed inset-0 z-50 flex items-center justify-center">
+        <div class="modal-overlay absolute inset-0"></div>
+        <div class="bg-white rounded-lg shadow-xl z-10 w-full max-w-md p-6 mx-4">
+            <h2 class="text-2xl font-bold mb-2 text-gray-800">학생 정보 입력</h2>
+            <p class="text-gray-500 mb-6 text-sm">원활한 서비스 이용을 위해 정보를 입력해주세요.</p>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">이메일</label>
+                    <input type="text" id="reg-email" class="w-full bg-gray-100 border border-gray-300 rounded p-2 text-gray-500" readonly>
+                </div>
+                <div class="flex gap-4">
+                    <div class="flex-1">
+                        <label class="block text-sm font-bold text-gray-700 mb-1">반</label>
+                        <select id="reg-class" class="w-full border border-gray-300 rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                            <option value="">선택</option>
+                            <option value="1">1반</option><option value="2">2반</option><option value="3">3반</option>
+                            <option value="4">4반</option><option value="5">5반</option><option value="6">6반</option>
+                            <option value="7">7반</option><option value="8">8반</option><option value="9">9반</option>
+                        </select>
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-sm font-bold text-gray-700 mb-1">번호</label>
+                        <input type="number" id="reg-number" placeholder="예: 15" class="w-full border border-gray-300 rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">이름</label>
+                    <input type="text" id="reg-name" placeholder="본명 입력" class="w-full border border-gray-300 rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+            </div>
+
+            <button onclick="registerUser()" class="w-full mt-6 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition shadow-md">
+                입력 완료 및 시작
+            </button>
+        </div>
     </div>
 
     <script>
-        // Auth Logic
         const TEACHER_EMAIL = "westoria28@gmail.com";
+        let currentUser = null;
 
-        // Use firebase.auth() directly to avoid variable collision
-        firebase.auth().onAuthStateChanged((user) => {
+        // Auth State Check
+        window.auth.onAuthStateChanged(async (user) => {
             if (user) {
+                currentUser = user;
+                
+                // 1. Check if Teacher
                 if (user.email === TEACHER_EMAIL) {
                     window.location.href = 'teacher/dashboard.html';
-                } else {
-                    window.location.href = 'student/dashboard.html';
+                    return;
+                }
+
+                // 2. Check if Student exists in Firestore
+                try {
+                    const doc = await window.db.collection('users').doc(user.uid).get();
+                    if (doc.exists) {
+                        window.location.href = 'student/dashboard.html';
+                    } else {
+                        // Show Register Modal
+                        document.getElementById('reg-email').value = user.email;
+                        document.getElementById('reg-name').value = user.displayName || '';
+                        document.getElementById('register-modal').style.display = 'flex';
+                    }
+                } catch (error) {
+                    console.error("Auth check error:", error);
+                    alert("로그인 정보를 확인하는 중 오류가 발생했습니다.");
                 }
             }
         });
 
         function handleGoogleLogin() {
             const provider = new firebase.auth.GoogleAuthProvider();
-            firebase.auth().signInWithPopup(provider).catch((error) => {
+            window.auth.signInWithPopup(provider).catch((error) => {
                 alert("로그인 실패: " + error.message);
             });
+        }
+
+        function registerUser() {
+            const cls = document.getElementById('reg-class').value;
+            const num = document.getElementById('reg-number').value;
+            const name = document.getElementById('reg-name').value.trim();
+
+            if (!cls || !num || !name) {
+                alert("모든 정보를 올바르게 입력해주세요.");
+                return;
+            }
+
+            const userData = {
+                email: currentUser.email,
+                class: parseInt(cls),
+                number: parseInt(num),
+                name: name,
+                uid: currentUser.uid, // Important for security rules
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                photoURL: currentUser.photoURL
+            };
+
+            window.db.collection('users').doc(currentUser.uid).set(userData)
+                .then(() => {
+                    alert("가입이 완료되었습니다.");
+                    window.location.href = 'student/dashboard.html';
+                })
+                .catch((error) => {
+                    console.error("Register Error:", error);
+                    alert("가입 처리 실패: " + error.message);
+                });
         }
     </script>
 </body>

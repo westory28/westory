@@ -7,7 +7,7 @@
     <!-- Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Firebase & Config -->
+    <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
@@ -20,7 +20,6 @@
         .dashboard-container { max-width: 1280px; margin: 40px auto; padding: 0 24px; }
         .card-grid { display: grid; gap: 24px; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
         
-        /* Menu Card Style */
         .menu-card {
             background: white; border-radius: 12px; padding: 30px 24px; text-align: center;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1); transition: transform 0.2s, box-shadow 0.2s; border: 1px solid #e5e7eb;
@@ -32,14 +31,8 @@
         .card-title { font-size: 1.2rem; font-weight: 700; margin-bottom: 8px; color: #111827; }
         .card-desc { color: #6b7280; font-size: 0.9rem; }
 
-        /* Menu Config Section */
-        .config-section { margin-top: 40px; background: white; border-radius: 12px; padding: 30px; border: 1px solid #e5e7eb; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-        .config-title { font-size: 1.25rem; font-weight: 800; color: #1f2937; margin-bottom: 20px; border-bottom: 2px solid #f3f4f6; padding-bottom: 10px; }
-        .toggle-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
-        .toggle-item { display: flex; align-items: center; justify-content: space-between; padding: 15px; background: #f9fafb; border-radius: 8px; border: 1px solid #f3f4f6; }
-        .toggle-label { font-weight: 600; color: #374151; }
-        
-        /* Switch CSS */
+        /* Modal Styles */
+        .modal-overlay { background-color: rgba(0, 0, 0, 0.5); }
         .switch { position: relative; display: inline-block; width: 48px; height: 24px; }
         .switch input { opacity: 0; width: 0; height: 0; }
         .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 24px; }
@@ -49,7 +42,7 @@
     </style>
 </head>
 <body>
-    <!-- Header will be injected by auth-manager.js -->
+    <!-- Header injected by auth-manager.js -->
 
     <main class="dashboard-container">
         <h1 class="text-3xl font-bold mb-8 text-gray-900" id="welcome-text">반갑습니다, 선생님 👋</h1>
@@ -77,49 +70,43 @@
                 <div class="card-desc">지필고사 답안 및 채점 관리</div>
             </a>
         </div>
+    </main>
 
-        <!-- Student Menu Management Section (New Feature) -->
-        <div class="config-section">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="config-title mb-0 border-none pb-0"><i class="fas fa-cog mr-2"></i>학생 메뉴 표시 관리</h2>
-                <button onclick="saveMenuConfig()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold text-sm transition">
-                    <i class="fas fa-save mr-2"></i>설정 저장
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center">
+        <div class="modal-overlay absolute inset-0" onclick="document.getElementById('settings-modal').style.display='none'"></div>
+        <div class="bg-white rounded-lg shadow-xl z-10 w-full max-w-md p-6 mx-4">
+            <div class="flex justify-between items-center mb-6 pb-4 border-b">
+                <h2 class="text-xl font-bold text-gray-900"><i class="fas fa-cog mr-2"></i>학생 메뉴 표시 설정</h2>
+                <button onclick="document.getElementById('settings-modal').style.display='none'" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times fa-lg"></i>
                 </button>
             </div>
-            <p class="text-sm text-gray-500 mb-6">체크 해제 시 학생 대시보드에서 해당 메뉴가 숨겨집니다.</p>
             
-            <div class="toggle-grid">
-                <div class="toggle-item">
-                    <span class="toggle-label">역사 퀴즈</span>
-                    <label class="switch">
-                        <input type="checkbox" id="toggle-quiz">
-                        <span class="slider"></span>
-                    </label>
+            <div class="space-y-4 mb-8">
+                <div class="flex justify-between items-center">
+                    <span class="font-bold text-gray-700">역사 퀴즈</span>
+                    <label class="switch"><input type="checkbox" id="toggle-quiz"><span class="slider"></span></label>
                 </div>
-                <div class="toggle-item">
-                    <span class="toggle-label">학습 기록</span>
-                    <label class="switch">
-                        <input type="checkbox" id="toggle-history">
-                        <span class="slider"></span>
-                    </label>
+                <div class="flex justify-between items-center">
+                    <span class="font-bold text-gray-700">학습 기록</span>
+                    <label class="switch"><input type="checkbox" id="toggle-history"><span class="slider"></span></label>
                 </div>
-                <div class="toggle-item">
-                    <span class="toggle-label">나의 성적표</span>
-                    <label class="switch">
-                        <input type="checkbox" id="toggle-score">
-                        <span class="slider"></span>
-                    </label>
+                <div class="flex justify-between items-center">
+                    <span class="font-bold text-gray-700">나의 성적표</span>
+                    <label class="switch"><input type="checkbox" id="toggle-score"><span class="slider"></span></label>
                 </div>
-                <div class="toggle-item">
-                    <span class="toggle-label">시험 채점</span>
-                    <label class="switch">
-                        <input type="checkbox" id="toggle-mark-exam">
-                        <span class="slider"></span>
-                    </label>
+                <div class="flex justify-between items-center">
+                    <span class="font-bold text-gray-700">시험 채점</span>
+                    <label class="switch"><input type="checkbox" id="toggle-mark-exam"><span class="slider"></span></label>
                 </div>
             </div>
+
+            <button onclick="saveMenuConfig()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition shadow">
+                설정 저장
+            </button>
         </div>
-    </main>
+    </div>
 
     <footer class="text-center py-8 text-gray-400 text-sm border-t mt-auto bg-white">
         Copyright © 역사교사 방재석. All rights reserved.
@@ -129,27 +116,31 @@
         // Initialize Auth
         window.AuthManager.init('teacher');
 
-        // Menu Config Logic
+        // Logic to bind the header button to the modal
         document.addEventListener('auth-ready', () => {
-            loadMenuConfig();
+            const settingsBtn = document.getElementById('header-settings-btn');
+            if(settingsBtn) {
+                settingsBtn.addEventListener('click', () => {
+                    loadMenuConfig();
+                    document.getElementById('settings-modal').style.display = 'flex';
+                });
+            }
         });
 
         async function loadMenuConfig() {
             try {
-                const doc = await db.collection('site_settings').doc('menu_config').get();
+                const doc = await window.db.collection('site_settings').doc('menu_config').get();
                 if (doc.exists) {
                     const data = doc.data();
-                    document.getElementById('toggle-quiz').checked = data.quiz !== false; // Default true
+                    document.getElementById('toggle-quiz').checked = data.quiz !== false;
                     document.getElementById('toggle-history').checked = data.history !== false;
                     document.getElementById('toggle-score').checked = data.score !== false;
                     document.getElementById('toggle-mark-exam').checked = data.mark_exam !== false;
                 } else {
-                    // Defaults
-                    document.querySelectorAll('input[type="checkbox"]').forEach(el => el.checked = true);
+                    document.querySelectorAll('.switch input').forEach(el => el.checked = true);
                 }
             } catch (error) {
                 console.error("Config load error:", error);
-                alert("설정 불러오기 실패");
             }
         }
 
@@ -163,10 +154,10 @@
             };
 
             try {
-                await db.collection('site_settings').doc('menu_config').set(config, { merge: true });
-                alert("메뉴 설정이 저장되었습니다. 학생 화면에 즉시 반영됩니다.");
+                await window.db.collection('site_settings').doc('menu_config').set(config, { merge: true });
+                alert("설정이 저장되었습니다.");
+                document.getElementById('settings-modal').style.display = 'none';
             } catch (error) {
-                console.error("Config save error:", error);
                 alert("저장 실패: " + error.message);
             }
         }

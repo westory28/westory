@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>학생 대시보드 - Westory</title>
+    <!-- Tailwind -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <script src="../assets/js/firebase-config.js"></script>
+    <!-- Common -->
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <script src="../assets/js/auth-manager.js"></script>
+
+    <style>
+        .dashboard-container { max-width: 1280px; margin: 40px auto; padding: 0 24px; }
+        .card-grid { display: grid; gap: 24px; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+        
+        .menu-card {
+            background: white; border-radius: 12px; padding: 30px 24px; text-align: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1); transition: transform 0.2s, box-shadow 0.2s; border: 1px solid #e5e7eb;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            cursor: pointer; text-decoration: none;
+        }
+        .menu-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.1); border-color: #2563eb; }
+        .menu-card.disabled { opacity: 0.5; pointer-events: none; display: none; } /* Hidden by default if filtered */
+        
+        .card-icon { font-size: 32px; margin-bottom: 16px; width: 64px; height: 64px; background: #eff6ff; color: #2563eb; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+        .card-title { font-size: 1.2rem; font-weight: 700; margin-bottom: 8px; color: #111827; }
+        .card-desc { color: #6b7280; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+    <!-- Header injected by JS -->
+
+    <main class="dashboard-container">
+        <h1 class="text-3xl font-bold mb-8 text-gray-900" id="welcome-text">환영합니다! 👋</h1>
+
+        <div id="loading-spinner" class="flex justify-center py-10">
+            <div class="loader-spinner"></div>
+        </div>
+
+        <div class="card-grid hidden" id="menu-grid">
+            <!-- Quiz -->
+            <a href="quiz.html" class="menu-card" id="card-quiz">
+                <div class="card-icon"><i class="fas fa-pencil-alt"></i></div>
+                <div class="card-title">역사 퀴즈</div>
+                <div class="card-desc">이번 학기 퀴즈 풀기</div>
+            </a>
+            
+            <!-- History -->
+            <a href="history.html" class="menu-card" id="card-history">
+                <div class="card-icon"><i class="fas fa-history"></i></div>
+                <div class="card-title">학습 기록</div>
+                <div class="card-desc">지난 퀴즈 결과 확인</div>
+            </a>
+            
+            <!-- Score -->
+            <a href="score.html" class="menu-card" id="card-score">
+                <div class="card-icon"><i class="fas fa-star"></i></div>
+                <div class="card-title">나의 성적표</div>
+                <div class="card-desc">수행평가 점수 확인</div>
+            </a>
+            
+            <!-- Mark Exam -->
+            <a href="mark-exam.html" class="menu-card" id="card-mark-exam">
+                <div class="card-icon"><i class="fas fa-check-circle"></i></div>
+                <div class="card-title">시험 채점</div>
+                <div class="card-desc">지필고사 답안 채점</div>
+            </a>
+        </div>
+    </main>
+
+    <footer class="text-center py-8 text-gray-400 text-sm border-t mt-auto bg-white">
+        Copyright © 역사교사 방재석. All rights reserved.
+    </footer>
+
+    <script>
+        // Init Auth
+        window.AuthManager.init('student');
+
+        document.addEventListener('auth-ready', async (e) => {
+            const user = e.detail;
+            document.getElementById('welcome-text').textContent = `${user.displayName || '학생'}님, 환영합니다! 👋`;
+            
+            // Check Menu Visibility Config
+            try {
+                const doc = await window.db.collection('site_settings').doc('menu_config').get();
+                if (doc.exists) {
+                    const cfg = doc.data();
+                    // Toggle visibility based on config
+                    // If config is false, remove the card. If true or undefined, show it.
+                    if (cfg.quiz === false) document.getElementById('card-quiz').remove();
+                    if (cfg.history === false) document.getElementById('card-history').remove();
+                    if (cfg.score === false) document.getElementById('card-score').remove();
+                    if (cfg.mark_exam === false) document.getElementById('card-mark-exam').remove();
+                    
+                    // Also hide nav items
+                    if (cfg.quiz === false) hideNav('menu-quiz');
+                    if (cfg.history === false) hideNav('menu-history');
+                    if (cfg.score === false) hideNav('menu-score');
+                    if (cfg.mark_exam === false) hideNav('menu-mark');
+                }
+            } catch (err) {
+                console.warn("메뉴 설정을 불러올 수 없습니다. 기본값을 사용합니다.", err);
+            } finally {
+                document.getElementById('loading-spinner').classList.add('hidden');
+                document.getElementById('menu-grid').classList.remove('hidden');
+            }
+        });
+
+        function hideNav(id) {
+            const el = document.getElementById('nav-' + id);
+            const mobileEl = document.getElementById('mobile-nav-' + id);
+            if(el) el.style.display = 'none';
+            if(mobileEl) mobileEl.style.display = 'none';
+        }
+    </script>
+</body>
+</html>
