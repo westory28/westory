@@ -25,16 +25,9 @@ class AuthManager {
 
     calculateRootPrefix() {
         const path = window.location.pathname;
-        
-        // Depth 2 (e.g. /student/lesson/note.html)
         if (path.includes('/student/lesson/')) return '../../';
-        if (path.includes('/student/assessment/')) return '../../'; // Just in case
-        if (path.includes('/student/score/')) return '../../';      // Just in case
-        
-        // Depth 1 (e.g. /student/dashboard.html, /teacher/dashboard.html)
+        if (path.includes('/student/assessment/') || path.includes('/student/score/')) return '../../';
         if (path.includes('/student/') || path.includes('/teacher/')) return '../';
-        
-        // Root (index.html)
         return './';
     }
 
@@ -52,17 +45,11 @@ class AuthManager {
                     return;
                 }
 
-                // Check Privacy Consent (Crucial Step)
                 await this.checkPrivacyConsent(user);
-
                 await this.loadHeader();
-                this.loadFooter(); // Inject Footer
+                this.loadFooter();
                 this.updateUserInfo(user);
-                
-                // Initialize Session Timer for Teacher
-                if (type === 'teacher') {
-                    this.initSessionTimer();
-                }
+                this.initSessionTimer(); // Start timer for everyone
 
                 document.dispatchEvent(new CustomEvent('auth-ready', { detail: user }));
             } else {
@@ -74,8 +61,7 @@ class AuthManager {
     }
 
     async checkPrivacyConsent(user) {
-        if (user.email === TEACHER_EMAIL) return; // Skip for teacher
-
+        if (user.email === TEACHER_EMAIL) return;
         try {
             const doc = await window.db.collection('users').doc(user.uid).get();
             if (doc.exists) {
@@ -84,9 +70,7 @@ class AuthManager {
                     this.showPrivacyModal(user.uid);
                 }
             }
-        } catch (e) {
-            console.error("Privacy check failed", e);
-        }
+        } catch (e) { console.error(e); }
     }
 
     showPrivacyModal(uid) {
@@ -121,14 +105,9 @@ class AuthManager {
             </div>
         `;
         document.body.insertAdjacentHTML('beforeend', modalHtml);
-
         const checkbox = document.getElementById('privacy-check');
         const btn = document.getElementById('btn-privacy-confirm');
-        
-        checkbox.addEventListener('change', (e) => {
-            btn.disabled = !e.target.checked;
-        });
-
+        checkbox.addEventListener('change', (e) => { btn.disabled = !e.target.checked; });
         btn.addEventListener('click', async () => {
             try {
                 await window.db.collection('users').doc(uid).update({
@@ -136,9 +115,7 @@ class AuthManager {
                     privacyAgreedAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
                 document.getElementById('global-privacy-modal').remove();
-            } catch (e) {
-                alert("처리 중 오류가 발생했습니다.");
-            }
+            } catch (e) { alert("오류 발생"); }
         });
     }
 
@@ -149,12 +126,9 @@ class AuthManager {
         const menuItems = MENUS[this.userType] || [];
         const resolve = (url) => this.rootPrefix + url;
         const currentPath = window.location.pathname;
-        const isActive = (url) => currentPath.endsWith(url.split('/').pop()); // Improved active check
-        
-        // Determine if current page is Dashboard
+        const isActive = (url) => currentPath.endsWith(url.split('/').pop());
         const isDashboard = currentPath.includes('dashboard.html');
 
-        // Build Nav HTML only if NOT dashboard
         let navHtml = '';
         let mobileNavHtml = '';
         let mobileToggleBtn = '';
@@ -167,7 +141,6 @@ class AuthManager {
                     `).join('')}
                 </nav>
             `;
-            
             mobileNavHtml = `
                 <div id="mobile-menu">
                     ${menuItems.map(item => `
@@ -178,52 +151,47 @@ class AuthManager {
                     `).join('')}
                 </div>
             `;
-
-            mobileToggleBtn = `
-                <button id="mobile-menu-toggle" class="mobile-menu-btn"><i class="fas fa-bars"></i></button>
-            `;
+            mobileToggleBtn = `<button id="mobile-menu-toggle" class="mobile-menu-btn"><i class="fas fa-bars"></i></button>`;
         }
 
-        // Dashboard Link based on Role
         const dashboardLink = this.userType === 'teacher' ? resolve('teacher/dashboard.html') : resolve('student/dashboard.html');
 
-        // Right Side Content
-        let rightSideHtml = '';
+        // Teacher Settings Icon
+        let settingsIcon = '';
         if (this.userType === 'teacher') {
-            rightSideHtml = `
-                <div class="flex items-center gap-3">
-                    <span id="header-settings-btn" class="text-gray-400 hover:text-blue-600 cursor-pointer transition p-1" title="설정">
-                        <i class="fas fa-cog fa-lg"></i>
-                    </span>
-                    <div class="hidden md:flex items-center bg-gray-100 rounded-full px-3 py-1">
-                        <span class="text-xs font-bold text-gray-500 mr-2"><i class="fas fa-clock"></i></span>
-                        <span id="session-timer-display" class="text-xs font-mono font-bold text-red-500 w-10 text-center">60:00</span>
-                        <button id="btn-extend-session" class="ml-2 text-[10px] bg-white border border-gray-300 rounded px-1 hover:bg-gray-50 text-blue-600">연장</button>
-                    </div>
-                    <span id="header-greeting" class="text-sm font-bold text-blue-600 hidden md:inline"></span>
-                    <button id="logout-btn" class="text-gray-500 hover:text-gray-800 text-sm font-bold whitespace-nowrap">로그아웃</button>
-                    ${mobileToggleBtn}
-                </div>
-            `;
-        } else {
-            // Student
-            rightSideHtml = `
-                <div class="flex items-center gap-4">
-                    <span id="header-greeting" class="text-sm font-bold text-gray-600 hidden md:inline"></span>
-                    <button id="logout-btn" class="text-gray-500 hover:text-gray-800 text-sm font-bold whitespace-nowrap">로그아웃</button>
-                    ${mobileToggleBtn}
-                </div>
+            settingsIcon = `
+                <span id="header-settings-btn" class="text-gray-400 hover:text-blue-600 cursor-pointer transition p-1 mr-2" title="설정">
+                    <i class="fas fa-cog fa-lg"></i>
+                </span>
             `;
         }
 
         const headerHtml = `
             <header>
                 <div class="header-container">
-                    <a href="${dashboardLink}" class="logo-text">
-                        <span class="logo-we">We</span><span class="logo-story">story</span>
-                    </a>
-                    ${navHtml}
-                    ${rightSideHtml}
+                    <div class="flex items-center gap-6">
+                        <a href="${dashboardLink}" class="logo-text">
+                            <span class="logo-we">We</span><span class="logo-story">story</span>
+                        </a>
+                        
+                        <!-- 60 Min Timer (Visible for all) -->
+                        <div class="hidden md:flex items-center gap-2 px-3 py-1 bg-stone-100 rounded-full border border-stone-200">
+                            <i class="fas fa-stopwatch text-stone-400 text-xs"></i>
+                            <span id="session-timer-display" class="font-mono font-bold text-stone-600 text-sm w-[42px] text-center">60:00</span>
+                            <button id="btn-extend-session" class="ml-1 text-stone-400 hover:text-blue-600 transition p-1" title="시간 초기화">
+                                <i class="fas fa-redo-alt text-xs"></i>
+                            </button>
+                        </div>
+
+                        ${navHtml}
+                    </div>
+
+                    <div class="flex items-center gap-4">
+                        ${settingsIcon}
+                        <span id="header-greeting" class="text-sm font-bold text-stone-700 hidden md:inline"></span>
+                        <button id="logout-btn" class="text-stone-400 hover:text-stone-800 text-sm font-bold whitespace-nowrap">로그아웃</button>
+                        ${mobileToggleBtn}
+                    </div>
                 </div>
                 ${mobileNavHtml}
             </header>
@@ -231,27 +199,19 @@ class AuthManager {
 
         document.body.insertAdjacentHTML('afterbegin', headerHtml);
         
-        // Bind Events
+        // Events
         document.getElementById('logout-btn').addEventListener('click', () => this.logout());
-        
+        document.getElementById('btn-extend-session').addEventListener('click', () => this.extendSession());
+
         if (this.userType === 'teacher') {
-            const extendBtn = document.getElementById('btn-extend-session');
-            if(extendBtn) extendBtn.addEventListener('click', () => this.extendSession());
-            
             const settingsBtn = document.getElementById('header-settings-btn');
-            if(settingsBtn) settingsBtn.addEventListener('click', () => {
-                document.dispatchEvent(new Event('open-settings'));
-            });
+            if(settingsBtn) settingsBtn.addEventListener('click', () => document.dispatchEvent(new Event('open-settings')));
         }
 
-        // Mobile Menu Events
         const mobileBtn = document.getElementById('mobile-menu-toggle');
         const mobileMenu = document.getElementById('mobile-menu');
         if (mobileBtn && mobileMenu) {
-            mobileBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                mobileMenu.classList.toggle('open');
-            });
+            mobileBtn.addEventListener('click', (e) => { e.stopPropagation(); mobileMenu.classList.toggle('open'); });
             document.addEventListener('click', (e) => {
                 if (mobileMenu.classList.contains('open') && !mobileMenu.contains(e.target) && !mobileBtn.contains(e.target)) {
                     mobileMenu.classList.remove('open');
@@ -263,7 +223,6 @@ class AuthManager {
     loadFooter() {
         const existingFooter = document.querySelector('footer');
         if(existingFooter) existingFooter.remove();
-
         const footerHtml = `
             <footer class="bg-white border-t border-stone-200 py-8 mt-auto">
                 <div class="container mx-auto text-center">
@@ -277,12 +236,16 @@ class AuthManager {
     updateUserInfo(user) {
         const greetingEl = document.getElementById('header-greeting');
         if (greetingEl) {
-            const name = user.displayName || (this.userType === 'teacher' ? '선생님' : '학생');
-            greetingEl.textContent = `${name} ${this.userType === 'teacher' ? '' : '님'}`;
+            let displayName = user.displayName;
+            // If name is not in Auth profile, try to use "학생" or "선생님" default, 
+            // but usually we want to fetch from DB if possible or rely on Auth display name.
+            if(!displayName) displayName = this.userType === 'teacher' ? '선생님' : '학생';
+            
+            const suffix = (this.userType === 'teacher') ? ' 교사' : ' 학생';
+            greetingEl.textContent = displayName + suffix;
         }
     }
 
-    // Session Timer Logic (60 min)
     initSessionTimer() {
         let expiry = localStorage.getItem('sessionExpiry');
         if (!expiry) {
@@ -297,12 +260,11 @@ class AuthManager {
         const expiry = now + (60 * 60 * 1000); // 60 mins
         localStorage.setItem('sessionExpiry', expiry);
         this.startTimerInterval();
-        alert("세션이 60분 연장되었습니다.");
+        alert("세션이 60분으로 초기화되었습니다.");
     }
 
     startTimerInterval() {
         if (this.timerInterval) clearInterval(this.timerInterval);
-        
         const display = document.getElementById('session-timer-display');
         
         this.timerInterval = setInterval(() => {
@@ -312,13 +274,17 @@ class AuthManager {
 
             if (diff <= 0) {
                 clearInterval(this.timerInterval);
-                alert("세션이 만료되었습니다.");
+                alert("세션이 만료되어 자동 로그아웃됩니다.");
                 this.logout();
             } else {
                 if(display) {
                     const m = Math.floor(diff / 60000);
                     const s = Math.floor((diff % 60000) / 1000);
                     display.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+                    
+                    // Visual warning for last 5 mins
+                    if(m < 5) display.classList.add('text-red-500');
+                    else display.classList.remove('text-red-500');
                 }
             }
         }, 1000);
