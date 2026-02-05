@@ -7,72 +7,157 @@
     <!-- Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <!-- Config (Path corrected for student/ folder) -->
     <script src="../assets/js/firebase-config.js"></script>
-    <!-- Common -->
     <link rel="stylesheet" href="../assets/css/style.css">
     <script src="../assets/js/auth-manager.js"></script>
 
     <style>
-        .dashboard-container { max-width: 1280px; margin: 40px auto; padding: 0 24px; }
-        .card-grid { display: grid; gap: 24px; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+        .dashboard-container { max-width: 1024px; margin: 0 auto; padding: 24px; }
         
-        .menu-card {
-            background: white; border-radius: 12px; padding: 30px 24px; text-align: center;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1); transition: transform 0.2s, box-shadow 0.2s; border: 1px solid #e5e7eb;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            cursor: pointer; text-decoration: none;
-        }
-        .menu-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.1); border-color: #2563eb; }
-        .menu-card.disabled { opacity: 0.5; pointer-events: none; display: none; } /* Hidden by default if filtered */
+        /* Filter Styles */
+        .filter-bar { display: flex; gap: 12px; margin-bottom: 24px; background: white; padding: 16px; border-radius: 12px; border: 1px solid #e5e7eb; align-items: center; }
+        .filter-select { padding: 8px 16px; border-radius: 8px; border: 1px solid #d1d5db; font-weight: 600; color: #374151; background-color: #f9fafb; cursor: pointer; transition: all 0.2s; }
+        .filter-select:hover { border-color: #2563eb; }
         
-        .card-icon { font-size: 32px; margin-bottom: 16px; width: 64px; height: 64px; background: #eff6ff; color: #2563eb; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
-        .card-title { font-size: 1.2rem; font-weight: 700; margin-bottom: 8px; color: #111827; }
-        .card-desc { color: #6b7280; font-size: 0.9rem; }
+        /* Tab Styles */
+        .tab-container { display: flex; gap: 8px; margin-bottom: 24px; border-bottom: 2px solid #e5e7eb; }
+        .tab-btn { padding: 12px 24px; font-weight: 700; color: #6b7280; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.2s; margin-bottom: -2px; }
+        .tab-btn:hover { color: #111827; }
+        .tab-btn.active { color: #2563eb; border-bottom-color: #2563eb; }
+        .tab-content { display: none; animation: fadeIn 0.3s ease-out; }
+        .tab-content.active { display: block; }
+
+        /* Item List Styles */
+        .item-card { background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; margin-bottom: 12px; transition: transform 0.2s, box-shadow 0.2s; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+        .item-card:hover { transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-color: #2563eb; }
+        .item-icon { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; margin-right: 16px; flex-shrink: 0; }
+        
+        /* Colors for types */
+        .icon-quiz { background-color: #eff6ff; color: #2563eb; }
+        .icon-exam { background-color: #fef3c7; color: #d97706; }
+        .icon-lesson { background-color: #ecfdf5; color: #059669; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
-    <!-- Header injected by JS -->
+    <!-- Header injected by AuthManager -->
 
     <main class="dashboard-container">
-        <h1 class="text-3xl font-bold mb-8 text-gray-900" id="welcome-text">환영합니다! 👋</h1>
-
-        <div id="loading-spinner" class="flex justify-center py-10">
-            <div class="loader-spinner"></div>
+        <!-- Welcome Section -->
+        <div class="mb-8">
+            <h1 class="text-2xl font-bold text-gray-900" id="welcome-text">환영합니다! 👋</h1>
+            <p class="text-gray-500 text-sm mt-1">오늘 학습할 내용을 확인해보세요.</p>
         </div>
 
-        <div class="card-grid hidden" id="menu-grid">
-            <!-- Quiz -->
-            <a href="quiz.html" class="menu-card" id="card-quiz">
-                <div class="card-icon"><i class="fas fa-pencil-alt"></i></div>
-                <div class="card-title">역사 퀴즈</div>
-                <div class="card-desc">이번 학기 퀴즈 풀기</div>
-            </a>
-            
-            <!-- History -->
-            <a href="history.html" class="menu-card" id="card-history">
-                <div class="card-icon"><i class="fas fa-history"></i></div>
-                <div class="card-title">학습 기록</div>
-                <div class="card-desc">지난 퀴즈 결과 확인</div>
-            </a>
-            
-            <!-- Score -->
-            <a href="score.html" class="menu-card" id="card-score">
-                <div class="card-icon"><i class="fas fa-star"></i></div>
-                <div class="card-title">나의 성적표</div>
-                <div class="card-desc">수행평가 점수 확인</div>
-            </a>
-            
-            <!-- Mark Exam -->
-            <a href="mark-exam.html" class="menu-card" id="card-mark-exam">
-                <div class="card-icon"><i class="fas fa-check-circle"></i></div>
-                <div class="card-title">시험 채점</div>
-                <div class="card-desc">지필고사 답안 채점</div>
-            </a>
+        <!-- Filter Bar -->
+        <div class="filter-bar">
+            <div class="flex items-center gap-2">
+                <i class="fas fa-filter text-gray-400"></i>
+                <span class="font-bold text-sm text-gray-600">학기 선택:</span>
+            </div>
+            <select id="year-select" class="filter-select">
+                <option value="2025">2025학년도</option>
+                <option value="2026">2026학년도</option>
+            </select>
+            <select id="semester-select" class="filter-select">
+                <option value="2">2학기</option>
+                <option value="1">1학기</option>
+            </select>
         </div>
+
+        <!-- Tabs -->
+        <div class="tab-container">
+            <button class="tab-btn active" onclick="switchTab('quiz')">🧩 형성평가</button>
+            <button class="tab-btn" onclick="switchTab('exam')">📝 시험대비</button>
+            <button class="tab-btn" onclick="switchTab('lesson')">📚 수업활동</button>
+        </div>
+
+        <!-- Tab Contents -->
+        
+        <!-- 1. Quiz Tab -->
+        <div id="tab-quiz" class="tab-content active">
+            <div class="grid gap-3">
+                <div class="item-card" onclick="location.href='quiz/list.html'">
+                    <div class="flex items-center">
+                        <div class="item-icon icon-quiz"><i class="fas fa-puzzle-piece"></i></div>
+                        <div>
+                            <h3 class="font-bold text-gray-800">4단원: 제국주의 침략</h3>
+                            <p class="text-xs text-gray-500">형성평가 | 총 10문항</p>
+                        </div>
+                    </div>
+                    <i class="fas fa-chevron-right text-gray-300"></i>
+                </div>
+                <div class="item-card" onclick="location.href='quiz/list.html'">
+                    <div class="flex items-center">
+                        <div class="item-icon icon-quiz"><i class="fas fa-puzzle-piece"></i></div>
+                        <div>
+                            <h3 class="font-bold text-gray-800">5단원: 세계 대전</h3>
+                            <p class="text-xs text-gray-500">형성평가 | 총 15문항</p>
+                        </div>
+                    </div>
+                    <i class="fas fa-chevron-right text-gray-300"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. Exam Tab -->
+        <div id="tab-exam" class="tab-content">
+            <div class="grid gap-3">
+                <div class="item-card" onclick="location.href='exam/mark.html'">
+                    <div class="flex items-center">
+                        <div class="item-icon icon-exam"><i class="fas fa-pen-alt"></i></div>
+                        <div>
+                            <h3 class="font-bold text-gray-800">2학기 기말고사 자가채점</h3>
+                            <p class="text-xs text-gray-500">OMR 마킹 및 오답 확인</p>
+                        </div>
+                    </div>
+                    <span class="text-xs font-bold text-red-500 bg-red-50 px-2 py-1 rounded">D-Day</span>
+                </div>
+                <div class="item-card" onclick="location.href='score.html'">
+                    <div class="flex items-center">
+                        <div class="item-icon icon-exam"><i class="fas fa-chart-line"></i></div>
+                        <div>
+                            <h3 class="font-bold text-gray-800">나의 성적표 확인</h3>
+                            <p class="text-xs text-gray-500">수행평가 및 지필고사 합산</p>
+                        </div>
+                    </div>
+                    <i class="fas fa-chevron-right text-gray-300"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. Lesson Tab -->
+        <div id="tab-lesson" class="tab-content">
+            <div class="grid gap-3">
+                <div class="item-card" onclick="location.href='lesson/note.html'">
+                    <div class="flex items-center">
+                        <div class="item-icon icon-lesson"><i class="fas fa-book-open"></i></div>
+                        <div>
+                            <h3 class="font-bold text-gray-800">1910년대 무단 통치와 토지 조사 사업</h3>
+                            <p class="text-xs text-gray-500">빈칸 채우기 핵심 노트</p>
+                        </div>
+                    </div>
+                    <i class="fas fa-chevron-right text-gray-300"></i>
+                </div>
+                <div class="item-card disabled opacity-50 cursor-not-allowed">
+                    <div class="flex items-center">
+                        <div class="item-icon bg-gray-100 text-gray-400"><i class="fas fa-lock"></i></div>
+                        <div>
+                            <h3 class="font-bold text-gray-500">3.1 운동과 대한민국 임시 정부</h3>
+                            <p class="text-xs text-gray-400">오픈 예정</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </main>
 
     <footer class="text-center py-8 text-gray-400 text-sm border-t mt-auto bg-white">
@@ -83,41 +168,20 @@
         // Init Auth
         window.AuthManager.init('student');
 
-        document.addEventListener('auth-ready', async (e) => {
+        document.addEventListener('auth-ready', (e) => {
             const user = e.detail;
-            document.getElementById('welcome-text').textContent = `${user.displayName || '학생'}님, 환영합니다! 👋`;
-            
-            // Check Menu Visibility Config
-            try {
-                const doc = await window.db.collection('site_settings').doc('menu_config').get();
-                if (doc.exists) {
-                    const cfg = doc.data();
-                    // Toggle visibility based on config
-                    // If config is false, remove the card. If true or undefined, show it.
-                    if (cfg.quiz === false) document.getElementById('card-quiz').remove();
-                    if (cfg.history === false) document.getElementById('card-history').remove();
-                    if (cfg.score === false) document.getElementById('card-score').remove();
-                    if (cfg.mark_exam === false) document.getElementById('card-mark-exam').remove();
-                    
-                    // Also hide nav items
-                    if (cfg.quiz === false) hideNav('menu-quiz');
-                    if (cfg.history === false) hideNav('menu-history');
-                    if (cfg.score === false) hideNav('menu-score');
-                    if (cfg.mark_exam === false) hideNav('menu-mark');
-                }
-            } catch (err) {
-                console.warn("메뉴 설정을 불러올 수 없습니다. 기본값을 사용합니다.", err);
-            } finally {
-                document.getElementById('loading-spinner').classList.add('hidden');
-                document.getElementById('menu-grid').classList.remove('hidden');
-            }
+            document.getElementById('welcome-text').innerText = `${user.displayName || '학생'}님, 환영합니다! 👋`;
         });
 
-        function hideNav(id) {
-            const el = document.getElementById('nav-' + id);
-            const mobileEl = document.getElementById('mobile-nav-' + id);
-            if(el) el.style.display = 'none';
-            if(mobileEl) mobileEl.style.display = 'none';
+        // Tab Switching Logic
+        function switchTab(tabName) {
+            // Update Buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+
+            // Update Content
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.getElementById(`tab-${tabName}`).classList.add('active');
         }
     </script>
 </body>

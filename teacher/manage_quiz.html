@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>퀴즈 관리 - Westory Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <script src="../assets/js/firebase-config.js"></script>
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <script src="../assets/js/auth-manager.js"></script>
+
+    <style>
+        .tab-btn { @apply px-6 py-2 rounded-full text-sm font-bold transition cursor-pointer; }
+        .tab-btn.active { @apply bg-blue-600 text-white shadow-md; }
+        .tab-btn.inactive { @apply bg-white text-gray-500 hover:bg-gray-100; }
+    </style>
+</head>
+<body>
+    <!-- Header injected by AuthManager -->
+
+    <main class="max-w-7xl mx-auto px-4 py-8">
+        
+        <!-- Tabs -->
+        <div class="flex justify-center mb-8 gap-2">
+            <button onclick="app.setTab('log')" id="btn-tab-log" class="tab-btn active">📊 실시간 기록</button>
+            <button onclick="app.setTab('bank')" id="btn-tab-bank" class="tab-btn inactive">🗄️ 문제 은행</button>
+            <button onclick="app.setTab('add')" id="btn-tab-add" class="tab-btn inactive">✍️ 문제 등록</button>
+        </div>
+
+        <!-- 1. Realtime Log Tab -->
+        <div id="tab-log" class="tab-content">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+                    <h2 class="text-xl font-bold text-gray-800">제출 현황 <span id="log-count" class="text-sm font-normal text-gray-500"></span></h2>
+                    <div class="flex gap-2">
+                        <select id="select-class-trigger" onchange="app.loadByClass(this.value)" class="border rounded px-3 py-2 text-sm font-bold bg-gray-50">
+                            <option value="">반 선택</option>
+                            <option value="all">전체 (최근 50개)</option>
+                            <option value="1">1반</option><option value="2">2반</option><option value="3">3반</option>
+                            <option value="4">4반</option><option value="5">5반</option><option value="6">6반</option>
+                            <option value="7">7반</option><option value="8">8반</option><option value="9">9반</option>
+                        </select>
+                        <button onclick="app.loadByClass(document.getElementById('select-class-trigger').value)" class="bg-gray-100 p-2 rounded hover:bg-gray-200"><i class="fas fa-sync-alt"></i></button>
+                        <button onclick="app.deleteSelectedLogs()" class="bg-red-50 text-red-600 px-3 py-2 rounded text-sm font-bold hover:bg-red-100">선택 삭제</button>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-gray-50 text-gray-600 font-bold border-b">
+                            <tr>
+                                <th class="p-4 w-10"><input type="checkbox" onchange="document.querySelectorAll('.log-checkbox').forEach(cb=>cb.checked=this.checked)"></th>
+                                <th class="p-4">시간</th>
+                                <th class="p-4">학생</th>
+                                <th class="p-4">점수</th>
+                                <th class="p-4">상태</th>
+                                <th class="p-4 text-center">삭제</th>
+                            </tr>
+                        </thead>
+                        <tbody id="log-body" class="divide-y">
+                            <tr><td colspan="6" class="p-8 text-center text-gray-400">데이터를 불러오려면 반을 선택하세요.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. Question Bank Tab -->
+        <div id="tab-bank" class="tab-content hidden">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold text-gray-800">등록된 문제 <span id="total-q-count" class="text-sm font-normal text-gray-500"></span></h2>
+                    <div class="flex gap-2">
+                        <select id="bank-filter-unit" onchange="app.renderBank()" class="border rounded px-2 py-1 text-sm"><option value="all">전체 단원</option><option value="I.">I. 고대</option><option value="II.">II. 종교</option><option value="III.">III. 교류</option><option value="IV.">IV. 제국주의</option><option value="V.">V. 세계대전</option></select>
+                        <button onclick="app.deleteSelectedQuestions()" class="bg-red-50 text-red-600 px-3 py-1 rounded text-sm font-bold border border-red-200">삭제</button>
+                    </div>
+                </div>
+                <div class="overflow-x-auto max-h-[600px]">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-gray-50 text-gray-600 font-bold sticky top-0">
+                            <tr>
+                                <th class="p-3 w-10"><input type="checkbox" onchange="document.querySelectorAll('.q-checkbox').forEach(cb=>cb.checked=this.checked)"></th>
+                                <th class="p-3 w-12">ID</th>
+                                <th class="p-3">문제 내용</th>
+                                <th class="p-3 w-20">유형</th>
+                                <th class="p-3 w-20">정답</th>
+                                <th class="p-3 w-20">정답률</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bank-body" class="divide-y"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. Add Question Tab -->
+        <div id="tab-add" class="tab-content hidden">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Manual Add -->
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                    <h3 class="font-bold text-lg mb-4 text-gray-800">📝 직접 만들기</h3>
+                    <div class="space-y-3">
+                        <select id="new-q-unit" class="w-full p-2 border rounded text-sm"><option>I. 문명의 발생</option><option>IV. 제국주의 침략</option><option>V. 세계 대전</option></select>
+                        <select id="new-q-type" class="w-full p-2 border rounded text-sm"><option value="choice">객관식</option><option value="ox">O/X</option><option value="word">단답형</option></select>
+                        <textarea id="new-q-text" class="w-full p-2 border rounded text-sm h-24" placeholder="문제 내용을 입력하세요"></textarea>
+                        <input type="text" id="new-q-options" class="w-full p-2 border rounded text-sm" placeholder="보기 (콤마로 구분, 객관식만)">
+                        <input type="text" id="new-q-answer" class="w-full p-2 border rounded text-sm" placeholder="정답">
+                        <input type="text" id="new-q-exp" class="w-full p-2 border rounded text-sm" placeholder="해설">
+                        <button onclick="app.addCustomQuestion()" class="w-full bg-blue-600 text-white font-bold py-3 rounded hover:bg-blue-700">등록하기</button>
+                    </div>
+                </div>
+                
+                <!-- Excel Upload -->
+                <div class="bg-green-50 p-6 rounded-xl border border-green-200">
+                    <h3 class="font-bold text-lg mb-4 text-green-800">📗 엑셀 업로드</h3>
+                    <input type="file" id="excel-file" accept=".xlsx" class="block w-full text-sm text-slate-500 mb-6 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-100 file:text-green-700 hover:file:bg-green-200"/>
+                    <button onclick="app.uploadExcel()" class="w-full bg-green-600 text-white font-bold py-3 rounded hover:bg-green-700">업로드 시작</button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        window.AuthManager.init('teacher');
+
+        const app = {
+            state: { questions: [], logs: [] },
+
+            init: function() {
+                this.loadQuestions();
+            },
+
+            setTab: function(tabName) {
+                document.querySelectorAll('.tab-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                    btn.classList.add('inactive');
+                });
+                document.getElementById('btn-tab-' + tabName).classList.add('active');
+                document.getElementById('btn-tab-' + tabName).classList.remove('inactive');
+
+                document.querySelectorAll('.tab-content').forEach(div => div.classList.add('hidden'));
+                document.getElementById('tab-' + tabName).classList.remove('hidden');
+            },
+
+            loadByClass: function(cls) {
+                if(!cls) return;
+                let q = window.db.collection('quiz_results').orderBy('timestamp', 'desc');
+                if (cls !== 'all') q = q.where('class', '==', parseInt(cls) || cls); // Try both number and string
+                else q = q.limit(50);
+
+                q.get().then(snap => {
+                    let html = '';
+                    snap.forEach(doc => {
+                        const d = doc.data();
+                        html += `<tr class="hover:bg-gray-50"><td class="p-4"><input type="checkbox" class="log-checkbox" value="${doc.id}"></td><td class="p-4 text-xs text-gray-500">${d.timeString}</td><td class="p-4 font-bold text-gray-700">${d.class}반 ${d.number}번 ${d.name}</td><td class="p-4 font-bold text-blue-600">${d.score}점</td><td class="p-4 text-xs">${d.status}</td><td class="p-4 text-center"><button onclick="app.deleteLog('${doc.id}')" class="text-red-400 hover:text-red-600"><i class="fas fa-trash"></i></button></td></tr>`;
+                    });
+                    document.getElementById('log-body').innerHTML = html || '<tr><td colspan="6" class="p-8 text-center">데이터가 없습니다.</td></tr>';
+                    document.getElementById('log-count').innerText = `(${snap.size}건)`;
+                });
+            },
+
+            loadQuestions: function() {
+                window.db.collection('quiz_questions').get().then(snap => {
+                    this.state.questions = [];
+                    snap.forEach(doc => this.state.questions.push({ ...doc.data(), id: parseInt(doc.id) }));
+                    this.state.questions.sort((a,b) => a.id - b.id);
+                    this.renderBank();
+                });
+            },
+
+            renderBank: function() {
+                const filter = document.getElementById('bank-filter-unit').value;
+                const list = (filter === 'all') ? this.state.questions : this.state.questions.filter(q => (q.unit||"").includes(filter));
+                document.getElementById('total-q-count').innerText = `(${list.length}문항)`;
+                
+                document.getElementById('bank-body').innerHTML = list.map(q => `
+                    <tr class="hover:bg-gray-50 border-b">
+                        <td class="p-3"><input type="checkbox" class="q-checkbox" value="${q.id}"></td>
+                        <td class="p-3 text-xs font-bold text-gray-500">${q.id}</td>
+                        <td class="p-3 text-sm font-bold text-gray-800">${q.question}</td>
+                        <td class="p-3 text-xs text-gray-500 bg-gray-100 rounded text-center">${q.type}</td>
+                        <td class="p-3 text-xs font-bold text-blue-600">${q.answer}</td>
+                        <td class="p-3 text-xs text-gray-500 text-center">${q.stat_total ? Math.round((q.stat_correct/q.stat_total)*100)+'%' : '-'}</td>
+                    </tr>
+                `).join('');
+            },
+
+            addCustomQuestion: function() {
+                // Logic adapted from previous `addCustomQuestion`
+                const id = this.state.questions.length > 0 ? Math.max(...this.state.questions.map(q=>q.id)) + 1 : 1;
+                const data = {
+                    id: id,
+                    unit: document.getElementById('new-q-unit').value,
+                    type: document.getElementById('new-q-type').value,
+                    question: document.getElementById('new-q-text').value,
+                    options: document.getElementById('new-q-options').value.split(','),
+                    answer: document.getElementById('new-q-answer').value,
+                    explanation: document.getElementById('new-q-exp').value
+                };
+                window.db.collection('quiz_questions').doc(String(id)).set(data).then(() => {
+                    alert('등록되었습니다.');
+                    this.loadQuestions();
+                });
+            },
+
+            deleteSelectedLogs: function() {
+                const checked = document.querySelectorAll('.log-checkbox:checked');
+                if(!checked.length) return;
+                if(!confirm(`${checked.length}개의 기록을 삭제하시겠습니까?`)) return;
+                const batch = window.db.batch();
+                checked.forEach(cb => batch.delete(window.db.collection('quiz_results').doc(cb.value)));
+                batch.commit().then(() => this.loadByClass(document.getElementById('select-class-trigger').value));
+            },
+
+            deleteSelectedQuestions: function() {
+                const checked = document.querySelectorAll('.q-checkbox:checked');
+                if(!checked.length) return;
+                if(!confirm("선택한 문제를 삭제하시겠습니까?")) return;
+                const batch = window.db.batch();
+                checked.forEach(cb => batch.delete(window.db.collection('quiz_questions').doc(cb.value)));
+                batch.commit().then(() => this.loadQuestions());
+            }
+        };
+
+        // Initialize when Auth is ready
+        document.addEventListener('auth-ready', () => app.init());
+    </script>
+</body>
+</html>
