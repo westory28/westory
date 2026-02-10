@@ -45,6 +45,13 @@
         /* Table Sort Header */
         th.sortable { cursor: pointer; user-select: none; transition: background 0.2s; }
         th.sortable:hover { background-color: #e5e7eb; }
+
+        /* Preview Styles */
+        .preview-choice { padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s; }
+        .preview-choice:hover { background-color: #f9fafb; }
+        .preview-choice.correct { border-color: #22c55e; background-color: #f0fdf4; color: #15803d; font-weight: bold; }
+        .preview-choice.wrong { border-color: #ef4444; background-color: #fef2f2; color: #b91c1c; }
+        .preview-img { max-height: 200px; max-width: 100%; border-radius: 8px; border: 1px solid #eee; margin: 10px auto; display: block; }
     </style>
 </head>
 <body class="bg-gray-50 h-screen flex flex-col">
@@ -53,7 +60,6 @@
     <main class="flex-1 w-full max-w-7xl mx-auto px-6 py-6 h-full overflow-hidden flex flex-col">
         <!-- Tabs -->
         <div class="flex border-b border-gray-200 mb-4 bg-white rounded-t-lg px-2 shrink-0">
-            <!-- Changed Label -->
             <button onclick="app.setTab('manage')" id="btn-tab-manage" class="tab-btn-base tab-btn-active">문제 등록</button>
             <button onclick="app.setTab('log')" id="btn-tab-log" class="tab-btn-base">📊 제출 현황</button>
             <button onclick="app.setTab('bank')" id="btn-tab-bank" class="tab-btn-base">🗄️ 전체 문제 은행</button>
@@ -66,9 +72,7 @@
                 <div class="p-4 border-b bg-gray-50 font-bold text-gray-700">
                     📚 단원 및 평가 선택
                 </div>
-                <div class="flex-1 overflow-y-auto p-4" id="tree-container">
-                    <!-- Tree rendered here -->
-                </div>
+                <div class="flex-1 overflow-y-auto p-4" id="tree-container"></div>
             </div>
 
             <!-- Right: Assessment Editor -->
@@ -122,6 +126,16 @@
                                 </select>
                             </div>
                             <input type="text" id="new-q-text" placeholder="문제 내용 입력" class="w-full border p-2 rounded text-sm">
+                            <!-- Image Input -->
+                            <div class="flex items-center gap-2">
+                                <label class="flex items-center gap-2 text-xs font-bold text-gray-500 cursor-pointer hover:text-blue-600">
+                                    <i class="fas fa-image text-lg"></i> 이미지 첨부
+                                    <input type="file" id="new-q-image" class="hidden" accept="image/*" onchange="app.handleImageSelect(this, 'new-q-preview')">
+                                </label>
+                                <span id="new-q-preview-name" class="text-xs text-gray-400 truncate max-w-[200px]"></span>
+                            </div>
+                            <img id="new-q-preview" class="hidden h-20 rounded border border-gray-200 object-contain">
+
                             <input type="text" id="new-q-options" placeholder="보기 (콤마로 구분, 객관식/순서용)" class="w-full border p-2 rounded text-sm">
                             <input type="text" id="new-q-answer" placeholder="정답" class="w-full border p-2 rounded text-sm font-bold text-blue-600">
                             <textarea id="new-q-exp" placeholder="해설 (선택)" class="w-full border p-2 rounded text-sm h-16 resize-none"></textarea>
@@ -132,7 +146,7 @@
             </div>
         </div>
 
-        <!-- TAB 2: Logs (Existing) -->
+        <!-- TAB 2: Logs -->
         <div id="tab-log" class="tab-content hidden h-full overflow-y-auto">
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <div class="flex justify-between items-center mb-6">
@@ -157,10 +171,9 @@
             </div>
         </div>
 
-        <!-- TAB 3: Question Bank (Revamped) -->
+        <!-- TAB 3: Question Bank -->
         <div id="tab-bank" class="tab-content hidden h-full overflow-hidden flex flex-col">
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col h-full overflow-hidden">
-                 <!-- Filter Bar -->
                  <div class="p-4 border-b bg-gray-50 flex flex-wrap gap-3 items-center shrink-0">
                     <div class="flex items-center gap-2">
                         <i class="fas fa-filter text-gray-400"></i>
@@ -171,19 +184,9 @@
                         <select id="filter-small" onchange="app.filterBank('small')" class="border rounded px-2 py-1.5 text-sm w-32 text-gray-700"><option value="">소단원 전체</option></select>
                     </div>
                     <div class="h-6 w-px bg-gray-300 mx-2"></div>
-                    <select id="filter-type" onchange="app.filterBank('type')" class="border rounded px-2 py-1.5 text-sm w-24 text-gray-700">
-                        <option value="">유형 전체</option>
-                        <option value="choice">객관식</option>
-                        <option value="ox">O/X</option>
-                        <option value="word">단답형</option>
-                        <option value="order">순서</option>
-                    </select>
-                    <div class="ml-auto text-xs text-gray-500">
-                        총 <span id="bank-total-count" class="font-bold text-blue-600">0</span>문제
-                    </div>
+                    <select id="filter-type" onchange="app.filterBank('type')" class="border rounded px-2 py-1.5 text-sm w-24 text-gray-700"><option value="">유형 전체</option><option value="choice">객관식</option><option value="ox">O/X</option><option value="word">단답형</option><option value="order">순서</option></select>
+                    <div class="ml-auto text-xs text-gray-500">총 <span id="bank-total-count" class="font-bold text-blue-600">0</span>문제</div>
                  </div>
-
-                 <!-- Table -->
                  <div class="flex-1 overflow-auto">
                     <table class="w-full text-sm text-left">
                         <thead class="bg-white font-bold text-gray-700 sticky top-0 shadow-sm z-10">
@@ -192,10 +195,10 @@
                                 <th class="p-3 w-20 text-center sortable" onclick="app.sortBank('category')">분류 <i class="fas fa-sort sort-icon"></i></th>
                                 <th class="p-3 w-40 sortable" onclick="app.sortBank('unit')">단원 정보 <i class="fas fa-sort sort-icon"></i></th>
                                 <th class="p-3 w-20 text-center sortable" onclick="app.sortBank('type')">유형 <i class="fas fa-sort sort-icon"></i></th>
-                                <th class="p-3">문제 (클릭하여 수정)</th>
+                                <th class="p-3">문제</th>
                                 <th class="p-3 w-32">정답</th>
                                 <th class="p-3 w-24 text-center sortable" onclick="app.sortBank('rate')">정답률 <i class="fas fa-sort sort-icon"></i></th>
-                                <th class="p-3 w-16 text-center">삭제</th>
+                                <th class="p-3 w-16 text-center">관리</th>
                             </tr>
                         </thead>
                         <tbody id="bank-body" class="divide-y divide-gray-100 bg-white"></tbody>
@@ -214,7 +217,6 @@
                 <h3 class="font-bold text-lg text-gray-800"><i class="fas fa-edit text-blue-500 mr-2"></i>문제 수정</h3>
                 <button onclick="app.closeEditModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
             </div>
-            
             <div class="overflow-y-auto flex-1 space-y-4 pr-2">
                 <input type="hidden" id="edit-id">
                 <div class="grid grid-cols-2 gap-4">
@@ -236,8 +238,6 @@
                         </select>
                     </div>
                 </div>
-
-                <!-- Unit Selectors for Edit -->
                 <div class="bg-gray-50 p-3 rounded border border-gray-200">
                     <label class="block text-xs font-bold text-gray-500 mb-2">단원 이동</label>
                     <div class="grid grid-cols-2 gap-2">
@@ -245,10 +245,20 @@
                         <select id="edit-subunit" class="w-full border p-2 rounded text-sm"></select>
                     </div>
                 </div>
-
                 <div>
                     <label class="block text-xs font-bold text-gray-500 mb-1">문제 내용</label>
                     <input type="text" id="edit-question" class="w-full border p-2 rounded text-sm font-bold">
+                </div>
+                <!-- Image Input in Edit -->
+                <div>
+                    <div class="flex items-center gap-2 mb-2">
+                        <label class="flex items-center gap-2 text-xs font-bold text-gray-500 cursor-pointer hover:text-blue-600 bg-gray-100 px-3 py-1 rounded">
+                            <i class="fas fa-image"></i> 이미지 변경
+                            <input type="file" id="edit-image" class="hidden" accept="image/*" onchange="app.handleImageSelect(this, 'edit-preview')">
+                        </label>
+                        <button onclick="app.removeEditImage()" class="text-xs text-red-500 hover:text-red-700 font-bold px-2">삭제</button>
+                    </div>
+                    <img id="edit-preview" class="hidden h-24 rounded border border-gray-200 object-contain bg-white p-1">
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-gray-500 mb-1">보기 (콤마 구분)</label>
@@ -263,11 +273,22 @@
                     <textarea id="edit-explanation" class="w-full border p-2 rounded text-sm h-20 resize-none"></textarea>
                 </div>
             </div>
-
             <div class="mt-6 pt-4 border-t flex justify-end gap-3">
                 <button onclick="app.closeEditModal()" class="px-4 py-2 bg-white border border-gray-300 rounded text-gray-700 font-bold hover:bg-gray-50">취소</button>
                 <button onclick="app.saveEditQuestion()" class="px-6 py-2 bg-blue-600 text-white rounded font-bold hover:bg-blue-700 shadow-md">수정 저장</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Preview Modal -->
+    <div id="preview-modal" class="fixed inset-0 z-[60] hidden flex items-center justify-center">
+        <div class="absolute inset-0 bg-black bg-opacity-70 backdrop-blur-sm" onclick="document.getElementById('preview-modal').classList.add('hidden')"></div>
+        <div class="bg-white rounded-xl shadow-2xl z-10 w-full max-w-md p-6 relative mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <span class="text-xs font-bold bg-blue-100 text-blue-700 px-2 py-1 rounded">학생 화면 미리보기</span>
+                <button onclick="document.getElementById('preview-modal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times text-lg"></i></button>
+            </div>
+            <div id="preview-content"></div>
         </div>
     </div>
 
@@ -282,10 +303,9 @@
             selectedNode: null,
             selectedCategory: 'diagnostic', 
             assessmentConfig: {},
-            
-            // Filters & Sort
             filters: { big: '', mid: '', small: '', type: '' },
             sort: { key: 'id', order: 'desc' },
+            tempImage: null, // Stores Base64 for new/edit image
 
             init: function() {
                 this.loadTree();
@@ -293,15 +313,14 @@
                 this.loadConfig();
             },
 
+            // ... (Tab Switching, Tree Loading, Config Loading same as before) ...
             setTab: function(tab) {
                 document.querySelectorAll('.tab-btn-base').forEach(b => b.classList.remove('tab-btn-active'));
                 document.getElementById('btn-tab-'+tab).classList.add('tab-btn-active');
                 document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
                 document.getElementById('tab-'+tab).classList.remove('hidden');
-                
                 if(tab === 'bank') this.renderBank();
             },
-
             setSubTab: function(cat) {
                 this.selectedCategory = cat;
                 document.getElementById('sub-btn-diagnostic').className = cat==='diagnostic' ? "py-2 px-4 font-bold text-sm border-b-2 border-blue-500 text-blue-600" : "py-2 px-4 font-bold text-sm border-b-2 border-transparent text-gray-400 hover:text-gray-600";
@@ -309,47 +328,38 @@
                 this.renderQuestions();
                 this.updateToggleState();
             },
-
-            // --- Data Loading ---
             loadTree: async function() {
                 try {
                     const doc = await window.getCollection('curriculum').doc('tree').get();
                     this.treeData = (doc.exists && doc.data().tree) ? doc.data().tree : [];
                     this.renderTree();
-                    this.populateFilters(); // Populate Big Unit Filter
+                    this.populateFilters();
                 } catch(e) { console.error(e); }
             },
-
             loadQuestions: async function() {
                 const snap = await window.getCollection('quiz_questions').get();
                 this.questions = [];
                 snap.forEach(doc => this.questions.push({id: parseInt(doc.id), ...doc.data()}));
                 if(document.getElementById('tab-bank').classList.contains('hidden') === false) this.renderBank();
             },
-
             loadConfig: async function() {
                 const doc = await window.getCollection('assessment_config').doc('status').get();
                 this.assessmentConfig = (doc.exists) ? doc.data() : {};
             },
 
-            // --- Tree Rendering ---
+            // --- Render Tree & Editor ---
             renderTree: function() {
                 const container = document.getElementById('tree-container');
                 container.innerHTML = '';
-                
-                // 1. Exam Prep Node
                 const examNode = document.createElement('div');
                 examNode.className = 'tree-item exam-prep';
                 examNode.innerHTML = '<i class="fas fa-file-contract mr-2"></i>지필평가 대비 실전';
                 examNode.onclick = () => this.selectExamPrep(examNode);
                 container.appendChild(examNode);
-
-                // 2. Curriculum Tree
                 this.treeData.forEach(big => {
                     const bigEl = document.createElement('div');
                     bigEl.className = 'tree-node level-0';
                     bigEl.innerHTML = `<div class="font-bold text-gray-800 py-1 select-none">${big.title}</div>`;
-                    
                     if(big.children) {
                         big.children.forEach(mid => {
                             const midEl = document.createElement('div');
@@ -365,43 +375,34 @@
                     container.appendChild(bigEl);
                 });
             },
-
             selectExamPrep: function(el) {
                 this.resetSelection();
                 el.classList.add('active');
                 this.selectedNode = { id: 'exam_prep', title: '지필평가 대비 실전', type: 'special' };
                 this.renderEditor();
             },
-
             selectNode: function(node, parentTitle, el) {
                 this.resetSelection();
                 el.classList.add('active');
                 this.selectedNode = { ...node, parentTitle };
                 this.renderEditor();
             },
-
             resetSelection: function() {
                 document.querySelectorAll('.tree-item').forEach(e => e.classList.remove('active'));
                 document.getElementById('empty-state').classList.add('hidden');
             },
-
-            // --- Editor Logic ---
             renderEditor: function() {
                 const node = this.selectedNode;
                 document.getElementById('selected-title').innerText = node.title;
                 document.getElementById('selected-path').innerText = node.type === 'special' ? '특별 학습' : `${node.parentTitle} > ${node.title}`;
-                
-                // Show/Hide Sub Tabs
                 const subTabs = document.getElementById('sub-tabs');
                 if (node.id === 'exam_prep') {
                     subTabs.classList.add('hidden');
                     this.selectedCategory = 'exam_prep';
                 } else {
                     subTabs.classList.remove('hidden');
-                    this.setSubTab('diagnostic'); // Default
+                    this.setSubTab('diagnostic'); 
                 }
-
-                // Populate SubUnit Dropdown for Add Form
                 const subSel = document.getElementById('new-q-subunit');
                 subSel.innerHTML = '<option value="">소단원 (전체)</option>';
                 if(node.children) {
@@ -412,18 +413,35 @@
                         subSel.appendChild(opt);
                     });
                 }
-
                 this.renderQuestions();
                 this.updateToggleState();
             },
 
+            // --- Image Handling ---
+            handleImageSelect: function(input, previewId) {
+                const file = input.files[0];
+                if(file) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        this.tempImage = e.target.result;
+                        const prev = document.getElementById(previewId);
+                        prev.src = this.tempImage;
+                        prev.classList.remove('hidden');
+                        if(previewId === 'new-q-preview') document.getElementById('new-q-preview-name').innerText = file.name;
+                    };
+                    reader.readAsDataURL(file);
+                }
+            },
+            removeEditImage: function() {
+                this.tempImage = null;
+                document.getElementById('edit-preview').src = '';
+                document.getElementById('edit-preview').classList.add('hidden');
+            },
+
+            // --- Question Operations ---
             renderQuestions: function() {
                 const list = document.getElementById('q-list');
-                const filtered = this.questions.filter(q => 
-                    q.unitId === this.selectedNode.id && 
-                    q.category === this.selectedCategory
-                );
-
+                const filtered = this.questions.filter(q => q.unitId === this.selectedNode.id && q.category === this.selectedCategory);
                 if(filtered.length === 0) {
                     list.innerHTML = '<div class="text-center py-10 text-gray-400 border-2 border-dashed border-gray-200 rounded-lg">등록된 문제가 없습니다.</div>';
                 } else {
@@ -432,56 +450,30 @@
                             <div class="flex justify-between items-start mb-2">
                                 <span class="bg-gray-100 text-gray-600 text-xs font-bold px-2 py-1 rounded">Q${idx+1} | ${q.type}</span>
                                 <div class="flex gap-2">
+                                    <button onclick="app.previewQuestion(${q.id})" class="text-gray-400 hover:text-green-600 text-xs border border-gray-200 px-2 py-1 rounded hover:bg-green-50 transition"><i class="fas fa-play mr-1"></i>미리보기</button>
                                     <button onclick="app.openEditModal(${q.id})" class="text-blue-400 hover:text-blue-600"><i class="fas fa-edit"></i></button>
                                     <button onclick="app.deleteQuestion('${q.id}')" class="text-gray-300 hover:text-red-500"><i class="fas fa-trash"></i></button>
                                 </div>
                             </div>
-                            <p class="font-bold text-gray-800 mb-2">${q.question}</p>
-                            <div class="text-sm text-gray-500">
-                                <span class="text-blue-600 font-bold mr-2">정답: ${q.answer}</span>
-                                ${q.options ? `<span class="text-xs text-gray-400">(${q.options.join(', ')})</span>` : ''}
+                            <div class="flex gap-4">
+                                ${q.image ? `<img src="${q.image}" class="w-16 h-16 object-cover rounded border border-gray-100">` : ''}
+                                <div>
+                                    <p class="font-bold text-gray-800 mb-2">${q.question}</p>
+                                    <div class="text-sm text-gray-500">
+                                        <span class="text-blue-600 font-bold mr-2">정답: ${q.answer}</span>
+                                        ${q.options ? `<span class="text-xs text-gray-400">(${q.options.join(', ')})</span>` : ''}
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     `).join('');
                 }
             },
 
-            updateToggleState: function() {
-                const key = `${this.selectedNode.id}_${this.selectedCategory}`;
-                const isActive = this.assessmentConfig[key] === true;
-                const checkbox = document.getElementById('toggle-active');
-                const text = document.getElementById('toggle-text');
-                
-                checkbox.checked = isActive;
-                text.innerText = isActive ? '학생 공개 중' : '학생 비공개';
-                text.className = isActive ? 'ml-2 text-sm font-bold text-green-600' : 'ml-2 text-sm font-bold text-gray-400';
-            },
-
-            toggleActivation: async function() {
-                if(!this.selectedNode) return;
-                const key = `${this.selectedNode.id}_${this.selectedCategory}`;
-                const checkbox = document.getElementById('toggle-active');
-                const newState = checkbox.checked;
-                
-                // Optimistic UI
-                this.assessmentConfig[key] = newState;
-                this.updateToggleState();
-
-                await window.getCollection('assessment_config').doc('status').set({
-                    [key]: newState
-                }, { merge: true });
-            },
-
             addQuestion: async function() {
                 if(!this.selectedNode) return;
-                
-                const type = document.getElementById('new-q-type').value;
                 const text = document.getElementById('new-q-text').value;
                 const ans = document.getElementById('new-q-answer').value;
-                const opts = document.getElementById('new-q-options').value;
-                const exp = document.getElementById('new-q-exp').value;
-                const subUnitId = document.getElementById('new-q-subunit').value;
-
                 if(!text || !ans) { alert("문제와 정답은 필수입니다."); return; }
 
                 const newId = Date.now();
@@ -489,26 +481,31 @@
                     id: newId,
                     unitId: this.selectedNode.id,
                     category: this.selectedCategory,
-                    subUnitId: subUnitId || null,
-                    type: type,
+                    subUnitId: document.getElementById('new-q-subunit').value || null,
+                    type: document.getElementById('new-q-type').value,
                     question: text,
+                    image: this.tempImage || null,
                     answer: ans,
-                    options: opts ? opts.split(',').map(s=>s.trim()) : [],
-                    explanation: exp,
+                    options: document.getElementById('new-q-options').value ? document.getElementById('new-q-options').value.split(',').map(s=>s.trim()) : [],
+                    explanation: document.getElementById('new-q-exp').value,
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
 
                 await window.getCollection('quiz_questions').doc(String(newId)).set(qData);
                 
-                // Reset inputs
+                // Reset
                 document.getElementById('new-q-text').value = '';
                 document.getElementById('new-q-options').value = '';
                 document.getElementById('new-q-answer').value = '';
                 document.getElementById('new-q-exp').value = '';
+                document.getElementById('new-q-image').value = '';
+                document.getElementById('new-q-preview').classList.add('hidden');
+                document.getElementById('new-q-preview-name').innerText = '';
+                this.tempImage = null;
                 
                 this.questions.push(qData);
                 this.renderQuestions();
-                if(document.getElementById('tab-bank').classList.contains('hidden') === false) this.renderBank();
+                if(!document.getElementById('tab-bank').classList.contains('hidden')) this.renderBank();
             },
 
             deleteQuestion: async function(id) {
@@ -516,181 +513,69 @@
                 await window.getCollection('quiz_questions').doc(String(id)).delete();
                 this.questions = this.questions.filter(q => String(q.id) !== String(id));
                 this.renderQuestions();
-                if(document.getElementById('tab-bank').classList.contains('hidden') === false) this.renderBank();
+                if(!document.getElementById('tab-bank').classList.contains('hidden')) this.renderBank();
             },
 
-            // --- Question Bank Logic (Revamped) ---
-            populateFilters: function() {
-                // Populate Big Units
-                const bigSel = document.getElementById('filter-big');
-                bigSel.innerHTML = '<option value="">대단원 전체</option>';
-                this.treeData.forEach(big => {
-                    const opt = document.createElement('option');
-                    opt.value = big.id;
-                    opt.innerText = big.title;
-                    bigSel.appendChild(opt);
-                });
-            },
-
-            filterBank: function(level) {
-                if(level === 'big') {
-                    const bigId = document.getElementById('filter-big').value;
-                    const midSel = document.getElementById('filter-mid');
-                    const smallSel = document.getElementById('filter-small');
-                    midSel.innerHTML = '<option value="">중단원 전체</option>';
-                    smallSel.innerHTML = '<option value="">소단원 전체</option>';
-                    this.filters.big = bigId;
-                    this.filters.mid = '';
-                    this.filters.small = '';
-
-                    if(bigId) {
-                        const big = this.treeData.find(b => b.id === bigId);
-                        if(big && big.children) {
-                            big.children.forEach(mid => {
-                                const opt = document.createElement('option');
-                                opt.value = mid.id;
-                                opt.innerText = mid.title;
-                                midSel.appendChild(opt);
-                            });
-                        }
-                    }
-                } else if(level === 'mid') {
-                    const midId = document.getElementById('filter-mid').value;
-                    const smallSel = document.getElementById('filter-small');
-                    smallSel.innerHTML = '<option value="">소단원 전체</option>';
-                    this.filters.mid = midId;
-                    this.filters.small = '';
-                    
-                    if(midId) {
-                        // Find Mid Node logic (search entire tree)
-                        let midNode = null;
-                        this.treeData.forEach(big => {
-                            if(big.children) {
-                                const found = big.children.find(m => m.id === midId);
-                                if(found) midNode = found;
-                            }
-                        });
-                        if(midNode && midNode.children) {
-                            midNode.children.forEach(small => {
-                                const opt = document.createElement('option');
-                                opt.value = small.id;
-                                opt.innerText = small.title;
-                                smallSel.appendChild(opt);
-                            });
-                        }
-                    }
-                } else if(level === 'small') {
-                    this.filters.small = document.getElementById('filter-small').value;
-                } else if(level === 'type') {
-                    this.filters.type = document.getElementById('filter-type').value;
-                }
-
-                this.renderBank();
-            },
-
-            sortBank: function(key) {
-                if(this.sort.key === key) {
-                    this.sort.order = this.sort.order === 'asc' ? 'desc' : 'asc';
-                } else {
-                    this.sort.key = key;
-                    this.sort.order = 'asc';
-                }
-                this.renderBank();
-            },
-
-            renderBank: function() {
-                const tbody = document.getElementById('bank-body');
-                let filtered = this.questions.filter(q => {
-                    // Filter Logic
-                    if(this.filters.type && q.type !== this.filters.type) return false;
-                    
-                    // Unit Filters
-                    // We need to resolve unit hierarchy for each question to filter properly
-                    // Map questions unitId (Mid) to Tree
-                    if(this.filters.mid && q.unitId !== this.filters.mid) return false;
-                    if(this.filters.small && q.subUnitId !== this.filters.small) return false;
-                    
-                    if(this.filters.big) {
-                         // Check if question's unitId belongs to selected Big Unit
-                         const big = this.treeData.find(b => b.id === this.filters.big);
-                         if(!big || !big.children || !big.children.find(m => m.id === q.unitId)) return false;
-                    }
-                    return true;
-                });
-
-                // Sort Logic
-                filtered.sort((a, b) => {
-                    let valA = a[this.sort.key];
-                    let valB = b[this.sort.key];
-
-                    // Special Sorts
-                    if(this.sort.key === 'unit') {
-                        // Sort by Unit ID logic or Name (Simplified to unitId)
-                        valA = a.unitId; valB = b.unitId;
-                    }
-                    if(this.sort.key === 'rate') {
-                        // Mock rate for now or 0
-                        valA = a.correctRate || 0; valB = b.correctRate || 0;
-                    }
-
-                    if(valA < valB) return this.sort.order === 'asc' ? -1 : 1;
-                    if(valA > valB) return this.sort.order === 'asc' ? 1 : -1;
-                    return 0;
-                });
+            // --- Preview Logic ---
+            previewQuestion: function(id) {
+                const q = this.questions.find(x => x.id === id);
+                if(!q) return;
                 
-                document.getElementById('bank-total-count').innerText = filtered.length;
+                const container = document.getElementById('preview-content');
+                let html = `
+                    <div class="mb-4">
+                        <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">${q.type}</span>
+                        ${q.image ? `<img src="${q.image}" class="preview-img">` : ''}
+                        <h4 class="font-bold text-lg mt-2 text-gray-800">${q.question}</h4>
+                    </div>
+                `;
 
-                tbody.innerHTML = filtered.map(q => {
-                    // Resolve Unit Names
-                    let unitPath = '지필평가 대비';
-                    if(q.category !== 'exam_prep') {
-                        let bigTitle = '?', midTitle = '?', smallTitle = '-';
-                        this.treeData.forEach(b => {
-                            if(b.children) {
-                                const m = b.children.find(m => m.id === q.unitId);
-                                if(m) {
-                                    bigTitle = b.title;
-                                    midTitle = m.title;
-                                    if(m.children && q.subUnitId) {
-                                        const s = m.children.find(s => s.id === q.subUnitId);
-                                        if(s) smallTitle = s.title;
-                                    }
-                                }
-                            }
-                        });
-                        unitPath = `<div class="text-xs text-gray-500">${bigTitle} ></div><div class="font-bold text-gray-700">${midTitle}</div><div class="text-xs text-gray-400">${smallTitle}</div>`;
-                    } else {
-                        unitPath = '<span class="text-red-600 font-bold text-xs bg-red-50 px-2 py-1 rounded">지필평가 실전</span>';
-                    }
+                if(q.type === 'choice') {
+                    html += `<div class="space-y-2">
+                        ${(q.options||[]).map(opt => `
+                            <div class="preview-choice" onclick="app.simulateAnswer(this, '${opt}', '${q.answer}')">${opt}</div>
+                        `).join('')}
+                    </div>`;
+                } else if(q.type === 'ox') {
+                    html += `<div class="flex gap-2">
+                        <button class="flex-1 py-4 border-2 rounded-lg font-bold text-xl hover:bg-blue-50 border-blue-200 text-blue-600" onclick="app.simulateAnswer(this, 'O', '${q.answer}')">O</button>
+                        <button class="flex-1 py-4 border-2 rounded-lg font-bold text-xl hover:bg-red-50 border-red-200 text-red-600" onclick="app.simulateAnswer(this, 'X', '${q.answer}')">X</button>
+                    </div>`;
+                } else {
+                    html += `<div class="flex gap-2">
+                        <input type="text" class="border p-2 rounded w-full" placeholder="정답 입력">
+                        <button class="bg-blue-600 text-white px-4 rounded" onclick="alert('주관식은 자동 채점되지 않습니다 (예시). 정답: ${q.answer}')">확인</button>
+                    </div>`;
+                }
 
-                    const typeMap = {choice:'객관식', ox:'O/X', word:'단답형', order:'순서'};
-                    const rate = q.correctRate ? `${q.correctRate}%` : '-';
-                    const catMap = {diagnostic:'진단', formative:'형성', exam_prep:'지필'};
-
-                    return `
-                    <tr class="border-b border-gray-50 last:border-0 hover:bg-gray-50 group cursor-pointer" onclick="app.openEditModal(${q.id})">
-                        <td class="p-3 text-xs text-gray-500 text-center">${q.id}</td>
-                        <td class="p-3 text-center"><span class="bg-gray-100 text-xs px-2 py-1 rounded text-gray-600">${catMap[q.category]||q.category}</span></td>
-                        <td class="p-3 leading-tight">${unitPath}</td>
-                        <td class="p-3 text-center"><span class="border border-gray-200 text-xs px-2 py-1 rounded text-gray-500">${typeMap[q.type]}</span></td>
-                        <td class="p-3 font-bold text-gray-700 max-w-xs break-keep group-hover:text-blue-600">
-                            ${q.question}
-                            <i class="fas fa-edit text-xs text-gray-300 ml-2 opacity-0 group-hover:opacity-100"></i>
-                        </td>
-                        <td class="p-3 text-blue-600 font-bold truncate max-w-[100px]">${q.answer}</td>
-                        <td class="p-3 text-center text-gray-500 font-mono">${rate}</td>
-                        <td class="p-3 text-center" onclick="event.stopPropagation()">
-                            <button onclick="app.deleteQuestion('${q.id}')" class="text-gray-300 hover:text-red-500 p-2"><i class="fas fa-trash"></i></button>
-                        </td>
-                    </tr>
-                `}).join('');
+                container.innerHTML = html;
+                document.getElementById('preview-modal').classList.remove('hidden');
+                document.getElementById('preview-modal').classList.add('flex');
             },
 
-            // --- Edit Modal Logic ---
+            simulateAnswer: function(el, selected, correct) {
+                // Reset siblings
+                if(el.parentNode) {
+                    Array.from(el.parentNode.children).forEach(child => {
+                        child.classList.remove('correct', 'wrong', 'border-blue-200', 'border-red-200', 'bg-blue-50', 'bg-red-50');
+                        child.style.opacity = '0.5';
+                    });
+                }
+                el.style.opacity = '1';
+                
+                if(String(selected) === String(correct)) {
+                    el.classList.add('correct');
+                    // Confetti or simple animation could go here
+                } else {
+                    el.classList.add('wrong');
+                    // Highlight correct one?
+                }
+            },
+
+            // --- Edit Modal ---
             openEditModal: function(id) {
                 const q = this.questions.find(x => x.id === id);
                 if(!q) return;
-
                 document.getElementById('edit-id').value = id;
                 document.getElementById('edit-category').value = q.category;
                 document.getElementById('edit-type').value = q.type;
@@ -699,7 +584,18 @@
                 document.getElementById('edit-answer').value = q.answer;
                 document.getElementById('edit-explanation').value = q.explanation || '';
                 
-                // Populate Unit Selector
+                // Image handling
+                const prev = document.getElementById('edit-preview');
+                if(q.image) {
+                    prev.src = q.image;
+                    prev.classList.remove('hidden');
+                    this.tempImage = q.image; // Keep existing unless changed
+                } else {
+                    prev.classList.add('hidden');
+                    this.tempImage = null;
+                }
+
+                // Populate Selectors (same as before)
                 const unitSel = document.getElementById('edit-unit');
                 unitSel.innerHTML = '<option value="">(선택 안함 - 지필평가)</option>';
                 this.treeData.forEach(big => {
@@ -713,94 +609,141 @@
                      }
                 });
                 unitSel.value = q.unitId || '';
-                
-                // Populate SubUnit
                 this.updateEditSubUnits(q.subUnitId);
 
                 document.getElementById('edit-modal').classList.remove('hidden');
                 document.getElementById('edit-modal').classList.add('flex');
             },
-
             updateEditSubUnits: function(defaultVal = '') {
                 const midId = document.getElementById('edit-unit').value;
                 const subSel = document.getElementById('edit-subunit');
                 subSel.innerHTML = '<option value="">(소단원 없음)</option>';
-                
                 if(midId) {
                     let midNode = null;
-                    this.treeData.forEach(big => {
-                        if(big.children) {
-                            const found = big.children.find(m => m.id === midId);
-                            if(found) midNode = found;
-                        }
-                    });
+                    this.treeData.forEach(big => { if(big.children) { const found = big.children.find(m => m.id === midId); if(found) midNode = found; } });
                     if(midNode && midNode.children) {
-                        midNode.children.forEach(small => {
-                            const opt = document.createElement('option');
-                            opt.value = small.id;
-                            opt.innerText = small.title;
-                            subSel.appendChild(opt);
-                        });
+                        midNode.children.forEach(small => { const opt = document.createElement('option'); opt.value = small.id; opt.innerText = small.title; subSel.appendChild(opt); });
                     }
                 }
                 if(defaultVal) subSel.value = defaultVal;
             },
-
             saveEditQuestion: async function() {
                 const id = document.getElementById('edit-id').value;
-                const unitId = document.getElementById('edit-unit').value;
-                
                 const data = {
                     category: document.getElementById('edit-category').value,
                     type: document.getElementById('edit-type').value,
-                    unitId: unitId || 'exam_prep',
+                    unitId: document.getElementById('edit-unit').value || 'exam_prep',
                     subUnitId: document.getElementById('edit-subunit').value || null,
                     question: document.getElementById('edit-question').value,
+                    image: this.tempImage || null, // Updated image or existing or null
                     options: document.getElementById('edit-options').value.split(',').map(s=>s.trim()),
                     answer: document.getElementById('edit-answer').value,
                     explanation: document.getElementById('edit-explanation').value,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
-
                 await window.getCollection('quiz_questions').doc(String(id)).update(data);
                 
-                // Update local data
                 const idx = this.questions.findIndex(q => String(q.id) === String(id));
                 if(idx > -1) this.questions[idx] = { ...this.questions[idx], ...data };
                 
                 this.closeEditModal();
-                if(document.getElementById('tab-bank').classList.contains('hidden') === false) this.renderBank();
-                else this.renderQuestions(); // If in editor tab
+                if(!document.getElementById('tab-bank').classList.contains('hidden')) this.renderBank(); else this.renderQuestions();
             },
-
             closeEditModal: function() {
                 document.getElementById('edit-modal').classList.add('hidden');
                 document.getElementById('edit-modal').classList.remove('flex');
+                this.tempImage = null;
+                document.getElementById('edit-image').value = '';
             },
 
-            // --- Log Tab (Existing) ---
+            // --- Toggle/Bank/Sort/Filter (Same as existing) ---
+            updateToggleState: function() {
+                const key = `${this.selectedNode.id}_${this.selectedCategory}`;
+                const isActive = this.assessmentConfig[key] === true;
+                document.getElementById('toggle-active').checked = isActive;
+                const text = document.getElementById('toggle-text');
+                text.innerText = isActive ? '학생 공개 중' : '학생 비공개';
+                text.className = isActive ? 'ml-2 text-sm font-bold text-green-600' : 'ml-2 text-sm font-bold text-gray-400';
+            },
+            toggleActivation: async function() {
+                if(!this.selectedNode) return;
+                const key = `${this.selectedNode.id}_${this.selectedCategory}`;
+                const newState = document.getElementById('toggle-active').checked;
+                this.assessmentConfig[key] = newState;
+                this.updateToggleState();
+                await window.getCollection('assessment_config').doc('status').set({[key]: newState}, { merge: true });
+            },
+            populateFilters: function() {
+                const bigSel = document.getElementById('filter-big');
+                bigSel.innerHTML = '<option value="">대단원 전체</option>';
+                this.treeData.forEach(big => { const opt = document.createElement('option'); opt.value = big.id; opt.innerText = big.title; bigSel.appendChild(opt); });
+            },
+            filterBank: function(level) {
+                if(level === 'big') {
+                    const bigId = document.getElementById('filter-big').value;
+                    const midSel = document.getElementById('filter-mid');
+                    midSel.innerHTML = '<option value="">중단원 전체</option>';
+                    this.filters.big = bigId; this.filters.mid = ''; this.filters.small = '';
+                    if(bigId) { const big = this.treeData.find(b => b.id === bigId); if(big && big.children) big.children.forEach(mid => { const opt = document.createElement('option'); opt.value = mid.id; opt.innerText = mid.title; midSel.appendChild(opt); }); }
+                } else if(level === 'mid') { this.filters.mid = document.getElementById('filter-mid').value; }
+                else if(level === 'type') { this.filters.type = document.getElementById('filter-type').value; }
+                this.renderBank();
+            },
+            sortBank: function(key) {
+                if(this.sort.key === key) this.sort.order = this.sort.order === 'asc' ? 'desc' : 'asc';
+                else { this.sort.key = key; this.sort.order = 'asc'; }
+                this.renderBank();
+            },
+            renderBank: function() {
+                const tbody = document.getElementById('bank-body');
+                let filtered = this.questions.filter(q => {
+                    if(this.filters.type && q.type !== this.filters.type) return false;
+                    if(this.filters.mid && q.unitId !== this.filters.mid) return false;
+                    if(this.filters.big) { const big = this.treeData.find(b => b.id === this.filters.big); if(!big || !big.children || !big.children.find(m => m.id === q.unitId)) return false; }
+                    return true;
+                });
+                filtered.sort((a, b) => {
+                    let valA = a[this.sort.key]; let valB = b[this.sort.key];
+                    if(this.sort.key === 'unit') { valA = a.unitId; valB = b.unitId; }
+                    if(valA < valB) return this.sort.order === 'asc' ? -1 : 1;
+                    if(valA > valB) return this.sort.order === 'asc' ? 1 : -1;
+                    return 0;
+                });
+                document.getElementById('bank-total-count').innerText = filtered.length;
+                tbody.innerHTML = filtered.map(q => `
+                    <tr class="border-b border-gray-50 last:border-0 hover:bg-gray-50 group cursor-pointer" onclick="app.openEditModal(${q.id})">
+                        <td class="p-3 text-xs text-gray-500 text-center">${q.id}</td>
+                        <td class="p-3 text-center"><span class="bg-gray-100 text-xs px-2 py-1 rounded text-gray-600">${q.category==='diagnostic'?'진단':(q.category==='formative'?'형성':'지필')}</span></td>
+                        <td class="p-3 text-xs text-gray-500 truncate max-w-[100px]">${q.unitId}</td>
+                        <td class="p-3 text-center"><span class="border border-gray-200 text-xs px-2 py-1 rounded text-gray-500">${q.type}</span></td>
+                        <td class="p-3 font-bold text-gray-700 max-w-xs break-keep group-hover:text-blue-600 flex items-center gap-2">
+                            ${q.image ? '<i class="fas fa-image text-gray-400"></i>' : ''} ${q.question}
+                        </td>
+                        <td class="p-3 text-blue-600 font-bold truncate max-w-[100px]">${q.answer}</td>
+                        <td class="p-3 text-center text-gray-500 font-mono">-</td>
+                        <td class="p-3 text-center" onclick="event.stopPropagation()">
+                            <button onclick="app.previewQuestion(${q.id})" class="text-green-500 hover:text-green-700 mr-2"><i class="fas fa-play"></i></button>
+                            <button onclick="app.deleteQuestion('${q.id}')" class="text-gray-300 hover:text-red-500"><i class="fas fa-trash"></i></button>
+                        </td>
+                    </tr>
+                `).join('');
+            },
+            
             loadByClass: function(cls) {
-                if(!cls) return;
+                // (Existing Log Logic)
                 const tbody = document.getElementById('log-body');
+                if(!cls) return;
                 tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center">로딩 중...</td></tr>';
                 let q = window.getCollection('quiz_results').orderBy('timestamp', 'desc');
-                if (cls !== 'all') q = q.where('class', '==', parseInt(cls));
-                else q = q.limit(50);
-
+                if (cls !== 'all') q = q.where('class', '==', parseInt(cls)); else q = q.limit(50);
                 q.get().then(snap => {
                     let html = '';
-                    snap.forEach(doc => {
-                        const d = doc.data();
-                        html += `<tr class="border-b hover:bg-blue-50"><td class="p-4 text-xs font-mono text-gray-500">${d.timeString||'-'}</td><td class="p-4 font-bold text-gray-700">${d.class}반 ${d.number}번 ${d.name}</td><td class="p-4 font-bold text-blue-600">${d.score}점</td><td class="p-4 text-xs">${d.status}</td><td class="p-4"><button onclick="app.deleteLog('${doc.id}')" class="text-gray-300 hover:text-red-500"><i class="fas fa-trash"></i></button></td></tr>`;
-                    });
+                    snap.forEach(doc => { const d = doc.data(); html += `<tr class="border-b hover:bg-blue-50"><td class="p-4 text-xs font-mono text-gray-500">${d.timeString||'-'}</td><td class="p-4 font-bold text-gray-700">${d.class}반 ${d.number}번 ${d.name}</td><td class="p-4 font-bold text-blue-600">${d.score}점</td><td class="p-4 text-xs">${d.status}</td><td class="p-4"><button onclick="app.deleteLog('${doc.id}')" class="text-gray-300 hover:text-red-500"><i class="fas fa-trash"></i></button></td></tr>`; });
                     tbody.innerHTML = html || '<tr><td colspan="5" class="p-8 text-center text-gray-400">데이터 없음</td></tr>';
                     document.getElementById('log-count').innerText = `(${snap.size}건)`;
                 });
             },
-            
-            deleteLog: function(id) {
-                if(confirm("기록 삭제?")) window.getCollection('quiz_results').doc(id).delete().then(() => this.loadByClass(document.getElementById('select-class-trigger').value));
-            }
+            deleteLog: function(id) { if(confirm("기록 삭제?")) window.getCollection('quiz_results').doc(id).delete().then(() => this.loadByClass(document.getElementById('select-class-trigger').value)); }
         };
 
         document.addEventListener('auth-ready', () => app.init());

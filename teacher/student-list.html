@@ -22,9 +22,22 @@
         
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <div class="p-6 border-b bg-gray-50 flex justify-between items-center flex-wrap gap-4">
-                <h2 class="text-lg font-bold text-gray-800">
-                    <i class="fas fa-users text-blue-500 mr-2"></i> 학생 명단 <span id="std-count" class="text-sm font-normal text-gray-500"></span>
-                </h2>
+                <div class="flex items-center gap-4">
+                    <h2 class="text-lg font-bold text-gray-800">
+                        <i class="fas fa-users text-blue-500 mr-2"></i> 학생 명단 <span id="std-count" class="text-sm font-normal text-gray-500"></span>
+                    </h2>
+                    <!-- Bulk Actions Toolbar -->
+                    <div id="bulk-toolbar" class="hidden flex items-center gap-2 bg-blue-50 px-3 py-1 rounded border border-blue-200 animate-fade-in">
+                        <span class="text-xs font-bold text-blue-800" id="selected-count-text">0명 선택됨</span>
+                        <div class="h-4 w-px bg-blue-300 mx-1"></div>
+                        <button onclick="app.promoteSelected()" class="text-xs bg-white border border-blue-300 text-blue-700 px-2 py-1 rounded hover:bg-blue-100 font-bold" title="학년을 1씩 올립니다">
+                            <i class="fas fa-level-up-alt mr-1"></i>일괄 진급
+                        </button>
+                        <button onclick="app.deleteSelected()" class="text-xs bg-white border border-red-300 text-red-700 px-2 py-1 rounded hover:bg-red-50 font-bold">
+                            <i class="fas fa-trash mr-1"></i>일괄 삭제
+                        </button>
+                    </div>
+                </div>
                 <div class="flex gap-2">
                     <input type="text" id="search-input" placeholder="이름 또는 반(숫자) 검색" class="border rounded px-3 py-2 text-sm w-64 focus:outline-none focus:border-blue-500">
                     <button onclick="app.filterList()" class="bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-blue-700">검색</button>
@@ -35,15 +48,17 @@
                 <table class="w-full text-sm text-left">
                     <thead class="bg-gray-100 text-gray-600 font-bold uppercase text-xs">
                         <tr>
-                            <th class="p-4 w-20 text-center">반</th>
-                            <th class="p-4 w-20 text-center">번호</th>
+                            <th class="p-4 w-10 text-center"><input type="checkbox" id="check-all" onclick="app.toggleSelectAll(this)"></th>
+                            <th class="p-4 w-16 text-center">학년</th>
+                            <th class="p-4 w-16 text-center">반</th>
+                            <th class="p-4 w-16 text-center">번호</th>
                             <th class="p-4">이름 (클릭하여 기록 조회)</th>
                             <th class="p-4">이메일</th>
                             <th class="p-4 text-center w-32">관리</th>
                         </tr>
                     </thead>
                     <tbody id="std-list" class="divide-y divide-gray-100 bg-white">
-                        <tr><td colspan="5" class="p-8 text-center text-gray-400">데이터를 불러오는 중...</td></tr>
+                        <tr><td colspan="7" class="p-8 text-center text-gray-400">데이터를 불러오는 중...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -54,29 +69,51 @@
     <!-- Student History Modal -->
     <div id="history-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center">
         <div class="bg-black bg-opacity-50 absolute inset-0" onclick="document.getElementById('history-modal').classList.add('hidden')"></div>
-        <div class="bg-white rounded-lg shadow-xl z-10 w-full max-w-2xl p-6 mx-4 max-h-[80vh] flex flex-col">
+        <div class="bg-white rounded-lg shadow-xl z-10 w-full max-w-3xl p-6 mx-4 max-h-[85vh] flex flex-col">
             <div class="flex justify-between items-center mb-4 border-b pb-2">
-                <h3 class="font-bold text-lg" id="history-title">학습 기록</h3>
-                <button onclick="document.getElementById('history-modal').classList.add('hidden')"><i class="fas fa-times"></i></button>
+                <div>
+                    <h3 class="font-bold text-lg text-gray-800" id="history-title">학습 기록</h3>
+                    <p class="text-xs text-gray-500">학생의 문제 풀이 내역을 날짜별로 확인합니다.</p>
+                </div>
+                <button onclick="document.getElementById('history-modal').classList.add('hidden')"><i class="fas fa-times text-gray-400 hover:text-gray-600 text-xl"></i></button>
             </div>
-            <div id="history-content" class="overflow-y-auto flex-1 space-y-2"></div>
+            <div id="history-content" class="overflow-y-auto flex-1 space-y-3 pr-2"></div>
         </div>
     </div>
 
     <!-- Edit Modal -->
     <div id="edit-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center">
         <div class="bg-black bg-opacity-50 absolute inset-0" onclick="document.getElementById('edit-modal').classList.add('hidden')"></div>
-        <div class="bg-white p-6 rounded-lg w-80 shadow-xl z-10">
-            <h3 class="font-bold mb-4">학생 정보 수정</h3>
+        <div class="bg-white p-6 rounded-lg w-96 shadow-xl z-10">
+            <h3 class="font-bold mb-4 text-lg border-b pb-2">학생 정보 수정</h3>
             <input type="hidden" id="edit-id">
-            <div class="space-y-3">
-                <input type="number" id="edit-class" class="w-full border p-2 rounded" placeholder="반">
-                <input type="number" id="edit-num" class="w-full border p-2 rounded" placeholder="번호">
-                <input type="text" id="edit-name" class="w-full border p-2 rounded" placeholder="이름">
+            <div class="space-y-4">
+                <div class="grid grid-cols-3 gap-2">
+                    <div>
+                        <label class="block text-xs text-gray-500 font-bold mb-1">학년</label>
+                        <input type="number" id="edit-grade" class="w-full border p-2 rounded text-sm text-center">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 font-bold mb-1">반</label>
+                        <input type="number" id="edit-class" class="w-full border p-2 rounded text-sm text-center">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 font-bold mb-1">번호</label>
+                        <input type="number" id="edit-num" class="w-full border p-2 rounded text-sm text-center">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 font-bold mb-1">이름</label>
+                    <input type="text" id="edit-name" class="w-full border p-2 rounded text-sm font-bold">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 font-bold mb-1">이메일 (로그인 ID)</label>
+                    <input type="text" id="edit-email" class="w-full border p-2 rounded text-sm bg-gray-50">
+                </div>
             </div>
-            <div class="flex gap-2 mt-4">
-                <button onclick="app.saveStudent()" class="flex-1 bg-blue-600 text-white py-2 rounded font-bold">저장</button>
-                <button onclick="document.getElementById('edit-modal').classList.add('hidden')" class="flex-1 bg-gray-200 py-2 rounded">취소</button>
+            <div class="flex gap-2 mt-6">
+                <button onclick="document.getElementById('edit-modal').classList.add('hidden')" class="flex-1 bg-white border border-gray-300 text-gray-700 py-2 rounded font-bold hover:bg-gray-50">취소</button>
+                <button onclick="app.saveStudent()" class="flex-1 bg-blue-600 text-white py-2 rounded font-bold hover:bg-blue-700 shadow-md">저장</button>
             </div>
         </div>
     </div>
@@ -88,6 +125,7 @@
 
         const app = {
             students: [],
+            selectedIds: new Set(),
             
             init: function() {
                 // Users are GLOBAL
@@ -95,11 +133,16 @@
                     this.students = [];
                     snap.forEach(doc => {
                         const d = doc.data();
-                        d.class = parseInt(d.class) || 0;
-                        d.number = parseInt(d.number) || 0;
-                        this.students.push({ ...d, id: doc.id });
+                        this.students.push({ 
+                            id: doc.id,
+                            grade: parseInt(d.grade) || 2, // Default to 2 if missing
+                            class: parseInt(d.class) || 0,
+                            number: parseInt(d.number) || 0,
+                            name: d.name || '',
+                            email: d.email || ''
+                        });
                     });
-                    this.students.sort((a,b) => (a.class - b.class) || (a.number - b.number));
+                    this.students.sort((a,b) => (a.grade - b.grade) || (a.class - b.class) || (a.number - b.number));
                     this.render(this.students);
                 });
             },
@@ -109,69 +152,143 @@
                 const tbody = document.getElementById('std-list');
                 
                 if(list.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-gray-400">학생 데이터가 없습니다.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-gray-400">학생 데이터가 없습니다.</td></tr>';
                     return;
                 }
 
                 tbody.innerHTML = list.map(s => `
-                    <tr class="hover:bg-blue-50 transition group">
+                    <tr class="hover:bg-blue-50 transition group border-b last:border-0">
+                        <td class="p-4 text-center">
+                            <input type="checkbox" class="student-check w-4 h-4 text-blue-600 rounded focus:ring-blue-500" value="${s.id}" onclick="app.toggleSelect('${s.id}')" ${this.selectedIds.has(s.id)?'checked':''}>
+                        </td>
+                        <td class="p-4 text-center text-gray-500 text-xs">${s.grade}</td>
                         <td class="p-4 text-center font-bold text-gray-600">${s.class}</td>
                         <td class="p-4 text-center font-bold text-gray-600">${s.number}</td>
                         <td class="p-4">
                             <span onclick="app.showHistory('${s.id}', '${s.name}', ${s.class}, ${s.number})" 
-                                  class="font-bold text-gray-800 cursor-pointer hover:text-blue-600 hover:underline">
-                                ${s.name} <i class="fas fa-search-plus text-xs text-gray-300 group-hover:text-blue-400 ml-1"></i>
+                                  class="font-bold text-gray-800 cursor-pointer hover:text-blue-600 hover:underline flex items-center">
+                                ${s.name} <i class="fas fa-folder-open text-xs text-gray-300 group-hover:text-blue-400 ml-2"></i>
                             </span>
                         </td>
-                        <td class="p-4 text-gray-500 text-sm font-mono">${s.email}</td>
+                        <td class="p-4 text-gray-500 text-xs font-mono">${s.email}</td>
                         <td class="p-4 text-center">
-                            <button onclick="app.openEdit('${s.id}')" class="text-blue-500 hover:text-blue-700 mr-3"><i class="fas fa-edit"></i></button>
-                            <button onclick="app.deleteStudent('${s.id}')" class="text-red-400 hover:text-red-600"><i class="fas fa-trash"></i></button>
+                            <button onclick="app.openEdit('${s.id}')" class="text-blue-500 hover:text-blue-700 mr-3 p-1"><i class="fas fa-edit"></i></button>
+                            <button onclick="app.deleteStudent('${s.id}')" class="text-red-400 hover:text-red-600 p-1"><i class="fas fa-trash"></i></button>
                         </td>
                     </tr>
                 `).join('');
+                
+                this.updateToolbar();
+            },
+
+            // --- Selection Logic ---
+            toggleSelectAll: function(el) {
+                const visibleIds = Array.from(document.querySelectorAll('.student-check')).map(cb => cb.value);
+                if (el.checked) visibleIds.forEach(id => this.selectedIds.add(id));
+                else this.selectedIds.clear();
+                this.render(this.students); // Re-render to update checkboxes
+            },
+            toggleSelect: function(id) {
+                if(this.selectedIds.has(id)) this.selectedIds.delete(id);
+                else this.selectedIds.add(id);
+                this.updateToolbar();
+            },
+            updateToolbar: function() {
+                const count = this.selectedIds.size;
+                const toolbar = document.getElementById('bulk-toolbar');
+                document.getElementById('selected-count-text').innerText = `${count}명 선택됨`;
+                if(count > 0) toolbar.classList.remove('hidden');
+                else toolbar.classList.add('hidden');
+            },
+
+            // --- Bulk Actions ---
+            promoteSelected: async function() {
+                if(!confirm(`선택한 ${this.selectedIds.size}명의 학년을 1씩 올리시겠습니까?`)) return;
+                const batch = window.db.batch();
+                this.selectedIds.forEach(id => {
+                    const ref = window.getCollection('users').doc(id);
+                    const currentGrade = this.students.find(s => s.id === id).grade || 2;
+                    batch.update(ref, { grade: currentGrade + 1 });
+                });
+                await batch.commit();
+                this.selectedIds.clear();
+                this.init();
+            },
+            deleteSelected: async function() {
+                if(!confirm(`선택한 ${this.selectedIds.size}명을 정말 삭제하시겠습니까? (복구 불가)`)) return;
+                const batch = window.db.batch();
+                this.selectedIds.forEach(id => {
+                    const ref = window.getCollection('users').doc(id);
+                    batch.delete(ref);
+                });
+                await batch.commit();
+                this.selectedIds.clear();
+                this.init();
             },
 
             filterList: function() {
                 const q = document.getElementById('search-input').value.trim();
-                if(!q) {
-                    this.render(this.students);
-                    return;
-                }
-                const filtered = this.students.filter(s => 
-                    s.name.includes(q) || String(s.class) === q
-                );
+                if(!q) { this.render(this.students); return; }
+                const filtered = this.students.filter(s => s.name.includes(q) || String(s.class) === q);
                 this.render(filtered);
             },
 
+            // --- History Popup ---
             showHistory: async function(uid, name, cls, num) {
-                document.getElementById('history-title').innerText = `${cls}반 ${num}번 ${name}의 기록 (${window.currentConfig.year}-${window.currentConfig.semester})`;
+                document.getElementById('history-title').innerText = `${name} (${cls}반 ${num}번) 문제 풀이 모음`;
                 const content = document.getElementById('history-content');
-                content.innerHTML = '<div class="text-center p-4">로딩 중...</div>';
+                content.innerHTML = '<div class="text-center p-10"><div class="loader-spinner mx-auto mb-2"></div><p>기록을 불러오는 중...</p></div>';
                 document.getElementById('history-modal').classList.remove('hidden');
 
                 try {
-                    // Changed: Use dynamic collection for Results
                     let snap = await window.getCollection('quiz_results')
                         .where('uid', '==', uid)
                         .orderBy('timestamp', 'desc')
                         .get();
 
                     if (snap.empty) {
-                        content.innerHTML = '<div class="text-center p-8 text-gray-400">해당 학기의 기록이 없습니다.</div>';
+                        content.innerHTML = '<div class="text-center p-20 text-gray-400 bg-gray-50 rounded-lg">해당 학기의 문제 풀이 기록이 없습니다.</div>';
                         return;
                     }
 
+                    // Fetch questions for details (Optional optimization: batch fetch)
+                    // For now, simpler rendering
+                    
                     let html = '';
+                    // Group by Date
+                    const groups = {};
                     snap.forEach(doc => {
                         const d = doc.data();
+                        const dateKey = d.timeString ? d.timeString.split(' ')[0] : 'Unknown';
+                        if(!groups[dateKey]) groups[dateKey] = [];
+                        groups[dateKey].push(d);
+                    });
+
+                    Object.keys(groups).forEach(date => {
                         html += `
-                            <div class="bg-gray-50 p-4 rounded border flex justify-between items-center">
-                                <div>
-                                    <div class="text-xs text-gray-500">${d.timeString}</div>
-                                    <div class="font-bold text-gray-800">${d.score}점</div>
+                            <div class="border border-gray-200 rounded-lg overflow-hidden mb-4">
+                                <div class="bg-gray-100 px-4 py-2 font-bold text-gray-700 flex justify-between items-center cursor-pointer hover:bg-gray-200" onclick="this.nextElementSibling.classList.toggle('hidden')">
+                                    <span>📅 ${date} 응시 (${groups[date].length}건)</span>
+                                    <i class="fas fa-chevron-down text-gray-400"></i>
                                 </div>
-                                <div class="text-xs px-2 py-1 bg-white border rounded">${d.status || '완료'}</div>
+                                <div class="hidden bg-white p-4 space-y-4">
+                                    ${groups[date].map(record => `
+                                        <div>
+                                            <div class="flex justify-between items-center text-sm mb-2 border-b pb-1">
+                                                <span class="font-bold text-blue-600">${record.score}점</span>
+                                                <span class="text-gray-400 text-xs">${record.timeString.split(' ').slice(1).join(' ')}</span>
+                                            </div>
+                                            <div class="space-y-2">
+                                                ${(record.details || []).map((q, idx) => `
+                                                    <div class="flex items-start gap-2 text-sm ${q.correct ? 'text-green-700' : 'text-red-600'}">
+                                                        <span class="font-mono font-bold w-6">Q${idx+1}</span>
+                                                        <span class="flex-1 truncate">${q.correct ? '✅ 정답' : `❌ 오답 (제출: ${q.u})`}</span>
+                                                    </div>
+                                                `).join('')}
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
                             </div>
                         `;
                     });
@@ -179,25 +296,30 @@
 
                 } catch (e) {
                     console.error(e);
-                    content.innerHTML = `<div class="text-center p-4 text-red-500">데이터 로드 실패 (인덱스 문제 가능성)<br>${e.message}</div>`;
+                    content.innerHTML = `<div class="text-center p-4 text-red-500">데이터 로드 실패: ${e.message}</div>`;
                 }
             },
 
+            // --- Edit Student ---
             openEdit: function(id) {
                 const s = this.students.find(x => x.id === id);
                 document.getElementById('edit-id').value = id;
+                document.getElementById('edit-grade').value = s.grade;
                 document.getElementById('edit-class').value = s.class;
                 document.getElementById('edit-num').value = s.number;
                 document.getElementById('edit-name').value = s.name;
+                document.getElementById('edit-email').value = s.email;
                 document.getElementById('edit-modal').classList.remove('hidden');
             },
 
             saveStudent: function() {
                 const id = document.getElementById('edit-id').value;
                 const updateData = {
+                    grade: parseInt(document.getElementById('edit-grade').value),
                     class: parseInt(document.getElementById('edit-class').value),
                     number: parseInt(document.getElementById('edit-num').value),
-                    name: document.getElementById('edit-name').value
+                    name: document.getElementById('edit-name').value,
+                    email: document.getElementById('edit-email').value
                 };
                 window.getCollection('users').doc(id).update(updateData).then(() => {
                     document.getElementById('edit-modal').classList.add('hidden');
