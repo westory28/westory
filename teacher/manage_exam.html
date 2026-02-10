@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>시험 채점 설정 - Westory Admin</title>
+    <title>점수 관리 - Westory Admin</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
@@ -20,47 +20,132 @@
         .choice-btn { width: 32px; height: 32px; border: 1px solid #d1d5db; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; font-weight: bold; color: #6b7280; }
         .choice-btn:hover { background-color: #f3f4f6; }
         .choice-btn.selected { background-color: #ef4444; color: white; border-color: #ef4444; }
+        
+        /* New Styles for Score Floater */
+        .score-floater {
+            position: fixed;
+            top: 100px;
+            right: 20px;
+            width: 220px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e5e7eb;
+            z-index: 40;
+            padding: 1.5rem;
+            text-align: center;
+        }
+
+        .tab-btn-base { padding: 12px 24px; font-weight: 700; font-size: 0.95rem; border-bottom: 3px solid transparent; color: #6b7280; transition: all 0.2s; }
+        .tab-btn-base:hover { color: #374151; background-color: #f9fafb; }
+        .tab-btn-active { border-bottom-color: #2563eb; color: #2563eb; }
     </style>
 </head>
-<body>
+<body class="bg-gray-50">
     <!-- Header injected by AuthManager -->
 
-    <main class="max-w-6xl mx-auto px-4 py-8">
+    <main class="max-w-7xl mx-auto px-4 py-8">
         
         <div class="flex justify-between items-center mb-6">
             <div>
-                <h1 class="text-2xl font-bold text-gray-800">📝 정답 및 채점 기준 설정</h1>
-                <p class="text-sm text-gray-500 mt-1">학생들이 [시험 채점] 메뉴에서 사용할 정답 데이터를 설정합니다.</p>
+                <h1 class="text-2xl font-bold text-gray-800">📊 점수 및 평가 기준 관리</h1>
+                <p class="text-sm text-gray-500 mt-1">성적 산출 기준을 설정하고, 지필평가 정답을 관리하세요.</p>
             </div>
-            <button onclick="configApp.saveToDB()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold shadow-lg transition flex items-center">
-                <i class="fas fa-save mr-2"></i> 설정 저장하기
-            </button>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-20">
-            <!-- Objective Section -->
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                <div class="flex justify-between items-center mb-6 pb-2 border-b">
-                    <h2 class="font-bold text-lg text-gray-700">객관식 문항</h2>
-                    <button onclick="configApp.addObjective()" class="text-sm bg-green-50 text-green-700 px-3 py-1 rounded font-bold hover:bg-green-100">+ 문항 추가</button>
+        <!-- Tabs -->
+        <div class="flex border-b border-gray-200 mb-6 bg-white rounded-t-lg px-2">
+            <button onclick="app.setTab('preview')" id="btn-tab-preview" class="tab-btn-base tab-btn-active">1. 성적 산출 기준 (수행평가)</button>
+            <button onclick="app.setTab('omr')" id="btn-tab-omr" class="tab-btn-base">2. 지필평가 정답 (OMR)</button>
+        </div>
+
+        <!-- TAB 1: Grading Plan (Performance Assessment) -->
+        <div id="tab-preview" class="tab-content">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Left: Form -->
+                <div class="lg:col-span-1">
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 sticky top-24">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 id="formTitle" class="font-bold text-lg text-gray-800">✏️ 평가 기준 등록</h3>
+                            <button onclick="app.resetPlanForm()" class="text-xs text-gray-400 hover:text-gray-600">초기화</button>
+                        </div>
+                        
+                        <input type="hidden" id="edit-plan-id">
+                        
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-500 mb-1">대상 학년</label>
+                                <select id="plan-grade" class="w-full border rounded p-2 text-sm bg-gray-50">
+                                    <option value="1">1학년</option>
+                                    <option value="2">2학년</option>
+                                    <option value="3">3학년</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-500 mb-1">과목명</label>
+                                <input type="text" id="plan-subject" placeholder="예: 역사, 사회" class="w-full border rounded p-2 text-sm">
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold text-gray-500 mb-2">평가 항목 (만점 / 반영비율)</label>
+                                <div id="criteriaList" class="space-y-2"></div>
+                                <button onclick="app.addCriteriaRow()" class="w-full mt-2 border border-dashed border-gray-300 text-gray-500 text-sm py-2 rounded hover:bg-gray-50 font-bold">+ 항목 추가</button>
+                            </div>
+
+                            <button onclick="app.saveGradingPlan()" id="btn-save-plan" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 shadow-md transition">
+                                기준 저장하기
+                            </button>
+                        </div>
+                    </div>
                 </div>
-                <div id="obj-list" class="space-y-3 max-h-[600px] overflow-y-auto pr-2"></div>
-            </div>
 
-            <!-- Subjective Section -->
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                <div class="flex justify-between items-center mb-6 pb-2 border-b">
-                    <h2 class="font-bold text-lg text-gray-700">서술형 문항</h2>
-                    <button onclick="configApp.addSubjParent()" class="text-sm bg-indigo-50 text-indigo-700 px-3 py-1 rounded font-bold hover:bg-indigo-100">+ 큰 문항 추가</button>
+                <!-- Right: List -->
+                <div class="lg:col-span-2">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-bold text-gray-600">등록된 기준 목록</h3>
+                        <span class="text-xs text-gray-400 bg-white px-2 py-1 rounded border">현재 학기 데이터만 표시됩니다</span>
+                    </div>
+                    <div id="plan-list" class="space-y-4">
+                        <div class="text-center py-10 text-gray-400">데이터를 불러오는 중...</div>
+                    </div>
                 </div>
-                <div id="subj-list" class="space-y-4 max-h-[600px] overflow-y-auto pr-2"></div>
             </div>
         </div>
 
-        <div class="fixed bottom-0 left-0 w-full bg-white border-t p-4 z-40 flex justify-center items-center shadow-lg gap-8">
-            <div class="text-center"><p class="text-xs text-gray-500 font-bold">총 문항수</p><p class="text-xl font-bold text-gray-800" id="total-count">0</p></div>
-            <div class="text-center"><p class="text-xs text-gray-500 font-bold">총 배점</p><p class="text-xl font-bold text-red-600" id="total-score">0</p></div>
+        <!-- TAB 2: OMR Config -->
+        <div id="tab-omr" class="tab-content hidden relative">
+            
+            <!-- Floating Score Card -->
+            <div class="score-floater">
+                <p class="text-xs text-gray-400 font-bold uppercase mb-1">Total Score</p>
+                <p class="text-4xl font-black text-red-500 mb-2" id="total-score">0</p>
+                <div class="text-xs text-gray-500 font-bold bg-gray-100 rounded py-1">총 문항수: <span id="total-count">0</span></div>
+                <button onclick="omrApp.saveToDB()" class="w-full mt-4 bg-gray-800 text-white text-sm font-bold py-2 rounded hover:bg-gray-900 shadow-sm">
+                    <i class="fas fa-save mr-1"></i> 저장
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 pr-[240px]">
+                <!-- Objective Section -->
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                    <div class="flex justify-between items-center mb-6 pb-2 border-b">
+                        <h2 class="font-bold text-lg text-gray-700">객관식 문항</h2>
+                        <button onclick="omrApp.addObjective()" class="text-sm bg-green-50 text-green-700 px-3 py-1 rounded font-bold hover:bg-green-100">+ 문항 추가</button>
+                    </div>
+                    <div id="obj-list" class="space-y-3 max-h-[600px] overflow-y-auto pr-2"></div>
+                </div>
+
+                <!-- Subjective Section -->
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                    <div class="flex justify-between items-center mb-6 pb-2 border-b">
+                        <h2 class="font-bold text-lg text-gray-700">서술형 문항</h2>
+                        <button onclick="omrApp.addSubjParent()" class="text-sm bg-indigo-50 text-indigo-700 px-3 py-1 rounded font-bold hover:bg-indigo-100">+ 큰 문항 추가</button>
+                    </div>
+                    <div id="subj-list" class="space-y-4 max-h-[600px] overflow-y-auto pr-2"></div>
+                </div>
+            </div>
         </div>
+
     </main>
 
     <!-- Footer injected by AuthManager -->
@@ -68,11 +153,176 @@
     <script>
         window.AuthManager.init('teacher');
 
-        const configApp = {
+        // --- Main App Controller ---
+        const app = {
+            plans: [],
+
+            init: function() {
+                this.loadGradingPlans();
+                this.addCriteriaRow(); // Add initial row
+            },
+
+            setTab: function(tabName) {
+                ['preview', 'omr'].forEach(t => {
+                    const btn = document.getElementById('btn-tab-' + t);
+                    const div = document.getElementById('tab-' + t);
+                    if (t === tabName) {
+                        btn.classList.add('tab-btn-active');
+                        div.classList.remove('hidden');
+                        if(t === 'omr') omrApp.init(); // Lazy load OMR
+                    } else {
+                        btn.classList.remove('tab-btn-active');
+                        div.classList.add('hidden');
+                    }
+                });
+            },
+
+            // --- Grading Plan Logic ---
+            loadGradingPlans: async function() {
+                const listDiv = document.getElementById('plan-list');
+                try {
+                    // Changed: Use dynamic collection
+                    const q = window.getCollection('grading_plans').orderBy('createdAt', 'desc');
+                    const snap = await q.get();
+                    this.plans = [];
+                    snap.forEach(doc => this.plans.push({ id: doc.id, ...doc.data() }));
+                    this.renderPlans();
+                } catch(e) {
+                    listDiv.innerHTML = '<div class="text-center text-red-400">로드 실패</div>';
+                }
+            },
+
+            renderPlans: function() {
+                const listDiv = document.getElementById('plan-list');
+                if(this.plans.length === 0) {
+                    listDiv.innerHTML = '<div class="text-center py-10 text-gray-400 bg-white rounded border border-dashed">등록된 기준이 없습니다.</div>';
+                    return;
+                }
+                listDiv.innerHTML = this.plans.map(p => {
+                    const itemsHtml = p.items.map(i => `<span class="inline-block bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded mr-1 mb-1">${i.name} (${i.ratio}%)</span>`).join('');
+                    return `
+                        <div class="bg-white p-5 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition flex justify-between items-start group">
+                            <div>
+                                <div class="flex items-center gap-2 mb-2">
+                                    <span class="font-bold text-lg text-gray-800">${p.subject}</span>
+                                    <span class="text-xs font-bold text-white bg-blue-500 px-2 py-0.5 rounded">${p.targetGrade||'2'}학년</span>
+                                </div>
+                                <div>${itemsHtml}</div>
+                            </div>
+                            <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition">
+                                <button onclick="app.editPlan('${p.id}')" class="text-blue-500 hover:bg-blue-50 p-2 rounded"><i class="fas fa-edit"></i></button>
+                                <button onclick="app.deletePlan('${p.id}')" class="text-red-500 hover:bg-red-50 p-2 rounded"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            },
+
+            addCriteriaRow: function(data = null) {
+                const div = document.createElement('div');
+                div.className = 'criteria-row flex gap-2 items-center';
+                div.innerHTML = `
+                    <select class="c-type border rounded p-2 text-xs w-20 bg-gray-50">
+                        <option value="지필" ${data?.type==='지필'?'selected':''}>지필</option>
+                        <option value="수행" ${data?.type==='수행'?'selected':''}>수행</option>
+                    </select>
+                    <input type="text" placeholder="항목명" class="c-name border rounded p-2 text-xs flex-1" value="${data?.name||''}">
+                    <input type="number" placeholder="만점" class="c-max border rounded p-2 text-xs w-16 text-center" value="${data?.maxScore||''}">
+                    <input type="number" placeholder="%" class="c-ratio border rounded p-2 text-xs w-16 text-center" value="${data?.ratio||''}">
+                    <button onclick="this.parentElement.remove()" class="text-gray-300 hover:text-red-500 px-2"><i class="fas fa-times"></i></button>
+                `;
+                document.getElementById('criteriaList').appendChild(div);
+            },
+
+            saveGradingPlan: async function() {
+                const id = document.getElementById('edit-plan-id').value;
+                const subject = document.getElementById('plan-subject').value;
+                const grade = document.getElementById('plan-grade').value;
+                
+                if(!subject) { alert("과목명을 입력하세요."); return; }
+                
+                const items = [];
+                let totalRatio = 0;
+                document.querySelectorAll('.criteria-row').forEach(row => {
+                    const type = row.querySelector('.c-type').value;
+                    const name = row.querySelector('.c-name').value;
+                    const maxScore = Number(row.querySelector('.c-max').value);
+                    const ratio = Number(row.querySelector('.c-ratio').value);
+                    if(name && maxScore && ratio) {
+                        items.push({ type, name, maxScore, ratio });
+                        totalRatio += ratio;
+                    }
+                });
+
+                if(items.length === 0) { alert("항목을 하나 이상 입력하세요."); return; }
+                if(totalRatio !== 100) { alert(`비율 합계는 100%여야 합니다. (현재 ${totalRatio}%)`); return; }
+
+                const data = {
+                    subject, 
+                    targetGrade: grade,
+                    items,
+                    academicYear: window.currentConfig.year, // explicit save
+                    semester: window.currentConfig.semester,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+
+                // Changed: Use dynamic collection
+                const col = window.getCollection('grading_plans');
+                if(id) {
+                    await col.doc(id).update(data);
+                } else {
+                    data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+                    await col.add(data);
+                }
+                
+                alert("저장되었습니다.");
+                this.resetPlanForm();
+                this.loadGradingPlans();
+            },
+
+            editPlan: function(id) {
+                const p = this.plans.find(x => x.id === id);
+                if(!p) return;
+                document.getElementById('edit-plan-id').value = id;
+                document.getElementById('plan-subject').value = p.subject;
+                document.getElementById('plan-grade').value = p.targetGrade || '2';
+                
+                const list = document.getElementById('criteriaList');
+                list.innerHTML = '';
+                p.items.forEach(i => this.addCriteriaRow(i));
+                
+                document.getElementById('formTitle').innerText = "🔄 평가 기준 수정";
+                document.getElementById('btn-save-plan').classList.remove('bg-blue-600');
+                document.getElementById('btn-save-plan').classList.add('bg-amber-500');
+                document.getElementById('btn-save-plan').innerText = "수정사항 저장";
+            },
+            
+            deletePlan: async function(id) {
+                if(confirm("삭제하시겠습니까?")) {
+                    await window.getCollection('grading_plans').doc(id).delete();
+                    this.loadGradingPlans();
+                }
+            },
+
+            resetPlanForm: function() {
+                document.getElementById('edit-plan-id').value = '';
+                document.getElementById('plan-subject').value = '';
+                document.getElementById('criteriaList').innerHTML = '';
+                this.addCriteriaRow();
+                document.getElementById('formTitle').innerText = "✏️ 평가 기준 등록";
+                document.getElementById('btn-save-plan').classList.add('bg-blue-600');
+                document.getElementById('btn-save-plan').classList.remove('bg-amber-500');
+                document.getElementById('btn-save-plan').innerText = "기준 저장하기";
+            }
+        };
+
+        // --- OMR Controller (Lazy Loaded) ---
+        const omrApp = {
+            loaded: false,
             data: { objective: [], subjective: [] },
 
             init: function() {
-                // Changed: Use dynamic collection for exam config
+                if(this.loaded) return;
                 window.getCollection("exam_config").doc("final_exam").get()
                     .then((doc) => {
                         if (doc.exists) {
@@ -81,6 +331,7 @@
                             this.data.subjective = d.subjective || [];
                         }
                         this.render();
+                        this.loaded = true;
                     });
             },
 
@@ -101,11 +352,11 @@
                     <div class="flex items-center gap-4 bg-gray-50 p-3 rounded border border-gray-100">
                         <span class="font-bold text-gray-500 w-8 text-center">${i+1}</span>
                         <div class="flex gap-1">
-                            ${[1,2,3,4,5].map(n => `<button onclick="configApp.setObjAnswer(${i}, ${n})" class="choice-btn ${item.answer===n ? 'selected':''}">${n}</button>`).join('')}
+                            ${[1,2,3,4,5].map(n => `<button onclick="omrApp.setObjAnswer(${i}, ${n})" class="choice-btn ${item.answer===n ? 'selected':''}">${n}</button>`).join('')}
                         </div>
-                        <input type="number" class="w-16 p-1 text-center border rounded text-sm font-bold text-blue-600" value="${item.score}" onchange="configApp.updateObjScore(${i}, this.value)">
+                        <input type="number" class="w-16 p-1 text-center border rounded text-sm font-bold text-blue-600" value="${item.score}" onchange="omrApp.updateObjScore(${i}, this.value)">
                         <span class="text-xs text-gray-400">점</span>
-                        <button onclick="configApp.removeObjective(${i})" class="ml-auto text-gray-300 hover:text-red-500"><i class="fas fa-times"></i></button>
+                        <button onclick="omrApp.removeObjective(${i})" class="ml-auto text-gray-300 hover:text-red-500"><i class="fas fa-times"></i></button>
                     </div>
                 `).join('');
             },
@@ -126,8 +377,8 @@
                         <div class="flex justify-between items-center mb-2">
                             <span class="font-bold text-indigo-600">서술형 ${pIdx+1}번</span>
                             <div class="space-x-2">
-                                <button onclick="configApp.addSubjItem(${pIdx})" class="text-xs bg-white border px-2 py-1 rounded">+ 소문항</button>
-                                <button onclick="configApp.removeSubjParent(${pIdx})" class="text-gray-400 hover:text-red-500"><i class="fas fa-trash"></i></button>
+                                <button onclick="omrApp.addSubjItem(${pIdx})" class="text-xs bg-white border px-2 py-1 rounded">+ 소문항</button>
+                                <button onclick="omrApp.removeSubjParent(${pIdx})" class="text-gray-400 hover:text-red-500"><i class="fas fa-trash"></i></button>
                             </div>
                         </div>
                         <div class="space-y-2">
@@ -135,10 +386,10 @@
                                 <div class="pl-4 border-l-2 border-indigo-100">
                                     <div class="flex items-center gap-2 mb-1">
                                         <span class="text-xs font-bold text-gray-500">(${sIdx+1})</span>
-                                        <input type="number" class="w-14 p-1 text-center border rounded text-xs font-bold" value="${sub.score}" onchange="configApp.updateSubjField(${pIdx}, ${sIdx}, 'score', this.value)">
+                                        <input type="number" class="w-14 p-1 text-center border rounded text-xs font-bold" value="${sub.score}" onchange="omrApp.updateSubjField(${pIdx}, ${sIdx}, 'score', this.value)">
                                         <span class="text-xs text-gray-400">점</span>
                                     </div>
-                                    <textarea class="w-full p-2 border rounded text-sm h-16" placeholder="모범 답안 입력" onchange="configApp.updateSubjField(${pIdx}, ${sIdx}, 'answer', this.value)">${sub.answer || ''}</textarea>
+                                    <textarea class="w-full p-2 border rounded text-sm h-16" placeholder="모범 답안 입력" onchange="omrApp.updateSubjField(${pIdx}, ${sIdx}, 'answer', this.value)">${sub.answer || ''}</textarea>
                                 </div>
                             `).join('')}
                         </div>
@@ -155,7 +406,6 @@
             },
 
             saveToDB: function() {
-                // Changed: Use dynamic collection
                 window.getCollection("exam_config").doc("final_exam").set({
                     objective: this.data.objective,
                     subjective: this.data.subjective,
@@ -164,7 +414,7 @@
             }
         };
 
-        document.addEventListener('auth-ready', () => configApp.init());
+        document.addEventListener('auth-ready', () => app.init());
     </script>
 </body>
 </html>

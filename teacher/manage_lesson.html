@@ -53,7 +53,8 @@
 <body class="bg-gray-50 h-screen flex flex-col">
     <!-- Header injected by AuthManager -->
 
-    <main class="flex-1 w-full max-w-[1800px] mx-auto px-6 py-6 h-full overflow-hidden flex flex-col">
+    <!-- Changed: max-w-[1800px] -> max-w-7xl for better margins -->
+    <main class="flex-1 w-full max-w-7xl mx-auto px-6 py-6 h-full overflow-hidden flex flex-col">
         
         <div class="flex justify-between items-center mb-4 shrink-0">
             <div>
@@ -129,7 +130,8 @@
         </div>
 
     </main>
-
+    
+    <!-- (Existing Modal & Scripts...) -->
     <!-- Preview Modal -->
     <div id="preview-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center">
         <div class="absolute inset-0 bg-black bg-opacity-70 backdrop-blur-sm" onclick="app.closePreview()"></div>
