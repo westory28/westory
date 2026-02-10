@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -17,42 +18,45 @@
     <script src="../assets/js/auth-manager.js"></script>
 
     <style>
-        .tab-btn { @apply px-6 py-2 rounded-full text-sm font-bold transition cursor-pointer; }
-        .tab-btn.active { @apply bg-blue-600 text-white shadow-md; }
-        .tab-btn.inactive { @apply bg-white text-gray-500 hover:bg-gray-100; }
+        /* Table sort icon style */
+        .sort-icon { margin-left: 4px; font-size: 0.8em; color: #9ca3af; }
+        .sort-active { color: #2563eb; }
+        .tab-btn-base { padding: 12px 24px; font-weight: 700; font-size: 0.95rem; border-bottom: 3px solid transparent; color: #6b7280; transition: all 0.2s; }
+        .tab-btn-base:hover { color: #374151; background-color: #f9fafb; }
+        .tab-btn-active { border-bottom-color: #2563eb; color: #2563eb; }
     </style>
 </head>
-<body>
+<body class="bg-gray-50">
     <!-- Header injected by AuthManager -->
 
-    <main class="max-w-7xl mx-auto px-4 py-8">
+    <main class="w-full px-6 py-8">
         
-        <!-- Tabs -->
-        <div class="flex justify-center mb-8 gap-2">
-            <button onclick="app.setTab('log')" id="btn-tab-log" class="tab-btn active">📊 실시간 기록</button>
-            <button onclick="app.setTab('bank')" id="btn-tab-bank" class="tab-btn inactive">🗄️ 문제 은행</button>
-            <button onclick="app.setTab('add')" id="btn-tab-add" class="tab-btn inactive">✍️ 문제 등록</button>
+        <!-- Improved Tabs -->
+        <div class="flex border-b border-gray-200 mb-6 bg-white rounded-t-lg px-2">
+            <button onclick="app.setTab('log')" id="btn-tab-log" class="tab-btn-base tab-btn-active">📊 제출 현황</button>
+            <button onclick="app.setTab('bank')" id="btn-tab-bank" class="tab-btn-base">🗄️ 문제 은행</button>
+            <button onclick="app.setTab('add')" id="btn-tab-add" class="tab-btn-base">✍️ 문제 등록</button>
         </div>
 
-        <!-- 1. Realtime Log Tab -->
+        <!-- 1. Submission Status Tab -->
         <div id="tab-log" class="tab-content">
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
                     <h2 class="text-xl font-bold text-gray-800">제출 현황 <span id="log-count" class="text-sm font-normal text-gray-500"></span></h2>
                     <div class="flex gap-2">
-                        <select id="select-class-trigger" onchange="app.loadByClass(this.value)" class="border rounded px-3 py-2 text-sm font-bold bg-gray-50">
+                        <select id="select-class-trigger" onchange="app.loadByClass(this.value)" class="border rounded px-3 py-2 text-sm font-bold bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
                             <option value="">반 선택</option>
                             <option value="all">전체 (최근 50개)</option>
                             <option value="1">1반</option><option value="2">2반</option><option value="3">3반</option>
                             <option value="4">4반</option><option value="5">5반</option><option value="6">6반</option>
                             <option value="7">7반</option><option value="8">8반</option><option value="9">9반</option>
                         </select>
-                        <button onclick="app.loadByClass(document.getElementById('select-class-trigger').value)" class="bg-gray-100 p-2 rounded hover:bg-gray-200"><i class="fas fa-sync-alt"></i></button>
-                        <button onclick="app.deleteSelectedLogs()" class="bg-red-50 text-red-600 px-3 py-2 rounded text-sm font-bold hover:bg-red-100">선택 삭제</button>
+                        <button onclick="app.loadByClass(document.getElementById('select-class-trigger').value)" class="bg-gray-100 p-2 rounded hover:bg-gray-200 text-gray-600" title="새로고침"><i class="fas fa-sync-alt"></i></button>
+                        <button onclick="app.deleteSelectedLogs()" class="bg-white border border-red-200 text-red-600 px-3 py-2 rounded text-sm font-bold hover:bg-red-50 transition">선택 삭제</button>
                     </div>
                 </div>
                 <div class="overflow-x-auto">
-                    <table class="w-full text-sm text-left">
+                    <table class="w-full text-sm text-left whitespace-nowrap">
                         <thead class="bg-gray-50 text-gray-600 font-bold border-b">
                             <tr>
                                 <th class="p-4 w-10"><input type="checkbox" onchange="document.querySelectorAll('.log-checkbox').forEach(cb=>cb.checked=this.checked)"></th>
@@ -60,10 +64,10 @@
                                 <th class="p-4">학생</th>
                                 <th class="p-4">점수</th>
                                 <th class="p-4">상태</th>
-                                <th class="p-4 text-center">삭제</th>
+                                <th class="p-4 text-center">관리</th>
                             </tr>
                         </thead>
-                        <tbody id="log-body" class="divide-y">
+                        <tbody id="log-body" class="divide-y divide-gray-100">
                             <tr><td colspan="6" class="p-8 text-center text-gray-400">데이터를 불러오려면 반을 선택하세요.</td></tr>
                         </tbody>
                     </table>
@@ -75,52 +79,111 @@
         <div id="tab-bank" class="tab-content hidden">
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <div class="flex justify-between items-center mb-6">
-                    <h2 class="text-xl font-bold text-gray-800">등록된 문제 <span id="total-q-count" class="text-sm font-normal text-gray-500"></span></h2>
+                    <h2 class="text-xl font-bold text-gray-800">문제 은행 <span id="total-q-count" class="text-sm font-normal text-gray-500"></span></h2>
                     <div class="flex gap-2">
-                        <select id="bank-filter-unit" onchange="app.renderBank()" class="border rounded px-2 py-1 text-sm"><option value="all">전체 단원</option><option value="I.">I. 고대</option><option value="II.">II. 종교</option><option value="III.">III. 교류</option><option value="IV.">IV. 제국주의</option><option value="V.">V. 세계대전</option></select>
-                        <button onclick="app.deleteSelectedQuestions()" class="bg-red-50 text-red-600 px-3 py-1 rounded text-sm font-bold border border-red-200">삭제</button>
+                        <select id="bank-filter-unit" onchange="app.renderBank()" class="border rounded px-3 py-2 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="all">전체 단원</option>
+                            <option value="I.">I. 고대</option>
+                            <option value="II.">II. 종교</option>
+                            <option value="III.">III. 교류</option>
+                            <option value="IV.">IV. 제국주의</option>
+                            <option value="V.">V. 세계대전</option>
+                        </select>
+                        <button onclick="app.deleteSelectedQuestions()" class="bg-white border border-red-200 text-red-600 px-3 py-2 rounded text-sm font-bold hover:bg-red-50 transition">선택 삭제</button>
                     </div>
                 </div>
-                <div class="overflow-x-auto max-h-[600px]">
+                <div class="overflow-x-auto max-h-[700px]">
                     <table class="w-full text-sm text-left">
-                        <thead class="bg-gray-50 text-gray-600 font-bold sticky top-0">
+                        <thead class="bg-gray-50 text-gray-600 font-bold sticky top-0 shadow-sm z-10">
                             <tr>
-                                <th class="p-3 w-10"><input type="checkbox" onchange="document.querySelectorAll('.q-checkbox').forEach(cb=>cb.checked=this.checked)"></th>
-                                <th class="p-3 w-12">ID</th>
-                                <th class="p-3">문제 내용</th>
-                                <th class="p-3 w-20">유형</th>
-                                <th class="p-3 w-20">정답</th>
-                                <th class="p-3 w-20">정답률</th>
+                                <th class="p-3 bg-gray-50 w-10"><input type="checkbox" onchange="document.querySelectorAll('.q-checkbox').forEach(cb=>cb.checked=this.checked)"></th>
+                                <th class="p-3 bg-gray-50 w-20 cursor-pointer hover:bg-gray-100" onclick="app.sortBank('id')">ID <i id="sort-icon-id" class="fas fa-sort sort-icon"></i></th>
+                                <th class="p-3 bg-gray-50 cursor-pointer hover:bg-gray-100" onclick="app.sortBank('unit')">단원 <i id="sort-icon-unit" class="fas fa-sort sort-icon"></i></th>
+                                <th class="p-3 bg-gray-50 cursor-pointer hover:bg-gray-100" onclick="app.sortBank('question')">문제 내용 <i id="sort-icon-question" class="fas fa-sort sort-icon"></i></th>
+                                <th class="p-3 bg-gray-50 w-24 cursor-pointer hover:bg-gray-100" onclick="app.sortBank('type')">유형 <i id="sort-icon-type" class="fas fa-sort sort-icon"></i></th>
+                                <th class="p-3 bg-gray-50 w-20 text-center">정답</th>
+                                <th class="p-3 bg-gray-50 w-24 text-center">정답률</th>
                             </tr>
                         </thead>
-                        <tbody id="bank-body" class="divide-y"></tbody>
+                        <tbody id="bank-body" class="divide-y divide-gray-100 bg-white"></tbody>
                     </table>
                 </div>
+                <div class="mt-4 text-xs text-gray-400 text-right">* 문제를 클릭하면 수정할 수 있습니다.</div>
             </div>
         </div>
 
         <!-- 3. Add Question Tab -->
         <div id="tab-add" class="tab-content hidden">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- Manual Add -->
-                <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                    <h3 class="font-bold text-lg mb-4 text-gray-800">📝 직접 만들기</h3>
-                    <div class="space-y-3">
-                        <select id="new-q-unit" class="w-full p-2 border rounded text-sm"><option>I. 문명의 발생</option><option>IV. 제국주의 침략</option><option>V. 세계 대전</option></select>
-                        <select id="new-q-type" class="w-full p-2 border rounded text-sm"><option value="choice">객관식</option><option value="ox">O/X</option><option value="word">단답형</option></select>
-                        <textarea id="new-q-text" class="w-full p-2 border rounded text-sm h-24" placeholder="문제 내용을 입력하세요"></textarea>
-                        <input type="text" id="new-q-options" class="w-full p-2 border rounded text-sm" placeholder="보기 (콤마로 구분, 객관식만)">
-                        <input type="text" id="new-q-answer" class="w-full p-2 border rounded text-sm" placeholder="정답">
-                        <input type="text" id="new-q-exp" class="w-full p-2 border rounded text-sm" placeholder="해설">
-                        <button onclick="app.addCustomQuestion()" class="w-full bg-blue-600 text-white font-bold py-3 rounded hover:bg-blue-700">등록하기</button>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <!-- Manual Add Form -->
+                <div class="md:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-200 relative">
+                    <input type="hidden" id="edit-q-id"> <!-- Hidden ID for Edit Mode -->
+                    <div class="flex justify-between items-center mb-6 border-b pb-4">
+                        <h3 class="font-bold text-lg text-gray-800" id="form-title">📝 직접 만들기</h3>
+                        <button onclick="app.clearForm()" class="text-xs text-gray-400 hover:text-gray-600"><i class="fas fa-undo mr-1"></i>초기화</button>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-500 mb-1">단원</label>
+                                <select id="new-q-unit" class="w-full p-3 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                                    <option>I. 문명의 발생</option>
+                                    <option>II. 종교와 문화</option>
+                                    <option>III. 지역 세계의 교류</option>
+                                    <option>IV. 제국주의 침략</option>
+                                    <option>V. 세계 대전</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-500 mb-1">유형</label>
+                                <select id="new-q-type" class="w-full p-3 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                                    <option value="choice">객관식</option>
+                                    <option value="ox">O/X</option>
+                                    <option value="word">단답형</option>
+                                    <option value="order">순서나열</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">문제 내용</label>
+                            <textarea id="new-q-text" class="w-full p-3 border rounded-lg text-sm h-32 focus:ring-2 focus:ring-blue-500 outline-none resize-none" placeholder="질문을 입력하세요"></textarea>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">보기 (콤마 , 로 구분 / 객관식·순서나열 전용)</label>
+                            <input type="text" id="new-q-options" class="w-full p-3 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="예: 기원전 8000년, 기원전 2333년, ...">
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-500 mb-1">정답</label>
+                                <input type="text" id="new-q-answer" class="w-full p-3 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none font-bold text-blue-600" placeholder="정답 입력">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-500 mb-1">해설 (선택)</label>
+                                <input type="text" id="new-q-exp" class="w-full p-3 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="해설 입력">
+                            </div>
+                        </div>
+
+                        <button onclick="app.saveCustomQuestion()" id="btn-save-q" class="w-full bg-blue-600 text-white font-bold py-4 rounded-lg hover:bg-blue-700 transition shadow-lg mt-4">
+                            등록하기
+                        </button>
                     </div>
                 </div>
                 
                 <!-- Excel Upload -->
-                <div class="bg-green-50 p-6 rounded-xl border border-green-200">
-                    <h3 class="font-bold text-lg mb-4 text-green-800">📗 엑셀 업로드</h3>
-                    <input type="file" id="excel-file" accept=".xlsx" class="block w-full text-sm text-slate-500 mb-6 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-100 file:text-green-700 hover:file:bg-green-200"/>
-                    <button onclick="app.uploadExcel()" class="w-full bg-green-600 text-white font-bold py-3 rounded hover:bg-green-700">업로드 시작</button>
+                <div class="bg-green-50 p-6 rounded-xl border border-green-200 h-fit">
+                    <h3 class="font-bold text-lg mb-4 text-green-800 border-b border-green-200 pb-2">📗 엑셀 대량 업로드</h3>
+                    <div class="mb-4 text-xs text-green-700 leading-relaxed">
+                        <p class="mb-2"><strong>[필수 컬럼]</strong><br>unit, type, question, options, answer, explanation</p>
+                        <p>엑셀 파일(.xlsx)을 드래그하거나 선택하여 한 번에 등록하세요.</p>
+                    </div>
+                    <input type="file" id="excel-file" accept=".xlsx" class="block w-full text-sm text-slate-500 mb-6 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-100 file:text-green-700 hover:file:bg-green-200 cursor-pointer"/>
+                    <button onclick="app.uploadExcel()" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 transition shadow-md">
+                        업로드 시작
+                    </button>
                 </div>
             </div>
         </div>
@@ -133,37 +196,57 @@
         window.AuthManager.init('teacher');
 
         const app = {
-            state: { questions: [], logs: [] },
+            state: { questions: [], logs: [], sortField: 'id', sortOrder: 'asc' },
 
             init: function() {
                 this.loadQuestions();
             },
 
             setTab: function(tabName) {
-                document.querySelectorAll('.tab-btn').forEach(btn => {
-                    btn.classList.remove('active');
-                    btn.classList.add('inactive');
+                // Update Tab Styles
+                ['log', 'bank', 'add'].forEach(t => {
+                    const btn = document.getElementById('btn-tab-' + t);
+                    const div = document.getElementById('tab-' + t);
+                    
+                    if (t === tabName) {
+                        btn.classList.add('tab-btn-active');
+                        div.classList.remove('hidden');
+                    } else {
+                        btn.classList.remove('tab-btn-active');
+                        div.classList.add('hidden');
+                    }
                 });
-                document.getElementById('btn-tab-' + tabName).classList.add('active');
-                document.getElementById('btn-tab-' + tabName).classList.remove('inactive');
 
-                document.querySelectorAll('.tab-content').forEach(div => div.classList.add('hidden'));
-                document.getElementById('tab-' + tabName).classList.remove('hidden');
+                // Clear form if switching to 'add' without edit intent (simple heuristic)
+                if (tabName === 'add' && !document.getElementById('edit-q-id').value) {
+                    this.clearForm();
+                }
             },
 
             loadByClass: function(cls) {
                 if(!cls) return;
+                const tbody = document.getElementById('log-body');
+                tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center"><div class="loader-spinner mx-auto mb-2"></div>로딩 중...</td></tr>';
+
                 let q = window.db.collection('quiz_results').orderBy('timestamp', 'desc');
-                if (cls !== 'all') q = q.where('class', '==', parseInt(cls) || cls); // Try both number and string
+                if (cls !== 'all') q = q.where('class', '==', parseInt(cls) || cls);
                 else q = q.limit(50);
 
                 q.get().then(snap => {
                     let html = '';
                     snap.forEach(doc => {
                         const d = doc.data();
-                        html += `<tr class="hover:bg-gray-50"><td class="p-4"><input type="checkbox" class="log-checkbox" value="${doc.id}"></td><td class="p-4 text-xs text-gray-500">${d.timeString}</td><td class="p-4 font-bold text-gray-700">${d.class}반 ${d.number}번 ${d.name}</td><td class="p-4 font-bold text-blue-600">${d.score}점</td><td class="p-4 text-xs">${d.status}</td><td class="p-4 text-center"><button onclick="app.deleteLog('${doc.id}')" class="text-red-400 hover:text-red-600"><i class="fas fa-trash"></i></button></td></tr>`;
+                        html += `
+                        <tr class="hover:bg-blue-50 transition border-b border-gray-100 last:border-0">
+                            <td class="p-4"><input type="checkbox" class="log-checkbox w-4 h-4" value="${doc.id}"></td>
+                            <td class="p-4 text-xs text-gray-500 font-mono">${d.timeString}</td>
+                            <td class="p-4 font-bold text-gray-700">${d.class}반 ${d.number}번 ${d.name}</td>
+                            <td class="p-4 font-bold text-blue-600">${d.score}점</td>
+                            <td class="p-4 text-xs"><span class="px-2 py-1 rounded ${d.status==='완료'?'bg-green-100 text-green-700':'bg-red-100 text-red-700'}">${d.status}</span></td>
+                            <td class="p-4 text-center"><button onclick="app.deleteLog('${doc.id}')" class="text-gray-300 hover:text-red-500 transition"><i class="fas fa-trash"></i></button></td>
+                        </tr>`;
                     });
-                    document.getElementById('log-body').innerHTML = html || '<tr><td colspan="6" class="p-8 text-center">데이터가 없습니다.</td></tr>';
+                    tbody.innerHTML = html || '<tr><td colspan="6" class="p-8 text-center text-gray-400">데이터가 없습니다.</td></tr>';
                     document.getElementById('log-count').innerText = `(${snap.size}건)`;
                 });
             },
@@ -172,66 +255,151 @@
                 window.db.collection('quiz_questions').get().then(snap => {
                     this.state.questions = [];
                     snap.forEach(doc => this.state.questions.push({ ...doc.data(), id: parseInt(doc.id) }));
-                    this.state.questions.sort((a,b) => a.id - b.id);
                     this.renderBank();
                 });
             },
 
+            sortBank: function(field) {
+                if (this.state.sortField === field) {
+                    this.state.sortOrder = this.state.sortOrder === 'asc' ? 'desc' : 'asc';
+                } else {
+                    this.state.sortField = field;
+                    this.state.sortOrder = 'asc';
+                }
+                this.renderBank();
+            },
+
             renderBank: function() {
+                // Filter
                 const filter = document.getElementById('bank-filter-unit').value;
-                const list = (filter === 'all') ? this.state.questions : this.state.questions.filter(q => (q.unit||"").includes(filter));
+                let list = (filter === 'all') ? this.state.questions : this.state.questions.filter(q => (q.unit||"").includes(filter));
+                
+                // Sort
+                const field = this.state.sortField;
+                const order = this.state.sortOrder === 'asc' ? 1 : -1;
+                list.sort((a, b) => {
+                    let va = a[field], vb = b[field];
+                    if (typeof va === 'string') va = va.toLowerCase();
+                    if (typeof vb === 'string') vb = vb.toLowerCase();
+                    if (va < vb) return -1 * order;
+                    if (va > vb) return 1 * order;
+                    return 0;
+                });
+
                 document.getElementById('total-q-count').innerText = `(${list.length}문항)`;
                 
+                // Update Icons
+                document.querySelectorAll('.sort-icon').forEach(el => { el.className = 'fas fa-sort sort-icon'; });
+                const icon = document.getElementById('sort-icon-' + field);
+                if(icon) icon.className = `fas fa-sort-${this.state.sortOrder === 'asc' ? 'up' : 'down'} sort-icon sort-active`;
+
+                // Render Table
                 document.getElementById('bank-body').innerHTML = list.map(q => `
-                    <tr class="hover:bg-gray-50 border-b">
-                        <td class="p-3"><input type="checkbox" class="q-checkbox" value="${q.id}"></td>
-                        <td class="p-3 text-xs font-bold text-gray-500">${q.id}</td>
-                        <td class="p-3 text-sm font-bold text-gray-800">${q.question}</td>
-                        <td class="p-3 text-xs text-gray-500 bg-gray-100 rounded text-center">${q.type}</td>
-                        <td class="p-3 text-xs font-bold text-blue-600">${q.answer}</td>
+                    <tr class="hover:bg-blue-50 border-b border-gray-100 last:border-0 cursor-pointer group" onclick="app.editQuestion(${q.id})">
+                        <td class="p-3" onclick="event.stopPropagation()"><input type="checkbox" class="q-checkbox w-4 h-4" value="${q.id}"></td>
+                        <td class="p-3 text-xs font-bold text-gray-500 font-mono group-hover:text-blue-600">${q.id}</td>
+                        <td class="p-3 text-xs text-gray-500">${q.unit || '-'}</td>
+                        <td class="p-3 text-sm font-medium text-gray-800 truncate max-w-xs group-hover:text-blue-700">${q.question}</td>
+                        <td class="p-3 text-xs"><span class="bg-gray-100 text-gray-600 px-2 py-1 rounded border">${q.type}</span></td>
+                        <td class="p-3 text-xs font-bold text-center text-blue-600">${q.answer}</td>
                         <td class="p-3 text-xs text-gray-500 text-center">${q.stat_total ? Math.round((q.stat_correct/q.stat_total)*100)+'%' : '-'}</td>
                     </tr>
                 `).join('');
             },
 
-            addCustomQuestion: function() {
-                // Logic adapted from previous `addCustomQuestion`
-                const id = this.state.questions.length > 0 ? Math.max(...this.state.questions.map(q=>q.id)) + 1 : 1;
+            editQuestion: function(id) {
+                const q = this.state.questions.find(item => item.id === id);
+                if (!q) return;
+
+                document.getElementById('edit-q-id').value = q.id;
+                document.getElementById('new-q-unit').value = q.unit;
+                document.getElementById('new-q-type').value = q.type;
+                document.getElementById('new-q-text').value = q.question;
+                document.getElementById('new-q-options').value = (q.options || []).join(', ');
+                document.getElementById('new-q-answer').value = q.answer;
+                document.getElementById('new-q-exp').value = q.explanation || '';
+                
+                document.getElementById('form-title').innerHTML = `✏️ 문제 수정 (ID: ${q.id})`;
+                document.getElementById('btn-save-q').innerText = "수정사항 저장";
+                document.getElementById('btn-save-q').classList.remove('bg-blue-600');
+                document.getElementById('btn-save-q').classList.add('bg-indigo-600');
+                
+                this.setTab('add');
+            },
+
+            clearForm: function() {
+                document.getElementById('edit-q-id').value = '';
+                document.getElementById('form-title').innerHTML = '📝 직접 만들기';
+                document.getElementById('new-q-text').value = '';
+                document.getElementById('new-q-options').value = '';
+                document.getElementById('new-q-answer').value = '';
+                document.getElementById('new-q-exp').value = '';
+                document.getElementById('btn-save-q').innerText = "등록하기";
+                document.getElementById('btn-save-q').classList.add('bg-blue-600');
+                document.getElementById('btn-save-q').classList.remove('bg-indigo-600');
+            },
+
+            saveCustomQuestion: function() {
+                const editId = document.getElementById('edit-q-id').value;
+                const isEdit = !!editId;
+                
+                // Calculate ID: if edit use existing, else max + 1
+                let id = isEdit ? parseInt(editId) : 1;
+                if (!isEdit && this.state.questions.length > 0) {
+                    id = Math.max(...this.state.questions.map(q=>q.id)) + 1;
+                }
+                
                 const data = {
                     id: id,
                     unit: document.getElementById('new-q-unit').value,
                     type: document.getElementById('new-q-type').value,
                     question: document.getElementById('new-q-text').value,
-                    options: document.getElementById('new-q-options').value.split(','),
+                    options: document.getElementById('new-q-options').value.split(',').map(s=>s.trim()).filter(s=>s),
                     answer: document.getElementById('new-q-answer').value,
                     explanation: document.getElementById('new-q-exp').value
                 };
+
                 window.db.collection('quiz_questions').doc(String(id)).set(data).then(() => {
-                    alert('등록되었습니다.');
+                    alert(isEdit ? '수정되었습니다.' : '등록되었습니다.');
+                    this.clearForm();
                     this.loadQuestions();
-                });
+                    if(isEdit) this.setTab('bank'); // Return to bank after edit
+                }).catch(err => alert("저장 실패: " + err.message));
             },
 
             deleteSelectedLogs: function() {
                 const checked = document.querySelectorAll('.log-checkbox:checked');
                 if(!checked.length) return;
                 if(!confirm(`${checked.length}개의 기록을 삭제하시겠습니까?`)) return;
+                
                 const batch = window.db.batch();
                 checked.forEach(cb => batch.delete(window.db.collection('quiz_results').doc(cb.value)));
-                batch.commit().then(() => this.loadByClass(document.getElementById('select-class-trigger').value));
+                
+                batch.commit().then(() => {
+                    this.loadByClass(document.getElementById('select-class-trigger').value);
+                });
+            },
+            
+            deleteLog: function(id) {
+                if(confirm("삭제하시겠습니까?")) {
+                    window.db.collection('quiz_results').doc(id).delete().then(() => {
+                        this.loadByClass(document.getElementById('select-class-trigger').value);
+                    });
+                }
             },
 
             deleteSelectedQuestions: function() {
                 const checked = document.querySelectorAll('.q-checkbox:checked');
                 if(!checked.length) return;
-                if(!confirm("선택한 문제를 삭제하시겠습니까?")) return;
+                if(!confirm(`선택한 ${checked.length}개의 문제를 삭제하시겠습니까?`)) return;
+                
                 const batch = window.db.batch();
                 checked.forEach(cb => batch.delete(window.db.collection('quiz_questions').doc(cb.value)));
+                
                 batch.commit().then(() => this.loadQuestions());
             }
         };
 
-        // Initialize when Auth is ready
         document.addEventListener('auth-ready', () => app.init());
     </script>
 </body>
