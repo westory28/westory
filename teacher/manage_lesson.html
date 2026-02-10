@@ -1,11 +1,16 @@
+
 <!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>수업 자료 관리 - Westory Admin</title>
+    <title>단원 설정 - Westory Admin</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Quill Editor -->
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
     
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
@@ -14,67 +19,140 @@
     <script src="../assets/js/firebase-config.js"></script>
     <link rel="stylesheet" href="../assets/css/style.css">
     <script src="../assets/js/auth-manager.js"></script>
+
+    <style>
+        .tree-node { position: relative; padding-left: 20px; }
+        .tree-line { position: absolute; top: 0; bottom: 0; left: 10px; border-left: 1px dashed #cbd5e1; }
+        .tree-item { 
+            display: flex; align-items: center; padding: 6px 10px; margin: 2px 0; 
+            border-radius: 6px; cursor: pointer; transition: all 0.2s; border: 1px solid transparent; 
+        }
+        .tree-item:hover { background-color: #f1f5f9; }
+        .tree-item.active { background-color: #eff6ff; border-color: #bfdbfe; color: #2563eb; font-weight: bold; }
+        
+        /* Level Styles */
+        .level-0 .tree-item-title { font-weight: 800; font-size: 1.05rem; color: #1e293b; } /* Large */
+        .level-1 .tree-item-title { font-weight: 600; font-size: 0.95rem; color: #475569; } /* Medium */
+        .level-2 .tree-item-title { font-weight: 400; font-size: 0.9rem; color: #64748b; } /* Small */
+
+        .btn-action { opacity: 0; transition: opacity 0.2s; }
+        .tree-item:hover .btn-action { opacity: 1; }
+
+        /* Quill Override */
+        .ql-container { font-family: 'Noto Sans KR', sans-serif; font-size: 1rem; height: 500px; }
+        .ql-editor strong { font-weight: bold; }
+        
+        /* Preview Styles */
+        .cloze-input {
+            border: none; border-bottom: 2px solid #374151; text-align: center;
+            font-weight: bold; color: #2563eb; background: transparent;
+            padding: 0 4px; width: 100px; display: inline-block;
+        }
+    </style>
 </head>
-<body>
+<body class="bg-gray-50 h-screen flex flex-col">
     <!-- Header injected by AuthManager -->
 
-    <main class="max-w-5xl mx-auto px-4 py-8">
+    <main class="flex-1 w-full max-w-[1800px] mx-auto px-6 py-6 h-full overflow-hidden flex flex-col">
         
-        <div class="flex justify-between items-center mb-8">
-            <h1 class="text-2xl font-bold text-gray-800">📚 수업 자료 관리 (빈칸 노트)</h1>
-            <button onclick="lessonApp.openModal()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold shadow transition">
-                <i class="fas fa-plus mr-2"></i> 새 자료 등록
-            </button>
+        <div class="flex justify-between items-center mb-4 shrink-0">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800"><i class="fas fa-sitemap text-blue-500 mr-2"></i>단원 설정 및 수업 자료 관리</h1>
+                <p class="text-sm text-gray-500 mt-1">대단원 > 중단원 > 소단원 구조를 설정하고, 소단원을 선택하여 학습 자료를 등록하세요.</p>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="app.addRootUnit()" class="bg-stone-800 text-white px-4 py-2 rounded-lg font-bold hover:bg-stone-900 shadow-sm text-sm">
+                    <i class="fas fa-plus mr-1"></i> 대단원 추가
+                </button>
+            </div>
         </div>
 
-        <!-- List -->
-        <div id="lesson-list" class="grid gap-4">
-            <!-- Dynamic Content -->
-            <div class="p-8 text-center text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-300">
-                등록된 수업 자료가 없습니다.
+        <div class="flex gap-6 h-full overflow-hidden pb-4">
+            
+            <!-- Left: Tree Structure -->
+            <div class="w-1/3 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden">
+                <div class="p-4 border-b bg-gray-50 font-bold text-gray-700 flex justify-between items-center">
+                    <span>📚 단원 목차</span>
+                    <button onclick="app.saveTree()" class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200">구조 저장</button>
+                </div>
+                <div class="flex-1 overflow-y-auto p-4" id="tree-container">
+                    <div class="text-center text-gray-400 py-10">로딩 중...</div>
+                </div>
+            </div>
+
+            <!-- Right: Lesson Editor (Hidden until leaf selected) -->
+            <div class="w-2/3 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col relative" id="editor-panel">
+                <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 bg-white z-10 rounded-xl">
+                    <i class="far fa-hand-point-left text-4xl mb-4"></i>
+                    <p class="text-lg">왼쪽 목차에서 <strong>소단원</strong>을 선택하면<br>자료를 편집할 수 있습니다.</p>
+                </div>
+
+                <!-- Editor UI -->
+                <div class="p-4 border-b flex justify-between items-center bg-gray-50 shrink-0">
+                    <div class="flex items-center gap-2 overflow-hidden">
+                        <span class="bg-blue-600 text-white text-xs px-2 py-1 rounded font-bold shrink-0">선택됨</span>
+                        <span id="selected-unit-path" class="font-bold text-gray-700 truncate"></span>
+                    </div>
+                    <div class="flex gap-2">
+                         <button onclick="app.previewLesson()" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg font-bold hover:bg-gray-50 text-sm">
+                            <i class="fas fa-eye mr-2"></i>미리보기
+                        </button>
+                        <button onclick="app.saveLesson()" class="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-700 shadow-md text-sm">
+                            <i class="fas fa-save mr-2"></i>저장하기
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flex-1 overflow-y-auto p-6 space-y-4">
+                    <!-- Title Input -->
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">자료 제목 (학생에게 표시될 제목)</label>
+                        <input type="text" id="lesson-title" class="w-full text-lg font-bold border-b-2 border-gray-200 focus:border-blue-500 outline-none py-2 px-1 transition" placeholder="제목을 입력하세요">
+                    </div>
+
+                    <!-- Video Link -->
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">YouTube 영상 링크 (선택)</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="lesson-video" class="w-full border rounded-lg px-3 py-2 text-sm bg-gray-50 focus:bg-white transition" placeholder="https://youtu.be/...">
+                        </div>
+                    </div>
+
+                    <!-- Content Editor -->
+                    <div class="flex-1 flex flex-col h-full min-h-[500px]">
+                        <label class="block text-xs font-bold text-gray-500 mb-1 flex justify-between">
+                            <span>학습 내용 (텍스트, 이미지, 빈칸)</span>
+                            <span class="text-blue-600">빈칸 만드는 법: 정답을 대괄호 [정답] 으로 감싸세요.</span>
+                        </label>
+                        <div id="quill-editor" class="bg-white"></div>
+                    </div>
+                </div>
             </div>
         </div>
 
     </main>
 
-    <!-- Create/Edit Modal -->
-    <div id="lesson-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
-        <div class="bg-white w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden m-4">
-            <div class="p-6 border-b flex justify-between items-center bg-gray-50">
-                <h3 class="font-bold text-lg text-gray-800">수업 자료 에디터</h3>
-                <button onclick="lessonApp.closeModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times text-xl"></i></button>
+    <!-- Preview Modal -->
+    <div id="preview-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center">
+        <div class="absolute inset-0 bg-black bg-opacity-70 backdrop-blur-sm" onclick="app.closePreview()"></div>
+        <div class="bg-white w-full max-w-4xl h-[85vh] rounded-2xl shadow-2xl z-10 flex flex-col overflow-hidden relative">
+            <div class="p-4 border-b flex justify-between items-center bg-gray-50">
+                <h3 class="font-bold text-lg"><i class="fas fa-mobile-alt mr-2"></i>학생 화면 미리보기</h3>
+                <button onclick="app.closePreview()" class="text-gray-500 hover:text-gray-800"><i class="fas fa-times text-xl"></i></button>
             </div>
-            
-            <div class="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-                <input type="hidden" id="edit-id">
-                <div>
-                    <label class="block text-sm font-bold text-gray-700 mb-1">단원 / 분류</label>
-                    <select id="edit-unit" class="w-full border rounded p-2 text-sm bg-white">
-                        <option>I. 문명의 발생</option>
-                        <option>IV. 제국주의 침략</option>
-                        <option>V. 세계 대전</option>
-                        <option>기타</option>
-                    </select>
+            <div class="flex-1 overflow-y-auto p-8 bg-gray-50">
+                <div class="max-w-2xl mx-auto bg-white p-8 rounded-xl shadow-sm border border-gray-200 min-h-full">
+                    <h1 id="preview-title" class="text-2xl font-bold mb-4 text-gray-900 border-b pb-4"></h1>
+                    <div id="preview-video-area" class="mb-6 hidden">
+                        <div class="relative pb-[56.25%] h-0 overflow-hidden rounded-xl bg-black">
+                            <iframe id="preview-iframe" class="absolute top-0 left-0 w-full h-full" frameborder="0" allowfullscreen></iframe>
+                        </div>
+                    </div>
+                    <div id="preview-content" class="prose max-w-none text-gray-800 leading-loose"></div>
+                    <div class="mt-8 text-center">
+                        <button class="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold opacity-50 cursor-not-allowed">정답 확인 (예시)</button>
+                    </div>
                 </div>
-                <div>
-                    <label class="block text-sm font-bold text-gray-700 mb-1">제목</label>
-                    <input type="text" id="edit-title" class="w-full border rounded p-2 text-sm" placeholder="예: 1910년대 무단 통치">
-                </div>
-                <div>
-                    <label class="block text-sm font-bold text-gray-700 mb-1">유튜브 링크 (선택)</label>
-                    <input type="text" id="edit-video" class="w-full border rounded p-2 text-sm" placeholder="URL 입력">
-                </div>
-                <div>
-                    <label class="block text-sm font-bold text-gray-700 mb-1">
-                        내용 (빈칸은 <span class="text-blue-600 font-mono">[정답]</span>으로 감싸주세요)
-                    </label>
-                    <textarea id="edit-content" class="w-full border rounded p-4 text-sm h-48 leading-relaxed font-sans resize-y" placeholder="예: 일제는 1910년 [조선총독부]를 설치하였다."></textarea>
-                    <p class="text-xs text-gray-400 mt-1">* 텍스트 중간에 대괄호 [ ] 를 사용하여 정답을 입력하면 학생 화면에서 빈칸으로 표시됩니다.</p>
-                </div>
-            </div>
-
-            <div class="p-4 border-t bg-gray-50 text-right">
-                <button onclick="lessonApp.saveLesson()" class="bg-blue-600 text-white px-6 py-2 rounded font-bold hover:bg-blue-700 transition">저장하기</button>
             </div>
         </div>
     </div>
@@ -84,88 +162,305 @@
     <script>
         window.AuthManager.init('teacher');
 
-        const lessonApp = {
+        const app = {
+            treeData: [],
+            selectedNodeId: null,
+            quill: null,
+
             init: function() {
-                this.loadLessons();
+                this.initQuill();
+                this.loadTree();
             },
 
-            loadLessons: function() {
-                window.db.collection('lessons').orderBy('createdAt', 'desc').get().then(snap => {
-                    if(snap.empty) return;
-                    const html = [];
-                    snap.forEach(doc => {
-                        const d = doc.data();
-                        html.push(`
-                            <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex justify-between items-center hover:shadow-md transition">
-                                <div>
-                                    <span class="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded mb-1 inline-block">${d.unit}</span>
-                                    <h3 class="text-lg font-bold text-gray-800">${d.title}</h3>
-                                    <p class="text-xs text-gray-400 mt-1">등록일: ${d.createdAt ? new Date(d.createdAt.toDate()).toLocaleDateString() : '-'}</p>
-                                </div>
-                                <div class="flex gap-2">
-                                    <button onclick="lessonApp.editLesson('${doc.id}')" class="text-gray-400 hover:text-blue-600 p-2"><i class="fas fa-edit"></i></button>
-                                    <button onclick="lessonApp.deleteLesson('${doc.id}')" class="text-gray-400 hover:text-red-600 p-2"><i class="fas fa-trash"></i></button>
-                                </div>
-                            </div>
-                        `);
-                    });
-                    document.getElementById('lesson-list').innerHTML = html.join('');
+            initQuill: function() {
+                this.quill = new Quill('#quill-editor', {
+                    theme: 'snow',
+                    modules: {
+                        toolbar: [
+                            [{ 'header': [1, 2, 3, false] }],
+                            ['bold', 'italic', 'underline', 'strike'],
+                            [{ 'color': [] }, { 'background': [] }],
+                            [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                            ['link', 'image'],
+                            ['clean']
+                        ]
+                    },
+                    placeholder: '여기에 학습 내용을 작성하세요. 이미지를 붙여넣거나 업로드할 수 있습니다.'
                 });
             },
 
-            openModal: function(id = null) {
-                document.getElementById('edit-id').value = id || '';
-                document.getElementById('edit-title').value = '';
-                document.getElementById('edit-video').value = '';
-                document.getElementById('edit-content').value = '';
-                
-                if(id) {
-                    window.db.collection('lessons').doc(id).get().then(doc => {
-                        const d = doc.data();
-                        document.getElementById('edit-unit').value = d.unit;
-                        document.getElementById('edit-title').value = d.title;
-                        document.getElementById('edit-video').value = d.videoUrl || '';
-                        document.getElementById('edit-content').value = d.rawContent;
-                    });
+            // --- Tree Management ---
+            loadTree: async function() {
+                try {
+                    const doc = await window.db.collection('site_settings').doc('curriculum').get();
+                    if (doc.exists && doc.data().tree) {
+                        this.treeData = doc.data().tree;
+                    } else {
+                        // Default Structure
+                        this.treeData = [
+                            { 
+                                id: 'root-' + Date.now(), 
+                                title: '새 대단원', 
+                                children: [] 
+                            }
+                        ];
+                    }
+                    this.renderTree();
+                } catch(e) {
+                    console.error(e);
+                    document.getElementById('tree-container').innerHTML = '<p class="text-red-500">불러오기 실패</p>';
                 }
-                document.getElementById('lesson-modal').classList.remove('hidden');
-                document.getElementById('lesson-modal').classList.add('flex');
             },
 
-            closeModal: function() {
-                document.getElementById('lesson-modal').classList.add('hidden');
-                document.getElementById('lesson-modal').classList.remove('flex');
-            },
+            renderTree: function() {
+                const container = document.getElementById('tree-container');
+                container.innerHTML = '';
+                
+                // Recursive Render
+                const renderNode = (node, level, parentArr) => {
+                    const el = document.createElement('div');
+                    el.className = `tree-node level-${level}`;
+                    
+                    // Indentation line
+                    if (level > 0) {
+                        const line = document.createElement('div');
+                        line.className = 'tree-line';
+                        el.appendChild(line);
+                    }
 
-            saveLesson: function() {
-                const id = document.getElementById('edit-id').value;
-                const data = {
-                    unit: document.getElementById('edit-unit').value,
-                    title: document.getElementById('edit-title').value,
-                    videoUrl: document.getElementById('edit-video').value,
-                    rawContent: document.getElementById('edit-content').value,
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    // Content Item
+                    const itemBox = document.createElement('div');
+                    itemBox.className = `tree-item ${this.selectedNodeId === node.id ? 'active' : ''}`;
+                    itemBox.onclick = (e) => { e.stopPropagation(); this.selectNode(node, level); };
+                    
+                    // Icon based on level
+                    let icon = 'fa-folder';
+                    if (level === 1) icon = 'fa-folder-open';
+                    if (level === 2) icon = 'fa-file-alt';
+
+                    // Title
+                    const titleSpan = document.createElement('span');
+                    titleSpan.className = 'tree-item-title flex-1 ml-2';
+                    titleSpan.innerText = node.title;
+                    
+                    // Actions
+                    const actions = document.createElement('div');
+                    actions.className = 'btn-action flex gap-1 ml-2';
+                    
+                    // Add Child (Only for Level 0 and 1)
+                    if (level < 2) {
+                        const btnAdd = document.createElement('button');
+                        btnAdd.className = 'text-green-600 hover:bg-green-100 p-1 rounded';
+                        btnAdd.innerHTML = '<i class="fas fa-plus"></i>';
+                        btnAdd.title = level === 0 ? '중단원 추가' : '소단원 추가';
+                        btnAdd.onclick = (e) => { e.stopPropagation(); this.addChild(node); };
+                        actions.appendChild(btnAdd);
+                    }
+
+                    // Rename
+                    const btnEdit = document.createElement('button');
+                    btnEdit.className = 'text-blue-600 hover:bg-blue-100 p-1 rounded';
+                    btnEdit.innerHTML = '<i class="fas fa-pen"></i>';
+                    btnEdit.title = '이름 변경';
+                    btnEdit.onclick = (e) => { e.stopPropagation(); this.renameNode(node); };
+                    actions.appendChild(btnEdit);
+
+                    // Delete
+                    const btnDel = document.createElement('button');
+                    btnDel.className = 'text-red-600 hover:bg-red-100 p-1 rounded';
+                    btnDel.innerHTML = '<i class="fas fa-trash"></i>';
+                    btnDel.title = '삭제';
+                    btnDel.onclick = (e) => { e.stopPropagation(); this.deleteNode(node, parentArr); };
+                    actions.appendChild(btnDel);
+
+                    itemBox.innerHTML = `<i class="fas ${icon} text-gray-400"></i>`;
+                    itemBox.appendChild(titleSpan);
+                    itemBox.appendChild(actions);
+                    el.appendChild(itemBox);
+
+                    // Children Container
+                    if (node.children && node.children.length > 0) {
+                        const childrenContainer = document.createElement('div');
+                        node.children.forEach(child => {
+                            childrenContainer.appendChild(renderNode(child, level + 1, node.children));
+                        });
+                        el.appendChild(childrenContainer);
+                    }
+
+                    return el;
                 };
 
-                const promise = id 
-                    ? window.db.collection('lessons').doc(id).update(data)
-                    : window.db.collection('lessons').add(data);
-
-                promise.then(() => {
-                    this.closeModal();
-                    this.loadLessons();
-                    alert('저장되었습니다.');
+                this.treeData.forEach(rootNode => {
+                    container.appendChild(renderNode(rootNode, 0, this.treeData));
                 });
             },
 
-            deleteLesson: function(id) {
-                if(confirm("삭제하시겠습니까?")) {
-                    window.db.collection('lessons').doc(id).delete().then(() => this.loadLessons());
+            // --- Tree Actions ---
+            selectNode: function(node, level) {
+                this.selectedNodeId = node.id;
+                this.renderTree(); // re-render to update active class
+
+                const panel = document.getElementById('empty-state');
+                const pathDisplay = document.getElementById('selected-unit-path');
+
+                if (level === 2) { // Leaf node (Small Unit)
+                    panel.classList.add('hidden');
+                    pathDisplay.innerText = node.title;
+                    this.loadLessonContent(node.id, node.title);
+                } else {
+                    panel.classList.remove('hidden');
                 }
+            },
+
+            addRootUnit: function() {
+                const name = prompt("새 대단원 이름:");
+                if(!name) return;
+                this.treeData.push({ id: 'u-'+Date.now(), title: name, children: [] });
+                this.renderTree();
+                this.saveTree(true); // Silent save
+            },
+
+            addChild: function(node) {
+                const name = prompt("새 하위 단원 이름:");
+                if(!name) return;
+                if(!node.children) node.children = [];
+                node.children.push({ id: 'u-'+Date.now(), title: name, children: [] });
+                this.renderTree();
+                this.saveTree(true);
+            },
+
+            renameNode: function(node) {
+                const newName = prompt("단원 이름 수정:", node.title);
+                if(newName) {
+                    node.title = newName;
+                    this.renderTree();
+                    this.saveTree(true);
+                    // Update header if selected
+                    if(this.selectedNodeId === node.id) document.getElementById('selected-unit-path').innerText = newName;
+                }
+            },
+
+            deleteNode: function(node, parentArr) {
+                if(!confirm(`'${node.title}' 및 하위 내용을 모두 삭제하시겠습니까?`)) return;
+                const idx = parentArr.indexOf(node);
+                if(idx > -1) {
+                    parentArr.splice(idx, 1);
+                    if(this.selectedNodeId === node.id) {
+                        this.selectedNodeId = null;
+                        document.getElementById('empty-state').classList.remove('hidden');
+                    }
+                    this.renderTree();
+                    this.saveTree(true);
+                }
+            },
+
+            saveTree: async function(silent = false) {
+                try {
+                    await window.db.collection('site_settings').doc('curriculum').set({
+                        tree: this.treeData,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    if(!silent) alert("구조가 저장되었습니다.");
+                } catch(e) {
+                    alert("저장 실패: " + e.message);
+                }
+            },
+
+            // --- Content Management ---
+            loadLessonContent: async function(unitId, unitTitle) {
+                // Reset UI
+                document.getElementById('lesson-title').value = unitTitle; // Default title matches unit
+                document.getElementById('lesson-video').value = '';
+                this.quill.setContents([]);
+
+                // Fetch
+                try {
+                    const snap = await window.db.collection('lessons').where('unitId', '==', unitId).limit(1).get();
+                    if (!snap.empty) {
+                        const data = snap.docs[0].data();
+                        document.getElementById('lesson-title').value = data.title;
+                        document.getElementById('lesson-video').value = data.videoUrl || '';
+                        // Quill uses Delta or HTML. Storing HTML is easier for preview.
+                        // But for editing, lets use clipboard paste or basic HTML insertion
+                        const raw = data.contentHtml || "";
+                        this.quill.clipboard.dangerouslyPasteHTML(raw);
+                    }
+                } catch(e) {
+                    console.error("Content load error", e);
+                }
+            },
+
+            saveLesson: async function() {
+                if(!this.selectedNodeId) return;
+
+                const title = document.getElementById('lesson-title').value;
+                const video = document.getElementById('lesson-video').value;
+                const html = this.quill.root.innerHTML;
+
+                const data = {
+                    unitId: this.selectedNodeId,
+                    title: title,
+                    videoUrl: video,
+                    contentHtml: html,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+
+                try {
+                    // Check if exists
+                    const snap = await window.db.collection('lessons').where('unitId', '==', this.selectedNodeId).limit(1).get();
+                    if (snap.empty) {
+                        await window.db.collection('lessons').add(data);
+                    } else {
+                        await window.db.collection('lessons').doc(snap.docs[0].id).update(data);
+                    }
+                    alert("수업 자료가 저장되었습니다.");
+                } catch(e) {
+                    alert("저장 실패: " + e.message);
+                }
+            },
+
+            // --- Preview ---
+            previewLesson: function() {
+                const title = document.getElementById('lesson-title').value;
+                const videoUrl = document.getElementById('lesson-video').value;
+                let html = this.quill.root.innerHTML;
+
+                // Transform [answer] to Inputs
+                // Regex to find [text]
+                html = html.replace(/\[(.*?)\]/g, (match, p1) => {
+                    return `<input type="text" class="cloze-input" placeholder="빈칸" readonly value="(정답: ${p1})">`;
+                });
+
+                document.getElementById('preview-title').innerText = title;
+                document.getElementById('preview-content').innerHTML = html;
+
+                const videoArea = document.getElementById('preview-video-area');
+                if (videoUrl) {
+                    // Simple Youtube ID extractor
+                    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+                    const match = videoUrl.match(regExp);
+                    if (match && match[2].length === 11) {
+                        document.getElementById('preview-iframe').src = `https://www.youtube.com/embed/${match[2]}`;
+                        videoArea.classList.remove('hidden');
+                    } else {
+                        videoArea.classList.add('hidden');
+                    }
+                } else {
+                    videoArea.classList.add('hidden');
+                }
+
+                document.getElementById('preview-modal').classList.remove('hidden');
+                document.getElementById('preview-modal').classList.add('flex');
+            },
+
+            closePreview: function() {
+                document.getElementById('preview-modal').classList.add('hidden');
+                document.getElementById('preview-modal').classList.remove('flex');
+                document.getElementById('preview-iframe').src = '';
             }
         };
 
-        document.addEventListener('auth-ready', () => lessonApp.init());
+        document.addEventListener('auth-ready', () => app.init());
     </script>
 </body>
 </html>
