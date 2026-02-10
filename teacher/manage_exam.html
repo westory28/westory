@@ -42,10 +42,10 @@
         .tab-btn-active { border-bottom-color: #2563eb; color: #2563eb; background-color: #eff6ff; }
     </style>
 </head>
-<body class="bg-gray-50 h-screen flex flex-col">
+<body class="bg-gray-50 min-h-screen flex flex-col">
     <!-- Header injected by AuthManager -->
 
-    <main class="w-full max-w-7xl mx-auto px-4 py-6 flex-1 flex flex-col min-h-0">
+    <main class="w-full max-w-7xl mx-auto px-4 py-6 flex-1 flex flex-col">
         
         <div class="flex justify-between items-end mb-4 flex-shrink-0">
             <div>
@@ -67,7 +67,7 @@
             <button onclick="app.setTab('omr')" id="btn-tab-omr" class="tab-btn-base">2. 지필평가 정답 (OMR)</button>
         </div>
 
-        <!-- Content Container with fixed minimum height to prevent shaking -->
+        <!-- Content Container -->
         <div class="bg-white border-x border-b border-gray-200 rounded-b-lg p-6 flex-1 min-h-[700px] relative">
             
             <!-- TAB 1: Grading Plan (Performance Assessment) -->

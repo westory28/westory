@@ -21,8 +21,11 @@
     <script src="../assets/js/auth-manager.js"></script>
 
     <style>
-        .tree-node { position: relative; padding-left: 20px; }
-        .tree-line { position: absolute; top: 0; bottom: 0; left: 10px; border-left: 1px dashed #cbd5e1; }
+        .tree-node { position: relative; }
+        .tree-node.level-0 { padding-left: 0; margin-bottom: 24px; }
+        .tree-node:not(.level-0) { padding-left: 24px; }
+
+        .tree-line { position: absolute; top: 0; bottom: 0; left: 12px; border-left: 1px dashed #cbd5e1; }
         .tree-item { 
             display: flex; align-items: center; padding: 6px 10px; margin: 2px 0; 
             border-radius: 6px; cursor: pointer; transition: all 0.2s; border: 1px solid transparent; 
@@ -66,7 +69,7 @@
             
             <!-- Left: Tree Structure -->
             <div class="w-1/3 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden">
-                <div class="p-4 border-b bg-gray-50 font-bold text-gray-700 flex justify-between items-center">
+                <div class="p-6 border-b bg-gray-50 font-bold text-gray-700 flex justify-between items-center">
                     <span>📚 단원 목차</span>
                     <div class="flex gap-1">
                         <button onclick="app.addRootUnit()" class="text-xs bg-stone-800 text-white px-3 py-1.5 rounded hover:bg-stone-900 shadow-sm flex items-center transition" title="대단원 추가">
@@ -76,7 +79,7 @@
                     </div>
                 </div>
                 <!-- Changed: Added overflow-x-auto for long titles -->
-                <div class="flex-1 overflow-y-auto overflow-x-auto p-4" id="tree-container">
+                <div class="flex-1 overflow-y-auto overflow-x-auto p-6" id="tree-container">
                     <div class="text-center text-gray-400 py-10">로딩 중...</div>
                 </div>
             </div>
@@ -222,6 +225,7 @@
                 
                 const renderNode = (node, level, parentArr) => {
                     const el = document.createElement('div');
+                    // Changed: Use class based indent logic
                     el.className = `tree-node level-${level}`;
                     
                     if (level > 0) {
