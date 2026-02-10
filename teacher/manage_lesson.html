@@ -53,7 +53,6 @@
 <body class="bg-gray-50 h-screen flex flex-col">
     <!-- Header injected by AuthManager -->
 
-    <!-- Changed: max-w-[1800px] -> max-w-7xl for better margins -->
     <main class="flex-1 w-full max-w-7xl mx-auto px-6 py-6 h-full overflow-hidden flex flex-col">
         
         <div class="flex justify-between items-center mb-4 shrink-0">
@@ -70,10 +69,10 @@
                 <div class="p-4 border-b bg-gray-50 font-bold text-gray-700 flex justify-between items-center">
                     <span>📚 단원 목차</span>
                     <div class="flex gap-1">
-                        <button onclick="app.addRootUnit()" class="text-xs bg-stone-800 text-white px-2 py-1.5 rounded hover:bg-stone-900 shadow-sm flex items-center" title="대단원 추가">
-                            <i class="fas fa-plus mr-1"></i>대단원 추가
+                        <button onclick="app.addRootUnit()" class="text-xs bg-stone-800 text-white px-3 py-1.5 rounded hover:bg-stone-900 shadow-sm flex items-center transition" title="대단원 추가">
+                            <i class="fas fa-plus mr-1.5"></i>대단원 추가
                         </button>
-                        <button onclick="app.saveTree()" class="text-xs bg-blue-100 text-blue-700 px-2 py-1.5 rounded hover:bg-blue-200">구조 저장</button>
+                        <button onclick="app.saveTree()" class="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded hover:bg-blue-200 transition font-bold">저장</button>
                     </div>
                 </div>
                 <!-- Changed: Added overflow-x-auto for long titles -->
