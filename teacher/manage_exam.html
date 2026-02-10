@@ -36,7 +36,8 @@
             text-align: center;
         }
 
-        .tab-btn-base { padding: 14px 24px; font-weight: 700; font-size: 1rem; border-bottom: 3px solid transparent; color: #9ca3af; transition: all 0.2s; flex: 1; text-align: center; }
+        /* Changed: Added flex: 1 1 0px and width: 0 for equal distribution */
+        .tab-btn-base { padding: 14px 24px; font-weight: 700; font-size: 1rem; border-bottom: 3px solid transparent; color: #9ca3af; transition: all 0.2s; flex: 1 1 0px; width: 0; text-align: center; }
         .tab-btn-base:hover { color: #4b5563; background-color: #f9fafb; }
         .tab-btn-active { border-bottom-color: #2563eb; color: #2563eb; background-color: #eff6ff; }
     </style>
@@ -61,7 +62,8 @@
 
         <!-- Tabs -->
         <div class="flex border-b border-gray-200 mb-0 bg-white rounded-t-lg overflow-hidden flex-shrink-0 shadow-sm">
-            <button onclick="app.setTab('preview')" id="btn-tab-preview" class="tab-btn-base tab-btn-active">1. 성적 산출 기준 (수행평가)</button>
+            <!-- Changed: Updated Label -->
+            <button onclick="app.setTab('preview')" id="btn-tab-preview" class="tab-btn-base tab-btn-active">1. 성적 산출 관리</button>
             <button onclick="app.setTab('omr')" id="btn-tab-omr" class="tab-btn-base">2. 지필평가 정답 (OMR)</button>
         </div>
 
