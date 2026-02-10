@@ -18,58 +18,116 @@
     <script src="../../assets/js/auth-manager.js"></script>
 
     <style>
-        .note-container { max-width: 800px; margin: 0 auto; padding: 24px; }
+        body { height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+        main { flex: 1; display: flex; overflow: hidden; height: 100%; }
+        
+        /* Sidebar */
+        .lesson-sidebar { width: 300px; background: white; border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; height: 100%; transition: transform 0.3s; z-index: 40; }
+        .sidebar-header { padding: 16px; border-bottom: 1px solid #f3f4f6; font-weight: 800; color: #1f2937; display: flex; justify-content: space-between; align-items: center; }
+        .sidebar-content { flex: 1; overflow-y: auto; padding: 12px; }
+        
+        /* Tree Items */
+        .tree-group { margin-bottom: 12px; }
+        .tree-header { font-size: 0.95rem; font-weight: 700; color: #374151; padding: 8px 12px; cursor: pointer; display: flex; align-items: center; border-radius: 6px; transition: background 0.2s; }
+        .tree-header:hover { background-color: #f3f4f6; }
+        .tree-header i { margin-right: 8px; font-size: 0.8em; color: #9ca3af; transition: transform 0.2s; }
+        .tree-group.open .tree-header i { transform: rotate(90deg); color: #3b82f6; }
+        .tree-children { display: none; padding-left: 12px; margin-top: 4px; }
+        .tree-group.open .tree-children { display: block; }
+        
+        .lesson-item { display: flex; align-items: center; padding: 8px 12px; font-size: 0.9rem; color: #6b7280; border-radius: 6px; cursor: pointer; transition: all 0.2s; text-decoration: none; margin-bottom: 2px; }
+        .lesson-item:hover { background-color: #eff6ff; color: #2563eb; }
+        .lesson-item.active { background-color: #2563eb; color: white; font-weight: 700; }
+        .lesson-item i { margin-right: 8px; font-size: 1rem; }
+
+        /* Main Content */
+        .content-container { flex: 1; overflow-y: auto; padding: 32px; background-color: #f9fafb; position: relative; }
+        .note-wrapper { max-width: 800px; margin: 0 auto; }
+
         .cloze-input { border: none; border-bottom: 2px solid #374151; text-align: center; font-weight: bold; color: #2563eb; background: transparent; padding: 0 4px; width: 100px; transition: all 0.2s; }
         .cloze-input:focus { outline: none; border-bottom-color: #2563eb; background-color: #eff6ff; }
         .cloze-input.correct { border-bottom-color: #22c55e; color: #15803d; background-color: #dcfce7; pointer-events: none; }
         .cloze-input.wrong { border-bottom-color: #ef4444; color: #b91c1c; background-color: #fee2e2; }
         .youtube-container { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 24px; }
         .youtube-container iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-        .note-section { background: white; padding: 32px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid #e5e7eb; line-height: 2.2; font-size: 1.05rem; }
+        .note-section { background: white; padding: 40px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border: 1px solid #e5e7eb; line-height: 2.2; font-size: 1.05rem; }
+        
         /* Quill Content Styles */
         .note-section h1, .note-section h2 { font-weight: bold; margin-top: 1em; margin-bottom: 0.5em; }
         .note-section h1 { font-size: 1.5em; }
         .note-section h2 { font-size: 1.25em; border-left: 4px solid #2563eb; padding-left: 10px; }
         .note-section p { margin-bottom: 0.5em; }
         .note-section img { max-width: 100%; border-radius: 8px; margin: 10px 0; }
-        .loader-spinner { border: 4px solid #f3f3f3; border-top: 4px solid #3b82f6; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        /* Mobile Toggle */
+        .sidebar-toggle { display: none; position: absolute; bottom: 20px; left: 20px; z-index: 50; background: #1f2937; color: white; width: 50px; height: 50px; border-radius: 50%; align-items: center; justify-content: center; box-shadow: 0 4px 6px rgba(0,0,0,0.2); cursor: pointer; }
+        
+        @media (max-width: 768px) {
+            .lesson-sidebar { position: fixed; left: 0; top: 64px; bottom: 0; transform: translateX(-100%); width: 80%; max-width: 320px; }
+            .lesson-sidebar.show { transform: translateX(0); }
+            .sidebar-toggle { display: flex; }
+            .content-container { padding: 20px; }
+            .note-section { padding: 20px; }
+        }
+        
+        .overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 30; }
+        .overlay.show { display: block; }
     </style>
 </head>
 <body>
     <!-- Header injected by AuthManager -->
 
-    <main class="note-container">
-        
-        <!-- Loading / Empty State -->
-        <div id="loading-state" class="text-center py-32">
-            <div class="loader-spinner mx-auto mb-4" id="loader"></div>
-            <p class="text-gray-500 font-medium text-lg" id="status-msg">수업 자료를 불러오는 중입니다...</p>
+    <main>
+        <!-- Mobile Overlay -->
+        <div id="sidebar-overlay" class="overlay" onclick="toggleSidebar()"></div>
+
+        <!-- Sidebar -->
+        <aside id="lesson-sidebar" class="lesson-sidebar">
+            <div class="sidebar-header">
+                <span>📑 수업 목차</span>
+                <button onclick="toggleSidebar()" class="md:hidden text-gray-400"><i class="fas fa-times"></i></button>
+            </div>
+            <div id="tree-root" class="sidebar-content">
+                <div class="text-center text-gray-400 py-10 text-sm">목차 로딩 중...</div>
+            </div>
+        </aside>
+
+        <!-- Content -->
+        <div class="content-container">
+            <button class="sidebar-toggle" onclick="toggleSidebar()"><i class="fas fa-list"></i></button>
+            
+            <div class="note-wrapper">
+                <!-- Loading / Empty State -->
+                <div id="loading-state" class="text-center py-32">
+                    <div class="text-6xl mb-4">👈</div>
+                    <h2 class="text-xl font-bold text-gray-700">학습할 단원을 선택하세요</h2>
+                    <p class="text-gray-500 mt-2">왼쪽 목록에서 수업 자료를 클릭하면 내용이 표시됩니다.</p>
+                </div>
+
+                <!-- Actual Content -->
+                <div id="content-area" class="hidden animate-[fadeIn_0.3s_ease-out]">
+                    <!-- Title -->
+                    <div class="mb-6">
+                        <span class="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded mb-2 inline-block">학습 자료</span>
+                        <h1 class="text-3xl font-extrabold text-gray-900 leading-tight" id="lesson-title"></h1>
+                    </div>
+
+                    <!-- Video -->
+                    <div id="video-wrapper" class="youtube-container hidden">
+                        <iframe id="video-frame" frameborder="0" allowfullscreen></iframe>
+                    </div>
+
+                    <!-- Note Content -->
+                    <div id="lesson-body" class="note-section text-gray-800"></div>
+
+                    <!-- Action Buttons -->
+                    <div class="mt-8 flex justify-center gap-4 pb-10">
+                        <button onclick="resetInputs()" class="px-6 py-3 bg-white border-2 border-gray-200 text-gray-600 font-bold rounded-xl shadow-sm hover:bg-gray-50 transition"><i class="fas fa-undo mr-2"></i>다시 풀기</button>
+                        <button onclick="checkAnswers()" class="px-8 py-3 bg-blue-600 text-white font-bold rounded-xl shadow-lg hover:bg-blue-700 transition transform active:scale-95"><i class="fas fa-check mr-2"></i>정답 확인</button>
+                    </div>
+                </div>
+            </div>
         </div>
-
-        <!-- Content Area -->
-        <div id="content-area" class="hidden animate-[fadeIn_0.5s_ease-out]">
-            <!-- Title -->
-            <div class="mb-6 border-b pb-4 border-gray-200">
-                <span class="text-sm font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded mb-2 inline-block">학습 자료</span>
-                <h1 class="text-2xl font-bold text-gray-900 leading-tight" id="lesson-title"></h1>
-            </div>
-
-            <!-- Video -->
-            <div id="video-wrapper" class="youtube-container hidden">
-                <iframe id="video-frame" frameborder="0" allowfullscreen></iframe>
-            </div>
-
-            <!-- Note Content -->
-            <div id="lesson-body" class="note-section text-gray-800"></div>
-
-            <!-- Action Buttons -->
-            <div class="mt-8 flex justify-end gap-3 sticky bottom-6 z-10">
-                <button onclick="resetInputs()" class="px-6 py-3 bg-white border border-gray-300 text-gray-700 font-bold rounded-lg shadow-sm hover:bg-gray-50 transition"><i class="fas fa-undo mr-2"></i>초기화</button>
-                <button onclick="checkAnswers()" class="px-6 py-3 bg-blue-600 text-white font-bold rounded-lg shadow-lg hover:bg-blue-700 transition transform active:scale-95"><i class="fas fa-check mr-2"></i>정답 확인</button>
-            </div>
-        </div>
-
     </main>
 
     <!-- Footer injected by AuthManager -->
@@ -77,101 +135,164 @@
     <script>
         window.AuthManager.init('student');
 
+        let currentLessonId = null;
+
         document.addEventListener('auth-ready', async () => {
+            await loadTree();
+            
+            // Check URL Params for deep linking
             const params = new URLSearchParams(window.location.search);
             const unitId = params.get('id');
             const titleParam = params.get('title');
 
-            if(!unitId) {
-                showStatus("선택된 단원이 없습니다.<br>목록에서 단원을 선택해주세요.");
-                return;
+            if(unitId) {
+                loadLessonContent(unitId, titleParam);
             }
+        });
 
+        function toggleSidebar() {
+            document.getElementById('lesson-sidebar').classList.toggle('show');
+            document.getElementById('sidebar-overlay').classList.toggle('show');
+        }
+
+        async function loadTree() {
+            const treeContainer = document.getElementById('tree-root');
             try {
-                // Fetch from current semester's lessons
+                const doc = await window.getCollection('curriculum').doc('tree').get();
+                if (!doc.exists || !doc.data().tree) {
+                    treeContainer.innerHTML = '<div class="p-4 text-center text-gray-400 text-sm">등록된 목차가 없습니다.</div>';
+                    return;
+                }
+
+                const tree = doc.data().tree;
+                let html = '';
+
+                tree.forEach((big, idx) => {
+                    // Default open if it's the first one or if user hasn't selected anything
+                    const isOpen = idx === 0 ? 'open' : '';
+                    
+                    html += `
+                        <div class="tree-group ${isOpen}">
+                            <div class="tree-header" onclick="this.parentElement.classList.toggle('open')">
+                                <i class="fas fa-chevron-right"></i>
+                                <span>${big.title}</span>
+                            </div>
+                            <div class="tree-children">
+                                ${(big.children || []).map(mid => `
+                                    <div class="mb-2">
+                                        <div class="text-xs font-bold text-gray-400 px-3 py-1">${mid.title}</div>
+                                        ${(mid.children || []).map(small => `
+                                            <div class="lesson-item" id="item-${small.id}" onclick="onSelectLesson('${small.id}', '${small.title}')">
+                                                <i class="far fa-file-alt"></i>
+                                                <span class="truncate">${small.title}</span>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                });
+                treeContainer.innerHTML = html;
+            } catch (e) {
+                console.error(e);
+                treeContainer.innerHTML = '<div class="p-4 text-red-500 text-sm">목차 로드 실패</div>';
+            }
+        }
+
+        window.onSelectLesson = function(id, title) {
+            // Update URL without reload
+            const newUrl = `${window.location.pathname}?id=${id}&title=${encodeURIComponent(title)}`;
+            window.history.pushState({path: newUrl}, '', newUrl);
+            
+            // Close sidebar on mobile
+            if(window.innerWidth < 768) toggleSidebar();
+
+            loadLessonContent(id, title);
+        };
+
+        async function loadLessonContent(unitId, fallbackTitle) {
+            // Update Active State in Sidebar
+            document.querySelectorAll('.lesson-item').forEach(el => el.classList.remove('active'));
+            const activeItem = document.getElementById(`item-${unitId}`);
+            if(activeItem) activeItem.classList.add('active');
+
+            // Show Loading
+            document.getElementById('loading-state').classList.add('hidden');
+            document.getElementById('content-area').classList.add('hidden');
+            
+            // Re-use loading spinner from previous layout if needed, or simple opacity
+            // Ideally create a local spinner, but for now just clear content
+            
+            try {
                 const snap = await window.getCollection('lessons').where('unitId', '==', unitId).limit(1).get();
-                
                 if(snap.empty) {
-                    showStatus("아직 등록된 수업 자료가 없습니다.<br>선생님께 문의해주세요. 🙇‍♂️");
+                    document.getElementById('loading-state').classList.remove('hidden');
+                    document.getElementById('loading-state').innerHTML = `<div class="text-6xl mb-4">📭</div><h2 class="text-xl font-bold">내용이 없습니다</h2><p class="text-gray-500">선생님이 아직 자료를 등록하지 않았습니다.</p>`;
                     return;
                 }
 
                 const data = snap.docs[0].data();
-                renderLesson(data, titleParam);
+                renderLesson(data, fallbackTitle);
             } catch(e) {
                 console.error(e);
-                showStatus("자료를 불러오는 중 오류가 발생했습니다.");
+                alert("자료 로드 중 오류가 발생했습니다.");
             }
-        });
-
-        function showStatus(msg) {
-            document.getElementById('loader').classList.add('hidden');
-            document.getElementById('status-msg').innerHTML = msg;
         }
 
         function renderLesson(data, fallbackTitle) {
             document.getElementById('loading-state').classList.add('hidden');
             document.getElementById('content-area').classList.remove('hidden');
 
-            // Title
             document.getElementById('lesson-title').innerText = data.title || fallbackTitle || '제목 없음';
             
-            // Video
             if(data.videoUrl) {
                 const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
                 const match = data.videoUrl.match(regExp);
                 if (match && match[2].length === 11) {
                     document.getElementById('video-frame').src = `https://www.youtube.com/embed/${match[2]}`;
                     document.getElementById('video-wrapper').classList.remove('hidden');
+                } else {
+                    document.getElementById('video-wrapper').classList.add('hidden');
                 }
+            } else {
+                document.getElementById('video-wrapper').classList.add('hidden');
             }
 
-            // HTML Content & Cloze Conversion
             let html = data.contentHtml || '';
-            // Replace [answer] with input fields
             html = html.replace(/\[(.*?)\]/g, (match, p1) => {
-                // p1 is the answer text inside brackets
                 return `<input type="text" class="cloze-input" data-answer="${p1}" placeholder="빈칸" autocomplete="off">`;
             });
             
             document.getElementById('lesson-body').innerHTML = html;
+            
+            // Scroll to top
+            document.querySelector('.content-container').scrollTop = 0;
         }
 
-        function checkAnswers() {
+        window.checkAnswers = function() {
             const inputs = document.querySelectorAll('.cloze-input');
-            if(inputs.length === 0) {
-                alert("채점할 빈칸이 없습니다.");
-                return;
-            }
+            if(inputs.length === 0) { alert("채점할 빈칸이 없습니다."); return; }
 
             let correctCount = 0;
             inputs.forEach(input => {
                 const userAnswer = input.value.trim().replace(/\s+/g, '');
                 const correctAnswer = input.dataset.answer.replace(/\s+/g, '');
-                
                 if (userAnswer === correctAnswer) {
-                    input.classList.add('correct');
-                    input.classList.remove('wrong');
-                    correctCount++;
+                    input.classList.add('correct'); input.classList.remove('wrong'); correctCount++;
                 } else {
-                    input.classList.add('wrong');
-                    input.classList.remove('correct');
+                    input.classList.add('wrong'); input.classList.remove('correct');
                 }
             });
 
-            if (correctCount === inputs.length) {
-                alert("🎉 훌륭합니다! 모든 빈칸을 완벽하게 채웠습니다.");
-            }
-        }
+            if (correctCount === inputs.length) alert("🎉 훌륭합니다! 모든 빈칸을 완벽하게 채웠습니다.");
+        };
 
-        function resetInputs() {
+        window.resetInputs = function() {
             if(!confirm("입력한 내용을 모두 지우시겠습니까?")) return;
             const inputs = document.querySelectorAll('.cloze-input');
-            inputs.forEach(input => {
-                input.value = '';
-                input.classList.remove('correct', 'wrong');
-            });
-        }
+            inputs.forEach(input => { input.value = ''; input.classList.remove('correct', 'wrong'); });
+        };
     </script>
 </body>
 </html>
