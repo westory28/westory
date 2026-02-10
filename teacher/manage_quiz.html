@@ -18,7 +18,6 @@
     <script src="../assets/js/auth-manager.js"></script>
 
     <style>
-        /* Table sort icon style */
         .sort-icon { margin-left: 4px; font-size: 0.8em; color: #9ca3af; }
         .sort-active { color: #2563eb; }
         .tab-btn-base { padding: 12px 24px; font-weight: 700; font-size: 0.95rem; border-bottom: 3px solid transparent; color: #6b7280; transition: all 0.2s; }
@@ -30,7 +29,6 @@
     <!-- Header injected by AuthManager -->
 
     <main class="w-full px-6 py-8">
-        
         <!-- Improved Tabs -->
         <div class="flex border-b border-gray-200 mb-6 bg-white rounded-t-lg px-2">
             <button onclick="app.setTab('log')" id="btn-tab-log" class="tab-btn-base tab-btn-active">📊 제출 현황</button>
@@ -118,7 +116,7 @@
             <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
                 <!-- Manual Add Form -->
                 <div class="md:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-200 relative">
-                    <input type="hidden" id="edit-q-id"> <!-- Hidden ID for Edit Mode -->
+                    <input type="hidden" id="edit-q-id"> 
                     <div class="flex justify-between items-center mb-6 border-b pb-4">
                         <h3 class="font-bold text-lg text-gray-800" id="form-title">📝 직접 만들기</h3>
                         <button onclick="app.clearForm()" class="text-xs text-gray-400 hover:text-gray-600"><i class="fas fa-undo mr-1"></i>초기화</button>
@@ -203,7 +201,6 @@
                 </div>
             </div>
         </div>
-
     </main>
 
     <!-- Footer injected by AuthManager -->
@@ -219,11 +216,9 @@
             },
 
             setTab: function(tabName) {
-                // Update Tab Styles
                 ['log', 'bank', 'add'].forEach(t => {
                     const btn = document.getElementById('btn-tab-' + t);
                     const div = document.getElementById('tab-' + t);
-                    
                     if (t === tabName) {
                         btn.classList.add('tab-btn-active');
                         div.classList.remove('hidden');
@@ -232,8 +227,6 @@
                         div.classList.add('hidden');
                     }
                 });
-
-                // Clear form if switching to 'add' without edit intent
                 if (tabName === 'add' && !document.getElementById('edit-q-id').value) {
                     this.clearForm();
                 }
@@ -244,7 +237,8 @@
                 const tbody = document.getElementById('log-body');
                 tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center"><div class="loader-spinner mx-auto mb-2"></div>로딩 중...</td></tr>';
 
-                let q = window.db.collection('quiz_results').orderBy('timestamp', 'desc');
+                // Changed: Use dynamic collection
+                let q = window.getCollection('quiz_results').orderBy('timestamp', 'desc');
                 if (cls !== 'all') q = q.where('class', '==', parseInt(cls) || cls);
                 else q = q.limit(50);
 
@@ -268,7 +262,8 @@
             },
 
             loadQuestions: function() {
-                window.db.collection('quiz_questions').get().then(snap => {
+                // Changed: Use dynamic collection
+                window.getCollection('quiz_questions').get().then(snap => {
                     this.state.questions = [];
                     snap.forEach(doc => this.state.questions.push({ ...doc.data(), id: parseInt(doc.id) }));
                     this.renderBank();
@@ -286,16 +281,13 @@
             },
 
             renderBank: function() {
-                // Filter
                 const filter = document.getElementById('bank-filter-unit').value;
                 let list = (filter === 'all') ? this.state.questions : this.state.questions.filter(q => (q.unit||"").includes(filter));
                 
-                // Sort
                 const field = this.state.sortField;
                 const order = this.state.sortOrder === 'asc' ? 1 : -1;
                 list.sort((a, b) => {
                     let va = a[field], vb = b[field];
-                    
                     if (field === 'rate') {
                         va = a.stat_total ? (a.stat_correct / a.stat_total) : 0;
                         vb = b.stat_total ? (b.stat_correct / b.stat_total) : 0;
@@ -303,7 +295,6 @@
                         if (typeof va === 'string') va = va.toLowerCase();
                         if (typeof vb === 'string') vb = vb.toLowerCase();
                     }
-                    
                     if (va < vb) return -1 * order;
                     if (va > vb) return 1 * order;
                     return 0;
@@ -311,12 +302,10 @@
 
                 document.getElementById('total-q-count').innerText = `(${list.length}문항)`;
                 
-                // Update Icons
                 document.querySelectorAll('.sort-icon').forEach(el => { el.className = 'fas fa-sort sort-icon'; });
                 const icon = document.getElementById('sort-icon-' + field);
                 if(icon) icon.className = `fas fa-sort-${this.state.sortOrder === 'asc' ? 'up' : 'down'} sort-icon sort-active`;
 
-                // Render Table
                 document.getElementById('bank-body').innerHTML = list.map(q => `
                     <tr class="hover:bg-blue-50 border-b border-gray-100 last:border-0 cursor-pointer group" onclick="app.editQuestion(${q.id})">
                         <td class="p-3" onclick="event.stopPropagation()"><input type="checkbox" class="q-checkbox w-4 h-4" value="${q.id}"></td>
@@ -332,10 +321,7 @@
 
             downloadTemplate: function() {
                 const wb = XLSX.utils.book_new();
-                const ws_data = [
-                    ['unit', 'type', 'question', 'options', 'answer', 'explanation'], // Header
-                    ['I. 고대', 'choice', '다음 중 고조선의 법이 아닌 것은?', '살인자는 사형, 도둑질은 노비, 상해는 곡식, 도둑질은 사형', '4', '도둑질한 자는 노비로 삼는다.'] // Sample
-                ];
+                const ws_data = [ ['unit', 'type', 'question', 'options', 'answer', 'explanation'], ['I. 고대', 'choice', '다음 중 고조선의 법이 아닌 것은?', '살인자는 사형, 도둑질은 노비, 상해는 곡식, 도둑질은 사형', '4', '도둑질한 자는 노비로 삼는다.'] ];
                 const ws = XLSX.utils.aoa_to_sheet(ws_data);
                 XLSX.utils.book_append_sheet(wb, ws, "Template");
                 XLSX.writeFile(wb, "question_template.xlsx");
@@ -353,14 +339,10 @@
                 document.getElementById('new-q-answer').value = q.answer;
                 document.getElementById('new-q-exp').value = q.explanation || '';
                 
-                // Image handling
                 document.getElementById('current-image-data').value = q.image || '';
                 document.getElementById('new-q-image-file').value = ''; 
-                if (q.image) {
-                    document.getElementById('image-preview-area').classList.remove('hidden');
-                } else {
-                    document.getElementById('image-preview-area').classList.add('hidden');
-                }
+                if (q.image) document.getElementById('image-preview-area').classList.remove('hidden');
+                else document.getElementById('image-preview-area').classList.add('hidden');
 
                 document.getElementById('form-title').innerHTML = `✏️ 문제 수정 (ID: ${q.id})`;
                 document.getElementById('btn-save-q').innerText = "수정사항 저장";
@@ -383,9 +365,7 @@
                 document.getElementById('new-q-options').value = '';
                 document.getElementById('new-q-answer').value = '';
                 document.getElementById('new-q-exp').value = '';
-                
                 this.removeImage();
-
                 document.getElementById('btn-save-q').innerText = "등록하기";
                 document.getElementById('btn-save-q').classList.add('bg-blue-600');
                 document.getElementById('btn-save-q').classList.remove('bg-indigo-600');
@@ -403,23 +383,13 @@
             saveCustomQuestion: async function() {
                 const editId = document.getElementById('edit-q-id').value;
                 const isEdit = !!editId;
-                
-                // Calculate ID
                 let id = isEdit ? parseInt(editId) : 1;
-                if (!isEdit && this.state.questions.length > 0) {
-                    id = Math.max(...this.state.questions.map(q=>q.id)) + 1;
-                }
+                if (!isEdit && this.state.questions.length > 0) id = Math.max(...this.state.questions.map(q=>q.id)) + 1;
 
-                // Handle Image
                 let imageData = document.getElementById('current-image-data').value;
                 const fileInput = document.getElementById('new-q-image-file');
                 if (fileInput.files.length > 0) {
-                    try {
-                        imageData = await this.readFileAsDataURL(fileInput.files[0]);
-                    } catch(e) {
-                        alert("이미지 처리 중 오류 발생");
-                        return;
-                    }
+                    try { imageData = await this.readFileAsDataURL(fileInput.files[0]); } catch(e) { alert("이미지 처리 중 오류 발생"); return; }
                 }
                 
                 const data = {
@@ -433,7 +403,8 @@
                     image: imageData || null
                 };
 
-                window.db.collection('quiz_questions').doc(String(id)).set(data).then(() => {
+                // Changed: Use dynamic collection
+                window.getCollection('quiz_questions').doc(String(id)).set(data).then(() => {
                     alert(isEdit ? '수정되었습니다.' : '등록되었습니다.');
                     this.clearForm();
                     this.loadQuestions();
@@ -445,20 +416,14 @@
                 const checked = document.querySelectorAll('.log-checkbox:checked');
                 if(!checked.length) return;
                 if(!confirm(`${checked.length}개의 기록을 삭제하시겠습니까?`)) return;
-                
                 const batch = window.db.batch();
-                checked.forEach(cb => batch.delete(window.db.collection('quiz_results').doc(cb.value)));
-                
-                batch.commit().then(() => {
-                    this.loadByClass(document.getElementById('select-class-trigger').value);
-                });
+                checked.forEach(cb => batch.delete(window.getCollection('quiz_results').doc(cb.value)));
+                batch.commit().then(() => this.loadByClass(document.getElementById('select-class-trigger').value));
             },
             
             deleteLog: function(id) {
                 if(confirm("삭제하시겠습니까?")) {
-                    window.db.collection('quiz_results').doc(id).delete().then(() => {
-                        this.loadByClass(document.getElementById('select-class-trigger').value);
-                    });
+                    window.getCollection('quiz_results').doc(id).delete().then(() => this.loadByClass(document.getElementById('select-class-trigger').value));
                 }
             },
 
@@ -466,10 +431,8 @@
                 const checked = document.querySelectorAll('.q-checkbox:checked');
                 if(!checked.length) return;
                 if(!confirm(`선택한 ${checked.length}개의 문제를 삭제하시겠습니까?`)) return;
-                
                 const batch = window.db.batch();
-                checked.forEach(cb => batch.delete(window.db.collection('quiz_questions').doc(cb.value)));
-                
+                checked.forEach(cb => batch.delete(window.getCollection('quiz_questions').doc(cb.value)));
                 batch.commit().then(() => this.loadQuestions());
             }
         };

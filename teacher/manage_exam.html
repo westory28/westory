@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -37,7 +38,6 @@
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-20">
-            
             <!-- Objective Section -->
             <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                 <div class="flex justify-between items-center mb-6 pb-2 border-b">
@@ -55,21 +55,12 @@
                 </div>
                 <div id="subj-list" class="space-y-4 max-h-[600px] overflow-y-auto pr-2"></div>
             </div>
-
         </div>
 
-        <!-- Footer Stats -->
         <div class="fixed bottom-0 left-0 w-full bg-white border-t p-4 z-40 flex justify-center items-center shadow-lg gap-8">
-            <div class="text-center">
-                <p class="text-xs text-gray-500 font-bold">총 문항수</p>
-                <p class="text-xl font-bold text-gray-800" id="total-count">0</p>
-            </div>
-            <div class="text-center">
-                <p class="text-xs text-gray-500 font-bold">총 배점</p>
-                <p class="text-xl font-bold text-red-600" id="total-score">0</p>
-            </div>
+            <div class="text-center"><p class="text-xs text-gray-500 font-bold">총 문항수</p><p class="text-xl font-bold text-gray-800" id="total-count">0</p></div>
+            <div class="text-center"><p class="text-xs text-gray-500 font-bold">총 배점</p><p class="text-xl font-bold text-red-600" id="total-score">0</p></div>
         </div>
-
     </main>
 
     <!-- Footer injected by AuthManager -->
@@ -81,7 +72,8 @@
             data: { objective: [], subjective: [] },
 
             init: function() {
-                window.db.collection("mark_exam_2025-2").doc("final_exam").get()
+                // Changed: Use dynamic collection for exam config
+                window.getCollection("exam_config").doc("final_exam").get()
                     .then((doc) => {
                         if (doc.exists) {
                             const d = doc.data();
@@ -98,26 +90,10 @@
                 this.updateTotal();
             },
 
-            // --- Objective Logic ---
-            addObjective: function() {
-                this.data.objective.push({ score: 4, answer: 0 }); // Default 4 points
-                this.render();
-            },
-            
-            removeObjective: function(idx) {
-                this.data.objective.splice(idx, 1);
-                this.render();
-            },
-
-            setObjAnswer: function(idx, val) {
-                this.data.objective[idx].answer = val;
-                this.render();
-            },
-
-            updateObjScore: function(idx, val) {
-                this.data.objective[idx].score = Number(val);
-                this.updateTotal();
-            },
+            addObjective: function() { this.data.objective.push({ score: 4, answer: 0 }); this.render(); },
+            removeObjective: function(idx) { this.data.objective.splice(idx, 1); this.render(); },
+            setObjAnswer: function(idx, val) { this.data.objective[idx].answer = val; this.render(); },
+            updateObjScore: function(idx, val) { this.data.objective[idx].score = Number(val); this.updateTotal(); },
 
             renderObjective: function() {
                 const list = document.getElementById('obj-list');
@@ -125,9 +101,7 @@
                     <div class="flex items-center gap-4 bg-gray-50 p-3 rounded border border-gray-100">
                         <span class="font-bold text-gray-500 w-8 text-center">${i+1}</span>
                         <div class="flex gap-1">
-                            ${[1,2,3,4,5].map(n => `
-                                <button onclick="configApp.setObjAnswer(${i}, ${n})" class="choice-btn ${item.answer===n ? 'selected':''}">${n}</button>
-                            `).join('')}
+                            ${[1,2,3,4,5].map(n => `<button onclick="configApp.setObjAnswer(${i}, ${n})" class="choice-btn ${item.answer===n ? 'selected':''}">${n}</button>`).join('')}
                         </div>
                         <input type="number" class="w-16 p-1 text-center border rounded text-sm font-bold text-blue-600" value="${item.score}" onchange="configApp.updateObjScore(${i}, this.value)">
                         <span class="text-xs text-gray-400">점</span>
@@ -136,19 +110,9 @@
                 `).join('');
             },
 
-            // --- Subjective Logic ---
-            addSubjParent: function() {
-                this.data.subjective.push({ subItems: [] });
-                this.render();
-            },
-            addSubjItem: function(pIdx) {
-                this.data.subjective[pIdx].subItems.push({ score: 5, answer: "" });
-                this.render();
-            },
-            removeSubjParent: function(idx) {
-                this.data.subjective.splice(idx, 1);
-                this.render();
-            },
+            addSubjParent: function() { this.data.subjective.push({ subItems: [] }); this.render(); },
+            addSubjItem: function(pIdx) { this.data.subjective[pIdx].subItems.push({ score: 5, answer: "" }); this.render(); },
+            removeSubjParent: function(idx) { this.data.subjective.splice(idx, 1); this.render(); },
             updateSubjField: function(pIdx, sIdx, field, val) {
                 if(field === 'score') this.data.subjective[pIdx].subItems[sIdx].score = Number(val);
                 else this.data.subjective[pIdx].subItems[sIdx][field] = val;
@@ -185,15 +149,14 @@
             updateTotal: function() {
                 let s = 0, c = 0;
                 this.data.objective.forEach(i => { s += (i.score||0); c++; });
-                this.data.subjective.forEach(p => {
-                    p.subItems.forEach(i => { s += (i.score||0); c++; });
-                });
+                this.data.subjective.forEach(p => { p.subItems.forEach(i => { s += (i.score||0); c++; }); });
                 document.getElementById('total-score').innerText = s;
                 document.getElementById('total-count').innerText = c;
             },
 
             saveToDB: function() {
-                window.db.collection("mark_exam_2025-2").doc("final_exam").set({
+                // Changed: Use dynamic collection
+                window.getCollection("exam_config").doc("final_exam").set({
                     objective: this.data.objective,
                     subjective: this.data.subjective,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()

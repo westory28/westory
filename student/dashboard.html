@@ -5,31 +5,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>학생 대시보드 - Westory</title>
-    <!-- Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-    <!-- Config -->
     <script src="../assets/js/firebase-config.js"></script>
     <link rel="stylesheet" href="../assets/css/style.css">
     <script src="../assets/js/auth-manager.js"></script>
 
     <style>
         .dashboard-container { max-width: 1280px; margin: 0 auto; padding: 24px 40px; width: 100%; }
-        
         .tab-nav { display: flex; border-bottom: 2px solid #e5e7eb; margin-bottom: 32px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
         .tab-btn { flex: 1; padding: 16px 24px; text-align: center; font-weight: 700; font-size: 1.1rem; color: #9ca3af; cursor: pointer; transition: all 0.2s; border-bottom: 3px solid transparent; white-space: nowrap; min-width: fit-content; }
         .tab-btn:hover { color: #4b5563; background-color: #f9fafb; }
         .tab-btn.active { color: #2563eb; border-bottom-color: #2563eb; background-color: transparent; }
-        
         .section-content { display: none; animation: fadeIn 0.3s ease-out; }
         .section-content.active { display: block; }
-
-        /* Accordion for Lessons */
         .accordion-item { border: 1px solid #e5e7eb; border-radius: 12px; margin-bottom: 12px; overflow: hidden; background: white; transition: shadow 0.2s; }
         .accordion-item:hover { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
         .accordion-header { padding: 20px; background: #fff; font-weight: 700; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 1.05rem; }
@@ -37,11 +29,9 @@
         .accordion-body { display: none; padding: 16px 20px; background: #f8fafc; border-top: 1px solid #e5e7eb; }
         .accordion-item.open .accordion-body { display: block; }
         .accordion-item.open .accordion-header i { transform: rotate(180deg); }
-
         .lesson-link { display: flex; align-items: center; padding: 14px 16px; margin-bottom: 8px; border-radius: 8px; background: white; border: 1px solid #e2e8f0; color: #4b5563; font-weight: 600; transition: all 0.2s; text-decoration: none; }
         .lesson-link:hover { border-color: #3b82f6; color: #2563eb; transform: translateX(4px); box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
         .lesson-link i { margin-right: 12px; font-size: 1.1em; }
-
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
@@ -60,17 +50,14 @@
             </div>
         </div>
 
-        <!-- 3 Main Tabs (Reordered: Lesson -> Assess -> Score) -->
         <div class="tab-nav">
             <div class="tab-btn active" onclick="switchTab('lesson')"><i class="fas fa-book-reader mr-2"></i>수업자료</div>
             <div class="tab-btn" onclick="switchTab('assess')"><i class="fas fa-gamepad mr-2"></i>평가</div>
             <div class="tab-btn" onclick="switchTab('score')"><i class="fas fa-chart-bar mr-2"></i>점수</div>
         </div>
 
-        <!-- 1. Lesson (Hierarchical) - Default Active -->
         <div id="tab-lesson" class="section-content active">
             <div id="lesson-container" class="space-y-4 max-w-4xl mx-auto">
-                <!-- Dynamically populated -->
                 <div class="py-20 text-center text-gray-400">
                     <div class="loader-spinner mx-auto mb-4"></div>
                     <p>수업 자료를 불러오는 중입니다...</p>
@@ -78,10 +65,8 @@
             </div>
         </div>
 
-        <!-- 2. Assessment -->
         <div id="tab-assess" class="section-content">
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <!-- Linked to actual quiz.html -->
                 <div onclick="location.href='quiz.html'" class="group bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:border-blue-500 hover:shadow-md cursor-pointer flex flex-col justify-between transition-all h-full">
                     <div class="flex justify-between items-start mb-4">
                         <div class="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center text-2xl group-hover:bg-blue-600 group-hover:text-white transition-colors">
@@ -97,10 +82,8 @@
             </div>
         </div>
 
-        <!-- 3. Score -->
         <div id="tab-score" class="section-content">
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <!-- Linked to mark-exam.html -->
                 <div onclick="location.href='mark-exam.html'" class="group bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:border-amber-500 hover:shadow-md cursor-pointer flex flex-col justify-between transition-all h-full relative overflow-hidden">
                     <div class="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl shadow-sm z-10">시험 기간</div>
                     <div class="flex justify-between items-start mb-4">
@@ -114,7 +97,6 @@
                         <p class="text-sm text-gray-500 leading-relaxed word-keep">지필평가 직후 OMR 답안을 입력하고 점수를 확인하세요.</p>
                     </div>
                 </div>
-                <!-- Linked to score.html -->
                 <div onclick="location.href='score.html'" class="group bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:border-green-500 hover:shadow-md cursor-pointer flex flex-col justify-between transition-all h-full">
                     <div class="flex justify-between items-start mb-4">
                         <div class="w-14 h-14 rounded-2xl bg-green-50 text-green-600 flex items-center justify-center text-2xl group-hover:bg-green-600 group-hover:text-white transition-colors">
@@ -140,63 +122,75 @@
         document.addEventListener('auth-ready', (e) => {
             const user = e.detail;
             document.getElementById('welcome-text').innerText = `${user.displayName || '학생'}님, 환영합니다!`;
-            loadConfig();
+            
+            // Use Global Config
+            const cfg = window.currentConfig;
+            document.getElementById('semester-badge').innerText = `${cfg.year}학년도 ${cfg.semester}학기`;
+            
+            if(cfg.showQuiz === false) document.querySelector('[onclick="switchTab(\'assess\')"]').style.display = 'none';
+            if(cfg.showScore === false) document.querySelector('[onclick="switchTab(\'score\')"]').style.display = 'none';
+            if(cfg.showLesson === false) document.querySelector('[onclick="switchTab(\'lesson\')"]').style.display = 'none';
+
             loadLessons();
         });
 
         function switchTab(name) {
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            event.currentTarget.classList.add('active'); // Changed to currentTarget to handle icon click
+            event.currentTarget.classList.add('active'); 
             document.querySelectorAll('.section-content').forEach(s => s.classList.remove('active'));
             document.getElementById('tab-' + name).classList.add('active');
-        }
-
-        async function loadConfig() {
-            try {
-                const doc = await window.db.collection('site_settings').doc('config').get();
-                if (doc.exists) {
-                    const data = doc.data();
-                    document.getElementById('semester-badge').innerText = 
-                        (data.currentSemester || '2025-1').replace('-', '학년도 ') + '학기';
-                    
-                    if(data.showQuiz === false) document.querySelector('[onclick="switchTab(\'assess\')"]').style.display = 'none';
-                    if(data.showScore === false) document.querySelector('[onclick="switchTab(\'score\')"]').style.display = 'none';
-                    if(data.showLesson === false) document.querySelector('[onclick="switchTab(\'lesson\')"]').style.display = 'none';
-                }
-            } catch(e) {}
         }
 
         async function loadLessons() {
             const container = document.getElementById('lesson-container');
             
-            // Mock Data for Structure (linking to note.html as an example)
-            const units = [
-                {
-                    title: "I. 문명의 발생과 고대 세계의 형성",
-                    lessons: [
-                        { id: "L1", title: "1. 1910년대 무단 통치와 토지 조사 사업" }, // Example title matching note.html
-                    ]
+            try {
+                // Fetch Tree from Scoped Collection
+                const treeDoc = await window.getCollection('curriculum').doc('tree').get();
+                if(!treeDoc.exists || !treeDoc.data().tree) {
+                    container.innerHTML = '<div class="text-center py-20 text-gray-400">등록된 수업 자료가 없습니다.</div>';
+                    return;
                 }
-            ];
 
-            let html = '';
-            units.forEach((unit, idx) => {
-                html += `
+                const tree = treeDoc.data().tree;
+                let html = '';
+                
+                // Helper to flatten tree and find lessons (simplified for dashboard view)
+                // Real implementation needs to fetch lessons linked to units
+                // Here we assume a structure where we might need to fetch lessons separately
+                
+                html = '<div class="text-center py-10 text-gray-500">수업 자료 트리를 불러왔습니다. (상세 구현 필요)</div>';
+                
+                // For demo/prototype, simply listing units
+                html = tree.map((unit, idx) => `
                     <div class="accordion-item open" id="acc-${idx}">
                         <div class="accordion-header" onclick="toggleAccordion('acc-${idx}')">
                             <span>${unit.title}</span>
                             <i class="fas fa-chevron-down text-gray-400 transition-transform duration-200"></i>
                         </div>
                         <div class="accordion-body">
-                            ${unit.lessons.map(l => `<a href="lesson/note.html" class="lesson-link"><i class="far fa-file-alt text-blue-500"></i><span>${l.title}</span></a>`).join('')}
+                             <div class="text-sm text-gray-400 p-2">하위 단원을 선택하여 학습하세요.</div>
+                             ${(unit.children||[]).map(mid => `
+                                <div class="ml-4 mt-2 font-bold text-gray-600">${mid.title}</div>
+                                ${(mid.children||[]).map(small => `
+                                    <a href="lesson/note.html?id=${small.id}&title=${encodeURIComponent(small.title)}" class="lesson-link ml-6 mt-1">
+                                        <i class="far fa-file-alt text-blue-500"></i><span>${small.title}</span>
+                                    </a>
+                                `).join('')}
+                             `).join('')}
                         </div>
                     </div>
-                `;
-            });
-            container.innerHTML = html;
+                `).join('');
+
+                container.innerHTML = html;
+
+            } catch(e) {
+                console.error(e);
+                container.innerHTML = '<div class="text-center text-red-500">자료 로드 실패</div>';
+            }
         }
 
-        function toggleAccordion(id) {
+        window.toggleAccordion = (id) => {
             document.getElementById(id).classList.toggle('open');
         }
     </script>

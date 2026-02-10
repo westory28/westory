@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -18,26 +19,12 @@
 
     <style>
         .note-container { max-width: 800px; margin: 0 auto; padding: 24px; }
-        
-        /* Cloze Input Styles */
-        .cloze-input {
-            border: none;
-            border-bottom: 2px solid #374151;
-            text-align: center;
-            font-weight: bold;
-            color: #2563eb;
-            background: transparent;
-            padding: 0 4px;
-            width: 100px;
-            transition: all 0.2s;
-        }
+        .cloze-input { border: none; border-bottom: 2px solid #374151; text-align: center; font-weight: bold; color: #2563eb; background: transparent; padding: 0 4px; width: 100px; transition: all 0.2s; }
         .cloze-input:focus { outline: none; border-bottom-color: #2563eb; background-color: #eff6ff; }
         .cloze-input.correct { border-bottom-color: #22c55e; color: #15803d; background-color: #dcfce7; pointer-events: none; }
         .cloze-input.wrong { border-bottom-color: #ef4444; color: #b91c1c; background-color: #fee2e2; }
-
         .youtube-container { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 24px; }
         .youtube-container iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-        
         .note-section { background: white; padding: 32px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid #e5e7eb; line-height: 2.5; font-size: 1.1rem; }
     </style>
 </head>
@@ -64,7 +51,6 @@
         <!-- Cloze Test Note -->
         <div class="note-section text-gray-800">
             <h2 class="text-lg font-bold mb-4 border-l-4 border-blue-500 pl-3">핵심 쏙쏙 노트</h2>
-            
             <p>1. 일제는 1910년 한국을 강제 병합한 후 <input type="text" class="cloze-input" data-answer="조선총독부">를 설치하여 식민 통치의 최고 기구로 삼았다.</p>
             <p>2. 헌병 경찰 제도를 실시하여 한국인의 일상생활을 감시하고, 재판 없이 처벌할 수 있는 <input type="text" class="cloze-input" data-answer="즉결처분권">을 부여하였다.</p>
             <p>3. 경제적으로는 재정을 확보하고 토지 소유권을 확정한다는 명분으로 <input type="text" class="cloze-input" data-answer="토지조사사업">을 실시하였다. (1910~1918)</p>
@@ -73,12 +59,8 @@
 
         <!-- Action Buttons -->
         <div class="mt-8 flex justify-end gap-3 sticky bottom-6">
-            <button onclick="resetInputs()" class="px-6 py-3 bg-white border border-gray-300 text-gray-700 font-bold rounded-lg shadow-sm hover:bg-gray-50">
-                <i class="fas fa-undo mr-2"></i>초기화
-            </button>
-            <button onclick="checkAnswers()" class="px-6 py-3 bg-blue-600 text-white font-bold rounded-lg shadow-lg hover:bg-blue-700 transition transform active:scale-95">
-                <i class="fas fa-check mr-2"></i>정답 확인
-            </button>
+            <button onclick="resetInputs()" class="px-6 py-3 bg-white border border-gray-300 text-gray-700 font-bold rounded-lg shadow-sm hover:bg-gray-50"><i class="fas fa-undo mr-2"></i>초기화</button>
+            <button onclick="checkAnswers()" class="px-6 py-3 bg-blue-600 text-white font-bold rounded-lg shadow-lg hover:bg-blue-700 transition transform active:scale-95"><i class="fas fa-check mr-2"></i>정답 확인</button>
         </div>
     </main>
 
@@ -90,33 +72,22 @@
         function checkAnswers() {
             const inputs = document.querySelectorAll('.cloze-input');
             let correctCount = 0;
-
             inputs.forEach(input => {
                 const userAnswer = input.value.trim().replace(/\s+/g, '');
                 const correctAnswer = input.dataset.answer.replace(/\s+/g, '');
-
                 if (userAnswer === correctAnswer) {
-                    input.classList.add('correct');
-                    input.classList.remove('wrong');
-                    correctCount++;
+                    input.classList.add('correct'); input.classList.remove('wrong'); correctCount++;
                 } else {
-                    input.classList.add('wrong');
-                    input.classList.remove('correct');
+                    input.classList.add('wrong'); input.classList.remove('correct');
                 }
             });
-
-            if (correctCount === inputs.length) {
-                alert("🎉 훌륭합니다! 모든 빈칸을 완벽하게 채웠습니다.");
-            }
+            if (correctCount === inputs.length) alert("🎉 훌륭합니다! 모든 빈칸을 완벽하게 채웠습니다.");
         }
 
         function resetInputs() {
             if(!confirm("입력한 내용을 모두 지우시겠습니까?")) return;
             const inputs = document.querySelectorAll('.cloze-input');
-            inputs.forEach(input => {
-                input.value = '';
-                input.classList.remove('correct', 'wrong');
-            });
+            inputs.forEach(input => { input.value = ''; input.classList.remove('correct', 'wrong'); });
         }
     </script>
 </body>

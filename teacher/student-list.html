@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -89,17 +90,15 @@
             students: [],
             
             init: function() {
-                // Fetch all students
-                window.db.collection('users').get().then(snap => {
+                // Users are GLOBAL
+                window.getCollection('users').get().then(snap => {
                     this.students = [];
                     snap.forEach(doc => {
                         const d = doc.data();
-                        // Ensure numeric types for sorting
                         d.class = parseInt(d.class) || 0;
                         d.number = parseInt(d.number) || 0;
                         this.students.push({ ...d, id: doc.id });
                     });
-                    // Sort by Class then Number
                     this.students.sort((a,b) => (a.class - b.class) || (a.number - b.number));
                     this.render(this.students);
                 });
@@ -145,31 +144,21 @@
                 this.render(filtered);
             },
 
-            // Fix: Load history by UID mostly, or use composite query correctly
             showHistory: async function(uid, name, cls, num) {
-                document.getElementById('history-title').innerText = `${cls}반 ${num}번 ${name}의 기록`;
+                document.getElementById('history-title').innerText = `${cls}반 ${num}번 ${name}의 기록 (${window.currentConfig.year}-${window.currentConfig.semester})`;
                 const content = document.getElementById('history-content');
                 content.innerHTML = '<div class="text-center p-4">로딩 중...</div>';
                 document.getElementById('history-modal').classList.remove('hidden');
 
                 try {
-                    // Try querying by UID first (most reliable)
-                    let snap = await window.db.collection('quiz_results')
+                    // Changed: Use dynamic collection for Results
+                    let snap = await window.getCollection('quiz_results')
                         .where('uid', '==', uid)
                         .orderBy('timestamp', 'desc')
                         .get();
 
-                    // Fallback to name/class/number if UID strategy fails (legacy data)
                     if (snap.empty) {
-                        snap = await window.db.collection('quiz_results')
-                            .where('name', '==', name)
-                            .where('class', '==', cls) // Ensure type match (int vs int)
-                            .orderBy('timestamp', 'desc')
-                            .get();
-                    }
-
-                    if (snap.empty) {
-                        content.innerHTML = '<div class="text-center p-8 text-gray-400">기록이 없습니다.</div>';
+                        content.innerHTML = '<div class="text-center p-8 text-gray-400">해당 학기의 기록이 없습니다.</div>';
                         return;
                     }
 
@@ -210,15 +199,15 @@
                     number: parseInt(document.getElementById('edit-num').value),
                     name: document.getElementById('edit-name').value
                 };
-                window.db.collection('users').doc(id).update(updateData).then(() => {
+                window.getCollection('users').doc(id).update(updateData).then(() => {
                     document.getElementById('edit-modal').classList.add('hidden');
-                    this.init(); // Reload
+                    this.init(); 
                 });
             },
 
             deleteStudent: function(id) {
                 if(confirm("정말 삭제하시겠습니까? (복구 불가)")) {
-                    window.db.collection('users').doc(id).delete().then(() => this.init());
+                    window.getCollection('users').doc(id).delete().then(() => this.init());
                 }
             }
         };

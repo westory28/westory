@@ -1,10 +1,10 @@
+
 <!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WeStory - 시험 자가 채점</title>
-    
     <!-- Tailwind & Icons -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -20,7 +20,6 @@
     <script src="../assets/js/auth-manager.js"></script>
     
     <style>
-        /* Local specific styles only */
         .score-card { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(4px); border: 1px solid #e5e7eb; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
         .omr-btn { width: 32px; height: 32px; border-radius: 50%; border: 1px solid #d1d5db; display: flex; justify-content: center; align-items: center; cursor: pointer; font-size: 0.9rem; font-weight: bold; transition: all 0.2s; color: #6b7280; background-color: white; }
         .omr-btn:hover { background-color: #f3f4f6; border-color: #9ca3af; }
@@ -36,8 +35,6 @@
         .btn-grading { transition: all 0.2s; }
         .btn-grading.active-correct { background-color: #22c55e; color: white; border-color: #22c55e; }
         .btn-grading.active-wrong { background-color: #ef4444; color: white; border-color: #ef4444; }
-
-        /* Modal */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(0,0,0,0.6); z-index: 99999; display: flex; justify-content: center; align-items: center; }
         .modal-box { background: white; padding: 2.5rem; border-radius: 1rem; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); max-width: 450px; width: 90%; text-align: center; }
     </style>
@@ -108,18 +105,14 @@
     <!-- Footer injected by AuthManager -->
 
     <script>
-        // Init AuthManager (Handles Header & Auth)
         window.AuthManager.init('student');
 
         const app = {
             state: { totalScore: 0, maxScore: 0, examData: null, userMarks: {}, isAgreed: false },
 
             init: function() {
-                // Wait for AuthManager to confirm login
                 document.addEventListener('auth-ready', (e) => {
-                    const user = e.detail;
                     this.loadExamData();
-                    // User greeting is handled by AuthManager in the header
                 });
             },
 
@@ -127,7 +120,6 @@
                 this.state.isAgreed = !this.state.isAgreed;
                 const btn = document.getElementById('btn-start');
                 const box = document.getElementById('checkbox-ui');
-                
                 if (this.state.isAgreed) {
                     btn.disabled = false;
                     btn.classList.remove('bg-stone-200', 'text-stone-400', 'cursor-not-allowed');
@@ -147,7 +139,8 @@
             },
 
             loadExamData: function() {
-                window.db.collection('mark_exam_2025-2').doc('final_exam').get()
+                // Changed: Use dynamic collection
+                window.getCollection('exam_config').doc('final_exam').get()
                     .then((doc) => {
                         if (doc.exists) {
                             this.state.examData = doc.data();

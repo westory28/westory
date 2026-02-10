@@ -192,7 +192,8 @@
             // --- Tree Management ---
             loadTree: async function() {
                 try {
-                    const doc = await window.db.collection('site_settings').doc('curriculum').get();
+                    // Changed: Use dynamic collection for semester
+                    const doc = await window.getCollection('curriculum').doc('tree').get();
                     if (doc.exists && doc.data().tree) {
                         this.treeData = doc.data().tree;
                     } else {
@@ -221,33 +222,27 @@
                     const el = document.createElement('div');
                     el.className = `tree-node level-${level}`;
                     
-                    // Indentation line
                     if (level > 0) {
                         const line = document.createElement('div');
                         line.className = 'tree-line';
                         el.appendChild(line);
                     }
 
-                    // Content Item
                     const itemBox = document.createElement('div');
                     itemBox.className = `tree-item ${this.selectedNodeId === node.id ? 'active' : ''}`;
                     itemBox.onclick = (e) => { e.stopPropagation(); this.selectNode(node, level); };
                     
-                    // Icon based on level
                     let icon = 'fa-folder';
                     if (level === 1) icon = 'fa-folder-open';
                     if (level === 2) icon = 'fa-file-alt';
 
-                    // Title
                     const titleSpan = document.createElement('span');
                     titleSpan.className = 'tree-item-title flex-1 ml-2';
                     titleSpan.innerText = node.title;
                     
-                    // Actions
                     const actions = document.createElement('div');
                     actions.className = 'btn-action flex gap-1 ml-2';
                     
-                    // Add Child (Only for Level 0 and 1)
                     if (level < 2) {
                         const btnAdd = document.createElement('button');
                         btnAdd.className = 'text-green-600 hover:bg-green-100 p-1 rounded';
@@ -257,7 +252,6 @@
                         actions.appendChild(btnAdd);
                     }
 
-                    // Rename
                     const btnEdit = document.createElement('button');
                     btnEdit.className = 'text-blue-600 hover:bg-blue-100 p-1 rounded';
                     btnEdit.innerHTML = '<i class="fas fa-pen"></i>';
@@ -265,7 +259,6 @@
                     btnEdit.onclick = (e) => { e.stopPropagation(); this.renameNode(node); };
                     actions.appendChild(btnEdit);
 
-                    // Delete
                     const btnDel = document.createElement('button');
                     btnDel.className = 'text-red-600 hover:bg-red-100 p-1 rounded';
                     btnDel.innerHTML = '<i class="fas fa-trash"></i>';
@@ -278,7 +271,6 @@
                     itemBox.appendChild(actions);
                     el.appendChild(itemBox);
 
-                    // Children Container
                     if (node.children && node.children.length > 0) {
                         const childrenContainer = document.createElement('div');
                         node.children.forEach(child => {
@@ -295,15 +287,14 @@
                 });
             },
 
-            // --- Tree Actions ---
             selectNode: function(node, level) {
                 this.selectedNodeId = node.id;
-                this.renderTree(); // re-render to update active class
+                this.renderTree(); 
 
                 const panel = document.getElementById('empty-state');
                 const pathDisplay = document.getElementById('selected-unit-path');
 
-                if (level === 2) { // Leaf node (Small Unit)
+                if (level === 2) { 
                     panel.classList.add('hidden');
                     pathDisplay.innerText = node.title;
                     this.loadLessonContent(node.id, node.title);
@@ -317,7 +308,7 @@
                 if(!name) return;
                 this.treeData.push({ id: 'u-'+Date.now(), title: name, children: [] });
                 this.renderTree();
-                this.saveTree(true); // Silent save
+                this.saveTree(true); 
             },
 
             addChild: function(node) {
@@ -335,7 +326,6 @@
                     node.title = newName;
                     this.renderTree();
                     this.saveTree(true);
-                    // Update header if selected
                     if(this.selectedNodeId === node.id) document.getElementById('selected-unit-path').innerText = newName;
                 }
             },
@@ -356,7 +346,8 @@
 
             saveTree: async function(silent = false) {
                 try {
-                    await window.db.collection('site_settings').doc('curriculum').set({
+                    // Changed: Use dynamic collection
+                    await window.getCollection('curriculum').doc('tree').set({
                         tree: this.treeData,
                         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                     });
@@ -366,22 +357,18 @@
                 }
             },
 
-            // --- Content Management ---
             loadLessonContent: async function(unitId, unitTitle) {
-                // Reset UI
-                document.getElementById('lesson-title').value = unitTitle; // Default title matches unit
+                document.getElementById('lesson-title').value = unitTitle; 
                 document.getElementById('lesson-video').value = '';
                 this.quill.setContents([]);
 
-                // Fetch
                 try {
-                    const snap = await window.db.collection('lessons').where('unitId', '==', unitId).limit(1).get();
+                    // Changed: Use dynamic collection
+                    const snap = await window.getCollection('lessons').where('unitId', '==', unitId).limit(1).get();
                     if (!snap.empty) {
                         const data = snap.docs[0].data();
                         document.getElementById('lesson-title').value = data.title;
                         document.getElementById('lesson-video').value = data.videoUrl || '';
-                        // Quill uses Delta or HTML. Storing HTML is easier for preview.
-                        // But for editing, lets use clipboard paste or basic HTML insertion
                         const raw = data.contentHtml || "";
                         this.quill.clipboard.dangerouslyPasteHTML(raw);
                     }
@@ -406,12 +393,13 @@
                 };
 
                 try {
-                    // Check if exists
-                    const snap = await window.db.collection('lessons').where('unitId', '==', this.selectedNodeId).limit(1).get();
+                    // Changed: Use dynamic collection
+                    const lessonRef = window.getCollection('lessons');
+                    const snap = await lessonRef.where('unitId', '==', this.selectedNodeId).limit(1).get();
                     if (snap.empty) {
-                        await window.db.collection('lessons').add(data);
+                        await lessonRef.add(data);
                     } else {
-                        await window.db.collection('lessons').doc(snap.docs[0].id).update(data);
+                        await lessonRef.doc(snap.docs[0].id).update(data);
                     }
                     alert("수업 자료가 저장되었습니다.");
                 } catch(e) {
@@ -419,14 +407,11 @@
                 }
             },
 
-            // --- Preview ---
             previewLesson: function() {
                 const title = document.getElementById('lesson-title').value;
                 const videoUrl = document.getElementById('lesson-video').value;
                 let html = this.quill.root.innerHTML;
 
-                // Transform [answer] to Inputs
-                // Regex to find [text]
                 html = html.replace(/\[(.*?)\]/g, (match, p1) => {
                     return `<input type="text" class="cloze-input" placeholder="빈칸" readonly value="(정답: ${p1})">`;
                 });
@@ -436,7 +421,6 @@
 
                 const videoArea = document.getElementById('preview-video-area');
                 if (videoUrl) {
-                    // Simple Youtube ID extractor
                     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
                     const match = videoUrl.match(regExp);
                     if (match && match[2].length === 11) {

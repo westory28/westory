@@ -16,6 +16,32 @@ const MENUS = {
 
 const TEACHER_EMAIL = "westoria28@gmail.com";
 
+// --- Global Config State ---
+window.currentConfig = {
+    year: '2025',
+    semester: '2',
+    showQuiz: true,
+    showScore: true,
+    showLesson: true
+};
+
+// --- Dynamic Collection Helper ---
+window.getCollection = function(collectionName) {
+    // Global Collections (Root)
+    const globalCollections = ['users', 'site_settings', 'metadata'];
+    if (globalCollections.includes(collectionName)) {
+        return window.db.collection(collectionName);
+    }
+    
+    // Scoped Collections (Year/Semester)
+    // Structure: years/{year}/semesters/{semester}/{collectionName}
+    return window.db.collection('years')
+        .doc(window.currentConfig.year)
+        .collection('semesters')
+        .doc(window.currentConfig.semester)
+        .collection(collectionName);
+};
+
 class AuthManager {
     constructor() {
         this.currentUser = null;
@@ -34,33 +60,45 @@ class AuthManager {
     init(type, requireAuth = true) {
         this.userType = type;
         
-        window.auth.onAuthStateChanged((user) => {
-            if (user) {
-                this.currentUser = user;
-                
-                // 1. Render Header IMMEDIATELY (Don't wait for DB)
-                this.loadHeader(); 
-                this.loadFooter();
-                this.initSessionTimer(); // Start timer right away
-                this.updateUserInfo(user.displayName || (type==='teacher'?'선생님':'학생')); // Temporary name
+        // 1. Load Config FIRST
+        this.loadGlobalConfig().then(() => {
+            window.auth.onAuthStateChanged((user) => {
+                if (user) {
+                    this.currentUser = user;
+                    
+                    this.loadHeader(); 
+                    this.loadFooter();
+                    this.initSessionTimer();
+                    this.updateUserInfo(user.displayName || (type==='teacher'?'선생님':'학생'));
 
-                // 2. Security Check (Teacher)
-                if (type === 'teacher' && user.email !== TEACHER_EMAIL) {
-                    alert("교사 전용 페이지입니다. 학생 대시보드로 이동합니다.");
-                    window.location.href = this.rootPrefix + 'student/dashboard.html';
-                    return;
+                    if (type === 'teacher') {
+                        if (user.email !== TEACHER_EMAIL) {
+                            alert("교사 전용 페이지입니다. 학생 대시보드로 이동합니다.");
+                            window.location.href = this.rootPrefix + 'student/dashboard.html';
+                            return;
+                        }
+                        this.injectSettingsModal(); // Inject Settings for Teacher
+                    }
+
+                    this.fetchAdditionalUserData(user, type);
+                    document.dispatchEvent(new CustomEvent('auth-ready', { detail: user }));
+                } else {
+                    if (requireAuth) window.location.href = this.rootPrefix + 'index.html';
                 }
-
-                // 3. Fetch Real Name & Privacy Check (Async)
-                this.fetchAdditionalUserData(user, type);
-
-                document.dispatchEvent(new CustomEvent('auth-ready', { detail: user }));
-            } else {
-                if (requireAuth) {
-                    window.location.href = this.rootPrefix + 'index.html';
-                }
-            }
+            });
         });
+    }
+
+    async loadGlobalConfig() {
+        try {
+            const doc = await window.db.collection('site_settings').doc('config').get();
+            if (doc.exists) {
+                const data = doc.data();
+                window.currentConfig = { ...window.currentConfig, ...data };
+            }
+        } catch (e) {
+            console.warn("Config load failed, using default", e);
+        }
     }
 
     async fetchAdditionalUserData(user, type) {
@@ -68,23 +106,14 @@ class AuthManager {
             const doc = await window.db.collection('users').doc(user.uid).get();
             if (doc.exists) {
                 const data = doc.data();
-                
-                // Update Name with Real DB Name
-                if (data.name) {
-                    this.updateUserInfo(data.name);
-                }
-
-                // Check Privacy Agreement
-                if (type === 'student' && !data.privacyAgreed) {
-                    this.showPrivacyModal(user.uid);
-                }
+                if (data.name) this.updateUserInfo(data.name);
+                if (type === 'student' && !data.privacyAgreed) this.showPrivacyModal(user.uid);
             }
-        } catch (e) {
-            console.error("DB Error:", e);
-        }
+        } catch (e) { console.error("DB Error:", e); }
     }
 
     showPrivacyModal(uid) {
+        // ... (Existing privacy modal code) ...
         const modalHtml = `
             <div id="global-privacy-modal" class="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-70 backdrop-blur-sm">
                 <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-8 mx-4">
@@ -121,10 +150,7 @@ class AuthManager {
         checkbox.addEventListener('change', (e) => { btn.disabled = !e.target.checked; });
         btn.addEventListener('click', async () => {
             try {
-                await window.db.collection('users').doc(uid).update({
-                    privacyAgreed: true,
-                    privacyAgreedAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
+                await window.db.collection('users').doc(uid).update({ privacyAgreed: true });
                 document.getElementById('global-privacy-modal').remove();
             } catch (e) { alert("오류 발생"); }
         });
@@ -145,55 +171,34 @@ class AuthManager {
         let mobileToggleBtn = '';
 
         if (!isDashboard) {
-            navHtml = `
-                <nav class="desktop-nav flex items-center h-full ml-6">
-                    ${menuItems.map(item => `
-                        <a href="${resolve(item.url)}" class="nav-link ${isActive(item.url) ? 'active' : ''}">${item.name}</a>
-                    `).join('')}
-                </nav>
-            `;
-            mobileNavHtml = `
-                <div id="mobile-menu">
-                    ${menuItems.map(item => `
-                        <a href="${resolve(item.url)}" class="mobile-link ${isActive(item.url) ? 'active' : ''}">
-                            <svg class="mobile-icon" viewBox="0 0 24 24"><path d="${item.icon}"></path></svg>
-                            ${item.name}
-                        </a>
-                    `).join('')}
-                </div>
-            `;
+            navHtml = `<nav class="desktop-nav flex items-center h-full ml-6">${menuItems.map(item => `<a href="${resolve(item.url)}" class="nav-link ${isActive(item.url) ? 'active' : ''}">${item.name}</a>`).join('')}</nav>`;
+            mobileNavHtml = `<div id="mobile-menu">${menuItems.map(item => `<a href="${resolve(item.url)}" class="mobile-link ${isActive(item.url) ? 'active' : ''}"><svg class="mobile-icon" viewBox="0 0 24 24"><path d="${item.icon}"></path></svg>${item.name}</a>`).join('')}</div>`;
             mobileToggleBtn = `<button id="mobile-menu-toggle" class="mobile-menu-btn"><i class="fas fa-bars"></i></button>`;
         }
 
         const dashboardLink = this.userType === 'teacher' ? resolve('teacher/dashboard.html') : resolve('student/dashboard.html');
-        let settingsIcon = this.userType === 'teacher' ? `
-            <span id="header-settings-btn" class="text-gray-400 hover:text-blue-600 cursor-pointer transition p-1 mr-2" title="설정"><i class="fas fa-cog fa-lg"></i></span>` : '';
+        // Only show settings icon for teacher
+        let settingsIcon = this.userType === 'teacher' ? `<span id="header-settings-btn" class="text-gray-400 hover:text-blue-600 cursor-pointer transition p-1 mr-2" title="설정"><i class="fas fa-cog fa-lg"></i></span>` : '';
+        
+        // Show current Year/Sem info in header
+        const semInfo = `<span class="hidden md:inline-block text-xs font-mono bg-gray-100 text-gray-500 px-2 py-1 rounded mr-2 border border-gray-200">${window.currentConfig.year}-${window.currentConfig.semester}</span>`;
 
         const headerHtml = `
             <header>
                 <div class="header-container">
                     <div class="flex items-center gap-4">
-                        <a href="${dashboardLink}" class="logo-text">
-                            <span class="logo-we">We</span><span class="logo-story">story</span>
-                        </a>
-                        
-                        <!-- 60 Min Timer (Visible via inline style to prevent overriding) -->
+                        <a href="${dashboardLink}" class="logo-text"><span class="logo-we">We</span><span class="logo-story">story</span></a>
                         <div class="flex items-center gap-1 md:gap-2 px-3 py-1 bg-stone-100 rounded-full border border-stone-200" style="display: flex !important;">
                             <i class="fas fa-stopwatch text-stone-400 text-xs"></i>
                             <span id="session-timer-display" class="font-mono font-bold text-stone-600 text-sm w-[42px] text-center">60:00</span>
-                            <button id="btn-extend-session" class="ml-1 text-stone-400 hover:text-blue-600 transition p-1" title="시간 초기화">
-                                <i class="fas fa-redo-alt text-xs"></i>
-                            </button>
+                            <button id="btn-extend-session" class="ml-1 text-stone-400 hover:text-blue-600 transition p-1" title="시간 초기화"><i class="fas fa-redo-alt text-xs"></i></button>
                         </div>
-
                         ${navHtml}
                     </div>
-
                     <div class="flex items-center gap-3">
+                        ${semInfo}
                         ${settingsIcon}
-                        <!-- Name Display (No 'hidden' class, forced visibility) -->
                         <span id="header-greeting" class="text-sm font-bold text-stone-700 whitespace-nowrap" style="display: inline-block !important;"></span>
-                        
                         <button id="logout-btn" class="text-stone-400 hover:text-stone-800 text-sm font-bold whitespace-nowrap ml-2">로그아웃</button>
                         ${mobileToggleBtn}
                     </div>
@@ -204,15 +209,15 @@ class AuthManager {
 
         document.body.insertAdjacentHTML('afterbegin', headerHtml);
         
-        // Events
         document.getElementById('logout-btn').addEventListener('click', () => this.logout());
         document.getElementById('btn-extend-session').addEventListener('click', () => this.extendSession());
 
         if (this.userType === 'teacher') {
             const settingsBtn = document.getElementById('header-settings-btn');
-            if(settingsBtn) settingsBtn.addEventListener('click', () => document.dispatchEvent(new Event('open-settings')));
+            if(settingsBtn) settingsBtn.addEventListener('click', () => this.openSettingsModal());
         }
 
+        // Mobile Menu Logic
         const mobileBtn = document.getElementById('mobile-menu-toggle');
         const mobileMenu = document.getElementById('mobile-menu');
         if (mobileBtn && mobileMenu) {
@@ -223,6 +228,102 @@ class AuthManager {
                 }
             });
         }
+    }
+
+    // --- Global Settings Modal for Teacher ---
+    injectSettingsModal() {
+        if(document.getElementById('global-settings-modal')) return;
+        
+        const modalHtml = `
+            <div id="global-settings-modal" class="fixed inset-0 z-[9999] hidden flex items-center justify-center">
+                <div class="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm" onclick="AuthManager.closeSettingsModal()"></div>
+                <div class="bg-white rounded-xl shadow-2xl z-10 w-full max-w-md p-6 mx-4 transform transition-all">
+                    <div class="flex justify-between items-center mb-6 pb-4 border-b">
+                        <h2 class="text-xl font-bold text-gray-900"><i class="fas fa-cog mr-2"></i>시스템 설정</h2>
+                        <button onclick="AuthManager.closeSettingsModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+                    </div>
+                    <div class="space-y-6">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-2">학년도</label>
+                                <select id="global-config-year" class="w-full border border-gray-300 rounded-lg p-3 bg-gray-50 focus:ring-2 focus:ring-blue-500 font-bold text-gray-800">
+                                    <option value="2025">2025학년도</option>
+                                    <option value="2026">2026학년도</option>
+                                    <option value="2027">2027학년도</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-2">학기</label>
+                                <select id="global-config-sem" class="w-full border border-gray-300 rounded-lg p-3 bg-gray-50 focus:ring-2 focus:ring-blue-500 font-bold text-gray-800">
+                                    <option value="1">1학기</option>
+                                    <option value="2">2학기</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="bg-yellow-50 text-yellow-800 text-xs p-3 rounded border border-yellow-200 font-bold">
+                            <i class="fas fa-exclamation-triangle mr-1"></i> 학년도/학기를 변경하면 해당 기간의 데이터베이스로 즉시 전환됩니다.
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">메뉴 표시 제어</label>
+                            <div class="space-y-3">
+                                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                    <span class="text-sm font-medium text-gray-700">평가(Quiz)</span>
+                                    <input type="checkbox" id="global-toggle-quiz" class="w-5 h-5 text-blue-600 rounded">
+                                </div>
+                                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                    <span class="text-sm font-medium text-gray-700">점수(Score)</span>
+                                    <input type="checkbox" id="global-toggle-score" class="w-5 h-5 text-blue-600 rounded">
+                                </div>
+                                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                    <span class="text-sm font-medium text-gray-700">수업자료(Lesson)</span>
+                                    <input type="checkbox" id="global-toggle-lesson" class="w-5 h-5 text-blue-600 rounded">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <button onclick="AuthManager.saveGlobalSettings()" class="w-full mt-8 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition shadow-lg">
+                        설정 저장
+                    </button>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // Static Accessor
+        window.AuthManager.closeSettingsModal = () => {
+            document.getElementById('global-settings-modal').classList.add('hidden');
+            document.getElementById('global-settings-modal').classList.remove('flex');
+        };
+        
+        window.AuthManager.saveGlobalSettings = async () => {
+            const newConfig = {
+                year: document.getElementById('global-config-year').value,
+                semester: document.getElementById('global-config-sem').value,
+                showQuiz: document.getElementById('global-toggle-quiz').checked,
+                showScore: document.getElementById('global-toggle-score').checked,
+                showLesson: document.getElementById('global-toggle-lesson').checked
+            };
+            
+            try {
+                await window.db.collection('site_settings').doc('config').set(newConfig, { merge: true });
+                alert("설정이 저장되었습니다. 페이지를 새로고침합니다.");
+                window.location.reload();
+            } catch (e) {
+                alert("설정 저장 실패: " + e.message);
+            }
+        };
+    }
+
+    openSettingsModal() {
+        const c = window.currentConfig;
+        document.getElementById('global-config-year').value = c.year || '2025';
+        document.getElementById('global-config-sem').value = c.semester || '2';
+        document.getElementById('global-toggle-quiz').checked = c.showQuiz !== false;
+        document.getElementById('global-toggle-score').checked = c.showScore !== false;
+        document.getElementById('global-toggle-lesson').checked = c.showLesson !== false;
+
+        document.getElementById('global-settings-modal').classList.remove('hidden');
+        document.getElementById('global-settings-modal').classList.add('flex');
     }
 
     loadFooter() {
@@ -248,11 +349,7 @@ class AuthManager {
 
     initSessionTimer() {
         let expiry = localStorage.getItem('sessionExpiry');
-        if (!expiry) {
-            this.extendSession();
-        } else {
-            this.startTimerInterval();
-        }
+        if (!expiry) { this.extendSession(); } else { this.startTimerInterval(); }
     }
 
     extendSession() {
@@ -260,30 +357,19 @@ class AuthManager {
         const expiry = now + (60 * 60 * 1000); // 60 mins
         localStorage.setItem('sessionExpiry', expiry);
         this.startTimerInterval();
-        // Optional alert removal to make UX smoother, or keep it if requested
-        // alert("세션이 60분으로 초기화되었습니다."); 
         const display = document.getElementById('session-timer-display');
-        if(display) {
-             display.textContent = "60:00";
-             display.classList.remove('text-red-500');
-        }
+        if(display) { display.textContent = "60:00"; display.classList.remove('text-red-500'); }
     }
 
     startTimerInterval() {
         if (this.timerInterval) clearInterval(this.timerInterval);
         const display = document.getElementById('session-timer-display');
-        
-        // Run once immediately to set text
         this.updateTimerDisplay(display);
-
-        this.timerInterval = setInterval(() => {
-            this.updateTimerDisplay(display);
-        }, 1000);
+        this.timerInterval = setInterval(() => { this.updateTimerDisplay(display); }, 1000);
     }
 
     updateTimerDisplay(display) {
         if(!display) return;
-        
         const expiry = parseInt(localStorage.getItem('sessionExpiry') || '0');
         const now = Date.now();
         const diff = expiry - now;
@@ -296,7 +382,6 @@ class AuthManager {
             const m = Math.floor(diff / 60000);
             const s = Math.floor((diff % 60000) / 1000);
             display.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-            
             if(m < 5) display.classList.add('text-red-500');
             else display.classList.remove('text-red-500');
         }

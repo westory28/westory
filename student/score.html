@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -20,65 +21,44 @@
     <script src="../assets/js/auth-manager.js"></script>
 
     <style>
-        /* Local overrides for score card dashboard */
         .page-header { margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 15px; }
         .page-title { font-size: 24px; font-weight: 700; color: #111; margin: 0; }
         .user-greeting { font-size: 16px; color: #2563eb; margin-top: 5px; font-weight: 600; }
-        
-        .alert-box { 
-            background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba;
-            padding: 15px; border-radius: 6px; margin-bottom: 25px; 
-            font-size: 14px; font-weight: bold; text-align: center; line-height: 1.6;
-            word-break: keep-all;
-        }
-
-        .control-panel {
-            background-color: #fff; border-radius: 8px; padding: 20px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px;
-            display: flex; gap: 15px; flex-wrap: wrap; align-items: center;
-        }
+        .alert-box { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; padding: 15px; border-radius: 6px; margin-bottom: 25px; font-size: 14px; font-weight: bold; text-align: center; line-height: 1.6; word-break: keep-all; }
+        .control-panel { background-color: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px; display: flex; gap: 15px; flex-wrap: wrap; align-items: center; }
         .filter-group { display: flex; align-items: center; gap: 8px; }
         .filter-label { font-size: 14px; font-weight: bold; color: #555; white-space: nowrap; }
         select { padding: 8px 12px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; min-width: 100px; }
-
         .dashboard-grid { display: grid; grid-template-columns: 1fr 340px; gap: 25px; }
         @media (max-width: 900px) { .dashboard-grid { grid-template-columns: 1fr; } }
-
         .subject-card { background: #fff; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e1e4e8; border-left: 5px solid #ccc; transition: all 0.2s; }
         .subject-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); transform: translateY(-2px); }
-        
         .card-header { padding: 18px 25px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
         .subject-name { font-size: 18px; font-weight: 700; color: #222; }
-        
         .score-info { text-align: right; }
         .total-score { font-size: 20px; font-weight: bold; color: #adb5bd; transition: color 0.3s;}
         .grade-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; color: #fff; margin-left: 8px; vertical-align: middle; }
         .toggle-text { font-size: 12px; color: #999; margin-top: 4px; }
         .card-body { padding: 0 25px 25px 25px; display: none; background-color: #fafbfc; border-top: 1px solid #eee; }
         .card-body.expanded { display: block; }
-
         .input-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px dashed #eee; }
         .input-item:last-child { border-bottom: none; }
         .item-label { font-size: 14px; color: #333; }
         .item-sub { font-size: 12px; color: #888; margin-top: 2px; }
         .type-tag { font-size: 11px; padding: 2px 5px; border-radius: 3px; background: #eee; color: #555; margin-right: 6px; }
         .score-input { width: 70px; padding: 6px; border: 1px solid #ccc; border-radius: 4px; text-align: center; font-size: 15px; }
-
         .chart-panel { background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #e1e4e8; height: fit-content; position: sticky; top: 84px; }
         .chart-title { font-size: 16px; font-weight: bold; margin-bottom: 15px; color: #333; border-bottom: 1px solid #eee; padding-bottom: 10px;}
         .chart-wrapper { position: relative; height: 300px; width: 100%; }
-        
         .grade-scale-bar { display: flex; height: 30px; border-radius: 6px; overflow: hidden; margin-top: 20px; font-weight: bold; color: white; text-shadow: 0 1px 1px rgba(0,0,0,0.2); font-size: 11px; }
         .scale-segment { flex: 1; display: flex; justify-content: center; align-items: center; }
         .scale-note { font-size: 11px; color: #666; margin-top: 10px; text-align: right; }
-
         .bg-A { background-color: #fa5252; } 
         .bg-B { background-color: #fd7e14; } 
         .bg-C { background-color: #fab005; } 
         .bg-D { background-color: #51cf66; } 
         .bg-E { background-color: #339af0; } 
         .bg-none { background-color: #adb5bd; }
-
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 9999; display: flex; justify-content: center; align-items: center; backdrop-filter: blur(3px); }
         .modal-content { background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 480px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2); position: relative; }
         .modal-check-area { margin-bottom: 20px; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 10px; border-radius: 6px; border: 1px solid #e5e7eb; cursor: pointer; transition: background 0.2s; }
@@ -88,132 +68,68 @@
     </style>
 </head>
 <body>
-
     <div id="loadingOverlay" style="position:fixed; top:0; left:0; width:100%; height:100%; background:#fff; z-index:9999; display:flex; justify-content:center; align-items:center; flex-direction:column; color:#666;">
-        <div class="loader-spinner"></div>
-        <p class="mt-4">로딩 중...</p>
+        <div class="loader-spinner"></div><p class="mt-4">로딩 중...</p>
     </div>
-
     <!-- Header injected by JS -->
-
     <div id="appSection" class="hidden">
-        
         <div id="warningModal" class="modal-overlay hidden">
             <div class="modal-content">
                 <div class="text-4xl mb-2">⚠️</div>
                 <h3 class="text-xl font-bold text-amber-600 mb-4">주의사항 안내</h3>
-                <div class="text-sm text-stone-600 mb-6 leading-relaxed">
-                    이 결과는 <strong>참고용 시뮬레이션</strong>이며,<br>
-                    정확한 성적은 <u>나이스(NEIS)</u> 및 <u>성적 통지표</u>를 확인하세요.
-                    <div class="bg-stone-100 p-2 mt-2 rounded text-xs">입력한 점수는 서버에 저장되지 않고<br>내 컴퓨터(브라우저)에만 임시로 남습니다.</div>
-                </div>
-                
+                <div class="text-sm text-stone-600 mb-6 leading-relaxed">이 결과는 <strong>참고용 시뮬레이션</strong>이며,<br>정확한 성적은 <u>나이스(NEIS)</u> 및 <u>성적 통지표</u>를 확인하세요.</div>
                 <div class="modal-check-area" onclick="document.getElementById('agreeCheck').click()">
                     <input type="checkbox" id="agreeCheck" onclick="event.stopPropagation()">
                     <label for="agreeCheck">위 내용을 확인하였으며 동의합니다.</label>
                 </div>
-                
                 <button id="btnStart" class="btn-confirm" disabled>확 인</button>
             </div>
         </div>
-
         <div class="container mx-auto px-4 py-8 max-w-6xl">
             <div class="page-header">
                 <h1 class="page-title">나의 성적표</h1>
                 <div id="userNameArea" class="user-greeting">학생 정보를 불러오는 중...</div>
             </div>
-
-            <div class="alert-box">
-                ⚠️ 이 결과는 참고용 시뮬레이션이며, 정확한 성적은 <u>나이스(NEIS)</u> 및 <u>성적 통지표</u>를 확인하세요.<br>
-                <span style="font-size:12px; font-weight:normal; color:#664d03;">(입력한 점수는 서버에 저장되지 않고 내 컴퓨터에만 임시로 남습니다.)</span>
-            </div>
-
             <div class="control-panel">
-                <div class="filter-group">
-                    <span class="filter-label">연도</span>
-                    <select id="yearFilter" onchange="renderDashboard()">
-                        <option value="2025">2025학년도</option>
-                        <option value="2026">2026학년도</option>
-                    </select>
-                </div>
-                <div class="filter-group">
-                    <span class="filter-label">학기</span>
-                    <select id="semesterFilter" onchange="renderDashboard()">
-                        <option value="1학기">1학기</option>
-                        <option value="2학기">2학기</option>
-                    </select>
-                </div>
-                <div class="filter-group">
-                    <span class="filter-label">학년</span>
-                    <select id="gradeFilter" onchange="renderDashboard()">
-                        <option value="1">1학년</option>
-                        <option value="2">2학년</option>
-                        <option value="3">3학년</option>
-                    </select>
-                </div>
-
-                <div class="filter-group" style="margin-left:auto;">
-                    <span class="filter-label">정렬</span>
-                    <select id="sortFilter" onchange="renderDashboard()">
-                        <option value="default">교과표 순서 (국영수...)</option>
-                        <option value="score_high">성적 높은 순</option>
-                        <option value="name">가나다 순</option>
-                    </select>
-                </div>
+                <div class="filter-group"><span class="filter-label">연도</span><select id="yearFilter" onchange="renderDashboard()"><option value="2025">2025학년도</option><option value="2026">2026학년도</option></select></div>
+                <div class="filter-group"><span class="filter-label">학기</span><select id="semesterFilter" onchange="renderDashboard()"><option value="1학기">1학기</option><option value="2학기">2학기</option></select></div>
+                <div class="filter-group"><span class="filter-label">학년</span><select id="gradeFilter" onchange="renderDashboard()"><option value="1">1학년</option><option value="2">2학년</option><option value="3">3학년</option></select></div>
+                <div class="filter-group" style="margin-left:auto;"><span class="filter-label">정렬</span><select id="sortFilter" onchange="renderDashboard()"><option value="default">교과표 순서</option><option value="score_high">성적 높은 순</option><option value="name">가나다 순</option></select></div>
             </div>
-
             <div class="dashboard-grid">
-                <div class="left-content">
-                    <div id="subjectsList"></div>
-                </div>
+                <div class="left-content"><div id="subjectsList"></div></div>
                 <div class="right-sidebar">
                     <div class="chart-panel">
                         <div class="chart-title">성취도 그래프</div>
-                        <div class="chart-wrapper">
-                            <canvas id="gradeChart"></canvas>
-                        </div>
-                        <div class="grade-scale-bar">
-                            <div class="scale-segment bg-A">A (90~)</div>
-                            <div class="scale-segment bg-B">B (80~)</div>
-                            <div class="scale-segment bg-C">C (70~)</div>
-                            <div class="scale-segment bg-D">D (60~)</div>
-                            <div class="scale-segment bg-E">E (~59)</div>
-                        </div>
-                        <div class="scale-note">※ 음악, 미술, 체육은 3단계(A/B/C) 평가입니다.</div>
+                        <div class="chart-wrapper"><canvas id="gradeChart"></canvas></div>
+                        <div class="grade-scale-bar"><div class="scale-segment bg-A">A</div><div class="scale-segment bg-B">B</div><div class="scale-segment bg-C">C</div><div class="scale-segment bg-D">D</div><div class="scale-segment bg-E">E</div></div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-
     <!-- Footer injected by AuthManager -->
-
     <script>
-        // Init AuthManager
         window.AuthManager.init('student');
-
         let allGradingPlans = [];
         let myChart = null;
         const FIXED_SUBJECT_ORDER = ['국어', '영어', '수학', '과학', '역사', '기가', '한문', '일본어', '미술', '체육'];
 
-        // Auth Logic Integration
         document.addEventListener('auth-ready', async (e) => {
             document.getElementById('loadingOverlay').style.display = 'none';
             document.getElementById('appSection').classList.remove('hidden');
             document.getElementById('warningModal').classList.remove('hidden');
+            
+            // Set Filters from Global Config
+            document.getElementById('yearFilter').value = window.currentConfig.year;
+            document.getElementById('semesterFilter').value = window.currentConfig.semester + "학기";
 
             const user = e.detail;
             try {
-                const userDoc = await window.db.collection('users').doc(user.uid).get();
-                let userName = user.displayName || "학생"; 
-                if (userDoc.exists && userDoc.data().name) {
-                    userName = userDoc.data().name;
-                }
+                const userDoc = await window.getCollection('users').doc(user.uid).get();
+                let userName = (userDoc.exists && userDoc.data().name) ? userDoc.data().name : (user.displayName || "학생");
                 document.getElementById('userNameArea').innerText = `${userName} 학생, 화이팅!`;
-            } catch (err) {
-                console.error("이름 가져오기 실패:", err);
-                document.getElementById('userNameArea').innerText = "환영합니다!";
-            }
+            } catch (err) { document.getElementById('userNameArea').innerText = "환영합니다!"; }
             loadAllData();
         });
 
@@ -226,7 +142,6 @@
             if (!hasData) return { grade: '-', colorCode: '#adb5bd', class: 'bg-none', text: '미입력' }; 
             const roundedScore = Math.round(score);
             const isArtsPE = ['음악', '미술', '체육'].includes(subjectName);
-
             if (isArtsPE) {
                 if (roundedScore >= 80) return { grade: 'A', colorCode: '#fa5252', class: 'bg-A', text: `${score}점` };
                 if (roundedScore >= 60) return { grade: 'B', colorCode: '#fab005', class: 'bg-C', text: `${score}점` }; 
@@ -242,7 +157,8 @@
 
         async function loadAllData() {
             try {
-                const snapshot = await window.db.collection("grading_plans").orderBy("createdAt", "desc").get();
+                // Changed: Use dynamic collection for Grading Plans
+                const snapshot = await window.getCollection("grading_plans").orderBy("createdAt", "desc").get();
                 allGradingPlans = [];
                 snapshot.forEach(doc => allGradingPlans.push({ id: doc.id, ...doc.data() }));
                 renderDashboard();
@@ -252,24 +168,15 @@
         window.toggleCard = (header) => {
             const body = header.nextElementSibling;
             const hint = header.querySelector('.toggle-text');
-            if (body.classList.contains('expanded')) {
-                body.classList.remove('expanded');
-                hint.innerText = '▼ 점수 입력하기';
-            } else {
-                body.classList.add('expanded');
-                hint.innerText = '▲ 접기';
-            }
+            if (body.classList.contains('expanded')) { body.classList.remove('expanded'); hint.innerText = '▼ 점수 입력하기'; } 
+            else { body.classList.add('expanded'); hint.innerText = '▲ 접기'; }
         };
 
         function calculateTotal(plan) {
             let total = 0; let hasData = false; 
             plan.items.forEach((item, idx) => {
                 const saved = localStorage.getItem(`score_${plan.id}_${idx}`);
-                if(saved !== null && saved !== "") {
-                    hasData = true;
-                    const val = parseFloat(saved);
-                    if(!isNaN(val)) total += (val / item.maxScore) * item.ratio;
-                }
+                if(saved !== null && saved !== "") { hasData = true; const val = parseFloat(saved); if(!isNaN(val)) total += (val / item.maxScore) * item.ratio; }
             });
             return { score: parseFloat(total.toFixed(1)), hasData: hasData };
         }
@@ -294,11 +201,9 @@
                 return { ...plan, currentScore: result.score, hasData: result.hasData };
             });
 
-            if (sortMode === 'score_high') {
-                filteredPlans.sort((a, b) => b.currentScore - a.currentScore);
-            } else if (sortMode === 'name') {
-                filteredPlans.sort((a, b) => a.subject.localeCompare(b.subject));
-            } else {
+            if (sortMode === 'score_high') { filteredPlans.sort((a, b) => b.currentScore - a.currentScore); } 
+            else if (sortMode === 'name') { filteredPlans.sort((a, b) => a.subject.localeCompare(b.subject)); } 
+            else {
                 filteredPlans.sort((a, b) => {
                     let idxA = FIXED_SUBJECT_ORDER.indexOf(a.subject);
                     let idxB = FIXED_SUBJECT_ORDER.indexOf(b.subject);
@@ -308,8 +213,7 @@
             }
 
             if (filteredPlans.length === 0) {
-                container.innerHTML = `<div style="text-align:center; padding:50px; color:#888; background:#fff; border-radius:8px; border:1px solid #eee;">
-                    해당 학기(${gradeFilter}학년 ${yearFilter} ${semesterFilter})의 데이터가 없습니다.</div>`;
+                container.innerHTML = `<div style="text-align:center; padding:50px; color:#888; background:#fff; border-radius:8px; border:1px solid #eee;">해당 학기(${gradeFilter}학년 ${yearFilter} ${semesterFilter})의 데이터가 없습니다.</div>`;
                 updateChart([], [], []);
                 return;
             }
@@ -319,42 +223,16 @@
             filteredPlans.forEach(plan => {
                 const { currentScore, hasData } = plan;
                 const info = getGradeInfo(currentScore, hasData, plan.subject);
+                chartLabels.push(plan.subject); chartData.push(currentScore); chartColors.push(info.colorCode);
 
-                chartLabels.push(plan.subject);
-                chartData.push(currentScore); 
-                chartColors.push(info.colorCode);
-
-                const card = document.createElement('div');
-                card.className = 'subject-card';
-                card.style.borderLeftColor = info.colorCode;
-
+                const card = document.createElement('div'); card.className = 'subject-card'; card.style.borderLeftColor = info.colorCode;
                 let itemsHtml = '';
                 plan.items.forEach((item, idx) => {
                     const savedVal = localStorage.getItem(`score_${plan.id}_${idx}`) || "";
-                    itemsHtml += `
-                        <div class="input-item">
-                            <div>
-                                <div class="item-label"><span class="type-tag">${item.type}</span>${item.name}</div>
-                                <div class="item-sub">${item.maxScore}점 만점 / ${item.ratio}% 반영</div>
-                            </div>
-                            <input type="number" class="score-input" 
-                                data-planid="${plan.id}" data-idx="${idx}" data-max="${item.maxScore}" 
-                                value="${savedVal}" placeholder="0" onclick="event.stopPropagation()">
-                        </div>
-                    `;
+                    itemsHtml += `<div class="input-item"><div><div class="item-label"><span class="type-tag">${item.type}</span>${item.name}</div><div class="item-sub">${item.maxScore}점 만점 / ${item.ratio}% 반영</div></div><input type="number" class="score-input" data-planid="${plan.id}" data-idx="${idx}" data-max="${item.maxScore}" value="${savedVal}" placeholder="0" onclick="event.stopPropagation()"></div>`;
                 });
 
-                card.innerHTML = `
-                    <div class="card-header" onclick="toggleCard(this)">
-                        <div class="subject-name">${plan.subject}</div>
-                        <div class="score-info">
-                            <span class="total-score" id="score_text_${plan.id}" style="color:${info.colorCode}">${info.text}</span>
-                            <span class="grade-badge ${info.class}" id="grade_badge_${plan.id}">${info.grade}</span>
-                            <div class="toggle-text">▼ 점수 입력하기</div>
-                        </div>
-                    </div>
-                    <div class="card-body">${itemsHtml}</div>
-                `;
+                card.innerHTML = `<div class="card-header" onclick="toggleCard(this)"><div class="subject-name">${plan.subject}</div><div class="score-info"><span class="total-score" id="score_text_${plan.id}" style="color:${info.colorCode}">${info.text}</span><span class="grade-badge ${info.class}" id="grade_badge_${plan.id}">${info.grade}</span><div class="toggle-text">▼ 점수 입력하기</div></div></div><div class="card-body">${itemsHtml}</div>`;
                 container.appendChild(card);
             });
 
@@ -363,49 +241,30 @@
         };
 
         function handleInput(e) {
-            const planId = e.target.dataset.planid;
-            const idx = e.target.dataset.idx;
-            const max = parseFloat(e.target.dataset.max);
+            const planId = e.target.dataset.planid; const idx = e.target.dataset.idx; const max = parseFloat(e.target.dataset.max);
             let val = parseFloat(e.target.value);
-            if (!isNaN(val)) {
-                if(val > max) { val = max; e.target.value = max; }
-                if(val < 0) { val = 0; e.target.value = 0; }
-            }
+            if (!isNaN(val)) { if(val > max) { val = max; e.target.value = max; } if(val < 0) { val = 0; e.target.value = 0; } }
             localStorage.setItem(`score_${planId}_${idx}`, e.target.value);
             updateCardUI(planId);
         }
 
         function updateCardUI(planId) {
-            const plan = allGradingPlans.find(p => p.id === planId);
-            if(!plan) return;
-            const { score, hasData } = calculateTotal(plan);
-            const info = getGradeInfo(score, hasData, plan.subject);
-
-            const textEl = document.getElementById(`score_text_${planId}`);
-            const badgeEl = document.getElementById(`grade_badge_${planId}`);
-            
+            const plan = allGradingPlans.find(p => p.id === planId); if(!plan) return;
+            const { score, hasData } = calculateTotal(plan); const info = getGradeInfo(score, hasData, plan.subject);
+            const textEl = document.getElementById(`score_text_${planId}`); const badgeEl = document.getElementById(`grade_badge_${planId}`);
             textEl.innerText = info.text; textEl.style.color = info.colorCode;
             badgeEl.innerText = info.grade; badgeEl.className = `grade-badge ${info.class}`;
             badgeEl.closest('.subject-card').style.borderLeftColor = info.colorCode;
-
             if(myChart) {
                 const idx = myChart.data.labels.indexOf(plan.subject);
-                if(idx !== -1) {
-                    myChart.data.datasets[0].data[idx] = score;
-                    myChart.data.datasets[0].backgroundColor[idx] = info.colorCode;
-                    myChart.update();
-                }
+                if(idx !== -1) { myChart.data.datasets[0].data[idx] = score; myChart.data.datasets[0].backgroundColor[idx] = info.colorCode; myChart.update(); }
             }
         }
 
         function updateChart(labels, data, colors) {
             const ctx = document.getElementById('gradeChart').getContext('2d');
             if(myChart) myChart.destroy();
-            myChart = new Chart(ctx, {
-                type: 'bar',
-                data: { labels: labels, datasets: [{ label: '환산 점수', data: data, backgroundColor: colors, borderRadius: 4, barPercentage: 0.6 }] },
-                options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 100 }, x: { ticks: { font: { size: 12 } } } }, plugins: { legend: { display: false } } }
-            });
+            myChart = new Chart(ctx, { type: 'bar', data: { labels: labels, datasets: [{ label: '환산 점수', data: data, backgroundColor: colors, borderRadius: 4, barPercentage: 0.6 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 100 }, x: { ticks: { font: { size: 12 } } } }, plugins: { legend: { display: false } } } });
         }
     </script>
 </body>

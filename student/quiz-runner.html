@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -21,7 +22,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Noto+Serif+KR:wght@700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        /* Quiz Specific Styles */
         .serif { font-family: 'Noto Serif KR', serif; }
         .fade-in { animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
@@ -49,7 +49,6 @@
     </style>
 </head>
 <body class="text-stone-800 min-h-screen flex flex-col bg-stone-50">
-    <!-- Header injected by JS -->
     <div id="loading-overlay"><div class="animate-spin rounded-full h-16 w-16 border-t-4 border-amber-600 border-solid mb-4"></div><p class="text-xl font-bold text-stone-700" id="loading-text">인증 확인 중...</p></div>
     <div id="image-zoom-modal" onclick="document.getElementById('image-zoom-modal').style.display='none'"><img id="image-zoom-content" src=""></div>
 
@@ -82,9 +81,7 @@
         <section id="view-ready" class="hidden max-w-md mx-auto bg-white p-8 rounded-xl shadow-lg fade-in mt-8 border-t-4 border-green-500 text-center">
             <h2 class="text-2xl font-bold text-stone-900 mb-2">환영합니다!</h2>
             <p class="text-xl font-bold text-amber-600 mb-6"><span id="user-info-display"></span> 학생</p>
-            
             <p class="text-stone-500 text-sm mb-6 bg-stone-50 p-3 rounded">⚠️ <strong>주의사항</strong><br>시작 버튼을 누르면 <strong>10분간 재응시가 불가능</strong>합니다.<br>준비되면 시작하세요.</p>
-            
             <button onclick="app.startQuiz()" class="w-full bg-green-600 text-white font-bold py-4 rounded-lg hover:bg-green-700 transition shadow-lg text-lg">도전 시작 <i class="fas fa-play ml-2"></i></button>
             <div class="mt-4 text-xs text-stone-400">총 도전 횟수: <span id="live-count-text">...</span></div>
         </section>
@@ -133,7 +130,6 @@
     <!-- Footer injected by AuthManager -->
 
     <script>
-        // Init AuthManager (Handles Header & Auth)
         window.AuthManager.init('student');
 
         const app = {
@@ -141,13 +137,9 @@
             
             init: function() { 
                 window.addEventListener('beforeunload', (e) => { if (this.state.isQuizActive) { e.preventDefault(); e.returnValue = ''; } });
-                
                 const numSelect = document.getElementById('reg-number');
                 for(let i=1; i<=35; i++) { const opt = document.createElement('option'); opt.value = i; opt.innerText = i; numSelect.appendChild(opt); }
-
                 this.updateVisitCount();
-                
-                // AuthManager emits auth-ready when user is logged in
                 document.addEventListener('auth-ready', (e) => {
                     const user = e.detail;
                     this.state.currentUser = user;
@@ -157,8 +149,8 @@
 
             checkUserProfile: async function(uid) {
                 document.getElementById('loading-text').innerText = "학생 정보 확인 중...";
-                const doc = await window.db.collection('users').doc(uid).get();
-                
+                // Global User
+                const doc = await window.getCollection('users').doc(uid).get();
                 if (doc.exists) {
                     this.state.userProfile = doc.data();
                     const name = this.state.userProfile.name;
@@ -174,39 +166,33 @@
                 const cls = document.getElementById('reg-class').value;
                 const num = document.getElementById('reg-number').value;
                 const name = document.getElementById('reg-name').value.trim();
-
                 if(!cls || !num || !name) { alert("정보를 모두 입력해주세요."); return; }
                 const nameRegex = /^[가-힣]{2,4}$/;
                 if (!nameRegex.test(name)) { alert("이름은 2~4글자 한글만 가능합니다."); return; }
-
                 this.showLoading(true, "등록 중...");
                 try {
-                    const checkSnapshot = await window.db.collection('users').where('class', '==', cls).where('number', '==', num).limit(1).get();
+                    const checkSnapshot = await window.getCollection('users').where('class', '==', cls).where('number', '==', num).limit(1).get();
                     if (!checkSnapshot.empty) {
                         this.showLoading(false);
-                        alert(`❌ 가입 불가\n\n${cls}반 ${num}번은 이미 등록된 학생이 있습니다.\n본인의 번호가 맞다면 선생님께 문의하세요.`);
+                        alert(`❌ 가입 불가\n\n${cls}반 ${num}번은 이미 등록된 학생이 있습니다.`);
                         return;
                     }
                     const profile = { class: cls, number: num, name: name, email: this.state.currentUser.email };
-                    await window.db.collection('users').doc(this.state.currentUser.uid).set(profile);
+                    await window.getCollection('users').doc(this.state.currentUser.uid).set(profile);
                     this.state.userProfile = profile;
                     document.getElementById('user-info-display').innerText = `${cls}반 ${num}번 ${name}`;
                     this.showView('view-ready');
                 } catch(e) {
-                    if(e.code === 'failed-precondition') { alert("시스템 초기화가 필요합니다 (Index). 관리자에게 문의하세요."); } 
-                    else { alert("등록 오류: " + e.message); }
+                     alert("등록 오류: " + e.message);
                 }
                 this.showLoading(false);
             },
 
             updateVisitCount: function() {
-                const badgeText = document.getElementById("live-count-text");
-                const sessionKey = 'quiz_visited_session'; 
-                if (!sessionStorage.getItem(sessionKey)) {
-                    fetch('https://api.counterapi.dev/v1/westory28-history-quiz/visits/up').then(res=>res.json()).then(d=>{ badgeText.innerText = `${d.count}명`; sessionStorage.setItem(sessionKey, 'true'); }).catch(()=>{});
-                } else {
-                    fetch('https://api.counterapi.dev/v1/westory28-history-quiz/visits/').then(res=>res.json()).then(d=>{ badgeText.innerText = `${d.count}명`; }).catch(()=>{});
-                }
+                // Use Global Metadata
+                window.getCollection('metadata').doc('count_info').get().then(doc => {
+                    if(doc.exists) document.getElementById("live-count-text").innerText = (doc.data().total_plays || 0) + "회";
+                }).catch(()=>{});
             },
 
             showLoading: function(show, msg="로딩 중...") { 
@@ -215,35 +201,20 @@
             },
 
             goHome: function() {
-                if (this.state.isQuizActive) { if (confirm("포기하고 나가시겠습니까?\n(10분간 재응시 불가)")) location.reload(); } 
+                if (this.state.isQuizActive) { if (confirm("포기하고 나가시겠습니까?")) location.reload(); } 
                 else location.reload();
             },
 
             startQuiz: async function() {
-                this.showLoading(true, "응시 가능 여부 확인 중...");
+                this.showLoading(true, "준비 중...");
                 try {
-                    const userDoc = await window.db.collection('users').doc(this.state.currentUser.uid).get();
-                    const userData = userDoc.data();
-                    const blockedUntil = userData.blockedUntil || 0;
-                    const now = new Date().getTime();
-
-                    if (now < blockedUntil) {
-                        const leftMins = Math.ceil((blockedUntil - now) / (1000 * 60));
-                        this.showLoading(false);
-                        alert(`⛔ 재응시 불가!\n\n${leftMins}분 뒤에 다시 시도할 수 있습니다.`);
-                        return;
-                    }
-
                     await this.loadRandomQuestions();
-                    if(!this.state.allQuestions || this.state.allQuestions.length === 0) throw new Error("문제 없음");
-
-                    await window.db.collection('users').doc(this.state.currentUser.uid).update({ blockedUntil: now + (10 * 60 * 1000) });
+                    if(!this.state.allQuestions || this.state.allQuestions.length === 0) throw new Error("문제가 없습니다.");
                 } catch(e) {
                     this.showLoading(false);
                     alert("오류 발생: " + e.message);
                     return;
                 }
-
                 this.state.student = this.state.userProfile;
                 this.state.questions = this.state.allQuestions; 
                 this.state.currentIndex = 0; 
@@ -252,7 +223,6 @@
                 this.state.timeLeft = 60; 
                 this.state.isTimeOut = false; 
                 this.state.isQuizActive = true; 
-                
                 this.showLoading(false);
                 this.showView('view-quiz'); 
                 this.renderQuestion(); 
@@ -260,24 +230,12 @@
             },
 
             loadRandomQuestions: async function() {
-                if(!window.db) return;
-                let totalCount = 189; 
-                try { const metaDoc = await window.db.collection("metadata").doc("count_info").get(); if (metaDoc.exists) totalCount = metaDoc.data().total_questions || 189; } catch(e) {}
-                
-                const randomIds = new Set();
-                const pickCount = Math.min(5, totalCount); 
-                
-                if (totalCount >= 5) {
-                    const recentRange = 50; const startOfRecent = Math.max(1, totalCount - recentRange + 1);
-                    while(randomIds.size < 3) { const rand = Math.floor(Math.random() * (totalCount - startOfRecent + 1)) + startOfRecent; randomIds.add(rand.toString()); }
-                }
-                while(randomIds.size < pickCount) { const rand = Math.floor(Math.random() * totalCount) + 1; randomIds.add(rand.toString()); }
-                
-                const targetIds = Array.from(randomIds);
-                const qSnapshot = await window.db.collection("quiz_questions").where(firebase.firestore.FieldPath.documentId(), 'in', targetIds).get();
+                // Fetch Scoped Questions
+                const qSnapshot = await window.getCollection("quiz_questions").get();
                 const loadedData = [];
                 qSnapshot.forEach((doc) => { let data = doc.data(); data.id = parseInt(doc.id); loadedData.push(data); });
-                this.state.allQuestions = this.shuffleArray(loadedData);
+                if(loadedData.length < 5) this.state.allQuestions = loadedData;
+                else this.state.allQuestions = this.shuffleArray(loadedData).slice(0, 5);
             },
 
             shuffleArray: function(array) { for (let i = array.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [array[i], array[j]] = [array[j], array[i]]; } return array; },
@@ -373,10 +331,10 @@
             
             saveToFirebase: function(detailLogs = []) {
                 const status = document.getElementById('submission-status');
-                if(!window.db) { status.innerHTML = "⚠️ DB 연결 실패"; return; }
                 const data = { timestamp: firebase.firestore.FieldValue.serverTimestamp(), timeString: new Date().toLocaleString(), class: this.state.student.class, number: this.state.student.number, name: this.state.student.name, score: this.state.score, status: this.state.isTimeOut ? "시간초과" : "완료", details: detailLogs, uid: this.state.currentUser.uid };
-                window.db.collection("metadata").doc("stats").set({ total_plays: firebase.firestore.FieldValue.increment(1) }, { merge: true });
-                window.db.collection("quiz_results").add(data).then(() => { status.className = "bg-green-100 text-green-700 p-3 rounded text-sm mb-6 border border-green-200 font-bold"; status.innerHTML = '<i class="fas fa-check-circle"></i> 제출 완료!'; }).catch((error) => { console.error("Error: ", error); status.className = "bg-red-100 text-red-700 p-3 rounded text-sm mb-6 border border-red-200"; status.innerHTML = '⚠️ 전송 실패'; });
+                // Changed: Use dynamic collection for Results & Global for Metadata
+                window.getCollection("metadata").doc("count_info").set({ total_plays: firebase.firestore.FieldValue.increment(1) }, { merge: true });
+                window.getCollection("quiz_results").add(data).then(() => { status.className = "bg-green-100 text-green-700 p-3 rounded text-sm mb-6 border border-green-200 font-bold"; status.innerHTML = '<i class="fas fa-check-circle"></i> 제출 완료!'; }).catch((error) => { console.error("Error: ", error); status.className = "bg-red-100 text-red-700 p-3 rounded text-sm mb-6 border border-red-200"; status.innerHTML = '⚠️ 전송 실패'; });
             },
             
             showView: function(id) { document.querySelectorAll('main > section').forEach(el => el.classList.add('hidden')); document.getElementById(id).classList.remove('hidden'); window.scrollTo(0,0); }
