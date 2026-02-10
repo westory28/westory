@@ -158,7 +158,13 @@
         async function loadTree() {
             const treeContainer = document.getElementById('tree-root');
             try {
-                const doc = await window.getCollection('curriculum').doc('tree').get();
+                // FALLBACK LOGIC: Try new semester path first, then fall back to global
+                let doc = await window.getCollection('curriculum').doc('tree').get();
+                if (!doc.exists) {
+                    // Try global collection
+                    doc = await window.db.collection('curriculum').doc('tree').get();
+                }
+
                 if (!doc.exists || !doc.data().tree) {
                     treeContainer.innerHTML = '<div class="p-4 text-center text-gray-400 text-sm">등록된 목차가 없습니다.</div>';
                     return;
@@ -221,11 +227,13 @@
             document.getElementById('loading-state').classList.add('hidden');
             document.getElementById('content-area').classList.add('hidden');
             
-            // Re-use loading spinner from previous layout if needed, or simple opacity
-            // Ideally create a local spinner, but for now just clear content
-            
             try {
-                const snap = await window.getCollection('lessons').where('unitId', '==', unitId).limit(1).get();
+                // Try Semester path first, then Global
+                let snap = await window.getCollection('lessons').where('unitId', '==', unitId).limit(1).get();
+                if(snap.empty) {
+                    snap = await window.db.collection('lessons').where('unitId', '==', unitId).limit(1).get();
+                }
+
                 if(snap.empty) {
                     document.getElementById('loading-state').classList.remove('hidden');
                     document.getElementById('loading-state').innerHTML = `<div class="text-6xl mb-4">📭</div><h2 class="text-xl font-bold">내용이 없습니다</h2><p class="text-gray-500">선생님이 아직 자료를 등록하지 않았습니다.</p>`;

@@ -179,7 +179,12 @@
 
             loadTree: async function() {
                 try {
-                    const doc = await window.getCollection('curriculum').doc('tree').get();
+                    // FALLBACK LOAD: Try semester path, then global
+                    let doc = await window.getCollection('curriculum').doc('tree').get();
+                    if (!doc.exists) {
+                        doc = await window.db.collection('curriculum').doc('tree').get();
+                    }
+
                     if (doc.exists && doc.data().tree) {
                         this.treeData = doc.data().tree;
                     } else {
@@ -332,6 +337,7 @@
 
             saveTree: async function(silent = false) {
                 try {
+                    // Saves to the CURRENT Semester (window.getCollection)
                     await window.getCollection('curriculum').doc('tree').set({
                         tree: this.treeData,
                         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -345,7 +351,10 @@
                 document.getElementById('lesson-video').value = '';
                 this.quill.setContents([]);
                 try {
-                    const snap = await window.getCollection('lessons').where('unitId', '==', unitId).limit(1).get();
+                    // Fallback Load for Content
+                    let snap = await window.getCollection('lessons').where('unitId', '==', unitId).limit(1).get();
+                    if(snap.empty) snap = await window.db.collection('lessons').where('unitId', '==', unitId).limit(1).get();
+
                     if (!snap.empty) {
                         const data = snap.docs[0].data();
                         document.getElementById('lesson-title').value = data.title;
@@ -369,6 +378,7 @@
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
                 try {
+                    // Saves to the CURRENT Semester
                     const lessonRef = window.getCollection('lessons');
                     const snap = await lessonRef.where('unitId', '==', this.selectedNodeId).limit(1).get();
                     if (snap.empty) { await lessonRef.add(data); } 
