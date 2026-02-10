@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Westory - 역사 퀴즈</title>
+    <title>Westory - 역사 평가</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
@@ -19,23 +19,29 @@
     <script src="../assets/js/auth-manager.js"></script>
     
     <style>
-        .quiz-card { background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; margin-bottom: 16px; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-        .quiz-card:hover { transform: translateY(-2px); box-shadow: 0 8px 16px -4px rgba(0,0,0,0.08); border-color: #bfdbfe; }
-        .btn-start { padding: 8px 16px; border-radius: 8px; font-weight: bold; font-size: 0.9rem; transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center; }
-        .btn-start.active { background-color: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; cursor: pointer; }
-        .btn-start.active:hover { background-color: #2563eb; color: white; }
-        .btn-start.disabled { background-color: #f3f4f6; color: #9ca3af; cursor: not-allowed; border: 1px solid #e5e7eb; }
-        .badge { font-size: 0.75rem; font-weight: 800; padding: 2px 6px; border-radius: 4px; margin-right: 6px; }
         .exam-banner { background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); color: white; border-radius: 16px; padding: 24px; position: relative; overflow: hidden; cursor: pointer; transition: transform 0.2s; }
         .exam-banner:hover { transform: scale(1.01); }
         .exam-banner.disabled { background: #e5e7eb; cursor: not-allowed; opacity: 0.8; }
         .exam-deco { position: absolute; font-size: 8rem; opacity: 0.1; right: -20px; bottom: -20px; transform: rotate(-15deg); }
+        
+        .unit-header { background: #f8fafc; padding: 16px 20px; border-bottom: 1px solid #e2e8f0; font-weight: 800; color: #1e293b; font-size: 1.1rem; }
+        .unit-row { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #f1f5f9; background: white; transition: background 0.2s; }
+        .unit-row:hover { background-color: #f8fafc; }
+        .unit-title { font-weight: 600; color: #475569; display: flex; align-items: center; }
+        .unit-title::before { content: ''; display: inline-block; width: 6px; height: 6px; background-color: #cbd5e1; border-radius: 50%; margin-right: 12px; }
+        
+        .btn-action { padding: 6px 12px; border-radius: 6px; font-size: 0.85rem; font-weight: 700; transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px; border: 1px solid transparent; }
+        .btn-diag { color: #2563eb; background-color: #eff6ff; border-color: #dbeafe; }
+        .btn-diag:hover { background-color: #2563eb; color: white; border-color: #2563eb; }
+        .btn-form { color: #059669; background-color: #ecfdf5; border-color: #d1fae5; }
+        .btn-form:hover { background-color: #059669; color: white; border-color: #059669; }
+        .btn-disabled { color: #9ca3af; background-color: #f3f4f6; border-color: #e5e7eb; cursor: not-allowed; }
     </style>
 </head>
 <body class="bg-gray-50">
     <!-- Header injected by AuthManager -->
 
-    <main class="container mx-auto px-4 py-8 max-w-3xl">
+    <main class="container mx-auto px-4 py-8 max-w-4xl">
         
         <div id="greeting-area" class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-8 flex items-center gap-3 hidden animate-[fadeIn_0.5s]">
             <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-xl">🔥</div>
@@ -45,7 +51,7 @@
             </div>
         </div>
 
-        <!-- 1. Paper Exam Prep Banner -->
+        <!-- 1. Exam Prep Banner -->
         <section class="mb-10">
             <h2 class="text-lg font-bold text-gray-800 mb-3 ml-1 flex items-center gap-2">
                 <i class="fas fa-flag-checkered text-blue-600"></i> 실전 대비
@@ -63,12 +69,12 @@
             </div>
         </section>
 
-        <!-- 2. Unit List -->
+        <!-- 2. Curriculum Tree List -->
         <section>
             <h2 class="text-lg font-bold text-gray-800 mb-4 ml-1 flex items-center gap-2">
-                <i class="fas fa-layer-group text-amber-500"></i> 단원별 학습
+                <i class="fas fa-layer-group text-amber-500"></i> 단원별 평가
             </h2>
-            <div id="quiz-list-container" class="space-y-4">
+            <div id="quiz-list-container" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div class="py-20 text-center text-gray-400">
                     <div class="loader-spinner mx-auto mb-3"></div>
                     <p>평가 목록을 불러오는 중...</p>
@@ -108,25 +114,38 @@
 
             loadData: async function() {
                 try {
-                    // Parallel Fetch
-                    const [treeDoc, configDoc] = await Promise.all([
+                    // Fetch Tree & Settings from 'settings' doc
+                    const [treeDoc, settingsDoc] = await Promise.all([
                         window.getCollection('curriculum').doc('tree').get(),
-                        window.getCollection('assessment_config').doc('status').get()
+                        window.getCollection('assessment_config').doc('settings').get()
                     ]);
 
                     this.tree = (treeDoc.exists && treeDoc.data().tree) ? treeDoc.data().tree : [];
-                    this.config = (configDoc.exists) ? configDoc.data() : {};
+                    // Handle old format (status doc) vs new format (settings doc)
+                    // If settings doc exists, use it. Else fallback or empty.
+                    this.config = (settingsDoc.exists) ? settingsDoc.data() : {};
+                    
+                    // Legacy support check: if empty, try loading 'status' doc for basic activation
+                    if(Object.keys(this.config).length === 0) {
+                         const statusDoc = await window.getCollection('assessment_config').doc('status').get();
+                         if(statusDoc.exists) {
+                             const raw = statusDoc.data();
+                             // Convert simple boolean to object format
+                             for(const key in raw) { this.config[key] = { active: raw[key] }; }
+                         }
+                    }
                     
                     this.renderExamPrep();
                     this.renderList();
                 } catch(e) {
                     console.error(e);
-                    document.getElementById('quiz-list-container').innerHTML = '<div class="text-center text-red-400">데이터 로드 실패</div>';
+                    document.getElementById('quiz-list-container').innerHTML = '<div class="text-center text-red-400 p-10">데이터 로드 실패</div>';
                 }
             },
 
             renderExamPrep: function() {
-                const isActive = this.config['exam_prep_exam_prep'] === true;
+                const conf = this.config['exam_prep_exam_prep'] || {};
+                const isActive = conf.active === true;
                 const card = document.getElementById('exam-prep-card');
                 if(!isActive) {
                     card.classList.add('disabled', 'bg-gray-200');
@@ -148,27 +167,27 @@
 
                 let html = '';
                 this.tree.forEach(big => {
+                    html += `<div class="unit-header">${big.title}</div>`;
                     if(big.children) {
                         big.children.forEach(mid => {
-                            const diagKey = `${mid.id}_diagnostic`;
-                            const formKey = `${mid.id}_formative`;
-                            const isDiagActive = this.config[diagKey] === true;
-                            const isFormActive = this.config[formKey] === true;
+                            // Check Config for this unit
+                            const diagConf = this.config[`${mid.id}_diagnostic`] || {};
+                            const formConf = this.config[`${mid.id}_formative`] || {};
+                            
+                            const isDiagActive = diagConf.active === true;
+                            const isFormActive = formConf.active === true;
 
                             html += `
-                                <div class="quiz-card group">
-                                    <div class="mb-4">
-                                        <div class="text-xs text-gray-400 font-bold mb-1">${big.title}</div>
-                                        <h3 class="text-xl font-bold text-gray-800">${mid.title}</h3>
-                                    </div>
-                                    <div class="grid grid-cols-2 gap-3">
+                                <div class="unit-row">
+                                    <div class="unit-title">${mid.title}</div>
+                                    <div class="flex gap-2">
                                         <button onclick="${isDiagActive ? `app.startQuiz('${mid.id}', 'diagnostic', '${mid.title}')` : ''}" 
-                                            class="btn-start ${isDiagActive ? 'active' : 'disabled'} h-12">
-                                            ${isDiagActive ? '<i class="fas fa-stethoscope mr-2"></i>진단평가' : '<span class="text-xs">Coming Soon</span>'}
+                                            class="btn-action ${isDiagActive ? 'btn-diag' : 'btn-disabled'}">
+                                            ${isDiagActive ? '<i class="fas fa-stethoscope"></i> 진단평가' : '<i class="fas fa-lock"></i> 진단'}
                                         </button>
                                         <button onclick="${isFormActive ? `app.startQuiz('${mid.id}', 'formative', '${mid.title}')` : ''}" 
-                                            class="btn-start ${isFormActive ? 'active' : 'disabled'} h-12">
-                                            ${isFormActive ? '<i class="fas fa-pencil-alt mr-2"></i>형성평가' : '<span class="text-xs">Coming Soon</span>'}
+                                            class="btn-action ${isFormActive ? 'btn-form' : 'btn-disabled'}">
+                                            ${isFormActive ? '<i class="fas fa-pencil-alt"></i> 형성평가' : '<i class="fas fa-lock"></i> 형성'}
                                         </button>
                                     </div>
                                 </div>
@@ -180,7 +199,6 @@
             },
 
             startQuiz: function(unitId, cat, title) {
-                // Encode params
                 const url = `quiz-runner.html?unitId=${unitId}&category=${cat}&title=${encodeURIComponent(title)}`;
                 window.location.href = url;
             }

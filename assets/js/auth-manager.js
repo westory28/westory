@@ -1,5 +1,4 @@
 
-
 // Menu Configurations
 const MENUS = {
     student: [
@@ -28,14 +27,10 @@ window.currentConfig = {
 
 // --- Dynamic Collection Helper ---
 window.getCollection = function(collectionName) {
-    // Global Collections (Root)
     const globalCollections = ['users', 'site_settings', 'metadata'];
     if (globalCollections.includes(collectionName)) {
         return window.db.collection(collectionName);
     }
-    
-    // Scoped Collections (Year/Semester)
-    // Structure: years/{year}/semesters/{semester}/{collectionName}
     return window.db.collection('years')
         .doc(window.currentConfig.year)
         .collection('semesters')
@@ -61,7 +56,6 @@ class AuthManager {
     init(type, requireAuth = true) {
         this.userType = type;
         
-        // 1. Load Config FIRST
         this.loadGlobalConfig().then(() => {
             window.auth.onAuthStateChanged((user) => {
                 if (user) {
@@ -78,7 +72,7 @@ class AuthManager {
                             window.location.href = this.rootPrefix + 'student/dashboard.html';
                             return;
                         }
-                        this.injectSettingsModal(); // Inject Settings for Teacher
+                        this.injectSettingsModal(); 
                     }
 
                     this.fetchAdditionalUserData(user, type);
@@ -114,7 +108,7 @@ class AuthManager {
     }
 
     showPrivacyModal(uid) {
-        // ... (Existing privacy modal code) ...
+        // (Previously defined privacy modal code remains the same)
         const modalHtml = `
             <div id="global-privacy-modal" class="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-70 backdrop-blur-sm">
                 <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-8 mx-4">
@@ -178,10 +172,7 @@ class AuthManager {
         }
 
         const dashboardLink = this.userType === 'teacher' ? resolve('teacher/dashboard.html') : resolve('student/dashboard.html');
-        // Only show settings icon for teacher
         let settingsIcon = this.userType === 'teacher' ? `<span id="header-settings-btn" class="text-gray-400 hover:text-blue-600 cursor-pointer transition p-1 mr-2" title="설정"><i class="fas fa-cog fa-lg"></i></span>` : '';
-        
-        // Show current Year/Sem info in header
         const semInfo = `<span class="hidden md:inline-block text-xs font-mono bg-gray-100 text-gray-500 px-2 py-1 rounded mr-2 border border-gray-200">${window.currentConfig.year}-${window.currentConfig.semester}</span>`;
 
         const headerHtml = `
@@ -189,17 +180,20 @@ class AuthManager {
                 <div class="header-container">
                     <div class="flex items-center gap-4">
                         <a href="${dashboardLink}" class="logo-text"><span class="logo-we">We</span><span class="logo-story">story</span></a>
-                        <div class="flex items-center gap-1 md:gap-2 px-3 py-1 bg-stone-100 rounded-full border border-stone-200" style="display: flex !important;">
-                            <i class="fas fa-stopwatch text-stone-400 text-xs"></i>
-                            <span id="session-timer-display" class="font-mono font-bold text-stone-600 text-sm w-[42px] text-center">60:00</span>
-                            <button id="btn-extend-session" class="ml-1 text-stone-400 hover:text-blue-600 transition p-1" title="시간 초기화"><i class="fas fa-redo-alt text-xs"></i></button>
-                        </div>
                         ${navHtml}
                     </div>
                     <div class="flex items-center gap-3">
                         ${semInfo}
                         ${settingsIcon}
                         <span id="header-greeting" class="text-sm font-bold text-stone-700 whitespace-nowrap" style="display: inline-block !important;"></span>
+                        
+                        <!-- Moved Timer Here -->
+                        <div class="flex items-center gap-1 md:gap-2 px-3 py-1 bg-stone-100 rounded-full border border-stone-200 ml-2">
+                            <i class="fas fa-stopwatch text-stone-400 text-xs"></i>
+                            <span id="session-timer-display" class="font-mono font-bold text-stone-600 text-sm w-[42px] text-center">60:00</span>
+                            <button id="btn-extend-session" class="ml-1 text-stone-400 hover:text-blue-600 transition p-1" title="시간 초기화"><i class="fas fa-redo-alt text-xs"></i></button>
+                        </div>
+
                         <button id="logout-btn" class="text-stone-400 hover:text-stone-800 text-sm font-bold whitespace-nowrap ml-2">로그아웃</button>
                         ${mobileToggleBtn}
                     </div>
@@ -231,19 +225,10 @@ class AuthManager {
         }
     }
 
-    // --- Global Settings Modal for Teacher ---
+    // --- Global Settings Modal for Teacher --- (Existing code)
     injectSettingsModal() {
         if(document.getElementById('global-settings-modal')) return;
-
-        // Define global handlers for explicit HTML access
-        window.closeSystemSettings = () => {
-            const el = document.getElementById('global-settings-modal');
-            if(el) {
-                el.classList.add('hidden');
-                el.classList.remove('flex');
-            }
-        };
-
+        window.closeSystemSettings = () => { document.getElementById('global-settings-modal').classList.add('hidden'); document.getElementById('global-settings-modal').classList.remove('flex'); };
         window.saveSystemSettings = async () => {
             const newConfig = {
                 year: document.getElementById('global-config-year').value,
@@ -252,16 +237,12 @@ class AuthManager {
                 showScore: document.getElementById('global-toggle-score').checked,
                 showLesson: document.getElementById('global-toggle-lesson').checked
             };
-            
             try {
                 await window.db.collection('site_settings').doc('config').set(newConfig, { merge: true });
                 alert("설정이 저장되었습니다. 페이지를 새로고침합니다.");
                 window.location.reload();
-            } catch (e) {
-                alert("설정 저장 실패: " + e.message);
-            }
+            } catch (e) { alert("설정 저장 실패: " + e.message); }
         };
-        
         const modalHtml = `
             <div id="global-settings-modal" class="fixed inset-0 z-[9999] hidden flex items-center justify-center">
                 <div class="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm" onclick="closeSystemSettings()"></div>
@@ -277,7 +258,6 @@ class AuthManager {
                                 <select id="global-config-year" class="w-full border border-gray-300 rounded-lg p-3 bg-gray-50 focus:ring-2 focus:ring-blue-500 font-bold text-gray-800">
                                     <option value="2025">2025학년도</option>
                                     <option value="2026">2026학년도</option>
-                                    <option value="2027">2027학년도</option>
                                 </select>
                             </div>
                             <div>
@@ -288,30 +268,17 @@ class AuthManager {
                                 </select>
                             </div>
                         </div>
-                        <div class="bg-yellow-50 text-yellow-800 text-xs p-3 rounded border border-yellow-200 font-bold">
-                            <i class="fas fa-exclamation-triangle mr-1"></i> 학년도/학기를 변경하면 해당 기간의 데이터베이스로 즉시 전환됩니다.
-                        </div>
+                        <div class="bg-yellow-50 text-yellow-800 text-xs p-3 rounded border border-yellow-200 font-bold"><i class="fas fa-exclamation-triangle mr-1"></i> 학년도/학기를 변경하면 해당 기간의 데이터베이스로 즉시 전환됩니다.</div>
                         <div>
                             <label class="block text-sm font-bold text-gray-700 mb-2">메뉴 표시 제어</label>
                             <div class="space-y-3">
-                                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                    <span class="text-sm font-medium text-gray-700">평가(Quiz)</span>
-                                    <input type="checkbox" id="global-toggle-quiz" class="w-5 h-5 text-blue-600 rounded">
-                                </div>
-                                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                    <span class="text-sm font-medium text-gray-700">점수(Score)</span>
-                                    <input type="checkbox" id="global-toggle-score" class="w-5 h-5 text-blue-600 rounded">
-                                </div>
-                                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                    <span class="text-sm font-medium text-gray-700">수업자료(Lesson)</span>
-                                    <input type="checkbox" id="global-toggle-lesson" class="w-5 h-5 text-blue-600 rounded">
-                                </div>
+                                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg"><span class="text-sm font-medium text-gray-700">평가(Quiz)</span><input type="checkbox" id="global-toggle-quiz" class="w-5 h-5 text-blue-600 rounded"></div>
+                                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg"><span class="text-sm font-medium text-gray-700">점수(Score)</span><input type="checkbox" id="global-toggle-score" class="w-5 h-5 text-blue-600 rounded"></div>
+                                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg"><span class="text-sm font-medium text-gray-700">수업자료(Lesson)</span><input type="checkbox" id="global-toggle-lesson" class="w-5 h-5 text-blue-600 rounded"></div>
                             </div>
                         </div>
                     </div>
-                    <button onclick="saveSystemSettings()" class="w-full mt-8 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition shadow-lg">
-                        설정 저장
-                    </button>
+                    <button onclick="saveSystemSettings()" class="w-full mt-8 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition shadow-lg">설정 저장</button>
                 </div>
             </div>
         `;
@@ -325,7 +292,6 @@ class AuthManager {
         document.getElementById('global-toggle-quiz').checked = c.showQuiz !== false;
         document.getElementById('global-toggle-score').checked = c.showScore !== false;
         document.getElementById('global-toggle-lesson').checked = c.showLesson !== false;
-
         document.getElementById('global-settings-modal').classList.remove('hidden');
         document.getElementById('global-settings-modal').classList.add('flex');
     }
@@ -333,13 +299,7 @@ class AuthManager {
     loadFooter() {
         const existingFooter = document.querySelector('footer');
         if(existingFooter) existingFooter.remove();
-        const footerHtml = `
-            <footer class="bg-white border-t border-stone-200 py-8 mt-auto">
-                <div class="container mx-auto text-center">
-                    <p class="text-stone-400 text-xs font-bold font-mono">Copyright © 용신중학교 역사교사 방재석. All rights reserved.</p>
-                </div>
-            </footer>
-        `;
+        const footerHtml = `<footer class="bg-white border-t border-stone-200 py-8 mt-auto"><div class="container mx-auto text-center"><p class="text-stone-400 text-xs font-bold font-mono">Copyright © 용신중학교 역사교사 방재석. All rights reserved.</p></div></footer>`;
         document.body.insertAdjacentHTML('beforeend', footerHtml);
     }
 
@@ -358,7 +318,7 @@ class AuthManager {
 
     extendSession() {
         const now = Date.now();
-        const expiry = now + (60 * 60 * 1000); // 60 mins
+        const expiry = now + (60 * 60 * 1000); 
         localStorage.setItem('sessionExpiry', expiry);
         this.startTimerInterval();
         const display = document.getElementById('session-timer-display');
@@ -377,7 +337,6 @@ class AuthManager {
         const expiry = parseInt(localStorage.getItem('sessionExpiry') || '0');
         const now = Date.now();
         const diff = expiry - now;
-
         if (diff <= 0) {
             clearInterval(this.timerInterval);
             alert("세션이 만료되어 자동 로그아웃됩니다.");
@@ -393,9 +352,7 @@ class AuthManager {
 
     logout() {
         localStorage.removeItem('sessionExpiry');
-        window.auth.signOut().then(() => {
-            window.location.href = this.rootPrefix + 'index.html';
-        });
+        window.auth.signOut().then(() => { window.location.href = this.rootPrefix + 'index.html'; });
     }
 }
 

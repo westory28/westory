@@ -21,7 +21,8 @@
     <main class="max-w-7xl mx-auto px-4 py-8">
         
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div class="p-6 border-b bg-gray-50 flex justify-between items-center flex-wrap gap-4">
+            <!-- Fixed Height Toolbar Container -->
+            <div class="p-6 border-b bg-gray-50 flex justify-between items-center flex-wrap gap-4 min-h-[88px]">
                 <div class="flex items-center gap-4">
                     <h2 class="text-lg font-bold text-gray-800">
                         <i class="fas fa-users text-blue-500 mr-2"></i> 학생 명단 <span id="std-count" class="text-sm font-normal text-gray-500"></span>
@@ -32,6 +33,10 @@
                         <div class="h-4 w-px bg-blue-300 mx-1"></div>
                         <button onclick="app.promoteSelected()" class="text-xs bg-white border border-blue-300 text-blue-700 px-2 py-1 rounded hover:bg-blue-100 font-bold" title="학년을 1씩 올립니다">
                             <i class="fas fa-level-up-alt mr-1"></i>일괄 진급
+                        </button>
+                        <!-- Added Move Class -->
+                        <button onclick="app.openMoveClassModal()" class="text-xs bg-white border border-blue-300 text-green-700 px-2 py-1 rounded hover:bg-green-50 font-bold" title="반을 변경합니다">
+                            <i class="fas fa-exchange-alt mr-1"></i>반 이동
                         </button>
                         <button onclick="app.deleteSelected()" class="text-xs bg-white border border-red-300 text-red-700 px-2 py-1 rounded hover:bg-red-50 font-bold">
                             <i class="fas fa-trash mr-1"></i>일괄 삭제
@@ -118,6 +123,20 @@
         </div>
     </div>
 
+    <!-- Move Class Modal -->
+    <div id="move-class-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center">
+        <div class="bg-black bg-opacity-50 absolute inset-0" onclick="document.getElementById('move-class-modal').classList.add('hidden')"></div>
+        <div class="bg-white p-6 rounded-lg w-80 shadow-xl z-10 text-center">
+            <h3 class="font-bold text-lg mb-2">반 이동</h3>
+            <p class="text-sm text-gray-500 mb-4">선택한 학생들을 이동할 반을 선택하세요.</p>
+            <select id="target-class-select" class="w-full border p-3 rounded mb-4 font-bold text-center">
+                <!-- 1~12 Class -->
+                <option value="1">1반</option><option value="2">2반</option><option value="3">3반</option><option value="4">4반</option><option value="5">5반</option><option value="6">6반</option><option value="7">7반</option><option value="8">8반</option><option value="9">9반</option><option value="10">10반</option><option value="11">11반</option><option value="12">12반</option>
+            </select>
+            <button onclick="app.moveSelected()" class="w-full bg-green-600 text-white font-bold py-2 rounded hover:bg-green-700">이동 확인</button>
+        </div>
+    </div>
+
     <!-- Footer injected by AuthManager -->
 
     <script>
@@ -128,14 +147,13 @@
             selectedIds: new Set(),
             
             init: function() {
-                // Users are GLOBAL
                 window.getCollection('users').get().then(snap => {
                     this.students = [];
                     snap.forEach(doc => {
                         const d = doc.data();
                         this.students.push({ 
                             id: doc.id,
-                            grade: parseInt(d.grade) || 2, // Default to 2 if missing
+                            grade: parseInt(d.grade) || 2,
                             class: parseInt(d.class) || 0,
                             number: parseInt(d.number) || 0,
                             name: d.name || '',
@@ -225,6 +243,25 @@
                 this.selectedIds.clear();
                 this.init();
             },
+            openMoveClassModal: function() {
+                document.getElementById('move-class-modal').classList.remove('hidden');
+                document.getElementById('move-class-modal').classList.add('flex');
+            },
+            moveSelected: async function() {
+                const targetClass = parseInt(document.getElementById('target-class-select').value);
+                if(!confirm(`선택한 ${this.selectedIds.size}명을 ${targetClass}반으로 이동하시겠습니까?`)) return;
+                
+                const batch = window.db.batch();
+                this.selectedIds.forEach(id => {
+                    const ref = window.getCollection('users').doc(id);
+                    batch.update(ref, { class: targetClass });
+                });
+                await batch.commit();
+                
+                document.getElementById('move-class-modal').classList.add('hidden');
+                this.selectedIds.clear();
+                this.init();
+            },
 
             filterList: function() {
                 const q = document.getElementById('search-input').value.trim();
@@ -233,7 +270,7 @@
                 this.render(filtered);
             },
 
-            // --- History Popup ---
+            // --- History Popup (Existing logic...) ---
             showHistory: async function(uid, name, cls, num) {
                 document.getElementById('history-title').innerText = `${name} (${cls}반 ${num}번) 문제 풀이 모음`;
                 const content = document.getElementById('history-content');
@@ -250,12 +287,8 @@
                         content.innerHTML = '<div class="text-center p-20 text-gray-400 bg-gray-50 rounded-lg">해당 학기의 문제 풀이 기록이 없습니다.</div>';
                         return;
                     }
-
-                    // Fetch questions for details (Optional optimization: batch fetch)
-                    // For now, simpler rendering
                     
                     let html = '';
-                    // Group by Date
                     const groups = {};
                     snap.forEach(doc => {
                         const d = doc.data();

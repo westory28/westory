@@ -23,9 +23,11 @@
     <style>
         .tree-node { position: relative; }
         .tree-node.level-0 { padding-left: 0; margin-bottom: 24px; }
-        .tree-node:not(.level-0) { padding-left: 24px; }
+        /* Improved indentation */
+        .tree-node.level-1 { margin-left: 28px; }
+        .tree-node.level-2 { margin-left: 28px; }
 
-        .tree-line { position: absolute; top: 0; bottom: 0; left: 12px; border-left: 1px dashed #cbd5e1; }
+        .tree-line { position: absolute; top: 0; bottom: 0; left: -14px; border-left: 1px dashed #cbd5e1; }
         .tree-item { 
             display: flex; align-items: center; padding: 6px 10px; margin: 2px 0; 
             border-radius: 6px; cursor: pointer; transition: all 0.2s; border: 1px solid transparent; 
@@ -33,19 +35,16 @@
         .tree-item:hover { background-color: #f1f5f9; }
         .tree-item.active { background-color: #eff6ff; border-color: #bfdbfe; color: #2563eb; font-weight: bold; }
         
-        /* Level Styles */
-        .level-0 .tree-item-title { font-weight: 800; font-size: 1.05rem; color: #1e293b; } /* Large */
-        .level-1 .tree-item-title { font-weight: 600; font-size: 0.95rem; color: #475569; } /* Medium */
-        .level-2 .tree-item-title { font-weight: 400; font-size: 0.9rem; color: #64748b; } /* Small */
+        .level-0 .tree-item-title { font-weight: 800; font-size: 1.05rem; color: #1e293b; }
+        .level-1 .tree-item-title { font-weight: 600; font-size: 0.95rem; color: #475569; }
+        .level-2 .tree-item-title { font-weight: 400; font-size: 0.9rem; color: #64748b; }
 
         .btn-action { opacity: 0; transition: opacity 0.2s; }
         .tree-item:hover .btn-action { opacity: 1; }
 
-        /* Quill Override */
         .ql-container { font-family: 'Noto Sans KR', sans-serif; font-size: 1rem; height: 500px; }
         .ql-editor strong { font-weight: bold; }
         
-        /* Preview Styles */
         .cloze-input {
             border: none; border-bottom: 2px solid #374151; text-align: center;
             font-weight: bold; color: #2563eb; background: transparent;
@@ -66,7 +65,6 @@
         </div>
 
         <div class="flex gap-6 h-full overflow-hidden pb-4">
-            
             <!-- Left: Tree Structure -->
             <div class="w-1/3 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden">
                 <div class="p-6 border-b bg-gray-50 font-bold text-gray-700 flex justify-between items-center">
@@ -78,7 +76,6 @@
                         <button onclick="app.saveTree()" class="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded hover:bg-blue-200 transition font-bold">저장</button>
                     </div>
                 </div>
-                <!-- Changed: Added overflow-x-auto for long titles -->
                 <div class="flex-1 overflow-y-auto overflow-x-auto p-6" id="tree-container">
                     <div class="text-center text-gray-400 py-10">로딩 중...</div>
                 </div>
@@ -136,7 +133,6 @@
 
     </main>
     
-    <!-- (Existing Modal & Scripts...) -->
     <!-- Preview Modal -->
     <div id="preview-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center">
         <div class="absolute inset-0 bg-black bg-opacity-70 backdrop-blur-sm" onclick="app.closePreview()"></div>
@@ -195,22 +191,13 @@
                 });
             },
 
-            // --- Tree Management ---
             loadTree: async function() {
                 try {
-                    // Changed: Use dynamic collection for semester
                     const doc = await window.getCollection('curriculum').doc('tree').get();
                     if (doc.exists && doc.data().tree) {
                         this.treeData = doc.data().tree;
                     } else {
-                        // Default Structure
-                        this.treeData = [
-                            { 
-                                id: 'root-' + Date.now(), 
-                                title: '새 대단원', 
-                                children: [] 
-                            }
-                        ];
+                        this.treeData = [{ id: 'root-' + Date.now(), title: '새 대단원', children: [] }];
                     }
                     this.renderTree();
                 } catch(e) {
@@ -225,7 +212,6 @@
                 
                 const renderNode = (node, level, parentArr) => {
                     const el = document.createElement('div');
-                    // Changed: Use class based indent logic
                     el.className = `tree-node level-${level}`;
                     
                     if (level > 0) {
@@ -244,22 +230,14 @@
                     if (!isLeaf) iconClass = isExpanded ? 'fas fa-folder-open' : 'fas fa-folder';
                     else iconClass = 'fas fa-file-alt';
 
-                    // Click Handler
                     itemBox.onclick = (e) => { 
                         e.stopPropagation(); 
-                        if (!isLeaf) {
-                            this.toggleExpand(node.id);
-                        } else {
-                            this.selectNode(node, level);
-                        }
+                        if (!isLeaf) { this.toggleExpand(node.id); } 
+                        else { this.selectNode(node, level); }
                     };
 
-                    const caretIcon = !isLeaf 
-                        ? `<i class="fas fa-caret-${isExpanded?'down':'right'} w-4 text-gray-400 mr-1 transition-transform"></i>` 
-                        : `<span class="w-4 mr-1"></span>`;
-
+                    const caretIcon = !isLeaf ? `<i class="fas fa-caret-${isExpanded?'down':'right'} w-4 text-gray-400 mr-1 transition-transform"></i>` : `<span class="w-4 mr-1"></span>`;
                     const titleSpan = document.createElement('span');
-                    // Changed: Added whitespace-nowrap to prevent line breaks
                     titleSpan.className = 'tree-item-title flex-1 ml-1 select-none whitespace-nowrap';
                     titleSpan.innerText = node.title;
                     
@@ -301,7 +279,6 @@
                         });
                         el.appendChild(childrenContainer);
                     }
-
                     return el;
                 };
 
@@ -319,10 +296,8 @@
             selectNode: function(node, level) {
                 this.selectedNodeId = node.id;
                 this.renderTree(); 
-
                 const panel = document.getElementById('empty-state');
                 const pathDisplay = document.getElementById('selected-unit-path');
-
                 if (level === 2) { 
                     panel.classList.add('hidden');
                     pathDisplay.innerText = node.title;
@@ -347,7 +322,7 @@
                 if(!name) return;
                 if(!node.children) node.children = [];
                 node.children.push({ id: 'u-'+Date.now(), title: name, children: [] });
-                this.expandedIds.add(node.id); // Auto expand parent
+                this.expandedIds.add(node.id);
                 this.renderTree();
                 this.saveTree(true);
             },
@@ -378,24 +353,19 @@
 
             saveTree: async function(silent = false) {
                 try {
-                    // Changed: Use dynamic collection
                     await window.getCollection('curriculum').doc('tree').set({
                         tree: this.treeData,
                         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                     });
                     if(!silent) alert("구조가 저장되었습니다.");
-                } catch(e) {
-                    alert("저장 실패: " + e.message);
-                }
+                } catch(e) { alert("저장 실패: " + e.message); }
             },
 
             loadLessonContent: async function(unitId, unitTitle) {
                 document.getElementById('lesson-title').value = unitTitle; 
                 document.getElementById('lesson-video').value = '';
                 this.quill.setContents([]);
-
                 try {
-                    // Changed: Use dynamic collection
                     const snap = await window.getCollection('lessons').where('unitId', '==', unitId).limit(1).get();
                     if (!snap.empty) {
                         const data = snap.docs[0].data();
@@ -404,18 +374,14 @@
                         const raw = data.contentHtml || "";
                         this.quill.clipboard.dangerouslyPasteHTML(raw);
                     }
-                } catch(e) {
-                    console.error("Content load error", e);
-                }
+                } catch(e) { console.error("Content load error", e); }
             },
 
             saveLesson: async function() {
                 if(!this.selectedNodeId) return;
-
                 const title = document.getElementById('lesson-title').value;
                 const video = document.getElementById('lesson-video').value;
                 const html = this.quill.root.innerHTML;
-
                 const data = {
                     unitId: this.selectedNodeId,
                     title: title,
@@ -423,34 +389,24 @@
                     contentHtml: html,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
-
                 try {
-                    // Changed: Use dynamic collection
                     const lessonRef = window.getCollection('lessons');
                     const snap = await lessonRef.where('unitId', '==', this.selectedNodeId).limit(1).get();
-                    if (snap.empty) {
-                        await lessonRef.add(data);
-                    } else {
-                        await lessonRef.doc(snap.docs[0].id).update(data);
-                    }
+                    if (snap.empty) { await lessonRef.add(data); } 
+                    else { await lessonRef.doc(snap.docs[0].id).update(data); }
                     alert("수업 자료가 저장되었습니다.");
-                } catch(e) {
-                    alert("저장 실패: " + e.message);
-                }
+                } catch(e) { alert("저장 실패: " + e.message); }
             },
 
             previewLesson: function() {
                 const title = document.getElementById('lesson-title').value;
                 const videoUrl = document.getElementById('lesson-video').value;
                 let html = this.quill.root.innerHTML;
-
                 html = html.replace(/\[(.*?)\]/g, (match, p1) => {
                     return `<input type="text" class="cloze-input" placeholder="빈칸" readonly value="(정답: ${p1})">`;
                 });
-
                 document.getElementById('preview-title').innerText = title;
                 document.getElementById('preview-content').innerHTML = html;
-
                 const videoArea = document.getElementById('preview-video-area');
                 if (videoUrl) {
                     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
@@ -458,13 +414,8 @@
                     if (match && match[2].length === 11) {
                         document.getElementById('preview-iframe').src = `https://www.youtube.com/embed/${match[2]}`;
                         videoArea.classList.remove('hidden');
-                    } else {
-                        videoArea.classList.add('hidden');
-                    }
-                } else {
-                    videoArea.classList.add('hidden');
-                }
-
+                    } else { videoArea.classList.add('hidden'); }
+                } else { videoArea.classList.add('hidden'); }
                 document.getElementById('preview-modal').classList.remove('hidden');
                 document.getElementById('preview-modal').classList.add('flex');
             },
