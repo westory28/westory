@@ -21,7 +21,6 @@
         .choice-btn:hover { background-color: #f3f4f6; }
         .choice-btn.selected { background-color: #ef4444; color: white; border-color: #ef4444; }
         
-        /* New Styles for Score Floater */
         .score-floater {
             position: fixed;
             top: 100px;
@@ -36,7 +35,6 @@
             text-align: center;
         }
 
-        /* Changed: Added flex: 1 1 0px and width: 0 for equal distribution */
         .tab-btn-base { padding: 14px 24px; font-weight: 700; font-size: 1rem; border-bottom: 3px solid transparent; color: #9ca3af; transition: all 0.2s; flex: 1 1 0px; width: 0; text-align: center; }
         .tab-btn-base:hover { color: #4b5563; background-color: #f9fafb; }
         .tab-btn-active { border-bottom-color: #2563eb; color: #2563eb; background-color: #eff6ff; }
@@ -62,7 +60,6 @@
 
         <!-- Tabs -->
         <div class="flex border-b border-gray-200 mb-0 bg-white rounded-t-lg overflow-hidden flex-shrink-0 shadow-sm">
-            <!-- Changed: Updated Label -->
             <button onclick="app.setTab('preview')" id="btn-tab-preview" class="tab-btn-base tab-btn-active">1. 성적 산출 관리</button>
             <button onclick="app.setTab('omr')" id="btn-tab-omr" class="tab-btn-base">2. 지필평가 정답 (OMR)</button>
         </div>
@@ -117,9 +114,18 @@
                     <div class="lg:col-span-8">
                         <div class="flex justify-between items-center mb-4">
                             <h3 class="font-bold text-gray-700 text-lg">등록된 기준 목록</h3>
+                            <!-- Sorting Filter -->
+                            <div class="flex items-center gap-2">
+                                <span class="text-sm text-gray-500 font-bold">정렬:</span>
+                                <select id="planSort" onchange="app.sortPlans()" class="border border-gray-300 rounded px-2 py-1.5 text-sm bg-white font-bold text-gray-700 cursor-pointer">
+                                    <option value="latest">최신순 (중요도)</option>
+                                    <option value="name">과목명 (가나다)</option>
+                                    <option value="grade">학년순</option>
+                                </select>
+                            </div>
                         </div>
-                        <div id="plan-list" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div class="text-center py-20 text-gray-400 col-span-2 border-2 border-dashed border-gray-200 rounded-xl">데이터를 불러오는 중...</div>
+                        <div id="plan-list" class="space-y-4">
+                            <div class="text-center py-20 text-gray-400 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">데이터를 불러오는 중...</div>
                         </div>
                     </div>
                 </div>
@@ -206,35 +212,50 @@
                     const snap = await q.get();
                     this.plans = [];
                     snap.forEach(doc => this.plans.push({ id: doc.id, ...doc.data() }));
-                    this.renderPlans();
+                    this.sortPlans(); // Initial Render through Sort
                 } catch(e) {
-                    listDiv.innerHTML = '<div class="text-center text-red-400 col-span-2">로드 실패</div>';
+                    listDiv.innerHTML = '<div class="text-center text-red-400">로드 실패</div>';
                 }
+            },
+
+            sortPlans: function() {
+                const mode = document.getElementById('planSort').value;
+                if (mode === 'name') {
+                    this.plans.sort((a,b) => a.subject.localeCompare(b.subject));
+                } else if (mode === 'grade') {
+                    this.plans.sort((a,b) => parseInt(a.targetGrade||0) - parseInt(b.targetGrade||0));
+                } else {
+                    // Latest (descending createdAt)
+                    this.plans.sort((a,b) => {
+                        const tA = a.createdAt ? a.createdAt.seconds : 0;
+                        const tB = b.createdAt ? b.createdAt.seconds : 0;
+                        return tB - tA;
+                    });
+                }
+                this.renderPlans();
             },
 
             renderPlans: function() {
                 const listDiv = document.getElementById('plan-list');
                 if(this.plans.length === 0) {
-                    listDiv.innerHTML = '<div class="text-center py-20 text-gray-400 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200 col-span-2 flex flex-col items-center justify-center"><i class="fas fa-folder-open text-4xl mb-4 text-gray-300"></i><p>등록된 평가 기준이 없습니다.</p></div>';
+                    listDiv.innerHTML = '<div class="text-center py-20 text-gray-400 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center"><i class="fas fa-folder-open text-4xl mb-4 text-gray-300"></i><p>등록된 평가 기준이 없습니다.</p></div>';
                     return;
                 }
                 listDiv.innerHTML = this.plans.map(p => {
-                    const itemsHtml = p.items.map(i => `<span class="inline-flex items-center bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded border border-gray-200"><span class="font-bold mr-1">${i.name}</span><span class="text-gray-400">|</span><span class="ml-1 text-blue-600 font-bold">${i.ratio}%</span></span>`).join('');
+                    const itemsHtml = p.items.map(i => `<span class="inline-flex items-center bg-gray-100 text-gray-600 text-xs px-3 py-1.5 rounded border border-gray-200"><span class="font-bold mr-1">${i.name}</span><span class="text-gray-300 mx-1">|</span><span class="text-blue-600 font-bold">${i.ratio}%</span></span>`).join('');
                     return `
-                        <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md hover:border-blue-300 transition flex flex-col justify-between group relative overflow-hidden">
-                            <div class="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
-                            <div class="pl-3">
-                                <div class="flex justify-between items-start mb-3">
-                                    <div class="flex items-center gap-2">
-                                        <span class="text-xs font-bold text-white bg-blue-500 px-2 py-0.5 rounded shadow-sm">${p.targetGrade||'2'}학년</span>
-                                        <span class="font-bold text-lg text-gray-800">${p.subject}</span>
-                                    </div>
-                                    <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition">
-                                        <button onclick="app.editPlan('${p.id}')" class="text-blue-500 hover:bg-blue-50 p-1.5 rounded"><i class="fas fa-pen"></i></button>
-                                        <button onclick="app.deletePlan('${p.id}')" class="text-red-500 hover:bg-red-50 p-1.5 rounded"><i class="fas fa-trash"></i></button>
-                                    </div>
+                        <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md hover:border-blue-300 transition group relative overflow-hidden flex items-center justify-between">
+                            <div class="absolute top-0 left-0 w-1.5 h-full bg-blue-500"></div>
+                            <div class="pl-4 flex-1">
+                                <div class="flex items-center gap-3 mb-3">
+                                    <span class="text-xs font-bold text-white bg-blue-500 px-2.5 py-1 rounded shadow-sm">${p.targetGrade||'2'}학년</span>
+                                    <h4 class="font-bold text-xl text-gray-800">${p.subject}</h4>
                                 </div>
                                 <div class="flex flex-wrap gap-2">${itemsHtml}</div>
+                            </div>
+                            <div class="flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition duration-200 border-l pl-4 border-gray-100 ml-4">
+                                <button onclick="app.editPlan('${p.id}')" class="text-blue-500 hover:bg-blue-50 p-2 rounded flex items-center text-xs font-bold bg-white border border-blue-100 shadow-sm"><i class="fas fa-pen mr-1"></i>수정</button>
+                                <button onclick="app.deletePlan('${p.id}')" class="text-red-500 hover:bg-red-50 p-2 rounded flex items-center text-xs font-bold bg-white border border-red-100 shadow-sm"><i class="fas fa-trash mr-1"></i>삭제</button>
                             </div>
                         </div>
                     `;
