@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -92,7 +93,21 @@
         </div>
 
         <div class="menu-grid">
-            <!-- 1. Assessment Management -->
+            <!-- 1. Lesson Management -->
+            <div onclick="location.href='manage_lesson.html'" class="v-card group">
+                <div class="icon-circle text-gray-400 group-hover:text-green-600">
+                    <i class="fas fa-book-reader"></i>
+                </div>
+                <h3 class="text-xl font-bold text-gray-800 mb-2">수업 자료 관리</h3>
+                <p class="text-sm text-gray-500 leading-relaxed">
+                    계층형 학습 자료 등록<br>및 빈칸 채우기 노트 생성
+                </p>
+                <div class="mt-auto pt-6 text-green-600 text-sm font-bold opacity-0 group-hover:opacity-100 transition">
+                    바로가기 <i class="fas fa-arrow-right ml-1"></i>
+                </div>
+            </div>
+
+            <!-- 2. Assessment Management -->
             <div onclick="location.href='manage_quiz.html'" class="v-card group">
                 <div class="icon-circle text-gray-400 group-hover:text-blue-600">
                     <i class="fas fa-pencil-alt"></i>
@@ -106,7 +121,7 @@
                 </div>
             </div>
 
-            <!-- 2. Score Management -->
+            <!-- 3. Score Management -->
             <div onclick="location.href='manage_exam.html'" class="v-card group">
                 <div class="icon-circle text-gray-400 group-hover:text-amber-500">
                     <i class="fas fa-chart-bar"></i>
@@ -116,20 +131,6 @@
                     지필/수행평가 배점 설정<br>및 OMR 채점 결과 산출
                 </p>
                 <div class="mt-auto pt-6 text-amber-500 text-sm font-bold opacity-0 group-hover:opacity-100 transition">
-                    바로가기 <i class="fas fa-arrow-right ml-1"></i>
-                </div>
-            </div>
-
-            <!-- 3. Lesson Management -->
-            <div onclick="location.href='manage_lesson.html'" class="v-card group">
-                <div class="icon-circle text-gray-400 group-hover:text-green-600">
-                    <i class="fas fa-book-reader"></i>
-                </div>
-                <h3 class="text-xl font-bold text-gray-800 mb-2">수업 자료 관리</h3>
-                <p class="text-sm text-gray-500 leading-relaxed">
-                    계층형 학습 자료 등록<br>및 빈칸 채우기 노트 생성
-                </p>
-                <div class="mt-auto pt-6 text-green-600 text-sm font-bold opacity-0 group-hover:opacity-100 transition">
                     바로가기 <i class="fas fa-arrow-right ml-1"></i>
                 </div>
             </div>

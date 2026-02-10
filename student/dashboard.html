@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -59,15 +60,26 @@
             </div>
         </div>
 
-        <!-- 3 Main Tabs -->
+        <!-- 3 Main Tabs (Reordered: Lesson -> Assess -> Score) -->
         <div class="tab-nav">
-            <div class="tab-btn active" onclick="switchTab('assess')"><i class="fas fa-gamepad mr-2"></i>평가</div>
+            <div class="tab-btn active" onclick="switchTab('lesson')"><i class="fas fa-book-reader mr-2"></i>수업자료</div>
+            <div class="tab-btn" onclick="switchTab('assess')"><i class="fas fa-gamepad mr-2"></i>평가</div>
             <div class="tab-btn" onclick="switchTab('score')"><i class="fas fa-chart-bar mr-2"></i>점수</div>
-            <div class="tab-btn" onclick="switchTab('lesson')"><i class="fas fa-book-reader mr-2"></i>수업자료</div>
         </div>
 
-        <!-- 1. Assessment -->
-        <div id="tab-assess" class="section-content active">
+        <!-- 1. Lesson (Hierarchical) - Default Active -->
+        <div id="tab-lesson" class="section-content active">
+            <div id="lesson-container" class="space-y-4 max-w-4xl mx-auto">
+                <!-- Dynamically populated -->
+                <div class="py-20 text-center text-gray-400">
+                    <div class="loader-spinner mx-auto mb-4"></div>
+                    <p>수업 자료를 불러오는 중입니다...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. Assessment -->
+        <div id="tab-assess" class="section-content">
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <!-- Linked to actual quiz.html -->
                 <div onclick="location.href='quiz.html'" class="group bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:border-blue-500 hover:shadow-md cursor-pointer flex flex-col justify-between transition-all h-full">
@@ -85,7 +97,7 @@
             </div>
         </div>
 
-        <!-- 2. Score -->
+        <!-- 3. Score -->
         <div id="tab-score" class="section-content">
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <!-- Linked to mark-exam.html -->
@@ -114,17 +126,6 @@
                         <h3 class="font-bold text-xl text-gray-900 mb-1 group-hover:text-green-700">나의 성적표</h3>
                         <p class="text-sm text-gray-500 leading-relaxed word-keep">수행평가와 지필평가를 합산한 최종 성적을 관리하세요.</p>
                     </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 3. Lesson (Hierarchical) -->
-        <div id="tab-lesson" class="section-content">
-            <div id="lesson-container" class="space-y-4 max-w-4xl mx-auto">
-                <!-- Dynamically populated -->
-                <div class="py-20 text-center text-gray-400">
-                    <div class="loader-spinner mx-auto mb-4"></div>
-                    <p>수업 자료를 불러오는 중입니다...</p>
                 </div>
             </div>
         </div>
