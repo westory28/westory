@@ -89,7 +89,7 @@
                         <div class="text-xs text-gray-500 font-bold mb-1" id="selected-path"></div>
                         <div class="flex items-center gap-2">
                             <h2 class="text-xl font-bold text-gray-800" id="selected-title">-</h2>
-                            <!-- Settings Button next to Title -->
+                            <!-- Settings Button -->
                             <button onclick="app.openSettingsModal()" class="text-gray-400 hover:text-blue-600 transition p-1" title="평가 설정 (시간, 재응시 등)">
                                 <i class="fas fa-cog"></i>
                             </button>
@@ -107,10 +107,24 @@
                     </div>
                 </div>
 
-                <!-- Sub Tabs -->
+                <!-- 1. Normal Mode: Sub Tabs -->
                 <div class="bg-white shrink-0 flex border-b border-gray-200 px-4 pt-2" id="sub-tabs">
                     <button onclick="app.setSubTab('diagnostic')" id="sub-btn-diagnostic" class="py-2 px-4 font-bold text-sm border-b-2 border-blue-500 text-blue-600">진단평가</button>
                     <button onclick="app.setSubTab('formative')" id="sub-btn-formative" class="py-2 px-4 font-bold text-sm border-b-2 border-transparent text-gray-400 hover:text-gray-600">형성평가</button>
+                </div>
+
+                <!-- 2. Exam Prep Mode: Cascading Filters -->
+                <div class="bg-blue-50 shrink-0 border-b border-blue-100 px-4 py-3 hidden" id="ep-filter-container">
+                    <div class="flex items-center gap-2 text-sm">
+                        <i class="fas fa-filter text-blue-500"></i>
+                        <span class="font-bold text-blue-800 mr-1">단원 필터:</span>
+                        <select id="ep-filter-big" onchange="app.updateEpSelects('filter', 'big')" class="border border-blue-200 rounded px-2 py-1 text-xs w-28 bg-white focus:outline-none focus:border-blue-500"><option value="">대단원 전체</option></select>
+                        <i class="fas fa-chevron-right text-blue-300 text-xs"></i>
+                        <select id="ep-filter-mid" onchange="app.updateEpSelects('filter', 'mid')" class="border border-blue-200 rounded px-2 py-1 text-xs w-28 bg-white focus:outline-none focus:border-blue-500"><option value="">중단원 전체</option></select>
+                        <i class="fas fa-chevron-right text-blue-300 text-xs"></i>
+                        <select id="ep-filter-small" onchange="app.updateEpSelects('filter', 'small')" class="border border-blue-200 rounded px-2 py-1 text-xs w-28 bg-white focus:outline-none focus:border-blue-500"><option value="">소단원 전체</option></select>
+                        <button onclick="app.resetEpFilters()" class="ml-auto text-xs text-blue-400 hover:text-blue-600"><i class="fas fa-sync-alt"></i></button>
+                    </div>
                 </div>
 
                 <!-- Questions List -->
@@ -118,7 +132,7 @@
                     <div id="q-list" class="space-y-3"></div>
                     
                     <!-- Add Form Area -->
-                    <div class="mt-8 bg-white p-5 rounded-xl border-2 border-dashed border-gray-300">
+                    <div class="mt-8 bg-white p-5 rounded-xl border-2 border-dashed border-gray-300 relative">
                         <h3 class="font-bold text-gray-700 mb-4 flex items-center"><i class="fas fa-plus-circle text-blue-500 mr-2"></i> 새 문제 추가</h3>
                         <div class="space-y-3">
                             <div class="grid grid-cols-2 gap-3">
@@ -128,12 +142,25 @@
                                     <option value="word">단답형</option>
                                     <option value="order">순서나열</option>
                                 </select>
+                                
+                                <!-- Normal Mode: Single Subunit Select -->
                                 <select id="new-q-subunit" class="border p-2 rounded text-sm bg-gray-50">
                                     <option value="">소단원 (전체)</option>
                                 </select>
                             </div>
+
+                            <!-- Exam Prep Mode: Cascading Selects for Assignment -->
+                            <div id="ep-add-container" class="hidden bg-blue-50 p-2 rounded border border-blue-100">
+                                <div class="text-xs font-bold text-blue-600 mb-1 flex items-center"><i class="fas fa-tag mr-1"></i> 문제 출처 단원 지정</div>
+                                <div class="grid grid-cols-3 gap-2">
+                                    <select id="ep-add-big" onchange="app.updateEpSelects('add', 'big')" class="border border-blue-200 rounded p-1.5 text-xs bg-white"><option value="">대단원 선택</option></select>
+                                    <select id="ep-add-mid" onchange="app.updateEpSelects('add', 'mid')" class="border border-blue-200 rounded p-1.5 text-xs bg-white"><option value="">중단원 선택</option></select>
+                                    <select id="ep-add-small" class="border border-blue-200 rounded p-1.5 text-xs bg-white"><option value="">소단원 선택</option></select>
+                                </div>
+                            </div>
+
                             <input type="text" id="new-q-text" placeholder="문제 내용 입력" class="w-full border p-2 rounded text-sm">
-                            <!-- Image Input -->
+                            
                             <div class="flex items-center gap-2">
                                 <label class="flex items-center gap-2 text-xs font-bold text-gray-500 cursor-pointer hover:text-blue-600">
                                     <i class="fas fa-image text-lg"></i> 이미지 첨부
@@ -147,7 +174,6 @@
                             <input type="text" id="new-q-answer" placeholder="정답" class="w-full border p-2 rounded text-sm font-bold text-blue-600">
                             <textarea id="new-q-exp" placeholder="해설 (선택)" class="w-full border p-2 rounded text-sm h-16 resize-none"></textarea>
                             
-                            <!-- Add/Preview Buttons -->
                             <div class="grid grid-cols-2 gap-2 mt-2">
                                 <button onclick="app.previewNewQuestion()" class="bg-white border border-gray-300 text-gray-700 font-bold py-2 rounded hover:bg-gray-50 transition">
                                     <i class="fas fa-eye mr-2"></i>미리보기
@@ -228,12 +254,10 @@
         </div>
     </div>
 
-    <!-- Edit Modal (Existing logic) -->
-    <!-- ... Omitted for brevity, keep existing Edit Modal ... -->
+    <!-- Edit Modal -->
     <div id="edit-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center">
         <div class="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm" onclick="app.closeEditModal()"></div>
         <div class="bg-white rounded-xl shadow-2xl z-10 w-full max-w-2xl p-6 mx-4 relative flex flex-col max-h-[90vh]">
-            <!-- Edit Form Fields... -->
             <div class="flex justify-between items-center mb-4 border-b pb-3"><h3 class="font-bold text-lg text-gray-800"><i class="fas fa-edit text-blue-500 mr-2"></i>문제 수정</h3><button onclick="app.closeEditModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button></div>
             <div class="overflow-y-auto flex-1 space-y-4 pr-2">
                 <input type="hidden" id="edit-id"><div class="grid grid-cols-2 gap-4"><div><label class="block text-xs font-bold text-gray-500 mb-1">분류</label><select id="edit-category" class="w-full border p-2 rounded text-sm bg-gray-50 font-bold"><option value="diagnostic">진단평가</option><option value="formative">형성평가</option><option value="exam_prep">지필평가 대비</option></select></div><div><label class="block text-xs font-bold text-gray-500 mb-1">유형</label><select id="edit-type" class="w-full border p-2 rounded text-sm bg-gray-50"><option value="choice">객관식</option><option value="ox">O/X</option><option value="word">단답형</option><option value="order">순서나열</option></select></div></div><div class="bg-gray-50 p-3 rounded border border-gray-200"><label class="block text-xs font-bold text-gray-500 mb-2">단원 이동</label><div class="grid grid-cols-2 gap-2"><select id="edit-unit" onchange="app.updateEditSubUnits()" class="w-full border p-2 rounded text-sm"></select><select id="edit-subunit" class="w-full border p-2 rounded text-sm"></select></div></div><div><label class="block text-xs font-bold text-gray-500 mb-1">문제 내용</label><input type="text" id="edit-question" class="w-full border p-2 rounded text-sm font-bold"></div><div><div class="flex items-center gap-2 mb-2"><label class="flex items-center gap-2 text-xs font-bold text-gray-500 cursor-pointer hover:text-blue-600 bg-gray-100 px-3 py-1 rounded"><i class="fas fa-image"></i> 이미지 변경<input type="file" id="edit-image" class="hidden" accept="image/*" onchange="app.handleImageSelect(this, 'edit-preview')"></label><button onclick="app.removeEditImage()" class="text-xs text-red-500 hover:text-red-700 font-bold px-2">삭제</button></div><img id="edit-preview" class="hidden h-24 rounded border border-gray-200 object-contain bg-white p-1"></div><div><label class="block text-xs font-bold text-gray-500 mb-1">보기 (콤마 구분)</label><input type="text" id="edit-options" class="w-full border p-2 rounded text-sm"></div><div><label class="block text-xs font-bold text-gray-500 mb-1">정답</label><input type="text" id="edit-answer" class="w-full border p-2 rounded text-sm font-bold text-blue-600 bg-blue-50"></div><div><label class="block text-xs font-bold text-gray-500 mb-1">해설</label><textarea id="edit-explanation" class="w-full border p-2 rounded text-sm h-20 resize-none"></textarea></div>
@@ -254,6 +278,7 @@
             selectedCategory: 'diagnostic', 
             assessmentSettings: {},
             filters: { big: '', mid: '', small: '', type: '' },
+            examPrepFilters: { big: '', mid: '', small: '' },
             sort: { key: 'id', order: 'desc' },
             tempImage: null,
 
@@ -263,7 +288,6 @@
                 this.loadSettings();
             },
 
-            // ... (Basic tabs/loading logic same as before) ...
             setTab: function(tab) {
                 document.querySelectorAll('.tab-btn-base').forEach(b => b.classList.remove('tab-btn-active'));
                 document.getElementById('btn-tab-'+tab).classList.add('tab-btn-active');
@@ -330,26 +354,114 @@
                 const node = this.selectedNode;
                 document.getElementById('selected-title').innerText = node.title;
                 document.getElementById('selected-path').innerText = node.type === 'special' ? '특별 학습' : `${node.parentTitle} > ${node.title}`;
+                
                 const subTabs = document.getElementById('sub-tabs');
+                const epFilters = document.getElementById('ep-filter-container');
+                const epAddContainer = document.getElementById('ep-add-container');
+                const normalSubUnitSelect = document.getElementById('new-q-subunit');
+
                 if (node.id === 'exam_prep') {
+                    // Exam Prep Mode
                     subTabs.classList.add('hidden');
+                    epFilters.classList.remove('hidden');
+                    
+                    // Show Cascading Selects in Add Form
+                    epAddContainer.classList.remove('hidden');
+                    normalSubUnitSelect.classList.add('hidden');
+                    
                     this.selectedCategory = 'exam_prep';
+                    this.updateEpSelects('filter', 'init'); // Init filters
+                    this.updateEpSelects('add', 'init');    // Init add form
                 } else {
+                    // Normal Mode
                     subTabs.classList.remove('hidden');
+                    epFilters.classList.add('hidden');
+                    
+                    // Show Single Select in Add Form
+                    epAddContainer.classList.add('hidden');
+                    normalSubUnitSelect.classList.remove('hidden');
+                    
                     this.setSubTab('diagnostic'); 
-                }
-                const subSel = document.getElementById('new-q-subunit');
-                subSel.innerHTML = '<option value="">소단원 (전체)</option>';
-                if(node.children) {
-                    node.children.forEach(small => {
-                        const opt = document.createElement('option');
-                        opt.value = small.id;
-                        opt.innerText = small.title;
-                        subSel.appendChild(opt);
-                    });
+                    
+                    // Populate Normal SubUnit Select
+                    normalSubUnitSelect.innerHTML = '<option value="">소단원 (전체)</option>';
+                    if(node.children) {
+                        node.children.forEach(small => {
+                            const opt = document.createElement('option');
+                            opt.value = small.id;
+                            opt.innerText = small.title;
+                            normalSubUnitSelect.appendChild(opt);
+                        });
+                    }
                 }
                 this.renderQuestions();
                 this.updateSettingsUI();
+            },
+
+            // --- Cascading Dropdown Logic for Exam Prep ---
+            updateEpSelects: function(prefix, level) {
+                // prefix: 'filter' or 'add'
+                // level: 'init', 'big', 'mid'
+                const idBig = prefix === 'filter' ? 'ep-filter-big' : 'ep-add-big';
+                const idMid = prefix === 'filter' ? 'ep-filter-mid' : 'ep-add-mid';
+                const idSmall = prefix === 'filter' ? 'ep-filter-small' : 'ep-add-small';
+                
+                const elBig = document.getElementById(idBig);
+                const elMid = document.getElementById(idMid);
+                const elSmall = document.getElementById(idSmall);
+
+                if (level === 'init') {
+                    // Populate Big Units
+                    elBig.innerHTML = `<option value="">${prefix==='filter'?'대단원 전체':'대단원 선택'}</option>`;
+                    this.treeData.forEach(big => {
+                        const opt = document.createElement('option');
+                        opt.value = big.id; opt.innerText = big.title;
+                        elBig.appendChild(opt);
+                    });
+                    elMid.innerHTML = `<option value="">${prefix==='filter'?'중단원 전체':'중단원 선택'}</option>`;
+                    elSmall.innerHTML = `<option value="">${prefix==='filter'?'소단원 전체':'소단원 선택'}</option>`;
+                } else if (level === 'big') {
+                    // Populate Mid based on Big
+                    elMid.innerHTML = `<option value="">${prefix==='filter'?'중단원 전체':'중단원 선택'}</option>`;
+                    elSmall.innerHTML = `<option value="">${prefix==='filter'?'소단원 전체':'소단원 선택'}</option>`;
+                    const selBigId = elBig.value;
+                    const bigNode = this.treeData.find(b => b.id === selBigId);
+                    if(bigNode && bigNode.children) {
+                        bigNode.children.forEach(mid => {
+                            const opt = document.createElement('option');
+                            opt.value = mid.id; opt.innerText = mid.title;
+                            elMid.appendChild(opt);
+                        });
+                    }
+                } else if (level === 'mid') {
+                    // Populate Small based on Mid
+                    elSmall.innerHTML = `<option value="">${prefix==='filter'?'소단원 전체':'소단원 선택'}</option>`;
+                    const selBigId = elBig.value;
+                    const selMidId = elMid.value;
+                    const bigNode = this.treeData.find(b => b.id === selBigId);
+                    if(bigNode && bigNode.children) {
+                        const midNode = bigNode.children.find(m => m.id === selMidId);
+                        if(midNode && midNode.children) {
+                            midNode.children.forEach(small => {
+                                const opt = document.createElement('option');
+                                opt.value = small.id; opt.innerText = small.title;
+                                elSmall.appendChild(opt);
+                            });
+                        }
+                    }
+                }
+
+                if (prefix === 'filter') {
+                    this.examPrepFilters.big = elBig.value;
+                    this.examPrepFilters.mid = elMid.value;
+                    this.examPrepFilters.small = elSmall.value;
+                    this.renderQuestions();
+                }
+            },
+            resetEpFilters: function() {
+                this.updateEpSelects('filter', 'init');
+                this.examPrepFilters = { big: '', mid: '', small: '' };
+                this.renderQuestions();
             },
 
             // --- Settings Logic (Modal) ---
@@ -357,7 +469,7 @@
                 if(!this.selectedNode) return;
                 document.getElementById('settings-modal').classList.remove('hidden');
                 document.getElementById('settings-modal').classList.add('flex');
-                this.updateSettingsUI(); // Fill inputs
+                this.updateSettingsUI(); 
             },
             closeSettingsModal: function() {
                 document.getElementById('settings-modal').classList.add('hidden');
@@ -368,14 +480,12 @@
                 const key = `${this.selectedNode.id}_${this.selectedCategory}`;
                 const config = this.assessmentSettings[key] || {};
                 
-                // Header Toggle (Immediate save)
                 const isActive = config.active === true;
                 document.getElementById('toggle-active').checked = isActive;
                 const text = document.getElementById('toggle-text');
                 text.innerText = isActive ? '학생 공개 중' : '학생 비공개';
                 text.className = isActive ? 'ml-2 text-sm font-bold text-green-600' : 'ml-2 text-sm font-bold text-gray-400';
 
-                // Modal Inputs
                 document.getElementById('setting-time').value = config.timeLimit || 60;
                 document.getElementById('setting-retake').checked = config.allowRetake !== false;
                 document.getElementById('setting-cooldown').value = config.cooldown || 0;
@@ -414,47 +524,22 @@
                 const text = document.getElementById('new-q-text').value;
                 const options = document.getElementById('new-q-options').value;
                 const ans = document.getElementById('new-q-answer').value;
-                
                 if(!text) { alert("문제 내용을 입력해주세요."); return; }
-
-                const mockQ = {
-                    id: 'temp', type: type, question: text, answer: ans,
-                    options: options ? options.split(',').map(s=>s.trim()) : [],
-                    image: this.tempImage
-                };
-                
+                const mockQ = { id: 'temp', type: type, question: text, answer: ans, options: options ? options.split(',').map(s=>s.trim()) : [], image: this.tempImage };
                 this.showPreviewModal(mockQ);
             },
-
             showPreviewModal: function(q) {
                 const container = document.getElementById('preview-content');
-                let html = `
-                    <div class="mb-4">
-                        <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">${q.type}</span>
-                        ${q.image ? `<img src="${q.image}" class="preview-img">` : ''}
-                        <h4 class="font-bold text-lg mt-2 text-gray-800">${q.question}</h4>
-                    </div>
-                `;
-                if(q.type === 'choice') {
-                    html += `<div class="space-y-2">${(q.options||[]).map(opt => `<div class="preview-choice" onclick="app.simulateAnswer(this, '${opt}', '${q.answer}')">${opt}</div>`).join('')}</div>`;
-                } else if(q.type === 'ox') {
-                    html += `<div class="flex gap-2"><button class="flex-1 py-4 border-2 rounded-lg font-bold text-xl hover:bg-blue-50 border-blue-200 text-blue-600" onclick="app.simulateAnswer(this, 'O', '${q.answer}')">O</button><button class="flex-1 py-4 border-2 rounded-lg font-bold text-xl hover:bg-red-50 border-red-200 text-red-600" onclick="app.simulateAnswer(this, 'X', '${q.answer}')">X</button></div>`;
-                } else {
-                    html += `<div class="flex gap-2"><input type="text" class="border p-2 rounded w-full" placeholder="정답 입력"><button class="bg-blue-600 text-white px-4 rounded" onclick="alert('예시 정답: ${q.answer}')">확인</button></div>`;
-                }
+                let html = `<div class="mb-4"><span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">${q.type}</span>${q.image ? `<img src="${q.image}" class="preview-img">` : ''}<h4 class="font-bold text-lg mt-2 text-gray-800">${q.question}</h4></div>`;
+                if(q.type === 'choice') { html += `<div class="space-y-2">${(q.options||[]).map(opt => `<div class="preview-choice" onclick="app.simulateAnswer(this, '${opt}', '${q.answer}')">${opt}</div>`).join('')}</div>`; } 
+                else if(q.type === 'ox') { html += `<div class="flex gap-2"><button class="flex-1 py-4 border-2 rounded-lg font-bold text-xl hover:bg-blue-50 border-blue-200 text-blue-600" onclick="app.simulateAnswer(this, 'O', '${q.answer}')">O</button><button class="flex-1 py-4 border-2 rounded-lg font-bold text-xl hover:bg-red-50 border-red-200 text-red-600" onclick="app.simulateAnswer(this, 'X', '${q.answer}')">X</button></div>`; } 
+                else { html += `<div class="flex gap-2"><input type="text" class="border p-2 rounded w-full" placeholder="정답 입력"><button class="bg-blue-600 text-white px-4 rounded" onclick="alert('예시 정답: ${q.answer}')">확인</button></div>`; }
                 container.innerHTML = html;
-                document.getElementById('preview-modal').classList.remove('hidden');
-                document.getElementById('preview-modal').classList.add('flex');
+                document.getElementById('preview-modal').classList.remove('hidden'); document.getElementById('preview-modal').classList.add('flex');
             },
-            simulateAnswer: function(el, selected, correct) {
-                if(el.parentNode) Array.from(el.parentNode.children).forEach(child => { child.classList.remove('correct', 'wrong'); child.style.opacity = '0.5'; });
-                el.style.opacity = '1';
-                if(String(selected) === String(correct)) el.classList.add('correct'); else el.classList.add('wrong');
-            },
+            simulateAnswer: function(el, selected, correct) { if(el.parentNode) Array.from(el.parentNode.children).forEach(child => { child.classList.remove('correct', 'wrong'); child.style.opacity = '0.5'; }); el.style.opacity = '1'; if(String(selected) === String(correct)) el.classList.add('correct'); else el.classList.add('wrong'); },
             previewQuestion: function(id) { const q = this.questions.find(x => x.id === id); if(q) this.showPreviewModal(q); },
 
-            // --- Existing functions (Image, Add, Delete, Edit, Bank, Logs) ---
-            // ... (These remain largely the same, ensuring `handleImageSelect` works for both forms)
             handleImageSelect: function(input, previewId) {
                 const file = input.files[0];
                 if(file) {
@@ -469,15 +554,33 @@
                 }
             },
             removeEditImage: function() { this.tempImage = null; document.getElementById('edit-preview').classList.add('hidden'); },
+            
             addQuestion: async function() {
                 if(!this.selectedNode) return;
                 const text = document.getElementById('new-q-text').value;
                 const ans = document.getElementById('new-q-answer').value;
                 if(!text || !ans) { alert("문제와 정답은 필수입니다."); return; }
                 const newId = Date.now();
+                
+                let subUnitId = null;
+                let refUnitIds = {}; // For Exam Prep tracking
+
+                if (this.selectedNode.id === 'exam_prep') {
+                    // Get values from cascading dropdowns
+                    const b = document.getElementById('ep-add-big').value;
+                    const m = document.getElementById('ep-add-mid').value;
+                    const s = document.getElementById('ep-add-small').value;
+                    refUnitIds = { refBig: b, refMid: m, refSmall: s };
+                    // Optionally set subUnitId to the most specific unit selected, if needed for simple filtering later
+                    subUnitId = s || m || b || null; 
+                } else {
+                    subUnitId = document.getElementById('new-q-subunit').value || null;
+                }
+
                 const qData = {
                     id: newId, unitId: this.selectedNode.id, category: this.selectedCategory,
-                    subUnitId: document.getElementById('new-q-subunit').value || null,
+                    subUnitId: subUnitId,
+                    ...refUnitIds, // Spread exam prep refs
                     type: document.getElementById('new-q-type').value, question: text,
                     image: this.tempImage || null, answer: ans,
                     options: document.getElementById('new-q-options').value ? document.getElementById('new-q-options').value.split(',').map(s=>s.trim()) : [],
@@ -492,15 +595,25 @@
                 this.questions.push(qData); this.renderQuestions();
                 if(!document.getElementById('tab-bank').classList.contains('hidden')) this.renderBank();
             },
+            
             deleteQuestion: async function(id) { if(confirm("삭제?")) { await window.getCollection('quiz_questions').doc(String(id)).delete(); this.questions = this.questions.filter(q => String(q.id) !== String(id)); this.renderQuestions(); if(!document.getElementById('tab-bank').classList.contains('hidden')) this.renderBank(); } },
-            // ... (Edit, Bank, Log functions omitted as they are standard) ...
-            openEditModal: function(id) { /* ... */ const q = this.questions.find(x=>x.id===id); if(!q)return; document.getElementById('edit-id').value=id; document.getElementById('edit-question').value=q.question; document.getElementById('edit-answer').value=q.answer; document.getElementById('edit-modal').classList.remove('hidden'); document.getElementById('edit-modal').classList.add('flex'); },
+            // ... (Edit, Bank, Log functions) ...
+            openEditModal: function(id) { const q = this.questions.find(x=>x.id===id); if(!q)return; document.getElementById('edit-id').value=id; document.getElementById('edit-question').value=q.question; document.getElementById('edit-answer').value=q.answer; document.getElementById('edit-modal').classList.remove('hidden'); document.getElementById('edit-modal').classList.add('flex'); },
             closeEditModal: function() { document.getElementById('edit-modal').classList.add('hidden'); document.getElementById('edit-modal').classList.remove('flex'); },
-            saveEditQuestion: async function() { /* ... */ this.closeEditModal(); },
-            // ...
+            saveEditQuestion: async function() { this.closeEditModal(); },
+            
             renderQuestions: function() {
                 const list = document.getElementById('q-list');
-                const filtered = this.questions.filter(q => q.unitId === this.selectedNode.id && q.category === this.selectedCategory);
+                
+                let filtered = this.questions.filter(q => q.unitId === this.selectedNode.id && q.category === this.selectedCategory);
+                
+                // Exam Prep Filtering Logic
+                if (this.selectedNode.id === 'exam_prep') {
+                    if (this.examPrepFilters.big) filtered = filtered.filter(q => q.refBig === this.examPrepFilters.big);
+                    if (this.examPrepFilters.mid) filtered = filtered.filter(q => q.refMid === this.examPrepFilters.mid);
+                    if (this.examPrepFilters.small) filtered = filtered.filter(q => q.refSmall === this.examPrepFilters.small);
+                }
+
                 if(filtered.length === 0) { list.innerHTML = '<div class="text-center py-10 text-gray-400 border-2 border-dashed border-gray-200 rounded-lg">등록된 문제가 없습니다.</div>'; } else {
                     list.innerHTML = filtered.map((q, idx) => `
                         <div class="bg-white p-4 rounded-lg border border-gray-200 hover:border-blue-300 transition relative group">
@@ -509,7 +622,8 @@
                         </div>`).join('');
                 }
             },
-            // ... (Bank & Log stubs to prevent errors if not fully pasted) ...
+            
+            // ... (Bank & Log stubs) ...
             loadByClass: function(c){}, filterBank: function(){}, sortBank: function(){}, renderBank: function(){}
         };
         document.addEventListener('auth-ready', () => app.init());
