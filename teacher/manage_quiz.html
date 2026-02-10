@@ -50,6 +50,7 @@
                             <option value="1">1반</option><option value="2">2반</option><option value="3">3반</option>
                             <option value="4">4반</option><option value="5">5반</option><option value="6">6반</option>
                             <option value="7">7반</option><option value="8">8반</option><option value="9">9반</option>
+                            <option value="10">10반</option>
                         </select>
                         <button onclick="app.loadByClass(document.getElementById('select-class-trigger').value)" class="bg-gray-100 p-2 rounded hover:bg-gray-200 text-gray-600" title="새로고침"><i class="fas fa-sync-alt"></i></button>
                         <button onclick="app.deleteSelectedLogs()" class="bg-white border border-red-200 text-red-600 px-3 py-2 rounded text-sm font-bold hover:bg-red-50 transition">선택 삭제</button>
@@ -102,7 +103,7 @@
                                 <th class="p-3 bg-gray-50 cursor-pointer hover:bg-gray-100" onclick="app.sortBank('question')">문제 내용 <i id="sort-icon-question" class="fas fa-sort sort-icon"></i></th>
                                 <th class="p-3 bg-gray-50 w-24 cursor-pointer hover:bg-gray-100" onclick="app.sortBank('type')">유형 <i id="sort-icon-type" class="fas fa-sort sort-icon"></i></th>
                                 <th class="p-3 bg-gray-50 w-20 text-center">정답</th>
-                                <th class="p-3 bg-gray-50 w-24 text-center">정답률</th>
+                                <th class="p-3 bg-gray-50 w-24 text-center cursor-pointer hover:bg-gray-100" onclick="app.sortBank('rate')">정답률 <i id="sort-icon-rate" class="fas fa-sort sort-icon"></i></th>
                             </tr>
                         </thead>
                         <tbody id="bank-body" class="divide-y divide-gray-100 bg-white"></tbody>
@@ -147,6 +148,18 @@
                         </div>
 
                         <div>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">이미지 (선택)</label>
+                            <div class="flex items-center gap-2">
+                                <input type="file" id="new-q-image-file" accept="image/*" class="w-full p-2 border rounded-lg text-sm bg-gray-50 file:mr-4 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-blue-50 file:text-blue-700">
+                                <div id="image-preview-area" class="hidden flex items-center">
+                                    <span class="text-xs text-blue-600 font-bold px-2 py-1 bg-blue-50 rounded"><i class="fas fa-check mr-1"></i>등록됨</span>
+                                    <button onclick="app.removeImage()" class="text-gray-400 hover:text-red-500 ml-2" title="이미지 삭제"><i class="fas fa-times"></i></button>
+                                </div>
+                                <input type="hidden" id="current-image-data">
+                            </div>
+                        </div>
+
+                        <div>
                             <label class="block text-xs font-bold text-gray-500 mb-1">문제 내용</label>
                             <textarea id="new-q-text" class="w-full p-3 border rounded-lg text-sm h-32 focus:ring-2 focus:ring-blue-500 outline-none resize-none" placeholder="질문을 입력하세요"></textarea>
                         </div>
@@ -161,9 +174,9 @@
                                 <label class="block text-xs font-bold text-gray-500 mb-1">정답</label>
                                 <input type="text" id="new-q-answer" class="w-full p-3 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none font-bold text-blue-600" placeholder="정답 입력">
                             </div>
-                            <div>
+                            <div class="col-span-1 md:col-span-2">
                                 <label class="block text-xs font-bold text-gray-500 mb-1">해설 (선택)</label>
-                                <input type="text" id="new-q-exp" class="w-full p-3 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="해설 입력">
+                                <textarea id="new-q-exp" class="w-full p-3 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none h-24" placeholder="해설을 입력하세요"></textarea>
                             </div>
                         </div>
 
@@ -175,7 +188,10 @@
                 
                 <!-- Excel Upload -->
                 <div class="bg-green-50 p-6 rounded-xl border border-green-200 h-fit">
-                    <h3 class="font-bold text-lg mb-4 text-green-800 border-b border-green-200 pb-2">📗 엑셀 대량 업로드</h3>
+                    <div class="flex justify-between items-center mb-4 border-b border-green-200 pb-2">
+                        <h3 class="font-bold text-lg text-green-800">📗 엑셀 대량 업로드</h3>
+                        <button onclick="app.downloadTemplate()" class="text-xs bg-white text-green-700 border border-green-300 px-2 py-1 rounded hover:bg-green-50 shadow-sm transition"><i class="fas fa-download mr-1"></i>양식 다운로드</button>
+                    </div>
                     <div class="mb-4 text-xs text-green-700 leading-relaxed">
                         <p class="mb-2"><strong>[필수 컬럼]</strong><br>unit, type, question, options, answer, explanation</p>
                         <p>엑셀 파일(.xlsx)을 드래그하거나 선택하여 한 번에 등록하세요.</p>
@@ -217,7 +233,7 @@
                     }
                 });
 
-                // Clear form if switching to 'add' without edit intent (simple heuristic)
+                // Clear form if switching to 'add' without edit intent
                 if (tabName === 'add' && !document.getElementById('edit-q-id').value) {
                     this.clearForm();
                 }
@@ -279,8 +295,15 @@
                 const order = this.state.sortOrder === 'asc' ? 1 : -1;
                 list.sort((a, b) => {
                     let va = a[field], vb = b[field];
-                    if (typeof va === 'string') va = va.toLowerCase();
-                    if (typeof vb === 'string') vb = vb.toLowerCase();
+                    
+                    if (field === 'rate') {
+                        va = a.stat_total ? (a.stat_correct / a.stat_total) : 0;
+                        vb = b.stat_total ? (b.stat_correct / b.stat_total) : 0;
+                    } else {
+                        if (typeof va === 'string') va = va.toLowerCase();
+                        if (typeof vb === 'string') vb = vb.toLowerCase();
+                    }
+                    
                     if (va < vb) return -1 * order;
                     if (va > vb) return 1 * order;
                     return 0;
@@ -302,9 +325,20 @@
                         <td class="p-3 text-sm font-medium text-gray-800 truncate max-w-xs group-hover:text-blue-700">${q.question}</td>
                         <td class="p-3 text-xs"><span class="bg-gray-100 text-gray-600 px-2 py-1 rounded border">${q.type}</span></td>
                         <td class="p-3 text-xs font-bold text-center text-blue-600">${q.answer}</td>
-                        <td class="p-3 text-xs text-gray-500 text-center">${q.stat_total ? Math.round((q.stat_correct/q.stat_total)*100)+'%' : '-'}</td>
+                        <td class="p-3 text-xs text-gray-500 text-center font-mono">${q.stat_total ? Math.round((q.stat_correct/q.stat_total)*100)+'%' : '-'}</td>
                     </tr>
                 `).join('');
+            },
+
+            downloadTemplate: function() {
+                const wb = XLSX.utils.book_new();
+                const ws_data = [
+                    ['unit', 'type', 'question', 'options', 'answer', 'explanation'], // Header
+                    ['I. 고대', 'choice', '다음 중 고조선의 법이 아닌 것은?', '살인자는 사형, 도둑질은 노비, 상해는 곡식, 도둑질은 사형', '4', '도둑질한 자는 노비로 삼는다.'] // Sample
+                ];
+                const ws = XLSX.utils.aoa_to_sheet(ws_data);
+                XLSX.utils.book_append_sheet(wb, ws, "Template");
+                XLSX.writeFile(wb, "question_template.xlsx");
             },
 
             editQuestion: function(id) {
@@ -319,12 +353,27 @@
                 document.getElementById('new-q-answer').value = q.answer;
                 document.getElementById('new-q-exp').value = q.explanation || '';
                 
+                // Image handling
+                document.getElementById('current-image-data').value = q.image || '';
+                document.getElementById('new-q-image-file').value = ''; 
+                if (q.image) {
+                    document.getElementById('image-preview-area').classList.remove('hidden');
+                } else {
+                    document.getElementById('image-preview-area').classList.add('hidden');
+                }
+
                 document.getElementById('form-title').innerHTML = `✏️ 문제 수정 (ID: ${q.id})`;
                 document.getElementById('btn-save-q').innerText = "수정사항 저장";
                 document.getElementById('btn-save-q').classList.remove('bg-blue-600');
                 document.getElementById('btn-save-q').classList.add('bg-indigo-600');
                 
                 this.setTab('add');
+            },
+
+            removeImage: function() {
+                document.getElementById('current-image-data').value = '';
+                document.getElementById('new-q-image-file').value = '';
+                document.getElementById('image-preview-area').classList.add('hidden');
             },
 
             clearForm: function() {
@@ -334,19 +383,43 @@
                 document.getElementById('new-q-options').value = '';
                 document.getElementById('new-q-answer').value = '';
                 document.getElementById('new-q-exp').value = '';
+                
+                this.removeImage();
+
                 document.getElementById('btn-save-q').innerText = "등록하기";
                 document.getElementById('btn-save-q').classList.add('bg-blue-600');
                 document.getElementById('btn-save-q').classList.remove('bg-indigo-600');
             },
 
-            saveCustomQuestion: function() {
+            readFileAsDataURL: function(file) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                });
+            },
+
+            saveCustomQuestion: async function() {
                 const editId = document.getElementById('edit-q-id').value;
                 const isEdit = !!editId;
                 
-                // Calculate ID: if edit use existing, else max + 1
+                // Calculate ID
                 let id = isEdit ? parseInt(editId) : 1;
                 if (!isEdit && this.state.questions.length > 0) {
                     id = Math.max(...this.state.questions.map(q=>q.id)) + 1;
+                }
+
+                // Handle Image
+                let imageData = document.getElementById('current-image-data').value;
+                const fileInput = document.getElementById('new-q-image-file');
+                if (fileInput.files.length > 0) {
+                    try {
+                        imageData = await this.readFileAsDataURL(fileInput.files[0]);
+                    } catch(e) {
+                        alert("이미지 처리 중 오류 발생");
+                        return;
+                    }
                 }
                 
                 const data = {
@@ -356,14 +429,15 @@
                     question: document.getElementById('new-q-text').value,
                     options: document.getElementById('new-q-options').value.split(',').map(s=>s.trim()).filter(s=>s),
                     answer: document.getElementById('new-q-answer').value,
-                    explanation: document.getElementById('new-q-exp').value
+                    explanation: document.getElementById('new-q-exp').value,
+                    image: imageData || null
                 };
 
                 window.db.collection('quiz_questions').doc(String(id)).set(data).then(() => {
                     alert(isEdit ? '수정되었습니다.' : '등록되었습니다.');
                     this.clearForm();
                     this.loadQuestions();
-                    if(isEdit) this.setTab('bank'); // Return to bank after edit
+                    if(isEdit) this.setTab('bank'); 
                 }).catch(err => alert("저장 실패: " + err.message));
             },
 
