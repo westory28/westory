@@ -1,4 +1,5 @@
 
+
 // Menu Configurations
 const MENUS = {
     student: [
@@ -233,14 +234,41 @@ class AuthManager {
     // --- Global Settings Modal for Teacher ---
     injectSettingsModal() {
         if(document.getElementById('global-settings-modal')) return;
+
+        // Define global handlers for explicit HTML access
+        window.closeSystemSettings = () => {
+            const el = document.getElementById('global-settings-modal');
+            if(el) {
+                el.classList.add('hidden');
+                el.classList.remove('flex');
+            }
+        };
+
+        window.saveSystemSettings = async () => {
+            const newConfig = {
+                year: document.getElementById('global-config-year').value,
+                semester: document.getElementById('global-config-sem').value,
+                showQuiz: document.getElementById('global-toggle-quiz').checked,
+                showScore: document.getElementById('global-toggle-score').checked,
+                showLesson: document.getElementById('global-toggle-lesson').checked
+            };
+            
+            try {
+                await window.db.collection('site_settings').doc('config').set(newConfig, { merge: true });
+                alert("설정이 저장되었습니다. 페이지를 새로고침합니다.");
+                window.location.reload();
+            } catch (e) {
+                alert("설정 저장 실패: " + e.message);
+            }
+        };
         
         const modalHtml = `
             <div id="global-settings-modal" class="fixed inset-0 z-[9999] hidden flex items-center justify-center">
-                <div class="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm" onclick="AuthManager.closeSettingsModal()"></div>
+                <div class="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm" onclick="closeSystemSettings()"></div>
                 <div class="bg-white rounded-xl shadow-2xl z-10 w-full max-w-md p-6 mx-4 transform transition-all">
                     <div class="flex justify-between items-center mb-6 pb-4 border-b">
                         <h2 class="text-xl font-bold text-gray-900"><i class="fas fa-cog mr-2"></i>시스템 설정</h2>
-                        <button onclick="AuthManager.closeSettingsModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+                        <button onclick="closeSystemSettings()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
                     </div>
                     <div class="space-y-6">
                         <div class="grid grid-cols-2 gap-4">
@@ -281,37 +309,13 @@ class AuthManager {
                             </div>
                         </div>
                     </div>
-                    <button onclick="AuthManager.saveGlobalSettings()" class="w-full mt-8 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition shadow-lg">
+                    <button onclick="saveSystemSettings()" class="w-full mt-8 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition shadow-lg">
                         설정 저장
                     </button>
                 </div>
             </div>
         `;
         document.body.insertAdjacentHTML('beforeend', modalHtml);
-        
-        // Static Accessor
-        window.AuthManager.closeSettingsModal = () => {
-            document.getElementById('global-settings-modal').classList.add('hidden');
-            document.getElementById('global-settings-modal').classList.remove('flex');
-        };
-        
-        window.AuthManager.saveGlobalSettings = async () => {
-            const newConfig = {
-                year: document.getElementById('global-config-year').value,
-                semester: document.getElementById('global-config-sem').value,
-                showQuiz: document.getElementById('global-toggle-quiz').checked,
-                showScore: document.getElementById('global-toggle-score').checked,
-                showLesson: document.getElementById('global-toggle-lesson').checked
-            };
-            
-            try {
-                await window.db.collection('site_settings').doc('config').set(newConfig, { merge: true });
-                alert("설정이 저장되었습니다. 페이지를 새로고침합니다.");
-                window.location.reload();
-            } catch (e) {
-                alert("설정 저장 실패: " + e.message);
-            }
-        };
     }
 
     openSettingsModal() {
