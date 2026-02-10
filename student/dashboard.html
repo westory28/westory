@@ -129,9 +129,13 @@
         async function loadLessons() {
             const container = document.getElementById('lesson-container');
             try {
-                // Fallback Logic
+                // 1. Try Current Config Path
                 let treeDoc = await window.getCollection('curriculum').doc('tree').get();
-                if(!treeDoc.exists) treeDoc = await window.db.collection('curriculum').doc('tree').get();
+                
+                // 2. Fallback: Global (Legacy data)
+                if(!treeDoc.exists) {
+                    treeDoc = await window.db.collection('curriculum').doc('tree').get();
+                }
 
                 if(!treeDoc.exists || !treeDoc.data().tree) {
                     container.innerHTML = '<div class="text-center py-20 text-gray-400">등록된 수업 자료가 없습니다.</div>';

@@ -179,8 +179,10 @@
 
             loadTree: async function() {
                 try {
-                    // FALLBACK LOAD: Try semester path, then global
+                    // 1. Try Config Path
                     let doc = await window.getCollection('curriculum').doc('tree').get();
+                    
+                    // 2. Fallback: Global
                     if (!doc.exists) {
                         doc = await window.db.collection('curriculum').doc('tree').get();
                     }
@@ -351,9 +353,13 @@
                 document.getElementById('lesson-video').value = '';
                 this.quill.setContents([]);
                 try {
-                    // Fallback Load for Content
+                    // 1. Try Config Path
                     let snap = await window.getCollection('lessons').where('unitId', '==', unitId).limit(1).get();
-                    if(snap.empty) snap = await window.db.collection('lessons').where('unitId', '==', unitId).limit(1).get();
+                    
+                    // 2. Fallback: Global
+                    if(snap.empty) {
+                        snap = await window.db.collection('lessons').where('unitId', '==', unitId).limit(1).get();
+                    }
 
                     if (!snap.empty) {
                         const data = snap.docs[0].data();

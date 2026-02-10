@@ -158,10 +158,11 @@
         async function loadTree() {
             const treeContainer = document.getElementById('tree-root');
             try {
-                // FALLBACK LOGIC: Try new semester path first, then fall back to global
+                // 1. Try Current Config Path
                 let doc = await window.getCollection('curriculum').doc('tree').get();
+                
+                // 2. Fallback: Global (Legacy)
                 if (!doc.exists) {
-                    // Try global collection
                     doc = await window.db.collection('curriculum').doc('tree').get();
                 }
 
@@ -228,8 +229,10 @@
             document.getElementById('content-area').classList.add('hidden');
             
             try {
-                // Try Semester path first, then Global
+                // 1. Try Config Path
                 let snap = await window.getCollection('lessons').where('unitId', '==', unitId).limit(1).get();
+                
+                // 2. Fallback: Global
                 if(snap.empty) {
                     snap = await window.db.collection('lessons').where('unitId', '==', unitId).limit(1).get();
                 }
