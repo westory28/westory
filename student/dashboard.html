@@ -52,7 +52,7 @@
 
         <div class="tab-nav">
             <div class="tab-btn active" onclick="switchTab('lesson')"><i class="fas fa-book-reader mr-2"></i>수업자료</div>
-            <!-- Modified click handler to redirect -->
+            <!-- Assessment tab redirects -->
             <div class="tab-btn" onclick="location.href='quiz.html'"><i class="fas fa-gamepad mr-2"></i>평가</div>
             <div class="tab-btn" onclick="switchTab('score')"><i class="fas fa-chart-bar mr-2"></i>점수</div>
         </div>
@@ -136,7 +136,8 @@
                 }
                 const tree = treeDoc.data().tree;
                 let html = tree.map((unit, idx) => `
-                    <div class="accordion-item open" id="acc-${idx}">
+                    <!-- Removed 'open' class for collapsed state by default -->
+                    <div class="accordion-item" id="acc-${idx}">
                         <div class="accordion-header" onclick="toggleAccordion('acc-${idx}')">
                             <span>${unit.title}</span>
                             <i class="fas fa-chevron-down text-gray-400 transition-transform duration-200"></i>

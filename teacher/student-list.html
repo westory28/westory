@@ -17,7 +17,16 @@
     <style>
         .btn-bulk { transition: all 0.2s; }
         .btn-bulk:disabled { background-color: #f3f4f6; color: #9ca3af; border-color: #e5e7eb; cursor: not-allowed; }
-        .btn-bulk:not(:disabled):hover { transform: translateY(-1px); }
+        .btn-bulk:not(:disabled):hover { transform: translateY(-1px); shadow: md; }
+        /* Solid colors when active */
+        #btn-promote:not(:disabled) { background-color: #2563eb; color: white; border-color: #2563eb; }
+        #btn-promote:not(:disabled):hover { background-color: #1d4ed8; }
+        
+        #btn-move:not(:disabled) { background-color: #16a34a; color: white; border-color: #16a34a; }
+        #btn-move:not(:disabled):hover { background-color: #15803d; }
+        
+        #btn-delete:not(:disabled) { background-color: #dc2626; color: white; border-color: #dc2626; }
+        #btn-delete:not(:disabled):hover { background-color: #b91c1c; }
     </style>
 </head>
 <body class="bg-gray-50">
@@ -32,17 +41,17 @@
                     <h2 class="text-lg font-bold text-gray-800">
                         <i class="fas fa-users text-blue-500 mr-2"></i> 학생 명단 <span id="std-count" class="text-sm font-normal text-gray-500"></span>
                     </h2>
-                    <!-- Bulk Actions Toolbar (Always visible, state controlled via disabled attribute) -->
+                    <!-- Bulk Actions Toolbar -->
                     <div id="bulk-toolbar" class="flex items-center gap-2 px-3 py-1">
                         <span class="text-xs font-bold text-blue-800 mr-2" id="selected-count-text">0명 선택됨</span>
                         <div class="h-4 w-px bg-gray-300 mx-1"></div>
-                        <button id="btn-promote" onclick="app.promoteSelected()" disabled class="btn-bulk text-xs bg-white border border-blue-300 text-blue-700 px-3 py-1.5 rounded font-bold shadow-sm" title="학년을 1씩 올립니다">
+                        <button id="btn-promote" onclick="app.promoteSelected()" disabled class="btn-bulk text-xs px-3 py-1.5 rounded font-bold shadow-sm border" title="학년을 1씩 올립니다">
                             <i class="fas fa-level-up-alt mr-1"></i>일괄 진급
                         </button>
-                        <button id="btn-move" onclick="app.openMoveClassModal()" disabled class="btn-bulk text-xs bg-white border border-green-300 text-green-700 px-3 py-1.5 rounded font-bold shadow-sm" title="반을 변경합니다">
+                        <button id="btn-move" onclick="app.openMoveClassModal()" disabled class="btn-bulk text-xs px-3 py-1.5 rounded font-bold shadow-sm border" title="반을 변경합니다">
                             <i class="fas fa-exchange-alt mr-1"></i>반 이동
                         </button>
-                        <button id="btn-delete" onclick="app.deleteSelected()" disabled class="btn-bulk text-xs bg-white border border-red-300 text-red-700 px-3 py-1.5 rounded font-bold shadow-sm">
+                        <button id="btn-delete" onclick="app.deleteSelected()" disabled class="btn-bulk text-xs px-3 py-1.5 rounded font-bold shadow-sm border">
                             <i class="fas fa-trash mr-1"></i>일괄 삭제
                         </button>
                     </div>
