@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>용신중학교 역사 평가(최종)</title>
+    <title>용신중학교 역사 평가</title>
     <!-- Tailwind & Chart.js -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -79,9 +79,17 @@
         </section>
 
         <section id="view-ready" class="hidden max-w-md mx-auto bg-white p-8 rounded-xl shadow-lg fade-in mt-8 border-t-4 border-green-500 text-center">
-            <h2 class="text-2xl font-bold text-stone-900 mb-2">환영합니다!</h2>
-            <p class="text-xl font-bold text-amber-600 mb-6"><span id="user-info-display"></span> 학생</p>
-            <p class="text-stone-500 text-sm mb-6 bg-stone-50 p-3 rounded">⚠️ <strong>주의사항</strong><br>시작 버튼을 누르면 <strong>10분간 재응시가 불가능</strong>합니다.<br>준비되면 시작하세요.</p>
+            <div class="mb-4">
+                <div class="text-xs font-bold text-gray-400 mb-1" id="ready-cat-text">평가</div>
+                <h2 class="text-2xl font-bold text-stone-900" id="ready-title-text">준비</h2>
+            </div>
+            
+            <p class="text-stone-500 text-sm mb-6 bg-stone-50 p-4 rounded text-left">
+                ⚠️ <strong>주의사항</strong><br>
+                1. 시작 버튼을 누르면 타이머가 작동합니다.<br>
+                2. 중간에 종료하면 기록이 남지 않을 수 있습니다.<br>
+                3. 준비가 되면 아래 버튼을 눌러주세요.
+            </p>
             <button onclick="app.startQuiz()" class="w-full bg-green-600 text-white font-bold py-4 rounded-lg hover:bg-green-700 transition shadow-lg text-lg">도전 시작 <i class="fas fa-play ml-2"></i></button>
             <div class="mt-4 text-xs text-stone-400">총 도전 횟수: <span id="live-count-text">...</span></div>
         </section>
@@ -114,7 +122,7 @@
                 <div id="submission-status" class="bg-stone-50 p-3 rounded text-sm mb-6 border border-stone-200 text-stone-500"><i class="fas fa-circle-notch fa-spin"></i> 데이터 저장 중...</div>
                 <div class="grid grid-cols-2 gap-3">
                     <button onclick="document.getElementById('review-section').classList.toggle('hidden')" class="bg-white border-2 border-stone-200 text-stone-700 font-bold py-3 rounded hover:bg-stone-50">오답노트</button>
-                    <button onclick="location.reload()" class="bg-stone-900 text-white font-bold py-3 rounded hover:bg-stone-700 shadow-lg">다시 도전</button>
+                    <button onclick="location.href='quiz.html'" class="bg-stone-900 text-white font-bold py-3 rounded hover:bg-stone-700 shadow-lg">목록으로</button>
                 </div>
                 <button onclick="location.href='history.html'" class="w-full mt-3 bg-white border border-stone-300 text-stone-700 font-bold py-3 rounded-lg hover:bg-stone-50 transition shadow-sm">
                     📊 내 기록장 보기
@@ -133,10 +141,24 @@
         window.AuthManager.init('student');
 
         const app = {
-            state: { currentUser: null, userProfile: null, questions:[], allQuestions:[], currentIndex:0, answers:{}, score:0, timer:null, timeLeft:60, isTimeOut:false, isQuizActive: false },
+            state: { currentUser: null, userProfile: null, questions:[], allQuestions:[], currentIndex:0, answers:{}, score:0, timer:null, timeLeft:60, isTimeOut:false, isQuizActive: false, params: {} },
             
             init: function() { 
                 window.addEventListener('beforeunload', (e) => { if (this.state.isQuizActive) { e.preventDefault(); e.returnValue = ''; } });
+                
+                // Parse URL params
+                const params = new URLSearchParams(window.location.search);
+                this.state.params = {
+                    unitId: params.get('unitId'),
+                    category: params.get('category'),
+                    title: params.get('title') || '평가'
+                };
+                
+                // Set Title
+                const catName = this.state.params.category === 'diagnostic' ? '진단평가' : (this.state.params.category === 'formative' ? '형성평가' : '실전평가');
+                document.getElementById('ready-cat-text').innerText = catName;
+                document.getElementById('ready-title-text').innerText = decodeURIComponent(this.state.params.title);
+
                 const numSelect = document.getElementById('reg-number');
                 for(let i=1; i<=35; i++) { const opt = document.createElement('option'); opt.value = i; opt.innerText = i; numSelect.appendChild(opt); }
                 this.updateVisitCount();
@@ -153,8 +175,6 @@
                 const doc = await window.getCollection('users').doc(uid).get();
                 if (doc.exists) {
                     this.state.userProfile = doc.data();
-                    const name = this.state.userProfile.name;
-                    document.getElementById('user-info-display').innerText = `${this.state.userProfile.class}반 ${this.state.userProfile.number}번 ${name}`;
                     this.showView('view-ready');
                 } else {
                     this.showView('view-register');
@@ -163,6 +183,7 @@
             },
 
             registerUser: async function() {
+                // (Existing register logic)
                 const cls = document.getElementById('reg-class').value;
                 const num = document.getElementById('reg-number').value;
                 const name = document.getElementById('reg-name').value.trim();
@@ -180,7 +201,6 @@
                     const profile = { class: cls, number: num, name: name, email: this.state.currentUser.email };
                     await window.getCollection('users').doc(this.state.currentUser.uid).set(profile);
                     this.state.userProfile = profile;
-                    document.getElementById('user-info-display').innerText = `${cls}반 ${num}번 ${name}`;
                     this.showView('view-ready');
                 } catch(e) {
                      alert("등록 오류: " + e.message);
@@ -189,7 +209,6 @@
             },
 
             updateVisitCount: function() {
-                // Use Global Metadata
                 window.getCollection('metadata').doc('count_info').get().then(doc => {
                     if(doc.exists) document.getElementById("live-count-text").innerText = (doc.data().total_plays || 0) + "회";
                 }).catch(()=>{});
@@ -200,16 +219,11 @@
                 if(msg) document.getElementById('loading-text').innerText = msg;
             },
 
-            goHome: function() {
-                if (this.state.isQuizActive) { if (confirm("포기하고 나가시겠습니까?")) location.reload(); } 
-                else location.reload();
-            },
-
             startQuiz: async function() {
-                this.showLoading(true, "준비 중...");
+                this.showLoading(true, "문제 로딩 중...");
                 try {
-                    await this.loadRandomQuestions();
-                    if(!this.state.allQuestions || this.state.allQuestions.length === 0) throw new Error("문제가 없습니다.");
+                    await this.loadQuestions();
+                    if(!this.state.allQuestions || this.state.allQuestions.length === 0) throw new Error("등록된 문제가 없습니다.");
                 } catch(e) {
                     this.showLoading(false);
                     alert("오류 발생: " + e.message);
@@ -220,7 +234,7 @@
                 this.state.currentIndex = 0; 
                 this.state.answers = {}; 
                 this.state.score = 0; 
-                this.state.timeLeft = 60; 
+                this.state.timeLeft = 60 * (this.state.params.category === 'exam_prep' ? 3 : 1); // More time for exam
                 this.state.isTimeOut = false; 
                 this.state.isQuizActive = true; 
                 this.showLoading(false);
@@ -229,13 +243,25 @@
                 this.startTimer();
             },
 
-            loadRandomQuestions: async function() {
-                // Fetch Scoped Questions
-                const qSnapshot = await window.getCollection("quiz_questions").get();
+            loadQuestions: async function() {
+                const { unitId, category } = this.state.params;
+                
+                let query = window.getCollection("quiz_questions");
+                
+                if (unitId === 'exam_prep') {
+                    // Load 'exam_prep' category questions only
+                    query = query.where('category', '==', 'exam_prep');
+                } else if (unitId && category) {
+                    query = query.where('unitId', '==', unitId).where('category', '==', category);
+                }
+                
+                const qSnapshot = await query.get();
                 const loadedData = [];
                 qSnapshot.forEach((doc) => { let data = doc.data(); data.id = parseInt(doc.id); loadedData.push(data); });
+                
+                // Shuffle
                 if(loadedData.length < 5) this.state.allQuestions = loadedData;
-                else this.state.allQuestions = this.shuffleArray(loadedData).slice(0, 5);
+                else this.state.allQuestions = this.shuffleArray(loadedData).slice(0, 10); // Max 10 questions
             },
 
             shuffleArray: function(array) { for (let i = array.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [array[i], array[j]] = [array[j], array[i]]; } return array; },
@@ -243,13 +269,17 @@
             startTimer: function() { 
                 if(this.state.timer) clearInterval(this.state.timer); 
                 const bar = document.getElementById('timer-bar'), txt = document.getElementById('timer-text'); 
-                bar.style.width='100%'; txt.innerText='60초'; 
+                const maxTime = this.state.timeLeft;
+                
+                txt.innerText = maxTime + '초'; 
+                bar.style.width='100%'; 
+                
                 this.state.timer = setInterval(() => { 
                     this.state.timeLeft--; 
                     txt.innerText = this.state.timeLeft + '초'; 
-                    bar.style.width = (this.state.timeLeft/60)*100 + '%'; 
+                    bar.style.width = (this.state.timeLeft / maxTime)*100 + '%'; 
                     if(this.state.timeLeft<=10) { bar.classList.add('timer-urgent'); txt.classList.add('animate-pulse'); } 
-                    if(this.state.timeLeft<=0) { clearInterval(this.state.timer); this.state.isTimeOut=true; alert("종료"); this.finishQuiz(); } 
+                    if(this.state.timeLeft<=0) { clearInterval(this.state.timer); this.state.isTimeOut=true; alert("시간 종료!"); this.finishQuiz(); } 
                 }, 1000); 
             },
 
@@ -258,7 +288,8 @@
                 this.tempAnswer = this.state.answers[q.id] || null;
                 document.getElementById('quiz-progress-text').innerText = `${this.state.currentIndex+1}/${this.state.questions.length}`;
                 document.getElementById('question-badge').innerText = {'choice':'객관식','blank':'단답','word':'단답','order':'순서','ox':'O/X'}[q.type];
-                document.getElementById('student-question-unit').innerText = q.unit || "기타";
+                document.getElementById('student-question-unit').innerText = this.state.params.title;
+                
                 const img = document.getElementById('question-image'); 
                 if(q.image) { img.src=q.image; img.parentNode.classList.remove('hidden'); } else img.parentNode.classList.add('hidden');
                 document.getElementById('question-text').innerHTML = this.linkify(q.question);
@@ -304,18 +335,20 @@
 
             prevQuestion: function() { const q = this.state.questions[this.state.currentIndex]; if (this.state.currentIndex > 0) { this.state.currentIndex--; this.renderQuestion(); } },
             
-            submitAnswer: function() { const q = this.state.questions[this.state.currentIndex]; let ans = this.state.answers[q.id]; if(q.type==='order') { if(!ans || ans.split('-').length !== q.options.length) { alert("순서를 완성하세요"); return; } } else if(!ans) { alert("정답을 입력하세요"); return; } if(this.state.currentIndex < 4) { this.state.currentIndex++; this.renderQuestion(); } else this.finishQuiz(); },
+            submitAnswer: function() { const q = this.state.questions[this.state.currentIndex]; let ans = this.state.answers[q.id]; if(q.type==='order') { if(!ans || ans.split('-').length !== q.options.length) { alert("순서를 완성하세요"); return; } } else if(!ans) { alert("정답을 입력하세요"); return; } if(this.state.currentIndex < this.state.questions.length - 1) { this.state.currentIndex++; this.renderQuestion(); } else this.finishQuiz(); },
             
             finishQuiz: function() {
                 clearInterval(this.state.timer); this.state.isQuizActive = false;
                 let correct = 0; let details = []; let detailLogs = [];
+                const pointPerQ = 100 / this.state.questions.length;
+                
                 this.state.questions.forEach(q => {
                     const u = (this.state.answers[q.id]||"").toString().replace(/\s+/g,'').trim(); const a = q.answer.toString().replace(/\s+/g,'').trim();
                     let isC = false; if(u.length > 0) { isC = (q.type === 'word' || q.type === 'blank') ? (u.includes(a)||a.includes(u)) : (u === a); }
                     if(isC) correct++; else details.push({q:q.question, u:u||"미입력", a:q.answer, exp:q.explanation});
                     detailLogs.push({ id: q.id, correct: isC, u: u });
                 });
-                this.state.score = correct * 20; this.state.incorrectDetails = details;
+                this.state.score = Math.round(correct * pointPerQ); this.state.incorrectDetails = details;
                 this.showView('view-results'); this.renderResults(); this.saveToFirebase(detailLogs);
             },
             
@@ -332,7 +365,6 @@
             saveToFirebase: function(detailLogs = []) {
                 const status = document.getElementById('submission-status');
                 const data = { timestamp: firebase.firestore.FieldValue.serverTimestamp(), timeString: new Date().toLocaleString(), class: this.state.student.class, number: this.state.student.number, name: this.state.student.name, score: this.state.score, status: this.state.isTimeOut ? "시간초과" : "완료", details: detailLogs, uid: this.state.currentUser.uid };
-                // Changed: Use dynamic collection for Results & Global for Metadata
                 window.getCollection("metadata").doc("count_info").set({ total_plays: firebase.firestore.FieldValue.increment(1) }, { merge: true });
                 window.getCollection("quiz_results").add(data).then(() => { status.className = "bg-green-100 text-green-700 p-3 rounded text-sm mb-6 border border-green-200 font-bold"; status.innerHTML = '<i class="fas fa-check-circle"></i> 제출 완료!'; }).catch((error) => { console.error("Error: ", error); status.className = "bg-red-100 text-red-700 p-3 rounded text-sm mb-6 border border-red-200"; status.innerHTML = '⚠️ 전송 실패'; });
             },

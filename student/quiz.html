@@ -5,7 +5,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Westory - 역사 퀴즈</title>
-    <!-- Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
@@ -20,61 +19,60 @@
     <script src="../assets/js/auth-manager.js"></script>
     
     <style>
-        .list-item { display: flex; justify-content: space-between; align-items: center; background: white; padding: 1.25rem; border-radius: 0.5rem; border: 1px solid #e5e7eb; box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: all 0.2s; margin-bottom: 0.75rem; }
-        .list-item.active { cursor: pointer; border-left: 5px solid #2563eb; }
-        .list-item.active:hover { transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-        .list-item.locked { cursor: not-allowed; background-color: #f9fafb; border-left: 5px solid #d1d5db; opacity: 0.7; }
-        .fade-in { animation: fadeIn 0.5s ease-in-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+        .quiz-card { background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; margin-bottom: 16px; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .quiz-card:hover { transform: translateY(-2px); box-shadow: 0 8px 16px -4px rgba(0,0,0,0.08); border-color: #bfdbfe; }
+        .btn-start { padding: 8px 16px; border-radius: 8px; font-weight: bold; font-size: 0.9rem; transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center; }
+        .btn-start.active { background-color: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; cursor: pointer; }
+        .btn-start.active:hover { background-color: #2563eb; color: white; }
+        .btn-start.disabled { background-color: #f3f4f6; color: #9ca3af; cursor: not-allowed; border: 1px solid #e5e7eb; }
+        .badge { font-size: 0.75rem; font-weight: 800; padding: 2px 6px; border-radius: 4px; margin-right: 6px; }
+        .exam-banner { background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); color: white; border-radius: 16px; padding: 24px; position: relative; overflow: hidden; cursor: pointer; transition: transform 0.2s; }
+        .exam-banner:hover { transform: scale(1.01); }
+        .exam-banner.disabled { background: #e5e7eb; cursor: not-allowed; opacity: 0.8; }
+        .exam-deco { position: absolute; font-size: 8rem; opacity: 0.1; right: -20px; bottom: -20px; transform: rotate(-15deg); }
     </style>
 </head>
-<body>
+<body class="bg-gray-50">
     <!-- Header injected by AuthManager -->
 
-    <main class="flex-grow container mx-auto px-4 py-8 max-w-3xl">
+    <main class="container mx-auto px-4 py-8 max-w-3xl">
         
-        <div id="greeting-area" class="bg-blue-50 border-l-4 border-blue-500 p-4 rounded shadow-sm mb-8 flex items-center justify-between hidden fade-in">
+        <div id="greeting-area" class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-8 flex items-center gap-3 hidden animate-[fadeIn_0.5s]">
+            <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-xl">🔥</div>
             <div>
-                <span class="text-blue-700 font-bold text-lg" id="user-name-display">학생</span>
-                <span class="text-blue-600 font-medium">님, 오늘도 화이팅! 🔥</span>
+                <div class="font-bold text-gray-800"><span id="user-name-display" class="text-blue-600">학생</span>님, 오늘도 화이팅!</div>
+                <div class="text-xs text-gray-400" id="semester-text">2025학년도</div>
             </div>
         </div>
 
+        <!-- 1. Paper Exam Prep Banner -->
         <section class="mb-10">
-            <h2 class="text-lg font-bold text-stone-800 mb-3 flex items-center gap-2">
-                <span class="bg-blue-600 w-1.5 h-6 rounded-sm"></span>
-                현재 진행 중인 평가
+            <h2 class="text-lg font-bold text-gray-800 mb-3 ml-1 flex items-center gap-2">
+                <i class="fas fa-flag-checkered text-blue-600"></i> 실전 대비
             </h2>
-            
-            <div onclick="location.href='./quiz-runner.html'" class="group cursor-pointer bg-white rounded-xl shadow border border-stone-200 overflow-hidden hover:border-blue-400 transition relative">
-                <div class="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-lg shadow-sm z-10">D-DAY</div>
-                <div class="flex items-stretch">
-                    <div class="bg-blue-50 w-24 flex items-center justify-center text-3xl group-hover:bg-blue-100 transition">
-                        🏫
-                    </div>
-                    <div class="p-5 flex-grow">
-                        <div class="text-blue-600 font-bold text-xs mb-1" id="semester-text">2025학년도 1학기</div>
-                        <h3 class="text-xl font-bold text-stone-900 mb-1">역사 정리 퀴즈</h3>
-                        <p class="text-stone-500 text-sm">형성 평가 | 랜덤 5문항</p>
-                    </div>
-                    <div class="flex items-center pr-5">
-                        <i class="fas fa-chevron-right text-stone-300 group-hover:text-blue-500"></i>
-                    </div>
+            <div id="exam-prep-card" class="exam-banner shadow-lg group" onclick="app.startQuiz('exam_prep', 'exam_prep', '지필평가 대비 실전')">
+                <i class="fas fa-pen-fancy exam-deco text-white"></i>
+                <div class="relative z-10">
+                    <div class="bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded inline-block mb-2 shadow-sm">FINAL CHECK</div>
+                    <h3 class="text-2xl font-black mb-1">지필평가 대비 실전 문제</h3>
+                    <p class="text-blue-100 text-sm font-medium opacity-90">실제 시험처럼 문제를 풀어보고 실력을 점검하세요.</p>
+                </div>
+                <div class="absolute right-6 top-1/2 transform -translate-y-1/2 bg-white/20 backdrop-blur-sm p-3 rounded-full text-white group-hover:bg-white group-hover:text-blue-600 transition">
+                    <i class="fas fa-chevron-right text-xl"></i>
                 </div>
             </div>
         </section>
 
+        <!-- 2. Unit List -->
         <section>
-            <h2 class="text-lg font-bold text-stone-800 mb-3 flex items-center gap-2">
-                <span class="bg-amber-500 w-1.5 h-6 rounded-sm"></span>
-                단원별 학습 (준비중)
+            <h2 class="text-lg font-bold text-gray-800 mb-4 ml-1 flex items-center gap-2">
+                <i class="fas fa-layer-group text-amber-500"></i> 단원별 학습
             </h2>
-            <div class="flex flex-col">
-                <div class="list-item locked">
-                    <div><div class="text-xs text-stone-400 font-bold mb-1">1단원</div><h3 class="text-lg font-bold text-stone-500">문명의 형성</h3></div>
-                    <div class="text-right"><span class="bg-stone-200 text-stone-500 text-xs font-bold px-2 py-1 rounded">준비중</span></div>
+            <div id="quiz-list-container" class="space-y-4">
+                <div class="py-20 text-center text-gray-400">
+                    <div class="loader-spinner mx-auto mb-3"></div>
+                    <p>평가 목록을 불러오는 중...</p>
                 </div>
-                <!-- More items... -->
             </div>
         </section>
 
@@ -85,26 +83,110 @@
     <script>
         window.AuthManager.init('student');
 
-        document.addEventListener('auth-ready', async (e) => {
-            const user = e.detail;
-            document.getElementById('semester-text').innerText = `${window.currentConfig.year}학년도 ${window.currentConfig.semester}학기`;
-            loadUserInfo(user.uid);
-        });
+        const app = {
+            config: {},
+            tree: [],
 
-        async function loadUserInfo(uid) {
-            try {
-                // Users are global
-                const doc = await window.getCollection('users').doc(uid).get();
-                if (doc.exists) {
-                    const data = doc.data();
-                    const name = data.name || "학생";
-                    document.getElementById('user-name-display').innerText = name + " 학생";
-                    document.getElementById('greeting-area').classList.remove('hidden');
+            init: function() {
+                document.addEventListener('auth-ready', (e) => {
+                    const user = e.detail;
+                    this.loadUserInfo(user.uid);
+                    document.getElementById('semester-text').innerText = `${window.currentConfig.year}학년도 ${window.currentConfig.semester}학기`;
+                    this.loadData();
+                });
+            },
+
+            loadUserInfo: async function(uid) {
+                try {
+                    const doc = await window.getCollection('users').doc(uid).get();
+                    if(doc.exists) {
+                        document.getElementById('user-name-display').innerText = doc.data().name || "학생";
+                        document.getElementById('greeting-area').classList.remove('hidden');
+                    }
+                } catch(e) {}
+            },
+
+            loadData: async function() {
+                try {
+                    // Parallel Fetch
+                    const [treeDoc, configDoc] = await Promise.all([
+                        window.getCollection('curriculum').doc('tree').get(),
+                        window.getCollection('assessment_config').doc('status').get()
+                    ]);
+
+                    this.tree = (treeDoc.exists && treeDoc.data().tree) ? treeDoc.data().tree : [];
+                    this.config = (configDoc.exists) ? configDoc.data() : {};
+                    
+                    this.renderExamPrep();
+                    this.renderList();
+                } catch(e) {
+                    console.error(e);
+                    document.getElementById('quiz-list-container').innerHTML = '<div class="text-center text-red-400">데이터 로드 실패</div>';
                 }
-            } catch (e) {
-                console.error("사용자 정보 로드 실패", e);
+            },
+
+            renderExamPrep: function() {
+                const isActive = this.config['exam_prep_exam_prep'] === true;
+                const card = document.getElementById('exam-prep-card');
+                if(!isActive) {
+                    card.classList.add('disabled', 'bg-gray-200');
+                    card.classList.remove('exam-banner', 'cursor-pointer', 'shadow-lg');
+                    card.style.background = '#e5e7eb';
+                    card.onclick = null;
+                    card.querySelector('h3').innerText += " (준비중)";
+                    card.querySelector('p').innerText = "선생님이 평가를 활성화하면 시작할 수 있습니다.";
+                    card.querySelector('i.fa-chevron-right').parentElement.style.display = 'none';
+                }
+            },
+
+            renderList: function() {
+                const container = document.getElementById('quiz-list-container');
+                if(this.tree.length === 0) {
+                    container.innerHTML = '<div class="text-center py-10 text-gray-400">등록된 단원이 없습니다.</div>';
+                    return;
+                }
+
+                let html = '';
+                this.tree.forEach(big => {
+                    if(big.children) {
+                        big.children.forEach(mid => {
+                            const diagKey = `${mid.id}_diagnostic`;
+                            const formKey = `${mid.id}_formative`;
+                            const isDiagActive = this.config[diagKey] === true;
+                            const isFormActive = this.config[formKey] === true;
+
+                            html += `
+                                <div class="quiz-card group">
+                                    <div class="mb-4">
+                                        <div class="text-xs text-gray-400 font-bold mb-1">${big.title}</div>
+                                        <h3 class="text-xl font-bold text-gray-800">${mid.title}</h3>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-3">
+                                        <button onclick="${isDiagActive ? `app.startQuiz('${mid.id}', 'diagnostic', '${mid.title}')` : ''}" 
+                                            class="btn-start ${isDiagActive ? 'active' : 'disabled'} h-12">
+                                            ${isDiagActive ? '<i class="fas fa-stethoscope mr-2"></i>진단평가' : '<span class="text-xs">Coming Soon</span>'}
+                                        </button>
+                                        <button onclick="${isFormActive ? `app.startQuiz('${mid.id}', 'formative', '${mid.title}')` : ''}" 
+                                            class="btn-start ${isFormActive ? 'active' : 'disabled'} h-12">
+                                            ${isFormActive ? '<i class="fas fa-pencil-alt mr-2"></i>형성평가' : '<span class="text-xs">Coming Soon</span>'}
+                                        </button>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                    }
+                });
+                container.innerHTML = html;
+            },
+
+            startQuiz: function(unitId, cat, title) {
+                // Encode params
+                const url = `quiz-runner.html?unitId=${unitId}&category=${cat}&title=${encodeURIComponent(title)}`;
+                window.location.href = url;
             }
-        }
+        };
+
+        app.init();
     </script>
 </body>
 </html>
