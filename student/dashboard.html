@@ -52,7 +52,8 @@
 
         <div class="tab-nav">
             <div class="tab-btn active" onclick="switchTab('lesson')"><i class="fas fa-book-reader mr-2"></i>수업자료</div>
-            <div class="tab-btn" onclick="switchTab('assess')"><i class="fas fa-gamepad mr-2"></i>평가</div>
+            <!-- Modified click handler to redirect -->
+            <div class="tab-btn" onclick="location.href='quiz.html'"><i class="fas fa-gamepad mr-2"></i>평가</div>
             <div class="tab-btn" onclick="switchTab('score')"><i class="fas fa-chart-bar mr-2"></i>점수</div>
         </div>
 
@@ -65,22 +66,7 @@
             </div>
         </div>
 
-        <div id="tab-assess" class="section-content">
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <div onclick="location.href='quiz.html'" class="group bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:border-blue-500 hover:shadow-md cursor-pointer flex flex-col justify-between transition-all h-full">
-                    <div class="flex justify-between items-start mb-4">
-                        <div class="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center text-2xl group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                            <i class="fas fa-gamepad"></i>
-                        </div>
-                        <i class="fas fa-arrow-right text-gray-300 group-hover:text-blue-500 transition-transform group-hover:translate-x-1"></i>
-                    </div>
-                    <div>
-                        <h3 class="font-bold text-xl text-gray-900 mb-1 group-hover:text-blue-700">형성평가 퀴즈</h3>
-                        <p class="text-sm text-gray-500 leading-relaxed word-keep">배운 내용을 퀴즈로 재미있게 확인해보세요.</p>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <!-- Assessment Tab Content Removed as it redirects -->
 
         <div id="tab-score" class="section-content">
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -122,12 +108,10 @@
         document.addEventListener('auth-ready', (e) => {
             const user = e.detail;
             document.getElementById('welcome-text').innerText = `${user.displayName || '학생'}님, 환영합니다!`;
-            
-            // Use Global Config
             const cfg = window.currentConfig;
             document.getElementById('semester-badge').innerText = `${cfg.year}학년도 ${cfg.semester}학기`;
             
-            if(cfg.showQuiz === false) document.querySelector('[onclick="switchTab(\'assess\')"]').style.display = 'none';
+            if(cfg.showQuiz === false) document.querySelector('[onclick*="quiz.html"]').style.display = 'none';
             if(cfg.showScore === false) document.querySelector('[onclick="switchTab(\'score\')"]').style.display = 'none';
             if(cfg.showLesson === false) document.querySelector('[onclick="switchTab(\'lesson\')"]').style.display = 'none';
 
@@ -138,42 +122,30 @@
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             event.currentTarget.classList.add('active'); 
             document.querySelectorAll('.section-content').forEach(s => s.classList.remove('active'));
-            document.getElementById('tab-' + name).classList.add('active');
+            const target = document.getElementById('tab-' + name);
+            if(target) target.classList.add('active');
         }
 
         async function loadLessons() {
             const container = document.getElementById('lesson-container');
-            
             try {
-                // Fetch Tree from Scoped Collection
                 const treeDoc = await window.getCollection('curriculum').doc('tree').get();
                 if(!treeDoc.exists || !treeDoc.data().tree) {
                     container.innerHTML = '<div class="text-center py-20 text-gray-400">등록된 수업 자료가 없습니다.</div>';
                     return;
                 }
-
                 const tree = treeDoc.data().tree;
-                let html = '';
-                
-                // Helper to flatten tree and find lessons (simplified for dashboard view)
-                // Real implementation needs to fetch lessons linked to units
-                // Here we assume a structure where we might need to fetch lessons separately
-                
-                html = '<div class="text-center py-10 text-gray-500">수업 자료 트리를 불러왔습니다. (상세 구현 필요)</div>';
-                
-                // For demo/prototype, simply listing units
-                html = tree.map((unit, idx) => `
+                let html = tree.map((unit, idx) => `
                     <div class="accordion-item open" id="acc-${idx}">
                         <div class="accordion-header" onclick="toggleAccordion('acc-${idx}')">
                             <span>${unit.title}</span>
                             <i class="fas fa-chevron-down text-gray-400 transition-transform duration-200"></i>
                         </div>
                         <div class="accordion-body">
-                             <div class="text-sm text-gray-400 p-2">하위 단원을 선택하여 학습하세요.</div>
                              ${(unit.children||[]).map(mid => `
-                                <div class="ml-4 mt-2 font-bold text-gray-600">${mid.title}</div>
+                                <div class="ml-4 mt-2 font-bold text-gray-600 flex items-center"><i class="fas fa-folder text-yellow-400 mr-2"></i>${mid.title}</div>
                                 ${(mid.children||[]).map(small => `
-                                    <a href="lesson/note.html?id=${small.id}&title=${encodeURIComponent(small.title)}" class="lesson-link ml-6 mt-1">
+                                    <a href="lesson/note.html?id=${small.id}&title=${encodeURIComponent(small.title)}" class="lesson-link ml-8 mt-1">
                                         <i class="far fa-file-alt text-blue-500"></i><span>${small.title}</span>
                                     </a>
                                 `).join('')}
@@ -181,18 +153,10 @@
                         </div>
                     </div>
                 `).join('');
-
                 container.innerHTML = html;
-
-            } catch(e) {
-                console.error(e);
-                container.innerHTML = '<div class="text-center text-red-500">자료 로드 실패</div>';
-            }
+            } catch(e) { container.innerHTML = '<div class="text-center text-red-500">자료 로드 실패</div>'; }
         }
-
-        window.toggleAccordion = (id) => {
-            document.getElementById(id).classList.toggle('open');
-        }
+        window.toggleAccordion = (id) => { document.getElementById(id).classList.toggle('open'); }
     </script>
 </body>
 </html>

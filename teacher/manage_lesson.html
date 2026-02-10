@@ -21,35 +21,21 @@
     <script src="../assets/js/auth-manager.js"></script>
 
     <style>
+        /* Tree Styles matching Quiz Manager */
         .tree-node { position: relative; }
-        .tree-node.level-0 { padding-left: 0; margin-bottom: 24px; }
-        /* Improved indentation */
-        .tree-node.level-1 { margin-left: 28px; }
-        .tree-node.level-2 { margin-left: 28px; }
-
-        .tree-line { position: absolute; top: 0; bottom: 0; left: -14px; border-left: 1px dashed #cbd5e1; }
-        .tree-item { 
-            display: flex; align-items: center; padding: 6px 10px; margin: 2px 0; 
-            border-radius: 6px; cursor: pointer; transition: all 0.2s; border: 1px solid transparent; 
-        }
-        .tree-item:hover { background-color: #f1f5f9; }
-        .tree-item.active { background-color: #eff6ff; border-color: #bfdbfe; color: #2563eb; font-weight: bold; }
+        .tree-node.level-0 { margin-bottom: 8px; }
+        .tree-node:not(.level-0) { margin-left: 20px; border-left: 1px dashed #e5e7eb; }
+        .tree-item { display: flex; align-items: center; padding: 8px 12px; border-radius: 6px; cursor: pointer; transition: all 0.2s; margin-bottom: 2px; }
+        .tree-item:hover { background-color: #f3f4f6; }
+        .tree-item.active { background-color: #eff6ff; color: #2563eb; font-weight: bold; }
         
-        .level-0 .tree-item-title { font-weight: 800; font-size: 1.05rem; color: #1e293b; }
-        .level-1 .tree-item-title { font-weight: 600; font-size: 0.95rem; color: #475569; }
-        .level-2 .tree-item-title { font-weight: 400; font-size: 0.9rem; color: #64748b; }
-
-        .btn-action { opacity: 0; transition: opacity 0.2s; }
-        .tree-item:hover .btn-action { opacity: 1; }
+        .tree-item-title { flex-grow: 1; margin-left: 8px; }
+        .btn-action { display: none; margin-left: 8px; }
+        .tree-item:hover .btn-action { display: flex; gap: 4px; }
 
         .ql-container { font-family: 'Noto Sans KR', sans-serif; font-size: 1rem; height: 500px; }
         .ql-editor strong { font-weight: bold; }
-        
-        .cloze-input {
-            border: none; border-bottom: 2px solid #374151; text-align: center;
-            font-weight: bold; color: #2563eb; background: transparent;
-            padding: 0 4px; width: 100px; display: inline-block;
-        }
+        .cloze-input { border: none; border-bottom: 2px solid #374151; text-align: center; font-weight: bold; color: #2563eb; background: transparent; padding: 0 4px; width: 100px; display: inline-block; }
     </style>
 </head>
 <body class="bg-gray-50 h-screen flex flex-col">
@@ -76,12 +62,12 @@
                         <button onclick="app.saveTree()" class="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded hover:bg-blue-200 transition font-bold">저장</button>
                     </div>
                 </div>
-                <div class="flex-1 overflow-y-auto overflow-x-auto p-6" id="tree-container">
+                <div class="flex-1 overflow-y-auto overflow-x-auto p-4" id="tree-container">
                     <div class="text-center text-gray-400 py-10">로딩 중...</div>
                 </div>
             </div>
 
-            <!-- Right: Lesson Editor (Hidden until leaf selected) -->
+            <!-- Right: Lesson Editor -->
             <div class="w-2/3 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col relative" id="editor-panel">
                 <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 bg-white z-10 rounded-xl">
                     <i class="far fa-hand-point-left text-4xl mb-4"></i>
@@ -214,21 +200,14 @@
                     const el = document.createElement('div');
                     el.className = `tree-node level-${level}`;
                     
-                    if (level > 0) {
-                        const line = document.createElement('div');
-                        line.className = 'tree-line';
-                        el.appendChild(line);
-                    }
-
                     const itemBox = document.createElement('div');
                     const isSelected = this.selectedNodeId === node.id;
                     itemBox.className = `tree-item ${isSelected ? 'active' : ''}`;
                     
                     const isExpanded = this.expandedIds.has(node.id);
                     const isLeaf = level >= 2;
-                    let iconClass = 'fas fa-folder';
-                    if (!isLeaf) iconClass = isExpanded ? 'fas fa-folder-open' : 'fas fa-folder';
-                    else iconClass = 'fas fa-file-alt';
+                    let iconClass = isLeaf ? 'fas fa-file-alt' : (isExpanded ? 'fas fa-folder-open text-yellow-500' : 'fas fa-folder text-yellow-500');
+                    if (isLeaf) iconClass += ' text-gray-400';
 
                     itemBox.onclick = (e) => { 
                         e.stopPropagation(); 
@@ -238,11 +217,11 @@
 
                     const caretIcon = !isLeaf ? `<i class="fas fa-caret-${isExpanded?'down':'right'} w-4 text-gray-400 mr-1 transition-transform"></i>` : `<span class="w-4 mr-1"></span>`;
                     const titleSpan = document.createElement('span');
-                    titleSpan.className = 'tree-item-title flex-1 ml-1 select-none whitespace-nowrap';
+                    titleSpan.className = 'tree-item-title select-none';
                     titleSpan.innerText = node.title;
                     
                     const actions = document.createElement('div');
-                    actions.className = 'btn-action flex gap-1 ml-2';
+                    actions.className = 'btn-action';
                     
                     if (!isLeaf) {
                         const btnAdd = document.createElement('button');
@@ -267,7 +246,7 @@
                     btnDel.onclick = (e) => { e.stopPropagation(); this.deleteNode(node, parentArr); };
                     actions.appendChild(btnDel);
 
-                    itemBox.innerHTML = caretIcon + `<i class="${iconClass} text-gray-400 ${isSelected?'text-blue-500':''}"></i>`;
+                    itemBox.innerHTML = caretIcon + `<i class="${iconClass}"></i>`;
                     itemBox.appendChild(titleSpan);
                     itemBox.appendChild(actions);
                     el.appendChild(itemBox);

@@ -14,6 +14,11 @@
     <script src="../assets/js/firebase-config.js"></script>
     <link rel="stylesheet" href="../assets/css/style.css">
     <script src="../assets/js/auth-manager.js"></script>
+    <style>
+        .btn-bulk { transition: all 0.2s; }
+        .btn-bulk:disabled { background-color: #f3f4f6; color: #9ca3af; border-color: #e5e7eb; cursor: not-allowed; }
+        .btn-bulk:not(:disabled):hover { transform: translateY(-1px); }
+    </style>
 </head>
 <body class="bg-gray-50">
     <!-- Header injected by AuthManager -->
@@ -27,18 +32,17 @@
                     <h2 class="text-lg font-bold text-gray-800">
                         <i class="fas fa-users text-blue-500 mr-2"></i> 학생 명단 <span id="std-count" class="text-sm font-normal text-gray-500"></span>
                     </h2>
-                    <!-- Bulk Actions Toolbar -->
-                    <div id="bulk-toolbar" class="hidden flex items-center gap-2 bg-blue-50 px-3 py-1 rounded border border-blue-200 animate-fade-in">
-                        <span class="text-xs font-bold text-blue-800" id="selected-count-text">0명 선택됨</span>
-                        <div class="h-4 w-px bg-blue-300 mx-1"></div>
-                        <button onclick="app.promoteSelected()" class="text-xs bg-white border border-blue-300 text-blue-700 px-2 py-1 rounded hover:bg-blue-100 font-bold" title="학년을 1씩 올립니다">
+                    <!-- Bulk Actions Toolbar (Always visible, state controlled via disabled attribute) -->
+                    <div id="bulk-toolbar" class="flex items-center gap-2 px-3 py-1">
+                        <span class="text-xs font-bold text-blue-800 mr-2" id="selected-count-text">0명 선택됨</span>
+                        <div class="h-4 w-px bg-gray-300 mx-1"></div>
+                        <button id="btn-promote" onclick="app.promoteSelected()" disabled class="btn-bulk text-xs bg-white border border-blue-300 text-blue-700 px-3 py-1.5 rounded font-bold shadow-sm" title="학년을 1씩 올립니다">
                             <i class="fas fa-level-up-alt mr-1"></i>일괄 진급
                         </button>
-                        <!-- Added Move Class -->
-                        <button onclick="app.openMoveClassModal()" class="text-xs bg-white border border-blue-300 text-green-700 px-2 py-1 rounded hover:bg-green-50 font-bold" title="반을 변경합니다">
+                        <button id="btn-move" onclick="app.openMoveClassModal()" disabled class="btn-bulk text-xs bg-white border border-green-300 text-green-700 px-3 py-1.5 rounded font-bold shadow-sm" title="반을 변경합니다">
                             <i class="fas fa-exchange-alt mr-1"></i>반 이동
                         </button>
-                        <button onclick="app.deleteSelected()" class="text-xs bg-white border border-red-300 text-red-700 px-2 py-1 rounded hover:bg-red-50 font-bold">
+                        <button id="btn-delete" onclick="app.deleteSelected()" disabled class="btn-bulk text-xs bg-white border border-red-300 text-red-700 px-3 py-1.5 rounded font-bold shadow-sm">
                             <i class="fas fa-trash mr-1"></i>일괄 삭제
                         </button>
                     </div>
@@ -130,7 +134,6 @@
             <h3 class="font-bold text-lg mb-2">반 이동</h3>
             <p class="text-sm text-gray-500 mb-4">선택한 학생들을 이동할 반을 선택하세요.</p>
             <select id="target-class-select" class="w-full border p-3 rounded mb-4 font-bold text-center">
-                <!-- 1~12 Class -->
                 <option value="1">1반</option><option value="2">2반</option><option value="3">3반</option><option value="4">4반</option><option value="5">5반</option><option value="6">6반</option><option value="7">7반</option><option value="8">8반</option><option value="9">9반</option><option value="10">10반</option><option value="11">11반</option><option value="12">12반</option>
             </select>
             <button onclick="app.moveSelected()" class="w-full bg-green-600 text-white font-bold py-2 rounded hover:bg-green-700">이동 확인</button>
@@ -199,12 +202,11 @@
                 this.updateToolbar();
             },
 
-            // --- Selection Logic ---
             toggleSelectAll: function(el) {
                 const visibleIds = Array.from(document.querySelectorAll('.student-check')).map(cb => cb.value);
                 if (el.checked) visibleIds.forEach(id => this.selectedIds.add(id));
                 else this.selectedIds.clear();
-                this.render(this.students); // Re-render to update checkboxes
+                this.render(this.students);
             },
             toggleSelect: function(id) {
                 if(this.selectedIds.has(id)) this.selectedIds.delete(id);
@@ -213,13 +215,14 @@
             },
             updateToolbar: function() {
                 const count = this.selectedIds.size;
-                const toolbar = document.getElementById('bulk-toolbar');
                 document.getElementById('selected-count-text').innerText = `${count}명 선택됨`;
-                if(count > 0) toolbar.classList.remove('hidden');
-                else toolbar.classList.add('hidden');
+                
+                const btns = ['btn-promote', 'btn-move', 'btn-delete'];
+                btns.forEach(id => {
+                    document.getElementById(id).disabled = (count === 0);
+                });
             },
 
-            // --- Bulk Actions ---
             promoteSelected: async function() {
                 if(!confirm(`선택한 ${this.selectedIds.size}명의 학년을 1씩 올리시겠습니까?`)) return;
                 const batch = window.db.batch();
@@ -270,7 +273,6 @@
                 this.render(filtered);
             },
 
-            // --- History Popup (Existing logic...) ---
             showHistory: async function(uid, name, cls, num) {
                 document.getElementById('history-title').innerText = `${name} (${cls}반 ${num}번) 문제 풀이 모음`;
                 const content = document.getElementById('history-content');
@@ -333,7 +335,6 @@
                 }
             },
 
-            // --- Edit Student ---
             openEdit: function(id) {
                 const s = this.students.find(x => x.id === id);
                 document.getElementById('edit-id').value = id;
