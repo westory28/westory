@@ -82,11 +82,7 @@
                     <div class="flex gap-2">
                         <select id="bank-filter-unit" onchange="app.renderBank()" class="border rounded px-3 py-2 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
                             <option value="all">전체 단원</option>
-                            <option value="I.">I. 고대</option>
-                            <option value="II.">II. 종교</option>
-                            <option value="III.">III. 교류</option>
-                            <option value="IV.">IV. 제국주의</option>
-                            <option value="V.">V. 세계대전</option>
+                            <!-- Dynamic Options -->
                         </select>
                         <button onclick="app.deleteSelectedQuestions()" class="bg-white border border-red-200 text-red-600 px-3 py-2 rounded text-sm font-bold hover:bg-red-50 transition">선택 삭제</button>
                     </div>
@@ -127,11 +123,8 @@
                             <div>
                                 <label class="block text-xs font-bold text-gray-500 mb-1">단원</label>
                                 <select id="new-q-unit" class="w-full p-3 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                                    <option>I. 문명의 발생</option>
-                                    <option>II. 종교와 문화</option>
-                                    <option>III. 지역 세계의 교류</option>
-                                    <option>IV. 제국주의 침략</option>
-                                    <option>V. 세계 대전</option>
+                                    <option value="">단원 선택</option>
+                                    <!-- Dynamic Options -->
                                 </select>
                             </div>
                             <div>
@@ -213,6 +206,31 @@
 
             init: function() {
                 this.loadQuestions();
+                this.loadUnitOptions();
+            },
+
+            loadUnitOptions: async function() {
+                try {
+                    const doc = await window.getCollection('curriculum').doc('tree').get();
+                    if(doc.exists && doc.data().tree) {
+                        // Extract Level 0 (Daedanwon) titles
+                        const roots = doc.data().tree.map(n => n.title);
+                        const makeOptions = (opts) => opts.map(u => `<option value="${u}">${u}</option>`).join('');
+                        
+                        const filterEl = document.getElementById('bank-filter-unit');
+                        const addEl = document.getElementById('new-q-unit');
+
+                        // Update Filter
+                        const currentFilter = filterEl.value;
+                        filterEl.innerHTML = `<option value="all">전체 단원</option>` + makeOptions(roots);
+                        if(roots.includes(currentFilter)) filterEl.value = currentFilter;
+
+                        // Update Add Form
+                        const currentAdd = addEl.value;
+                        addEl.innerHTML = `<option value="">단원 선택</option>` + makeOptions(roots);
+                        if(roots.includes(currentAdd)) addEl.value = currentAdd;
+                    }
+                } catch(e) { console.error("Unit load failed", e); }
             },
 
             setTab: function(tabName) {
