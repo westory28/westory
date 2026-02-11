@@ -32,7 +32,7 @@
 <body class="bg-gray-50 text-gray-800">
     <div id="loading-overlay" class="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center">
         <div class="loader-spinner"></div>
-        <p class="mt-4 text-gray-500 font-bold" id="loading-msg">시험 환경 구성 중...</p>
+        <p class="mt-4 text-gray-500 font-bold" id="loading-msg">맞춤형 시험 환경 구성 중...</p>
     </div>
 
     <!-- Main Container -->
@@ -53,7 +53,7 @@
                         <span class="font-bold text-blue-800" id="info-time">60초</span>
                     </div>
                     <div class="flex justify-between border-b border-blue-200 pb-2">
-                        <span class="text-gray-600">문항 수</span>
+                        <span class="text-gray-600">출제 문항 수</span>
                         <span class="font-bold text-blue-800" id="info-count">- 문항</span>
                     </div>
                     <div class="flex justify-between">
@@ -66,6 +66,7 @@
                     <button onclick="app.startQuiz()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-md transition transform active:scale-95 text-lg">
                         평가 시작하기
                     </button>
+                    <p class="mt-4 text-xs text-gray-400">지필평가 대비는 단원별로 고르게 출제됩니다.</p>
                 </div>
                 <div id="blocked-msg" class="hidden text-red-500 font-bold p-4 bg-red-50 rounded-xl border border-red-100">
                     <i class="fas fa-ban mr-2"></i><span id="blocked-reason"></span>
@@ -75,7 +76,6 @@
 
         <!-- View: Quiz -->
         <section id="view-quiz" class="hidden flex-col h-full">
-            <!-- Header -->
             <div class="flex justify-between items-center mb-6">
                 <div class="font-bold text-gray-500"><span id="q-current">1</span> / <span id="q-total">10</span></div>
                 <div class="flex items-center gap-2 bg-white px-3 py-1 rounded-full shadow-sm border border-gray-200">
@@ -83,20 +83,15 @@
                     <span class="font-mono font-bold text-lg text-gray-700 w-12 text-center" id="timer-display">00:00</span>
                 </div>
             </div>
-            <!-- Progress Bar -->
             <div class="w-full bg-gray-200 rounded-full h-2 mb-8 overflow-hidden">
                 <div id="timer-bar" class="bg-blue-500 h-2 rounded-full timer-progress" style="width: 100%"></div>
             </div>
-
-            <!-- Question Card -->
             <div class="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-gray-200 flex-1 flex flex-col">
                 <div id="q-image-area" class="mb-4 hidden text-center">
                     <img id="q-image" class="max-h-48 mx-auto rounded-lg border border-gray-100 cursor-zoom-in" onclick="window.open(this.src)">
                 </div>
                 <h2 class="text-xl md:text-2xl font-bold text-gray-800 mb-8 leading-snug break-keep" id="q-text"></h2>
-                
                 <div id="q-options-area" class="space-y-3 flex-1"></div>
-
                 <div class="mt-8 pt-4 border-t border-gray-100 flex justify-end">
                     <button id="btn-next" onclick="app.nextQuestion()" class="bg-gray-800 text-white px-8 py-3 rounded-xl font-bold hover:bg-gray-900 transition shadow-lg">다음 문제 <i class="fas fa-arrow-right ml-2"></i></button>
                 </div>
@@ -108,7 +103,6 @@
             <div class="bg-white p-8 rounded-2xl shadow-xl border-t-8 border-blue-500 max-w-md mx-auto">
                 <h2 class="text-3xl font-black text-gray-800 mb-2">평가 종료</h2>
                 <p class="text-gray-500 mb-8">수고하셨습니다! 결과를 확인하세요.</p>
-                
                 <div class="relative w-48 h-48 mx-auto mb-6">
                     <canvas id="resultChart"></canvas>
                     <div class="absolute inset-0 flex flex-col items-center justify-center">
@@ -116,20 +110,17 @@
                         <span class="text-sm text-gray-400 font-bold">점</span>
                     </div>
                 </div>
-
                 <div class="grid grid-cols-2 gap-3 mb-6">
                     <button onclick="document.getElementById('review-area').classList.toggle('hidden')" class="bg-white border-2 border-gray-200 text-gray-700 font-bold py-3 rounded-xl hover:bg-gray-50">오답 노트</button>
                     <button onclick="location.href='quiz.html'" class="bg-gray-800 text-white font-bold py-3 rounded-xl hover:bg-gray-900 shadow-md">목록으로</button>
                 </div>
                 <button onclick="location.href='history.html'" class="text-gray-400 text-sm hover:text-gray-600 underline">내 기록장 보기</button>
             </div>
-
             <div id="review-area" class="hidden mt-6 bg-white p-6 rounded-2xl shadow-lg text-left border border-red-100">
                 <h3 class="font-bold text-lg text-red-500 mb-4 border-b pb-2"><i class="fas fa-check-circle mr-2"></i>틀린 문제 확인</h3>
                 <div id="review-list" class="space-y-6"></div>
             </div>
         </section>
-
     </main>
 
     <!-- Footer injected by AuthManager -->
@@ -140,8 +131,8 @@
         const app = {
             params: {},
             config: {},
-            questions: [],
-            shuffledQuestions: [],
+            allQuestions: [],
+            selectedQuestions: [],
             currentIndex: 0,
             answers: {},
             timer: null,
@@ -152,97 +143,123 @@
             init: function() {
                 const p = new URLSearchParams(window.location.search);
                 this.params = { unitId: p.get('unitId'), category: p.get('category'), title: decodeURIComponent(p.get('title') || '') };
-                
                 document.getElementById('intro-title').innerText = this.params.title;
                 document.getElementById('intro-subtitle').innerText = this.params.category === 'diagnostic' ? '진단평가' : (this.params.category === 'formative' ? '형성평가' : '실전 모의고사');
-
-                document.addEventListener('auth-ready', (e) => {
-                    this.user = e.detail;
-                    this.checkPreconditions();
-                });
+                document.addEventListener('auth-ready', (e) => { this.user = e.detail; this.checkPreconditions(); });
             },
 
             checkPreconditions: async function() {
                 try {
-                    // 1. Fetch Config
                     const settingsDoc = await window.getCollection('assessment_config').doc('settings').get();
                     const key = `${this.params.unitId}_${this.params.category}`;
                     const allSettings = settingsDoc.exists ? settingsDoc.data() : {};
-                    this.config = allSettings[key] || { active: true, timeLimit: 60, allowRetake: true, cooldown: 0 }; // Default
+                    this.config = allSettings[key] || { active: true, timeLimit: 60, allowRetake: true, cooldown: 0, questionCount: 10 };
 
-                    // Legacy fallback
-                    if (!settingsDoc.exists) {
-                        const statusDoc = await window.getCollection('assessment_config').doc('status').get();
-                        if(statusDoc.exists && statusDoc.data()[key]) this.config.active = true;
-                    }
+                    if (!this.config.active && this.params.unitId !== 'exam_prep') throw new Error("현재 비활성화된 평가입니다.");
 
-                    if (!this.config.active && this.params.unitId !== 'exam_prep') {
-                        throw new Error("현재 비활성화된 평가입니다.");
-                    }
-
-                    // 2. Fetch Questions
                     let qQuery = window.getCollection('quiz_questions');
                     if (this.params.unitId === 'exam_prep') {
                         qQuery = qQuery.where('category', '==', 'exam_prep');
-                        this.config.timeLimit = 180; // Exam prep default
                     } else {
                         qQuery = qQuery.where('unitId', '==', this.params.unitId).where('category', '==', this.params.category);
                     }
-                    
                     const qSnap = await qQuery.get();
-                    this.questions = [];
-                    qSnap.forEach(d => this.questions.push({id: parseInt(d.id), ...d.data()}));
+                    this.allQuestions = [];
+                    qSnap.forEach(d => this.allQuestions.push({id: parseInt(d.id), ...d.data()}));
+                    if (this.allQuestions.length === 0) throw new Error("등록된 문제가 없습니다.");
 
-                    if (this.questions.length === 0) throw new Error("등록된 문제가 없습니다.");
-
-                    // 3. Check History (Retake/Cooldown)
                     const histSnap = await window.getCollection('quiz_results')
                         .where('uid', '==', this.user.uid)
-                        .where('unitId', '==', this.params.unitId) // Assuming unitId saved in result? If not, filtering might be loose.
-                        // Actually better to check timestamp of last general quiz if specific tracking not avail.
-                        // Ideally quiz_results should store unitId/category. Let's assume we save it now.
-                        .orderBy('timestamp', 'desc').limit(1).get();
+                        .where('unitId', '==', this.params.unitId)
+                        .where('category', '==', this.params.category)
+                        .orderBy('timestamp', 'desc').get();
 
-                    let lastAttempt = null;
-                    if (!histSnap.empty) {
-                        const d = histSnap.docs[0].data();
-                        // Filter locally if DB structure didn't have unitId
-                        // For now, assume strict cooldown applies only if we can verify the unit.
-                        // Let's rely on standard logic:
-                        lastAttempt = d.timestamp.toDate(); 
-                    }
+                    // Collect solved question IDs
+                    const solvedIds = new Set();
+                    histSnap.forEach(doc => {
+                        const d = doc.data();
+                        if(d.details) d.details.forEach(log => solvedIds.add(parseInt(log.id)));
+                    });
 
-                    // Update UI Info
                     this.timeLimitTotal = this.config.timeLimit || 60;
                     document.getElementById('info-time').innerText = this.timeLimitTotal + "초";
-                    document.getElementById('info-count').innerText = this.questions.length + "문항";
-                    document.getElementById('info-history').innerText = (!histSnap.empty ? "응시 이력 있음" : "첫 응시");
+                    document.getElementById('info-count').innerText = (this.config.questionCount || 10) + "문항";
+                    document.getElementById('info-history').innerText = (!histSnap.empty ? histSnap.size + "회 응시" : "첫 응시");
 
-                    // Enforce Constraints
                     if (!this.config.allowRetake && !histSnap.empty && this.params.unitId !== 'exam_prep') {
-                        this.blockStart("재응시가 허용되지 않는 평가입니다.");
-                        return;
+                        this.blockStart("재응시가 허용되지 않는 평가입니다."); return;
                     }
 
                     if (this.config.cooldown > 0 && !histSnap.empty) {
-                        const now = new Date();
-                        const diffMins = (now - lastAttempt) / 1000 / 60;
+                        const lastAttempt = histSnap.docs[0].data().timestamp.toDate();
+                        const diffMins = (new Date() - lastAttempt) / 1000 / 60;
                         if (diffMins < this.config.cooldown) {
                             const remain = Math.ceil(this.config.cooldown - diffMins);
-                            this.blockStart(`재응시 대기 시간: ${remain}분 남음`);
-                            return;
+                            this.blockStart(`재응시 대기 시간: ${remain}분 남음`); return;
                         }
                     }
 
-                    // Ready
+                    // Smart Question Selection
+                    this.selectSmartQuestions(solvedIds);
+
                     document.getElementById('loading-overlay').classList.add('hidden');
                     document.getElementById('view-intro').classList.remove('hidden');
                     document.getElementById('view-intro').classList.add('flex');
-
                 } catch(e) {
                     document.getElementById('loading-msg').innerText = "오류: " + e.message;
                     document.getElementById('loading-msg').classList.add('text-red-500');
                 }
+            },
+
+            selectSmartQuestions: function(solvedIds) {
+                const targetCount = this.config.questionCount || 10;
+                
+                // 1. Filter out previously solved questions
+                let pool = this.allQuestions.filter(q => !solvedIds.has(q.id));
+                
+                // 2. If pool is insufficient, reset exclusion logic (or add some back)
+                if (pool.length < targetCount) {
+                    pool = [...this.allQuestions]; // Fallback to full bank if new questions are exhausted
+                }
+
+                if (this.params.unitId === 'exam_prep') {
+                    // BALANCED DISTRIBUTION LOGIC
+                    this.selectedQuestions = this.pickBalancedQuestions(pool, targetCount);
+                } else {
+                    // NORMAL RANDOM LOGIC
+                    this.selectedQuestions = pool.sort(() => 0.5 - Math.random()).slice(0, targetCount);
+                }
+                
+                document.getElementById('q-total').innerText = this.selectedQuestions.length;
+            },
+
+            pickBalancedQuestions: function(pool, targetCount) {
+                // Group by refBig then refMid
+                const groups = {};
+                pool.forEach(q => {
+                    const bigKey = q.refBig || 'unknown_big';
+                    const midKey = q.refMid || 'unknown_mid';
+                    const key = `${bigKey}_${midKey}`;
+                    if(!groups[key]) groups[key] = [];
+                    groups[key].push(q);
+                });
+
+                const groupKeys = Object.keys(groups);
+                const result = [];
+                const localGroups = JSON.parse(JSON.stringify(groups)); // Deep copy to avoid mutations
+
+                // Round-Robin Selection
+                let safety = 0;
+                while(result.length < targetCount && groupKeys.some(k => localGroups[k].length > 0) && safety < 1000) {
+                    groupKeys.forEach(k => {
+                        if(result.length < targetCount && localGroups[k].length > 0) {
+                            const idx = Math.floor(Math.random() * localGroups[k].length);
+                            result.push(localGroups[k].splice(idx, 1)[0]);
+                        }
+                    });
+                    safety++;
+                }
+                return result.sort(() => 0.5 - Math.random());
             },
 
             blockStart: function(reason) {
@@ -255,19 +272,13 @@
             },
 
             startQuiz: function() {
-                // Shuffle & limit to 10
-                this.shuffledQuestions = this.questions.sort(() => 0.5 - Math.random()).slice(0, 10);
                 this.currentIndex = 0;
                 this.answers = {};
                 this.timeLeft = this.timeLimitTotal;
-                
                 document.getElementById('view-intro').classList.remove('flex');
                 document.getElementById('view-intro').classList.add('hidden');
                 document.getElementById('view-quiz').classList.remove('hidden');
                 document.getElementById('view-quiz').classList.add('flex');
-                
-                document.getElementById('q-total').innerText = this.shuffledQuestions.length;
-                
                 this.renderQuestion();
                 this.startTimer();
             },
@@ -275,41 +286,26 @@
             startTimer: function() {
                 const display = document.getElementById('timer-display');
                 const bar = document.getElementById('timer-bar');
-                
                 this.timer = setInterval(() => {
                     this.timeLeft--;
                     const m = Math.floor(this.timeLeft / 60);
                     const s = this.timeLeft % 60;
                     display.innerText = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-                    
                     const pct = (this.timeLeft / this.timeLimitTotal) * 100;
                     bar.style.width = pct + "%";
                     if(pct < 20) bar.classList.add('timer-urgent');
-
-                    if(this.timeLeft <= 0) {
-                        clearInterval(this.timer);
-                        alert("시간이 종료되었습니다! 현재까지 푼 내용으로 제출합니다.");
-                        this.finishQuiz(true);
-                    }
+                    if(this.timeLeft <= 0) { clearInterval(this.timer); alert("시간 종료!"); this.finishQuiz(true); }
                 }, 1000);
             },
 
             renderQuestion: function() {
-                const q = this.shuffledQuestions[this.currentIndex];
+                const q = this.selectedQuestions[this.currentIndex];
                 document.getElementById('q-current').innerText = this.currentIndex + 1;
-                
                 const imgArea = document.getElementById('q-image-area');
-                if(q.image) {
-                    document.getElementById('q-image').src = q.image;
-                    imgArea.classList.remove('hidden');
-                } else { imgArea.classList.add('hidden'); }
-
+                if(q.image) { document.getElementById('q-image').src = q.image; imgArea.classList.remove('hidden'); } else { imgArea.classList.add('hidden'); }
                 document.getElementById('q-text').innerHTML = q.question;
-                
                 const container = document.getElementById('q-options-area');
                 container.innerHTML = '';
-
-                // Render Options based on type
                 if(q.type === 'choice') {
                     q.options.forEach((opt, i) => {
                         const div = document.createElement('div');
@@ -335,121 +331,57 @@
                     input.oninput = (e) => this.answers[q.id] = e.target.value;
                     container.appendChild(input);
                 }
-
-                // Button Text
                 const btn = document.getElementById('btn-next');
-                btn.innerHTML = (this.currentIndex === this.shuffledQuestions.length - 1) ? '제출 하기 <i class="fas fa-check ml-2"></i>' : '다음 문제 <i class="fas fa-arrow-right ml-2"></i>';
+                btn.innerHTML = (this.currentIndex === this.selectedQuestions.length - 1) ? '제출 하기 <i class="fas fa-check ml-2"></i>' : '다음 문제 <i class="fas fa-arrow-right ml-2"></i>';
             },
 
-            selectAnswer: function(qid, val) {
-                this.answers[qid] = val;
-                this.renderQuestion(); // Re-render to show selection
-            },
+            selectAnswer: function(qid, val) { this.answers[qid] = val; this.renderQuestion(); },
 
             nextQuestion: function() {
-                const q = this.shuffledQuestions[this.currentIndex];
-                if(!this.answers[q.id]) {
-                    // Optional: allow skip? Let's force answer for now or confirm
-                    if(!confirm("답을 입력하지 않았습니다. 넘어가시겠습니까?")) return;
-                }
-
-                if(this.currentIndex < this.shuffledQuestions.length - 1) {
-                    this.currentIndex++;
-                    this.renderQuestion();
-                } else {
-                    this.finishQuiz();
-                }
+                const q = this.selectedQuestions[this.currentIndex];
+                if(!this.answers[q.id] && !confirm("넘어가시겠습니까?")) return;
+                if(this.currentIndex < this.selectedQuestions.length - 1) { this.currentIndex++; this.renderQuestion(); } else { this.finishQuiz(); }
             },
 
             finishQuiz: async function(isTimeOut = false) {
                 clearInterval(this.timer);
-                
-                // Calculate Score
                 let correctCnt = 0;
-                const details = [];
-                const detailLogs = []; // Minimal log for DB
-
-                this.shuffledQuestions.forEach(q => {
+                const details = [], detailLogs = [];
+                this.selectedQuestions.forEach(q => {
                     const userAns = (this.answers[q.id] || "").toString().replace(/\s+/g,'').trim();
                     const realAns = q.answer.toString().replace(/\s+/g,'').trim();
-                    let isCorrect = false;
-                    
-                    if (q.type === 'word' || q.type === 'blank') {
-                        isCorrect = (userAns === realAns); // Simplified logic
-                    } else {
-                        isCorrect = (userAns === realAns);
-                    }
-
+                    const isCorrect = (userAns === realAns);
                     if(isCorrect) correctCnt++;
                     details.push({ q: q.question, u: userAns, a: q.answer, correct: isCorrect, exp: q.explanation });
                     detailLogs.push({ id: q.id, correct: isCorrect, u: userAns });
                 });
-
-                const score = Math.round((correctCnt / this.shuffledQuestions.length) * 100);
-
-                // Save to DB
+                const score = Math.round((correctCnt / this.selectedQuestions.length) * 100);
                 try {
                     const userData = await window.getCollection('users').doc(this.user.uid).get();
                     const profile = userData.data() || {};
-                    
                     await window.getCollection('quiz_results').add({
-                        uid: this.user.uid,
-                        name: profile.name || 'Unknown',
-                        class: profile.class || 0,
-                        number: profile.number || 0,
-                        unitId: this.params.unitId,
-                        category: this.params.category,
-                        score: score,
-                        details: detailLogs,
-                        status: isTimeOut ? '시간초과' : '완료',
-                        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                        timeString: new Date().toLocaleString()
+                        uid: this.user.uid, name: profile.name || 'Unknown', class: profile.class || 0, number: profile.number || 0,
+                        unitId: this.params.unitId, category: this.params.category, score: score, details: detailLogs,
+                        status: isTimeOut ? '시간초과' : '완료', timestamp: firebase.firestore.FieldValue.serverTimestamp(), timeString: new Date().toLocaleString()
                     });
-                    
-                    await window.getCollection('metadata').doc('count_info').set({ total_plays: firebase.firestore.FieldValue.increment(1) }, { merge: true });
-
-                } catch(e) { console.error("Save failed", e); }
-
+                } catch(e) { console.error(e); }
                 this.renderResult(score, details);
             },
 
             renderResult: function(score, details) {
-                document.getElementById('view-quiz').classList.remove('flex');
                 document.getElementById('view-quiz').classList.add('hidden');
                 document.getElementById('view-result').classList.remove('hidden');
-                
                 document.getElementById('res-score').innerText = score;
-                
-                // Chart
-                new Chart(document.getElementById('resultChart'), {
-                    type: 'doughnut',
-                    data: {
-                        labels: ['정답', '오답'],
-                        datasets: [{ data: [score, 100-score], backgroundColor: ['#2563eb', '#f3f4f6'], borderWidth: 0 }]
-                    },
-                    options: { cutout: '85%', plugins: { legend: { display: false } } }
-                });
-
-                // Review List
+                new Chart(document.getElementById('resultChart'), { type: 'doughnut', data: { labels: ['정답', '오답'], datasets: [{ data: [score, 100-score], backgroundColor: ['#2563eb', '#f3f4f6'], borderWidth: 0 }] }, options: { cutout: '85%', plugins: { legend: { display: false } } } });
                 const list = document.getElementById('review-list');
-                list.innerHTML = details.filter(d => !d.correct).length === 0 
-                    ? '<div class="text-center py-4 text-green-600 font-bold">🎉 완벽합니다! 모든 문제를 맞혔습니다.</div>' 
-                    : details.map((d, i) => `
-                        <div class="border-b border-gray-100 pb-4 last:border-0 ${d.correct ? 'hidden' : 'block'}">
-                            <div class="flex gap-2 items-start mb-2">
-                                <span class="bg-red-100 text-red-600 text-xs font-bold px-2 py-1 rounded">Q${i+1}</span>
-                                <div class="font-bold text-gray-800">${d.q}</div>
-                            </div>
-                            <div class="flex gap-4 text-sm ml-8 mb-2">
-                                <span class="text-red-500 line-through decoration-2">${d.u || '(미입력)'}</span>
-                                <span class="text-blue-600 font-bold"><i class="fas fa-arrow-right mr-1"></i>${d.a}</span>
-                            </div>
-                            <div class="ml-8 bg-gray-50 p-3 rounded text-sm text-gray-600 leading-relaxed">${d.exp || '해설 없음'}</div>
-                        </div>
-                    `).join('');
+                list.innerHTML = details.filter(d => !d.correct).length === 0 ? '<div class="text-center py-4 text-green-600 font-bold">🎉 완벽합니다!</div>' : details.map((d, i) => `
+                        <div class="${d.correct ? 'hidden' : 'block'} border-b pb-4 last:border-0">
+                            <div class="flex gap-2 items-start mb-2"><span class="bg-red-100 text-red-600 text-xs font-bold px-2 py-1 rounded">Q${i+1}</span><div class="font-bold text-gray-800">${d.q}</div></div>
+                            <div class="flex gap-4 text-sm ml-8 mb-2"><span class="text-red-500 line-through">${d.u || '(미입력)'}</span><span class="text-blue-600 font-bold"><i class="fas fa-arrow-right mr-1"></i>${d.a}</span></div>
+                            <div class="ml-8 bg-gray-50 p-3 rounded text-xs text-gray-600">${d.exp || '해설 없음'}</div>
+                        </div>`).join('');
             }
         };
-
         app.init();
     </script>
 </body>

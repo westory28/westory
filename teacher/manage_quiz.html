@@ -188,10 +188,9 @@
             </div>
         </div>
 
-        <!-- TAB 2 & 3 Kept as is -->
+        <!-- TAB 2 & 3 -->
         <div id="tab-log" class="tab-content hidden h-full overflow-y-auto">
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <!-- Log content omitted for brevity, same as previous -->
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-xl font-bold text-gray-800">제출 현황 <span id="log-count" class="text-sm font-normal text-gray-500"></span></h2>
                     <div class="flex gap-2">
@@ -205,7 +204,6 @@
             </div>
         </div>
         <div id="tab-bank" class="tab-content hidden h-full overflow-hidden flex flex-col">
-            <!-- Bank content omitted for brevity, same as previous -->
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col h-full overflow-hidden">
                  <div class="p-4 border-b bg-gray-50 flex flex-wrap gap-3 items-center shrink-0">
                     <div class="flex items-center gap-2"><i class="fas fa-filter text-gray-400"></i><select id="filter-big" onchange="app.filterBank('big')" class="border rounded px-2 py-1.5 text-sm w-32 font-bold text-gray-700"><option value="">대단원 전체</option></select><i class="fas fa-chevron-right text-gray-300 text-xs"></i><select id="filter-mid" onchange="app.filterBank('mid')" class="border rounded px-2 py-1.5 text-sm w-32 text-gray-700"><option value="">중단원 전체</option></select><i class="fas fa-chevron-right text-gray-300 text-xs"></i><select id="filter-small" onchange="app.filterBank('small')" class="border rounded px-2 py-1.5 text-sm w-32 text-gray-700"><option value="">소단원 전체</option></select></div><div class="h-6 w-px bg-gray-300 mx-2"></div><select id="filter-type" onchange="app.filterBank('type')" class="border rounded px-2 py-1.5 text-sm w-24 text-gray-700"><option value="">유형 전체</option><option value="choice">객관식</option><option value="ox">O/X</option><option value="word">단답형</option><option value="order">순서</option></select><div class="ml-auto text-xs text-gray-500">총 <span id="bank-total-count" class="font-bold text-blue-600">0</span>문제</div>
@@ -218,15 +216,28 @@
     <!-- Settings Modal -->
     <div id="settings-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center">
         <div class="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm" onclick="app.closeSettingsModal()"></div>
-        <div class="bg-white rounded-xl shadow-2xl z-10 w-80 p-6 mx-4 relative transform transition-all">
-            <h3 class="font-bold text-lg text-gray-800 mb-4 border-b pb-2">평가 상세 설정</h3>
-            <div class="space-y-4">
+        <div class="bg-white rounded-xl shadow-2xl z-10 w-96 p-6 mx-4 relative transform transition-all">
+            <h3 class="font-bold text-lg text-gray-800 mb-4 border-b pb-2 flex items-center gap-2">
+                <i class="fas fa-sliders-h text-blue-500"></i> 평가 상세 설정
+            </h3>
+            <div class="space-y-5">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">한 번에 출제할 문항 수</label>
+                    <div class="flex items-center gap-2">
+                        <input type="number" id="setting-count" class="flex-1 border rounded p-2 text-center font-bold text-blue-600 text-lg" placeholder="10">
+                        <span class="text-sm font-bold text-gray-600">개</span>
+                    </div>
+                    <p class="text-[10px] text-gray-400 mt-1 leading-tight">
+                        * 문제 은행에서 랜덤으로 추출됩니다.<br>
+                        * 미풀이 문항을 우선 출제하며, 지필평가 대비는 단원별 균형 출제 로직이 적용됩니다.
+                    </p>
+                </div>
                 <div>
                     <label class="block text-xs font-bold text-gray-500 mb-1">제한 시간 (초)</label>
                     <input type="number" id="setting-time" class="w-full border rounded p-2 text-center font-bold text-lg">
                 </div>
                 <div>
-                    <label class="flex items-center justify-between cursor-pointer p-2 bg-gray-50 rounded border border-gray-200">
+                    <label class="flex items-center justify-between cursor-pointer p-3 bg-gray-50 rounded-lg border border-gray-200">
                         <span class="text-sm font-bold text-gray-600">재응시 허용</span>
                         <input type="checkbox" id="setting-retake" class="w-5 h-5 text-blue-600 rounded" onchange="app.toggleCooldownInput()">
                     </label>
@@ -236,8 +247,8 @@
                     <input type="number" id="setting-cooldown" class="w-full border rounded p-2 text-center font-bold text-lg">
                 </div>
             </div>
-            <div class="mt-6 flex justify-end">
-                <button onclick="app.saveSettings(true)" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700 w-full shadow-md">저장</button>
+            <div class="mt-8 flex justify-end">
+                <button onclick="app.saveSettings(true)" class="bg-blue-600 text-white px-4 py-3 rounded-xl font-bold hover:bg-blue-700 w-full shadow-lg transition transform active:scale-95">설정 저장하기</button>
             </div>
         </div>
     </div>
@@ -277,9 +288,7 @@
             selectedNode: null,
             selectedCategory: 'diagnostic', 
             assessmentSettings: {},
-            filters: { big: '', mid: '', small: '', type: '' },
             examPrepFilters: { big: '', mid: '', small: '' },
-            sort: { key: 'id', order: 'desc' },
             tempImage: null,
 
             init: function() {
@@ -293,7 +302,6 @@
                 document.getElementById('btn-tab-'+tab).classList.add('tab-btn-active');
                 document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
                 document.getElementById('tab-'+tab).classList.remove('hidden');
-                if(tab === 'bank') this.renderBank();
             },
             setSubTab: function(cat) {
                 this.selectedCategory = cat;
@@ -302,11 +310,10 @@
                 this.renderQuestions();
                 this.updateSettingsUI();
             },
-            loadTree: async function() { try { const doc = await window.getCollection('curriculum').doc('tree').get(); this.treeData = (doc.exists && doc.data().tree) ? doc.data().tree : []; this.renderTree(); this.populateFilters(); } catch(e) {} },
-            loadQuestions: async function() { const snap = await window.getCollection('quiz_questions').get(); this.questions = []; snap.forEach(doc => this.questions.push({id: parseInt(doc.id), ...doc.data()})); if(!document.getElementById('tab-bank').classList.contains('hidden')) this.renderBank(); },
+            loadTree: async function() { try { const doc = await window.getCollection('curriculum').doc('tree').get(); this.treeData = (doc.exists && doc.data().tree) ? doc.data().tree : []; this.renderTree(); } catch(e) {} },
+            loadQuestions: async function() { const snap = await window.getCollection('quiz_questions').get(); this.questions = []; snap.forEach(doc => this.questions.push({id: parseInt(doc.id), ...doc.data()})); },
             loadSettings: async function() { const doc = await window.getCollection('assessment_config').doc('settings').get(); this.assessmentSettings = (doc.exists) ? doc.data() : {}; },
 
-            // --- Render Tree & Editor ---
             renderTree: function() {
                 const container = document.getElementById('tree-container');
                 container.innerHTML = '';
@@ -361,29 +368,19 @@
                 const normalSubUnitSelect = document.getElementById('new-q-subunit');
 
                 if (node.id === 'exam_prep') {
-                    // Exam Prep Mode
                     subTabs.classList.add('hidden');
                     epFilters.classList.remove('hidden');
-                    
-                    // Show Cascading Selects in Add Form
                     epAddContainer.classList.remove('hidden');
                     normalSubUnitSelect.classList.add('hidden');
-                    
                     this.selectedCategory = 'exam_prep';
-                    this.updateEpSelects('filter', 'init'); // Init filters
-                    this.updateEpSelects('add', 'init');    // Init add form
+                    this.updateEpSelects('filter', 'init');
+                    this.updateEpSelects('add', 'init');
                 } else {
-                    // Normal Mode
                     subTabs.classList.remove('hidden');
                     epFilters.classList.add('hidden');
-                    
-                    // Show Single Select in Add Form
                     epAddContainer.classList.add('hidden');
                     normalSubUnitSelect.classList.remove('hidden');
-                    
                     this.setSubTab('diagnostic'); 
-                    
-                    // Populate Normal SubUnit Select
                     normalSubUnitSelect.innerHTML = '<option value="">소단원 (전체)</option>';
                     if(node.children) {
                         node.children.forEach(small => {
@@ -398,20 +395,15 @@
                 this.updateSettingsUI();
             },
 
-            // --- Cascading Dropdown Logic for Exam Prep ---
             updateEpSelects: function(prefix, level) {
-                // prefix: 'filter' or 'add'
-                // level: 'init', 'big', 'mid'
                 const idBig = prefix === 'filter' ? 'ep-filter-big' : 'ep-add-big';
                 const idMid = prefix === 'filter' ? 'ep-filter-mid' : 'ep-add-mid';
                 const idSmall = prefix === 'filter' ? 'ep-filter-small' : 'ep-add-small';
-                
                 const elBig = document.getElementById(idBig);
                 const elMid = document.getElementById(idMid);
                 const elSmall = document.getElementById(idSmall);
 
                 if (level === 'init') {
-                    // Populate Big Units
                     elBig.innerHTML = `<option value="">${prefix==='filter'?'대단원 전체':'대단원 선택'}</option>`;
                     this.treeData.forEach(big => {
                         const opt = document.createElement('option');
@@ -421,11 +413,9 @@
                     elMid.innerHTML = `<option value="">${prefix==='filter'?'중단원 전체':'중단원 선택'}</option>`;
                     elSmall.innerHTML = `<option value="">${prefix==='filter'?'소단원 전체':'소단원 선택'}</option>`;
                 } else if (level === 'big') {
-                    // Populate Mid based on Big
                     elMid.innerHTML = `<option value="">${prefix==='filter'?'중단원 전체':'중단원 선택'}</option>`;
                     elSmall.innerHTML = `<option value="">${prefix==='filter'?'소단원 전체':'소단원 선택'}</option>`;
-                    const selBigId = elBig.value;
-                    const bigNode = this.treeData.find(b => b.id === selBigId);
+                    const bigNode = this.treeData.find(b => b.id === elBig.value);
                     if(bigNode && bigNode.children) {
                         bigNode.children.forEach(mid => {
                             const opt = document.createElement('option');
@@ -434,13 +424,10 @@
                         });
                     }
                 } else if (level === 'mid') {
-                    // Populate Small based on Mid
                     elSmall.innerHTML = `<option value="">${prefix==='filter'?'소단원 전체':'소단원 선택'}</option>`;
-                    const selBigId = elBig.value;
-                    const selMidId = elMid.value;
-                    const bigNode = this.treeData.find(b => b.id === selBigId);
+                    const bigNode = this.treeData.find(b => b.id === elBig.value);
                     if(bigNode && bigNode.children) {
-                        const midNode = bigNode.children.find(m => m.id === selMidId);
+                        const midNode = bigNode.children.find(m => m.id === elMid.value);
                         if(midNode && midNode.children) {
                             midNode.children.forEach(small => {
                                 const opt = document.createElement('option');
@@ -450,21 +437,13 @@
                         }
                     }
                 }
-
                 if (prefix === 'filter') {
-                    this.examPrepFilters.big = elBig.value;
-                    this.examPrepFilters.mid = elMid.value;
-                    this.examPrepFilters.small = elSmall.value;
+                    this.examPrepFilters = { big: elBig.value, mid: elMid.value, small: elSmall.value };
                     this.renderQuestions();
                 }
             },
-            resetEpFilters: function() {
-                this.updateEpSelects('filter', 'init');
-                this.examPrepFilters = { big: '', mid: '', small: '' };
-                this.renderQuestions();
-            },
+            resetEpFilters: function() { this.updateEpSelects('filter', 'init'); this.examPrepFilters = { big: '', mid: '', small: '' }; this.renderQuestions(); },
 
-            // --- Settings Logic (Modal) ---
             openSettingsModal: function() {
                 if(!this.selectedNode) return;
                 document.getElementById('settings-modal').classList.remove('hidden');
@@ -486,6 +465,7 @@
                 text.innerText = isActive ? '학생 공개 중' : '학생 비공개';
                 text.className = isActive ? 'ml-2 text-sm font-bold text-green-600' : 'ml-2 text-sm font-bold text-gray-400';
 
+                document.getElementById('setting-count').value = config.questionCount || 10;
                 document.getElementById('setting-time').value = config.timeLimit || 60;
                 document.getElementById('setting-retake').checked = config.allowRetake !== false;
                 document.getElementById('setting-cooldown').value = config.cooldown || 0;
@@ -494,8 +474,8 @@
             toggleCooldownInput: function() {
                 const allow = document.getElementById('setting-retake').checked;
                 const area = document.getElementById('cooldown-area');
-                if(allow) { area.style.opacity = '1'; document.getElementById('setting-cooldown').disabled = false; } 
-                else { area.style.opacity = '0.5'; document.getElementById('setting-cooldown').disabled = true; }
+                area.style.opacity = allow ? '1' : '0.5';
+                document.getElementById('setting-cooldown').disabled = !allow;
             },
             saveSettings: async function(isModal = false) {
                 if(!this.selectedNode) return;
@@ -503,6 +483,7 @@
                 
                 const newData = {
                     active: document.getElementById('toggle-active').checked,
+                    questionCount: parseInt(document.getElementById('setting-count').value) || 10,
                     timeLimit: parseInt(document.getElementById('setting-time').value) || 60,
                     allowRetake: document.getElementById('setting-retake').checked,
                     cooldown: parseInt(document.getElementById('setting-cooldown').value) || 0
@@ -510,15 +491,10 @@
 
                 this.assessmentSettings[key] = newData;
                 this.updateSettingsUI();
-
                 await window.getCollection('assessment_config').doc('settings').set({ [key]: newData }, { merge: true });
-                if(isModal) {
-                    this.closeSettingsModal();
-                    alert("설정이 저장되었습니다.");
-                }
+                if(isModal) { this.closeSettingsModal(); alert("설정이 저장되었습니다."); }
             },
 
-            // --- Pre-Registration Preview ---
             previewNewQuestion: function() {
                 const type = document.getElementById('new-q-type').value;
                 const text = document.getElementById('new-q-text').value;
@@ -544,86 +520,52 @@
                 const file = input.files[0];
                 if(file) {
                     const reader = new FileReader();
-                    reader.onload = (e) => {
-                        this.tempImage = e.target.result;
-                        const prev = document.getElementById(previewId);
-                        prev.src = this.tempImage; prev.classList.remove('hidden');
-                        if(previewId === 'new-q-preview') document.getElementById('new-q-preview-name').innerText = file.name;
-                    };
+                    reader.onload = (e) => { this.tempImage = e.target.result; const prev = document.getElementById(previewId); prev.src = this.tempImage; prev.classList.remove('hidden'); if(previewId === 'new-q-preview') document.getElementById('new-q-preview-name').innerText = file.name; };
                     reader.readAsDataURL(file);
                 }
             },
-            removeEditImage: function() { this.tempImage = null; document.getElementById('edit-preview').classList.add('hidden'); },
-            
             addQuestion: async function() {
                 if(!this.selectedNode) return;
                 const text = document.getElementById('new-q-text').value;
                 const ans = document.getElementById('new-q-answer').value;
                 if(!text || !ans) { alert("문제와 정답은 필수입니다."); return; }
                 const newId = Date.now();
-                
                 let subUnitId = null;
-                let refUnitIds = {}; // For Exam Prep tracking
-
+                let refUnitIds = {};
                 if (this.selectedNode.id === 'exam_prep') {
-                    // Get values from cascading dropdowns
-                    const b = document.getElementById('ep-add-big').value;
-                    const m = document.getElementById('ep-add-mid').value;
-                    const s = document.getElementById('ep-add-small').value;
-                    refUnitIds = { refBig: b, refMid: m, refSmall: s };
-                    // Optionally set subUnitId to the most specific unit selected, if needed for simple filtering later
-                    subUnitId = s || m || b || null; 
-                } else {
-                    subUnitId = document.getElementById('new-q-subunit').value || null;
-                }
-
+                    refUnitIds = { refBig: document.getElementById('ep-add-big').value, refMid: document.getElementById('ep-add-mid').value, refSmall: document.getElementById('ep-add-small').value };
+                    subUnitId = refUnitIds.refSmall || refUnitIds.refMid || refUnitIds.refBig || null; 
+                } else { subUnitId = document.getElementById('new-q-subunit').value || null; }
                 const qData = {
-                    id: newId, unitId: this.selectedNode.id, category: this.selectedCategory,
-                    subUnitId: subUnitId,
-                    ...refUnitIds, // Spread exam prep refs
-                    type: document.getElementById('new-q-type').value, question: text,
-                    image: this.tempImage || null, answer: ans,
+                    id: newId, unitId: this.selectedNode.id, category: this.selectedCategory, subUnitId: subUnitId, ...refUnitIds,
+                    type: document.getElementById('new-q-type').value, question: text, image: this.tempImage || null, answer: ans,
                     options: document.getElementById('new-q-options').value ? document.getElementById('new-q-options').value.split(',').map(s=>s.trim()) : [],
-                    explanation: document.getElementById('new-q-exp').value,
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    explanation: document.getElementById('new-q-exp').value, createdAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
                 await window.getCollection('quiz_questions').doc(String(newId)).set(qData);
-                document.getElementById('new-q-text').value = ''; document.getElementById('new-q-options').value = '';
-                document.getElementById('new-q-answer').value = ''; document.getElementById('new-q-exp').value = '';
-                document.getElementById('new-q-image').value = ''; document.getElementById('new-q-preview').classList.add('hidden');
-                this.tempImage = null;
-                this.questions.push(qData); this.renderQuestions();
-                if(!document.getElementById('tab-bank').classList.contains('hidden')) this.renderBank();
+                this.resetForm(); this.questions.push(qData); this.renderQuestions();
             },
-            
-            deleteQuestion: async function(id) { if(confirm("삭제?")) { await window.getCollection('quiz_questions').doc(String(id)).delete(); this.questions = this.questions.filter(q => String(q.id) !== String(id)); this.renderQuestions(); if(!document.getElementById('tab-bank').classList.contains('hidden')) this.renderBank(); } },
-            // ... (Edit, Bank, Log functions) ...
-            openEditModal: function(id) { const q = this.questions.find(x=>x.id===id); if(!q)return; document.getElementById('edit-id').value=id; document.getElementById('edit-question').value=q.question; document.getElementById('edit-answer').value=q.answer; document.getElementById('edit-modal').classList.remove('hidden'); document.getElementById('edit-modal').classList.add('flex'); },
-            closeEditModal: function() { document.getElementById('edit-modal').classList.add('hidden'); document.getElementById('edit-modal').classList.remove('flex'); },
-            saveEditQuestion: async function() { this.closeEditModal(); },
-            
+            resetForm: function() {
+                document.getElementById('new-q-text').value = ''; document.getElementById('new-q-options').value = ''; document.getElementById('new-q-answer').value = ''; document.getElementById('new-q-exp').value = '';
+                document.getElementById('new-q-image').value = ''; document.getElementById('new-q-preview').classList.add('hidden'); document.getElementById('new-q-preview-name').innerText = ''; this.tempImage = null;
+            },
+            deleteQuestion: async function(id) { if(confirm("삭제?")) { await window.getCollection('quiz_questions').doc(String(id)).delete(); this.questions = this.questions.filter(q => String(q.id) !== String(id)); this.renderQuestions(); } },
             renderQuestions: function() {
                 const list = document.getElementById('q-list');
-                
                 let filtered = this.questions.filter(q => q.unitId === this.selectedNode.id && q.category === this.selectedCategory);
-                
-                // Exam Prep Filtering Logic
                 if (this.selectedNode.id === 'exam_prep') {
                     if (this.examPrepFilters.big) filtered = filtered.filter(q => q.refBig === this.examPrepFilters.big);
                     if (this.examPrepFilters.mid) filtered = filtered.filter(q => q.refMid === this.examPrepFilters.mid);
                     if (this.examPrepFilters.small) filtered = filtered.filter(q => q.refSmall === this.examPrepFilters.small);
                 }
-
                 if(filtered.length === 0) { list.innerHTML = '<div class="text-center py-10 text-gray-400 border-2 border-dashed border-gray-200 rounded-lg">등록된 문제가 없습니다.</div>'; } else {
                     list.innerHTML = filtered.map((q, idx) => `
-                        <div class="bg-white p-4 rounded-lg border border-gray-200 hover:border-blue-300 transition relative group">
-                            <div class="flex justify-between items-start mb-2"><span class="bg-gray-100 text-gray-600 text-xs font-bold px-2 py-1 rounded">Q${idx+1} | ${q.type}</span><div class="flex gap-2"><button onclick="app.previewQuestion(${q.id})" class="text-gray-400 hover:text-green-600 text-xs border border-gray-200 px-2 py-1 rounded hover:bg-green-50 transition"><i class="fas fa-play mr-1"></i>미리보기</button><button onclick="app.openEditModal(${q.id})" class="text-blue-400 hover:text-blue-600"><i class="fas fa-edit"></i></button><button onclick="app.deleteQuestion('${q.id}')" class="text-gray-300 hover:text-red-500"><i class="fas fa-trash"></i></button></div></div>
-                            <div class="flex gap-4">${q.image ? `<img src="${q.image}" class="w-16 h-16 object-cover rounded border border-gray-100">` : ''}<div><p class="font-bold text-gray-800 mb-2">${q.question}</p><div class="text-sm text-gray-500"><span class="text-blue-600 font-bold mr-2">정답: ${q.answer}</span>${q.options ? `<span class="text-xs text-gray-400">(${q.options.join(', ')})</span>` : ''}</div></div></div>
+                        <div class="bg-white p-4 rounded-lg border border-gray-200 hover:border-blue-300 transition relative group shadow-sm">
+                            <div class="flex justify-between items-start mb-2"><span class="bg-gray-100 text-gray-600 text-[10px] font-bold px-2 py-1 rounded">Q${idx+1} | ${q.type}</span><div class="flex gap-2"><button onclick="app.previewQuestion(${q.id})" class="text-gray-400 hover:text-green-600 text-xs border border-gray-200 px-2 py-1 rounded hover:bg-green-50 transition"><i class="fas fa-play mr-1"></i>미리보기</button><button onclick="app.deleteQuestion('${q.id}')" class="text-gray-300 hover:text-red-500"><i class="fas fa-trash"></i></button></div></div>
+                            <div class="flex gap-4">${q.image ? `<img src="${q.image}" class="w-16 h-16 object-cover rounded border border-gray-100">` : ''}<div><p class="font-bold text-gray-800 mb-2 text-sm">${q.question}</p><div class="text-xs text-gray-500"><span class="text-blue-600 font-bold mr-2">정답: ${q.answer}</span>${q.options ? `<span class="text-xs text-gray-400">(${q.options.join(', ')})</span>` : ''}</div></div></div>
                         </div>`).join('');
                 }
             },
-            
-            // ... (Bank & Log stubs) ...
             loadByClass: function(c){}, filterBank: function(){}, sortBank: function(){}, renderBank: function(){}
         };
         document.addEventListener('auth-ready', () => app.init());
