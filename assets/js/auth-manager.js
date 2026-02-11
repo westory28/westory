@@ -175,6 +175,16 @@ class AuthManager {
         let settingsIcon = this.userType === 'teacher' ? `<span id="header-settings-btn" class="text-gray-400 hover:text-blue-600 cursor-pointer transition p-1 mr-2" title="설정"><i class="fas fa-cog fa-lg"></i></span>` : '';
         const semInfo = `<span class="hidden md:inline-block text-xs font-mono bg-gray-100 text-gray-500 px-2 py-1 rounded mr-2 border border-gray-200">${window.currentConfig.year}-${window.currentConfig.semester}</span>`;
 
+        // Student MyPage Link
+        let myPageLink = '';
+        if (this.userType === 'student') {
+            myPageLink = `
+                <a href="${resolve('student/mypage.html')}" class="text-gray-400 hover:text-blue-600 transition p-1 mr-2" title="마이페이지로 이동">
+                    <i class="fas fa-user-circle fa-lg"></i>
+                </a>
+            `;
+        }
+
         const headerHtml = `
             <header>
                 <div class="header-container">
@@ -185,7 +195,10 @@ class AuthManager {
                     <div class="flex items-center gap-3">
                         ${semInfo}
                         ${settingsIcon}
-                        <span id="header-greeting" class="text-sm font-bold text-stone-700 whitespace-nowrap" style="display: inline-block !important;"></span>
+                        <div class="flex items-center gap-2 group cursor-pointer" ${this.userType === 'student' ? `onclick="location.href='${resolve('student/mypage.html')}'"` : ''}>
+                            <span id="header-greeting" class="text-sm font-bold text-stone-700 whitespace-nowrap group-hover:text-blue-600 transition"></span>
+                            ${myPageLink}
+                        </div>
                         
                         <!-- Moved Timer Here -->
                         <div class="flex items-center gap-1 md:gap-2 px-3 py-1 bg-stone-100 rounded-full border border-stone-200 ml-2">
@@ -209,7 +222,7 @@ class AuthManager {
 
         if (this.userType === 'teacher') {
             const settingsBtn = document.getElementById('header-settings-btn');
-            if(settingsBtn) settingsBtn.addEventListener('click', () => this.openSettingsModal());
+            if(settingsBtn) settingsBtn.addEventListener('click', (e) => { e.stopPropagation(); this.openSettingsModal(); });
         }
 
         // Mobile Menu Logic

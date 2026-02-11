@@ -65,6 +65,7 @@
         .modal-check-area:hover { background: #f9fafb; }
         .btn-confirm { background-color: #2563eb; color: white; border: none; padding: 14px 0; width: 100%; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: all 0.2s; }
         .btn-confirm:disabled { background-color: #d1d5db; cursor: not-allowed; color: #9ca3af; }
+        .save-indicator { position: fixed; bottom: 20px; right: 20px; background: #333; color: white; padding: 10px 20px; border-radius: 30px; font-size: 12px; display: none; align-items: center; gap: 8px; shadow-lg; z-index: 100; }
     </style>
 </head>
 <body>
@@ -78,6 +79,7 @@
                 <div class="text-4xl mb-2">⚠️</div>
                 <h3 class="text-xl font-bold text-amber-600 mb-4">주의사항 안내</h3>
                 <div class="text-sm text-stone-600 mb-6 leading-relaxed">이 결과는 <strong>참고용 시뮬레이션</strong>이며,<br>정확한 성적은 <u>나이스(NEIS)</u> 및 <u>성적 통지표</u>를 확인하세요.</div>
+                <div class="text-xs text-stone-400 mb-4 bg-stone-50 p-2 rounded">입력한 점수는 사용자의 계정에 안전하게 저장됩니다.</div>
                 <div class="modal-check-area" onclick="document.getElementById('agreeCheck').click()">
                     <input type="checkbox" id="agreeCheck" onclick="event.stopPropagation()">
                     <label for="agreeCheck">위 내용을 확인하였으며 동의합니다.</label>
@@ -94,7 +96,6 @@
                 <div class="filter-group"><span class="filter-label">연도</span><select id="yearFilter" onchange="renderDashboard()"><option value="2025">2025학년도</option><option value="2026">2026학년도</option></select></div>
                 <div class="filter-group">
                     <span class="filter-label">학기</span>
-                    <!-- Value modified to match DB format (1, 2) -->
                     <select id="semesterFilter" onchange="renderDashboard()">
                         <option value="1">1학기</option>
                         <option value="2">2학기</option>
@@ -115,11 +116,17 @@
             </div>
         </div>
     </div>
+    
+    <div id="saveIndicator" class="save-indicator"><i class="fas fa-sync fa-spin"></i> 저장 중...</div>
+
     <!-- Footer injected by AuthManager -->
     <script>
         window.AuthManager.init('student');
         let allGradingPlans = [];
+        let userScores = {}; // Format: { [planId_itemIdx]: value }
         let myChart = null;
+        let saveTimeout = null;
+        let currentUser = null;
         const FIXED_SUBJECT_ORDER = ['국어', '영어', '수학', '과학', '역사', '기가', '한문', '일본어', '미술', '체육'];
 
         document.addEventListener('auth-ready', async (e) => {
@@ -129,12 +136,12 @@
             
             // Set Filters from Global Config
             document.getElementById('yearFilter').value = window.currentConfig.year;
-            document.getElementById('semesterFilter').value = window.currentConfig.semester; // Value is now "1" or "2"
+            document.getElementById('semesterFilter').value = window.currentConfig.semester;
 
-            const user = e.detail;
+            currentUser = e.detail;
             try {
-                const userDoc = await window.getCollection('users').doc(user.uid).get();
-                let userName = (userDoc.exists && userDoc.data().name) ? userDoc.data().name : (user.displayName || "학생");
+                const userDoc = await window.getCollection('users').doc(currentUser.uid).get();
+                let userName = (userDoc.exists && userDoc.data().name) ? userDoc.data().name : (currentUser.displayName || "학생");
                 document.getElementById('userNameArea').innerText = `${userName} 학생, 화이팅!`;
             } catch (err) { document.getElementById('userNameArea').innerText = "환영합니다!"; }
             loadAllData();
@@ -164,10 +171,25 @@
 
         async function loadAllData() {
             try {
-                // Changed: Use dynamic collection for Grading Plans
-                const snapshot = await window.getCollection("grading_plans").orderBy("createdAt", "desc").get();
+                // 1. Fetch Grading Plans
+                const plansSnap = await window.getCollection("grading_plans").orderBy("createdAt", "desc").get();
                 allGradingPlans = [];
-                snapshot.forEach(doc => allGradingPlans.push({ id: doc.id, ...doc.data() }));
+                plansSnap.forEach(doc => allGradingPlans.push({ id: doc.id, ...doc.data() }));
+
+                // 2. Fetch User Scores from Firestore (academic_records)
+                const year = document.getElementById('yearFilter').value;
+                const sem = document.getElementById('semesterFilter').value;
+                const scoreDocId = `${year}_${sem}`;
+                
+                const scoreDoc = await window.db.collection('users').doc(currentUser.uid)
+                                      .collection('academic_records').doc(scoreDocId).get();
+                
+                if (scoreDoc.exists) {
+                    userScores = scoreDoc.data().scores || {};
+                } else {
+                    userScores = {};
+                }
+
                 renderDashboard();
             } catch (e) { console.error(e); }
         }
@@ -182,8 +204,14 @@
         function calculateTotal(plan) {
             let total = 0; let hasData = false; 
             plan.items.forEach((item, idx) => {
-                const saved = localStorage.getItem(`score_${plan.id}_${idx}`);
-                if(saved !== null && saved !== "") { hasData = true; const val = parseFloat(saved); if(!isNaN(val)) total += (val / item.maxScore) * item.ratio; }
+                // Modified: Read from userScores object instead of localStorage
+                const key = `${plan.id}_${idx}`;
+                const saved = userScores[key];
+                if(saved !== undefined && saved !== null && saved !== "") { 
+                    hasData = true; 
+                    const val = parseFloat(saved); 
+                    if(!isNaN(val)) total += (val / item.maxScore) * item.ratio; 
+                }
             });
             return { score: parseFloat(total.toFixed(1)), hasData: hasData };
         }
@@ -199,8 +227,7 @@
             let filteredPlans = allGradingPlans.filter(plan => {
                 const pGrade = plan.targetGrade || "2"; 
                 const pYear = plan.academicYear || "2025";
-                const pSem = plan.semester || "1"; // Default DB value is likely "1" or "2"
-                // Strict compare for semester
+                const pSem = plan.semester || "1"; 
                 return String(pGrade) === gradeFilter && pYear === yearFilter && pSem === semesterFilter;
             });
 
@@ -221,8 +248,10 @@
             }
 
             if (filteredPlans.length === 0) {
-                container.innerHTML = `<div style="text-align:center; padding:50px; color:#888; background:#fff; border-radius:8px; border:1px solid #eee;">해당 학기(${gradeFilter}학년 ${yearFilter} ${semesterFilter}학기)의 데이터가 없습니다.</div>`;
+                container.innerHTML = `<div style="text-align:center; padding:50px; color:#888; background:#fff; border-radius:8px; border:1px solid #eee;">해당 학기(${gradeFilter}학년 ${yearFilter} ${semesterFilter}학기)의 평가 기준 데이터가 없습니다.</div>`;
                 updateChart([], [], []);
+                // If switching year/semester, try reloading data to be safe, but typically we filter loaded data
+                if(yearFilter !== window.currentConfig.year) { /* maybe trigger reload */ }
                 return;
             }
 
@@ -236,7 +265,8 @@
                 const card = document.createElement('div'); card.className = 'subject-card'; card.style.borderLeftColor = info.colorCode;
                 let itemsHtml = '';
                 plan.items.forEach((item, idx) => {
-                    const savedVal = localStorage.getItem(`score_${plan.id}_${idx}`) || "";
+                    const key = `${plan.id}_${idx}`;
+                    const savedVal = userScores[key] || "";
                     itemsHtml += `<div class="input-item"><div><div class="item-label"><span class="type-tag">${item.type}</span>${item.name}</div><div class="item-sub">${item.maxScore}점 만점 / ${item.ratio}% 반영</div></div><input type="number" class="score-input" data-planid="${plan.id}" data-idx="${idx}" data-max="${item.maxScore}" value="${savedVal}" placeholder="0" onclick="event.stopPropagation()"></div>`;
                 });
 
@@ -249,11 +279,50 @@
         };
 
         function handleInput(e) {
-            const planId = e.target.dataset.planid; const idx = e.target.dataset.idx; const max = parseFloat(e.target.dataset.max);
+            const planId = e.target.dataset.planid; 
+            const idx = e.target.dataset.idx; 
+            const max = parseFloat(e.target.dataset.max);
             let val = parseFloat(e.target.value);
-            if (!isNaN(val)) { if(val > max) { val = max; e.target.value = max; } if(val < 0) { val = 0; e.target.value = 0; } }
-            localStorage.setItem(`score_${planId}_${idx}`, e.target.value);
+            
+            if (!isNaN(val)) { 
+                if(val > max) { val = max; e.target.value = max; } 
+                if(val < 0) { val = 0; e.target.value = 0; } 
+            }
+            
+            // Update Local State
+            const key = `${planId}_${idx}`;
+            userScores[key] = e.target.value; // Store as string to keep empty inputs empty if cleared
+            
             updateCardUI(planId);
+            debounceSave();
+        }
+
+        function debounceSave() {
+            const indicator = document.getElementById('saveIndicator');
+            indicator.style.display = 'flex';
+            indicator.innerHTML = '<i class="fas fa-sync fa-spin"></i> 저장 중...';
+            
+            if(saveTimeout) clearTimeout(saveTimeout);
+            
+            saveTimeout = setTimeout(async () => {
+                const year = document.getElementById('yearFilter').value;
+                const sem = document.getElementById('semesterFilter').value;
+                const scoreDocId = `${year}_${sem}`;
+                
+                try {
+                    await window.db.collection('users').doc(currentUser.uid)
+                        .collection('academic_records').doc(scoreDocId).set({
+                            scores: userScores,
+                            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                        }, { merge: true });
+                    
+                    indicator.innerHTML = '<i class="fas fa-check"></i> 저장 완료';
+                    setTimeout(() => { indicator.style.display = 'none'; }, 2000);
+                } catch(e) {
+                    console.error(e);
+                    indicator.innerHTML = '<i class="fas fa-exclamation-triangle"></i> 저장 실패';
+                }
+            }, 1000); // 1 second debounce
         }
 
         function updateCardUI(planId) {

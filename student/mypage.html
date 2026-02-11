@@ -1,0 +1,392 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>마이페이지 - Westory</title>
+    <!-- Tailwind & Chart.js -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    
+    <!-- Config & Styles -->
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <script src="../assets/js/firebase-config.js"></script>
+    <script src="../assets/js/auth-manager.js"></script>
+
+    <style>
+        .profile-card { background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); color: white; border-radius: 1.5rem; }
+        .stat-card { background: white; border-radius: 1rem; border: 1px solid #e5e7eb; box-shadow: 0 1px 2px rgba(0,0,0,0.05); padding: 1.5rem; height: 100%; }
+        .tab-btn { padding: 12px 24px; font-weight: 700; color: #9ca3af; border-bottom: 2px solid transparent; transition: all 0.2s; }
+        .tab-btn.active { color: #2563eb; border-bottom-color: #2563eb; }
+        .accordion-header { cursor: pointer; transition: background-color 0.2s; }
+        .accordion-header:hover { background-color: #f9fafb; }
+        .accordion-content { display: none; }
+        .accordion-content.open { display: block; }
+        .chart-wrapper { position: relative; height: 250px; width: 100%; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen flex flex-col">
+    <!-- Header injected by JS -->
+
+    <main class="flex-grow w-full max-w-6xl mx-auto px-4 py-8">
+        
+        <!-- 1. Profile Section -->
+        <section class="mb-8">
+            <div class="profile-card p-8 flex flex-col md:flex-row items-center gap-6 shadow-xl">
+                <div class="relative">
+                    <div class="w-24 h-24 bg-white/20 backdrop-blur rounded-full flex items-center justify-center text-4xl border-4 border-white/30">
+                        👨‍🎓
+                    </div>
+                    <div class="absolute bottom-0 right-0 bg-yellow-400 text-yellow-900 text-xs font-bold px-2 py-1 rounded-full shadow-sm" id="badge-level">LV.1</div>
+                </div>
+                <div class="text-center md:text-left flex-1">
+                    <h1 class="text-3xl font-extrabold mb-1" id="profile-name">학생 이름</h1>
+                    <p class="text-blue-100 font-medium mb-3" id="profile-info">--학년 --반 --번</p>
+                    <div class="inline-flex items-center bg-black/20 rounded-lg px-4 py-2 text-sm backdrop-blur-sm">
+                        <i class="fas fa-trophy text-yellow-300 mr-2"></i>
+                        <span>퀴즈 참여: <span class="font-bold text-white" id="stat-quiz-count">0</span>회</span>
+                        <div class="w-px h-3 bg-white/30 mx-3"></div>
+                        <i class="fas fa-pencil-alt text-green-300 mr-2"></i>
+                        <span>성적 입력: <span class="font-bold text-white" id="stat-score-count">0</span>과목</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. Charts Section -->
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <!-- Academic Score Chart -->
+            <div class="stat-card flex flex-col">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="font-bold text-gray-800 text-lg flex items-center">
+                        <span class="w-1.5 h-6 bg-blue-600 rounded-full mr-2"></span>나의 성적표
+                    </h3>
+                    <span class="text-xs text-gray-400 font-mono" id="score-semester-info">2025-1</span>
+                </div>
+                <div class="flex-1 flex items-center justify-center chart-wrapper">
+                    <canvas id="scoreChart"></canvas>
+                </div>
+                <p class="text-xs text-center text-gray-400 mt-2">* 입력된 수행/지필 점수 기준</p>
+            </div>
+
+            <!-- Quiz Growth Chart -->
+            <div class="stat-card flex flex-col">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="font-bold text-gray-800 text-lg flex items-center">
+                        <span class="w-1.5 h-6 bg-green-500 rounded-full mr-2"></span>퀴즈 성장 그래프
+                    </h3>
+                    <span class="text-xs text-gray-400">최근 10회</span>
+                </div>
+                <div class="flex-1 flex items-center justify-center chart-wrapper">
+                    <canvas id="quizChart"></canvas>
+                </div>
+                <p class="text-xs text-center text-gray-400 mt-2">* 형성/진단 평가 종합</p>
+            </div>
+        </section>
+
+        <!-- 3. Bottom Tabs -->
+        <section class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+            <div class="flex border-b border-gray-100">
+                <button onclick="app.switchTab('wrong')" class="tab-btn active" id="btn-wrong"><i class="fas fa-times-circle mr-2 text-red-400"></i>오답 노트</button>
+                <button onclick="app.switchTab('activity')" class="tab-btn" id="btn-activity"><i class="fas fa-file-alt mr-2 text-blue-400"></i>활동지 (준비중)</button>
+            </div>
+
+            <!-- Tab Content: Wrong Answers -->
+            <div id="tab-wrong" class="p-6">
+                <div id="wrong-list" class="space-y-4">
+                    <div class="text-center py-10 text-gray-400">
+                        <div class="loader-spinner mx-auto mb-2"></div>
+                        <p>오답 데이터를 분석하고 있습니다...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Activities -->
+            <div id="tab-activity" class="p-6 hidden">
+                <div class="text-center py-20 text-gray-400 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+                    <i class="fas fa-tools text-4xl mb-4 text-gray-300"></i>
+                    <p class="font-bold">활동지 모아보기 기능은 준비 중입니다.</p>
+                    <p class="text-sm mt-1">수업 시간에 작성한 빈칸 채우기 내용을 이곳에서 한눈에 볼 수 있습니다.</p>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer injected by AuthManager -->
+
+    <script>
+        window.AuthManager.init('student');
+
+        const app = {
+            user: null,
+            scoreChart: null,
+            quizChart: null,
+
+            init: function() {
+                document.addEventListener('auth-ready', (e) => {
+                    this.user = e.detail;
+                    this.loadProfile();
+                    this.loadDashboardData();
+                });
+            },
+
+            loadProfile: async function() {
+                try {
+                    const doc = await window.getCollection('users').doc(this.user.uid).get();
+                    if(doc.exists) {
+                        const d = doc.data();
+                        document.getElementById('profile-name').innerText = d.name || "학생";
+                        document.getElementById('profile-info').innerText = `${d.grade || 2}학년 ${d.class || '?'}반 ${d.number || '?'}번`;
+                    } else {
+                        document.getElementById('profile-name').innerText = this.user.displayName;
+                    }
+                    
+                    const config = window.currentConfig;
+                    document.getElementById('score-semester-info').innerText = `${config.year}-${config.semester}`;
+                } catch(e) { console.error(e); }
+            },
+
+            loadDashboardData: async function() {
+                try {
+                    await Promise.all([
+                        this.renderScoreChart(),
+                        this.renderQuizChart(),
+                        this.renderWrongAnswers()
+                    ]);
+                } catch(e) { console.error("Dashboard Load Error", e); }
+            },
+
+            // --- 1. Score Chart Logic ---
+            renderScoreChart: async function() {
+                const config = window.currentConfig;
+                const scoreDocId = `${config.year}_${config.semester}`;
+                
+                // Fetch User Scores
+                const scoreDoc = await window.db.collection('users').doc(this.user.uid)
+                                      .collection('academic_records').doc(scoreDocId).get();
+                const userScores = scoreDoc.exists ? scoreDoc.data().scores : {};
+
+                // Fetch Plans to map scores to subjects
+                const plansSnap = await window.getCollection("grading_plans").orderBy("createdAt", "desc").get();
+                const subjects = {};
+
+                plansSnap.forEach(doc => {
+                    const plan = doc.data();
+                    // Filter by current semester/year if stored in plan (assuming logic from score.html)
+                    if (plan.academicYear && plan.academicYear !== config.year) return;
+                    if (plan.semester && plan.semester !== config.semester) return;
+
+                    let total = 0;
+                    plan.items.forEach((item, idx) => {
+                        const key = `${doc.id}_${idx}`;
+                        const saved = userScores[key];
+                        if(saved) {
+                            const val = parseFloat(saved);
+                            if(!isNaN(val)) total += (val / item.maxScore) * item.ratio;
+                        }
+                    });
+                    
+                    // Store highest if duplicates exists (or just overwrite)
+                    subjects[plan.subject] = parseFloat(total.toFixed(1));
+                });
+
+                const labels = Object.keys(subjects);
+                const data = Object.values(subjects);
+                document.getElementById('stat-score-count').innerText = labels.length;
+
+                // Chart
+                const ctx = document.getElementById('scoreChart').getContext('2d');
+                if (data.length === 0) {
+                    this.showEmptyChart(ctx, "성적 데이터가 없습니다.");
+                    return;
+                }
+
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: '환산 점수',
+                            data: data,
+                            backgroundColor: 'rgba(59, 130, 246, 0.6)',
+                            borderColor: 'rgba(59, 130, 246, 1)',
+                            borderWidth: 1,
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: { y: { beginAtZero: true, max: 100 } },
+                        plugins: { legend: { display: false } }
+                    }
+                });
+            },
+
+            // --- 2. Quiz Chart Logic ---
+            renderQuizChart: async function() {
+                const snap = await window.getCollection('quiz_results')
+                    .where('uid', '==', this.user.uid)
+                    .orderBy('timestamp', 'desc')
+                    .limit(10)
+                    .get();
+
+                const results = [];
+                snap.forEach(doc => results.push(doc.data()));
+                document.getElementById('stat-quiz-count').innerText = results.length; // Just fetches loaded count here, real total needs count aggregation
+
+                // Reverse to show chronological order
+                results.reverse();
+
+                const ctx = document.getElementById('quizChart').getContext('2d');
+                if (results.length === 0) {
+                    this.showEmptyChart(ctx, "퀴즈 응시 기록이 없습니다.");
+                    return;
+                }
+
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: results.map((_, i) => `${i + 1}회`),
+                        datasets: [{
+                            label: '점수',
+                            data: results.map(r => r.score),
+                            borderColor: '#10b981', // emerald-500
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            fill: true,
+                            tension: 0.3,
+                            pointRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: { y: { beginAtZero: true, max: 100 } },
+                        plugins: { legend: { display: false } }
+                    }
+                });
+            },
+
+            // --- 3. Wrong Answers Logic ---
+            renderWrongAnswers: async function() {
+                // Fetch recent quiz results to extract wrong answers
+                // Note: Fetching distinct wrong answers efficiently in NoSQL is hard without a dedicated collection.
+                // We will client-side filter the recent 20 quiz results for this prototype.
+                
+                const snap = await window.getCollection('quiz_results')
+                    .where('uid', '==', this.user.uid)
+                    .orderBy('timestamp', 'desc')
+                    .limit(20)
+                    .get();
+
+                const container = document.getElementById('wrong-list');
+                const wrongItems = [];
+
+                // Need to fetch question details. 
+                // Optimized approach: Collect IDs first.
+                const questionIds = new Set();
+                const logMap = []; // Stores { logId, questionId, userAnswer }
+
+                snap.forEach(doc => {
+                    const data = doc.data();
+                    if (data.details) {
+                        data.details.forEach(log => {
+                            if (!log.correct) {
+                                questionIds.add(String(log.id));
+                                logMap.push({ qid: String(log.id), u: log.u, date: data.timeString });
+                            }
+                        });
+                    }
+                });
+
+                if (questionIds.size === 0) {
+                    container.innerHTML = `<div class="text-center py-10 text-gray-400 bg-gray-50 rounded-xl"><i class="fas fa-check-circle text-4xl mb-4 text-green-300"></i><p>최근 20회 퀴즈에서 오답이 없습니다. 훌륭해요!</p></div>`;
+                    return;
+                }
+
+                // Fetch Question Details
+                // Split into chunks of 10 for 'in' query
+                const idsArray = Array.from(questionIds);
+                const chunks = [];
+                for (let i=0; i<idsArray.length; i+=10) chunks.push(idsArray.slice(i, i+10));
+
+                const questionDetails = {};
+                await Promise.all(chunks.map(async chunk => {
+                    const qSnap = await window.getCollection('quiz_questions')
+                        .where(firebase.firestore.FieldPath.documentId(), 'in', chunk)
+                        .get();
+                    qSnap.forEach(d => questionDetails[d.id] = d.data());
+                }));
+
+                // Render
+                let html = '';
+                // Limit to show unique questions (latest instance) or all instances? Let's show unique by QID for "Review"
+                const renderedQids = new Set();
+
+                logMap.forEach(item => {
+                    if (renderedQids.has(item.qid)) return; // Skip duplicates
+                    const qData = questionDetails[item.qid];
+                    if (!qData) return;
+
+                    renderedQids.add(item.qid);
+                    html += `
+                        <div class="border border-gray-200 rounded-xl overflow-hidden hover:border-red-300 transition bg-white">
+                            <div class="accordion-header p-4 flex justify-between items-center" onclick="this.nextElementSibling.classList.toggle('open')">
+                                <div class="flex items-center gap-3 overflow-hidden">
+                                    <span class="bg-red-100 text-red-600 text-xs font-bold px-2 py-1 rounded shrink-0">오답</span>
+                                    <h4 class="font-bold text-gray-800 truncate">${qData.question}</h4>
+                                </div>
+                                <i class="fas fa-chevron-down text-gray-400"></i>
+                            </div>
+                            <div class="accordion-content bg-red-50 p-4 border-t border-gray-100">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3 text-sm">
+                                    <div class="bg-white p-3 rounded border border-red-100">
+                                        <div class="text-xs text-gray-500 mb-1">나의 오답</div>
+                                        <div class="font-bold text-red-500 line-through">${item.u || '(미입력)'}</div>
+                                    </div>
+                                    <div class="bg-white p-3 rounded border border-green-100">
+                                        <div class="text-xs text-gray-500 mb-1">정답</div>
+                                        <div class="font-bold text-green-600">${qData.answer}</div>
+                                    </div>
+                                </div>
+                                <div class="bg-white p-3 rounded border border-gray-200">
+                                    <div class="text-xs text-blue-500 font-bold mb-1"><i class="fas fa-lightbulb mr-1"></i>해설</div>
+                                    <p class="text-gray-700 text-sm leading-relaxed">${qData.explanation || '해설 정보가 없습니다.'}</p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                container.innerHTML = html;
+            },
+
+            showEmptyChart: function(ctx, msg) {
+                // Simple placeholder text on canvas parent or clear rect
+                const canvas = ctx.canvas;
+                const parent = canvas.parentNode;
+                parent.innerHTML = `<div class="flex items-center justify-center h-full text-gray-400 text-sm font-bold">${msg}</div>`;
+            },
+
+            switchTab: function(tabName) {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.getElementById('btn-' + tabName).classList.add('active');
+                
+                document.getElementById('tab-wrong').classList.add('hidden');
+                document.getElementById('tab-activity').classList.add('hidden');
+                document.getElementById('tab-' + tabName).classList.remove('hidden');
+            }
+        };
+
+        app.init();
+    </script>
+</body>
+</html>
