@@ -25,14 +25,22 @@
         .exam-banner.disabled .exam-deco { display: none; }
         .exam-deco { position: absolute; font-size: 8rem; opacity: 0.1; right: -20px; bottom: -20px; transform: rotate(-15deg); }
         
-        .unit-list-container { background: white; border-radius: 12px; border: 1px solid #e5e7eb; overflow: hidden; }
+        .unit-list-container { /* Removed background/border from container to let items separate */ }
         
-        /* Accordion Styles */
-        .acc-item { border-bottom: 1px solid #f3f4f6; }
-        .acc-item:last-child { border-bottom: none; }
+        /* Accordion Styles - Separated Cards */
+        .acc-item { 
+            background: white; 
+            border: 1px solid #e5e7eb; 
+            border-radius: 12px; 
+            margin-bottom: 16px; /* Spacing between items */
+            overflow: hidden; 
+            transition: box-shadow 0.2s;
+        }
+        .acc-item:hover { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
+        .acc-item:last-child { margin-bottom: 0; }
         
         .acc-header { padding: 20px; background-color: #fff; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: background 0.2s; }
-        .acc-header:hover { background-color: #f9fafb; }
+        .acc-header:hover { background-color: #f8fafc; }
         .acc-header-title { font-weight: 800; font-size: 1.05rem; color: #1f2937; }
         .acc-icon { transition: transform 0.3s; color: #9ca3af; }
         
@@ -89,8 +97,8 @@
             <h2 class="text-lg font-bold text-gray-800 mb-4 ml-1 flex items-center gap-2">
                 <i class="fas fa-layer-group text-amber-500"></i> 단원별 평가
             </h2>
-            <div id="quiz-list-container" class="unit-list-container shadow-sm bg-white min-h-[100px]">
-                <div class="py-20 text-center text-gray-400">
+            <div id="quiz-list-container" class="unit-list-container min-h-[100px]">
+                <div class="py-20 text-center text-gray-400 bg-white rounded-xl border border-gray-200">
                     <div class="loader-spinner mx-auto mb-3"></div>
                     <p>평가 목록을 불러오는 중...</p>
                 </div>
@@ -168,7 +176,7 @@
                     this.renderList();
                 } catch(e) {
                     console.error(e);
-                    document.getElementById('quiz-list-container').innerHTML = '<div class="text-center text-red-400 p-10 font-bold">데이터를 불러올 수 없습니다.</div>';
+                    document.getElementById('quiz-list-container').innerHTML = '<div class="text-center text-red-400 p-10 font-bold bg-white rounded-xl border border-gray-200">데이터를 불러올 수 없습니다.</div>';
                 }
             },
 
@@ -192,7 +200,7 @@
             renderList: function() {
                 const container = document.getElementById('quiz-list-container');
                 if(this.tree.length === 0) {
-                    container.innerHTML = '<div class="text-center py-10 text-gray-400">등록된 단원이 없습니다.<br><span class="text-xs">선생님이 아직 단원을 등록하지 않았습니다.</span></div>';
+                    container.innerHTML = '<div class="text-center py-10 text-gray-400 bg-white rounded-xl border border-gray-200">등록된 단원이 없습니다.<br><span class="text-xs">선생님이 아직 단원을 등록하지 않았습니다.</span></div>';
                     return;
                 }
 

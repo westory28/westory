@@ -72,7 +72,7 @@ class AuthManager {
                             window.location.href = this.rootPrefix + 'student/dashboard.html';
                             return;
                         }
-                        this.injectSettingsModal(); 
+                        // Teacher specific init if needed
                     }
 
                     this.fetchAdditionalUserData(user, type);
@@ -107,8 +107,28 @@ class AuthManager {
         } catch (e) { console.error("DB Error:", e); }
     }
 
-    showPrivacyModal(uid) {
-        // (Previously defined privacy modal code remains the same)
+    async showPrivacyModal(uid) {
+        // Fetch custom privacy text
+        let privacyContent = `
+            <p class="font-bold mb-2">[수집 및 이용 목적]</p>
+            <p>1. 학습 기록 관리 및 성적 산출</p>
+            <p>2. 맞춤형 학습 콘텐츠 제공</p>
+            <p>3. 교사의 학생 지도 및 상담 자료 활용</p>
+            <br>
+            <p class="font-bold mb-2">[수집 항목]</p>
+            <p>이름, 이메일, 학년, 반, 번호, 퀴즈 응시 내역</p>
+            <br>
+            <p class="font-bold mb-2">[보유 기간]</p>
+            <p>회원 탈퇴 시 또는 졸업 시까지</p>
+        `;
+
+        try {
+            const doc = await window.db.collection('site_settings').doc('privacy').get();
+            if(doc.exists && doc.data().text) {
+                privacyContent = doc.data().text;
+            }
+        } catch(e) { console.warn("Failed to load custom privacy text", e); }
+
         const modalHtml = `
             <div id="global-privacy-modal" class="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-70 backdrop-blur-sm">
                 <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-8 mx-4">
@@ -117,17 +137,8 @@ class AuthManager {
                         <h2 class="text-2xl font-bold text-gray-900">개인정보 활용 동의</h2>
                         <p class="text-gray-500 text-sm mt-2">서비스 이용을 위해 최초 1회 동의가 필요합니다.</p>
                     </div>
-                    <div class="bg-gray-50 p-4 rounded-lg text-sm text-gray-600 h-40 overflow-y-auto mb-6 border border-gray-200 leading-relaxed">
-                        <p class="font-bold mb-2">[수집 및 이용 목적]</p>
-                        <p>1. 학습 기록 관리 및 성적 산출</p>
-                        <p>2. 맞춤형 학습 콘텐츠 제공</p>
-                        <p>3. 교사의 학생 지도 및 상담 자료 활용</p>
-                        <br>
-                        <p class="font-bold mb-2">[수집 항목]</p>
-                        <p>이름, 이메일, 학년, 반, 번호, 퀴즈 응시 내역</p>
-                        <br>
-                        <p class="font-bold mb-2">[보유 기간]</p>
-                        <p>회원 탈퇴 시 또는 졸업 시까지</p>
+                    <div class="bg-gray-50 p-4 rounded-lg text-sm text-gray-600 h-60 overflow-y-auto mb-6 border border-gray-200 leading-relaxed custom-scroll">
+                        ${privacyContent}
                     </div>
                     <div class="flex items-center justify-center gap-2 mb-6 cursor-pointer" onclick="document.getElementById('privacy-check').click()">
                         <input type="checkbox" id="privacy-check" class="w-5 h-5 text-blue-600 rounded focus:ring-blue-500">
@@ -172,7 +183,8 @@ class AuthManager {
         }
 
         const dashboardLink = this.userType === 'teacher' ? resolve('teacher/dashboard.html') : resolve('student/dashboard.html');
-        let settingsIcon = this.userType === 'teacher' ? `<span id="header-settings-btn" class="text-gray-400 hover:text-blue-600 cursor-pointer transition p-1 mr-2" title="설정"><i class="fas fa-cog fa-lg"></i></span>` : '';
+        // Changed: Settings icon now links to page, not modal
+        let settingsIcon = this.userType === 'teacher' ? `<a href="${resolve('teacher/settings.html')}" class="text-gray-400 hover:text-blue-600 cursor-pointer transition p-1 mr-2" title="관리자 설정"><i class="fas fa-cog fa-lg"></i></a>` : '';
         const semInfo = `<span class="hidden md:inline-block text-xs font-mono bg-gray-100 text-gray-500 px-2 py-1 rounded mr-2 border border-gray-200">${window.currentConfig.year}-${window.currentConfig.semester}</span>`;
 
         // Student MyPage Link
@@ -220,11 +232,6 @@ class AuthManager {
         document.getElementById('logout-btn').addEventListener('click', () => this.logout());
         document.getElementById('btn-extend-session').addEventListener('click', () => this.extendSession());
 
-        if (this.userType === 'teacher') {
-            const settingsBtn = document.getElementById('header-settings-btn');
-            if(settingsBtn) settingsBtn.addEventListener('click', (e) => { e.stopPropagation(); this.openSettingsModal(); });
-        }
-
         // Mobile Menu Logic
         const mobileBtn = document.getElementById('mobile-menu-toggle');
         const mobileMenu = document.getElementById('mobile-menu');
@@ -236,77 +243,6 @@ class AuthManager {
                 }
             });
         }
-    }
-
-    // --- Global Settings Modal for Teacher --- (Existing code)
-    injectSettingsModal() {
-        if(document.getElementById('global-settings-modal')) return;
-        window.closeSystemSettings = () => { document.getElementById('global-settings-modal').classList.add('hidden'); document.getElementById('global-settings-modal').classList.remove('flex'); };
-        window.saveSystemSettings = async () => {
-            const newConfig = {
-                year: document.getElementById('global-config-year').value,
-                semester: document.getElementById('global-config-sem').value,
-                showQuiz: document.getElementById('global-toggle-quiz').checked,
-                showScore: document.getElementById('global-toggle-score').checked,
-                showLesson: document.getElementById('global-toggle-lesson').checked
-            };
-            try {
-                await window.db.collection('site_settings').doc('config').set(newConfig, { merge: true });
-                alert("설정이 저장되었습니다. 페이지를 새로고침합니다.");
-                window.location.reload();
-            } catch (e) { alert("설정 저장 실패: " + e.message); }
-        };
-        const modalHtml = `
-            <div id="global-settings-modal" class="fixed inset-0 z-[9999] hidden flex items-center justify-center">
-                <div class="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm" onclick="closeSystemSettings()"></div>
-                <div class="bg-white rounded-xl shadow-2xl z-10 w-full max-w-md p-6 mx-4 transform transition-all">
-                    <div class="flex justify-between items-center mb-6 pb-4 border-b">
-                        <h2 class="text-xl font-bold text-gray-900"><i class="fas fa-cog mr-2"></i>시스템 설정</h2>
-                        <button onclick="closeSystemSettings()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
-                    </div>
-                    <div class="space-y-6">
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm font-bold text-gray-700 mb-2">학년도</label>
-                                <select id="global-config-year" class="w-full border border-gray-300 rounded-lg p-3 bg-gray-50 focus:ring-2 focus:ring-blue-500 font-bold text-gray-800">
-                                    <option value="2025">2025학년도</option>
-                                    <option value="2026">2026학년도</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-bold text-gray-700 mb-2">학기</label>
-                                <select id="global-config-sem" class="w-full border border-gray-300 rounded-lg p-3 bg-gray-50 focus:ring-2 focus:ring-blue-500 font-bold text-gray-800">
-                                    <option value="1">1학기</option>
-                                    <option value="2">2학기</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="bg-yellow-50 text-yellow-800 text-xs p-3 rounded border border-yellow-200 font-bold"><i class="fas fa-exclamation-triangle mr-1"></i> 학년도/학기를 변경하면 해당 기간의 데이터베이스로 즉시 전환됩니다.</div>
-                        <div>
-                            <label class="block text-sm font-bold text-gray-700 mb-2">메뉴 표시 제어</label>
-                            <div class="space-y-3">
-                                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg"><span class="text-sm font-medium text-gray-700">평가(Quiz)</span><input type="checkbox" id="global-toggle-quiz" class="w-5 h-5 text-blue-600 rounded"></div>
-                                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg"><span class="text-sm font-medium text-gray-700">점수(Score)</span><input type="checkbox" id="global-toggle-score" class="w-5 h-5 text-blue-600 rounded"></div>
-                                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg"><span class="text-sm font-medium text-gray-700">수업자료(Lesson)</span><input type="checkbox" id="global-toggle-lesson" class="w-5 h-5 text-blue-600 rounded"></div>
-                            </div>
-                        </div>
-                    </div>
-                    <button onclick="saveSystemSettings()" class="w-full mt-8 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition shadow-lg">설정 저장</button>
-                </div>
-            </div>
-        `;
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
-    }
-
-    openSettingsModal() {
-        const c = window.currentConfig;
-        document.getElementById('global-config-year').value = c.year || '2025';
-        document.getElementById('global-config-sem').value = c.semester || '2';
-        document.getElementById('global-toggle-quiz').checked = c.showQuiz !== false;
-        document.getElementById('global-toggle-score').checked = c.showScore !== false;
-        document.getElementById('global-toggle-lesson').checked = c.showLesson !== false;
-        document.getElementById('global-settings-modal').classList.remove('hidden');
-        document.getElementById('global-settings-modal').classList.add('flex');
     }
 
     loadFooter() {
