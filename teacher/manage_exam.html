@@ -118,9 +118,9 @@
                             <div class="flex items-center gap-2">
                                 <span class="text-sm text-gray-500 font-bold">정렬:</span>
                                 <select id="planSort" onchange="app.sortPlans()" class="border border-gray-300 rounded px-2 py-1.5 text-sm bg-white font-bold text-gray-700 cursor-pointer">
-                                    <option value="latest">최신순 (중요도)</option>
+                                    <option value="latest">등록순 (최신)</option>
                                     <option value="name">과목명 (가나다)</option>
-                                    <option value="grade">학년순</option>
+                                    <option value="importance">중요도순 (국영수...)</option>
                                 </select>
                             </div>
                         </div>
@@ -176,6 +176,8 @@
         // --- Main App Controller ---
         const app = {
             plans: [],
+            // Subject Importance Order
+            subjectOrder: ['국어', '영어', '수학', '사회', '역사', '도덕', '과학', '기술', '가정', '기술가정', '기가', '정보', '음악', '미술', '체육'],
 
             init: function() {
                 this.updateSemesterBadge();
@@ -222,8 +224,19 @@
                 const mode = document.getElementById('planSort').value;
                 if (mode === 'name') {
                     this.plans.sort((a,b) => a.subject.localeCompare(b.subject));
-                } else if (mode === 'grade') {
-                    this.plans.sort((a,b) => parseInt(a.targetGrade||0) - parseInt(b.targetGrade||0));
+                } else if (mode === 'importance') {
+                    this.plans.sort((a,b) => {
+                        const getIdx = (subj) => {
+                            // Find index based on keyword inclusion
+                            const idx = this.subjectOrder.findIndex(key => subj.includes(key));
+                            return idx === -1 ? 999 : idx;
+                        };
+                        const idxA = getIdx(a.subject);
+                        const idxB = getIdx(b.subject);
+                        if(idxA !== idxB) return idxA - idxB;
+                        // Fallback to name if same importance
+                        return a.subject.localeCompare(b.subject);
+                    });
                 } else {
                     // Latest (descending createdAt)
                     this.plans.sort((a,b) => {

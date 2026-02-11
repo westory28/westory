@@ -22,7 +22,7 @@
 
     <style>
         .page-header { margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 15px; }
-        .page-title { font-size: 24px; font-weight: 700; color: #111; margin: 0; }
+        .page-title { font-size: 24px; font-weight: 700; color: #111; margin: 0; display: flex; align-items: baseline; }
         .user-greeting { font-size: 16px; color: #2563eb; margin-top: 5px; font-weight: 600; }
         .alert-box { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; padding: 15px; border-radius: 6px; margin-bottom: 25px; font-size: 14px; font-weight: bold; text-align: center; line-height: 1.6; word-break: keep-all; }
         .control-panel { background-color: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px; display: flex; gap: 15px; flex-wrap: wrap; align-items: center; }
@@ -89,11 +89,14 @@
         </div>
         <div class="container mx-auto px-4 py-8 max-w-6xl">
             <div class="page-header">
-                <h1 class="page-title">나의 성적표</h1>
+                <h1 class="page-title">
+                    나의 성적표
+                    <span id="displayYear" class="text-lg font-normal text-gray-500 ml-2"></span>
+                </h1>
                 <div id="userNameArea" class="user-greeting">학생 정보를 불러오는 중...</div>
             </div>
             <div class="control-panel">
-                <div class="filter-group"><span class="filter-label">연도</span><select id="yearFilter" onchange="renderDashboard()"><option value="2025">2025학년도</option><option value="2026">2026학년도</option></select></div>
+                <!-- Year filter removed, using currentConfig.year -->
                 <div class="filter-group">
                     <span class="filter-label">학기</span>
                     <select id="semesterFilter" onchange="renderDashboard()">
@@ -102,7 +105,14 @@
                     </select>
                 </div>
                 <div class="filter-group"><span class="filter-label">학년</span><select id="gradeFilter" onchange="renderDashboard()"><option value="1">1학년</option><option value="2">2학년</option><option value="3">3학년</option></select></div>
-                <div class="filter-group" style="margin-left:auto;"><span class="filter-label">정렬</span><select id="sortFilter" onchange="renderDashboard()"><option value="default">교과표 순서</option><option value="score_high">성적 높은 순</option><option value="name">가나다 순</option></select></div>
+                <div class="filter-group" style="margin-left:auto;">
+                    <span class="filter-label">정렬</span>
+                    <select id="sortFilter" onchange="renderDashboard()">
+                        <option value="latest">등록순 (최신)</option>
+                        <option value="name">과목명 (가나다)</option>
+                        <option value="importance">중요도순 (국영수...)</option>
+                    </select>
+                </div>
             </div>
             <div class="dashboard-grid">
                 <div class="left-content"><div id="subjectsList"></div></div>
@@ -127,15 +137,18 @@
         let myChart = null;
         let saveTimeout = null;
         let currentUser = null;
-        const FIXED_SUBJECT_ORDER = ['국어', '영어', '수학', '과학', '역사', '기가', '한문', '일본어', '미술', '체육'];
+        
+        const SUBJECT_PRIORITY = ['국어', '영어', '수학', '사회', '역사', '도덕', '과학', '기술', '가정', '기술가정', '기가', '정보', '음악', '미술', '체육'];
 
         document.addEventListener('auth-ready', async (e) => {
             document.getElementById('loadingOverlay').style.display = 'none';
             document.getElementById('appSection').classList.remove('hidden');
             document.getElementById('warningModal').classList.remove('hidden');
             
+            // Set Title Year
+            document.getElementById('displayYear').innerText = `(${window.currentConfig.year}학년도)`;
+            
             // Set Filters from Global Config
-            document.getElementById('yearFilter').value = window.currentConfig.year;
             document.getElementById('semesterFilter').value = window.currentConfig.semester;
 
             currentUser = e.detail;
@@ -155,7 +168,10 @@
         function getGradeInfo(score, hasData, subjectName) {
             if (!hasData) return { grade: '-', colorCode: '#adb5bd', class: 'bg-none', text: '미입력' }; 
             const roundedScore = Math.round(score);
-            const isArtsPE = ['음악', '미술', '체육'].includes(subjectName);
+            
+            // Arts & PE Logic (80/60)
+            const isArtsPE = ['음악', '미술', '체육'].some(key => subjectName.includes(key));
+            
             if (isArtsPE) {
                 if (roundedScore >= 80) return { grade: 'A', colorCode: '#fa5252', class: 'bg-A', text: `${score}점` };
                 if (roundedScore >= 60) return { grade: 'B', colorCode: '#fab005', class: 'bg-C', text: `${score}점` }; 
@@ -177,7 +193,7 @@
                 plansSnap.forEach(doc => allGradingPlans.push({ id: doc.id, ...doc.data() }));
 
                 // 2. Fetch User Scores from Firestore (academic_records)
-                const year = document.getElementById('yearFilter').value;
+                const year = window.currentConfig.year; // Use global config
                 const sem = document.getElementById('semesterFilter').value;
                 const scoreDocId = `${year}_${sem}`;
                 
@@ -218,7 +234,7 @@
 
         window.renderDashboard = () => {
             const gradeFilter = document.getElementById('gradeFilter').value;
-            const yearFilter = document.getElementById('yearFilter').value;
+            const yearFilter = window.currentConfig.year; // Use global config
             const semesterFilter = document.getElementById('semesterFilter').value;
             const sortMode = document.getElementById('sortFilter').value;
             const container = document.getElementById('subjectsList');
@@ -236,22 +252,32 @@
                 return { ...plan, currentScore: result.score, hasData: result.hasData };
             });
 
-            if (sortMode === 'score_high') { filteredPlans.sort((a, b) => b.currentScore - a.currentScore); } 
-            else if (sortMode === 'name') { filteredPlans.sort((a, b) => a.subject.localeCompare(b.subject)); } 
-            else {
+            // Sorting Logic
+            if (sortMode === 'name') {
+                filteredPlans.sort((a, b) => a.subject.localeCompare(b.subject));
+            } else if (sortMode === 'importance') {
                 filteredPlans.sort((a, b) => {
-                    let idxA = FIXED_SUBJECT_ORDER.indexOf(a.subject);
-                    let idxB = FIXED_SUBJECT_ORDER.indexOf(b.subject);
-                    if(idxA === -1) idxA = 999; if(idxB === -1) idxB = 999;
-                    return idxA - idxB;
+                    const getIdx = (subj) => {
+                        const idx = SUBJECT_PRIORITY.findIndex(key => subj.includes(key));
+                        return idx === -1 ? 999 : idx;
+                    };
+                    const idxA = getIdx(a.subject);
+                    const idxB = getIdx(b.subject);
+                    if(idxA !== idxB) return idxA - idxB;
+                    return a.subject.localeCompare(b.subject);
+                });
+            } else {
+                // Latest (Registration Order) - Default
+                filteredPlans.sort((a, b) => {
+                    const tA = a.createdAt ? a.createdAt.seconds : 0;
+                    const tB = b.createdAt ? b.createdAt.seconds : 0;
+                    return tB - tA;
                 });
             }
 
             if (filteredPlans.length === 0) {
                 container.innerHTML = `<div style="text-align:center; padding:50px; color:#888; background:#fff; border-radius:8px; border:1px solid #eee;">해당 학기(${gradeFilter}학년 ${yearFilter} ${semesterFilter}학기)의 평가 기준 데이터가 없습니다.</div>`;
                 updateChart([], [], []);
-                // If switching year/semester, try reloading data to be safe, but typically we filter loaded data
-                if(yearFilter !== window.currentConfig.year) { /* maybe trigger reload */ }
                 return;
             }
 
@@ -305,7 +331,7 @@
             if(saveTimeout) clearTimeout(saveTimeout);
             
             saveTimeout = setTimeout(async () => {
-                const year = document.getElementById('yearFilter').value;
+                const year = window.currentConfig.year;
                 const sem = document.getElementById('semesterFilter').value;
                 const scoreDocId = `${year}_${sem}`;
                 
