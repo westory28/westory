@@ -109,30 +109,30 @@
                 'exam': '지필평가', 'performance': '수행평가', 'event': '행사', 'diagnosis': '진단평가', 'formative': '형성평가'
             },
             
-            // Korean Public Holidays (2025-2026) Verified
+            // Korean Public Holidays (2025-2026) Verified with Exact Rules
             holidays: {
                 // 2025
                 '2025-01-01': '신정',
                 '2025-01-28': '설날', '2025-01-29': '설날', '2025-01-30': '설날',
-                '2025-03-01': '삼일절', '2025-03-03': '대체공휴일',
-                '2025-05-05': '어린이날/석가탄신일', '2025-05-06': '대체공휴일',
+                '2025-03-01': '삼일절', '2025-03-03': '대체공휴일', // 3.1 Sat -> 3.3 Mon
+                '2025-05-05': '어린이날/석가탄신일', '2025-05-06': '대체공휴일', // Overlap -> 5.6 Tue
                 '2025-06-06': '현충일',
                 '2025-08-15': '광복절',
                 '2025-10-03': '개천절',
-                '2025-10-05': '추석', '2025-10-06': '추석', '2025-10-07': '추석', '2025-10-08': '대체공휴일',
+                '2025-10-05': '추석', '2025-10-06': '추석', '2025-10-07': '추석', '2025-10-08': '대체공휴일', // 10.5 Sun -> 10.8 Wed
                 '2025-10-09': '한글날',
                 '2025-12-25': '성탄절',
                 
                 // 2026
                 '2026-01-01': '신정',
-                '2026-02-16': '설날', '2026-02-17': '설날', '2026-02-18': '설날',
-                '2026-03-01': '삼일절', '2026-03-02': '대체공휴일',
+                '2026-02-16': '설날', '2026-02-17': '설날', '2026-02-18': '설날', // No Sun overlap
+                '2026-03-01': '삼일절', '2026-03-02': '대체공휴일', // 3.1 Sun -> 3.2 Mon
                 '2026-05-05': '어린이날',
-                '2026-05-24': '석가탄신일', '2026-05-25': '대체공휴일',
-                '2026-06-06': '현충일',
-                '2026-08-15': '광복절', '2026-08-17': '대체공휴일',
-                '2026-09-24': '추석', '2026-09-25': '추석', '2026-09-26': '추석',
-                '2026-10-03': '개천절', '2026-10-05': '대체공휴일',
+                '2026-05-24': '석가탄신일', '2026-05-25': '대체공휴일', // 5.24 Sun -> 5.25 Mon
+                '2026-06-06': '현충일', // Sat - No substitute for Memorial Day
+                '2026-08-15': '광복절', '2026-08-17': '대체공휴일', // 8.15 Sat -> 8.17 Mon (National Holiday)
+                '2026-09-24': '추석', '2026-09-25': '추석', '2026-09-26': '추석', // No Sun overlap -> No substitute
+                '2026-10-03': '개천절', '2026-10-05': '대체공휴일', // 10.3 Sat -> 10.5 Mon (National Holiday)
                 '2026-10-09': '한글날',
                 '2026-12-25': '성탄절'
             },
@@ -177,13 +177,17 @@
                         right: 'dayGridMonth,listMonth'
                     },
                     dayCellClassNames: (arg) => {
-                        const dateStr = arg.date.toISOString().split('T')[0];
-                        if (this.holidays[dateStr]) return ['fc-day-holiday']; // Adds red color to date number
+                        // Use local time matching to avoid timezone shifts
+                        const year = arg.date.getFullYear();
+                        const month = String(arg.date.getMonth() + 1).padStart(2, '0');
+                        const day = String(arg.date.getDate()).padStart(2, '0');
+                        const dateStr = `${year}-${month}-${day}`;
+                        
+                        if (this.holidays[dateStr]) return ['fc-day-holiday'];
                         return [];
                     },
                     events: [...holidayTextEvents, this.fetchEvents.bind(this)],
                     eventClick: (info) => {
-                        // Don't show modal for holiday text events
                         if(info.event.classNames.includes('holiday-text-event')) return;
                         this.openModal(info.event);
                     },
@@ -205,8 +209,6 @@
                     snapshot.forEach(doc => {
                         const d = doc.data();
                         
-                        // Personalization Logic
-                        // Show if Target is Common OR (Target is Class AND Class matches User)
                         let isVisible = false;
                         if (d.targetType === 'common') isVisible = true;
                         else if (d.targetType === 'class' && d.targetClass === this.userClassStr) isVisible = true;
@@ -247,7 +249,7 @@
             },
 
             closeModal: function(e) {
-                if(e && e.target.id !== 'detail-modal') return; // Close only if overlay or button clicked
+                if(e && e.target.id !== 'detail-modal') return; 
                 const modal = document.getElementById('detail-modal');
                 modal.classList.add('hidden');
                 modal.classList.remove('flex');
