@@ -25,7 +25,8 @@
         .sidebar-item:hover { background-color: #f9fafb; color: #1f2937; }
         .sidebar-item.active { background-color: #eff6ff; color: #2563eb; border-left-color: #2563eb; }
         .sidebar-item i { width: 24px; text-align: center; margin-right: 8px; }
-        .content-area { flex: 1; padding: 1.5rem; overflow: hidden; background-color: #f8fafc; display: flex; flex-direction: column; height: 100vh; }
+        /* Adjusted content-area: removed height:100vh to fix overflow */
+        .content-area { flex: 1; padding: 1.5rem; overflow: hidden; background-color: #f8fafc; display: flex; flex-direction: column; }
         
         /* FullCalendar Overrides */
         .fc-toolbar-title { font-size: 1.25em !important; font-weight: 700; color: #1f2937; }
