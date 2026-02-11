@@ -1,0 +1,176 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>개인정보 동의 관리 - Westory Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Quill Editor -->
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <script src="../assets/js/firebase-config.js"></script>
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <script src="../assets/js/auth-manager.js"></script>
+
+    <style>
+        .setting-sidebar { width: 250px; background-color: white; border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; }
+        .sidebar-item { padding: 1rem 1.5rem; color: #4b5563; font-weight: 600; font-size: 0.95rem; cursor: pointer; transition: all 0.2s; border-left: 4px solid transparent; display: flex; align-items: center; text-decoration: none; }
+        .sidebar-item:hover { background-color: #f9fafb; color: #1f2937; }
+        .sidebar-item.active { background-color: #eff6ff; color: #2563eb; border-left-color: #2563eb; }
+        .sidebar-item i { width: 24px; text-align: center; margin-right: 8px; }
+        .content-area { flex: 1; padding: 2rem; overflow-y: auto; background-color: #f8fafc; }
+        
+        /* Quill Overrides */
+        .ql-container { font-family: 'Noto Sans KR', sans-serif; font-size: 1rem; height: 400px; background: white; }
+        .ql-editor strong { font-weight: bold; }
+        .ql-toolbar { background: #f9fafb; border-bottom: 1px solid #e5e7eb; }
+    </style>
+</head>
+<body class="bg-gray-50 h-screen flex flex-col overflow-hidden">
+    <!-- Header injected by AuthManager -->
+
+    <main class="flex flex-1 overflow-hidden">
+        <!-- Sidebar -->
+        <aside class="setting-sidebar">
+            <div class="p-6 border-b border-gray-100">
+                <h2 class="text-xl font-extrabold text-gray-800 flex items-center">
+                    <i class="fas fa-cog text-gray-400 mr-2"></i> 관리자 페이지
+                </h2>
+            </div>
+            <nav class="flex-1 py-4">
+                <a href="settings.html" class="sidebar-item">
+                    <i class="fas fa-sliders-h"></i>기본 환경 설정
+                </a>
+                <a href="settings_privacy.html" class="sidebar-item active">
+                    <i class="fas fa-user-shield"></i>개인정보 동의 관리
+                </a>
+                <a href="settings_schedule.html" class="sidebar-item">
+                    <i class="fas fa-calendar-alt"></i>학사 일정 관리
+                </a>
+            </nav>
+        </aside>
+
+        <!-- Content -->
+        <div class="content-area">
+            
+            <div class="bg-white rounded-xl border border-gray-200 p-8 shadow-sm max-w-4xl">
+                <div class="border-b border-gray-100 pb-4 mb-6">
+                    <h3 class="text-lg font-bold text-gray-900">개인정보 활용 동의서 관리</h3>
+                    <p class="text-sm text-gray-500 mt-1">학생들이 최초 접속 시 확인하는 동의서 문구를 수정합니다.</p>
+                </div>
+
+                <div class="space-y-4">
+                    <div class="bg-blue-50 p-4 rounded-lg text-sm text-blue-800 border border-blue-100 mb-2">
+                        <i class="fas fa-edit mr-1"></i> 에디터를 사용하여 텍스트 정렬, 굵기, 크기 등을 자유롭게 편집하세요.
+                    </div>
+                    
+                    <!-- Quill Editor Container -->
+                    <div class="bg-white rounded-xl shadow-inner border border-gray-200 overflow-hidden">
+                        <div id="privacy-editor"></div>
+                    </div>
+                    
+                    <div class="flex justify-between items-center pt-4">
+                        <button onclick="app.resetPrivacyDefault()" class="text-gray-500 text-sm hover:text-gray-800 underline">기본 문구로 초기화</button>
+                        <button onclick="app.savePrivacy()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition transform active:scale-95">
+                            동의서 내용 저장
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Footer injected by AuthManager -->
+
+    <script>
+        window.AuthManager.init('teacher');
+
+        const app = {
+            quill: null,
+
+            init: function() {
+                document.addEventListener('auth-ready', () => {
+                    this.initQuill();
+                    this.loadPrivacyText();
+                });
+            },
+
+            initQuill: function() {
+                this.quill = new Quill('#privacy-editor', {
+                    theme: 'snow',
+                    modules: {
+                        toolbar: [
+                            [{ 'size': ['small', false, 'large', 'huge'] }], // Font Size
+                            ['bold', 'italic', 'underline'], // Styling
+                            [{ 'align': [] }], // Alignment
+                            [{ 'list': 'ordered'}, { 'list': 'bullet' }], // Lists
+                            ['clean'] // Remove Formatting
+                        ]
+                    },
+                    placeholder: '여기에 동의서 내용을 입력하세요...'
+                });
+            },
+
+            loadPrivacyText: async function() {
+                try {
+                    const doc = await window.db.collection('site_settings').doc('privacy').get();
+                    if(doc.exists && doc.data().text) {
+                        this.quill.clipboard.dangerouslyPasteHTML(doc.data().text);
+                    } else {
+                        this.resetPrivacyDefault(false); // Load default to editor but don't save
+                    }
+                } catch(e) { console.error(e); }
+            },
+
+            savePrivacy: async function() {
+                const text = this.quill.root.innerHTML;
+                if(!text || text === '<p><br></p>') { alert("내용을 입력해주세요."); return; }
+                
+                try {
+                    await window.db.collection('site_settings').doc('privacy').set({
+                        text: text,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    alert("개인정보 활용 동의서 내용이 저장되었습니다.");
+                } catch(e) { alert("저장 실패: " + e.message); }
+            },
+
+            resetPrivacyDefault: function(save = true) {
+                const defaultText = `
+                    <p class="ql-align-center"><strong style="font-size: large;">[개인정보 수집 및 이용 동의서]</strong></p>
+                    <p><br></p>
+                    <p><strong>1. 수집 및 이용 목적</strong></p>
+                    <ul>
+                        <li>학습 기록 관리 및 성적 산출</li>
+                        <li>맞춤형 학습 콘텐츠 제공</li>
+                        <li>교사의 학생 지도 및 상담 자료 활용</li>
+                    </ul>
+                    <p><br></p>
+                    <p><strong>2. 수집 항목</strong></p>
+                    <p>이름, 이메일, 학년, 반, 번호, 퀴즈 응시 내역 및 학습 활동 데이터</p>
+                    <p><br></p>
+                    <p><strong>3. 보유 및 이용 기간</strong></p>
+                    <p>회원 탈퇴 시 또는 졸업 시까지 (졸업 후 지체 없이 파기)</p>
+                `;
+                
+                this.quill.clipboard.dangerouslyPasteHTML(defaultText);
+                
+                if(save && confirm("기본 문구로 되돌리고 바로 저장하시겠습니까?")) {
+                    this.savePrivacy();
+                }
+            }
+        };
+
+        app.init();
+    </script>
+</body>
+</html>
