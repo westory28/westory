@@ -1,0 +1,314 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>일정 관리 - Westory Admin</title>
+    <!-- Tailwind -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- FullCalendar -->
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+    
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    
+    <script src="../assets/js/firebase-config.js"></script>
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <script src="../assets/js/auth-manager.js"></script>
+
+    <style>
+        .fc-toolbar-title { font-size: 1.25em !important; font-weight: 700; color: #1f2937; }
+        .fc-button { background-color: #2563eb !important; border-color: #2563eb !important; font-weight: 600 !important; }
+        .fc-button:hover { background-color: #1d4ed8 !important; border-color: #1d4ed8 !important; }
+        .fc-button-active { background-color: #1e40af !important; border-color: #1e40af !important; }
+        .fc-daygrid-event { cursor: pointer; border-radius: 4px; padding: 2px 4px; font-size: 0.85rem; font-weight: 600; border: none; }
+        
+        /* Modal Overlay */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 100; display: flex; justify-content: center; align-items: center; }
+    </style>
+</head>
+<body class="bg-gray-50 flex flex-col h-screen">
+    <!-- Header injected by AuthManager -->
+
+    <main class="flex-1 w-full max-w-7xl mx-auto px-6 py-6 h-full flex flex-col overflow-hidden">
+        
+        <div class="flex justify-between items-center mb-4 shrink-0">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800"><i class="fas fa-calendar-alt text-blue-500 mr-2"></i>학사 일정 관리</h1>
+                <p class="text-sm text-gray-500 mt-1">수행평가, 지필평가 등 주요 학사 일정을 관리하세요.</p>
+            </div>
+            
+            <div class="flex items-center gap-2">
+                <span class="text-sm font-bold text-gray-600">보기 필터:</span>
+                <select id="view-filter" onchange="app.refetchEvents()" class="border border-gray-300 rounded px-3 py-2 text-sm font-bold focus:border-blue-500 outline-none">
+                    <option value="all">전체 일정</option>
+                    <option value="common">공통 일정만</option>
+                    <option value="2-1">2-1반</option><option value="2-2">2-2반</option><option value="2-3">2-3반</option>
+                    <option value="2-4">2-4반</option><option value="2-5">2-5반</option><option value="2-6">2-6반</option>
+                    <option value="2-7">2-7반</option><option value="2-8">2-8반</option><option value="2-9">2-9반</option>
+                    <option value="2-10">2-10반</option><option value="2-11">2-11반</option><option value="2-12">2-12반</option>
+                </select>
+                <button onclick="app.openModal()" class="bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-blue-700 shadow-sm ml-2">
+                    <i class="fas fa-plus mr-1"></i> 일정 추가
+                </button>
+            </div>
+        </div>
+
+        <div class="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 p-6 overflow-hidden flex flex-col">
+            <div id="calendar" class="h-full"></div>
+        </div>
+
+    </main>
+
+    <!-- Event Modal -->
+    <div id="event-modal" class="modal-overlay hidden">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 mx-4 relative">
+            <h3 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2 flex items-center">
+                <i class="fas fa-edit text-blue-500 mr-2"></i><span id="modal-title">일정 등록</span>
+            </h3>
+            
+            <input type="hidden" id="event-id">
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">일정 제목</label>
+                    <input type="text" id="event-title" class="w-full border rounded p-2 text-sm font-bold focus:border-blue-500 outline-none" placeholder="예: 역사 수행평가">
+                </div>
+                
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">시작 날짜</label>
+                        <input type="date" id="event-start" class="w-full border rounded p-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">종료 날짜 (선택)</label>
+                        <input type="date" id="event-end" class="w-full border rounded p-2 text-sm">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">일정 종류</label>
+                    <select id="event-type" class="w-full border rounded p-2 text-sm font-bold bg-white">
+                        <option value="performance">⚡ 수행평가 (Orange)</option>
+                        <option value="exam">🔥 지필평가 (Red)</option>
+                        <option value="diagnosis">📝 진단평가 (Blue)</option>
+                        <option value="formative">✍️ 형성평가 (Blue)</option>
+                        <option value="event">🎉 행사/기타 (Green)</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-2">대상 선택</label>
+                    <div class="flex gap-4 mb-2">
+                        <label class="flex items-center cursor-pointer">
+                            <input type="radio" name="targetType" value="common" checked onclick="app.toggleTargetClass(false)" class="w-4 h-4 text-blue-600">
+                            <span class="ml-2 text-sm font-bold">전체 공통</span>
+                        </label>
+                        <label class="flex items-center cursor-pointer">
+                            <input type="radio" name="targetType" value="class" onclick="app.toggleTargetClass(true)" class="w-4 h-4 text-blue-600">
+                            <span class="ml-2 text-sm font-bold">반 선택</span>
+                        </label>
+                    </div>
+                    <select id="target-class" class="w-full border rounded p-2 text-sm bg-gray-50" disabled>
+                        <option value="2-1">2-1반</option><option value="2-2">2-2반</option><option value="2-3">2-3반</option>
+                        <option value="2-4">2-4반</option><option value="2-5">2-5반</option><option value="2-6">2-6반</option>
+                        <option value="2-7">2-7반</option><option value="2-8">2-8반</option><option value="2-9">2-9반</option>
+                        <option value="2-10">2-10반</option><option value="2-11">2-11반</option><option value="2-12">2-12반</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">상세 내용</label>
+                    <textarea id="event-desc" class="w-full border rounded p-2 text-sm h-20 resize-none"></textarea>
+                </div>
+            </div>
+
+            <div class="flex justify-between items-center mt-6 pt-4 border-t">
+                <button type="button" onclick="app.deleteEvent()" id="btn-delete" class="text-red-500 font-bold text-sm hover:text-red-700 hidden"><i class="fas fa-trash mr-1"></i>삭제</button>
+                <div class="flex gap-2 ml-auto">
+                    <button onclick="app.closeModal()" class="px-4 py-2 bg-gray-100 text-gray-600 rounded font-bold text-sm hover:bg-gray-200">취소</button>
+                    <button onclick="app.saveEvent()" class="px-6 py-2 bg-blue-600 text-white rounded font-bold text-sm hover:bg-blue-700 shadow-md">저장</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer injected by AuthManager -->
+
+    <script>
+        window.AuthManager.init('teacher');
+
+        const app = {
+            calendar: null,
+            colorMap: {
+                'exam': '#ef4444',       // Red
+                'performance': '#f97316', // Orange
+                'event': '#10b981',       // Green
+                'diagnosis': '#3b82f6',   // Blue
+                'formative': '#3b82f6'    // Blue
+            },
+
+            init: function() {
+                const calendarEl = document.getElementById('calendar');
+                this.calendar = new FullCalendar.Calendar(calendarEl, {
+                    initialView: 'dayGridMonth',
+                    locale: 'ko',
+                    headerToolbar: {
+                        left: 'prev,next today',
+                        center: 'title',
+                        right: 'dayGridMonth,listMonth'
+                    },
+                    events: this.fetchEvents.bind(this),
+                    dateClick: (info) => this.openModal(null, info.dateStr),
+                    eventClick: (info) => this.openModal(info.event),
+                    height: '100%',
+                    displayEventTime: false
+                });
+                this.calendar.render();
+            },
+
+            fetchEvents: async function(info, successCallback, failureCallback) {
+                try {
+                    const snapshot = await window.db.collection('calendar_events')
+                        .where('start', '>=', info.startStr)
+                        .where('start', '<', info.endStr)
+                        .get();
+                    
+                    const events = [];
+                    const filter = document.getElementById('view-filter').value;
+
+                    snapshot.forEach(doc => {
+                        const d = doc.data();
+                        // Client-side filtering
+                        if (filter !== 'all') {
+                            if (filter === 'common') {
+                                if (d.targetType !== 'common') return;
+                            } else {
+                                // Specific class: Show Common AND Specific Class
+                                if (d.targetType === 'class' && d.targetClass !== filter) return;
+                            }
+                        }
+
+                        events.push({
+                            id: doc.id,
+                            title: d.title,
+                            start: d.start,
+                            end: d.end || d.start,
+                            backgroundColor: this.colorMap[d.eventType] || '#6b7280',
+                            borderColor: this.colorMap[d.eventType] || '#6b7280',
+                            extendedProps: d
+                        });
+                    });
+                    successCallback(events);
+                } catch(e) {
+                    console.error(e);
+                    failureCallback(e);
+                }
+            },
+
+            refetchEvents: function() {
+                this.calendar.refetchEvents();
+            },
+
+            // --- Modal Logic ---
+            openModal: function(eventObj = null, dateStr = null) {
+                document.getElementById('event-modal').classList.remove('hidden');
+                document.getElementById('event-modal').classList.add('flex');
+                
+                if (eventObj) {
+                    // Edit Mode
+                    const p = eventObj.extendedProps;
+                    document.getElementById('modal-title').innerText = "일정 수정";
+                    document.getElementById('event-id').value = eventObj.id;
+                    document.getElementById('event-title').value = p.title;
+                    document.getElementById('event-start').value = p.start;
+                    document.getElementById('event-end').value = p.end || '';
+                    document.getElementById('event-type').value = p.eventType;
+                    document.getElementById('event-desc').value = p.description || '';
+                    
+                    if (p.targetType === 'class') {
+                        document.querySelector('input[name="targetType"][value="class"]').checked = true;
+                        this.toggleTargetClass(true);
+                        document.getElementById('target-class').value = p.targetClass;
+                    } else {
+                        document.querySelector('input[name="targetType"][value="common"]').checked = true;
+                        this.toggleTargetClass(false);
+                    }
+                    document.getElementById('btn-delete').classList.remove('hidden');
+                } else {
+                    // Add Mode
+                    document.getElementById('modal-title').innerText = "일정 등록";
+                    document.getElementById('event-id').value = '';
+                    document.getElementById('event-title').value = '';
+                    document.getElementById('event-start').value = dateStr || new Date().toISOString().split('T')[0];
+                    document.getElementById('event-end').value = '';
+                    document.getElementById('event-type').value = 'performance';
+                    document.getElementById('event-desc').value = '';
+                    document.querySelector('input[name="targetType"][value="common"]').checked = true;
+                    this.toggleTargetClass(false);
+                    document.getElementById('btn-delete').classList.add('hidden');
+                }
+            },
+
+            closeModal: function() {
+                document.getElementById('event-modal').classList.add('hidden');
+                document.getElementById('event-modal').classList.remove('flex');
+            },
+
+            toggleTargetClass: function(enable) {
+                const sel = document.getElementById('target-class');
+                sel.disabled = !enable;
+                if(enable) sel.classList.remove('bg-gray-50');
+                else sel.classList.add('bg-gray-50');
+            },
+
+            saveEvent: async function() {
+                const id = document.getElementById('event-id').value;
+                const title = document.getElementById('event-title').value;
+                const start = document.getElementById('event-start').value;
+                if(!title || !start) { alert("제목과 시작 날짜는 필수입니다."); return; }
+
+                const data = {
+                    title: title,
+                    start: start,
+                    end: document.getElementById('event-end').value || null,
+                    eventType: document.getElementById('event-type').value,
+                    targetType: document.querySelector('input[name="targetType"]:checked').value,
+                    targetClass: document.querySelector('input[name="targetType"]:checked').value === 'class' ? document.getElementById('target-class').value : null,
+                    description: document.getElementById('event-desc').value,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+
+                try {
+                    if (id) {
+                        await window.db.collection('calendar_events').doc(id).update(data);
+                    } else {
+                        data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+                        await window.db.collection('calendar_events').add(data);
+                    }
+                    this.closeModal();
+                    this.refetchEvents();
+                } catch(e) { alert("저장 실패: " + e.message); }
+            },
+
+            deleteEvent: async function() {
+                const id = document.getElementById('event-id').value;
+                if(!id) return;
+                if(!confirm("정말 삭제하시겠습니까?")) return;
+                
+                try {
+                    await window.db.collection('calendar_events').doc(id).delete();
+                    this.closeModal();
+                    this.refetchEvents();
+                } catch(e) { alert("삭제 실패: " + e.message); }
+            }
+        };
+
+        document.addEventListener('auth-ready', () => app.init());
+    </script>
+</body>
+</html>

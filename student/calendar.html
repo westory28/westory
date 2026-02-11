@@ -1,0 +1,204 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>학사 일정 - Westory</title>
+    <!-- Tailwind -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- FullCalendar -->
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+    
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    
+    <script src="../assets/js/firebase-config.js"></script>
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <script src="../assets/js/auth-manager.js"></script>
+
+    <style>
+        .fc-toolbar-title { font-size: 1.25em !important; font-weight: 700; color: #1f2937; }
+        .fc-button { background-color: #2563eb !important; border-color: #2563eb !important; font-weight: 600 !important; }
+        .fc-daygrid-event { cursor: pointer; border-radius: 4px; padding: 2px 4px; font-size: 0.8rem; font-weight: 600; border: none; transition: transform 0.1s; }
+        .fc-daygrid-event:hover { transform: scale(1.02); }
+        
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 100; display: flex; justify-content: center; align-items: center; backdrop-filter: blur(2px); }
+    </style>
+</head>
+<body class="bg-gray-50 flex flex-col h-screen">
+    <!-- Header injected by AuthManager -->
+
+    <main class="flex-1 w-full max-w-5xl mx-auto px-4 py-6 h-full flex flex-col overflow-hidden">
+        
+        <div class="mb-4 shrink-0">
+            <h1 class="text-2xl font-bold text-gray-800"><i class="fas fa-calendar-check text-green-500 mr-2"></i>학사 일정</h1>
+            <p class="text-sm text-gray-500 mt-1">우리 반의 주요 일정과 평가 계획을 확인하세요.</p>
+        </div>
+
+        <div class="flex-1 bg-white rounded-xl shadow-lg border border-gray-100 p-4 md:p-6 overflow-hidden flex flex-col relative">
+            <div class="flex items-center gap-4 mb-4 text-xs font-bold text-gray-500 justify-end">
+                <div class="flex items-center"><span class="w-3 h-3 rounded-full bg-red-500 mr-1"></span>지필평가</div>
+                <div class="flex items-center"><span class="w-3 h-3 rounded-full bg-orange-500 mr-1"></span>수행평가</div>
+                <div class="flex items-center"><span class="w-3 h-3 rounded-full bg-blue-500 mr-1"></span>진단/형성</div>
+                <div class="flex items-center"><span class="w-3 h-3 rounded-full bg-green-500 mr-1"></span>행사</div>
+            </div>
+            <div id="calendar" class="h-full"></div>
+        </div>
+
+    </main>
+
+    <!-- Detail Modal -->
+    <div id="detail-modal" class="modal-overlay hidden" onclick="app.closeModal(event)">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 mx-4 relative transform transition-all scale-100" onclick="event.stopPropagation()">
+            <div class="mb-4">
+                <span id="detail-badge" class="px-2 py-1 rounded text-xs font-bold text-white bg-gray-500 inline-block mb-2">TYPE</span>
+                <h3 id="detail-title" class="text-xl font-bold text-gray-900 leading-tight">일정 제목</h3>
+            </div>
+            
+            <div class="space-y-3 text-sm text-gray-600 bg-gray-50 p-4 rounded-xl border border-gray-100 mb-6">
+                <div class="flex items-start gap-3">
+                    <i class="fas fa-clock mt-1 text-blue-500"></i>
+                    <div>
+                        <p class="font-bold text-gray-800">기간</p>
+                        <p id="detail-date">-</p>
+                    </div>
+                </div>
+                <div class="flex items-start gap-3">
+                    <i class="fas fa-align-left mt-1 text-blue-500"></i>
+                    <div>
+                        <p class="font-bold text-gray-800">상세 내용</p>
+                        <p id="detail-desc" class="whitespace-pre-wrap leading-relaxed">-</p>
+                    </div>
+                </div>
+            </div>
+
+            <button onclick="app.closeModal()" class="w-full bg-gray-800 text-white font-bold py-3 rounded-xl hover:bg-gray-900 transition">닫기</button>
+        </div>
+    </div>
+
+    <!-- Footer injected by AuthManager -->
+
+    <script>
+        window.AuthManager.init('student');
+
+        const app = {
+            calendar: null,
+            userClassStr: null,
+            colorMap: {
+                'exam': '#ef4444',       // Red
+                'performance': '#f97316', // Orange
+                'event': '#10b981',       // Green
+                'diagnosis': '#3b82f6',   // Blue
+                'formative': '#3b82f6'    // Blue
+            },
+            typeLabelMap: {
+                'exam': '지필평가', 'performance': '수행평가', 'event': '행사', 'diagnosis': '진단평가', 'formative': '형성평가'
+            },
+
+            init: function() {
+                document.addEventListener('auth-ready', async (e) => {
+                    const user = e.detail;
+                    await this.loadUserClass(user.uid);
+                    this.initCalendar();
+                });
+            },
+
+            loadUserClass: async function(uid) {
+                try {
+                    const doc = await window.getCollection('users').doc(uid).get();
+                    if(doc.exists) {
+                        const d = doc.data();
+                        if(d.grade && d.class) {
+                            this.userClassStr = `${d.grade}-${d.class}`;
+                        }
+                    }
+                } catch(e) { console.error(e); }
+            },
+
+            initCalendar: function() {
+                const calendarEl = document.getElementById('calendar');
+                this.calendar = new FullCalendar.Calendar(calendarEl, {
+                    initialView: 'dayGridMonth',
+                    locale: 'ko',
+                    headerToolbar: {
+                        left: 'prev,next today',
+                        center: 'title',
+                        right: 'dayGridMonth,listMonth'
+                    },
+                    events: this.fetchEvents.bind(this),
+                    eventClick: (info) => this.openModal(info.event),
+                    height: '100%',
+                    displayEventTime: false,
+                    fixedWeekCount: false
+                });
+                this.calendar.render();
+            },
+
+            fetchEvents: async function(info, successCallback, failureCallback) {
+                try {
+                    const snapshot = await window.db.collection('calendar_events')
+                        .where('start', '>=', info.startStr)
+                        .where('start', '<', info.endStr)
+                        .get();
+                    
+                    const events = [];
+                    snapshot.forEach(doc => {
+                        const d = doc.data();
+                        
+                        // Personalization Logic
+                        // Show if Target is Common OR (Target is Class AND Class matches User)
+                        let isVisible = false;
+                        if (d.targetType === 'common') isVisible = true;
+                        else if (d.targetType === 'class' && d.targetClass === this.userClassStr) isVisible = true;
+
+                        if (isVisible) {
+                            events.push({
+                                title: d.title,
+                                start: d.start,
+                                end: d.end || d.start,
+                                backgroundColor: this.colorMap[d.eventType] || '#6b7280',
+                                borderColor: this.colorMap[d.eventType] || '#6b7280',
+                                extendedProps: d
+                            });
+                        }
+                    });
+                    successCallback(events);
+                } catch(e) {
+                    console.error(e);
+                    failureCallback(e);
+                }
+            },
+
+            openModal: function(eventObj) {
+                const p = eventObj.extendedProps;
+                document.getElementById('detail-title').innerText = p.title;
+                document.getElementById('detail-badge').innerText = this.typeLabelMap[p.eventType] || '일정';
+                document.getElementById('detail-badge').style.backgroundColor = this.colorMap[p.eventType] || '#6b7280';
+                
+                let dateText = p.start;
+                if(p.end && p.end !== p.start) dateText += ` ~ ${p.end}`;
+                document.getElementById('detail-date').innerText = dateText;
+                
+                document.getElementById('detail-desc').innerText = p.description || '상세 내용이 없습니다.';
+                
+                const modal = document.getElementById('detail-modal');
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            },
+
+            closeModal: function(e) {
+                if(e && e.target.id !== 'detail-modal') return; // Close only if overlay or button clicked
+                const modal = document.getElementById('detail-modal');
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }
+        };
+
+        app.init();
+    </script>
+</body>
+</html>

@@ -1,15 +1,18 @@
 
+
 // Menu Configurations
 const MENUS = {
     student: [
         { name: "수업 자료", url: "student/lesson/note.html", icon: "M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" },
         { name: "평가", url: "student/quiz.html", icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" },
-        { name: "점수", url: "student/score.html", icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" }
+        { name: "점수", url: "student/score.html", icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" },
+        { name: "학사 일정", url: "student/calendar.html", icon: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" }
     ],
     teacher: [
         { name: "수업 자료 관리", url: "teacher/manage_lesson.html", icon: "M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" },
         { name: "평가 관리", url: "teacher/manage_quiz.html", icon: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" },
         { name: "점수 관리", url: "teacher/manage_exam.html", icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" },
+        { name: "학사 일정", url: "teacher/settings.html?tab=schedule", icon: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" },
         { name: "학생 명단 관리", url: "teacher/student-list.html", icon: "M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" }
     ]
 };
@@ -27,7 +30,7 @@ window.currentConfig = {
 
 // --- Dynamic Collection Helper ---
 window.getCollection = function(collectionName) {
-    const globalCollections = ['users', 'site_settings', 'metadata'];
+    const globalCollections = ['users', 'site_settings', 'metadata', 'calendar_events'];
     if (globalCollections.includes(collectionName)) {
         return window.db.collection(collectionName);
     }
@@ -42,6 +45,7 @@ class AuthManager {
     constructor() {
         this.currentUser = null;
         this.userType = null;
+        this.userData = null;
         this.rootPrefix = this.calculateRootPrefix();
     }
 
@@ -72,7 +76,7 @@ class AuthManager {
                             window.location.href = this.rootPrefix + 'student/dashboard.html';
                             return;
                         }
-                        // Teacher specific init if needed
+                        this.initDDayBanner(true); // Teacher sees common + all class events if needed, usually just common or nothing. Let's show common.
                     }
 
                     this.fetchAdditionalUserData(user, type);
@@ -101,10 +105,81 @@ class AuthManager {
             const doc = await window.db.collection('users').doc(user.uid).get();
             if (doc.exists) {
                 const data = doc.data();
+                this.userData = data; // Store for D-Day logic
                 if (data.name) this.updateUserInfo(data.name);
-                if (type === 'student' && !data.privacyAgreed) this.showPrivacyModal(user.uid);
+                if (type === 'student') {
+                    if (!data.privacyAgreed) this.showPrivacyModal(user.uid);
+                    this.initDDayBanner(false); // Student D-Day Init
+                }
             }
         } catch (e) { console.error("DB Error:", e); }
+    }
+
+    async initDDayBanner(isTeacher) {
+        const bannerContainer = document.getElementById('dday-container');
+        if (!bannerContainer) return;
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const todayStr = today.toISOString().split('T')[0];
+
+        try {
+            // Fetch future events
+            const snapshot = await window.db.collection('calendar_events')
+                .where('start', '>=', todayStr)
+                .orderBy('start')
+                .limit(10)
+                .get();
+
+            if (snapshot.empty) return;
+
+            let closestEvent = null;
+            let minDiff = Infinity;
+
+            const myClassStr = (this.userData && this.userData.grade && this.userData.class) 
+                ? `${this.userData.grade}-${this.userData.class}` 
+                : null;
+
+            snapshot.forEach(doc => {
+                const ev = doc.data();
+                
+                // Filter Logic
+                if (!isTeacher) {
+                    if (ev.targetType === 'class' && ev.targetClass !== myClassStr) return; // Skip other classes
+                }
+
+                // Check Type & Days
+                const eventDate = new Date(ev.start);
+                const diffTime = eventDate - today;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+
+                let isCandidate = false;
+                
+                // Exam: Show from D-30
+                if (ev.eventType === 'exam' && diffDays <= 30) isCandidate = true;
+                // Performance: Show from D-7
+                if (ev.eventType === 'performance' && diffDays <= 7) isCandidate = true;
+
+                if (isCandidate && diffDays < minDiff) {
+                    minDiff = diffDays;
+                    closestEvent = { ...ev, dDay: diffDays };
+                }
+            });
+
+            if (closestEvent) {
+                const colorClass = closestEvent.eventType === 'exam' ? 'bg-red-100 text-red-700 border-red-200' : 'bg-amber-100 text-amber-700 border-amber-200';
+                const dText = closestEvent.dDay === 0 ? "D-Day" : `D-${closestEvent.dDay}`;
+                
+                bannerContainer.innerHTML = `
+                    <div onclick="location.href='${this.rootPrefix}${isTeacher ? 'teacher/settings.html?tab=schedule' : 'student/calendar.html'}'" 
+                         class="cursor-pointer flex items-center gap-2 px-3 py-1 rounded-full border ${colorClass} text-xs font-bold shadow-sm hover:opacity-80 transition animate-pulse">
+                        <span>${closestEvent.title}</span>
+                        <span class="bg-white px-1.5 rounded-md shadow-sm">${dText}</span>
+                    </div>
+                `;
+            }
+
+        } catch (e) { console.error("D-Day Error", e); }
     }
 
     async showPrivacyModal(uid) {
@@ -169,7 +244,7 @@ class AuthManager {
         const menuItems = MENUS[this.userType] || [];
         const resolve = (url) => this.rootPrefix + url;
         const currentPath = window.location.pathname;
-        const isActive = (url) => currentPath.endsWith(url.split('/').pop());
+        const isActive = (url) => currentPath.endsWith(url.split('/').pop().split('?')[0]);
         const isDashboard = currentPath.includes('dashboard.html');
 
         let navHtml = '';
@@ -205,6 +280,7 @@ class AuthManager {
                         ${navHtml}
                     </div>
                     <div class="flex items-center gap-3">
+                        <div id="dday-container"></div> <!-- D-Day Banner Area -->
                         ${semInfo}
                         ${settingsIcon}
                         <div class="flex items-center gap-2 group cursor-pointer" ${this.userType === 'student' ? `onclick="location.href='${resolve('student/mypage.html')}'"` : ''}>
@@ -212,7 +288,7 @@ class AuthManager {
                             ${myPageLink}
                         </div>
                         
-                        <!-- Moved Timer Here -->
+                        <!-- Timer -->
                         <div class="flex items-center gap-1 md:gap-2 px-3 py-1 bg-stone-100 rounded-full border border-stone-200 ml-2">
                             <i class="fas fa-stopwatch text-stone-400 text-xs"></i>
                             <span id="session-timer-display" class="font-mono font-bold text-stone-600 text-sm w-[42px] text-center">60:00</span>
