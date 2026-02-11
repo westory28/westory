@@ -144,6 +144,21 @@
         </div>
     </div>
 
+    <!-- Name Input Modal -->
+    <div id="name-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center">
+        <div class="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm" onclick="app.closeNameModal()"></div>
+        <div class="bg-white rounded-xl shadow-2xl z-10 w-96 p-6 mx-4 relative transform transition-all scale-100">
+            <h3 class="font-bold text-lg text-gray-800 mb-4 flex items-center gap-2">
+                <i class="fas fa-pencil-alt text-blue-500"></i> <span id="name-modal-title">단원 이름 입력</span>
+            </h3>
+            <input type="text" id="name-modal-input" class="w-full border-2 border-gray-200 rounded-lg p-3 text-lg font-bold focus:border-blue-500 focus:bg-blue-50 outline-none mb-6 transition" placeholder="이름을 입력하세요" onkeyup="if(event.key==='Enter') app.confirmNameModal()">
+            <div class="flex justify-end gap-2">
+                <button onclick="app.closeNameModal()" class="px-4 py-2 text-gray-500 font-bold hover:bg-gray-100 rounded-lg transition">취소</button>
+                <button onclick="app.confirmNameModal()" class="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 shadow-md transition">확인</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Footer injected by AuthManager -->
 
     <script>
@@ -154,6 +169,10 @@
             selectedNodeId: null,
             expandedIds: new Set(),
             quill: null,
+            
+            // Modal State
+            modalMode: null, // 'root', 'child', 'rename'
+            targetNode: null,
 
             init: function() {
                 this.initQuill();
@@ -293,34 +312,72 @@
                 }
             },
 
-            addRootUnit: function() {
-                const name = prompt("새 대단원 이름:");
-                if(!name) return;
-                const newId = 'u-'+Date.now();
-                this.treeData.push({ id: newId, title: name, children: [] });
-                this.expandedIds.add(newId);
+            // --- Modal Functions ---
+            openNameModal: function(mode, node = null) {
+                this.modalMode = mode;
+                this.targetNode = node;
+                
+                const titleEl = document.getElementById('name-modal-title');
+                const inputEl = document.getElementById('name-modal-input');
+                
+                if (mode === 'root') {
+                    titleEl.innerText = "새 대단원 추가";
+                    inputEl.value = "";
+                } else if (mode === 'child') {
+                    titleEl.innerText = "하위 단원 추가";
+                    inputEl.value = "";
+                } else if (mode === 'rename') {
+                    titleEl.innerText = "단원 이름 변경";
+                    inputEl.value = node ? node.title : "";
+                }
+                
+                document.getElementById('name-modal').classList.remove('hidden');
+                document.getElementById('name-modal').classList.add('flex');
+                setTimeout(() => inputEl.focus(), 100);
+            },
+
+            closeNameModal: function() {
+                document.getElementById('name-modal').classList.add('hidden');
+                document.getElementById('name-modal').classList.remove('flex');
+                this.modalMode = null;
+                this.targetNode = null;
+            },
+
+            confirmNameModal: function() {
+                const name = document.getElementById('name-modal-input').value.trim();
+                if (!name) { alert("이름을 입력해주세요."); return; }
+
+                if (this.modalMode === 'root') {
+                    const newId = 'u-' + Date.now();
+                    this.treeData.push({ id: newId, title: name, children: [] });
+                    this.expandedIds.add(newId);
+                } else if (this.modalMode === 'child' && this.targetNode) {
+                    if (!this.targetNode.children) this.targetNode.children = [];
+                    const newId = 'u-' + Date.now();
+                    this.targetNode.children.push({ id: newId, title: name, children: [] });
+                    this.expandedIds.add(this.targetNode.id);
+                } else if (this.modalMode === 'rename' && this.targetNode) {
+                    this.targetNode.title = name;
+                    if (this.selectedNodeId === this.targetNode.id) {
+                        document.getElementById('selected-unit-path').innerText = name;
+                    }
+                }
+
                 this.renderTree();
-                this.saveTree(true); 
+                this.saveTree(true);
+                this.closeNameModal();
+            },
+
+            addRootUnit: function() {
+                this.openNameModal('root');
             },
 
             addChild: function(node) {
-                const name = prompt("새 하위 단원 이름:");
-                if(!name) return;
-                if(!node.children) node.children = [];
-                node.children.push({ id: 'u-'+Date.now(), title: name, children: [] });
-                this.expandedIds.add(node.id);
-                this.renderTree();
-                this.saveTree(true);
+                this.openNameModal('child', node);
             },
 
             renameNode: function(node) {
-                const newName = prompt("단원 이름 수정:", node.title);
-                if(newName) {
-                    node.title = newName;
-                    this.renderTree();
-                    this.saveTree(true);
-                    if(this.selectedNodeId === node.id) document.getElementById('selected-unit-path').innerText = newName;
-                }
+                this.openNameModal('rename', node);
             },
 
             deleteNode: function(node, parentArr) {
