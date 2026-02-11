@@ -36,11 +36,13 @@
         .fc-daygrid-event { cursor: pointer; border-radius: 4px; padding: 2px 4px; font-size: 0.85rem; font-weight: 600; border: none; }
         
         /* Korean Calendar Colors */
-        .fc-day-sun a { color: #ef4444 !important; text-decoration: none; } /* Red for Sunday */
-        .fc-day-sat a { color: #3b82f6 !important; text-decoration: none; } /* Blue for Saturday */
+        .fc-day-sun a { color: #ef4444 !important; text-decoration: none; font-weight: 700; } /* Red for Sunday */
+        .fc-day-sat a { color: #3b82f6 !important; text-decoration: none; font-weight: 700; } /* Blue for Saturday */
         
         /* Holiday Cell Style */
-        .fc-day-holiday a { color: #ef4444 !important; }
+        .fc-day-holiday a { color: #ef4444 !important; font-weight: 700; }
+        .holiday-text-event { background-color: transparent !important; border: none !important; }
+        .holiday-text-event .fc-event-title { color: #ef4444; font-size: 0.75rem; font-weight: 800; }
         
         .modal-overlay { z-index: 9999; }
     </style>
@@ -189,28 +191,31 @@
                 'formative': '#3b82f6'    // Blue
             },
             
-            // Korean Public Holidays (2025-2026)
+            // Korean Public Holidays (2025-2026) Verified
             holidays: {
                 // 2025
                 '2025-01-01': '신정',
                 '2025-01-28': '설날', '2025-01-29': '설날', '2025-01-30': '설날',
-                '2025-03-01': '삼일절', '2025-03-03': '대체공휴일', // Estimated
-                '2025-05-05': '어린이날', '2025-05-06': '석가탄신일',
+                '2025-03-01': '삼일절', '2025-03-03': '대체공휴일',
+                '2025-05-05': '어린이날/석가탄신일', '2025-05-06': '대체공휴일',
                 '2025-06-06': '현충일',
                 '2025-08-15': '광복절',
                 '2025-10-03': '개천절',
                 '2025-10-05': '추석', '2025-10-06': '추석', '2025-10-07': '추석', '2025-10-08': '대체공휴일',
                 '2025-10-09': '한글날',
                 '2025-12-25': '성탄절',
+                
                 // 2026
                 '2026-01-01': '신정',
                 '2026-02-16': '설날', '2026-02-17': '설날', '2026-02-18': '설날',
                 '2026-03-01': '삼일절', '2026-03-02': '대체공휴일',
-                '2026-05-05': '어린이날', '2026-05-24': '석가탄신일', '2026-05-25': '대체공휴일',
+                '2026-05-05': '어린이날',
+                '2026-05-24': '석가탄신일', '2026-05-25': '대체공휴일',
                 '2026-06-06': '현충일',
-                '2026-08-15': '광복절',
+                '2026-08-15': '광복절', '2026-08-17': '대체공휴일',
                 '2026-09-24': '추석', '2026-09-25': '추석', '2026-09-26': '추석',
-                '2026-10-03': '개천절', '2026-10-09': '한글날',
+                '2026-10-03': '개천절', '2026-10-05': '대체공휴일',
+                '2026-10-09': '한글날',
                 '2026-12-25': '성탄절'
             },
 
@@ -225,15 +230,6 @@
                 const calendarEl = document.getElementById('calendar');
                 
                 // Holiday Events Array
-                const holidayEvents = Object.keys(this.holidays).map(date => ({
-                    title: this.holidays[date],
-                    start: date,
-                    display: 'background',
-                    backgroundColor: '#fee2e2', // Light red background
-                    classNames: ['holiday-event']
-                }));
-                
-                // Add text events for holidays (FullCalendar background events don't show text by default)
                 const holidayTextEvents = Object.keys(this.holidays).map(date => ({
                     title: this.holidays[date],
                     start: date,
@@ -241,7 +237,7 @@
                     textColor: '#ef4444',
                     backgroundColor: 'transparent',
                     borderColor: 'transparent',
-                    classNames: ['holiday-text']
+                    classNames: ['holiday-text-event']
                 }));
 
                 this.calendar = new FullCalendar.Calendar(calendarEl, {
@@ -261,7 +257,7 @@
                     dateClick: (info) => this.openEventModal(null, info.dateStr),
                     eventClick: (info) => {
                         // Ignore clicks on holiday text events
-                        if (info.event.classNames.includes('holiday-text')) return;
+                        if (info.event.classNames.includes('holiday-text-event')) return;
                         this.openEventModal(info.event);
                     },
                     height: '100%',

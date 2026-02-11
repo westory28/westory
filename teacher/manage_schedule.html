@@ -27,6 +27,15 @@
         .fc-button-active { background-color: #1e40af !important; border-color: #1e40af !important; }
         .fc-daygrid-event { cursor: pointer; border-radius: 4px; padding: 2px 4px; font-size: 0.85rem; font-weight: 600; border: none; }
         
+        /* Korean Calendar Colors */
+        .fc-day-sun a { color: #ef4444 !important; text-decoration: none; font-weight: 700; } /* Red for Sunday */
+        .fc-day-sat a { color: #3b82f6 !important; text-decoration: none; font-weight: 700; } /* Blue for Saturday */
+        
+        /* Holiday Styles */
+        .fc-day-holiday a { color: #ef4444 !important; font-weight: 700; } /* Red date number */
+        .holiday-text-event { background-color: transparent !important; border: none !important; }
+        .holiday-text-event .fc-event-title { color: #ef4444; font-size: 0.75rem; font-weight: 800; }
+        
         /* Modal Overlay */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 100; display: flex; justify-content: center; align-items: center; }
     </style>
@@ -151,9 +160,56 @@
                 'diagnosis': '#3b82f6',   // Blue
                 'formative': '#3b82f6'    // Blue
             },
+            
+            // Korean Public Holidays (2025-2026) Verified
+            holidays: {
+                // 2025
+                '2025-01-01': '신정',
+                '2025-01-28': '설날', '2025-01-29': '설날', '2025-01-30': '설날',
+                '2025-03-01': '삼일절', '2025-03-03': '대체공휴일',
+                '2025-05-05': '어린이날/석가탄신일', '2025-05-06': '대체공휴일',
+                '2025-06-06': '현충일',
+                '2025-08-15': '광복절',
+                '2025-10-03': '개천절',
+                '2025-10-05': '추석', '2025-10-06': '추석', '2025-10-07': '추석', '2025-10-08': '대체공휴일',
+                '2025-10-09': '한글날',
+                '2025-12-25': '성탄절',
+                
+                // 2026
+                '2026-01-01': '신정',
+                '2026-02-16': '설날', '2026-02-17': '설날', '2026-02-18': '설날',
+                '2026-03-01': '삼일절', '2026-03-02': '대체공휴일',
+                '2026-05-05': '어린이날',
+                '2026-05-24': '석가탄신일', '2026-05-25': '대체공휴일',
+                '2026-06-06': '현충일',
+                '2026-08-15': '광복절', '2026-08-17': '대체공휴일',
+                '2026-09-24': '추석', '2026-09-25': '추석', '2026-09-26': '추석',
+                '2026-10-03': '개천절', '2026-10-05': '대체공휴일',
+                '2026-10-09': '한글날',
+                '2026-12-25': '성탄절'
+            },
 
             init: function() {
+                document.addEventListener('auth-ready', () => {
+                    this.initCalendar();
+                });
+            },
+
+            // --- Calendar Logic ---
+            initCalendar: function() {
                 const calendarEl = document.getElementById('calendar');
+                
+                // Holiday Events Array (Text for teachers too)
+                const holidayTextEvents = Object.keys(this.holidays).map(date => ({
+                    title: this.holidays[date],
+                    start: date,
+                    allDay: true,
+                    textColor: '#ef4444',
+                    backgroundColor: 'transparent',
+                    borderColor: 'transparent',
+                    classNames: ['holiday-text-event']
+                }));
+
                 this.calendar = new FullCalendar.Calendar(calendarEl, {
                     initialView: 'dayGridMonth',
                     locale: 'ko',
@@ -162,11 +218,23 @@
                         center: 'title',
                         right: 'dayGridMonth,listMonth'
                     },
-                    events: this.fetchEvents.bind(this),
+                    dayCellClassNames: (arg) => {
+                        const dateStr = arg.date.toISOString().split('T')[0];
+                        if (this.holidays[dateStr]) return ['fc-day-holiday']; // Red color for holidays
+                        return [];
+                    },
+                    events: [...holidayTextEvents, this.fetchEvents.bind(this)],
                     dateClick: (info) => this.openModal(null, info.dateStr),
-                    eventClick: (info) => this.openModal(info.event),
+                    eventClick: (info) => {
+                        if (info.event.classNames.includes('holiday-text-event')) return;
+                        this.openModal(info.event);
+                    },
                     height: '100%',
-                    displayEventTime: false
+                    contentHeight: '100%',
+                    expandRows: true,
+                    displayEventTime: false,
+                    fixedWeekCount: false,
+                    showNonCurrentDates: false
                 });
                 this.calendar.render();
             },
@@ -183,12 +251,10 @@
 
                     snapshot.forEach(doc => {
                         const d = doc.data();
-                        // Client-side filtering
                         if (filter !== 'all') {
                             if (filter === 'common') {
                                 if (d.targetType !== 'common') return;
                             } else {
-                                // Specific class: Show Common AND Specific Class
                                 if (d.targetType === 'class' && d.targetClass !== filter) return;
                             }
                         }
@@ -204,23 +270,19 @@
                         });
                     });
                     successCallback(events);
-                } catch(e) {
-                    console.error(e);
-                    failureCallback(e);
-                }
+                } catch(e) { console.error(e); failureCallback(e); }
             },
 
             refetchEvents: function() {
-                this.calendar.refetchEvents();
+                if(this.calendar) this.calendar.refetchEvents();
             },
 
-            // --- Modal Logic ---
+            // --- Event Modal Logic ---
             openModal: function(eventObj = null, dateStr = null) {
                 document.getElementById('event-modal').classList.remove('hidden');
                 document.getElementById('event-modal').classList.add('flex');
                 
                 if (eventObj) {
-                    // Edit Mode
                     const p = eventObj.extendedProps;
                     document.getElementById('modal-title').innerText = "일정 수정";
                     document.getElementById('event-id').value = eventObj.id;
@@ -240,7 +302,6 @@
                     }
                     document.getElementById('btn-delete').classList.remove('hidden');
                 } else {
-                    // Add Mode
                     document.getElementById('modal-title').innerText = "일정 등록";
                     document.getElementById('event-id').value = '';
                     document.getElementById('event-title').value = '';
