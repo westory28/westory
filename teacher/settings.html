@@ -29,9 +29,10 @@
         .sidebar-item:hover { background-color: #f9fafb; color: #1f2937; }
         .sidebar-item.active { background-color: #eff6ff; color: #2563eb; border-left-color: #2563eb; }
         .sidebar-item i { width: 24px; text-align: center; margin-right: 8px; }
-        .content-area { flex: 1; padding: 2rem; overflow-y: auto; background-color: #f8fafc; }
-        .section-panel { background: white; border-radius: 12px; border: 1px solid #e2e8f0; padding: 2rem; box-shadow: 0 1px 2px rgba(0,0,0,0.05); display: none; }
+        .content-area { flex: 1; padding: 2rem; overflow-y: auto; background-color: #f8fafc; display: flex; flex-direction: column; }
+        .section-panel { background: white; border-radius: 12px; border: 1px solid #e2e8f0; padding: 2rem; box-shadow: 0 1px 2px rgba(0,0,0,0.05); display: none; width: 100%; }
         .section-panel.active { display: block; animation: fadeIn 0.3s ease-out; }
+        #tab-schedule.active { display: flex; flex-direction: column; flex: 1; min-height: 0; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         
         /* Quill Overrides */
@@ -44,6 +45,16 @@
         .fc-button:hover { background-color: #1d4ed8 !important; border-color: #1d4ed8 !important; }
         .fc-button-active { background-color: #1e40af !important; border-color: #1e40af !important; }
         .fc-daygrid-event { cursor: pointer; border-radius: 4px; padding: 2px 4px; font-size: 0.85rem; font-weight: 600; border: none; }
+        
+        /* Korean Calendar Colors */
+        .fc-day-sun .fc-col-header-cell-cushion,
+        .fc-day-sun a { color: #ef4444 !important; /* Red for Sunday */ }
+        .fc-day-sat .fc-col-header-cell-cushion,
+        .fc-day-sat a { color: #3b82f6 !important; /* Blue for Saturday */ }
+        
+        /* Holiday Cell Style */
+        .fc-day-holiday .fc-daygrid-day-number { color: #ef4444 !important; }
+        
         .modal-overlay { z-index: 9999; }
     </style>
 </head>
@@ -165,7 +176,7 @@
             </div>
 
             <!-- Tab 3: Schedule Management -->
-            <div id="tab-schedule" class="section-panel h-full flex flex-col w-full" style="max-width: 100%;">
+            <div id="tab-schedule" class="section-panel flex flex-col h-full w-full" style="max-width: 100%;">
                 <div class="border-b border-gray-100 pb-4 mb-4 flex flex-wrap justify-between items-end gap-4 shrink-0">
                     <div>
                         <h3 class="text-lg font-bold text-gray-900">학사 일정 관리</h3>
@@ -186,7 +197,7 @@
                         </button>
                     </div>
                 </div>
-                <div class="flex-1 bg-white rounded-xl shadow-inner border border-gray-200 p-2 overflow-hidden relative">
+                <div class="flex-1 bg-white rounded-xl shadow-inner border border-gray-200 p-2 relative min-h-0">
                     <div id="calendar" class="h-full"></div>
                 </div>
             </div>
@@ -282,6 +293,31 @@
                 'diagnosis': '#3b82f6',   // Blue
                 'formative': '#3b82f6'    // Blue
             },
+            
+            // Korean Public Holidays (2025-2026)
+            holidays: {
+                // 2025
+                '2025-01-01': '신정',
+                '2025-01-28': '설날', '2025-01-29': '설날', '2025-01-30': '설날',
+                '2025-03-01': '삼일절', '2025-03-03': '대체공휴일', // Estimated
+                '2025-05-05': '어린이날', '2025-05-06': '석가탄신일',
+                '2025-06-06': '현충일',
+                '2025-08-15': '광복절',
+                '2025-10-03': '개천절',
+                '2025-10-05': '추석', '2025-10-06': '추석', '2025-10-07': '추석', '2025-10-08': '대체공휴일',
+                '2025-10-09': '한글날',
+                '2025-12-25': '성탄절',
+                // 2026
+                '2026-01-01': '신정',
+                '2026-02-16': '설날', '2026-02-17': '설날', '2026-02-18': '설날',
+                '2026-03-01': '삼일절', '2026-03-02': '대체공휴일',
+                '2026-05-05': '어린이날', '2026-05-24': '석가탄신일', '2026-05-25': '대체공휴일',
+                '2026-06-06': '현충일',
+                '2026-08-15': '광복절',
+                '2026-09-24': '추석', '2026-09-25': '추석', '2026-09-26': '추석',
+                '2026-10-03': '개천절', '2026-10-09': '한글날',
+                '2026-12-25': '성탄절'
+            },
 
             init: function() {
                 // Initialize Tabs
@@ -331,8 +367,11 @@
                 // Schedule Specific: Init or Render Calendar
                 if(tabName === 'schedule') {
                     setTimeout(() => {
-                        if(this.calendar) this.calendar.render();
-                        else this.initCalendar();
+                        if(this.calendar) {
+                            this.calendar.render();
+                        } else {
+                            this.initCalendar();
+                        }
                     }, 50);
                 }
             },
@@ -416,6 +455,27 @@
             // --- Calendar Logic ---
             initCalendar: function() {
                 const calendarEl = document.getElementById('calendar');
+                
+                // Holiday Events Array
+                const holidayEvents = Object.keys(this.holidays).map(date => ({
+                    title: this.holidays[date],
+                    start: date,
+                    display: 'background',
+                    backgroundColor: '#fee2e2', // Light red background
+                    classNames: ['holiday-event']
+                }));
+                
+                // Add text events for holidays (FullCalendar background events don't show text by default)
+                const holidayTextEvents = Object.keys(this.holidays).map(date => ({
+                    title: this.holidays[date],
+                    start: date,
+                    allDay: true,
+                    textColor: '#ef4444',
+                    backgroundColor: 'transparent',
+                    borderColor: 'transparent',
+                    classNames: ['holiday-text']
+                }));
+
                 this.calendar = new FullCalendar.Calendar(calendarEl, {
                     initialView: 'dayGridMonth',
                     locale: 'ko',
@@ -424,11 +484,24 @@
                         center: 'title',
                         right: 'dayGridMonth,listMonth'
                     },
-                    events: this.fetchEvents.bind(this),
+                    dayCellClassNames: (arg) => {
+                        const dateStr = arg.date.toISOString().split('T')[0];
+                        if (this.holidays[dateStr]) return ['fc-day-holiday']; // Red color for holidays
+                        return [];
+                    },
+                    events: [...holidayTextEvents, this.fetchEvents.bind(this)],
                     dateClick: (info) => this.openEventModal(null, info.dateStr),
-                    eventClick: (info) => this.openEventModal(info.event),
+                    eventClick: (info) => {
+                        // Ignore clicks on holiday text events
+                        if (info.event.classNames.includes('holiday-text')) return;
+                        this.openEventModal(info.event);
+                    },
                     height: '100%',
-                    displayEventTime: false
+                    contentHeight: 'auto',
+                    expandRows: true, // Ensure rows fill height
+                    displayEventTime: false,
+                    fixedWeekCount: false,
+                    showNonCurrentDates: false
                 });
                 this.calendar.render();
             },
