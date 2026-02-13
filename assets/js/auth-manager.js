@@ -252,7 +252,8 @@ class AuthManager {
         let mobileToggleBtn = '';
 
         if (!isDashboard) {
-            navHtml = `<nav class="desktop-nav flex items-center h-full ml-6">${menuItems.map(item => `<a href="${resolve(item.url)}" class="nav-link ${isActive(item.url) ? 'active' : ''}">${item.name}</a>`).join('')}</nav>`;
+            // Changed: Added 'hidden lg:flex' to hide on mobile/tablet (up to 1024px)
+            navHtml = `<nav class="desktop-nav hidden lg:flex items-center h-full ml-6">${menuItems.map(item => `<a href="${resolve(item.url)}" class="nav-link ${isActive(item.url) ? 'active' : ''}">${item.name}</a>`).join('')}</nav>`;
             mobileNavHtml = `<div id="mobile-menu">${menuItems.map(item => `<a href="${resolve(item.url)}" class="mobile-link ${isActive(item.url) ? 'active' : ''}"><svg class="mobile-icon" viewBox="0 0 24 24"><path d="${item.icon}"></path></svg>${item.name}</a>`).join('')}</div>`;
             mobileToggleBtn = `<button id="mobile-menu-toggle" class="mobile-menu-btn"><i class="fas fa-bars"></i></button>`;
         }
@@ -280,11 +281,12 @@ class AuthManager {
                         ${navHtml}
                     </div>
                     <div class="flex items-center gap-3">
-                        <div id="dday-container"></div> <!-- D-Day Banner Area -->
+                        <div id="dday-container" class="hidden md:block"></div> <!-- D-Day Banner Area (Hidden on Mobile) -->
                         ${semInfo}
                         ${settingsIcon}
                         <div class="flex items-center gap-2 group cursor-pointer" ${this.userType === 'student' ? `onclick="location.href='${resolve('student/mypage.html')}'"` : ''}>
-                            <span id="header-greeting" class="text-sm font-bold text-stone-700 whitespace-nowrap group-hover:text-blue-600 transition"></span>
+                            <!-- Header greeting hidden on small mobile, shown on md+ -->
+                            <span id="header-greeting" class="hidden md:inline text-sm font-bold text-stone-700 whitespace-nowrap group-hover:text-blue-600 transition"></span>
                             ${myPageLink}
                         </div>
                         
