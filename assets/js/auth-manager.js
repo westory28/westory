@@ -252,8 +252,8 @@ class AuthManager {
         let mobileToggleBtn = '';
 
         // Always render navigation (User Request: Show on all pages including dashboard)
-        // Hidden on mobile via CSS classes (hidden lg:flex)
-        navHtml = `<nav class="desktop-nav hidden lg:flex items-center h-full ml-6">${menuItems.map(item => `<a href="${resolve(item.url)}" class="nav-link ${isActive(item.url) ? 'active' : ''}">${item.name}</a>`).join('')}</nav>`;
+        // Hidden on mobile via style.css (.desktop-nav class)
+        navHtml = `<nav class="desktop-nav items-center h-full ml-6">${menuItems.map(item => `<a href="${resolve(item.url)}" class="nav-link ${isActive(item.url) ? 'active' : ''}">${item.name}</a>`).join('')}</nav>`;
         mobileNavHtml = `<div id="mobile-menu">${menuItems.map(item => `<a href="${resolve(item.url)}" class="mobile-link ${isActive(item.url) ? 'active' : ''}"><svg class="mobile-icon" viewBox="0 0 24 24"><path d="${item.icon}"></path></svg>${item.name}</a>`).join('')}</div>`;
         mobileToggleBtn = `<button id="mobile-menu-toggle" class="mobile-menu-btn"><i class="fas fa-bars"></i></button>`;
 
@@ -284,8 +284,8 @@ class AuthManager {
                         ${semInfo}
                         ${settingsIcon}
                         <div class="flex items-center gap-2 group cursor-pointer" ${this.userType === 'student' ? `onclick="location.href='${resolve('student/mypage.html')}'"` : ''}>
-                            <!-- Header greeting hidden on small mobile, shown on md+ -->
-                            <span id="header-greeting" class="hidden md:inline text-sm font-bold text-stone-700 whitespace-nowrap group-hover:text-blue-600 transition"></span>
+                            <!-- Header greeting hidden on small mobile, shown on md+ via .user-greeting class -->
+                            <span id="header-greeting" class="user-greeting text-sm font-bold text-stone-700 whitespace-nowrap group-hover:text-blue-600 transition"></span>
                             ${myPageLink}
                         </div>
                         
