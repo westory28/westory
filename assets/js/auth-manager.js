@@ -1,4 +1,5 @@
 
+
 // Menu Configurations
 const MENUS = {
     student: [
@@ -27,7 +28,7 @@ window.currentConfig = {
 };
 
 // --- Dynamic Collection Helper ---
-window.getCollection = function(collectionName) {
+window.getCollection = function (collectionName) {
     const globalCollections = ['users', 'site_settings', 'metadata', 'calendar_events'];
     if (globalCollections.includes(collectionName)) {
         return window.db.collection(collectionName);
@@ -57,16 +58,16 @@ class AuthManager {
 
     init(type, requireAuth = true) {
         this.userType = type;
-        
+
         this.loadGlobalConfig().then(() => {
             window.auth.onAuthStateChanged((user) => {
                 if (user) {
                     this.currentUser = user;
-                    
-                    this.loadHeader(); 
+
+                    this.loadHeader();
                     this.loadFooter();
                     this.initSessionTimer();
-                    this.updateUserInfo(user.displayName || (type==='teacher'?'선생님':'학생'));
+                    this.updateUserInfo(user.displayName || (type === 'teacher' ? '선생님' : '학생'));
 
                     if (type === 'teacher') {
                         if (user.email !== TEACHER_EMAIL) {
@@ -134,13 +135,13 @@ class AuthManager {
             let closestEvent = null;
             let minDiff = Infinity;
 
-            const myClassStr = (this.userData && this.userData.grade && this.userData.class) 
-                ? `${this.userData.grade}-${this.userData.class}` 
+            const myClassStr = (this.userData && this.userData.grade && this.userData.class)
+                ? `${this.userData.grade}-${this.userData.class}`
                 : null;
 
             snapshot.forEach(doc => {
                 const ev = doc.data();
-                
+
                 // Filter Logic
                 if (!isTeacher) {
                     if (ev.targetType === 'class' && ev.targetClass !== myClassStr) return; // Skip other classes
@@ -149,10 +150,10 @@ class AuthManager {
                 // Check Type & Days
                 const eventDate = new Date(ev.start);
                 const diffTime = eventDate - today;
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
                 let isCandidate = false;
-                
+
                 // Exam: Show from D-30
                 if (ev.eventType === 'exam' && diffDays <= 30) isCandidate = true;
                 // Performance: Show from D-7
@@ -168,7 +169,7 @@ class AuthManager {
                 const colorClass = closestEvent.eventType === 'exam' ? 'bg-red-100 text-red-700 border-red-200' : 'bg-amber-100 text-amber-700 border-amber-200';
                 const dText = closestEvent.dDay === 0 ? "D-Day" : `D-${closestEvent.dDay}`;
                 const targetUrl = isTeacher ? 'teacher/settings.html?tab=schedule' : 'student/calendar.html';
-                
+
                 bannerContainer.innerHTML = `
                     <div onclick="location.href='${this.rootPrefix}${targetUrl}'" 
                          class="cursor-pointer flex items-center gap-2 px-3 py-1 rounded-full border ${colorClass} text-xs font-bold shadow-sm hover:opacity-80 transition animate-pulse">
@@ -198,10 +199,10 @@ class AuthManager {
 
         try {
             const doc = await window.db.collection('site_settings').doc('privacy').get();
-            if(doc.exists && doc.data().text) {
+            if (doc.exists && doc.data().text) {
                 privacyContent = doc.data().text;
             }
-        } catch(e) { console.warn("Failed to load custom privacy text", e); }
+        } catch (e) { console.warn("Failed to load custom privacy text", e); }
 
         const modalHtml = `
             <div id="global-privacy-modal" class="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-70 backdrop-blur-sm">
@@ -244,16 +245,20 @@ class AuthManager {
         const resolve = (url) => this.rootPrefix + url;
         const currentPath = window.location.pathname;
         const isActive = (url) => currentPath.endsWith(url.split('/').pop().split('?')[0]);
-        // const isDashboard = currentPath.includes('dashboard.html');
+        const isDashboard = currentPath.includes('dashboard.html');
 
-        // Always generate navigation HTML regardless of page type
-        // Added 'hidden lg:flex' to hide on mobile/tablet (up to 1024px) but show on PC
-        let navHtml = `<nav class="desktop-nav hidden lg:flex items-center h-full ml-6">${menuItems.map(item => `<a href="${resolve(item.url)}" class="nav-link ${isActive(item.url) ? 'active' : ''}">${item.name}</a>`).join('')}</nav>`;
-        let mobileNavHtml = `<div id="mobile-menu">${menuItems.map(item => `<a href="${resolve(item.url)}" class="mobile-link ${isActive(item.url) ? 'active' : ''}"><svg class="mobile-icon" viewBox="0 0 24 24"><path d="${item.icon}"></path></svg>${item.name}</a>`).join('')}</div>`;
-        let mobileToggleBtn = `<button id="mobile-menu-toggle" class="mobile-menu-btn"><i class="fas fa-bars"></i></button>`;
+        let navHtml = '';
+        let mobileNavHtml = '';
+        let mobileToggleBtn = '';
+
+        // Always render navigation (User Request: Show on all pages including dashboard)
+        // Hidden on mobile via CSS classes (hidden lg:flex)
+        navHtml = `<nav class="desktop-nav hidden lg:flex items-center h-full ml-6">${menuItems.map(item => `<a href="${resolve(item.url)}" class="nav-link ${isActive(item.url) ? 'active' : ''}">${item.name}</a>`).join('')}</nav>`;
+        mobileNavHtml = `<div id="mobile-menu">${menuItems.map(item => `<a href="${resolve(item.url)}" class="mobile-link ${isActive(item.url) ? 'active' : ''}"><svg class="mobile-icon" viewBox="0 0 24 24"><path d="${item.icon}"></path></svg>${item.name}</a>`).join('')}</div>`;
+        mobileToggleBtn = `<button id="mobile-menu-toggle" class="mobile-menu-btn"><i class="fas fa-bars"></i></button>`;
 
         const dashboardLink = this.userType === 'teacher' ? resolve('teacher/dashboard.html') : resolve('student/dashboard.html');
-        // Settings icon now links to page, not modal
+        // Changed: Settings icon now links to page, not modal
         let settingsIcon = this.userType === 'teacher' ? `<a href="${resolve('teacher/settings.html')}" class="text-gray-400 hover:text-blue-600 cursor-pointer transition p-1 mr-2" title="관리자 설정"><i class="fas fa-cog fa-lg"></i></a>` : '';
         const semInfo = `<span class="hidden md:inline-block text-xs font-mono bg-gray-100 text-gray-500 px-2 py-1 rounded mr-2 border border-gray-200">${window.currentConfig.year}-${window.currentConfig.semester}</span>`;
 
@@ -300,7 +305,7 @@ class AuthManager {
         `;
 
         document.body.insertAdjacentHTML('afterbegin', headerHtml);
-        
+
         document.getElementById('logout-btn').addEventListener('click', () => this.logout());
         document.getElementById('btn-extend-session').addEventListener('click', () => this.extendSession());
 
@@ -319,7 +324,7 @@ class AuthManager {
 
     loadFooter() {
         const existingFooter = document.querySelector('footer');
-        if(existingFooter) existingFooter.remove();
+        if (existingFooter) existingFooter.remove();
         const footerHtml = `<footer class="bg-white border-t border-stone-200 py-4 mt-auto"><div class="container mx-auto text-center"><p class="text-stone-400 text-xs font-bold font-mono">Copyright © 용신중학교 역사교사 방재석. All rights reserved.</p></div></footer>`;
         document.body.insertAdjacentHTML('beforeend', footerHtml);
     }
@@ -339,11 +344,11 @@ class AuthManager {
 
     extendSession() {
         const now = Date.now();
-        const expiry = now + (60 * 60 * 1000); 
+        const expiry = now + (60 * 60 * 1000);
         localStorage.setItem('sessionExpiry', expiry);
         this.startTimerInterval();
         const display = document.getElementById('session-timer-display');
-        if(display) { display.textContent = "60:00"; display.classList.remove('text-red-500'); }
+        if (display) { display.textContent = "60:00"; display.classList.remove('text-red-500'); }
     }
 
     startTimerInterval() {
@@ -354,7 +359,7 @@ class AuthManager {
     }
 
     updateTimerDisplay(display) {
-        if(!display) return;
+        if (!display) return;
         const expiry = parseInt(localStorage.getItem('sessionExpiry') || '0');
         const now = Date.now();
         const diff = expiry - now;
@@ -366,7 +371,7 @@ class AuthManager {
             const m = Math.floor(diff / 60000);
             const s = Math.floor((diff % 60000) / 1000);
             display.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-            if(m < 5) display.classList.add('text-red-500');
+            if (m < 5) display.classList.add('text-red-500');
             else display.classList.remove('text-red-500');
         }
     }
