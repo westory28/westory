@@ -1,3 +1,4 @@
+
 /* Westory Standard Design System */
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800;900&display=swap');
 
@@ -25,11 +26,17 @@ header {
 .header-container {
     max-width: 80rem;
     margin: 0 auto;
-    padding: 0 1.5rem;
+    padding: 0 1rem; /* Mobile default */
     height: 100%;
     display: flex;
     align-items: center;
     justify-content: space-between;
+}
+
+@media (min-width: 1024px) {
+    .header-container {
+        padding: 0 1.5rem; /* Desktop padding */
+    }
 }
 
 /* Logo */

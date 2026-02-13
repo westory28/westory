@@ -54,21 +54,21 @@
         .preview-img { max-height: 200px; max-width: 100%; border-radius: 8px; border: 1px solid #eee; margin: 10px auto; display: block; }
     </style>
 </head>
-<body class="bg-gray-50 h-screen flex flex-col">
+<body class="bg-gray-50 min-h-screen flex flex-col">
     <!-- Header injected by AuthManager -->
 
-    <main class="flex-1 w-full max-w-7xl mx-auto px-6 py-6 h-full overflow-hidden flex flex-col">
+    <main class="flex-1 w-full max-w-7xl mx-auto px-4 lg:px-6 py-6 h-full flex flex-col">
         <!-- Tabs -->
-        <div class="flex border-b border-gray-200 mb-4 bg-white rounded-t-lg px-2 shrink-0">
-            <button onclick="app.setTab('manage')" id="btn-tab-manage" class="tab-btn-base tab-btn-active">문제 등록</button>
-            <button onclick="app.setTab('log')" id="btn-tab-log" class="tab-btn-base">📊 제출 현황</button>
-            <button onclick="app.setTab('bank')" id="btn-tab-bank" class="tab-btn-base">🗄️ 전체 문제 은행</button>
+        <div class="flex border-b border-gray-200 mb-4 bg-white rounded-t-lg px-2 shrink-0 overflow-x-auto">
+            <button onclick="app.setTab('manage')" id="btn-tab-manage" class="tab-btn-base tab-btn-active whitespace-nowrap">문제 등록</button>
+            <button onclick="app.setTab('log')" id="btn-tab-log" class="tab-btn-base whitespace-nowrap">📊 제출 현황</button>
+            <button onclick="app.setTab('bank')" id="btn-tab-bank" class="tab-btn-base whitespace-nowrap">🗄️ 전체 문제 은행</button>
         </div>
 
         <!-- TAB 1: Assessment Management (Tree + Editor) -->
-        <div id="tab-manage" class="tab-content h-full flex gap-6 overflow-hidden pb-2">
+        <div id="tab-manage" class="tab-content h-full flex flex-col lg:flex-row gap-6 lg:overflow-hidden pb-2">
             <!-- Left: Unit Tree -->
-            <div class="w-1/3 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden">
+            <div class="w-full lg:w-1/3 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col lg:overflow-hidden min-h-[300px] lg:min-h-0">
                 <div class="p-4 border-b bg-gray-50 font-bold text-gray-700">
                     📚 단원 및 평가 선택
                 </div>
@@ -76,19 +76,19 @@
             </div>
 
             <!-- Right: Assessment Editor -->
-            <div class="w-2/3 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col relative overflow-hidden" id="editor-panel">
+            <div class="w-full lg:w-2/3 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col relative lg:overflow-hidden min-h-[600px] lg:min-h-0" id="editor-panel">
                 <!-- Empty State -->
                 <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 bg-white z-20">
                     <i class="fas fa-mouse-pointer text-4xl mb-4"></i>
-                    <p class="text-lg text-center">왼쪽 목록에서 <strong>지필평가 대비</strong> 또는<br><strong>중단원</strong>을 선택하여 문제를 관리하세요.</p>
+                    <p class="text-lg text-center">목차에서 <strong>지필평가 대비</strong> 또는<br><strong>중단원</strong>을 선택하여 문제를 관리하세요.</p>
                 </div>
 
                 <!-- Editor Header -->
-                <div class="p-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
+                <div class="p-4 border-b bg-gray-50 flex flex-wrap justify-between items-center shrink-0 gap-2">
                     <div>
                         <div class="text-xs text-gray-500 font-bold mb-1" id="selected-path"></div>
                         <div class="flex items-center gap-2">
-                            <h2 class="text-xl font-bold text-gray-800" id="selected-title">-</h2>
+                            <h2 class="text-xl font-bold text-gray-800 truncate max-w-[200px]" id="selected-title">-</h2>
                             <!-- Settings Button -->
                             <button onclick="app.openSettingsModal()" class="text-gray-400 hover:text-blue-600 transition p-1" title="평가 설정 (시간, 재응시 등)">
                                 <i class="fas fa-cog"></i>
@@ -115,7 +115,7 @@
 
                 <!-- 2. Exam Prep Mode: Cascading Filters -->
                 <div class="bg-blue-50 shrink-0 border-b border-blue-100 px-4 py-3 hidden" id="ep-filter-container">
-                    <div class="flex items-center gap-2 text-sm">
+                    <div class="flex flex-wrap items-center gap-2 text-sm">
                         <i class="fas fa-filter text-blue-500"></i>
                         <span class="font-bold text-blue-800 mr-1">단원 필터:</span>
                         <select id="ep-filter-big" onchange="app.updateEpSelects('filter', 'big')" class="border border-blue-200 rounded px-2 py-1 text-xs w-28 bg-white focus:outline-none focus:border-blue-500"><option value="">대단원 전체</option></select>
@@ -152,7 +152,7 @@
                             <!-- Exam Prep Mode: Cascading Selects for Assignment -->
                             <div id="ep-add-container" class="hidden bg-blue-50 p-2 rounded border border-blue-100">
                                 <div class="text-xs font-bold text-blue-600 mb-1 flex items-center"><i class="fas fa-tag mr-1"></i> 문제 출처 단원 지정</div>
-                                <div class="grid grid-cols-3 gap-2">
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
                                     <select id="ep-add-big" onchange="app.updateEpSelects('add', 'big')" class="border border-blue-200 rounded p-1.5 text-xs bg-white"><option value="">대단원 선택</option></select>
                                     <select id="ep-add-mid" onchange="app.updateEpSelects('add', 'mid')" class="border border-blue-200 rounded p-1.5 text-xs bg-white"><option value="">중단원 선택</option></select>
                                     <select id="ep-add-small" class="border border-blue-200 rounded p-1.5 text-xs bg-white"><option value="">소단원 선택</option></select>
@@ -206,7 +206,7 @@
         <div id="tab-bank" class="tab-content hidden h-full overflow-hidden flex flex-col">
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col h-full overflow-hidden">
                  <div class="p-4 border-b bg-gray-50 flex flex-wrap gap-3 items-center shrink-0">
-                    <div class="flex items-center gap-2"><i class="fas fa-filter text-gray-400"></i><select id="filter-big" onchange="app.filterBank('big')" class="border rounded px-2 py-1.5 text-sm w-32 font-bold text-gray-700"><option value="">대단원 전체</option></select><i class="fas fa-chevron-right text-gray-300 text-xs"></i><select id="filter-mid" onchange="app.filterBank('mid')" class="border rounded px-2 py-1.5 text-sm w-32 text-gray-700"><option value="">중단원 전체</option></select><i class="fas fa-chevron-right text-gray-300 text-xs"></i><select id="filter-small" onchange="app.filterBank('small')" class="border rounded px-2 py-1.5 text-sm w-32 text-gray-700"><option value="">소단원 전체</option></select></div><div class="h-6 w-px bg-gray-300 mx-2"></div><select id="filter-type" onchange="app.filterBank('type')" class="border rounded px-2 py-1.5 text-sm w-24 text-gray-700"><option value="">유형 전체</option><option value="choice">객관식</option><option value="ox">O/X</option><option value="word">단답형</option><option value="order">순서</option></select><div class="ml-auto text-xs text-gray-500">총 <span id="bank-total-count" class="font-bold text-blue-600">0</span>문제</div>
+                    <div class="flex flex-wrap items-center gap-2"><i class="fas fa-filter text-gray-400"></i><select id="filter-big" onchange="app.filterBank('big')" class="border rounded px-2 py-1.5 text-sm w-32 font-bold text-gray-700"><option value="">대단원 전체</option></select><i class="fas fa-chevron-right text-gray-300 text-xs"></i><select id="filter-mid" onchange="app.filterBank('mid')" class="border rounded px-2 py-1.5 text-sm w-32 text-gray-700"><option value="">중단원 전체</option></select><i class="fas fa-chevron-right text-gray-300 text-xs"></i><select id="filter-small" onchange="app.filterBank('small')" class="border rounded px-2 py-1.5 text-sm w-32 text-gray-700"><option value="">소단원 전체</option></select></div><div class="h-6 w-px bg-gray-300 mx-2 hidden md:block"></div><select id="filter-type" onchange="app.filterBank('type')" class="border rounded px-2 py-1.5 text-sm w-24 text-gray-700"><option value="">유형 전체</option><option value="choice">객관식</option><option value="ox">O/X</option><option value="word">단답형</option><option value="order">순서</option></select><div class="ml-auto text-xs text-gray-500">총 <span id="bank-total-count" class="font-bold text-blue-600">0</span>문제</div>
                  </div>
                  <div class="flex-1 overflow-auto"><table class="w-full text-sm text-left"><thead class="bg-white font-bold text-gray-700 sticky top-0 shadow-sm z-10"><tr><th class="p-3 w-16 text-center sortable" onclick="app.sortBank('id')">ID <i class="fas fa-sort sort-icon"></i></th><th class="p-3 w-20 text-center sortable" onclick="app.sortBank('category')">분류 <i class="fas fa-sort sort-icon"></i></th><th class="p-3 w-40 sortable" onclick="app.sortBank('unit')">단원 정보 <i class="fas fa-sort sort-icon"></i></th><th class="p-3 w-20 text-center sortable" onclick="app.sortBank('type')">유형 <i class="fas fa-sort sort-icon"></i></th><th class="p-3">문제</th><th class="p-3 w-32">정답</th><th class="p-3 w-24 text-center sortable" onclick="app.sortBank('rate')">정답률 <i class="fas fa-sort sort-icon"></i></th><th class="p-3 w-16 text-center">관리</th></tr></thead><tbody id="bank-body" class="divide-y divide-gray-100 bg-white"></tbody></table></div>
             </div>
@@ -346,12 +346,16 @@
                 el.classList.add('active');
                 this.selectedNode = { id: 'exam_prep', title: '지필평가 대비 실전', type: 'special' };
                 this.renderEditor();
+                // Scroll to editor on mobile
+                if(window.innerWidth < 1024) document.getElementById('editor-panel').scrollIntoView({behavior:'smooth'});
             },
             selectNode: function(node, parentTitle, el) {
                 this.resetSelection();
                 el.classList.add('active');
                 this.selectedNode = { ...node, parentTitle };
                 this.renderEditor();
+                // Scroll to editor on mobile
+                if(window.innerWidth < 1024) document.getElementById('editor-panel').scrollIntoView({behavior:'smooth'});
             },
             resetSelection: function() {
                 document.querySelectorAll('.tree-item').forEach(e => e.classList.remove('active'));

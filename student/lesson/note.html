@@ -59,15 +59,16 @@
         .note-section p { margin-bottom: 0.5em; }
         .note-section img { max-width: 100%; border-radius: 8px; margin: 10px 0; }
         
-        /* Mobile Toggle */
+        /* Mobile/Tablet Toggle */
         .sidebar-toggle { display: none; position: absolute; bottom: 20px; left: 20px; z-index: 50; background: #1f2937; color: white; width: 50px; height: 50px; border-radius: 50%; align-items: center; justify-content: center; box-shadow: 0 4px 6px rgba(0,0,0,0.2); cursor: pointer; }
         
-        @media (max-width: 768px) {
+        /* Breakpoint set to 1024px for tablet support */
+        @media (max-width: 1024px) {
             .lesson-sidebar { position: fixed; left: 0; top: 64px; bottom: 0; transform: translateX(-100%); width: 80%; max-width: 320px; }
             .lesson-sidebar.show { transform: translateX(0); }
             .sidebar-toggle { display: flex; }
-            .content-container { padding: 20px; }
-            .note-section { padding: 20px; }
+            .content-container { padding: 20px 16px; }
+            .note-section { padding: 24px; }
         }
         
         .overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 30; }
@@ -85,7 +86,7 @@
         <aside id="lesson-sidebar" class="lesson-sidebar">
             <div class="sidebar-header">
                 <span>📑 수업 목차</span>
-                <button onclick="toggleSidebar()" class="md:hidden text-gray-400"><i class="fas fa-times"></i></button>
+                <button onclick="toggleSidebar()" class="lg:hidden text-gray-400"><i class="fas fa-times"></i></button>
             </div>
             <div id="tree-root" class="sidebar-content">
                 <div class="text-center text-gray-400 py-10 text-sm">목차 로딩 중...</div>
@@ -212,8 +213,8 @@
             const newUrl = `${window.location.pathname}?id=${id}&title=${encodeURIComponent(title)}`;
             window.history.pushState({path: newUrl}, '', newUrl);
             
-            // Close sidebar on mobile
-            if(window.innerWidth < 768) toggleSidebar();
+            // Close sidebar on mobile/tablet
+            if(window.innerWidth < 1024) toggleSidebar();
 
             loadLessonContent(id, title);
         };

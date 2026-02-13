@@ -38,21 +38,21 @@
         .cloze-input { border: none; border-bottom: 2px solid #374151; text-align: center; font-weight: bold; color: #2563eb; background: transparent; padding: 0 4px; width: 100px; display: inline-block; }
     </style>
 </head>
-<body class="bg-gray-50 h-screen flex flex-col">
+<body class="bg-gray-50 min-h-screen flex flex-col">
     <!-- Header injected by AuthManager -->
 
-    <main class="flex-1 w-full max-w-7xl mx-auto px-6 py-6 h-full overflow-hidden flex flex-col">
+    <main class="flex-1 w-full max-w-7xl mx-auto px-4 lg:px-6 py-6 h-full flex flex-col">
         
         <div class="flex justify-between items-center mb-4 shrink-0">
             <div>
-                <h1 class="text-2xl font-bold text-gray-800"><i class="fas fa-sitemap text-blue-500 mr-2"></i>단원 설정 및 수업 자료 관리</h1>
+                <h1 class="text-xl lg:text-2xl font-bold text-gray-800"><i class="fas fa-sitemap text-blue-500 mr-2"></i>단원 설정 및 수업 자료 관리</h1>
                 <p class="text-sm text-gray-500 mt-1">대단원 > 중단원 > 소단원 구조를 설정하고, 소단원을 선택하여 학습 자료를 등록하세요.</p>
             </div>
         </div>
 
-        <div class="flex gap-6 h-full overflow-hidden pb-4">
+        <div class="flex flex-col lg:flex-row gap-6 h-full lg:overflow-hidden pb-4">
             <!-- Left: Tree Structure -->
-            <div class="w-1/3 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden">
+            <div class="w-full lg:w-1/3 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col lg:overflow-hidden min-h-[300px] lg:min-h-0">
                 <div class="p-6 border-b bg-gray-50 font-bold text-gray-700 flex justify-between items-center">
                     <span>📚 단원 목차</span>
                     <div class="flex gap-1">
@@ -68,17 +68,17 @@
             </div>
 
             <!-- Right: Lesson Editor -->
-            <div class="w-2/3 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col relative" id="editor-panel">
+            <div class="w-full lg:w-2/3 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col relative min-h-[600px] lg:min-h-0" id="editor-panel">
                 <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 bg-white z-10 rounded-xl">
                     <i class="far fa-hand-point-left text-4xl mb-4"></i>
-                    <p class="text-lg">왼쪽 목차에서 <strong>소단원</strong>을 선택하면<br>자료를 편집할 수 있습니다.</p>
+                    <p class="text-lg">목차에서 <strong>소단원</strong>을 선택하면<br>자료를 편집할 수 있습니다.</p>
                 </div>
 
                 <!-- Editor UI -->
-                <div class="p-4 border-b flex justify-between items-center bg-gray-50 shrink-0">
+                <div class="p-4 border-b flex flex-wrap justify-between items-center bg-gray-50 shrink-0 gap-2">
                     <div class="flex items-center gap-2 overflow-hidden">
                         <span class="bg-blue-600 text-white text-xs px-2 py-1 rounded font-bold shrink-0">선택됨</span>
-                        <span id="selected-unit-path" class="font-bold text-gray-700 truncate"></span>
+                        <span id="selected-unit-path" class="font-bold text-gray-700 truncate max-w-[150px] lg:max-w-none"></span>
                     </div>
                     <div class="flex gap-2">
                          <button onclick="app.previewLesson()" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg font-bold hover:bg-gray-50 text-sm">
@@ -109,7 +109,7 @@
                     <div class="flex-1 flex flex-col h-full min-h-[500px]">
                         <label class="block text-xs font-bold text-gray-500 mb-1 flex justify-between">
                             <span>학습 내용 (텍스트, 이미지, 빈칸)</span>
-                            <span class="text-blue-600">빈칸 만드는 법: 정답을 대괄호 [정답] 으로 감싸세요.</span>
+                            <span class="text-blue-600 text-[10px] lg:text-xs">빈칸: [정답] 으로 감싸기</span>
                         </label>
                         <div id="quill-editor" class="bg-white"></div>
                     </div>
@@ -122,13 +122,13 @@
     <!-- Preview Modal -->
     <div id="preview-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center">
         <div class="absolute inset-0 bg-black bg-opacity-70 backdrop-blur-sm" onclick="app.closePreview()"></div>
-        <div class="bg-white w-full max-w-4xl h-[85vh] rounded-2xl shadow-2xl z-10 flex flex-col overflow-hidden relative">
+        <div class="bg-white w-full max-w-4xl h-[85vh] rounded-2xl shadow-2xl z-10 flex flex-col overflow-hidden relative mx-4">
             <div class="p-4 border-b flex justify-between items-center bg-gray-50">
                 <h3 class="font-bold text-lg"><i class="fas fa-mobile-alt mr-2"></i>학생 화면 미리보기</h3>
                 <button onclick="app.closePreview()" class="text-gray-500 hover:text-gray-800"><i class="fas fa-times text-xl"></i></button>
             </div>
-            <div class="flex-1 overflow-y-auto p-8 bg-gray-50">
-                <div class="max-w-2xl mx-auto bg-white p-8 rounded-xl shadow-sm border border-gray-200 min-h-full">
+            <div class="flex-1 overflow-y-auto p-4 lg:p-8 bg-gray-50">
+                <div class="max-w-2xl mx-auto bg-white p-6 lg:p-8 rounded-xl shadow-sm border border-gray-200 min-h-full">
                     <h1 id="preview-title" class="text-2xl font-bold mb-4 text-gray-900 border-b pb-4"></h1>
                     <div id="preview-video-area" class="mb-6 hidden">
                         <div class="relative pb-[56.25%] h-0 overflow-hidden rounded-xl bg-black">
@@ -307,6 +307,11 @@
                     panel.classList.add('hidden');
                     pathDisplay.innerText = node.title;
                     this.loadLessonContent(node.id, node.title);
+                    
+                    // On Mobile, scroll to editor
+                    if(window.innerWidth < 1024) {
+                        document.getElementById('editor-panel').scrollIntoView({behavior:'smooth'});
+                    }
                 } else {
                     panel.classList.remove('hidden');
                 }

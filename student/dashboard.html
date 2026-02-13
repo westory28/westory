@@ -15,11 +15,15 @@
     <script src="../assets/js/auth-manager.js"></script>
 
     <style>
-        .dashboard-container { max-width: 1280px; margin: 0 auto; padding: 24px 40px; width: 100%; }
-        .tab-nav { display: flex; border-bottom: 2px solid #e5e7eb; margin-bottom: 32px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .dashboard-container { max-width: 1280px; margin: 0 auto; padding: 24px 16px; width: 100%; } /* Mobile friendly padding */
+        @media (min-width: 768px) { .dashboard-container { padding: 24px 40px; } }
+        
+        .tab-nav { display: flex; border-bottom: 2px solid #e5e7eb; margin-bottom: 32px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+        .tab-nav::-webkit-scrollbar { display: none; }
         .tab-btn { flex: 1; padding: 16px 24px; text-align: center; font-weight: 700; font-size: 1.1rem; color: #9ca3af; cursor: pointer; transition: all 0.2s; border-bottom: 3px solid transparent; white-space: nowrap; min-width: fit-content; }
         .tab-btn:hover { color: #4b5563; background-color: #f9fafb; }
         .tab-btn.active { color: #2563eb; border-bottom-color: #2563eb; background-color: transparent; }
+        
         .section-content { display: none; animation: fadeIn 0.3s ease-out; }
         .section-content.active { display: block; }
         .accordion-item { border: 1px solid #e5e7eb; border-radius: 12px; margin-bottom: 12px; overflow: hidden; background: white; transition: shadow 0.2s; }

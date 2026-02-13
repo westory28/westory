@@ -45,20 +45,29 @@
         .holiday-text-event .fc-event-title { color: #ef4444; font-size: 0.75rem; font-weight: 800; }
         
         .modal-overlay { z-index: 9999; }
+
+        @media (max-width: 1024px) {
+            .setting-sidebar { width: 100%; border-right: none; border-bottom: 1px solid #e5e7eb; flex-direction: row; overflow-x: auto; padding-bottom: 0; }
+            .setting-sidebar .p-6 { padding: 1rem; }
+            .setting-sidebar h2 { font-size: 1rem; }
+            .sidebar-item { border-left: none; border-bottom: 4px solid transparent; padding: 1rem; white-space: nowrap; }
+            .sidebar-item.active { border-left-color: transparent; border-bottom-color: #2563eb; }
+            .content-area { padding: 1rem; }
+        }
     </style>
 </head>
 <body class="bg-gray-50 h-screen flex flex-col overflow-hidden">
     <!-- Header injected by AuthManager -->
 
-    <main class="flex flex-1 overflow-hidden">
+    <main class="flex flex-col lg:flex-row flex-1 overflow-hidden">
         <!-- Sidebar -->
-        <aside class="setting-sidebar">
-            <div class="p-6 border-b border-gray-100">
+        <aside class="setting-sidebar shrink-0">
+            <div class="p-6 border-b border-gray-100 lg:border-b-0 lg:border-gray-100">
                 <h2 class="text-xl font-extrabold text-gray-800 flex items-center">
-                    <i class="fas fa-cog text-gray-400 mr-2"></i> 관리자 페이지
+                    <i class="fas fa-cog text-gray-400 mr-2"></i> 관리자
                 </h2>
             </div>
-            <nav class="flex-1 py-4">
+            <nav class="flex lg:flex-col flex-1 py-0 lg:py-4 overflow-x-auto">
                 <a href="settings.html" class="sidebar-item">
                     <i class="fas fa-sliders-h"></i>기본 환경 설정
                 </a>
