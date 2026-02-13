@@ -8,7 +8,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
@@ -16,7 +15,6 @@
     <script src="../assets/js/firebase-config.js"></script>
     <link rel="stylesheet" href="../assets/css/style.css">
     <script src="../assets/js/auth-manager.js"></script>
-
     <style>
         .sort-icon {
             margin-left: 4px;
@@ -47,7 +45,6 @@
             color: #2563eb;
         }
 
-        /* Tree Styles */
         .tree-node {
             position: relative;
         }
@@ -95,7 +92,6 @@
             border-color: #d97706;
         }
 
-        /* Toggle Switch */
         .toggle-checkbox:checked {
             right: 0;
             border-color: #68D391;
@@ -135,7 +131,6 @@
             transform: translateX(100%);
         }
 
-        /* Table Sort Header */
         th.sortable {
             cursor: pointer;
             user-select: none;
@@ -146,7 +141,6 @@
             background-color: #e5e7eb;
         }
 
-        /* Preview Styles */
         .preview-choice {
             padding: 12px;
             border: 2px solid #e5e7eb;
@@ -182,22 +176,6 @@
             display: block;
         }
 
-        .preview-choice.wrong {
-            border-color: #ef4444;
-            background-color: #fef2f2;
-            color: #b91c1c;
-        }
-
-        .preview-img {
-            max-height: 200px;
-            max-width: 100%;
-            border-radius: 8px;
-            border: 1px solid #eee;
-            margin: 10px auto;
-            display: block;
-        }
-
-        /* Mobile Sidebar Drawer */
         @media (max-width: 1024px) {
             #sidebar-panel {
                 position: fixed;
@@ -247,664 +225,857 @@
         .fab-btn:active {
             transform: scale(0.95);
         }
+    </style>
+</head>
 
-        </head><body class="bg-gray-50 min-h-screen flex flex-col">< !-- Header injected by AuthManager --><main class="flex-1 w-full max-w-7xl mx-auto px-4 lg:px-6 py-6 h-full flex flex-col">< !-- Tabs --><div class="flex border-b border-gray-200 mb-4 bg-white rounded-t-lg px-2 shrink-0 overflow-x-auto"><button onclick="app.setTab('manage')" id="btn-tab-manage" class="tab-btn-base tab-btn-active whitespace-nowrap">문제 등록</button><button onclick="app.setTab('log')" id="btn-tab-log" class="tab-btn-base whitespace-nowrap">📊 제출 현황</button><button onclick="app.setTab('bank')" id="btn-tab-bank" class="tab-btn-base whitespace-nowrap">🗄️ 전체 문제 은행</button></div>< !-- TAB 1: Assessment Management (Tree + Editor) --><div id="tab-manage" class="tab-content h-full flex flex-col lg:flex-row gap-6 lg:overflow-hidden pb-2 relative">< !-- Mobile Overlay --><div id="sidebar-overlay" class="sidebar-overlay" onclick="app.toggleSidebar(false)"></div>< !-- Left: Unit Tree (Sidebar) --><div id="sidebar-panel" class="w-full lg:w-1/3 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col lg:overflow-hidden min-h-[300px] lg:min-h-0 lg:static fixed h-full top-0 left-0 z-50"><div class="p-4 border-b bg-gray-50 font-bold text-gray-700 flex justify-between items-center"><span>📚 단원 및 평가 선택</span><button class="lg:hidden text-gray-500 hover:text-gray-700" onclick="app.toggleSidebar(false)"><i class="fas fa-times"></i></button></div><div class="flex-1 overflow-y-auto p-4" id="tree-container"></div></div>< !-- Mobile FAB to Open Sidebar --><button class="fab-btn lg:hidden" onclick="app.toggleSidebar(true)"><i class="fas fa-list-ul text-xl"></i></button>< !-- Right: Assessment Editor --><div class="w-full lg:w-2/3 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col relative lg:overflow-hidden min-h-[600px] lg:min-h-0" id="editor-panel">< !-- Empty State --><div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 bg-white z-20"><i class="fas fa-mouse-pointer text-4xl mb-4"></i><p class="text-lg text-center">목차에서 <strong>지필평가 대비</strong>또는<br><strong>중단원</strong>을 선택하여 문제를 관리하세요.</p></div>< !-- Editor Header --><div class="p-4 border-b bg-gray-50 flex flex-wrap justify-between items-center shrink-0 gap-2"><div><div class="text-xs text-gray-500 font-bold mb-1" id="selected-path"></div><div class="flex items-center gap-2"><h2 class="text-xl font-bold text-gray-800 truncate max-w-[200px]" id="selected-title">-</h2>< !-- Settings Button --><button onclick="app.openSettingsModal()" class="text-gray-400 hover:text-blue-600 transition p-1" title="평가 설정 (시간, 재응시 등)"><i class="fas fa-cog"></i></button></div></div>< !-- Toggle --><div class="flex items-center gap-3"><label class="flex items-center cursor-pointer relative"><input type="checkbox" id="toggle-active" class="sr-only toggle-checkbox" onchange="app.saveSettings()"><div class="toggle-label bg-gray-300 rounded-full w-10 h-6 relative"><div class="toggle-dot bg-white w-5 h-5 rounded-full absolute top-0.5 left-0.5 shadow-sm"></div></div><span class="ml-2 text-sm font-bold text-gray-600" id="toggle-text">학생 비공개</span></label></div></div>< !-- 1. Normal Mode: Sub Tabs --><div class="bg-white shrink-0 flex border-b border-gray-200 px-4 pt-2" id="sub-tabs"><button onclick="app.setSubTab('diagnostic')" id="sub-btn-diagnostic" class="py-2 px-4 font-bold text-sm border-b-2 border-blue-500 text-blue-600">진단평가</button><button onclick="app.setSubTab('formative')" id="sub-btn-formative" class="py-2 px-4 font-bold text-sm border-b-2 border-transparent text-gray-400 hover:text-gray-600">형성평가</button></div>< !-- 2. Exam Prep Mode: Cascading Filters --><div class="bg-blue-50 shrink-0 border-b border-blue-100 px-4 py-3 hidden" id="ep-filter-container"><div class="flex flex-wrap items-center gap-2 text-sm"><i class="fas fa-filter text-blue-500"></i><span class="font-bold text-blue-800 mr-1">단원 필터:</span><select id="ep-filter-big" onchange="app.updateEpSelects('filter', 'big')" class="border border-blue-200 rounded px-2 py-1 text-xs w-28 bg-white focus:outline-none focus:border-blue-500"><option value="">대단원 전체</option></select><i class="fas fa-chevron-right text-blue-300 text-xs"></i><select id="ep-filter-mid" onchange="app.updateEpSelects('filter', 'mid')" class="border border-blue-200 rounded px-2 py-1 text-xs w-28 bg-white focus:outline-none focus:border-blue-500"><option value="">중단원 전체</option></select><i class="fas fa-chevron-right text-blue-300 text-xs"></i><select id="ep-filter-small" onchange="app.updateEpSelects('filter', 'small')" class="border border-blue-200 rounded px-2 py-1 text-xs w-28 bg-white focus:outline-none focus:border-blue-500"><option value="">소단원 전체</option></select><button onclick="app.resetEpFilters()" class="ml-auto text-xs text-blue-400 hover:text-blue-600"><i class="fas fa-sync-alt"></i></button></div></div>< !-- Questions List --><div class="flex-1 overflow-y-auto p-6 bg-gray-50 space-y-4"><div id="q-list" class="space-y-3"></div>< !-- Add Form Area --><div class="mt-8 bg-white p-5 rounded-xl border-2 border-dashed border-gray-300 relative"><h3 class="font-bold text-gray-700 mb-4 flex items-center"><i class="fas fa-plus-circle text-blue-500 mr-2"></i>새 문제 추가</h3><div class="space-y-3"><div class="grid grid-cols-2 gap-3"><select id="new-q-type" class="border p-2 rounded text-sm bg-gray-50"><option value="choice">객관식</option><option value="ox">O/X</option><option value="word">단답형</option><option value="order">순서나열</option></select>< !-- Normal Mode: Single Subunit Select --><select id="new-q-subunit" class="border p-2 rounded text-sm bg-gray-50"><option value="">소단원 (전체)</option></select></div>< !-- Exam Prep Mode: Cascading Selects for Assignment --><div id="ep-add-container" class="hidden bg-blue-50 p-2 rounded border border-blue-100"><div class="text-xs font-bold text-blue-600 mb-1 flex items-center"><i class="fas fa-tag mr-1"></i>문제 출처 단원 지정</div><div class="grid grid-cols-1 md:grid-cols-3 gap-2"><select id="ep-add-big" onchange="app.updateEpSelects('add', 'big')" class="border border-blue-200 rounded p-1.5 text-xs bg-white"><option value="">대단원 선택</option></select><select id="ep-add-mid" onchange="app.updateEpSelects('add', 'mid')" class="border border-blue-200 rounded p-1.5 text-xs bg-white"><option value="">중단원 선택</option></select><select id="ep-add-small" class="border border-blue-200 rounded p-1.5 text-xs bg-white"><option value="">소단원 선택</option></select></div></div><input type="text" id="new-q-text" placeholder="문제 내용 입력" class="w-full border p-2 rounded text-sm"><div class="flex items-center gap-2"><label class="flex items-center gap-2 text-xs font-bold text-gray-500 cursor-pointer hover:text-blue-600"><i class="fas fa-image text-lg"></i>이미지 첨부 <input type="file" id="new-q-image" class="hidden" accept="image/*" onchange="app.handleImageSelect(this, 'new-q-preview')"></label><span id="new-q-preview-name" class="text-xs text-gray-400 truncate max-w-[200px]"></span></div><img id="new-q-preview" class="hidden h-20 rounded border border-gray-200 object-contain"><input type="text" id="new-q-options" placeholder="보기 (콤마로 구분, 객관식/순서용)" class="w-full border p-2 rounded text-sm"><input type="text" id="new-q-answer" placeholder="정답" class="w-full border p-2 rounded text-sm font-bold text-blue-600"><textarea id="new-q-exp" placeholder="해설 (선택)" class="w-full border p-2 rounded text-sm h-16 resize-none"></textarea><div class="grid grid-cols-2 gap-2 mt-2"><button onclick="app.previewNewQuestion()" class="bg-white border border-gray-300 text-gray-700 font-bold py-2 rounded hover:bg-gray-50 transition"><i class="fas fa-eye mr-2"></i>미리보기 </button><button onclick="app.addQuestion()" class="bg-blue-600 text-white font-bold py-2 rounded hover:bg-blue-700 transition">등록 </button></div></div></div></div></div></div>< !-- TAB 2 & 3 --><div id="tab-log" class="tab-content hidden h-full overflow-y-auto"><div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6"><div class="flex justify-between items-center mb-6"><h2 class="text-xl font-bold text-gray-800">제출 현황 <span id="log-count" class="text-sm font-normal text-gray-500"></span></h2><div class="flex gap-2"><select id="select-class-trigger" onchange="app.loadByClass(this.value)" class="border rounded px-3 py-2 text-sm font-bold"><option value="">반 선택</option><option value="all">전체 (최근 50개)</option><option value="1">1반</option><option value="2">2반</option><option value="3">3반</option><option value="4">4반</option><option value="5">5반</option><option value="6">6반</option><option value="7">7반</option><option value="8">8반</option><option value="9">9반</option><option value="10">10반</option></select><button onclick="app.loadByClass(document.getElementById('select-class-trigger').value)" class="bg-gray-100 p-2 rounded"><i class="fas fa-sync-alt"></i></button></div></div><div class="overflow-x-auto"><table class="w-full text-sm text-left whitespace-nowrap"><thead class="bg-gray-50 text-gray-600 font-bold border-b"><tr><th class="p-4">시간</th><th class="p-4">학생</th><th class="p-4">점수</th><th class="p-4">상태</th><th class="p-4">관리</th></tr></thead><tbody id="log-body" class="divide-y divide-gray-100"></tbody></table></div></div></div><div id="tab-bank" class="tab-content hidden h-full overflow-hidden flex flex-col"><div class="bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col h-full overflow-hidden"><div class="p-4 border-b bg-gray-50 flex flex-wrap gap-3 items-center shrink-0"><div class="flex flex-wrap items-center gap-2"><i class="fas fa-filter text-gray-400"></i><select id="filter-big" onchange="app.filterBank('big')" class="border rounded px-2 py-1.5 text-sm w-32 font-bold text-gray-700"><option value="">대단원 전체</option></select><i class="fas fa-chevron-right text-gray-300 text-xs"></i><select id="filter-mid" onchange="app.filterBank('mid')" class="border rounded px-2 py-1.5 text-sm w-32 text-gray-700"><option value="">중단원 전체</option></select><i class="fas fa-chevron-right text-gray-300 text-xs"></i><select id="filter-small" onchange="app.filterBank('small')" class="border rounded px-2 py-1.5 text-sm w-32 text-gray-700"><option value="">소단원 전체</option></select></div><div class="h-6 w-px bg-gray-300 mx-2 hidden md:block"></div><select id="filter-type" onchange="app.filterBank('type')" class="border rounded px-2 py-1.5 text-sm w-24 text-gray-700"><option value="">유형 전체</option><option value="choice">객관식</option><option value="ox">O/X</option><option value="word">단답형</option><option value="order">순서</option></select><div class="ml-auto text-xs text-gray-500">총 <span id="bank-total-count" class="font-bold text-blue-600">0</span>문제</div></div><div class="flex-1 overflow-auto"><table class="w-full text-sm text-left"><thead class="bg-white font-bold text-gray-700 sticky top-0 shadow-sm z-10"><tr><th class="p-3 w-16 text-center sortable" onclick="app.sortBank('id')">ID <i class="fas fa-sort sort-icon"></i></th><th class="p-3 w-20 text-center sortable" onclick="app.sortBank('category')">분류 <i class="fas fa-sort sort-icon"></i></th><th class="p-3 w-40 sortable" onclick="app.sortBank('unit')">단원 정보 <i class="fas fa-sort sort-icon"></i></th><th class="p-3 w-20 text-center sortable" onclick="app.sortBank('type')">유형 <i class="fas fa-sort sort-icon"></i></th><th class="p-3">문제</th><th class="p-3 w-32">정답</th><th class="p-3 w-24 text-center sortable" onclick="app.sortBank('rate')">정답률 <i class="fas fa-sort sort-icon"></i></th><th class="p-3 w-16 text-center">관리</th></tr></thead><tbody id="bank-body" class="divide-y divide-gray-100 bg-white"></tbody></table></div></div></div></main>< !-- Settings Modal --><div id="settings-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center"><div class="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm" onclick="app.closeSettingsModal()"></div><div class="bg-white rounded-xl shadow-2xl z-10 w-96 p-6 mx-4 relative transform transition-all"><h3 class="font-bold text-lg text-gray-800 mb-4 border-b pb-2 flex items-center gap-2"><i class="fas fa-sliders-h text-blue-500"></i>평가 상세 설정 </h3><div class="space-y-5"><div><label class="block text-xs font-bold text-gray-500 mb-1">한 번에 출제할 문항 수</label><div class="flex items-center gap-2"><input type="number" id="setting-count" class="flex-1 border rounded p-2 text-center font-bold text-blue-600 text-lg" placeholder="10"><span class="text-sm font-bold text-gray-600">개</span></div><p class="text-[10px] text-gray-400 mt-1 leading-tight">* 문제 은행에서 랜덤으로 추출됩니다.<br>* 미풀이 문항을 우선 출제하며,
-        지필평가 대비는 단원별 균형 출제 로직이 적용됩니다. </p></div><div><label class="block text-xs font-bold text-gray-500 mb-1">제한 시간 (초)</label><input type="number" id="setting-time" class="w-full border rounded p-2 text-center font-bold text-lg"></div><div><label class="flex items-center justify-between cursor-pointer p-3 bg-gray-50 rounded-lg border border-gray-200"><span class="text-sm font-bold text-gray-600">재응시 허용</span><input type="checkbox" id="setting-retake" class="w-5 h-5 text-blue-600 rounded" onchange="app.toggleCooldownInput()"></label></div><div id="cooldown-area"><label class="block text-xs font-bold text-gray-500 mb-1">재응시 대기 시간 (분)</label><input type="number" id="setting-cooldown" class="w-full border rounded p-2 text-center font-bold text-lg"></div></div><div class="mt-8 flex justify-end"><button onclick="app.saveSettings(true)" class="bg-blue-600 text-white px-4 py-3 rounded-xl font-bold hover:bg-blue-700 w-full shadow-lg transition transform active:scale-95">설정 저장하기</button></div></div></div>< !-- Preview Modal --><div id="preview-modal" class="fixed inset-0 z-[60] hidden flex items-center justify-center"><div class="absolute inset-0 bg-black bg-opacity-70 backdrop-blur-sm" onclick="document.getElementById('preview-modal').classList.add('hidden')"></div><div class="bg-white rounded-xl shadow-2xl z-10 w-full max-w-md p-6 relative mx-4"><div class="flex justify-between items-center mb-4"><span class="text-xs font-bold bg-blue-100 text-blue-700 px-2 py-1 rounded">미리보기</span><button onclick="document.getElementById('preview-modal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times text-lg"></i></button></div><div id="preview-content"></div></div></div>< !-- Edit Modal --><div id="edit-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center"><div class="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm" onclick="app.closeEditModal()"></div><div class="bg-white rounded-xl shadow-2xl z-10 w-full max-w-2xl p-6 mx-4 relative flex flex-col max-h-[90vh]"><div class="flex justify-between items-center mb-4 border-b pb-3"><h3 class="font-bold text-lg text-gray-800"><i class="fas fa-edit text-blue-500 mr-2"></i>문제 수정</h3><button onclick="app.closeEditModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button></div><div class="overflow-y-auto flex-1 space-y-4 pr-2"><input type="hidden" id="edit-id"><div class="grid grid-cols-2 gap-4"><div><label class="block text-xs font-bold text-gray-500 mb-1">분류</label><select id="edit-category" class="w-full border p-2 rounded text-sm bg-gray-50 font-bold"><option value="diagnostic">진단평가</option><option value="formative">형성평가</option><option value="exam_prep">지필평가 대비</option></select></div><div><label class="block text-xs font-bold text-gray-500 mb-1">유형</label><select id="edit-type" class="w-full border p-2 rounded text-sm bg-gray-50"><option value="choice">객관식</option><option value="ox">O/X</option><option value="word">단답형</option><option value="order">순서나열</option></select></div></div><div class="bg-gray-50 p-3 rounded border border-gray-200"><label class="block text-xs font-bold text-gray-500 mb-2">단원 이동</label><div class="grid grid-cols-2 gap-2"><select id="edit-unit" onchange="app.updateEditSubUnits()" class="w-full border p-2 rounded text-sm"></select><select id="edit-subunit" class="w-full border p-2 rounded text-sm"></select></div></div><div><label class="block text-xs font-bold text-gray-500 mb-1">문제 내용</label><input type="text" id="edit-question" class="w-full border p-2 rounded text-sm font-bold"></div><div><div class="flex items-center gap-2 mb-2"><label class="flex items-center gap-2 text-xs font-bold text-gray-500 cursor-pointer hover:text-blue-600 bg-gray-100 px-3 py-1 rounded"><i class="fas fa-image"></i>이미지 변경<input type="file" id="edit-image" class="hidden" accept="image/*" onchange="app.handleImageSelect(this, 'edit-preview')"></label><button onclick="app.removeEditImage()" class="text-xs text-red-500 hover:text-red-700 font-bold px-2">삭제</button></div><img id="edit-preview" class="hidden h-24 rounded border border-gray-200 object-contain bg-white p-1"></div><div><label class="block text-xs font-bold text-gray-500 mb-1">보기 (콤마 구분)</label><input type="text" id="edit-options" class="w-full border p-2 rounded text-sm"></div><div><label class="block text-xs font-bold text-gray-500 mb-1">정답</label><input type="text" id="edit-answer" class="w-full border p-2 rounded text-sm font-bold text-blue-600 bg-blue-50"></div><div><label class="block text-xs font-bold text-gray-500 mb-1">해설</label><textarea id="edit-explanation" class="w-full border p-2 rounded text-sm h-20 resize-none"></textarea></div></div><div class="mt-6 pt-4 border-t flex justify-end gap-3"><button onclick="app.closeEditModal()" class="px-4 py-2 bg-white border border-gray-300 rounded text-gray-700 font-bold hover:bg-gray-50">취소</button><button onclick="app.saveEditQuestion()" class="px-6 py-2 bg-blue-600 text-white rounded font-bold hover:bg-blue-700 shadow-md">수정 저장</button></div></div></div>< !-- Footer injected by AuthManager --><script>window.AuthManager.init('teacher');
+<body class="bg-gray-50 min-h-screen flex flex-col">
+    <!-- Header injected by AuthManager -->
+    <main class="flex-1 w-full max-w-7xl mx-auto px-4 lg:px-6 py-6 h-full flex flex-col">
+        <!-- Tabs -->
+        <div class="flex border-b border-gray-200 mb-4 bg-white rounded-t-lg px-2 shrink-0 overflow-x-auto">
+            <button onclick="app.setTab('manage')" id="btn-tab-manage"
+                class="tab-btn-base tab-btn-active whitespace-nowrap">문제 등록</button>
+            <button onclick="app.setTab('log')" id="btn-tab-log" class="tab-btn-base whitespace-nowrap">📊 제출
+                현황</button>
+            <button onclick="app.setTab('bank')" id="btn-tab-bank" class="tab-btn-base whitespace-nowrap">🗄️ 전체 문제
+                은행</button>
+        </div>
 
-        const app= {
+        <!-- TAB 1: Assessment Management (Tree + Editor) -->
+        <div id="tab-manage"
+            class="tab-content h-full flex flex-col lg:flex-row gap-6 lg:overflow-hidden pb-2 relative">
+            <!-- Mobile Overlay -->
+            <div id="sidebar-overlay" class="sidebar-overlay" onclick="app.toggleSidebar(false)"></div>
 
+            <!-- Left: Unit Tree (Sidebar) -->
+            <div id="sidebar-panel"
+                class="w-full lg:w-1/3 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col lg:overflow-hidden min-h-[300px] lg:min-h-0 lg:static fixed h-full top-0 left-0 z-50">
+                <div class="p-4 border-b bg-gray-50 font-bold text-gray-700 flex justify-between items-center">
+                    <span>📚 단원 및 평가 선택</span>
+                    <button class="lg:hidden text-gray-500 hover:text-gray-700" onclick="app.toggleSidebar(false)">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="flex-1 overflow-y-auto p-4" id="tree-container"></div>
+            </div>
+
+            <!-- Mobile FAB to Open Sidebar -->
+            <button class="fab-btn lg:hidden" onclick="app.toggleSidebar(true)"><i
+                    class="fas fa-list-ul text-xl"></i></button>
+
+            <!-- Right: Assessment Editor -->
+            <div class="w-full lg:w-2/3 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col relative lg:overflow-hidden min-h-[600px] lg:min-h-0"
+                id="editor-panel">
+                <!-- Empty State -->
+                <div id="empty-state"
+                    class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 bg-white z-20">
+                    <i class="fas fa-mouse-pointer text-4xl mb-4"></i>
+                    <p class="text-lg text-center">목차에서 <strong>지필평가 대비</strong>또는<br><strong>중단원</strong>을 선택하여 문제를
+                        관리하세요.</p>
+                </div>
+
+                <!-- Editor Header -->
+                <div class="p-4 border-b bg-gray-50 flex flex-wrap justify-between items-center shrink-0 gap-2">
+                    <div>
+                        <div class="text-xs text-gray-500 font-bold mb-1" id="selected-path"></div>
+                        <div class="flex items-center gap-2">
+                            <h2 class="text-xl font-bold text-gray-800 truncate max-w-[200px]" id="selected-title">-
+                            </h2>
+                            <!-- Settings Button -->
+                            <button onclick="app.openSettingsModal()"
+                                class="text-gray-400 hover:text-blue-600 transition p-1" title="평가 설정 (시간, 재응시 등)">
+                                <i class="fas fa-cog"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Toggle -->
+                    <div class="flex items-center gap-3">
+                        <label class="flex items-center cursor-pointer relative">
+                            <input type="checkbox" id="toggle-active" class="sr-only toggle-checkbox"
+                                onchange="app.saveSettings()">
+                            <div class="toggle-label bg-gray-300 rounded-full w-10 h-6 relative">
+                                <div
+                                    class="toggle-dot bg-white w-5 h-5 rounded-full absolute top-0.5 left-0.5 shadow-sm">
+                                </div>
+                            </div>
+                            <span class="ml-2 text-sm font-bold text-gray-600" id="toggle-text">학생 비공개</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 1. Normal Mode: Sub Tabs -->
+                <div class="bg-white shrink-0 flex border-b border-gray-200 px-4 pt-2" id="sub-tabs">
+                    <button onclick="app.setSubTab('diagnostic')" id="sub-btn-diagnostic"
+                        class="py-2 px-4 font-bold text-sm border-b-2 border-blue-500 text-blue-600">진단평가</button>
+                    <button onclick="app.setSubTab('formative')" id="sub-btn-formative"
+                        class="py-2 px-4 font-bold text-sm border-b-2 border-transparent text-gray-400 hover:text-gray-600">형성평가</button>
+                </div>
+
+                <!-- 2. Exam Prep Mode: Cascading Filters -->
+                <div class="bg-blue-50 shrink-0 border-b border-blue-100 px-4 py-3 hidden" id="ep-filter-container">
+                    <div class="flex flex-wrap items-center gap-2 text-sm">
+                        <i class="fas fa-filter text-blue-500"></i><span class="font-bold text-blue-800 mr-1">단원
+                            필터:</span>
+                        <select id="ep-filter-big" onchange="app.updateEpSelects('filter', 'big')"
+                            class="border border-blue-200 rounded px-2 py-1 text-xs w-28 bg-white focus:outline-none focus:border-blue-500">
+                            <option value="">대단원 전체</option>
+                        </select>
+                        <i class="fas fa-chevron-right text-blue-300 text-xs"></i>
+                        <select id="ep-filter-mid" onchange="app.updateEpSelects('filter', 'mid')"
+                            class="border border-blue-200 rounded px-2 py-1 text-xs w-28 bg-white focus:outline-none focus:border-blue-500">
+                            <option value="">중단원 전체</option>
+                        </select>
+                        <i class="fas fa-chevron-right text-blue-300 text-xs"></i>
+                        <select id="ep-filter-small" onchange="app.updateEpSelects('filter', 'small')"
+                            class="border border-blue-200 rounded px-2 py-1 text-xs w-28 bg-white focus:outline-none focus:border-blue-500">
+                            <option value="">소단원 전체</option>
+                        </select>
+                        <button onclick="app.resetEpFilters()"
+                            class="ml-auto text-xs text-blue-400 hover:text-blue-600"><i
+                                class="fas fa-sync-alt"></i></button>
+                    </div>
+                </div>
+
+                <!-- Questions List -->
+                <div class="flex-1 overflow-y-auto p-6 bg-gray-50 space-y-4">
+                    <div id="q-list" class="space-y-3"></div>
+
+                    <!-- Add Form Area -->
+                    <div class="mt-8 bg-white p-5 rounded-xl border-2 border-dashed border-gray-300 relative">
+                        <h3 class="font-bold text-gray-700 mb-4 flex items-center"><i
+                                class="fas fa-plus-circle text-blue-500 mr-2"></i>새 문제 추가</h3>
+                        <div class="space-y-3">
+                            <div class="grid grid-cols-2 gap-3">
+                                <select id="new-q-type" class="border p-2 rounded text-sm bg-gray-50">
+                                    <option value="choice">객관식</option>
+                                    <option value="ox">O/X</option>
+                                    <option value="word">단답형</option>
+                                    <option value="order">순서나열</option>
+                                </select>
+                                <!-- Normal Mode: Single Subunit Select -->
+                                <select id="new-q-subunit" class="border p-2 rounded text-sm bg-gray-50">
+                                    <option value="">소단원 (전체)</option>
+                                </select>
+                            </div>
+
+                            <!-- Exam Prep Mode: Cascading Selects for Assignment -->
+                            <div id="ep-add-container" class="hidden bg-blue-50 p-2 rounded border border-blue-100">
+                                <div class="text-xs font-bold text-blue-600 mb-1 flex items-center"><i
+                                        class="fas fa-tag mr-1"></i>문제 출처 단원 지정</div>
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                    <select id="ep-add-big" onchange="app.updateEpSelects('add', 'big')"
+                                        class="border border-blue-200 rounded p-1.5 text-xs bg-white">
+                                        <option value="">대단원 선택</option>
+                                    </select>
+                                    <select id="ep-add-mid" onchange="app.updateEpSelects('add', 'mid')"
+                                        class="border border-blue-200 rounded p-1.5 text-xs bg-white">
+                                        <option value="">중단원 선택</option>
+                                    </select>
+                                    <select id="ep-add-small"
+                                        class="border border-blue-200 rounded p-1.5 text-xs bg-white">
+                                        <option value="">소단원 선택</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <input type="text" id="new-q-text" placeholder="문제 내용 입력"
+                                class="w-full border p-2 rounded text-sm">
+                            <div class="flex items-center gap-2">
+                                <label
+                                    class="flex items-center gap-2 text-xs font-bold text-gray-500 cursor-pointer hover:text-blue-600">
+                                    <i class="fas fa-image text-lg"></i>이미지 첨부
+                                    <input type="file" id="new-q-image" class="hidden" accept="image/*"
+                                        onchange="app.handleImageSelect(this, 'new-q-preview')">
+                                </label>
+                                <span id="new-q-preview-name"
+                                    class="text-xs text-gray-400 truncate max-w-[200px]"></span>
+                            </div>
+                            <img id="new-q-preview" class="hidden h-20 rounded border border-gray-200 object-contain">
+                            <input type="text" id="new-q-options" placeholder="보기 (콤마로 구분, 객관식/순서용)"
+                                class="w-full border p-2 rounded text-sm">
+                            <input type="text" id="new-q-answer" placeholder="정답"
+                                class="w-full border p-2 rounded text-sm font-bold text-blue-600">
+                            <textarea id="new-q-exp" placeholder="해설 (선택)"
+                                class="w-full border p-2 rounded text-sm h-16 resize-none"></textarea>
+                            <div class="grid grid-cols-2 gap-2 mt-2">
+                                <button onclick="app.previewNewQuestion()"
+                                    class="bg-white border border-gray-300 text-gray-700 font-bold py-2 rounded hover:bg-gray-50 transition"><i
+                                        class="fas fa-eye mr-2"></i>미리보기 </button>
+                                <button onclick="app.addQuestion()"
+                                    class="bg-blue-600 text-white font-bold py-2 rounded hover:bg-blue-700 transition">등록
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2 & 3 -->
+        <div id="tab-log" class="tab-content hidden h-full overflow-y-auto">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold text-gray-800">제출 현황 <span id="log-count"
+                            class="text-sm font-normal text-gray-500"></span></h2>
+                    <div class="flex gap-2">
+                        <select id="select-class-trigger" onchange="app.loadByClass(this.value)"
+                            class="border rounded px-3 py-2 text-sm font-bold">
+                            <option value="">반 선택</option>
+                            <option value="all">전체 (최근 50개)</option>
+                            <option value="1">1반</option>
+                            <option value="2">2반</option>
+                            <option value="3">3반</option>
+                            <option value="4">4반</option>
+                            <option value="5">5반</option>
+                            <option value="6">6반</option>
+                            <option value="7">7반</option>
+                            <option value="8">8반</option>
+                            <option value="9">9반</option>
+                            <option value="10">10반</option>
+                        </select>
+                        <button onclick="app.loadByClass(document.getElementById('select-class-trigger').value)"
+                            class="bg-gray-100 p-2 rounded"><i class="fas fa-sync-alt"></i></button>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left whitespace-nowrap">
+                        <thead class="bg-gray-50 text-gray-600 font-bold border-b">
+                            <tr>
+                                <th class="p-4">시간</th>
+                                <th class="p-4">학생</th>
+                                <th class="p-4">점수</th>
+                                <th class="p-4">상태</th>
+                                <th class="p-4">관리</th>
+                            </tr>
+                        </thead>
+                        <tbody id="log-body" class="divide-y divide-gray-100"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-bank" class="tab-content hidden h-full overflow-hidden flex flex-col">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col h-full overflow-hidden">
+                <div class="p-4 border-b bg-gray-50 flex flex-wrap gap-3 items-center shrink-0">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <i class="fas fa-filter text-gray-400"></i>
+                        <select id="filter-big" onchange="app.filterBank('big')"
+                            class="border rounded px-2 py-1.5 text-sm w-32 font-bold text-gray-700">
+                            <option value="">대단원 전체</option>
+                        </select>
+                        <i class="fas fa-chevron-right text-gray-300 text-xs"></i>
+                        <select id="filter-mid" onchange="app.filterBank('mid')"
+                            class="border rounded px-2 py-1.5 text-sm w-32 text-gray-700">
+                            <option value="">중단원 전체</option>
+                        </select>
+                        <i class="fas fa-chevron-right text-gray-300 text-xs"></i>
+                        <select id="filter-small" onchange="app.filterBank('small')"
+                            class="border rounded px-2 py-1.5 text-sm w-32 text-gray-700">
+                            <option value="">소단원 전체</option>
+                        </select>
+                    </div>
+                    <div class="h-6 w-px bg-gray-300 mx-2 hidden md:block"></div>
+                    <select id="filter-type" onchange="app.filterBank('type')"
+                        class="border rounded px-2 py-1.5 text-sm w-24 text-gray-700">
+                        <option value="">유형 전체</option>
+                        <option value="choice">객관식</option>
+                        <option value="ox">O/X</option>
+                        <option value="word">단답형</option>
+                        <option value="order">순서</option>
+                    </select>
+                    <div class="ml-auto text-xs text-gray-500">총 <span id="bank-total-count"
+                            class="font-bold text-blue-600">0</span>문제</div>
+                </div>
+                <div class="flex-1 overflow-auto">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-white font-bold text-gray-700 sticky top-0 shadow-sm z-10">
+                            <tr>
+                                <th class="p-3 w-16 text-center sortable" onclick="app.sortBank('id')">ID <i
+                                        class="fas fa-sort sort-icon"></i></th>
+                                <th class="p-3 w-20 text-center sortable" onclick="app.sortBank('category')">분류 <i
+                                        class="fas fa-sort sort-icon"></i></th>
+                                <th class="p-3 w-40 sortable" onclick="app.sortBank('unit')">단원 정보 <i
+                                        class="fas fa-sort sort-icon"></i></th>
+                                <th class="p-3 w-20 text-center sortable" onclick="app.sortBank('type')">유형 <i
+                                        class="fas fa-sort sort-icon"></i></th>
+                                <th class="p-3">문제</th>
+                                <th class="p-3 w-32">정답</th>
+                                <th class="p-3 w-24 text-center sortable" onclick="app.sortBank('rate')">정답률 <i
+                                        class="fas fa-sort sort-icon"></i></th>
+                                <th class="p-3 w-16 text-center">관리</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bank-body" class="divide-y divide-gray-100 bg-white"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center">
+        <div class="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm" onclick="app.closeSettingsModal()"></div>
+        <div class="bg-white rounded-xl shadow-2xl z-10 w-96 p-6 mx-4 relative transform transition-all">
+            <h3 class="font-bold text-lg text-gray-800 mb-4 border-b pb-2 flex items-center gap-2"><i
+                    class="fas fa-sliders-h text-blue-500"></i>평가 상세 설정 </h3>
+            <div class="space-y-5">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">한 번에 출제할 문항 수</label>
+                    <div class="flex items-center gap-2">
+                        <input type="number" id="setting-count"
+                            class="flex-1 border rounded p-2 text-center font-bold text-blue-600 text-lg"
+                            placeholder="10"><span class="text-sm font-bold text-gray-600">개</span>
+                    </div>
+                    <p class="text-[10px] text-gray-400 mt-1 leading-tight">* 문제 은행에서 랜덤으로 추출됩니다.<br>* 미풀이 문항을 우선 출제하며,
+                        <br> * 지필평가 대비는 단원별 균형 출제 로직이 적용됩니다.</p>
+                </div>
+                <div><label class="block text-xs font-bold text-gray-500 mb-1">제한 시간 (초)</label><input type="number"
+                        id="setting-time" class="w-full border rounded p-2 text-center font-bold text-lg"></div>
+                <div><label
+                        class="flex items-center justify-between cursor-pointer p-3 bg-gray-50 rounded-lg border border-gray-200"><span
+                            class="text-sm font-bold text-gray-600">재응시 허용</span><input type="checkbox"
+                            id="setting-retake" class="w-5 h-5 text-blue-600 rounded"
+                            onchange="app.toggleCooldownInput()"></label></div>
+                <div id="cooldown-area"><label class="block text-xs font-bold text-gray-500 mb-1">재응시 대기 시간
+                        (분)</label><input type="number" id="setting-cooldown"
+                        class="w-full border rounded p-2 text-center font-bold text-lg"></div>
+            </div>
+            <div class="mt-8 flex justify-end"><button onclick="app.saveSettings(true)"
+                    class="bg-blue-600 text-white px-4 py-3 rounded-xl font-bold hover:bg-blue-700 w-full shadow-lg transition transform active:scale-95">설정
+                    저장하기</button></div>
+        </div>
+    </div>
+
+    <!-- Preview Modal -->
+    <div id="preview-modal" class="fixed inset-0 z-[60] hidden flex items-center justify-center">
+        <div class="absolute inset-0 bg-black bg-opacity-70 backdrop-blur-sm"
+            onclick="document.getElementById('preview-modal').classList.add('hidden')"></div>
+        <div class="bg-white rounded-xl shadow-2xl z-10 w-full max-w-md p-6 relative mx-4">
+            <div class="flex justify-between items-center mb-4"><span
+                    class="text-xs font-bold bg-blue-100 text-blue-700 px-2 py-1 rounded">미리보기</span><button
+                    onclick="document.getElementById('preview-modal').classList.add('hidden')"
+                    class="text-gray-400 hover:text-gray-600"><i class="fas fa-times text-lg"></i></button></div>
+            <div id="preview-content"></div>
+        </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div id="edit-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center">
+        <div class="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm" onclick="app.closeEditModal()"></div>
+        <div class="bg-white rounded-xl shadow-2xl z-10 w-full max-w-2xl p-6 mx-4 relative flex flex-col max-h-[90vh]">
+            <div class="flex justify-between items-center mb-4 border-b pb-3">
+                <h3 class="font-bold text-lg text-gray-800"><i class="fas fa-edit text-blue-500 mr-2"></i>문제 수정</h3>
+                <button onclick="app.closeEditModal()" class="text-gray-400 hover:text-gray-600"><i
+                        class="fas fa-times"></i></button>
+            </div>
+            <div class="overflow-y-auto flex-1 space-y-4 pr-2">
+                <input type="hidden" id="edit-id">
+                <div class="grid grid-cols-2 gap-4">
+                    <div><label class="block text-xs font-bold text-gray-500 mb-1">분류</label><select id="edit-category"
+                            class="w-full border p-2 rounded text-sm bg-gray-50 font-bold">
+                            <option value="diagnostic">진단평가</option>
+                            <option value="formative">형성평가</option>
+                            <option value="exam_prep">지필평가 대비</option>
+                        </select></div>
+                    <div><label class="block text-xs font-bold text-gray-500 mb-1">유형</label><select id="edit-type"
+                            class="w-full border p-2 rounded text-sm bg-gray-50">
+                            <option value="choice">객관식</option>
+                            <option value="ox">O/X</option>
+                            <option value="word">단답형</option>
+                            <option value="order">순서나열</option>
+                        </select></div>
+                </div>
+                <div class="bg-gray-50 p-3 rounded border border-gray-200">
+                    <label class="block text-xs font-bold text-gray-500 mb-2">단원 이동</label>
+                    <div class="grid grid-cols-2 gap-2"><select id="edit-unit" onchange="app.updateEditSubUnits()"
+                            class="w-full border p-2 rounded text-sm"></select><select id="edit-subunit"
+                            class="w-full border p-2 rounded text-sm"></select></div>
+                </div>
+                <div><label class="block text-xs font-bold text-gray-500 mb-1">문제 내용</label><input type="text"
+                        id="edit-question" class="w-full border p-2 rounded text-sm font-bold"></div>
+                <div>
+                    <div class="flex items-center gap-2 mb-2">
+                        <label
+                            class="flex items-center gap-2 text-xs font-bold text-gray-500 cursor-pointer hover:text-blue-600 bg-gray-100 px-3 py-1 rounded"><i
+                                class="fas fa-image"></i>이미지 변경<input type="file" id="edit-image" class="hidden"
+                                accept="image/*" onchange="app.handleImageSelect(this, 'edit-preview')"></label>
+                        <button onclick="app.removeEditImage()"
+                            class="text-xs text-red-500 hover:text-red-700 font-bold px-2">삭제</button>
+                    </div>
+                    <img id="edit-preview"
+                        class="hidden h-24 rounded border border-gray-200 object-contain bg-white p-1">
+                </div>
+                <div><label class="block text-xs font-bold text-gray-500 mb-1">보기 (콤마 구분)</label><input type="text"
+                        id="edit-options" class="w-full border p-2 rounded text-sm"></div>
+                <div><label class="block text-xs font-bold text-gray-500 mb-1">정답</label><input type="text"
+                        id="edit-answer" class="w-full border p-2 rounded text-sm font-bold text-blue-600 bg-blue-50">
+                </div>
+                <div><label class="block text-xs font-bold text-gray-500 mb-1">해설</label><textarea id="edit-explanation"
+                        class="w-full border p-2 rounded text-sm h-20 resize-none"></textarea></div>
+            </div>
+            <div class="mt-6 pt-4 border-t flex justify-end gap-3">
+                <button onclick="app.closeEditModal()"
+                    class="px-4 py-2 bg-white border border-gray-300 rounded text-gray-700 font-bold hover:bg-gray-50">취소</button>
+                <button onclick="app.saveEditQuestion()"
+                    class="px-6 py-2 bg-blue-600 text-white rounded font-bold hover:bg-blue-700 shadow-md">수정
+                    저장</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer injected by AuthManager -->
+
+    <script>
+        window.AuthManager.init('teacher');
+
+        const app = {
             treeData: [],
             questions: [],
             selectedNode: null,
             selectedCategory: 'diagnostic',
-            assessmentSettings: {}
-
-            ,
-            examPrepFilters: {
-                big: '', mid: '', small: ''
-            }
-
-            ,
+            assessmentSettings: {},
+            examPrepFilters: { big: '', mid: '', small: '' },
             tempImage: null,
 
-            init: function() {
+            init: function () {
                 this.loadTree();
                 this.loadQuestions();
                 this.loadSettings();
-            }
+            },
 
-            ,
+            toggleSidebar: function (show) {
+                const panel = document.getElementById('sidebar-panel');
+                const overlay = document.getElementById('sidebar-overlay');
+                if (show) {
+                    panel.classList.add('open');
+                    overlay.classList.add('active');
+                } else {
+                    panel.classList.remove('open');
+                    overlay.classList.remove('active');
+                }
+            },
 
-        }
+            setTab: function (tab) {
+                document.querySelectorAll('.tab-btn-base').forEach(b => b.classList.remove('tab-btn-active'));
+                document.getElementById('btn-tab-' + tab).classList.add('tab-btn-active');
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+                document.getElementById('tab-' + tab).classList.remove('hidden');
+            },
 
-        ,
+            setSubTab: function (cat) {
+                this.selectedCategory = cat;
+                document.getElementById('sub-btn-diagnostic').className = cat === 'diagnostic' ? "py-2 px-4 font-bold text-sm border-b-2 border-blue-500 text-blue-600" : "py-2 px-4 font-bold text-sm border-b-2 border-transparent text-gray-400 hover:text-gray-600";
+                document.getElementById('sub-btn-formative').className = cat === 'formative' ? "py-2 px-4 font-bold text-sm border-b-2 border-blue-500 text-blue-600" : "py-2 px-4 font-bold text-sm border-b-2 border-transparent text-gray-400 hover:text-gray-600";
+                this.renderQuestions();
+                this.updateSettingsUI();
+            },
 
-        toggleSidebar: function(show) {
-            const panel=document.getElementById('sidebar-panel');
-            const overlay=document.getElementById('sidebar-overlay');
+            loadTree: async function () {
+                try {
+                    const doc = await window.getCollection('curriculum').doc('tree').get();
+                    this.treeData = (doc.exists && doc.data().tree) ? doc.data().tree : [];
+                    this.renderTree();
+                } catch (e) { }
+            },
 
-            if(show) {
-                panel.classList.add('open');
-                overlay.classList.add('active');
-            }
+            loadQuestions: async function () {
+                const snap = await window.getCollection('quiz_questions').get();
+                this.questions = [];
+                snap.forEach(doc => this.questions.push({ id: parseInt(doc.id), ...doc.data() }));
+            },
 
-            else {
-                panel.classList.remove('open');
-                overlay.classList.remove('active');
-            }
-        }
+            loadSettings: async function () {
+                const doc = await window.getCollection('assessment_config').doc('settings').get();
+                this.assessmentSettings = (doc.exists) ? doc.data() : {};
+            },
 
-        ,
+            renderTree: function () {
+                const container = document.getElementById('tree-container');
+                container.innerHTML = '';
 
-        setTab: function(tab) {
-            document.querySelectorAll('.tab-btn-base').forEach(b=> b.classList.remove('tab-btn-active'));
-            document.getElementById('btn-tab-' +tab).classList.add('tab-btn-active');
-            document.querySelectorAll('.tab-content').forEach(c=> c.classList.add('hidden'));
-            document.getElementById('tab-' +tab).classList.remove('hidden');
-        }
+                const examNode = document.createElement('div');
+                examNode.className = 'tree-item exam-prep';
+                examNode.innerHTML = '<i class="fas fa-file-contract mr-2"></i>지필평가 대비 실전';
+                examNode.onclick = () => this.selectExamPrep(examNode);
+                container.appendChild(examNode);
 
-        ,
-        setSubTab: function(cat) {
-            this.selectedCategory=cat;
-            document.getElementById('sub-btn-diagnostic').className=cat==='diagnostic' ? "py-2 px-4 font-bold text-sm border-b-2 border-blue-500 text-blue-600": "py-2 px-4 font-bold text-sm border-b-2 border-transparent text-gray-400 hover:text-gray-600";
-            document.getElementById('sub-btn-formative').className=cat==='formative' ? "py-2 px-4 font-bold text-sm border-b-2 border-blue-500 text-blue-600": "py-2 px-4 font-bold text-sm border-b-2 border-transparent text-gray-400 hover:text-gray-600";
-            this.renderQuestions();
-            this.updateSettingsUI();
-        }
+                this.treeData.forEach(big => {
+                    const bigEl = document.createElement('div');
+                    bigEl.className = 'tree-node level-0';
+                    bigEl.innerHTML = `<div class="font-bold text-gray-800 py-1 select-none">${big.title}</div>`;
 
-        ,
-        loadTree: async function() {
-            try {
-                const doc=await window.getCollection('curriculum').doc('tree').get();
-                this.treeData=(doc.exists && doc.data().tree) ? doc.data().tree: [];
-                this.renderTree();
-            }
-
-            catch(e) {}
-        }
-
-        ,
-        loadQuestions: async function() {
-            const snap=await window.getCollection('quiz_questions').get();
-            this.questions=[];
-
-            snap.forEach(doc=> this.questions.push({
-                    id: parseInt(doc.id), ...doc.data()
-                }));
-        }
-
-        ,
-        loadSettings: async function() {
-            const doc=await window.getCollection('assessment_config').doc('settings').get();
-
-            this.assessmentSettings=(doc.exists) ? doc.data() : {}
-
-            ;
-        }
-
-        ,
-
-        renderTree: function() {
-            const container=document.getElementById('tree-container');
-            container.innerHTML='';
-            const examNode=document.createElement('div');
-            examNode.className='tree-item exam-prep';
-            examNode.innerHTML='<i class="fas fa-file-contract mr-2"></i>지필평가 대비 실전';
-            examNode.onclick=()=>this.selectExamPrep(examNode);
-            container.appendChild(examNode);
-
-            this.treeData.forEach(big=> {
-                    const bigEl=document.createElement('div');
-                    bigEl.className='tree-node level-0';
-
-                    bigEl.innerHTML=`<div class="font-bold text-gray-800 py-1 select-none" >$ {
-                        big.title
+                    if (big.children) {
+                        big.children.forEach(mid => {
+                            const midEl = document.createElement('div');
+                            midEl.className = 'tree-node level-1';
+                            const item = document.createElement('div');
+                            item.className = 'tree-item';
+                            item.innerHTML = `<i class="fas fa-folder text-yellow-400 mr-2"></i>${mid.title}`;
+                            item.onclick = () => this.selectNode(mid, big.title, item);
+                            midEl.appendChild(item);
+                            bigEl.appendChild(midEl);
+                        });
                     }
-
-                    </div>`;
-
-                    if(big.children) {
-                        big.children.forEach(mid=> {
-                                const midEl=document.createElement('div');
-                                midEl.className='tree-node level-1';
-                                const item=document.createElement('div');
-                                item.className='tree-item';
-
-                                item.innerHTML=`<i class="fas fa-folder text-yellow-400 mr-2" ></i>$ {
-                                    mid.title
-                                }
-
-                                `;
-                                item.onclick=()=> this.selectNode(mid, big.title, item);
-                                midEl.appendChild(item);
-                                bigEl.appendChild(midEl);
-                            });
-                    }
-
                     container.appendChild(bigEl);
                 });
-        }
+            },
 
-        ,
-        selectExamPrep: function(el) {
-            this.resetSelection();
-            el.classList.add('active');
+            selectExamPrep: function (el) {
+                this.resetSelection();
+                el.classList.add('active');
+                this.selectedNode = { id: 'exam_prep', title: '지필평가 대비 실전', type: 'special' };
+                this.renderEditor();
+                this.toggleSidebar(false);
+                if (window.innerWidth < 1024) document.getElementById('editor-panel').scrollIntoView({ behavior: 'smooth' });
+            },
 
-            this.selectedNode= {
-                id: 'exam_prep', title: '지필평가 대비 실전', type: 'special'
-            }
+            selectNode: function (node, parentTitle, el) {
+                this.resetSelection();
+                el.classList.add('active');
+                this.selectedNode = { ...node, parentTitle };
+                this.renderEditor();
+                this.toggleSidebar(false);
+                if (window.innerWidth < 1024) document.getElementById('editor-panel').scrollIntoView({ behavior: 'smooth' });
+            },
 
-            ;
-            this.renderEditor();
-            this.toggleSidebar(false); // Close mobile sidebar on select
+            resetSelection: function () {
+                document.querySelectorAll('.tree-item').forEach(e => e.classList.remove('active'));
+                document.getElementById('empty-state').classList.add('hidden');
+            },
 
-            // Scroll to editor on mobile
-            if(window.innerWidth < 1024) document.getElementById('editor-panel').scrollIntoView({
-                behavior:'smooth'
-            });
-        }
+            renderEditor: function () {
+                const node = this.selectedNode;
+                document.getElementById('selected-title').innerText = node.title;
+                document.getElementById('selected-path').innerText = node.type === 'special' ? '특별 학습' : `${node.parentTitle} > ${node.title}`;
 
-        ,
-        selectNode: function(node, parentTitle, el) {
-            this.resetSelection();
-            el.classList.add('active');
+                const subTabs = document.getElementById('sub-tabs');
+                const epFilters = document.getElementById('ep-filter-container');
+                const epAddContainer = document.getElementById('ep-add-container');
+                const normalSubUnitSelect = document.getElementById('new-q-subunit');
 
-            this.selectedNode= {
-                ...node,
-                parentTitle
-            }
-
-            ;
-            this.renderEditor();
-            this.toggleSidebar(false); // Close mobile sidebar on select
-
-            // Scroll to editor on mobile
-            if(window.innerWidth < 1024) document.getElementById('editor-panel').scrollIntoView({
-                behavior:'smooth'
-            });
-        }
-
-        ,
-        resetSelection: function() {
-            document.querySelectorAll('.tree-item').forEach(e=> e.classList.remove('active'));
-            document.getElementById('empty-state').classList.add('hidden');
-        }
-
-        ,
-        renderEditor: function() {
-            const node=this.selectedNode;
-            document.getElementById('selected-title').innerText=node.title;
-
-            document.getElementById('selected-path').innerText=node.type==='special' ? '특별 학습' : `$ {
-                node.parentTitle
-            }
-
-            >$ {
-                node.title
-            }
-
-            `;
-
-            const subTabs=document.getElementById('sub-tabs');
-            const epFilters=document.getElementById('ep-filter-container');
-            const epAddContainer=document.getElementById('ep-add-container');
-            const normalSubUnitSelect=document.getElementById('new-q-subunit');
-
-            if (node.id==='exam_prep') {
-                subTabs.classList.add('hidden');
-                epFilters.classList.remove('hidden');
-                epAddContainer.classList.remove('hidden');
-                normalSubUnitSelect.classList.add('hidden');
-                this.selectedCategory='exam_prep';
-                this.updateEpSelects('filter', 'init');
-                this.updateEpSelects('add', 'init');
-            }
-
-            else {
-                subTabs.classList.remove('hidden');
-                epFilters.classList.add('hidden');
-                epAddContainer.classList.add('hidden');
-                normalSubUnitSelect.classList.remove('hidden');
-                this.setSubTab('diagnostic');
-                normalSubUnitSelect.innerHTML='<option value="">소단원 (전체)</option>';
-
-                if(node.children) {
-                    node.children.forEach(small=> {
-                            const opt=document.createElement('option');
-                            opt.value=small.id;
-                            opt.innerText=small.title;
+                if (node.id === 'exam_prep') {
+                    subTabs.classList.add('hidden');
+                    epFilters.classList.remove('hidden');
+                    epAddContainer.classList.remove('hidden');
+                    normalSubUnitSelect.classList.add('hidden');
+                    this.selectedCategory = 'exam_prep';
+                    this.updateEpSelects('filter', 'init');
+                    this.updateEpSelects('add', 'init');
+                } else {
+                    subTabs.classList.remove('hidden');
+                    epFilters.classList.add('hidden');
+                    epAddContainer.classList.add('hidden');
+                    normalSubUnitSelect.classList.remove('hidden');
+                    this.setSubTab('diagnostic');
+                    normalSubUnitSelect.innerHTML = '<option value="">소단원 (전체)</option>';
+                    if (node.children) {
+                        node.children.forEach(small => {
+                            const opt = document.createElement('option');
+                            opt.value = small.id;
+                            opt.innerText = small.title;
                             normalSubUnitSelect.appendChild(opt);
                         });
-                }
-            }
-
-            this.renderQuestions();
-            this.updateSettingsUI();
-        }
-
-        ,
-
-        updateEpSelects: function(prefix, level) {
-            const idBig=prefix==='filter' ? 'ep-filter-big': 'ep-add-big';
-            const idMid=prefix==='filter' ? 'ep-filter-mid': 'ep-add-mid';
-            const idSmall=prefix==='filter' ? 'ep-filter-small': 'ep-add-small';
-            const elBig=document.getElementById(idBig);
-            const elMid=document.getElementById(idMid);
-            const elSmall=document.getElementById(idSmall);
-
-            if (level==='init') {
-                elBig.innerHTML=`<option value="">$ {
-                    prefix==='filter' ?'대단원 전체': '대단원 선택'
-                }
-
-                </option>`;
-
-                this.treeData.forEach(big=> {
-                        const opt=document.createElement('option');
-                        opt.value=big.id; opt.innerText=big.title;
-                        elBig.appendChild(opt);
-                    });
-
-                elMid.innerHTML=`<option value="">$ {
-                    prefix==='filter' ?'중단원 전체': '중단원 선택'
-                }
-
-                </option>`;
-
-                elSmall.innerHTML=`<option value="">$ {
-                    prefix==='filter' ?'소단원 전체': '소단원 선택'
-                }
-
-                </option>`;
-            }
-
-            else if (level==='big') {
-                elMid.innerHTML=`<option value="">$ {
-                    prefix==='filter' ?'중단원 전체': '중단원 선택'
-                }
-
-                </option>`;
-
-                elSmall.innerHTML=`<option value="">$ {
-                    prefix==='filter' ?'소단원 전체': '소단원 선택'
-                }
-
-                </option>`;
-                const bigNode=this.treeData.find(b=> b.id===elBig.value);
-
-                if(bigNode && bigNode.children) {
-                    bigNode.children.forEach(mid=> {
-                            const opt=document.createElement('option');
-                            opt.value=mid.id; opt.innerText=mid.title;
-                            elMid.appendChild(opt);
-                        });
-                }
-            }
-
-            else if (level==='mid') {
-                elSmall.innerHTML=`<option value="">$ {
-                    prefix==='filter' ?'소단원 전체': '소단원 선택'
-                }
-
-                </option>`;
-                const bigNode=this.treeData.find(b=> b.id===elBig.value);
-
-                if(bigNode && bigNode.children) {
-                    const midNode=bigNode.children.find(m=> m.id===elMid.value);
-
-                    if(midNode && midNode.children) {
-                        midNode.children.forEach(small=> {
-                                const opt=document.createElement('option');
-                                opt.value=small.id; opt.innerText=small.title;
-                                elSmall.appendChild(opt);
-                            });
                     }
                 }
-            }
+                this.renderQuestions();
+                this.updateSettingsUI();
+            },
 
-            if (prefix==='filter') {
-                this.examPrepFilters= {
-                    big: elBig.value, mid: elMid.value, small: elSmall.value
+            updateEpSelects: function (prefix, level) {
+                const idBig = prefix === 'filter' ? 'ep-filter-big' : 'ep-add-big';
+                const idMid = prefix === 'filter' ? 'ep-filter-mid' : 'ep-add-mid';
+                const idSmall = prefix === 'filter' ? 'ep-filter-small' : 'ep-add-small';
+                const elBig = document.getElementById(idBig);
+                const elMid = document.getElementById(idMid);
+                const elSmall = document.getElementById(idSmall);
+
+                if (level === 'init') {
+                    elBig.innerHTML = `<option value="">${prefix === 'filter' ? '대단원 전체' : '대단원 선택'}</option>`;
+                    this.treeData.forEach(big => {
+                        const opt = document.createElement('option');
+                        opt.value = big.id; opt.innerText = big.title;
+                        elBig.appendChild(opt);
+                    });
+                    elMid.innerHTML = `<option value="">${prefix === 'filter' ? '중단원 전체' : '중단원 선택'}</option>`;
+                    elSmall.innerHTML = `<option value="">${prefix === 'filter' ? '소단원 전체' : '소단원 선택'}</option>`;
+                } else if (level === 'big') {
+                    elMid.innerHTML = `<option value="">${prefix === 'filter' ? '중단원 전체' : '중단원 선택'}</option>`;
+                    elSmall.innerHTML = `<option value="">${prefix === 'filter' ? '소단원 전체' : '소단원 선택'}</option>`;
+                    const bigNode = this.treeData.find(b => b.id === elBig.value);
+                    if (bigNode && bigNode.children) {
+                        bigNode.children.forEach(mid => {
+                            const opt = document.createElement('option');
+                            opt.value = mid.id; opt.innerText = mid.title;
+                            elMid.appendChild(opt);
+                        });
+                    }
+                } else if (level === 'mid') {
+                    elSmall.innerHTML = `<option value="">${prefix === 'filter' ? '소단원 전체' : '소단원 선택'}</option>`;
+                    const bigNode = this.treeData.find(b => b.id === elBig.value);
+                    if (bigNode && bigNode.children) {
+                        const midNode = bigNode.children.find(m => m.id === elMid.value);
+                        if (midNode && midNode.children) {
+                            midNode.children.forEach(small => {
+                                const opt = document.createElement('option');
+                                opt.value = small.id; opt.innerText = small.title;
+                                elSmall.appendChild(opt);
+                            });
+                        }
+                    }
                 }
 
-                ;
+                if (prefix === 'filter') {
+                    this.examPrepFilters = { big: elBig.value, mid: elMid.value, small: elSmall.value };
+                    this.renderQuestions();
+                }
+            },
+
+            resetEpFilters: function () {
+                this.updateEpSelects('filter', 'init');
+                this.examPrepFilters = { big: '', mid: '', small: '' };
                 this.renderQuestions();
-            }
-        }
+            },
 
-        ,
-        resetEpFilters: function() {
-            this.updateEpSelects('filter', 'init');
+            openSettingsModal: function () {
+                if (!this.selectedNode) return;
+                document.getElementById('settings-modal').classList.remove('hidden');
+                document.getElementById('settings-modal').classList.add('flex');
+                this.updateSettingsUI();
+            },
 
-            this.examPrepFilters= {
-                big: '', mid: '', small: ''
-            }
+            closeSettingsModal: function () {
+                document.getElementById('settings-modal').classList.add('hidden');
+                document.getElementById('settings-modal').classList.remove('flex');
+            },
 
-            ;
-            this.renderQuestions();
-        }
+            updateSettingsUI: function () {
+                if (!this.selectedNode) return;
+                const key = `${this.selectedNode.id}_${this.selectedCategory}`;
+                const config = this.assessmentSettings[key] || {};
 
-        ,
+                const isActive = config.active === true;
+                document.getElementById('toggle-active').checked = isActive;
+                const text = document.getElementById('toggle-text');
+                text.innerText = isActive ? '학생 공개 중' : '학생 비공개';
+                text.className = isActive ? 'ml-2 text-sm font-bold text-green-600' : 'ml-2 text-sm font-bold text-gray-400';
 
-        openSettingsModal: function() {
-            if( !this.selectedNode) return;
-            document.getElementById('settings-modal').classList.remove('hidden');
-            document.getElementById('settings-modal').classList.add('flex');
-            this.updateSettingsUI();
-        }
+                document.getElementById('setting-count').value = config.questionCount || 10;
+                document.getElementById('setting-time').value = config.timeLimit || 60;
+                document.getElementById('setting-retake').checked = config.allowRetake !== false;
+                document.getElementById('setting-cooldown').value = config.cooldown || 0;
+                this.toggleCooldownInput();
+            },
 
-        ,
-        closeSettingsModal: function() {
-            document.getElementById('settings-modal').classList.add('hidden');
-            document.getElementById('settings-modal').classList.remove('flex');
-        }
+            toggleCooldownInput: function () {
+                const allow = document.getElementById('setting-retake').checked;
+                const area = document.getElementById('cooldown-area');
+                area.style.opacity = allow ? '1' : '0.5';
+                document.getElementById('setting-cooldown').disabled = !allow;
+            },
 
-        ,
-        updateSettingsUI: function() {
-            if( !this.selectedNode) return;
+            saveSettings: async function (isModal = false) {
+                if (!this.selectedNode) return;
+                const key = `${this.selectedNode.id}_${this.selectedCategory}`;
 
-            const key=`$ {
-                this.selectedNode.id
-            }
-
-            _$ {
-                this.selectedCategory
-            }
-
-            `;
-
-            const config=this.assessmentSettings[key] || {}
-
-            ;
-
-            const isActive=config.active===true;
-            document.getElementById('toggle-active').checked=isActive;
-            const text=document.getElementById('toggle-text');
-            text.innerText=isActive ? '학생 공개 중' : '학생 비공개';
-            text.className=isActive ? 'ml-2 text-sm font-bold text-green-600' : 'ml-2 text-sm font-bold text-gray-400';
-
-            document.getElementById('setting-count').value=config.questionCount || 10;
-            document.getElementById('setting-time').value=config.timeLimit || 60;
-            document.getElementById('setting-retake').checked=config.allowRetake !==false;
-            document.getElementById('setting-cooldown').value=config.cooldown || 0;
-            this.toggleCooldownInput();
-        }
-
-        ,
-        toggleCooldownInput: function() {
-            const allow=document.getElementById('setting-retake').checked;
-            const area=document.getElementById('cooldown-area');
-            area.style.opacity=allow ? '1': '0.5';
-            document.getElementById('setting-cooldown').disabled= !allow;
-        }
-
-        ,
-        saveSettings: async function(isModal=false) {
-            if( !this.selectedNode) return;
-
-            const key=`$ {
-                this.selectedNode.id
-            }
-
-            _$ {
-                this.selectedCategory
-            }
-
-            `;
-
-            const newData= {
-                active: document.getElementById('toggle-active').checked,
+                const newData = {
+                    active: document.getElementById('toggle-active').checked,
                     questionCount: parseInt(document.getElementById('setting-count').value) || 10,
                     timeLimit: parseInt(document.getElementById('setting-time').value) || 60,
                     allowRetake: document.getElementById('setting-retake').checked,
                     cooldown: parseInt(document.getElementById('setting-cooldown').value) || 0
-            }
+                };
 
-            ;
+                this.assessmentSettings[key] = newData;
+                this.updateSettingsUI();
 
-            this.assessmentSettings[key]=newData;
-            this.updateSettingsUI();
+                await window.getCollection('assessment_config').doc('settings').set({ [key]: newData }, { merge: true });
 
-            await window.getCollection('assessment_config').doc('settings').set({
-                [key]: newData
-            }
+                if (isModal) {
+                    this.closeSettingsModal();
+                    alert("설정이 저장되었습니다.");
+                }
+            },
 
-            , {
-            merge: true
-        });
+            previewNewQuestion: function () {
+                const type = document.getElementById('new-q-type').value;
+                const text = document.getElementById('new-q-text').value;
+                const options = document.getElementById('new-q-options').value;
+                const ans = document.getElementById('new-q-answer').value;
 
-        if(isModal) {
-            this.closeSettingsModal();
-            alert("설정이 저장되었습니다.");
-        }
-        }
-
-        ,
-
-        previewNewQuestion: function() {
-            const type=document.getElementById('new-q-type').value;
-            const text=document.getElementById('new-q-text').value;
-            const options=document.getElementById('new-q-options').value;
-            const ans=document.getElementById('new-q-answer').value;
-
-            if( !text) {
-                alert("문제 내용을 입력해주세요.");
-                return;
-            }
-
-            const mockQ= {
-                id: 'temp', type: type, question: text, answer: ans, options: options ? options.split(',').map(s=>s.trim()): [], image: this.tempImage
-            }
-
-            ;
-            this.showPreviewModal(mockQ);
-        }
-
-        ,
-        showPreviewModal: function(q) {
-            const container=document.getElementById('preview-content');
-
-            let html=`<div class="mb-4"><span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">$ {
-                q.type
-            }
-
-            </span>$ {
-                q.image ? `<img src="${q.image}" class="preview-img">`: ''
-            }
-
-            <h4 class="font-bold text-lg mt-2 text-gray-800">$ {
-                q.question
-            }
-
-            </h4></div>`;
-
-            if(q.type==='choice') {
-                html+=`<div class="space-y-2">$ {
-                    (q.options||[]).map(opt=> `<div class="preview-choice" onclick="app.simulateAnswer(this, '${opt}', '${q.answer}')" >$ {
-                            opt
-                        }
-
-                        </div>`).join('')
+                if (!text) {
+                    alert("문제 내용을 입력해주세요.");
+                    return;
                 }
 
-                </div>`;
-            }
+                const mockQ = {
+                    id: 'temp', type: type, question: text, answer: ans,
+                    options: options ? options.split(',').map(s => s.trim()) : [],
+                    image: this.tempImage
+                };
+                this.showPreviewModal(mockQ);
+            },
 
-            else if(q.type==='ox') {
-                html+=`<div class="flex gap-2"><button class="flex-1 py-4 border-2 rounded-lg font-bold text-xl hover:bg-blue-50 border-blue-200 text-blue-600" onclick="app.simulateAnswer(this, 'O', '${q.answer}')">O</button><button class="flex-1 py-4 border-2 rounded-lg font-bold text-xl hover:bg-red-50 border-red-200 text-red-600" onclick="app.simulateAnswer(this, 'X', '${q.answer}')">X</button></div>`;
-            }
+            showPreviewModal: function (q) {
+                const container = document.getElementById('preview-content');
+                let html = `<div class="mb-4"><span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">${q.type}</span>
+                    ${q.image ? `<img src="${q.image}" class="preview-img">` : ''}
+                    <h4 class="font-bold text-lg mt-2 text-gray-800">${q.question}</h4></div>`;
 
-            else {
-                html+=`<div class="flex gap-2"><input type="text" class="border p-2 rounded w-full" placeholder="정답 입력"><button class="bg-blue-600 text-white px-4 rounded" onclick="alert('예시 정답: ${q.answer}')">확인</button></div>`;
-            }
+                if (q.type === 'choice') {
+                    html += `<div class="space-y-2">${(q.options || []).map(opt =>
+                        `<div class="preview-choice" onclick="app.simulateAnswer(this, '${opt}', '${q.answer}')">${opt}</div>`
+                    ).join('')}</div>`;
+                } else if (q.type === 'ox') {
+                    html += `<div class="flex gap-2"><button class="flex-1 py-4 border-2 rounded-lg font-bold text-xl hover:bg-blue-50 border-blue-200 text-blue-600" onclick="app.simulateAnswer(this, 'O', '${q.answer}')">O</button><button class="flex-1 py-4 border-2 rounded-lg font-bold text-xl hover:bg-red-50 border-red-200 text-red-600" onclick="app.simulateAnswer(this, 'X', '${q.answer}')">X</button></div>`;
+                } else {
+                    html += `<div class="flex gap-2"><input type="text" class="border p-2 rounded w-full" placeholder="정답 입력"><button class="bg-blue-600 text-white px-4 rounded" onclick="alert('예시 정답: ${q.answer}')">확인</button></div>`;
+                }
 
-            container.innerHTML=html;
-            document.getElementById('preview-modal').classList.remove('hidden');
-            document.getElementById('preview-modal').classList.add('flex');
-        }
+                container.innerHTML = html;
+                document.getElementById('preview-modal').classList.remove('hidden');
+                document.getElementById('preview-modal').classList.add('flex');
+            },
 
-        ,
-        simulateAnswer: function(el, selected, correct) {
-            if(el.parentNode) Array.from(el.parentNode.children).forEach(child=> {
-                    child.classList.remove('correct', 'wrong'); child.style.opacity='0.5';
+            simulateAnswer: function (el, selected, correct) {
+                if (el.parentNode) Array.from(el.parentNode.children).forEach(child => {
+                    child.classList.remove('correct', 'wrong');
+                    child.style.opacity = '0.5';
                 });
-            el.style.opacity='1';
-            if(String(selected)===String(correct)) el.classList.add('correct');
-            else el.classList.add('wrong');
-        }
+                el.style.opacity = '1';
+                if (String(selected) === String(correct)) el.classList.add('correct');
+                else el.classList.add('wrong');
+            },
 
-        ,
-        previewQuestion: function(id) {
-            const q=this.questions.find(x=> x.id===id);
-            if(q) this.showPreviewModal(q);
-        }
+            previewQuestion: function (id) {
+                const q = this.questions.find(x => x.id === id);
+                if (q) this.showPreviewModal(q);
+            },
 
-        ,
+            handleImageSelect: function (input, previewId) {
+                const file = input.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        this.tempImage = e.target.result;
+                        const prev = document.getElementById(previewId);
+                        prev.src = this.tempImage;
+                        prev.classList.remove('hidden');
+                        if (previewId === 'new-q-preview') document.getElementById('new-q-preview-name').innerText = file.name;
+                    };
+                    reader.readAsDataURL(file);
+                }
+            },
 
-        handleImageSelect: function(input, previewId) {
-            const file=input.files[0];
+            addQuestion: async function () {
+                if (!this.selectedNode) return;
+                const text = document.getElementById('new-q-text').value;
+                const ans = document.getElementById('new-q-answer').value;
 
-            if(file) {
-                const reader=new FileReader();
-
-                reader.onload=(e)=> {
-                    this.tempImage=e.target.result;
-                    const prev=document.getElementById(previewId);
-                    prev.src=this.tempImage;
-                    prev.classList.remove('hidden');
-                    if(previewId==='new-q-preview') document.getElementById('new-q-preview-name').innerText=file.name;
+                if (!text || !ans) {
+                    alert("문제와 정답은 필수입니다.");
+                    return;
                 }
 
-                ;
-                reader.readAsDataURL(file);
-            }
-        }
+                const newId = Date.now();
+                let subUnitId = null;
+                let refUnitIds = {};
 
-        ,
-        addQuestion: async function() {
-            if( !this.selectedNode) return;
-            const text=document.getElementById('new-q-text').value;
-            const ans=document.getElementById('new-q-answer').value;
-
-            if( !text || !ans) {
-                alert("문제와 정답은 필수입니다.");
-                return;
-            }
-
-            const newId=Date.now();
-            let subUnitId=null;
-
-            let refUnitIds= {}
-
-            ;
-
-            if (this.selectedNode.id==='exam_prep') {
-                refUnitIds= {
-                    refBig: document.getElementById('ep-add-big').value, refMid: document.getElementById('ep-add-mid').value, refSmall: document.getElementById('ep-add-small').value
+                if (this.selectedNode.id === 'exam_prep') {
+                    refUnitIds = {
+                        refBig: document.getElementById('ep-add-big').value,
+                        refMid: document.getElementById('ep-add-mid').value,
+                        refSmall: document.getElementById('ep-add-small').value
+                    };
+                    subUnitId = refUnitIds.refSmall || refUnitIds.refMid || refUnitIds.refBig || null;
+                } else {
+                    subUnitId = document.getElementById('new-q-subunit').value || null;
                 }
 
-                ;
-                subUnitId=refUnitIds.refSmall || refUnitIds.refMid || refUnitIds.refBig || null;
-            }
+                const qData = {
+                    id: newId,
+                    unitId: this.selectedNode.id,
+                    category: this.selectedCategory,
+                    subUnitId: subUnitId,
+                    ...refUnitIds,
+                    type: document.getElementById('new-q-type').value,
+                    question: text,
+                    image: this.tempImage || null,
+                    answer: ans,
+                    options: document.getElementById('new-q-options').value ? document.getElementById('new-q-options').value.split(',').map(s => s.trim()) : [],
+                    explanation: document.getElementById('new-q-exp').value,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
 
-            else {
-                subUnitId=document.getElementById('new-q-subunit').value || null;
-            }
-
-            const qData= {
-                id: newId, unitId: this.selectedNode.id, category: this.selectedCategory, subUnitId: subUnitId, ...refUnitIds,
-                    type: document.getElementById('new-q-type').value, question: text, image: this.tempImage || null, answer: ans,
-                    options: document.getElementById('new-q-options').value ? document.getElementById('new-q-options').value.split(',').map(s=>s.trim()): [],
-                    explanation: document.getElementById('new-q-exp').value, createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            }
-
-            ;
-            await window.getCollection('quiz_questions').doc(String(newId)).set(qData);
-            this.resetForm();
-            this.questions.push(qData);
-            this.renderQuestions();
-        }
-
-        ,
-        resetForm: function() {
-            document.getElementById('new-q-text').value='';
-            document.getElementById('new-q-options').value='';
-            document.getElementById('new-q-answer').value='';
-            document.getElementById('new-q-exp').value='';
-            document.getElementById('new-q-image').value='';
-            document.getElementById('new-q-preview').classList.add('hidden');
-            document.getElementById('new-q-preview-name').innerText='';
-            this.tempImage=null;
-        }
-
-        ,
-        deleteQuestion: async function(id) {
-            if(confirm("삭제?")) {
-                await window.getCollection('quiz_questions').doc(String(id)).delete();
-                this.questions=this.questions.filter(q=> String(q.id) !==String(id));
+                await window.getCollection('quiz_questions').doc(String(newId)).set(qData);
+                this.resetForm();
+                this.questions.push(qData);
                 this.renderQuestions();
-            }
-        }
+            },
 
-        ,
-        renderQuestions: function() {
-            const list=document.getElementById('q-list');
-            let filtered=this.questions.filter(q=> q.unitId===this.selectedNode.id && q.category===this.selectedCategory);
+            resetForm: function () {
+                document.getElementById('new-q-text').value = '';
+                document.getElementById('new-q-options').value = '';
+                document.getElementById('new-q-answer').value = '';
+                document.getElementById('new-q-exp').value = '';
+                document.getElementById('new-q-image').value = '';
+                document.getElementById('new-q-preview').classList.add('hidden');
+                document.getElementById('new-q-preview-name').innerText = '';
+                this.tempImage = null;
+            },
 
-            if (this.selectedNode.id==='exam_prep') {
-                if (this.examPrepFilters.big) filtered=filtered.filter(q=> q.refBig===this.examPrepFilters.big);
-                if (this.examPrepFilters.mid) filtered=filtered.filter(q=> q.refMid===this.examPrepFilters.mid);
-                if (this.examPrepFilters.small) filtered=filtered.filter(q=> q.refSmall===this.examPrepFilters.small);
-            }
+            deleteQuestion: async function (id) {
+                if (confirm("삭제?")) {
+                    await window.getCollection('quiz_questions').doc(String(id)).delete();
+                    this.questions = this.questions.filter(q => String(q.id) !== String(id));
+                    this.renderQuestions();
+                }
+            },
 
-            if(filtered.length===0) {
-                list.innerHTML='<div class="text-center py-10 text-gray-400 border-2 border-dashed border-gray-200 rounded-lg">등록된 문제가 없습니다.</div>';
-            }
+            renderQuestions: function () {
+                const list = document.getElementById('q-list');
+                let filtered = this.questions.filter(q => q.unitId === this.selectedNode.id && q.category === this.selectedCategory);
 
-            else {
-                list.innerHTML=filtered.map((q, idx)=> ` <div class="bg-white p-4 rounded-lg border border-gray-200 hover:border-blue-300 transition relative group shadow-sm" > <div class="flex justify-between items-start mb-2" ><span class="bg-gray-100 text-gray-600 text-[10px] font-bold px-2 py-1 rounded" >Q$ {
-                        idx+1
-                    }
+                if (this.selectedNode.id === 'exam_prep') {
+                    if (this.examPrepFilters.big) filtered = filtered.filter(q => q.refBig === this.examPrepFilters.big);
+                    if (this.examPrepFilters.mid) filtered = filtered.filter(q => q.refMid === this.examPrepFilters.mid);
+                    if (this.examPrepFilters.small) filtered = filtered.filter(q => q.refSmall === this.examPrepFilters.small);
+                }
 
-                    | $ {
-                        q.type
-                    }
+                if (filtered.length === 0) {
+                    list.innerHTML = '<div class="text-center py-10 text-gray-400 border-2 border-dashed border-gray-200 rounded-lg">등록된 문제가 없습니다.</div>';
+                } else {
+                    list.innerHTML = filtered.map((q, idx) => `
+                        <div class="bg-white p-4 rounded-lg border border-gray-200 hover:border-blue-300 transition relative group shadow-sm">
+                            <div class="flex justify-between items-start mb-2">
+                                <span class="bg-gray-100 text-gray-600 text-[10px] font-bold px-2 py-1 rounded">Q${idx + 1} | ${q.type}</span>
+                                <div class="flex gap-2">
+                                    <button onclick="app.previewQuestion(${q.id})" class="text-gray-400 hover:text-green-600 text-xs border border-gray-200 px-2 py-1 rounded hover:bg-green-50 transition"><i class="fas fa-play mr-1"></i>미리보기</button>
+                                    <button onclick="app.deleteQuestion('${q.id}')" class="text-gray-300 hover:text-red-500"><i class="fas fa-trash"></i></button>
+                                </div>
+                            </div>
+                            <div class="flex gap-4">
+                                ${q.image ? `<img src="${q.image}" class="w-16 h-16 object-cover rounded border border-gray-100">` : ''}
+                                <div>
+                                    <p class="font-bold text-gray-800 mb-2 text-sm">${q.question}</p>
+                                    <div class="text-xs text-gray-500">
+                                        <span class="text-blue-600 font-bold mr-2">정답: ${q.answer}</span>
+                                        ${q.options ? `<span class="text-xs text-gray-400">(${q.options.join(', ')})</span>` : ''}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            },
 
-                    </span><div class="flex gap-2" ><button onclick="app.previewQuestion(${q.id})" class="text-gray-400 hover:text-green-600 text-xs border border-gray-200 px-2 py-1 rounded hover:bg-green-50 transition" ><i class="fas fa-play mr-1" ></i>미리보기</button><button onclick="app.deleteQuestion('${q.id}')" class="text-gray-300 hover:text-red-500" ><i class="fas fa-trash" ></i></button></div></div> <div class="flex gap-4" >$ {
-                        q.image ? `<img src="${q.image}" class="w-16 h-16 object-cover rounded border border-gray-100" >` : ''
-                    }
+            loadByClass: function (c) { },
+            filterBank: function () { },
+            sortBank: function () { },
+            renderBank: function () { }
+        };
 
-                    <div><p class="font-bold text-gray-800 mb-2 text-sm" >$ {
-                        q.question
-                    }
+        document.addEventListener('auth-ready', () => app.init());
+    </script>
+</body>
 
-                    </p><div class="text-xs text-gray-500" ><span class="text-blue-600 font-bold mr-2" >정답: $ {
-                        q.answer
-                    }
-
-                    </span>$ {
-                        q.options ? `<span class="text-xs text-gray-400" >($ {
-                                q.options.join(', ')
-                            })</span>` : ''
-                    }
-
-                    </div></div></div> </div>`).join('');
-            }
-        }
-
-        ,
-        loadByClass: function(c) {}
-
-        ,
-        filterBank: function() {}
-
-        ,
-        sortBank: function() {}
-
-        ,
-        renderBank: function() {}
-        }
-
-        ;
-        document.addEventListener('auth-ready', ()=> app.init());
-        </script></body></html>
+</html>

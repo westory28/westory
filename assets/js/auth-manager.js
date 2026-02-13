@@ -335,6 +335,11 @@ class AuthManager {
             const suffix = (this.userType === 'teacher') ? ' 교사' : ' 학생';
             greetingEl.textContent = name + suffix;
         }
+
+        const welcomeEl = document.getElementById('welcome-text');
+        if (welcomeEl && name) {
+            welcomeEl.innerText = `${name}님, 환영합니다!`;
+        }
     }
 
     initSessionTimer() {

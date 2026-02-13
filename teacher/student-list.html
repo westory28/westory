@@ -28,7 +28,7 @@
 
         .btn-bulk:not(:disabled):hover {
             transform: translateY(-1px);
-            shadow: md;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         }
 
         /* Solid colors when active */
@@ -60,91 +60,6 @@
 
         #btn-delete:not(:disabled):hover {
             background-color: #b91c1c;
-        }
-
-        /* Mobile Card View for Table */
-        @media (max-width: 768px) {
-
-            table,
-            thead,
-            tbody,
-            th,
-            td,
-            tr {
-                display: block;
-            }
-
-            thead tr {
-                position: absolute;
-                top: -9999px;
-                left: -9999px;
-            }
-
-            tr.hover\:bg-blue-50:hover {
-                background-color: transparent;
-            }
-
-            /* Reset hover on mobile */
-            tr {
-                border: 1px solid #e5e7eb;
-                border-radius: 8px;
-                margin-bottom: 1rem;
-                padding: 1rem;
-                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-                background: white;
-            }
-
-            td {
-                border: none !important;
-                position: relative;
-                padding-left: 50% !important;
-                padding-top: 0.5rem !important;
-                padding-bottom: 0.5rem !important;
-                text-align: right !important;
-            }
-
-            td:before {
-                position: absolute;
-                top: 0.5rem;
-                left: 0;
-                width: 45%;
-                padding-right: 10px;
-                white-space: nowrap;
-                text-align: left;
-                font-weight: bold;
-                color: #6b7280;
-                content: attr(data-label);
-                font-size: 0.75rem;
-            }
-
-            /* Specific adjustments for Checkbox & Actions */
-            td:first-child {
-                text-align: left !important;
-                padding-left: 0 !important;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                border-bottom: 1px solid #f3f4f6 !important;
-                padding-bottom: 0.75rem !important;
-                margin-bottom: 0.5rem;
-            }
-
-            td:first-child:before {
-                content: "선택";
-            }
-
-            td:last-child {
-                text-align: right !important;
-                padding-left: 0 !important;
-                padding-top: 1rem !important;
-                border-top: 1px solid #f3f4f6 !important;
-                margin-top: 0.5rem;
-            }
-
-            td:last-child:before {
-                content: "";
-                display: none;
-            }
         }
     </style>
 </head>
