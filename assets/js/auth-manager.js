@@ -1,5 +1,4 @@
 
-
 // Menu Configurations
 const MENUS = {
     student: [
@@ -245,21 +244,16 @@ class AuthManager {
         const resolve = (url) => this.rootPrefix + url;
         const currentPath = window.location.pathname;
         const isActive = (url) => currentPath.endsWith(url.split('/').pop().split('?')[0]);
-        const isDashboard = currentPath.includes('dashboard.html');
+        // const isDashboard = currentPath.includes('dashboard.html');
 
-        let navHtml = '';
-        let mobileNavHtml = '';
-        let mobileToggleBtn = '';
-
-        if (!isDashboard) {
-            // Changed: Added 'hidden lg:flex' to hide on mobile/tablet (up to 1024px)
-            navHtml = `<nav class="desktop-nav hidden lg:flex items-center h-full ml-6">${menuItems.map(item => `<a href="${resolve(item.url)}" class="nav-link ${isActive(item.url) ? 'active' : ''}">${item.name}</a>`).join('')}</nav>`;
-            mobileNavHtml = `<div id="mobile-menu">${menuItems.map(item => `<a href="${resolve(item.url)}" class="mobile-link ${isActive(item.url) ? 'active' : ''}"><svg class="mobile-icon" viewBox="0 0 24 24"><path d="${item.icon}"></path></svg>${item.name}</a>`).join('')}</div>`;
-            mobileToggleBtn = `<button id="mobile-menu-toggle" class="mobile-menu-btn"><i class="fas fa-bars"></i></button>`;
-        }
+        // Always generate navigation HTML regardless of page type
+        // Added 'hidden lg:flex' to hide on mobile/tablet (up to 1024px) but show on PC
+        let navHtml = `<nav class="desktop-nav hidden lg:flex items-center h-full ml-6">${menuItems.map(item => `<a href="${resolve(item.url)}" class="nav-link ${isActive(item.url) ? 'active' : ''}">${item.name}</a>`).join('')}</nav>`;
+        let mobileNavHtml = `<div id="mobile-menu">${menuItems.map(item => `<a href="${resolve(item.url)}" class="mobile-link ${isActive(item.url) ? 'active' : ''}"><svg class="mobile-icon" viewBox="0 0 24 24"><path d="${item.icon}"></path></svg>${item.name}</a>`).join('')}</div>`;
+        let mobileToggleBtn = `<button id="mobile-menu-toggle" class="mobile-menu-btn"><i class="fas fa-bars"></i></button>`;
 
         const dashboardLink = this.userType === 'teacher' ? resolve('teacher/dashboard.html') : resolve('student/dashboard.html');
-        // Changed: Settings icon now links to page, not modal
+        // Settings icon now links to page, not modal
         let settingsIcon = this.userType === 'teacher' ? `<a href="${resolve('teacher/settings.html')}" class="text-gray-400 hover:text-blue-600 cursor-pointer transition p-1 mr-2" title="관리자 설정"><i class="fas fa-cog fa-lg"></i></a>` : '';
         const semInfo = `<span class="hidden md:inline-block text-xs font-mono bg-gray-100 text-gray-500 px-2 py-1 rounded mr-2 border border-gray-200">${window.currentConfig.year}-${window.currentConfig.semester}</span>`;
 
