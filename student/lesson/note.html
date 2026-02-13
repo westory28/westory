@@ -239,8 +239,7 @@
                 }
 
                 if(snap.empty) {
-                    document.getElementById('loading-state').classList.remove('hidden');
-                    document.getElementById('loading-state').innerHTML = `<div class="text-6xl mb-4">📭</div><h2 class="text-xl font-bold">내용이 없습니다</h2><p class="text-gray-500">선생님이 아직 자료를 등록하지 않았습니다.</p>`;
+                    showEmptyState();
                     return;
                 }
 
@@ -248,8 +247,18 @@
                 renderLesson(data, fallbackTitle);
             } catch(e) {
                 console.error(e);
-                alert("자료 로드 중 오류가 발생했습니다.");
+                showEmptyState(); // Show empty state even on error for better UX as per request
             }
+        }
+
+        function showEmptyState() {
+            const loadingState = document.getElementById('loading-state');
+            loadingState.classList.remove('hidden');
+            loadingState.innerHTML = `
+                <div class="text-6xl mb-4 text-gray-200">📭</div>
+                <h2 class="text-xl font-bold text-gray-500">아직 수업 자료가 등록되지 않았습니다</h2>
+                <p class="text-gray-400 mt-2 text-sm">선생님이 자료를 준비 중입니다. 잠시 후 다시 확인해주세요.</p>
+            `;
         }
 
         function renderLesson(data, fallbackTitle) {

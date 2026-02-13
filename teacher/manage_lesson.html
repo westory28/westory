@@ -36,80 +36,132 @@
         .ql-container { font-family: 'Noto Sans KR', sans-serif; font-size: 1rem; height: 500px; }
         .ql-editor strong { font-weight: bold; }
         .cloze-input { border: none; border-bottom: 2px solid #374151; text-align: center; font-weight: bold; color: #2563eb; background: transparent; padding: 0 4px; width: 100px; display: inline-block; }
+
+        /* Mobile Sidebar & Toggle */
+        .sidebar-toggle-btn {
+            display: none;
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            width: 56px;
+            height: 56px;
+            background-color: #2563eb;
+            color: white;
+            border-radius: 50%;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+            z-index: 50;
+            transition: transform 0.2s;
+        }
+        .sidebar-toggle-btn:active { transform: scale(0.95); }
+        .mobile-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 40; }
+
+        @media (max-width: 1024px) {
+            .sidebar-container {
+                position: fixed;
+                top: 0; right: 0; bottom: 0;
+                width: 80%;
+                max-width: 320px;
+                background: white;
+                z-index: 50;
+                transform: translateX(100%);
+                transition: transform 0.3s ease-out;
+                box-shadow: -4px 0 15px rgba(0,0,0,0.1);
+                display: flex; flex-direction: column;
+            }
+            .sidebar-container.open { transform: translateX(0); }
+            .sidebar-toggle-btn { display: flex; }
+            .mobile-overlay.open { display: block; }
+            
+            /* Adjust content area on mobile */
+            .editor-container { min-height: calc(100vh - 80px); }
+        }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen flex flex-col">
     <!-- Header injected by AuthManager -->
 
-    <main class="flex-1 w-full max-w-7xl mx-auto px-4 lg:px-6 py-6 h-full flex flex-col">
+    <main class="flex-1 w-full max-w-7xl mx-auto px-4 lg:px-6 py-6 h-full flex flex-col relative">
         
         <div class="flex justify-between items-center mb-4 shrink-0">
             <div>
-                <h1 class="text-xl lg:text-2xl font-bold text-gray-800"><i class="fas fa-sitemap text-blue-500 mr-2"></i>단원 설정 및 수업 자료 관리</h1>
-                <p class="text-sm text-gray-500 mt-1">대단원 > 중단원 > 소단원 구조를 설정하고, 소단원을 선택하여 학습 자료를 등록하세요.</p>
+                <h1 class="text-xl lg:text-2xl font-bold text-gray-800"><i class="fas fa-sitemap text-blue-500 mr-2"></i>수업 자료 관리</h1>
             </div>
         </div>
 
-        <div class="flex flex-col lg:flex-row gap-6 h-full lg:overflow-hidden pb-4">
-            <!-- Left: Tree Structure -->
-            <div class="w-full lg:w-1/3 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col lg:overflow-hidden min-h-[300px] lg:min-h-0">
-                <div class="p-6 border-b bg-gray-50 font-bold text-gray-700 flex justify-between items-center">
-                    <span>📚 단원 목차</span>
-                    <div class="flex gap-1">
-                        <button onclick="app.addRootUnit()" class="text-xs bg-stone-800 text-white px-3 py-1.5 rounded hover:bg-stone-900 shadow-sm flex items-center transition" title="대단원 추가">
-                            <i class="fas fa-plus mr-1.5"></i>대단원 추가
+        <div class="flex flex-col lg:flex-row gap-6 h-full lg:overflow-hidden pb-4 relative">
+            
+            <!-- Mobile Overlay -->
+            <div id="mobile-overlay" class="mobile-overlay" onclick="app.toggleSidebar(false)"></div>
+
+            <!-- Left: Tree Structure (Sidebar) -->
+            <div id="sidebar-panel" class="sidebar-container w-full lg:w-1/3 bg-white lg:rounded-xl lg:shadow-sm lg:border border-gray-200 lg:flex lg:flex-col lg:static lg:transform-none lg:overflow-hidden min-h-[300px] lg:min-h-0">
+                <div class="p-6 border-b bg-gray-50 font-bold text-gray-700 flex justify-between items-center shrink-0">
+                    <span class="flex items-center gap-2"><i class="fas fa-list"></i> 단원 목차</span>
+                    <div class="flex gap-1 items-center">
+                        <button onclick="app.addRootUnit()" class="text-xs bg-stone-800 text-white px-3 py-1.5 rounded hover:bg-stone-900 shadow-sm flex items-center transition">
+                            <i class="fas fa-plus mr-1"></i>추가
                         </button>
                         <button onclick="app.saveTree()" class="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded hover:bg-blue-200 transition font-bold">저장</button>
+                        <!-- Mobile Close Button -->
+                        <button onclick="app.toggleSidebar(false)" class="lg:hidden ml-2 text-gray-400 hover:text-gray-600">
+                            <i class="fas fa-times text-lg"></i>
+                        </button>
                     </div>
                 </div>
-                <div class="flex-1 overflow-y-auto overflow-x-auto p-4" id="tree-container">
+                <div class="flex-1 overflow-y-auto p-4" id="tree-container">
                     <div class="text-center text-gray-400 py-10">로딩 중...</div>
                 </div>
             </div>
 
             <!-- Right: Lesson Editor -->
-            <div class="w-full lg:w-2/3 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col relative min-h-[600px] lg:min-h-0" id="editor-panel">
-                <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 bg-white z-10 rounded-xl">
-                    <i class="far fa-hand-point-left text-4xl mb-4"></i>
-                    <p class="text-lg">목차에서 <strong>소단원</strong>을 선택하면<br>자료를 편집할 수 있습니다.</p>
+            <div class="editor-container w-full lg:w-2/3 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col relative min-h-[600px] lg:min-h-0" id="editor-panel">
+                <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 bg-white z-10 rounded-xl p-6 text-center">
+                    <div class="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4">
+                        <i class="far fa-hand-point-left text-4xl lg:block hidden"></i>
+                        <i class="fas fa-list text-3xl lg:hidden text-blue-400"></i>
+                    </div>
+                    <p class="text-lg font-bold text-gray-600">수업 자료를 선택해주세요</p>
+                    <p class="text-sm mt-2 lg:block hidden">왼쪽 목차에서 <strong>소단원</strong>을 클릭하여 내용을 편집하세요.</p>
+                    <p class="text-sm mt-2 lg:hidden">우측 하단 <strong>목록 버튼</strong>을 눌러 단원을 선택하세요.</p>
                 </div>
 
                 <!-- Editor UI -->
                 <div class="p-4 border-b flex flex-wrap justify-between items-center bg-gray-50 shrink-0 gap-2">
                     <div class="flex items-center gap-2 overflow-hidden">
-                        <span class="bg-blue-600 text-white text-xs px-2 py-1 rounded font-bold shrink-0">선택됨</span>
+                        <span class="bg-blue-600 text-white text-xs px-2 py-1 rounded font-bold shrink-0">EDIT</span>
                         <span id="selected-unit-path" class="font-bold text-gray-700 truncate max-w-[150px] lg:max-w-none"></span>
                     </div>
                     <div class="flex gap-2">
-                         <button onclick="app.previewLesson()" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg font-bold hover:bg-gray-50 text-sm">
-                            <i class="fas fa-eye mr-2"></i>미리보기
+                         <button onclick="app.previewLesson()" class="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg font-bold hover:bg-gray-50 text-xs md:text-sm">
+                            <i class="fas fa-eye md:mr-2"></i><span class="hidden md:inline">미리보기</span>
                         </button>
-                        <button onclick="app.saveLesson()" class="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-700 shadow-md text-sm">
-                            <i class="fas fa-save mr-2"></i>저장하기
+                        <button onclick="app.saveLesson()" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700 shadow-md text-xs md:text-sm">
+                            <i class="fas fa-save md:mr-2"></i><span class="hidden md:inline">저장</span>
                         </button>
                     </div>
                 </div>
 
-                <div class="flex-1 overflow-y-auto p-6 space-y-4">
+                <div class="flex-1 overflow-y-auto p-4 lg:p-6 space-y-4">
                     <!-- Title Input -->
                     <div>
-                        <label class="block text-xs font-bold text-gray-500 mb-1">자료 제목 (학생에게 표시될 제목)</label>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">자료 제목</label>
                         <input type="text" id="lesson-title" class="w-full text-lg font-bold border-b-2 border-gray-200 focus:border-blue-500 outline-none py-2 px-1 transition" placeholder="제목을 입력하세요">
                     </div>
 
                     <!-- Video Link -->
                     <div>
                         <label class="block text-xs font-bold text-gray-500 mb-1">YouTube 영상 링크 (선택)</label>
-                        <div class="flex gap-2">
-                            <input type="text" id="lesson-video" class="w-full border rounded-lg px-3 py-2 text-sm bg-gray-50 focus:bg-white transition" placeholder="https://youtu.be/...">
-                        </div>
+                        <input type="text" id="lesson-video" class="w-full border rounded-lg px-3 py-2 text-sm bg-gray-50 focus:bg-white transition" placeholder="https://youtu.be/...">
                     </div>
 
                     <!-- Content Editor -->
-                    <div class="flex-1 flex flex-col h-full min-h-[500px]">
+                    <div class="flex-1 flex flex-col h-full min-h-[400px]">
                         <label class="block text-xs font-bold text-gray-500 mb-1 flex justify-between">
-                            <span>학습 내용 (텍스트, 이미지, 빈칸)</span>
-                            <span class="text-blue-600 text-[10px] lg:text-xs">빈칸: [정답] 으로 감싸기</span>
+                            <span>학습 내용</span>
+                            <span class="text-blue-600 text-[10px]">빈칸: [정답]</span>
                         </label>
                         <div id="quill-editor" class="bg-white"></div>
                     </div>
@@ -117,10 +169,15 @@
             </div>
         </div>
 
+        <!-- Mobile Sidebar Toggle FAB -->
+        <button class="sidebar-toggle-btn lg:hidden" onclick="app.toggleSidebar(true)">
+            <i class="fas fa-list"></i>
+        </button>
+
     </main>
     
     <!-- Preview Modal -->
-    <div id="preview-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center">
+    <div id="preview-modal" class="fixed inset-0 z-[60] hidden flex items-center justify-center">
         <div class="absolute inset-0 bg-black bg-opacity-70 backdrop-blur-sm" onclick="app.closePreview()"></div>
         <div class="bg-white w-full max-w-4xl h-[85vh] rounded-2xl shadow-2xl z-10 flex flex-col overflow-hidden relative mx-4">
             <div class="p-4 border-b flex justify-between items-center bg-gray-50">
@@ -136,16 +193,13 @@
                         </div>
                     </div>
                     <div id="preview-content" class="prose max-w-none text-gray-800 leading-loose"></div>
-                    <div class="mt-8 text-center">
-                        <button class="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold opacity-50 cursor-not-allowed">정답 확인 (예시)</button>
-                    </div>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Name Input Modal -->
-    <div id="name-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center">
+    <div id="name-modal" class="fixed inset-0 z-[70] hidden flex items-center justify-center">
         <div class="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm" onclick="app.closeNameModal()"></div>
         <div class="bg-white rounded-xl shadow-2xl z-10 w-96 p-6 mx-4 relative transform transition-all scale-100">
             <h3 class="font-bold text-lg text-gray-800 mb-4 flex items-center gap-2">
@@ -194,6 +248,18 @@
                     },
                     placeholder: '여기에 학습 내용을 작성하세요. 이미지를 붙여넣거나 업로드할 수 있습니다.'
                 });
+            },
+
+            toggleSidebar: function(show) {
+                const panel = document.getElementById('sidebar-panel');
+                const overlay = document.getElementById('mobile-overlay');
+                if(show) {
+                    panel.classList.add('open');
+                    overlay.classList.add('open');
+                } else {
+                    panel.classList.remove('open');
+                    overlay.classList.remove('open');
+                }
             },
 
             loadTree: async function() {
@@ -301,17 +367,17 @@
             selectNode: function(node, level) {
                 this.selectedNodeId = node.id;
                 this.renderTree(); 
+                
+                // Close sidebar on mobile upon selection
+                this.toggleSidebar(false);
+
                 const panel = document.getElementById('empty-state');
                 const pathDisplay = document.getElementById('selected-unit-path');
+                
                 if (level === 2) { 
                     panel.classList.add('hidden');
                     pathDisplay.innerText = node.title;
                     this.loadLessonContent(node.id, node.title);
-                    
-                    // On Mobile, scroll to editor
-                    if(window.innerWidth < 1024) {
-                        document.getElementById('editor-panel').scrollIntoView({behavior:'smooth'});
-                    }
                 } else {
                     panel.classList.remove('hidden');
                 }
