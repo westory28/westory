@@ -1,13 +1,13 @@
-
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>점수 관리 - Westory Admin</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
+
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
@@ -17,10 +17,30 @@
     <script src="../assets/js/auth-manager.js"></script>
 
     <style>
-        .choice-btn { width: 32px; height: 32px; border: 1px solid #d1d5db; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; font-weight: bold; color: #6b7280; }
-        .choice-btn:hover { background-color: #f3f4f6; }
-        .choice-btn.selected { background-color: #ef4444; color: white; border-color: #ef4444; }
-        
+        .choice-btn {
+            width: 32px;
+            height: 32px;
+            border: 1px solid #d1d5db;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: bold;
+            color: #6b7280;
+        }
+
+        .choice-btn:hover {
+            background-color: #f3f4f6;
+        }
+
+        .choice-btn.selected {
+            background-color: #ef4444;
+            color: white;
+            border-color: #ef4444;
+        }
+
         .score-floater {
             position: fixed;
             top: 100px;
@@ -35,38 +55,59 @@
             text-align: center;
         }
 
-        .tab-btn-base { padding: 14px 24px; font-weight: 700; font-size: 1rem; border-bottom: 3px solid transparent; color: #9ca3af; transition: all 0.2s; flex: 1 1 0px; width: 0; text-align: center; }
-        .tab-btn-base:hover { color: #4b5563; background-color: #f9fafb; }
-        .tab-btn-active { border-bottom-color: #2563eb; color: #2563eb; background-color: #eff6ff; }
+        .tab-btn-base {
+            padding: 14px 24px;
+            font-weight: 700;
+            font-size: 1rem;
+            border-bottom: 3px solid transparent;
+            color: #9ca3af;
+            transition: all 0.2s;
+            flex: 1 1 0px;
+            width: 0;
+            text-align: center;
+        }
+
+        .tab-btn-base:hover {
+            color: #4b5563;
+            background-color: #f9fafb;
+        }
+
+        .tab-btn-active {
+            border-bottom-color: #2563eb;
+            color: #2563eb;
+            background-color: #eff6ff;
+        }
     </style>
 </head>
+
 <body class="bg-gray-50 min-h-screen flex flex-col">
     <!-- Header injected by AuthManager -->
 
     <main class="w-full max-w-7xl mx-auto px-4 py-6 flex-1 flex flex-col">
-        
+
         <div class="flex justify-between items-end mb-4 flex-shrink-0">
             <div>
                 <h1 class="text-2xl font-bold text-gray-800">📊 점수 및 평가 기준 관리</h1>
                 <p class="text-sm text-gray-500 mt-1">성적 산출 기준을 설정하고, 지필평가 정답을 관리하세요.</p>
             </div>
             <!-- Enhanced Semester Badge -->
-            <div class="bg-blue-600 text-white px-4 py-2 rounded-lg shadow-md flex items-center">
-                <i class="fas fa-calendar-alt mr-2"></i>
-                <span id="current-term-badge" class="font-bold text-lg tracking-wide">로딩 중...</span>
-                <span class="text-xs ml-2 opacity-80 font-normal">기준</span>
+            <div class="bg-blue-600 text-white px-3 py-1.5 md:px-4 md:py-2 rounded-lg shadow-md flex items-center">
+                <i class="fas fa-calendar-alt mr-2 text-sm md:text-base"></i>
+                <span id="current-term-badge" class="font-bold text-sm md:text-lg tracking-wide">로딩 중...</span>
+                <span class="text-[10px] md:text-xs ml-2 opacity-80 font-normal">기준</span>
             </div>
         </div>
 
         <!-- Tabs -->
         <div class="flex border-b border-gray-200 mb-0 bg-white rounded-t-lg overflow-hidden flex-shrink-0 shadow-sm">
-            <button onclick="app.setTab('preview')" id="btn-tab-preview" class="tab-btn-base tab-btn-active">1. 성적 산출 관리</button>
+            <button onclick="app.setTab('preview')" id="btn-tab-preview" class="tab-btn-base tab-btn-active">1. 성적 산출
+                관리</button>
             <button onclick="app.setTab('omr')" id="btn-tab-omr" class="tab-btn-base">2. 지필평가 정답 (OMR)</button>
         </div>
 
         <!-- Content Container -->
         <div class="bg-white border-x border-b border-gray-200 rounded-b-lg p-6 flex-1 min-h-[700px] relative">
-            
+
             <!-- TAB 1: Grading Plan (Performance Assessment) -->
             <div id="tab-preview" class="tab-content h-full">
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full">
@@ -75,15 +116,18 @@
                         <div class="bg-blue-50 p-6 rounded-xl border border-blue-100 sticky top-4">
                             <div class="flex justify-between items-center mb-4 border-b border-blue-200 pb-3">
                                 <h3 id="formTitle" class="font-bold text-lg text-blue-900">✏️ 평가 기준 등록</h3>
-                                <button onclick="app.resetPlanForm()" class="text-xs bg-white text-blue-600 border border-blue-200 px-2 py-1 rounded hover:bg-blue-100 transition"><i class="fas fa-undo mr-1"></i>초기화</button>
+                                <button onclick="app.resetPlanForm()"
+                                    class="text-xs bg-white text-blue-600 border border-blue-200 px-2 py-1 rounded hover:bg-blue-100 transition"><i
+                                        class="fas fa-undo mr-1"></i>초기화</button>
                             </div>
-                            
+
                             <input type="hidden" id="edit-plan-id">
-                            
+
                             <div class="space-y-4">
                                 <div>
                                     <label class="block text-xs font-bold text-blue-800 mb-1">대상 학년</label>
-                                    <select id="plan-grade" class="w-full border border-blue-200 rounded p-2 text-sm bg-white focus:ring-2 focus:ring-blue-400 font-bold text-gray-700">
+                                    <select id="plan-grade"
+                                        class="w-full border border-blue-200 rounded p-2 text-sm bg-white focus:ring-2 focus:ring-blue-400 font-bold text-gray-700">
                                         <option value="1">1학년</option>
                                         <option value="2">2학년</option>
                                         <option value="3">3학년</option>
@@ -91,7 +135,8 @@
                                 </div>
                                 <div>
                                     <label class="block text-xs font-bold text-blue-800 mb-1">과목명</label>
-                                    <input type="text" id="plan-subject" placeholder="예: 역사, 사회" class="w-full border border-blue-200 rounded p-2 text-sm focus:ring-2 focus:ring-blue-400">
+                                    <input type="text" id="plan-subject" placeholder="예: 역사, 사회"
+                                        class="w-full border border-blue-200 rounded p-2 text-sm focus:ring-2 focus:ring-blue-400">
                                 </div>
 
                                 <div>
@@ -99,11 +144,15 @@
                                         <label class="block text-xs font-bold text-blue-800">평가 항목</label>
                                         <span class="text-[10px] text-blue-600">* 합계 100% 필수</span>
                                     </div>
-                                    <div id="criteriaList" class="space-y-2 bg-white p-2 rounded border border-blue-100"></div>
-                                    <button onclick="app.addCriteriaRow()" class="w-full mt-2 border border-dashed border-blue-300 text-blue-500 text-xs py-2 rounded hover:bg-blue-50 font-bold transition">+ 항목 추가</button>
+                                    <div id="criteriaList"
+                                        class="space-y-2 bg-white p-2 rounded border border-blue-100"></div>
+                                    <button onclick="app.addCriteriaRow()"
+                                        class="w-full mt-2 border border-dashed border-blue-300 text-blue-500 text-xs py-2 rounded hover:bg-blue-50 font-bold transition">+
+                                        항목 추가</button>
                                 </div>
 
-                                <button onclick="app.saveGradingPlan()" id="btn-save-plan" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 shadow-md transition transform active:scale-95 mt-4">
+                                <button onclick="app.saveGradingPlan()" id="btn-save-plan"
+                                    class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 shadow-md transition transform active:scale-95 mt-4">
                                     기준 저장하기
                                 </button>
                             </div>
@@ -117,7 +166,8 @@
                             <!-- Sorting Filter -->
                             <div class="flex items-center gap-2">
                                 <span class="text-sm text-gray-500 font-bold">정렬:</span>
-                                <select id="planSort" onchange="app.sortPlans()" class="border border-gray-300 rounded px-2 py-1.5 text-sm bg-white font-bold text-gray-700 cursor-pointer">
+                                <select id="planSort" onchange="app.sortPlans()"
+                                    class="border border-gray-300 rounded px-2 py-1.5 text-sm bg-white font-bold text-gray-700 cursor-pointer">
                                     <option value="latest">등록순 (최신)</option>
                                     <option value="name">과목명 (가나다)</option>
                                     <option value="importance">중요도순 (국영수...)</option>
@@ -125,7 +175,9 @@
                             </div>
                         </div>
                         <div id="plan-list" class="space-y-4">
-                            <div class="text-center py-20 text-gray-400 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">데이터를 불러오는 중...</div>
+                            <div
+                                class="text-center py-20 text-gray-400 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+                                데이터를 불러오는 중...</div>
                         </div>
                     </div>
                 </div>
@@ -133,13 +185,15 @@
 
             <!-- TAB 2: OMR Config -->
             <div id="tab-omr" class="tab-content hidden h-full relative">
-                
+
                 <!-- Floating Score Card -->
                 <div class="score-floater">
                     <p class="text-xs text-gray-400 font-bold uppercase mb-1">Total Score</p>
                     <p class="text-4xl font-black text-red-500 mb-2" id="total-score">0</p>
-                    <div class="text-xs text-gray-500 font-bold bg-gray-100 rounded py-1">총 문항수: <span id="total-count">0</span></div>
-                    <button onclick="omrApp.saveToDB()" class="w-full mt-4 bg-gray-800 text-white text-sm font-bold py-2 rounded hover:bg-gray-900 shadow-sm">
+                    <div class="text-xs text-gray-500 font-bold bg-gray-100 rounded py-1">총 문항수: <span
+                            id="total-count">0</span></div>
+                    <button onclick="omrApp.saveToDB()"
+                        class="w-full mt-4 bg-gray-800 text-white text-sm font-bold py-2 rounded hover:bg-gray-900 shadow-sm">
                         <i class="fas fa-save mr-1"></i> 저장
                     </button>
                 </div>
@@ -149,7 +203,9 @@
                     <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                         <div class="flex justify-between items-center mb-6 pb-2 border-b">
                             <h2 class="font-bold text-lg text-gray-700">객관식 문항</h2>
-                            <button onclick="omrApp.addObjective()" class="text-xs bg-green-50 text-green-700 px-3 py-1.5 rounded font-bold hover:bg-green-100 border border-green-200">+ 문항 추가</button>
+                            <button onclick="omrApp.addObjective()"
+                                class="text-xs bg-green-50 text-green-700 px-3 py-1.5 rounded font-bold hover:bg-green-100 border border-green-200">+
+                                문항 추가</button>
                         </div>
                         <div id="obj-list" class="space-y-3 max-h-[600px] overflow-y-auto pr-2 custom-scroll"></div>
                     </div>
@@ -158,7 +214,9 @@
                     <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                         <div class="flex justify-between items-center mb-6 pb-2 border-b">
                             <h2 class="font-bold text-lg text-gray-700">서술형 문항</h2>
-                            <button onclick="omrApp.addSubjParent()" class="text-xs bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded font-bold hover:bg-indigo-100 border border-indigo-200">+ 큰 문항 추가</button>
+                            <button onclick="omrApp.addSubjParent()"
+                                class="text-xs bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded font-bold hover:bg-indigo-100 border border-indigo-200">+
+                                큰 문항 추가</button>
                         </div>
                         <div id="subj-list" class="space-y-4 max-h-[600px] overflow-y-auto pr-2 custom-scroll"></div>
                     </div>
@@ -179,26 +237,26 @@
             // Subject Importance Order
             subjectOrder: ['국어', '영어', '수학', '사회', '역사', '도덕', '과학', '기술', '가정', '기술가정', '기가', '정보', '음악', '미술', '체육'],
 
-            init: function() {
+            init: function () {
                 this.updateSemesterBadge();
                 this.loadGradingPlans();
                 this.addCriteriaRow(); // Add initial row
             },
 
-            updateSemesterBadge: function() {
+            updateSemesterBadge: function () {
                 const c = window.currentConfig;
                 const text = `${c.year}학년도 ${c.semester}학기`;
                 document.getElementById('current-term-badge').innerText = text;
             },
 
-            setTab: function(tabName) {
+            setTab: function (tabName) {
                 ['preview', 'omr'].forEach(t => {
                     const btn = document.getElementById('btn-tab-' + t);
                     const div = document.getElementById('tab-' + t);
                     if (t === tabName) {
                         btn.classList.add('tab-btn-active');
                         div.classList.remove('hidden');
-                        if(t === 'omr') omrApp.init(); // Lazy load OMR
+                        if (t === 'omr') omrApp.init(); // Lazy load OMR
                     } else {
                         btn.classList.remove('tab-btn-active');
                         div.classList.add('hidden');
@@ -207,7 +265,7 @@
             },
 
             // --- Grading Plan Logic ---
-            loadGradingPlans: async function() {
+            loadGradingPlans: async function () {
                 const listDiv = document.getElementById('plan-list');
                 try {
                     const q = window.getCollection('grading_plans').orderBy('createdAt', 'desc');
@@ -215,17 +273,17 @@
                     this.plans = [];
                     snap.forEach(doc => this.plans.push({ id: doc.id, ...doc.data() }));
                     this.sortPlans(); // Initial Render through Sort
-                } catch(e) {
+                } catch (e) {
                     listDiv.innerHTML = '<div class="text-center text-red-400">로드 실패</div>';
                 }
             },
 
-            sortPlans: function() {
+            sortPlans: function () {
                 const mode = document.getElementById('planSort').value;
                 if (mode === 'name') {
-                    this.plans.sort((a,b) => a.subject.localeCompare(b.subject));
+                    this.plans.sort((a, b) => a.subject.localeCompare(b.subject));
                 } else if (mode === 'importance') {
-                    this.plans.sort((a,b) => {
+                    this.plans.sort((a, b) => {
                         const getIdx = (subj) => {
                             // Find index based on keyword inclusion
                             const idx = this.subjectOrder.findIndex(key => subj.includes(key));
@@ -233,13 +291,13 @@
                         };
                         const idxA = getIdx(a.subject);
                         const idxB = getIdx(b.subject);
-                        if(idxA !== idxB) return idxA - idxB;
+                        if (idxA !== idxB) return idxA - idxB;
                         // Fallback to name if same importance
                         return a.subject.localeCompare(b.subject);
                     });
                 } else {
                     // Latest (descending createdAt)
-                    this.plans.sort((a,b) => {
+                    this.plans.sort((a, b) => {
                         const tA = a.createdAt ? a.createdAt.seconds : 0;
                         const tB = b.createdAt ? b.createdAt.seconds : 0;
                         return tB - tA;
@@ -248,9 +306,9 @@
                 this.renderPlans();
             },
 
-            renderPlans: function() {
+            renderPlans: function () {
                 const listDiv = document.getElementById('plan-list');
-                if(this.plans.length === 0) {
+                if (this.plans.length === 0) {
                     listDiv.innerHTML = '<div class="text-center py-20 text-gray-400 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center"><i class="fas fa-folder-open text-4xl mb-4 text-gray-300"></i><p>등록된 평가 기준이 없습니다.</p></div>';
                     return;
                 }
@@ -261,7 +319,7 @@
                             <div class="absolute top-0 left-0 w-1.5 h-full bg-blue-500"></div>
                             <div class="pl-4 flex-1">
                                 <div class="flex items-center gap-3 mb-3">
-                                    <span class="text-xs font-bold text-white bg-blue-500 px-2.5 py-1 rounded shadow-sm">${p.targetGrade||'2'}학년</span>
+                                    <span class="text-xs font-bold text-white bg-blue-500 px-2.5 py-1 rounded shadow-sm">${p.targetGrade || '2'}학년</span>
                                     <h4 class="font-bold text-xl text-gray-800">${p.subject}</h4>
                                 </div>
                                 <div class="flex flex-wrap gap-2">${itemsHtml}</div>
@@ -275,30 +333,30 @@
                 }).join('');
             },
 
-            addCriteriaRow: function(data = null) {
+            addCriteriaRow: function (data = null) {
                 const div = document.createElement('div');
                 div.className = 'criteria-row flex gap-1 items-center bg-gray-50 p-1 rounded mb-1';
                 // Optimized Inputs: Reduced widths (w-12/w-10) and padding
                 div.innerHTML = `
                     <select class="c-type border border-gray-300 rounded px-1 py-1.5 text-xs w-[60px] bg-white focus:outline-none focus:border-blue-500">
-                        <option value="지필" ${data?.type==='지필'?'selected':''}>지필</option>
-                        <option value="수행" ${data?.type==='수행'?'selected':''}>수행</option>
+                        <option value="지필" ${data?.type === '지필' ? 'selected' : ''}>지필</option>
+                        <option value="수행" ${data?.type === '수행' ? 'selected' : ''}>수행</option>
                     </select>
-                    <input type="text" placeholder="항목명" class="c-name border border-gray-300 rounded px-2 py-1.5 text-xs flex-1 min-w-0 focus:outline-none focus:border-blue-500" value="${data?.name||''}">
-                    <input type="number" placeholder="만점" class="c-max border border-gray-300 rounded px-1 py-1.5 text-xs w-[45px] text-center focus:outline-none focus:border-blue-500" value="${data?.maxScore||''}">
-                    <input type="number" placeholder="%" class="c-ratio border border-gray-300 rounded px-1 py-1.5 text-xs w-[40px] text-center focus:outline-none focus:border-blue-500 font-bold text-blue-600" value="${data?.ratio||''}">
+                    <input type="text" placeholder="항목명" class="c-name border border-gray-300 rounded px-2 py-1.5 text-xs flex-1 min-w-0 focus:outline-none focus:border-blue-500" value="${data?.name || ''}">
+                    <input type="number" placeholder="만점" class="c-max border border-gray-300 rounded px-1 py-1.5 text-xs w-[45px] text-center focus:outline-none focus:border-blue-500" value="${data?.maxScore || ''}">
+                    <input type="number" placeholder="%" class="c-ratio border border-gray-300 rounded px-1 py-1.5 text-xs w-[40px] text-center focus:outline-none focus:border-blue-500 font-bold text-blue-600" value="${data?.ratio || ''}">
                     <button onclick="this.parentElement.remove()" class="text-gray-300 hover:text-red-500 w-5 flex justify-center transition"><i class="fas fa-times"></i></button>
                 `;
                 document.getElementById('criteriaList').appendChild(div);
             },
 
-            saveGradingPlan: async function() {
+            saveGradingPlan: async function () {
                 const id = document.getElementById('edit-plan-id').value;
                 const subject = document.getElementById('plan-subject').value;
                 const grade = document.getElementById('plan-grade').value;
-                
-                if(!subject) { alert("과목명을 입력하세요."); return; }
-                
+
+                if (!subject) { alert("과목명을 입력하세요."); return; }
+
                 const items = [];
                 let totalRatio = 0;
                 document.querySelectorAll('.criteria-row').forEach(row => {
@@ -306,17 +364,17 @@
                     const name = row.querySelector('.c-name').value;
                     const maxScore = Number(row.querySelector('.c-max').value);
                     const ratio = Number(row.querySelector('.c-ratio').value);
-                    if(name && maxScore && ratio) {
+                    if (name && maxScore && ratio) {
                         items.push({ type, name, maxScore, ratio });
                         totalRatio += ratio;
                     }
                 });
 
-                if(items.length === 0) { alert("항목을 하나 이상 입력하세요."); return; }
-                if(totalRatio !== 100) { alert(`비율 합계는 100%여야 합니다. (현재 ${totalRatio}%)`); return; }
+                if (items.length === 0) { alert("항목을 하나 이상 입력하세요."); return; }
+                if (totalRatio !== 100) { alert(`비율 합계는 100%여야 합니다. (현재 ${totalRatio}%)`); return; }
 
                 const data = {
-                    subject, 
+                    subject,
                     targetGrade: grade,
                     items,
                     academicYear: window.currentConfig.year,
@@ -325,46 +383,46 @@
                 };
 
                 const col = window.getCollection('grading_plans');
-                if(id) {
+                if (id) {
                     await col.doc(id).update(data);
                 } else {
                     data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
                     await col.add(data);
                 }
-                
+
                 alert("저장되었습니다.");
                 this.resetPlanForm();
                 this.loadGradingPlans();
             },
 
-            editPlan: function(id) {
+            editPlan: function (id) {
                 const p = this.plans.find(x => x.id === id);
-                if(!p) return;
+                if (!p) return;
                 document.getElementById('edit-plan-id').value = id;
                 document.getElementById('plan-subject').value = p.subject;
                 document.getElementById('plan-grade').value = p.targetGrade || '2';
-                
+
                 const list = document.getElementById('criteriaList');
                 list.innerHTML = '';
                 p.items.forEach(i => this.addCriteriaRow(i));
-                
+
                 document.getElementById('formTitle').innerText = "🔄 평가 기준 수정";
                 document.getElementById('btn-save-plan').classList.remove('bg-blue-600');
                 document.getElementById('btn-save-plan').classList.add('bg-amber-500');
                 document.getElementById('btn-save-plan').innerText = "수정사항 저장";
-                
+
                 // Scroll to form on mobile
-                if(window.innerWidth < 1024) document.getElementById('formTitle').scrollIntoView({ behavior: 'smooth' });
+                if (window.innerWidth < 1024) document.getElementById('formTitle').scrollIntoView({ behavior: 'smooth' });
             },
-            
-            deletePlan: async function(id) {
-                if(confirm("삭제하시겠습니까?")) {
+
+            deletePlan: async function (id) {
+                if (confirm("삭제하시겠습니까?")) {
                     await window.getCollection('grading_plans').doc(id).delete();
                     this.loadGradingPlans();
                 }
             },
 
-            resetPlanForm: function() {
+            resetPlanForm: function () {
                 document.getElementById('edit-plan-id').value = '';
                 document.getElementById('plan-subject').value = '';
                 document.getElementById('criteriaList').innerHTML = '';
@@ -381,8 +439,8 @@
             loaded: false,
             data: { objective: [], subjective: [] },
 
-            init: function() {
-                if(this.loaded) return;
+            init: function () {
+                if (this.loaded) return;
                 window.getCollection("exam_config").doc("final_exam").get()
                     .then((doc) => {
                         if (doc.exists) {
@@ -395,24 +453,24 @@
                     });
             },
 
-            render: function() {
+            render: function () {
                 this.renderObjective();
                 this.renderSubjective();
                 this.updateTotal();
             },
 
-            addObjective: function() { this.data.objective.push({ score: 4, answer: 0 }); this.render(); },
-            removeObjective: function(idx) { this.data.objective.splice(idx, 1); this.render(); },
-            setObjAnswer: function(idx, val) { this.data.objective[idx].answer = val; this.render(); },
-            updateObjScore: function(idx, val) { this.data.objective[idx].score = Number(val); this.updateTotal(); },
+            addObjective: function () { this.data.objective.push({ score: 4, answer: 0 }); this.render(); },
+            removeObjective: function (idx) { this.data.objective.splice(idx, 1); this.render(); },
+            setObjAnswer: function (idx, val) { this.data.objective[idx].answer = val; this.render(); },
+            updateObjScore: function (idx, val) { this.data.objective[idx].score = Number(val); this.updateTotal(); },
 
-            renderObjective: function() {
+            renderObjective: function () {
                 const list = document.getElementById('obj-list');
                 list.innerHTML = this.data.objective.map((item, i) => `
                     <div class="flex items-center gap-4 bg-gray-50 p-3 rounded border border-gray-100">
-                        <span class="font-bold text-gray-500 w-8 text-center">${i+1}</span>
+                        <span class="font-bold text-gray-500 w-8 text-center">${i + 1}</span>
                         <div class="flex gap-1">
-                            ${[1,2,3,4,5].map(n => `<button onclick="omrApp.setObjAnswer(${i}, ${n})" class="choice-btn ${item.answer===n ? 'selected':''}">${n}</button>`).join('')}
+                            ${[1, 2, 3, 4, 5].map(n => `<button onclick="omrApp.setObjAnswer(${i}, ${n})" class="choice-btn ${item.answer === n ? 'selected' : ''}">${n}</button>`).join('')}
                         </div>
                         <input type="number" class="w-16 p-1 text-center border rounded text-sm font-bold text-blue-600" value="${item.score}" onchange="omrApp.updateObjScore(${i}, this.value)">
                         <span class="text-xs text-gray-400">점</span>
@@ -421,21 +479,21 @@
                 `).join('');
             },
 
-            addSubjParent: function() { this.data.subjective.push({ subItems: [] }); this.render(); },
-            addSubjItem: function(pIdx) { this.data.subjective[pIdx].subItems.push({ score: 5, answer: "" }); this.render(); },
-            removeSubjParent: function(idx) { this.data.subjective.splice(idx, 1); this.render(); },
-            updateSubjField: function(pIdx, sIdx, field, val) {
-                if(field === 'score') this.data.subjective[pIdx].subItems[sIdx].score = Number(val);
+            addSubjParent: function () { this.data.subjective.push({ subItems: [] }); this.render(); },
+            addSubjItem: function (pIdx) { this.data.subjective[pIdx].subItems.push({ score: 5, answer: "" }); this.render(); },
+            removeSubjParent: function (idx) { this.data.subjective.splice(idx, 1); this.render(); },
+            updateSubjField: function (pIdx, sIdx, field, val) {
+                if (field === 'score') this.data.subjective[pIdx].subItems[sIdx].score = Number(val);
                 else this.data.subjective[pIdx].subItems[sIdx][field] = val;
                 this.updateTotal();
             },
 
-            renderSubjective: function() {
+            renderSubjective: function () {
                 const list = document.getElementById('subj-list');
                 list.innerHTML = this.data.subjective.map((parent, pIdx) => `
                     <div class="bg-gray-50 p-4 rounded border border-gray-200">
                         <div class="flex justify-between items-center mb-2">
-                            <span class="font-bold text-indigo-600">서술형 ${pIdx+1}번</span>
+                            <span class="font-bold text-indigo-600">서술형 ${pIdx + 1}번</span>
                             <div class="space-x-2">
                                 <button onclick="omrApp.addSubjItem(${pIdx})" class="text-xs bg-white border px-2 py-1 rounded">+ 소문항</button>
                                 <button onclick="omrApp.removeSubjParent(${pIdx})" class="text-gray-400 hover:text-red-500"><i class="fas fa-trash"></i></button>
@@ -445,7 +503,7 @@
                             ${parent.subItems.map((sub, sIdx) => `
                                 <div class="pl-4 border-l-2 border-indigo-100">
                                     <div class="flex items-center gap-2 mb-1">
-                                        <span class="text-xs font-bold text-gray-500">(${sIdx+1})</span>
+                                        <span class="text-xs font-bold text-gray-500">(${sIdx + 1})</span>
                                         <input type="number" class="w-14 p-1 text-center border rounded text-xs font-bold" value="${sub.score}" onchange="omrApp.updateSubjField(${pIdx}, ${sIdx}, 'score', this.value)">
                                         <span class="text-xs text-gray-400">점</span>
                                     </div>
@@ -457,15 +515,15 @@
                 `).join('');
             },
 
-            updateTotal: function() {
+            updateTotal: function () {
                 let s = 0, c = 0;
-                this.data.objective.forEach(i => { s += (i.score||0); c++; });
-                this.data.subjective.forEach(p => { p.subItems.forEach(i => { s += (i.score||0); c++; }); });
+                this.data.objective.forEach(i => { s += (i.score || 0); c++; });
+                this.data.subjective.forEach(p => { p.subItems.forEach(i => { s += (i.score || 0); c++; }); });
                 document.getElementById('total-score').innerText = s;
                 document.getElementById('total-count').innerText = c;
             },
 
-            saveToDB: function() {
+            saveToDB: function () {
                 window.getCollection("exam_config").doc("final_exam").set({
                     objective: this.data.objective,
                     subjective: this.data.subjective,
@@ -477,4 +535,5 @@
         document.addEventListener('auth-ready', () => app.init());
     </script>
 </body>
+
 </html>

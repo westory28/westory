@@ -1,13 +1,13 @@
-
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>학생 관리 - Westory Admin</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
+
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
@@ -15,58 +15,185 @@
     <link rel="stylesheet" href="../assets/css/style.css">
     <script src="../assets/js/auth-manager.js"></script>
     <style>
-        .btn-bulk { transition: all 0.2s; }
-        .btn-bulk:disabled { background-color: #f3f4f6; color: #9ca3af; border-color: #e5e7eb; cursor: not-allowed; }
-        .btn-bulk:not(:disabled):hover { transform: translateY(-1px); shadow: md; }
+        .btn-bulk {
+            transition: all 0.2s;
+        }
+
+        .btn-bulk:disabled {
+            background-color: #f3f4f6;
+            color: #9ca3af;
+            border-color: #e5e7eb;
+            cursor: not-allowed;
+        }
+
+        .btn-bulk:not(:disabled):hover {
+            transform: translateY(-1px);
+            shadow: md;
+        }
+
         /* Solid colors when active */
-        #btn-promote:not(:disabled) { background-color: #2563eb; color: white; border-color: #2563eb; }
-        #btn-promote:not(:disabled):hover { background-color: #1d4ed8; }
-        
-        #btn-move:not(:disabled) { background-color: #16a34a; color: white; border-color: #16a34a; }
-        #btn-move:not(:disabled):hover { background-color: #15803d; }
-        
-        #btn-delete:not(:disabled) { background-color: #dc2626; color: white; border-color: #dc2626; }
-        #btn-delete:not(:disabled):hover { background-color: #b91c1c; }
+        #btn-promote:not(:disabled) {
+            background-color: #2563eb;
+            color: white;
+            border-color: #2563eb;
+        }
+
+        #btn-promote:not(:disabled):hover {
+            background-color: #1d4ed8;
+        }
+
+        #btn-move:not(:disabled) {
+            background-color: #16a34a;
+            color: white;
+            border-color: #16a34a;
+        }
+
+        #btn-move:not(:disabled):hover {
+            background-color: #15803d;
+        }
+
+        #btn-delete:not(:disabled) {
+            background-color: #dc2626;
+            color: white;
+            border-color: #dc2626;
+        }
+
+        #btn-delete:not(:disabled):hover {
+            background-color: #b91c1c;
+        }
+
+        /* Mobile Card View for Table */
+        @media (max-width: 768px) {
+
+            table,
+            thead,
+            tbody,
+            th,
+            td,
+            tr {
+                display: block;
+            }
+
+            thead tr {
+                position: absolute;
+                top: -9999px;
+                left: -9999px;
+            }
+
+            tr.hover\:bg-blue-50:hover {
+                background-color: transparent;
+            }
+
+            /* Reset hover on mobile */
+            tr {
+                border: 1px solid #e5e7eb;
+                border-radius: 8px;
+                margin-bottom: 1rem;
+                padding: 1rem;
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+                background: white;
+            }
+
+            td {
+                border: none !important;
+                position: relative;
+                padding-left: 50% !important;
+                padding-top: 0.5rem !important;
+                padding-bottom: 0.5rem !important;
+                text-align: right !important;
+            }
+
+            td:before {
+                position: absolute;
+                top: 0.5rem;
+                left: 0;
+                width: 45%;
+                padding-right: 10px;
+                white-space: nowrap;
+                text-align: left;
+                font-weight: bold;
+                color: #6b7280;
+                content: attr(data-label);
+                font-size: 0.75rem;
+            }
+
+            /* Specific adjustments for Checkbox & Actions */
+            td:first-child {
+                text-align: left !important;
+                padding-left: 0 !important;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                border-bottom: 1px solid #f3f4f6 !important;
+                padding-bottom: 0.75rem !important;
+                margin-bottom: 0.5rem;
+            }
+
+            td:first-child:before {
+                content: "선택";
+            }
+
+            td:last-child {
+                text-align: right !important;
+                padding-left: 0 !important;
+                padding-top: 1rem !important;
+                border-top: 1px solid #f3f4f6 !important;
+                margin-top: 0.5rem;
+            }
+
+            td:last-child:before {
+                content: "";
+                display: none;
+            }
+        }
     </style>
 </head>
+
 <body class="bg-gray-50">
     <!-- Header injected by AuthManager -->
 
     <main class="max-w-7xl mx-auto px-4 py-8">
-        
+
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <!-- Fixed Height Toolbar Container -->
             <div class="p-6 border-b bg-gray-50 flex justify-between items-center flex-wrap gap-4 min-h-[88px]">
                 <div class="flex items-center gap-4">
                     <h2 class="text-lg font-bold text-gray-800">
-                        <i class="fas fa-users text-blue-500 mr-2"></i> 학생 명단 <span id="std-count" class="text-sm font-normal text-gray-500"></span>
+                        <i class="fas fa-users text-blue-500 mr-2"></i> 학생 명단 <span id="std-count"
+                            class="text-sm font-normal text-gray-500"></span>
                     </h2>
                     <!-- Bulk Actions Toolbar -->
                     <div id="bulk-toolbar" class="flex items-center gap-2 px-3 py-1">
                         <span class="text-xs font-bold text-blue-800 mr-2" id="selected-count-text">0명 선택됨</span>
                         <div class="h-4 w-px bg-gray-300 mx-1"></div>
-                        <button id="btn-promote" onclick="app.promoteSelected()" disabled class="btn-bulk text-xs px-3 py-1.5 rounded font-bold shadow-sm border" title="학년을 1씩 올립니다">
+                        <button id="btn-promote" onclick="app.promoteSelected()" disabled
+                            class="btn-bulk text-xs px-3 py-1.5 rounded font-bold shadow-sm border" title="학년을 1씩 올립니다">
                             <i class="fas fa-level-up-alt mr-1"></i>일괄 진급
                         </button>
-                        <button id="btn-move" onclick="app.openMoveClassModal()" disabled class="btn-bulk text-xs px-3 py-1.5 rounded font-bold shadow-sm border" title="반을 변경합니다">
+                        <button id="btn-move" onclick="app.openMoveClassModal()" disabled
+                            class="btn-bulk text-xs px-3 py-1.5 rounded font-bold shadow-sm border" title="반을 변경합니다">
                             <i class="fas fa-exchange-alt mr-1"></i>반 이동
                         </button>
-                        <button id="btn-delete" onclick="app.deleteSelected()" disabled class="btn-bulk text-xs px-3 py-1.5 rounded font-bold shadow-sm border">
+                        <button id="btn-delete" onclick="app.deleteSelected()" disabled
+                            class="btn-bulk text-xs px-3 py-1.5 rounded font-bold shadow-sm border">
                             <i class="fas fa-trash mr-1"></i>일괄 삭제
                         </button>
                     </div>
                 </div>
                 <div class="flex gap-2">
-                    <input type="text" id="search-input" placeholder="이름 또는 반(숫자) 검색" class="border rounded px-3 py-2 text-sm w-64 focus:outline-none focus:border-blue-500">
-                    <button onclick="app.filterList()" class="bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-blue-700">검색</button>
+                    <input type="text" id="search-input" placeholder="이름 또는 반(숫자) 검색"
+                        class="border rounded px-3 py-2 text-sm w-64 focus:outline-none focus:border-blue-500">
+                    <button onclick="app.filterList()"
+                        class="bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-blue-700">검색</button>
                 </div>
             </div>
-            
+
             <div class="overflow-x-auto">
                 <table class="w-full text-sm text-left">
                     <thead class="bg-gray-100 text-gray-600 font-bold uppercase text-xs">
                         <tr>
-                            <th class="p-4 w-10 text-center"><input type="checkbox" id="check-all" onclick="app.toggleSelectAll(this)"></th>
+                            <th class="p-4 w-10 text-center"><input type="checkbox" id="check-all"
+                                    onclick="app.toggleSelectAll(this)"></th>
                             <th class="p-4 w-16 text-center">학년</th>
                             <th class="p-4 w-16 text-center">반</th>
                             <th class="p-4 w-16 text-center">번호</th>
@@ -76,7 +203,9 @@
                         </tr>
                     </thead>
                     <tbody id="std-list" class="divide-y divide-gray-100 bg-white">
-                        <tr><td colspan="7" class="p-8 text-center text-gray-400">데이터를 불러오는 중...</td></tr>
+                        <tr>
+                            <td colspan="7" class="p-8 text-center text-gray-400">데이터를 불러오는 중...</td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
@@ -86,14 +215,16 @@
 
     <!-- Student History Modal -->
     <div id="history-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center">
-        <div class="bg-black bg-opacity-50 absolute inset-0" onclick="document.getElementById('history-modal').classList.add('hidden')"></div>
+        <div class="bg-black bg-opacity-50 absolute inset-0"
+            onclick="document.getElementById('history-modal').classList.add('hidden')"></div>
         <div class="bg-white rounded-lg shadow-xl z-10 w-full max-w-3xl p-6 mx-4 max-h-[85vh] flex flex-col">
             <div class="flex justify-between items-center mb-4 border-b pb-2">
                 <div>
                     <h3 class="font-bold text-lg text-gray-800" id="history-title">학습 기록</h3>
                     <p class="text-xs text-gray-500">학생의 문제 풀이 내역을 날짜별로 확인합니다.</p>
                 </div>
-                <button onclick="document.getElementById('history-modal').classList.add('hidden')"><i class="fas fa-times text-gray-400 hover:text-gray-600 text-xl"></i></button>
+                <button onclick="document.getElementById('history-modal').classList.add('hidden')"><i
+                        class="fas fa-times text-gray-400 hover:text-gray-600 text-xl"></i></button>
             </div>
             <div id="history-content" class="overflow-y-auto flex-1 space-y-3 pr-2"></div>
         </div>
@@ -101,7 +232,8 @@
 
     <!-- Edit Modal -->
     <div id="edit-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center">
-        <div class="bg-black bg-opacity-50 absolute inset-0" onclick="document.getElementById('edit-modal').classList.add('hidden')"></div>
+        <div class="bg-black bg-opacity-50 absolute inset-0"
+            onclick="document.getElementById('edit-modal').classList.add('hidden')"></div>
         <div class="bg-white p-6 rounded-lg w-96 shadow-xl z-10">
             <h3 class="font-bold mb-4 text-lg border-b pb-2">학생 정보 수정</h3>
             <input type="hidden" id="edit-id">
@@ -130,22 +262,37 @@
                 </div>
             </div>
             <div class="flex gap-2 mt-6">
-                <button onclick="document.getElementById('edit-modal').classList.add('hidden')" class="flex-1 bg-white border border-gray-300 text-gray-700 py-2 rounded font-bold hover:bg-gray-50">취소</button>
-                <button onclick="app.saveStudent()" class="flex-1 bg-blue-600 text-white py-2 rounded font-bold hover:bg-blue-700 shadow-md">저장</button>
+                <button onclick="document.getElementById('edit-modal').classList.add('hidden')"
+                    class="flex-1 bg-white border border-gray-300 text-gray-700 py-2 rounded font-bold hover:bg-gray-50">취소</button>
+                <button onclick="app.saveStudent()"
+                    class="flex-1 bg-blue-600 text-white py-2 rounded font-bold hover:bg-blue-700 shadow-md">저장</button>
             </div>
         </div>
     </div>
 
     <!-- Move Class Modal -->
     <div id="move-class-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center">
-        <div class="bg-black bg-opacity-50 absolute inset-0" onclick="document.getElementById('move-class-modal').classList.add('hidden')"></div>
+        <div class="bg-black bg-opacity-50 absolute inset-0"
+            onclick="document.getElementById('move-class-modal').classList.add('hidden')"></div>
         <div class="bg-white p-6 rounded-lg w-80 shadow-xl z-10 text-center">
             <h3 class="font-bold text-lg mb-2">반 이동</h3>
             <p class="text-sm text-gray-500 mb-4">선택한 학생들을 이동할 반을 선택하세요.</p>
             <select id="target-class-select" class="w-full border p-3 rounded mb-4 font-bold text-center">
-                <option value="1">1반</option><option value="2">2반</option><option value="3">3반</option><option value="4">4반</option><option value="5">5반</option><option value="6">6반</option><option value="7">7반</option><option value="8">8반</option><option value="9">9반</option><option value="10">10반</option><option value="11">11반</option><option value="12">12반</option>
+                <option value="1">1반</option>
+                <option value="2">2반</option>
+                <option value="3">3반</option>
+                <option value="4">4반</option>
+                <option value="5">5반</option>
+                <option value="6">6반</option>
+                <option value="7">7반</option>
+                <option value="8">8반</option>
+                <option value="9">9반</option>
+                <option value="10">10반</option>
+                <option value="11">11반</option>
+                <option value="12">12반</option>
             </select>
-            <button onclick="app.moveSelected()" class="w-full bg-green-600 text-white font-bold py-2 rounded hover:bg-green-700">이동 확인</button>
+            <button onclick="app.moveSelected()"
+                class="w-full bg-green-600 text-white font-bold py-2 rounded hover:bg-green-700">이동 확인</button>
         </div>
     </div>
 
@@ -157,13 +304,13 @@
         const app = {
             students: [],
             selectedIds: new Set(),
-            
-            init: function() {
+
+            init: function () {
                 window.getCollection('users').get().then(snap => {
                     this.students = [];
                     snap.forEach(doc => {
                         const d = doc.data();
-                        this.students.push({ 
+                        this.students.push({
                             id: doc.id,
                             grade: parseInt(d.grade) || 2,
                             class: parseInt(d.class) || 0,
@@ -172,68 +319,68 @@
                             email: d.email || ''
                         });
                     });
-                    this.students.sort((a,b) => (a.grade - b.grade) || (a.class - b.class) || (a.number - b.number));
+                    this.students.sort((a, b) => (a.grade - b.grade) || (a.class - b.class) || (a.number - b.number));
                     this.render(this.students);
                 });
             },
 
-            render: function(list) {
+            render: function (list) {
                 document.getElementById('std-count').innerText = `(${list.length}명)`;
                 const tbody = document.getElementById('std-list');
-                
-                if(list.length === 0) {
+
+                if (list.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-gray-400">학생 데이터가 없습니다.</td></tr>';
                     return;
                 }
 
                 tbody.innerHTML = list.map(s => `
                     <tr class="hover:bg-blue-50 transition group border-b last:border-0">
-                        <td class="p-4 text-center">
-                            <input type="checkbox" class="student-check w-4 h-4 text-blue-600 rounded focus:ring-blue-500" value="${s.id}" onclick="app.toggleSelect('${s.id}')" ${this.selectedIds.has(s.id)?'checked':''}>
+                        <td class="p-4 text-center" data-label="선택">
+                            <input type="checkbox" class="student-check w-4 h-4 text-blue-600 rounded focus:ring-blue-500" value="${s.id}" onclick="app.toggleSelect('${s.id}')" ${this.selectedIds.has(s.id) ? 'checked' : ''}>
                         </td>
-                        <td class="p-4 text-center text-gray-500 text-xs">${s.grade}</td>
-                        <td class="p-4 text-center font-bold text-gray-600">${s.class}</td>
-                        <td class="p-4 text-center font-bold text-gray-600">${s.number}</td>
-                        <td class="p-4">
+                        <td class="p-4 text-center text-gray-500 text-xs" data-label="학년">${s.grade}</td>
+                        <td class="p-4 text-center font-bold text-gray-600" data-label="반">${s.class}</td>
+                        <td class="p-4 text-center font-bold text-gray-600" data-label="번호">${s.number}</td>
+                        <td class="p-4" data-label="이름">
                             <span onclick="app.showHistory('${s.id}', '${s.name}', ${s.class}, ${s.number})" 
-                                  class="font-bold text-gray-800 cursor-pointer hover:text-blue-600 hover:underline flex items-center">
+                                  class="font-bold text-gray-800 cursor-pointer hover:text-blue-600 hover:underline flex items-center justify-end md:justify-start">
                                 ${s.name} <i class="fas fa-folder-open text-xs text-gray-300 group-hover:text-blue-400 ml-2"></i>
                             </span>
                         </td>
-                        <td class="p-4 text-gray-500 text-xs font-mono">${s.email}</td>
-                        <td class="p-4 text-center">
-                            <button onclick="app.openEdit('${s.id}')" class="text-blue-500 hover:text-blue-700 mr-3 p-1"><i class="fas fa-edit"></i></button>
-                            <button onclick="app.deleteStudent('${s.id}')" class="text-red-400 hover:text-red-600 p-1"><i class="fas fa-trash"></i></button>
+                        <td class="p-4 text-gray-500 text-xs font-mono" data-label="이메일">${s.email}</td>
+                        <td class="p-4 text-center" data-label="관리">
+                            <button onclick="app.openEdit('${s.id}')" class="text-blue-500 hover:text-blue-700 mr-3 p-1"><i class="fas fa-edit"></i> <span class="md:hidden">수정</span></button>
+                            <button onclick="app.deleteStudent('${s.id}')" class="text-red-400 hover:text-red-600 p-1"><i class="fas fa-trash"></i> <span class="md:hidden">삭제</span></button>
                         </td>
                     </tr>
                 `).join('');
-                
+
                 this.updateToolbar();
             },
 
-            toggleSelectAll: function(el) {
+            toggleSelectAll: function (el) {
                 const visibleIds = Array.from(document.querySelectorAll('.student-check')).map(cb => cb.value);
                 if (el.checked) visibleIds.forEach(id => this.selectedIds.add(id));
                 else this.selectedIds.clear();
                 this.render(this.students);
             },
-            toggleSelect: function(id) {
-                if(this.selectedIds.has(id)) this.selectedIds.delete(id);
+            toggleSelect: function (id) {
+                if (this.selectedIds.has(id)) this.selectedIds.delete(id);
                 else this.selectedIds.add(id);
                 this.updateToolbar();
             },
-            updateToolbar: function() {
+            updateToolbar: function () {
                 const count = this.selectedIds.size;
                 document.getElementById('selected-count-text').innerText = `${count}명 선택됨`;
-                
+
                 const btns = ['btn-promote', 'btn-move', 'btn-delete'];
                 btns.forEach(id => {
                     document.getElementById(id).disabled = (count === 0);
                 });
             },
 
-            promoteSelected: async function() {
-                if(!confirm(`선택한 ${this.selectedIds.size}명의 학년을 1씩 올리시겠습니까?`)) return;
+            promoteSelected: async function () {
+                if (!confirm(`선택한 ${this.selectedIds.size}명의 학년을 1씩 올리시겠습니까?`)) return;
                 const batch = window.db.batch();
                 this.selectedIds.forEach(id => {
                     const ref = window.getCollection('users').doc(id);
@@ -244,8 +391,8 @@
                 this.selectedIds.clear();
                 this.init();
             },
-            deleteSelected: async function() {
-                if(!confirm(`선택한 ${this.selectedIds.size}명을 정말 삭제하시겠습니까? (복구 불가)`)) return;
+            deleteSelected: async function () {
+                if (!confirm(`선택한 ${this.selectedIds.size}명을 정말 삭제하시겠습니까? (복구 불가)`)) return;
                 const batch = window.db.batch();
                 this.selectedIds.forEach(id => {
                     const ref = window.getCollection('users').doc(id);
@@ -255,34 +402,34 @@
                 this.selectedIds.clear();
                 this.init();
             },
-            openMoveClassModal: function() {
+            openMoveClassModal: function () {
                 document.getElementById('move-class-modal').classList.remove('hidden');
                 document.getElementById('move-class-modal').classList.add('flex');
             },
-            moveSelected: async function() {
+            moveSelected: async function () {
                 const targetClass = parseInt(document.getElementById('target-class-select').value);
-                if(!confirm(`선택한 ${this.selectedIds.size}명을 ${targetClass}반으로 이동하시겠습니까?`)) return;
-                
+                if (!confirm(`선택한 ${this.selectedIds.size}명을 ${targetClass}반으로 이동하시겠습니까?`)) return;
+
                 const batch = window.db.batch();
                 this.selectedIds.forEach(id => {
                     const ref = window.getCollection('users').doc(id);
                     batch.update(ref, { class: targetClass });
                 });
                 await batch.commit();
-                
+
                 document.getElementById('move-class-modal').classList.add('hidden');
                 this.selectedIds.clear();
                 this.init();
             },
 
-            filterList: function() {
+            filterList: function () {
                 const q = document.getElementById('search-input').value.trim();
-                if(!q) { this.render(this.students); return; }
+                if (!q) { this.render(this.students); return; }
                 const filtered = this.students.filter(s => s.name.includes(q) || String(s.class) === q);
                 this.render(filtered);
             },
 
-            showHistory: async function(uid, name, cls, num) {
+            showHistory: async function (uid, name, cls, num) {
                 document.getElementById('history-title').innerText = `${name} (${cls}반 ${num}번) 문제 풀이 모음`;
                 const content = document.getElementById('history-content');
                 content.innerHTML = '<div class="text-center p-10"><div class="loader-spinner mx-auto mb-2"></div><p>기록을 불러오는 중...</p></div>';
@@ -298,13 +445,13 @@
                         content.innerHTML = '<div class="text-center p-20 text-gray-400 bg-gray-50 rounded-lg">해당 학기의 문제 풀이 기록이 없습니다.</div>';
                         return;
                     }
-                    
+
                     let html = '';
                     const groups = {};
                     snap.forEach(doc => {
                         const d = doc.data();
                         const dateKey = d.timeString ? d.timeString.split(' ')[0] : 'Unknown';
-                        if(!groups[dateKey]) groups[dateKey] = [];
+                        if (!groups[dateKey]) groups[dateKey] = [];
                         groups[dateKey].push(d);
                     });
 
@@ -325,7 +472,7 @@
                                             <div class="space-y-2">
                                                 ${(record.details || []).map((q, idx) => `
                                                     <div class="flex items-start gap-2 text-sm ${q.correct ? 'text-green-700' : 'text-red-600'}">
-                                                        <span class="font-mono font-bold w-6">Q${idx+1}</span>
+                                                        <span class="font-mono font-bold w-6">Q${idx + 1}</span>
                                                         <span class="flex-1 truncate">${q.correct ? '✅ 정답' : `❌ 오답 (제출: ${q.u})`}</span>
                                                     </div>
                                                 `).join('')}
@@ -344,7 +491,7 @@
                 }
             },
 
-            openEdit: function(id) {
+            openEdit: function (id) {
                 const s = this.students.find(x => x.id === id);
                 document.getElementById('edit-id').value = id;
                 document.getElementById('edit-grade').value = s.grade;
@@ -355,7 +502,7 @@
                 document.getElementById('edit-modal').classList.remove('hidden');
             },
 
-            saveStudent: function() {
+            saveStudent: function () {
                 const id = document.getElementById('edit-id').value;
                 const updateData = {
                     grade: parseInt(document.getElementById('edit-grade').value),
@@ -366,12 +513,12 @@
                 };
                 window.getCollection('users').doc(id).update(updateData).then(() => {
                     document.getElementById('edit-modal').classList.add('hidden');
-                    this.init(); 
+                    this.init();
                 });
             },
 
-            deleteStudent: function(id) {
-                if(confirm("정말 삭제하시겠습니까? (복구 불가)")) {
+            deleteStudent: function (id) {
+                if (confirm("정말 삭제하시겠습니까? (복구 불가)")) {
                     window.getCollection('users').doc(id).delete().then(() => this.init());
                 }
             }
@@ -380,4 +527,5 @@
         document.addEventListener('auth-ready', () => app.init());
     </script>
 </body>
+
 </html>

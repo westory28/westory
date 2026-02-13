@@ -37,6 +37,14 @@
         .fc-event-main { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 100; display: flex; justify-content: center; align-items: center; backdrop-filter: blur(2px); }
+
+        /* Mobile Optimization for Calendar */
+        @media (max-width: 768px) {
+            .fc-toolbar { flex-direction: column; gap: 0.5rem; }
+            .fc-toolbar-title { font-size: 1rem !important; }
+            .fc-button { padding: 0.25rem 0.5rem !important; font-size: 0.75rem !important; }
+            .fc-header-toolbar { margin-bottom: 0.5rem !important; }
+        }
     </style>
 </head>
 <body class="bg-gray-50 flex flex-col h-screen">
