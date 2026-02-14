@@ -1,44 +1,148 @@
-
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WeStory - 시험 자가 채점</title>
+    <title>WeStory - 정기 시험 답안</title>
     <!-- Tailwind & Icons -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
+
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-    
+
     <!-- Common Config & Styles -->
     <link rel="stylesheet" href="../assets/css/style.css">
     <script src="../assets/js/firebase-config.js"></script>
     <script src="../assets/js/auth-manager.js"></script>
-    
+
     <style>
-        .score-card { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(4px); border: 1px solid #e5e7eb; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
-        .omr-btn { width: 32px; height: 32px; border-radius: 50%; border: 1px solid #d1d5db; display: flex; justify-content: center; align-items: center; cursor: pointer; font-size: 0.9rem; font-weight: bold; transition: all 0.2s; color: #6b7280; background-color: white; }
-        .omr-btn:hover { background-color: #f3f4f6; border-color: #9ca3af; }
-        .omr-btn.correct { background-color: #22c55e; color: white; border-color: #22c55e; } 
-        .omr-btn.wrong { background-color: #ef4444; color: white; border-color: #ef4444; }   
-        .omr-btn.missed { border-color: #22c55e; color: #22c55e; border-width: 2px; } 
-        .result-badge { font-weight: 800; font-size: 1.1rem; width: 2rem; text-align: center; }
-        .res-o { color: #22c55e; }
-        .res-x { color: #ef4444; }
-        .subj-box { border: 1px solid #e5e7eb; border-radius: 0.5rem; background: white; overflow: hidden; margin-bottom: 1rem; }
-        .subj-header { background: #f9fafb; padding: 0.75rem 1rem; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; }
-        .subj-content { padding: 1rem; }
-        .btn-grading { transition: all 0.2s; }
-        .btn-grading.active-correct { background-color: #22c55e; color: white; border-color: #22c55e; }
-        .btn-grading.active-wrong { background-color: #ef4444; color: white; border-color: #ef4444; }
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(0,0,0,0.6); z-index: 99999; display: flex; justify-content: center; align-items: center; }
-        .modal-box { background: white; padding: 2.5rem; border-radius: 1rem; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); max-width: 450px; width: 90%; text-align: center; }
+        .score-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(4px);
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .omr-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 1px solid #d1d5db;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: bold;
+            transition: all 0.2s;
+            color: #6b7280;
+            background-color: white;
+        }
+
+        .omr-btn:hover {
+            background-color: #f3f4f6;
+            border-color: #9ca3af;
+        }
+
+        .omr-btn.correct {
+            background-color: #22c55e;
+            color: white;
+            border-color: #22c55e;
+        }
+
+        .omr-btn.wrong {
+            background-color: #ef4444;
+            color: white;
+            border-color: #ef4444;
+        }
+
+        .omr-btn.missed {
+            border-color: #22c55e;
+            color: #22c55e;
+            border-width: 2px;
+        }
+
+        .result-badge {
+            font-weight: 800;
+            font-size: 1.1rem;
+            width: 2rem;
+            text-align: center;
+        }
+
+        .res-o {
+            color: #22c55e;
+        }
+
+        .res-x {
+            color: #ef4444;
+        }
+
+        .subj-box {
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            background: white;
+            overflow: hidden;
+            margin-bottom: 1rem;
+        }
+
+        .subj-header {
+            background: #f9fafb;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .subj-content {
+            padding: 1rem;
+        }
+
+        .btn-grading {
+            transition: all 0.2s;
+        }
+
+        .btn-grading.active-correct {
+            background-color: #22c55e;
+            color: white;
+            border-color: #22c55e;
+        }
+
+        .btn-grading.active-wrong {
+            background-color: #ef4444;
+            color: white;
+            border-color: #ef4444;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(0, 0, 0, 0.6);
+            z-index: 99999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-box {
+            background: white;
+            padding: 2.5rem;
+            border-radius: 1rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            max-width: 450px;
+            width: 90%;
+            text-align: center;
+        }
     </style>
 </head>
+
 <body>
     <!-- Header injected by JS -->
 
@@ -53,17 +157,23 @@
             <div class="bg-stone-100 p-3 rounded mb-6 text-sm text-stone-500 font-medium">
                 입력한 점수는 서버에 저장되지 않고<br>내 컴퓨터(브라우저)에만 임시로 남습니다.
             </div>
-            <div class="flex items-center justify-center gap-2 mb-6 select-none cursor-pointer" onclick="app.toggleAgree()">
-                <div id="checkbox-ui" class="w-5 h-5 border-2 border-stone-300 rounded flex items-center justify-center text-white transition-colors"><i class="fas fa-check text-xs"></i></div>
+            <div class="flex items-center justify-center gap-2 mb-6 select-none cursor-pointer"
+                onclick="app.toggleAgree()">
+                <div id="checkbox-ui"
+                    class="w-5 h-5 border-2 border-stone-300 rounded flex items-center justify-center text-white transition-colors">
+                    <i class="fas fa-check text-xs"></i></div>
                 <label class="cursor-pointer text-stone-700 text-sm font-bold">위 내용을 확인하였으며 동의합니다.</label>
             </div>
-            <button id="btn-start" onclick="app.startExam()" disabled class="w-full py-3 rounded-lg font-bold text-lg transition-all duration-200 bg-stone-200 text-stone-400 cursor-not-allowed">확 인</button>
+            <button id="btn-start" onclick="app.startExam()" disabled
+                class="w-full py-3 rounded-lg font-bold text-lg transition-all duration-200 bg-stone-200 text-stone-400 cursor-not-allowed">확
+                인</button>
         </div>
     </div>
 
     <!-- Sticky Score Card -->
     <div class="sticky top-[80px] z-30 px-4 py-2 pointer-events-none">
-        <div class="max-w-3xl mx-auto score-card rounded-full px-6 py-3 flex justify-between items-center pointer-events-auto bg-white/90">
+        <div
+            class="max-w-3xl mx-auto score-card rounded-full px-6 py-3 flex justify-between items-center pointer-events-auto bg-white/90">
             <span class="font-bold text-stone-600">내 점수</span>
             <div class="flex items-baseline">
                 <span id="current-score" class="text-3xl font-bold text-blue-600 mr-1">0</span>
@@ -91,7 +201,8 @@
                     <span class="bg-indigo-100 text-indigo-800 text-xs px-2 py-1 rounded mr-2">논술형</span>서술형 답안
                 </h2>
                 <div class="bg-yellow-50 text-yellow-800 text-sm p-3 rounded mb-4">
-                    <i class="fas fa-exclamation-circle mr-1"></i> 서술형은 <strong>[정답 보기]</strong>를 누른 후, 정답과 비교하여 <strong>[정답 인정]</strong> 여부를 본인이 선택하세요.
+                    <i class="fas fa-exclamation-circle mr-1"></i> 서술형은 <strong>[정답 보기]</strong>를 누른 후, 정답과 비교하여
+                    <strong>[정답 인정]</strong> 여부를 본인이 선택하세요.
                 </div>
                 <div id="subjective-container"></div>
             </div>
@@ -110,13 +221,13 @@
         const app = {
             state: { totalScore: 0, maxScore: 0, examData: null, userMarks: {}, isAgreed: false },
 
-            init: function() {
+            init: function () {
                 document.addEventListener('auth-ready', (e) => {
                     this.loadExamData();
                 });
             },
 
-            toggleAgree: function() {
+            toggleAgree: function () {
                 this.state.isAgreed = !this.state.isAgreed;
                 const btn = document.getElementById('btn-start');
                 const box = document.getElementById('checkbox-ui');
@@ -133,12 +244,12 @@
                 }
             },
 
-            startExam: function() {
-                if(!this.state.isAgreed) return;
+            startExam: function () {
+                if (!this.state.isAgreed) return;
                 document.getElementById('warning-modal').style.display = 'none';
             },
 
-            loadExamData: function() {
+            loadExamData: function () {
                 // Changed: Use dynamic collection
                 window.getCollection('exam_config').doc('final_exam').get()
                     .then((doc) => {
@@ -156,30 +267,30 @@
                     });
             },
 
-            calcMaxScore: function() {
+            calcMaxScore: function () {
                 let max = 0;
-                if(this.state.examData.objective) {
+                if (this.state.examData.objective) {
                     this.state.examData.objective.forEach(q => max += (Number(q.score) || 0));
                 }
-                if(this.state.examData.subjective) {
+                if (this.state.examData.subjective) {
                     this.state.examData.subjective.forEach(p => {
-                        if(p.subItems) p.subItems.forEach(s => max += (Number(s.score) || 0));
+                        if (p.subItems) p.subItems.forEach(s => max += (Number(s.score) || 0));
                     });
                 }
                 this.state.maxScore = max;
                 document.getElementById('max-score').innerText = max;
             },
 
-            render: function() {
+            render: function () {
                 document.getElementById('loading-area').style.display = 'none';
                 document.getElementById('exam-content').classList.remove('hidden');
                 this.renderObjective();
                 this.renderSubjective();
             },
 
-            renderObjective: function() {
+            renderObjective: function () {
                 const container = document.getElementById('objective-container');
-                if(!this.state.examData.objective || this.state.examData.objective.length === 0) {
+                if (!this.state.examData.objective || this.state.examData.objective.length === 0) {
                     container.innerHTML = '<p class="text-stone-400">등록된 객관식 문항이 없습니다.</p>';
                     return;
                 }
@@ -190,7 +301,7 @@
                         <div class="flex items-center gap-4">
                             <span class="font-bold text-lg text-blue-600 w-8 text-center">${qNum}</span>
                             <div class="flex gap-2">
-                                ${[1,2,3,4,5].map(num => `
+                                ${[1, 2, 3, 4, 5].map(num => `
                                     <div class="omr-btn" onclick="app.checkObjective(${qNum}, ${num}, ${q.answer}, ${q.score})">${num}</div>
                                 `).join('')}
                             </div>
@@ -203,9 +314,9 @@
                 `}).join('');
             },
 
-            renderSubjective: function() {
+            renderSubjective: function () {
                 const container = document.getElementById('subjective-container');
-                if(!this.state.examData.subjective || this.state.examData.subjective.length === 0) {
+                if (!this.state.examData.subjective || this.state.examData.subjective.length === 0) {
                     container.innerHTML = '<p class="text-stone-400">등록된 서술형 문항이 없습니다.</p>';
                     return;
                 }
@@ -214,8 +325,8 @@
                         <div class="subj-header"><span class="font-bold">서술형 ${pIdx + 1}번</span></div>
                         <div class="subj-content space-y-4">
                             ${p.subItems.map((s, sIdx) => {
-                                const uid = `subj-${pIdx}-${sIdx}`;
-                                return `
+                    const uid = `subj-${pIdx}-${sIdx}`;
+                    return `
                                 <div class="border-b border-gray-100 pb-4 last:border-0 last:pb-0" id="${uid}-wrapper">
                                     <div class="flex justify-between mb-2">
                                         <span class="font-bold text-stone-700 text-sm">(${sIdx + 1}) 소문항 <span class="text-gray-400 font-normal ml-1">(${s.score}점)</span></span>
@@ -233,13 +344,13 @@
                                         </div>
                                     </div>
                                 </div>`;
-                            }).join('')}
+                }).join('')}
                         </div>
                     </div>
                 `).join('');
             },
 
-            checkObjective: function(qNo, selected, answer, score) {
+            checkObjective: function (qNo, selected, answer, score) {
                 const prevMark = this.state.userMarks[`obj-${qNo}`];
                 if (prevMark && prevMark.isCorrect) this.addScore(-prevMark.score);
 
@@ -251,24 +362,24 @@
                 buttons.forEach((btn, idx) => {
                     const btnNum = idx + 1;
                     btn.classList.remove('selected', 'correct', 'wrong', 'missed');
-                    btn.style.cssText = ''; 
-                    if(btnNum === Number(selected)) btn.classList.add(isCorrect ? 'correct' : 'wrong');
-                    if(!isCorrect && btnNum === Number(answer)) btn.classList.add('missed');
+                    btn.style.cssText = '';
+                    if (btnNum === Number(selected)) btn.classList.add(isCorrect ? 'correct' : 'wrong');
+                    if (!isCorrect && btnNum === Number(answer)) btn.classList.add('missed');
                 });
 
-                if(isCorrect) { badge.innerHTML = '<i class="fas fa-circle res-o text-xs"></i>'; this.addScore(Number(score)); } 
+                if (isCorrect) { badge.innerHTML = '<i class="fas fa-circle res-o text-xs"></i>'; this.addScore(Number(score)); }
                 else { badge.innerHTML = '<i class="fas fa-times res-x"></i>'; }
                 this.state.userMarks[`obj-${qNo}`] = { selected: selected, isCorrect: isCorrect, score: Number(score) };
             },
 
-            revealSubjective: function(id) {
+            revealSubjective: function (id) {
                 document.getElementById(`${id}-actions`).style.display = 'none';
                 document.getElementById(`${id}-check`).classList.remove('hidden');
             },
 
-            gradeSubjective: function(id, score, isCorrect) {
+            gradeSubjective: function (id, score, isCorrect) {
                 const prevMark = this.state.userMarks[id];
-                if(prevMark && prevMark.isCorrect) this.addScore(-Number(score));
+                if (prevMark && prevMark.isCorrect) this.addScore(-Number(score));
 
                 const btnCorrect = document.getElementById(`btn-correct-${id}`);
                 const btnWrong = document.getElementById(`btn-wrong-${id}`);
@@ -277,7 +388,7 @@
                 btnCorrect.className = 'btn-grading flex-1 bg-white border border-stone-300 text-stone-600 hover:bg-stone-50 py-2 rounded font-bold shadow-sm';
                 btnWrong.className = 'btn-grading flex-1 bg-white border border-stone-300 text-stone-600 hover:bg-stone-50 py-2 rounded font-bold shadow-sm';
 
-                if(isCorrect) {
+                if (isCorrect) {
                     btnCorrect.classList.remove('bg-white', 'text-stone-600'); btnCorrect.classList.add('active-correct');
                     badge.innerHTML = '<i class="fas fa-circle res-o text-xs"></i>'; this.addScore(Number(score));
                 } else {
@@ -287,14 +398,14 @@
                 this.state.userMarks[id] = { isCorrect: isCorrect, score: Number(score) };
             },
 
-            addScore: function(points) {
+            addScore: function (points) {
                 const el = document.getElementById('current-score');
                 const start = this.state.totalScore;
                 this.state.totalScore += points;
                 const end = this.state.totalScore;
                 let current = start;
                 const step = () => {
-                    if(current < end) { current++; el.innerText = current; requestAnimationFrame(step); } 
+                    if (current < end) { current++; el.innerText = current; requestAnimationFrame(step); }
                     else if (current > end) { current--; el.innerText = current; requestAnimationFrame(step); }
                     else { el.innerText = end; }
                 };
@@ -302,7 +413,8 @@
             }
         };
 
-        window.onload = function() { app.init(); };
+        window.onload = function () { app.init(); };
     </script>
 </body>
+
 </html>

@@ -118,6 +118,29 @@
                 gap: 4px;
             }
         }
+
+        /* Selected Date Cell Highlight */
+        .fc-day-selected {
+            background-color: #f3f4f6 !important;
+            outline: 2px solid #3b82f6 !important;
+            outline-offset: -2px !important;
+        }
+
+        /* Search Panel */
+        #search-panel {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            width: 300px;
+            max-height: 400px;
+            overflow-y: auto;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            z-index: 50;
+            margin-top: 8px;
+        }
     </style>
 </head>
 
@@ -164,6 +187,17 @@
                             class="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-blue-700 shadow-sm transition">
                             <i class="fas fa-plus mr-1"></i> 추가
                         </button>
+                    </div>
+                    <!-- Search Panel (Hidden by default) -->
+                    <div id="search-panel" class="hidden">
+                        <div class="p-3 border-b border-gray-200">
+                            <input type="text" id="search-input" placeholder="일정 제목 검색..."
+                                class="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                                oninput="app.performSearch(this.value)">
+                        </div>
+                        <div id="search-results" class="p-3 text-sm text-gray-500">
+                            검색어를 입력하세요
+                        </div>
                     </div>
                 </div>
                 <div id="calendar" class="flex-1"></div>
@@ -280,7 +314,8 @@
     </div>
 
     <!-- Event Modal (Add/Edit) -->
-    <div id="event-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+    <div id="event-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center"
+        onclick="app.attemptClose()">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 m-4" onclick="event.stopPropagation()">
             <div class="flex justify-between items-center mb-6">
                 <h3 id="modal-title" class="text-xl font-bold text-gray-800"><i
@@ -317,11 +352,11 @@
                     <label class="block text-sm font-bold text-gray-700 mb-1">일정 종류</label>
                     <select id="event-type"
                         class="w-full border border-gray-300 rounded-lg p-2.5 outline-none font-bold">
-                        <option value="exam" class="text-red-600">🔴 정기 시험 (Red)</option>
-                        <option value="performance" class="text-orange-500">⚡ 수행평가 (Orange)</option>
-                        <option value="diagnosis" class="text-blue-600">📝 진단평가 (Blue)</option>
-                        <option value="formative" class="text-blue-600">📘 형성평가 (Blue)</option>
-                        <option value="event" class="text-green-600">🎉 행사 (Green)</option>
+                        <option value="exam" class="text-red-600">🔴 정기 시험</option>
+                        <option value="performance" class="text-orange-500">⚡ 수행평가</option>
+                        <option value="diagnosis" class="text-blue-600">📝 진단평가</option>
+                        <option value="formative" class="text-blue-600">📘 형성평가</option>
+                        <option value="event" class="text-green-600">🎉 행사</option>
                     </select>
                 </div>
 
@@ -439,13 +474,70 @@
                         return ga - gb || ca - cb;
                     });
                     const sel = document.getElementById('view-filter');
+                    const noticeClassSel = document.getElementById('notice-class-select');
                     sorted.forEach(cls => {
                         const opt = document.createElement('option');
                         opt.value = cls;
                         opt.textContent = `${cls}반`;
                         sel.appendChild(opt);
+                        // Also add to notice class dropdown
+                        const noticeOpt = document.createElement('option');
+                        noticeOpt.value = cls;
+                        noticeOpt.textContent = `${cls}반`;
+                        noticeClassSel.appendChild(noticeOpt);
                     });
                 } catch (e) { console.error('Class filter init error:', e); }
+            },
+
+            // --- Search Functions ---
+            selectedDateEl: null, // Track selected date cell
+
+            openSearch: function () {
+                document.getElementById('search-modal').classList.remove('hidden');
+                document.getElementById('search-modal').classList.add('flex');
+                document.getElementById('search-input').focus();
+            },
+
+            closeSearch: function () {
+                document.getElementById('search-modal').classList.add('hidden');
+                document.getElementById('search-modal').classList.remove('flex');
+            },
+
+            executeSearch: async function () {
+                const query = document.getElementById('search-input').value.trim();
+                const resultsEl = document.getElementById('search-results');
+                if (!query) {
+                    resultsEl.innerHTML = '<div class="text-center text-gray-400 py-10">검색어를 입력하세요.</div>';
+                    return;
+                }
+                resultsEl.innerHTML = '<div class="text-center text-gray-400 py-10"><i class="fas fa-spinner fa-spin mr-2"></i>검색 중...</div>';
+
+                try {
+                    const path = this.getCollectionPath('calendar');
+                    const snapshot = await window.db.collection(path).get();
+                    const results = [];
+                    snapshot.forEach(doc => {
+                        const d = doc.data();
+                        if (d.title && d.title.toLowerCase().includes(query.toLowerCase())) {
+                            results.push({ id: doc.id, ...d });
+                        }
+                    });
+
+                    if (results.length === 0) {
+                        resultsEl.innerHTML = `<div class="text-center text-gray-400 py-10">검색 결과가 없습니다.</div>`;
+                    } else {
+                        resultsEl.innerHTML = results.map(r => `
+                            <div onclick="app.closeSearch(); app.openModal({id: '${r.id}', extendedProps: {title: '${r.title}', start: '${r.start}', end: '${r.end || ''}', eventType: '${r.eventType}', description: '${r.description || ''}'}})" 
+                                 class="p-3 border-b border-gray-100 hover:bg-blue-50 cursor-pointer transition">
+                                <div class="font-bold text-sm text-gray-800">${r.title}</div>
+                                <div class="text-xs text-gray-500">${r.start} ${r.end && r.start !== r.end ? '~ ' + r.end : ''}</div>
+                            </div>
+                        `).join('');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    resultsEl.innerHTML = '<div class="text-center text-red-500 py-10">검색 중 오류가 발생했습니다.</div>';
+                }
             },
 
             //Helper function to get year/semester based collection path
@@ -456,7 +548,12 @@
                     alert('시스템 설정을 불러올 수 없습니다. 페이지를 새로고침하세요.');
                     return null;
                 }
-                return `years/${cfg.year}/${collectionName}`;
+                // EXCEPTION: calendar uses years/{year}/calendar (no semester)
+                if (collectionName === 'calendar') {
+                    return `years/${cfg.year}/calendar`;
+                }
+                // All other collections use semesters path
+                return `years/${cfg.year}/semesters/${cfg.semester}/${collectionName}`;
             },
 
             // --- Notice Board Logic ---
@@ -519,20 +616,6 @@
             openNoticeModal: function (id = null) {
                 document.getElementById('notice-modal').classList.remove('hidden');
                 document.getElementById('notice-modal').classList.add('flex');
-
-                // Populate notice class select from the same data as view-filter
-                const noticeClassSel = document.getElementById('notice-class-select');
-                if (noticeClassSel.children.length === 0) {
-                    const viewFilter = document.getElementById('view-filter');
-                    Array.from(viewFilter.options).forEach(opt => {
-                        if (opt.value !== 'all' && opt.value !== 'common') {
-                            const o = document.createElement('option');
-                            o.value = opt.value;
-                            o.textContent = opt.textContent;
-                            noticeClassSel.appendChild(o);
-                        }
-                    });
-                }
 
                 if (id) {
                     const path = this.getCollectionPath('notices');
@@ -735,6 +818,13 @@
                             if (!e.end) return e.startStr === info.dateStr;
                             return target >= start && target < end;
                         }); // Include holidays too
+
+                        // Highlight selected date cell
+                        if (this.selectedDateEl) {
+                            this.selectedDateEl.classList.remove('fc-day-selected');
+                        }
+                        this.selectedDateEl = info.dayEl;
+                        info.dayEl.classList.add('fc-day-selected');
 
                         this.showEventsOnPanel(info.dateStr, dailyEvents);
                     },

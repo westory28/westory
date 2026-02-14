@@ -10,16 +10,13 @@ const MENUS = {
             ]
         },
         {
-            name: "평가", url: "student/quiz.html", icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2",
-            children: [
-                { name: "평가 응시", url: "student/quiz.html" },
-                { name: "정기 시험 답안 제출", url: "student/mark-exam.html" }
-            ]
+            name: "평가", url: "student/quiz.html", icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
         },
         {
             name: "성적", url: "student/score.html", icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",
             children: [
-                { name: "나의 성적표", url: "student/score.html" }
+                { name: "나의 성적표", url: "student/score.html" },
+                { name: "정기 시험 답안", url: "student/mark-exam.html" }
             ]
         }
     ],
@@ -37,7 +34,7 @@ const MENUS = {
             name: "점수 관리", url: "teacher/manage_exam.html", icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
             children: [
                 { name: "성적 산출 기준", url: "teacher/manage_exam.html" },
-                { name: "정기 시험 정답", url: "teacher/manage_exam.html?tab=omr" }
+                { name: "정기 시험 답안", url: "teacher/manage_exam.html?tab=omr" }
             ]
         },
         { name: "학생 명단 관리", url: "teacher/student-list.html", icon: "M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" }
@@ -61,8 +58,11 @@ window.getCollection = function (collectionName) {
     if (globalCollections.includes(collectionName)) {
         return window.db.collection(collectionName);
     }
+    // All collections use semesters path (curriculum, notices, quiz, etc.)
     return window.db.collection('years')
         .doc(window.currentConfig.year)
+        .collection('semesters')
+        .doc(window.currentConfig.semester)
         .collection(collectionName);
 };
 

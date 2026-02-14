@@ -257,7 +257,12 @@
                     console.error('Global config not loaded properly');
                     return null;
                 }
-                return `years/${cfg.year}/${collectionName}`;
+                // EXCEPTION: calendar uses years/{year}/calendar (no semester)
+                if (collectionName === 'calendar') {
+                    return `years/${cfg.year}/calendar`;
+                }
+                // All other collections use semesters path
+                return `years/${cfg.year}/semesters/${cfg.semester}/${collectionName}`;
             },
 
             fetchEvents: async function (info, successCallback, failureCallback) {
