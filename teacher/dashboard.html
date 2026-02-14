@@ -1,13 +1,16 @@
-
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>교사 대시보드 - Westory Admin</title>
+    <!-- Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
+    <!-- FullCalendar -->
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
@@ -16,194 +19,443 @@
     <script src="../assets/js/auth-manager.js"></script>
 
     <style>
-        .admin-container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
-        
-        /* Grid Layout */
-        .menu-grid { 
-            display: grid; 
-            grid-template-columns: 1fr; 
-            gap: 1rem; 
-            margin-top: 1rem; 
+        .fc-toolbar-title {
+            font-size: 1.25em !important;
+            font-weight: 700;
+            color: #1f2937;
         }
 
-        /* Card Base Styles */
-        .v-card { 
-            background: white; 
-            border-radius: 1rem; 
-            border: 1px solid #f3f4f6; 
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
-            display: flex; 
-            transition: all 0.3s ease; 
-            position: relative; 
-            overflow: hidden; 
-            cursor: pointer; 
-        }
-        .v-card:hover { 
-            transform: translateY(-4px); 
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); 
-            border-color: #3b82f6; 
-        }
-        .v-card::before { 
-            content: ''; position: absolute; top: 0; left: 0; 
-            background: #e5e7eb; transition: background 0.3s; 
+        .fc-button {
+            background-color: #2563eb !important;
+            border-color: #2563eb !important;
+            font-weight: 600 !important;
         }
 
-        /* Mobile Styles (Default) - Horizontal Compact Cards */
-        .v-card {
-            flex-direction: row;
+        .fc-button:hover {
+            background-color: #1d4ed8 !important;
+            border-color: #1d4ed8 !important;
+        }
+
+        .fc-button-active {
+            background-color: #1e40af !important;
+            border-color: #1e40af !important;
+        }
+
+        .fc-daygrid-event {
+            cursor: pointer;
+            border-radius: 4px;
+            padding: 2px 4px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            border: none;
+        }
+
+        /* Korean Calendar Colors */
+        .fc-day-sun a {
+            color: #ef4444 !important;
+            text-decoration: none;
+            font-weight: 700;
+        }
+
+        .fc-day-sat a {
+            color: #3b82f6 !important;
+            text-decoration: none;
+            font-weight: 700;
+        }
+
+        .fc-day-holiday a {
+            color: #ef4444 !important;
+            font-weight: 700;
+        }
+
+        .holiday-text-event {
+            background-color: transparent !important;
+            border: none !important;
+        }
+
+        .holiday-text-event .fc-event-title {
+            color: #ef4444;
+            font-size: 0.75rem;
+            font-weight: 800;
+        }
+
+        /* Modal Overlay */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 100;
+            display: flex;
+            justify-content: center;
             align-items: center;
-            padding: 1.25rem;
-            height: auto;
-            text-align: left;
         }
-        .v-card::before {
-            width: 4px; height: 100%; /* Vertical bar on left */
-        }
-        .v-card:hover::before { background: #3b82f6; }
-        
-        .icon-circle { 
-            width: 48px; height: 48px; 
-            border-radius: 12px; 
-            background: #f3f4f6; 
-            display: flex; align-items: center; justify-content: center; 
-            font-size: 1.5rem; 
-            margin-right: 1rem; 
-            flex-shrink: 0;
-            transition: all 0.3s; 
-        }
-        
-        .card-content { flex: 1; min-width: 0; }
-        .card-title { font-size: 1.1rem; font-weight: 800; color: #1f2937; margin-bottom: 0.25rem; }
-        .card-desc { font-size: 0.85rem; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .card-arrow { display: none; } /* Hide arrow on mobile */
 
-        /* Desktop Styles (md+) - Vertical Spacious Cards */
-        @media (min-width: 768px) {
-            .menu-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem; }
-            
-            .v-card {
+        /* Mobile Optimization for Calendar */
+        @media (max-width: 768px) {
+            .fc-toolbar {
                 flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                padding: 3rem 1.5rem;
-                text-align: center;
-                aspect-ratio: 3/4;
+                gap: 0.5rem;
             }
-            .v-card::before {
-                width: 100%; height: 6px; /* Horizontal bar on top */
+
+            .fc-toolbar-title {
+                font-size: 1rem !important;
             }
-            
-            .icon-circle {
-                width: 80px; height: 80px;
-                border-radius: 50%;
-                font-size: 2.5rem;
-                margin-right: 0;
-                margin-bottom: 1.5rem;
+
+            .fc-button {
+                padding: 0.25rem 0.6rem !important;
+                font-size: 0.75rem !important;
             }
-            
-            .card-title { font-size: 1.25rem; margin-bottom: 0.5rem; }
-            .card-desc { white-space: normal; line-height: 1.6; }
-            .card-arrow { 
-                display: block; 
-                margin-top: auto; 
-                padding-top: 1.5rem; 
-                font-size: 0.875rem; 
-                font-weight: 700; 
-                opacity: 0; 
-                transition: opacity 0.3s; 
+
+            .fc-header-toolbar {
+                margin-bottom: 0.5rem !important;
             }
-            .v-card:hover .card-arrow { opacity: 1; }
-        }
-        
-        @media (min-width: 1024px) {
-            .menu-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+            .fc .fc-toolbar-chunk:first-child {
+                display: flex;
+                gap: 4px;
+            }
         }
     </style>
 </head>
-<body class="bg-gray-50">
+
+<body class="bg-gray-50 flex flex-col h-screen">
     <!-- Header injected by AuthManager -->
 
-    <main class="admin-container">
-        <div class="mb-6 flex justify-between items-end">
-            <div>
-                <h1 class="text-2xl md:text-3xl font-extrabold text-gray-900">관리자 대시보드</h1>
-                <p class="hidden md:block text-gray-500 mt-2">수업 활동과 학생 데이터를 통합 관리하세요.</p>
-            </div>
-            <div class="text-right">
-                <span id="dash-year-badge" class="bg-blue-600 text-white font-bold px-3 py-1 rounded-full text-xs md:text-sm shadow-md">
-                    2025-2
-                </span>
-            </div>
+    <main class="flex-1 w-full max-w-7xl mx-auto px-4 py-4 md:px-6 md:py-6 h-full flex flex-col overflow-hidden">
+
+        <div class="flex justify-between items-center mb-4 shrink-0">
+            <h1 class="text-xl md:text-2xl font-bold text-gray-800 flex items-center">
+                <i class="fas fa-calendar-alt text-blue-500 mr-2"></i>학사 일정 관리
+            </h1>
+            <span id="dash-year-badge"
+                class="bg-blue-600 text-white font-bold px-3 py-1 rounded-full text-xs md:text-sm shadow-md">
+                2025-2
+            </span>
         </div>
 
-        <div class="menu-grid">
-            <!-- 1. Lesson Management -->
-            <div onclick="location.href='manage_lesson.html'" class="v-card group">
-                <div class="icon-circle text-gray-400 group-hover:text-green-600 group-hover:bg-green-50">
-                    <i class="fas fa-book-reader"></i>
-                </div>
-                <div class="card-content">
-                    <h3 class="card-title group-hover:text-green-700">수업 자료 관리</h3>
-                    <p class="card-desc">학습 자료 등록 및 빈칸 노트 생성</p>
-                </div>
-                <div class="card-arrow text-green-600">
-                    바로가기 <i class="fas fa-arrow-right ml-1"></i>
-                </div>
-            </div>
+        <div class="flex flex-wrap items-center gap-2 w-full md:w-auto mb-4 shrink-0 justify-end">
+            <span class="text-sm font-bold text-gray-600 hidden md:inline">보기 필터:</span>
+            <select id="view-filter" onchange="app.refetchEvents()"
+                class="border border-gray-300 rounded px-3 py-2 text-sm font-bold focus:border-blue-500 outline-none">
+                <option value="all">전체 일정</option>
+                <option value="common">공통 일정만</option>
+                <option value="2-1">2-1반</option>
+                <option value="2-2">2-2반</option>
+                <option value="2-3">2-3반</option>
+                <option value="2-4">2-4반</option>
+                <option value="2-5">2-5반</option>
+                <option value="2-6">2-6반</option>
+                <option value="2-7">2-7반</option>
+                <option value="2-8">2-8반</option>
+                <option value="2-9">2-9반</option>
+                <option value="2-10">2-10반</option>
+                <option value="2-11">2-11반</option>
+                <option value="2-12">2-12반</option>
+            </select>
+            <button onclick="app.openModal()"
+                class="bg-blue-600 text-white px-3 py-2 rounded text-sm font-bold hover:bg-blue-700 shadow-sm ml-1 flex-1 md:flex-none whitespace-nowrap">
+                <i class="fas fa-plus mr-1"></i> 일정 추가
+            </button>
+        </div>
 
-            <!-- 2. Assessment Management -->
-            <div onclick="location.href='manage_quiz.html'" class="v-card group">
-                <div class="icon-circle text-gray-400 group-hover:text-blue-600 group-hover:bg-blue-50">
-                    <i class="fas fa-pencil-alt"></i>
-                </div>
-                <div class="card-content">
-                    <h3 class="card-title group-hover:text-blue-700">평가 관리</h3>
-                    <p class="card-desc">형성평가 문항 및 실시간 응시 현황</p>
-                </div>
-                <div class="card-arrow text-blue-600">
-                    바로가기 <i class="fas fa-arrow-right ml-1"></i>
-                </div>
-            </div>
-
-            <!-- 3. Score Management -->
-            <div onclick="location.href='manage_exam.html'" class="v-card group">
-                <div class="icon-circle text-gray-400 group-hover:text-amber-500 group-hover:bg-amber-50">
-                    <i class="fas fa-chart-bar"></i>
-                </div>
-                <div class="card-content">
-                    <h3 class="card-title group-hover:text-amber-700">점수 관리</h3>
-                    <p class="card-desc">지필/수행평가 배점 및 성적 산출</p>
-                </div>
-                <div class="card-arrow text-amber-500">
-                    바로가기 <i class="fas fa-arrow-right ml-1"></i>
-                </div>
-            </div>
-
-            <!-- 4. Student Management -->
-            <div onclick="location.href='student-list.html'" class="v-card group">
-                <div class="icon-circle text-gray-400 group-hover:text-purple-600 group-hover:bg-purple-50">
-                    <i class="fas fa-users-cog"></i>
-                </div>
-                <div class="card-content">
-                    <h3 class="card-title group-hover:text-purple-700">학생 명단 관리</h3>
-                    <p class="card-desc">학생 정보 수정 및 비밀번호 초기화</p>
-                </div>
-                <div class="card-arrow text-purple-600">
-                    바로가기 <i class="fas fa-arrow-right ml-1"></i>
-                </div>
-            </div>
+        <div
+            class="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 p-2 md:p-6 overflow-hidden flex flex-col">
+            <div id="calendar" class="h-full"></div>
         </div>
     </main>
+
+    <!-- Event Modal -->
+    <div id="event-modal" class="modal-overlay hidden">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 mx-4 relative max-h-[90vh] overflow-y-auto">
+            <h3 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2 flex items-center">
+                <i class="fas fa-edit text-blue-500 mr-2"></i><span id="modal-title">일정 등록</span>
+            </h3>
+
+            <input type="hidden" id="event-id">
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">일정 제목</label>
+                    <input type="text" id="event-title"
+                        class="w-full border rounded p-2 text-sm font-bold focus:border-blue-500 outline-none"
+                        placeholder="예: 역사 수행평가">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">시작 날짜</label>
+                        <input type="date" id="event-start" class="w-full border rounded p-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">종료 날짜 (선택)</label>
+                        <input type="date" id="event-end" class="w-full border rounded p-2 text-sm">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">일정 종류</label>
+                    <select id="event-type" class="w-full border rounded p-2 text-sm font-bold bg-white">
+                        <option value="performance">⚡ 수행평가 (Orange)</option>
+                        <option value="exam">🔥 정기 시험 (Red)</option>
+                        <option value="diagnosis">📝 진단평가 (Blue)</option>
+                        <option value="formative">✍️ 형성평가 (Blue)</option>
+                        <option value="event">🎉 행사/기타 (Green)</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-2">대상 선택</label>
+                    <div class="flex gap-4 mb-2">
+                        <label class="flex items-center cursor-pointer">
+                            <input type="radio" name="targetType" value="common" checked
+                                onclick="app.toggleTargetClass(false)" class="w-4 h-4 text-blue-600">
+                            <span class="ml-2 text-sm font-bold">전체 공통</span>
+                        </label>
+                        <label class="flex items-center cursor-pointer">
+                            <input type="radio" name="targetType" value="class" onclick="app.toggleTargetClass(true)"
+                                class="w-4 h-4 text-blue-600">
+                            <span class="ml-2 text-sm font-bold">반 선택</span>
+                        </label>
+                    </div>
+                    <select id="target-class" class="w-full border rounded p-2 text-sm bg-gray-50" disabled>
+                        ${Array.from({length:12}, (_, i) => `<option value="2-${i+1}">2-${i+1}반</option>`).join('')}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">상세 내용</label>
+                    <textarea id="event-desc" class="w-full border rounded p-2 text-sm h-20 resize-none"></textarea>
+                </div>
+            </div>
+
+            <div class="flex justify-between items-center mt-6 pt-4 border-t">
+                <button type="button" onclick="app.deleteEvent()" id="btn-delete"
+                    class="text-red-500 font-bold text-sm hover:text-red-700 hidden"><i
+                        class="fas fa-trash mr-1"></i>삭제</button>
+                <div class="flex gap-2 ml-auto">
+                    <button onclick="app.closeModal()"
+                        class="px-4 py-2 bg-gray-100 text-gray-600 rounded font-bold text-sm hover:bg-gray-200">취소</button>
+                    <button onclick="app.saveEvent()"
+                        class="px-6 py-2 bg-blue-600 text-white rounded font-bold text-sm hover:bg-blue-700 shadow-md">저장</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Footer injected by AuthManager -->
 
     <script>
         window.AuthManager.init('teacher');
 
-        document.addEventListener('auth-ready', () => {
-            const cfg = window.currentConfig;
-            document.getElementById('dash-year-badge').innerText = `${cfg.year}학년도 ${cfg.semester}학기`;
-        });
+        const app = {
+            calendar: null,
+            colorMap: {
+                'exam': '#ef4444',
+                'performance': '#f97316',
+                'event': '#10b981',
+                'diagnosis': '#3b82f6',
+                'formative': '#3b82f6'
+            },
+            holidays: {
+                // 2025
+                '2025-01-01': '신정',
+                '2025-01-28': '설날', '2025-01-29': '설날', '2025-01-30': '설날',
+                '2025-03-01': '삼일절', '2025-03-03': '대체공휴일',
+                '2025-05-05': '어린이날/석가탄신일', '2025-05-06': '대체공휴일',
+                '2025-06-06': '현충일',
+                '2025-08-15': '광복절',
+                '2025-10-03': '개천절',
+                '2025-10-05': '추석', '2025-10-06': '추석', '2025-10-07': '추석', '2025-10-08': '대체공휴일',
+                '2025-10-09': '한글날',
+                '2025-12-25': '성탄절',
+                // 2026
+                '2026-01-01': '신정',
+                '2026-02-16': '설날', '2026-02-17': '설날', '2026-02-18': '설날',
+                '2026-03-01': '삼일절', '2026-03-02': '대체공휴일',
+                '2026-05-05': '어린이날',
+                '2026-05-24': '석가탄신일', '2026-05-25': '대체공휴일',
+                '2026-06-06': '현충일',
+                '2026-08-15': '광복절', '2026-08-17': '대체공휴일',
+                '2026-09-24': '추석', '2026-09-25': '추석', '2026-09-26': '추석',
+                '2026-10-03': '개천절', '2026-10-05': '대체공휴일',
+                '2026-10-09': '한글날',
+                '2026-12-25': '성탄절'
+            },
+
+            init: function () {
+                document.addEventListener('auth-ready', () => {
+                    const cfg = window.currentConfig;
+                    if (cfg) document.getElementById('dash-year-badge').innerText = `${cfg.year}학년도 ${cfg.semester}학기`;
+                    this.initCalendar();
+                });
+            },
+
+            initCalendar: function () {
+                const calendarEl = document.getElementById('calendar');
+                const holidayTextEvents = Object.keys(this.holidays).map(date => ({
+                    title: this.holidays[date], start: date, allDay: true,
+                    textColor: '#ef4444', backgroundColor: 'transparent', borderColor: 'transparent',
+                    classNames: ['holiday-text-event']
+                }));
+
+                this.calendar = new FullCalendar.Calendar(calendarEl, {
+                    initialView: 'dayGridMonth',
+                    locale: 'ko',
+                    headerToolbar: {
+                        left: 'prev,next today',
+                        center: 'title',
+                        right: 'dayGridMonth,listMonth'
+                    },
+                    dayCellClassNames: (arg) => {
+                        const year = arg.date.getFullYear();
+                        const month = String(arg.date.getMonth() + 1).padStart(2, '0');
+                        const day = String(arg.date.getDate()).padStart(2, '0');
+                        if (this.holidays[`${year}-${month}-${day}`]) return ['fc-day-holiday'];
+                        return [];
+                    },
+                    events: [...holidayTextEvents, this.fetchEvents.bind(this)],
+                    dateClick: (info) => this.openModal(null, info.dateStr),
+                    eventClick: (info) => {
+                        if (info.event.classNames.includes('holiday-text-event')) return;
+                        this.openModal(info.event);
+                    },
+                    height: '100%',
+                    contentHeight: '100%',
+                    expandRows: true, // Auto expand rows to fill height
+                    displayEventTime: false,
+                    fixedWeekCount: false,
+                    showNonCurrentDates: false,
+                    windowResize: function (view) {
+                        // Optional responsive handling
+                    }
+                });
+                this.calendar.render();
+            },
+
+            fetchEvents: async function (info, successCallback, failureCallback) {
+                try {
+                    const snapshot = await window.db.collection('calendar_events')
+                        .where('start', '>=', info.startStr)
+                        .where('start', '<', info.endStr)
+                        .get();
+
+                    const events = [];
+                    const filter = document.getElementById('view-filter').value;
+
+                    snapshot.forEach(doc => {
+                        const d = doc.data();
+                        if (filter !== 'all') {
+                            if (filter === 'common') { if (d.targetType !== 'common') return; }
+                            else { if (d.targetType === 'class' && d.targetClass !== filter) return; }
+                        }
+                        events.push({
+                            id: doc.id,
+                            title: d.title,
+                            start: d.start,
+                            end: d.end || d.start,
+                            backgroundColor: this.colorMap[d.eventType] || '#6b7280',
+                            borderColor: this.colorMap[d.eventType] || '#6b7280',
+                            extendedProps: d
+                        });
+                    });
+                    successCallback(events);
+                } catch (e) { console.error(e); failureCallback(e); }
+            },
+
+            refetchEvents: function () { if (this.calendar) this.calendar.refetchEvents(); },
+
+            openModal: function (eventObj = null, dateStr = null) {
+                document.getElementById('event-modal').classList.remove('hidden');
+                document.getElementById('event-modal').classList.add('flex');
+                if (eventObj) {
+                    const p = eventObj.extendedProps;
+                    document.getElementById('modal-title').innerText = "일정 수정";
+                    document.getElementById('event-id').value = eventObj.id;
+                    document.getElementById('event-title').value = p.title;
+                    document.getElementById('event-start').value = p.start;
+                    document.getElementById('event-end').value = p.end || '';
+                    document.getElementById('event-type').value = p.eventType;
+                    document.getElementById('event-desc').value = p.description || '';
+                    if (p.targetType === 'class') {
+                        document.querySelector('input[name="targetType"][value="class"]').checked = true;
+                        this.toggleTargetClass(true);
+                        document.getElementById('target-class').value = p.targetClass;
+                    } else {
+                        document.querySelector('input[name="targetType"][value="common"]').checked = true;
+                        this.toggleTargetClass(false);
+                    }
+                    document.getElementById('btn-delete').classList.remove('hidden');
+                } else {
+                    document.getElementById('modal-title').innerText = "일정 등록";
+                    // Reset fields
+                    document.getElementById('event-id').value = '';
+                    document.getElementById('event-title').value = '';
+                    document.getElementById('event-start').value = dateStr || new Date().toISOString().split('T')[0];
+                    document.getElementById('event-end').value = '';
+                    document.getElementById('event-type').value = 'performance';
+                    document.getElementById('event-desc').value = '';
+                    document.querySelector('input[name="targetType"][value="common"]').checked = true;
+                    this.toggleTargetClass(false);
+                    document.getElementById('btn-delete').classList.add('hidden');
+                }
+            },
+
+            closeModal: function () {
+                document.getElementById('event-modal').classList.add('hidden');
+                document.getElementById('event-modal').classList.remove('flex');
+            },
+
+            toggleTargetClass: function (enable) {
+                const sel = document.getElementById('target-class');
+                sel.disabled = !enable;
+                if (enable) sel.classList.remove('bg-gray-50'); else sel.classList.add('bg-gray-50');
+            },
+
+            saveEvent: async function () {
+                const id = document.getElementById('event-id').value;
+                const title = document.getElementById('event-title').value;
+                const start = document.getElementById('event-start').value;
+                if (!title || !start) { alert("제목과 시작 날짜는 필수입니다."); return; }
+
+                const data = {
+                    title: title,
+                    start: start,
+                    end: document.getElementById('event-end').value || null,
+                    eventType: document.getElementById('event-type').value,
+                    targetType: document.querySelector('input[name="targetType"]:checked').value,
+                    targetClass: document.querySelector('input[name="targetType"]:checked').value === 'class' ? document.getElementById('target-class').value : null,
+                    description: document.getElementById('event-desc').value,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+
+                try {
+                    if (id) await window.db.collection('calendar_events').doc(id).update(data);
+                    else {
+                        data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+                        await window.db.collection('calendar_events').add(data);
+                    }
+                    this.closeModal();
+                    this.refetchEvents();
+                } catch (e) { alert("저장 실패: " + e.message); }
+            },
+
+            deleteEvent: async function () {
+                const id = document.getElementById('event-id').value;
+                if (!id) return;
+                if (!confirm("정말 삭제하시겠습니까?")) return;
+                try {
+                    await window.db.collection('calendar_events').doc(id).delete();
+                    this.closeModal();
+                    this.refetchEvents();
+                } catch (e) { alert("삭제 실패: " + e.message); }
+            }
+        };
+
+        document.addEventListener('auth-ready', () => app.init());
     </script>
 </body>
+
 </html>
