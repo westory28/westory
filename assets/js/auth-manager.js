@@ -57,14 +57,12 @@ window.currentConfig = {
 
 // --- Dynamic Collection Helper ---
 window.getCollection = function (collectionName) {
-    const globalCollections = ['users', 'site_settings', 'metadata', 'calendar_events'];
+    const globalCollections = ['users', 'site_settings', 'metadata'];
     if (globalCollections.includes(collectionName)) {
         return window.db.collection(collectionName);
     }
     return window.db.collection('years')
         .doc(window.currentConfig.year)
-        .collection('semesters')
-        .doc(window.currentConfig.semester)
         .collection(collectionName);
 };
 
@@ -152,7 +150,8 @@ class AuthManager {
 
         try {
             // Fetch future events
-            const snapshot = await window.db.collection('calendar_events')
+            const calPath = `years/${window.currentConfig.year}/calendar`;
+            const snapshot = await window.db.collection(calPath)
                 .where('start', '>=', todayStr)
                 .orderBy('start')
                 .limit(10)

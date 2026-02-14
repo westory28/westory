@@ -196,32 +196,7 @@
                                 typeLabelMap: {
                                     'exam': '정기 시험', 'performance': '수행평가', 'event': '행사', 'diagnosis': '진단평가', 'formative': '형성평가'
                                 },
-                                holidays: {
-                                    // 2025
-                                    '2025-01-01': '신정',
-                                    '2025-01-28': '설날', '2025-01-29': '설날', '2025-01-30': '설날',
-                                    '2025-03-01': '삼일절', '2025-03-03': '대체공휴일',
-                                    '2025-05-05': '어린이날/석가탄신일', '2025-05-06': '대체공휴일',
-                                    '2025-06-06': '현충일',
-                                    '2025-08-15': '광복절',
-                                    '2025-10-03': '개천절',
-                                    '2025-10-05': '추석', '2025-10-06': '추석', '2025-10-07': '추석', '2025-10-08': '대체공휴일',
-                                    '2025-10-09': '한글날',
-                                    '2025-12-25': '성탄절',
-
-                                    // 2026
-                                    '2026-01-01': '신정',
-                                    '2026-02-16': '설날', '2026-02-17': '설날', '2026-02-18': '설날',
-                                    '2026-03-01': '삼일절', '2026-03-02': '대체공휴일',
-                                    '2026-05-05': '어린이날',
-                                    '2026-05-24': '석가탄신일', '2026-05-25': '대체공휴일',
-                                    '2026-06-06': '현충일',
-                                    '2026-08-15': '광복절', '2026-08-17': '대체공휴일',
-                                    '2026-09-24': '추석', '2026-09-25': '추석', '2026-09-26': '추석',
-                                    '2026-10-03': '개천절', '2026-10-05': '대체공휴일',
-                                    '2026-10-09': '한글날',
-                                    '2026-12-25': '성탄절'
-                                },
+                                holidays: {},
 
                                 init: function () {
                                     document.addEventListener('auth-ready', async (e) => {
@@ -256,7 +231,7 @@
                                         console.error('Global config not loaded properly');
                                         return null;
                                     }
-                                    return `years/${cfg.year}/semesters/${cfg.semester}/${collectionName}`;
+                                    return `years/${cfg.year}/${collectionName}`;
                                 },
 
                                 // --- Notice Board Logic (Read-Only) ---
@@ -374,11 +349,6 @@
 
                                 initCalendar: function () {
                                     const calendarEl = document.getElementById('calendar');
-                                    const holidayTextEvents = Object.keys(this.holidays).map(date => ({
-                                        title: this.holidays[date], start: date, allDay: true,
-                                        textColor: '#ef4444', backgroundColor: 'transparent', borderColor: 'transparent',
-                                        classNames: ['holiday-text-event']
-                                    }));
 
                                     this.calendar = new FullCalendar.Calendar(calendarEl, {
                                         initialView: 'dayGridMonth',
@@ -389,13 +359,12 @@
                                             right: 'dayGridMonth,listMonth'
                                         },
                                         dayCellClassNames: (arg) => {
-                                            const year = arg.date.getFullYear();
-                                            const month = String(arg.date.getMonth() + 1).padStart(2, '0');
-                                            const day = String(arg.date.getDate()).padStart(2, '0');
-                                            if (this.holidays[`${year}-${month}-${day}`]) return ['fc-day-holiday'];
-                                            return [];
+                                            const dateStr = arg.date.toISOString().split('T')[0];
+                                            const evts = this.calendar ? this.calendar.getEvents() : [];
+                                            const isHoliday = evts.some(e => e.startStr === dateStr && e.extendedProps && e.extendedProps.eventType === 'holiday');
+                                            return isHoliday ? ['fc-day-holiday'] : [];
                                         },
-                                        events: [...holidayTextEvents, this.fetchEvents.bind(this)],
+                                        events: [this.fetchEvents.bind(this)],
                                         dateClick: (info) => {
                                             // Find events for this date
                                             const allEvents = this.calendar.getEvents();
@@ -428,7 +397,7 @@
                                     try {
                                         // Fetch logic same as before: generic fetch then client filter if needed,
                                         // or filtered query if possible. To be safe, we fetch range and filter in memory for class.
-                                        const snapshot = await window.db.collection(this.getCollectionPath('calendar_events') || 'calendar_events')
+                                        const snapshot = await window.db.collection(this.getCollectionPath('calendar') || 'calendar')
                                             .where('start', '>=', info.startStr)
                                             .where('start', '<', info.endStr)
                                             .get();
@@ -440,13 +409,16 @@
                                             // Filter by Class (Common or My Class)
                                             if (d.targetType === 'class' && d.targetClass !== this.userClassStr) return;
 
+                                            const isHoliday = d.eventType === 'holiday';
                                             events.push({
                                                 id: doc.id,
                                                 title: d.title,
                                                 start: d.start,
                                                 end: d.end || d.start,
-                                                backgroundColor: this.colorMap[d.eventType] || '#6b7280',
-                                                borderColor: this.colorMap[d.eventType] || '#6b7280',
+                                                backgroundColor: isHoliday ? 'transparent' : (this.colorMap[d.eventType] || '#6b7280'),
+                                                borderColor: isHoliday ? 'transparent' : (this.colorMap[d.eventType] || '#6b7280'),
+                                                textColor: isHoliday ? '#ef4444' : undefined,
+                                                classNames: isHoliday ? ['holiday-text-event'] : [],
                                                 extendedProps: d
                                             });
                                         });

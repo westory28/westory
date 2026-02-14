@@ -361,7 +361,8 @@
 
             fetchEvents: async function (info, successCallback, failureCallback) {
                 try {
-                    const snapshot = await window.db.collection('calendar_events')
+                    const calPath = `years/${window.currentConfig.year}/calendar`;
+                    const snapshot = await window.db.collection(calPath)
                         .where('start', '>=', info.startStr)
                         .where('start', '<', info.endStr)
                         .get();
@@ -464,12 +465,13 @@
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
 
+                const calPath = `years/${window.currentConfig.year}/calendar`;
                 try {
                     if (id) {
-                        await window.db.collection('calendar_events').doc(id).update(data);
+                        await window.db.collection(calPath).doc(id).update(data);
                     } else {
                         data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
-                        await window.db.collection('calendar_events').add(data);
+                        await window.db.collection(calPath).add(data);
                     }
                     this.closeModal();
                     this.refetchEvents();
@@ -482,7 +484,8 @@
                 if (!confirm("정말 삭제하시겠습니까?")) return;
 
                 try {
-                    await window.db.collection('calendar_events').doc(id).delete();
+                    const calPath = `years/${window.currentConfig.year}/calendar`;
+                    await window.db.collection(calPath).doc(id).delete();
                     this.closeModal();
                     this.refetchEvents();
                 } catch (e) { alert("삭제 실패: " + e.message); }

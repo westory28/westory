@@ -127,13 +127,13 @@
     <main class="flex-1 w-full max-w-7xl mx-auto px-4 py-4 md:px-6 md:py-6 h-full flex flex-col overflow-hidden">
 
         <div class="flex justify-between items-center mb-4 shrink-0">
-            <h1 class="text-xl md:text-2xl font-bold text-gray-800 flex items-center">
-                <i class="fas fa-calendar-alt text-blue-500 mr-2"></i>대시보드
-            </h1>
-            <span id="dash-year-badge"
-                class="bg-blue-600 text-white font-bold px-3 py-1 rounded-full text-xs md:text-sm shadow-md min-w-[100px] text-center">
-                <i class="fas fa-spinner fa-spin"></i>
-            </span>
+            <div class="flex items-center gap-3">
+                <h1 class="text-xl md:text-2xl font-bold text-gray-800">대시보드</h1>
+                <span id="dash-year-badge"
+                    class="bg-blue-600 text-white font-bold px-3 py-1 rounded-full text-xs md:text-sm shadow-md min-w-[100px] text-center">
+                    <i class="fas fa-spinner fa-spin"></i>
+                </span>
+            </div>
         </div>
 
         <!-- Search & Filter (Moved to Top Right of Calendar Area or Global Header) -->
@@ -210,10 +210,12 @@
     </main>
 
     <!-- Notice Add/Edit Modal -->
-    <div id="notice-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-        <div class="bg-[#fffbeb] rounded-xl shadow-2xl w-full max-w-sm p-6 m-4 border-t-8 border-amber-400 relative"
+    <div id="notice-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center"
+        onclick="app.attemptCloseNotice(event)">
+        <div class="bg-[#fffbeb] rounded-xl shadow-2xl w-full max-w-lg p-8 m-4 border-t-8 border-amber-400 relative"
             onclick="event.stopPropagation()">
-            <button onclick="app.closeNoticeModal()" class="absolute top-4 right-4 text-amber-800 hover:text-amber-600">
+            <button onclick="app.attemptCloseNotice()"
+                class="absolute top-4 right-4 text-amber-800 hover:text-amber-600">
                 <i class="fas fa-times fa-lg"></i>
             </button>
             <h3 class="text-xl font-extrabold text-amber-900 mb-6"><i class="fas fa-pen-fancy mr-2"></i>알림 쓰기</h3>
@@ -242,16 +244,29 @@
 
                 <div>
                     <label class="block text-xs font-bold text-amber-800 mb-1">알림 내용</label>
-                    <textarea id="notice-content" rows="4"
+                    <textarea id="notice-content" rows="5"
                         class="w-full bg-white border border-yellow-300 rounded p-3 text-sm resize-none outline-none focus:ring-2 focus:ring-amber-300 placeholder-amber-800/30"
                         placeholder="내용을 입력하세요..."></textarea>
                 </div>
 
-                <div class="flex items-center gap-2">
-                    <input type="checkbox" id="notice-common"
-                        class="w-4 h-4 text-amber-600 rounded focus:ring-amber-500 border-gray-300">
-                    <label for="notice-common" class="text-sm font-bold text-amber-900 cursor-pointer">학급 전체 공통
-                        알림</label>
+                <div>
+                    <label class="block text-xs font-bold text-amber-800 mb-2">대상 선택</label>
+                    <div class="flex items-center gap-3">
+                        <label class="inline-flex items-center gap-1 cursor-pointer">
+                            <input type="radio" name="notice-target" value="common" id="notice-common-radio" checked
+                                class="text-amber-600 focus:ring-amber-500" onchange="app.toggleNoticeClassSelect()">
+                            <span class="text-sm font-bold text-amber-900">전체 공통</span>
+                        </label>
+                        <label class="inline-flex items-center gap-1 cursor-pointer">
+                            <input type="radio" name="notice-target" value="class" id="notice-class-radio"
+                                class="text-amber-600 focus:ring-amber-500" onchange="app.toggleNoticeClassSelect()">
+                            <span class="text-sm font-bold text-amber-900">학급 선택</span>
+                        </label>
+                        <select id="notice-class-select"
+                            class="hidden bg-white border border-yellow-300 rounded p-1.5 text-sm font-bold text-gray-700 outline-none">
+                            <!-- populated dynamically -->
+                        </select>
+                    </div>
                 </div>
             </div>
 
@@ -394,33 +409,8 @@
             typeLabelMap: {
                 'exam': '정기 시험', 'performance': '수행평가', 'event': '행사', 'diagnosis': '진단평가', 'formative': '형성평가'
             },
-            // Korean Public Holidays (2025-2026) Verified
-            holidays: {
-                // 2025
-                '2025-01-01': '신정',
-                '2025-01-28': '설날', '2025-01-29': '설날', '2025-01-30': '설날',
-                '2025-03-01': '삼일절', '2025-03-03': '대체공휴일',
-                '2025-05-05': '어린이날/석가탄신일', '2025-05-06': '대체공휴일',
-                '2025-06-06': '현충일',
-                '2025-08-15': '광복절',
-                '2025-10-03': '개천절',
-                '2025-10-05': '추석', '2025-10-06': '추석', '2025-10-07': '추석', '2025-10-08': '대체공휴일',
-                '2025-10-09': '한글날',
-                '2025-12-25': '성탄절',
-
-                // 2026
-                '2026-01-01': '신정',
-                '2026-02-16': '설날', '2026-02-17': '설날', '2026-02-18': '설날',
-                '2026-03-01': '삼일절', '2026-03-02': '대체공휴일',
-                '2026-05-05': '어린이날',
-                '2026-05-24': '석가탄신일', '2026-05-25': '대체공휴일',
-                '2026-06-06': '현충일',
-                '2026-08-15': '광복절', '2026-08-17': '대체공휴일',
-                '2026-09-24': '추석', '2026-09-25': '추석', '2026-09-26': '추석',
-                '2026-10-03': '개천절', '2026-10-05': '대체공휴일',
-                '2026-10-09': '한글날',
-                '2026-12-25': '성탄절'
-            },
+            // Holidays loaded from Firestore (no hardcoding)
+            holidays: {},
 
             init: function () {
                 const cfg = window.currentConfig;
@@ -466,7 +456,7 @@
                     alert('시스템 설정을 불러올 수 없습니다. 페이지를 새로고침하세요.');
                     return null;
                 }
-                return `years/${cfg.year}/semesters/${cfg.semester}/${collectionName}`;
+                return `years/${cfg.year}/${collectionName}`;
             },
 
             // --- Notice Board Logic ---
@@ -530,6 +520,20 @@
                 document.getElementById('notice-modal').classList.remove('hidden');
                 document.getElementById('notice-modal').classList.add('flex');
 
+                // Populate notice class select from the same data as view-filter
+                const noticeClassSel = document.getElementById('notice-class-select');
+                if (noticeClassSel.children.length === 0) {
+                    const viewFilter = document.getElementById('view-filter');
+                    Array.from(viewFilter.options).forEach(opt => {
+                        if (opt.value !== 'all' && opt.value !== 'common') {
+                            const o = document.createElement('option');
+                            o.value = opt.value;
+                            o.textContent = opt.textContent;
+                            noticeClassSel.appendChild(o);
+                        }
+                    });
+                }
+
                 if (id) {
                     const path = this.getCollectionPath('notices');
                     if (!path) return;
@@ -539,7 +543,13 @@
                         document.getElementById('notice-category').value = d.category;
                         document.getElementById('notice-content').value = d.content;
                         document.getElementById('notice-target-date').value = d.targetDate || '';
-                        document.getElementById('notice-common').checked = (d.targetType === 'common');
+                        if (d.targetType === 'class') {
+                            document.getElementById('notice-class-radio').checked = true;
+                            document.getElementById('notice-class-select').value = d.targetClass || '';
+                        } else {
+                            document.getElementById('notice-common-radio').checked = true;
+                        }
+                        this.toggleNoticeClassSelect();
                         this.toggleDDayInput();
                         document.getElementById('btn-delete-notice').classList.remove('hidden');
                     });
@@ -548,7 +558,8 @@
                     document.getElementById('notice-category').value = 'normal';
                     document.getElementById('notice-content').value = '';
                     document.getElementById('notice-target-date').value = '';
-                    document.getElementById('notice-common').checked = true;
+                    document.getElementById('notice-common-radio').checked = true;
+                    this.toggleNoticeClassSelect();
                     this.toggleDDayInput();
                     document.getElementById('btn-delete-notice').classList.add('hidden');
                 }
@@ -557,6 +568,23 @@
             closeNoticeModal: function () {
                 document.getElementById('notice-modal').classList.add('hidden');
                 document.getElementById('notice-modal').classList.remove('flex');
+            },
+
+            attemptCloseNotice: function (e) {
+                // If called from overlay click, e is the click event
+                if (e && e.target && e.target.id !== 'notice-modal') return;
+                const content = document.getElementById('notice-content').value.trim();
+                if (content) {
+                    if (!confirm('작성 중인 내용이 있습니다. 정말로 닫으시겠습니까?')) return;
+                }
+                this.closeNoticeModal();
+            },
+
+            toggleNoticeClassSelect: function () {
+                const isClass = document.getElementById('notice-class-radio').checked;
+                const sel = document.getElementById('notice-class-select');
+                if (isClass) sel.classList.remove('hidden');
+                else sel.classList.add('hidden');
             },
 
             toggleDDayInput: function () {
@@ -570,11 +598,13 @@
                 const content = document.getElementById('notice-content').value;
                 if (!content) return alert("내용을 입력하세요.");
 
+                const isCommon = document.getElementById('notice-common-radio').checked;
                 const data = {
                     category: document.getElementById('notice-category').value,
                     content: content,
                     targetDate: document.getElementById('notice-target-date').value,
-                    targetType: document.getElementById('notice-common').checked ? 'common' : 'class', // Simple boolean for now
+                    targetType: isCommon ? 'common' : 'class',
+                    targetClass: isCommon ? '' : document.getElementById('notice-class-select').value,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
 
@@ -658,6 +688,15 @@
                         </div>
                     `;
                 }).join('');
+
+                // Add event button at bottom
+                container.innerHTML += `
+                    <div class="text-center mt-3">
+                        <button onclick="app.openModal(null, '${dateStr}')" class="text-blue-600 hover:text-blue-800 font-bold text-xs underline">
+                            <i class="fas fa-plus mr-1"></i>이 날짜에 일정 추가하기
+                        </button>
+                    </div>
+                `;
             },
 
             // Need a way to look up full event props for editing
@@ -665,11 +704,6 @@
 
             initCalendar: function () {
                 const calendarEl = document.getElementById('calendar');
-                const holidayTextEvents = Object.keys(this.holidays).map(date => ({
-                    title: this.holidays[date], start: date, allDay: true,
-                    textColor: '#ef4444', backgroundColor: 'transparent', borderColor: 'transparent',
-                    classNames: ['holiday-text-event']
-                }));
 
                 this.calendar = new FullCalendar.Calendar(calendarEl, {
                     initialView: 'dayGridMonth',
@@ -680,13 +714,13 @@
                         right: 'dayGridMonth,listMonth'
                     },
                     dayCellClassNames: (arg) => {
-                        const year = arg.date.getFullYear();
-                        const month = String(arg.date.getMonth() + 1).padStart(2, '0');
-                        const day = String(arg.date.getDate()).padStart(2, '0');
-                        if (this.holidays[`${year}-${month}-${day}`]) return ['fc-day-holiday'];
-                        return [];
+                        // Check loaded events for holiday type
+                        const dateStr = arg.date.toISOString().split('T')[0];
+                        const evts = this.calendar ? this.calendar.getEvents() : [];
+                        const isHoliday = evts.some(e => e.startStr === dateStr && e.extendedProps && e.extendedProps.eventType === 'holiday');
+                        return isHoliday ? ['fc-day-holiday'] : [];
                     },
-                    events: [...holidayTextEvents, this.fetchEvents.bind(this)],
+                    events: [this.fetchEvents.bind(this)],
                     dateClick: (info) => {
                         // Find events for this date from the current view's cache or client side filter
                         // Better: Use getEvents() from calendar and filter
@@ -725,7 +759,7 @@
             },
 
             fetchEvents: async function (info, successCallback, failureCallback) {
-                const path = this.getCollectionPath('calendar_events');
+                const path = this.getCollectionPath('calendar');
                 if (!path) {
                     failureCallback(new Error('Collection path not available'));
                     return;
@@ -752,13 +786,17 @@
                         // Map for quick access
                         this.eventsMap[doc.id] = { id: doc.id, ...d };
 
+                        // Holiday events get special styling
+                        const isHoliday = d.eventType === 'holiday';
                         events.push({
                             id: doc.id,
                             title: d.title,
                             start: d.start,
                             end: d.end || d.start,
-                            backgroundColor: this.colorMap[d.eventType] || '#6b7280',
-                            borderColor: this.colorMap[d.eventType] || '#6b7280',
+                            backgroundColor: isHoliday ? 'transparent' : (this.colorMap[d.eventType] || '#6b7280'),
+                            borderColor: isHoliday ? 'transparent' : (this.colorMap[d.eventType] || '#6b7280'),
+                            textColor: isHoliday ? '#ef4444' : undefined,
+                            classNames: isHoliday ? ['holiday-text-event'] : [],
                             extendedProps: d
                         });
                     });
@@ -881,7 +919,7 @@
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
 
-                const path = this.getCollectionPath('calendar_events');
+                const path = this.getCollectionPath('calendar');
                 if (!path) return;
 
                 try {
@@ -900,7 +938,7 @@
                 const id = document.getElementById('event-id').value;
                 if (!id) return;
                 if (!confirm("정말 삭제하시겠습니까?")) return;
-                const path = this.getCollectionPath('calendar_events');
+                const path = this.getCollectionPath('calendar');
                 if (!path) return;
                 try {
                     await window.db.collection(path).doc(id).delete();
