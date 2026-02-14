@@ -295,7 +295,7 @@
                     console.error('Global config not loaded properly');
                     return null;
                 }
-                return `${cfg.year}-${cfg.semester}/${collectionName}`;
+                return `years/${cfg.year}/semesters/${cfg.semester}/${collectionName}`;
             },
 
             fetchEvents: async function (info, successCallback, failureCallback) {

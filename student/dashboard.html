@@ -256,7 +256,7 @@
                                         console.error('Global config not loaded properly');
                                         return null;
                                     }
-                                    return `${cfg.year}-${cfg.semester}/${collectionName}`;
+                                    return `years/${cfg.year}/semesters/${cfg.semester}/${collectionName}`;
                                 },
 
                                 // --- Notice Board Logic (Read-Only) ---
@@ -330,7 +330,7 @@
                                     // Format Date
                                     const dateObj = new Date(dateStr);
                                     const days = ['일', '월', '화', '수', '목', '금', '토'];
-                                    dateDisplay.innerText = `${dateObj.getMonth() + 1}월 ${dateObj.getDate()}일 (${days[dateObj.getDay()]})`;
+                                    dateDisplay.innerHTML = `<span class="inline-flex items-center bg-blue-50 border-2 border-blue-300 rounded-lg px-3 py-1"><span class="text-lg font-extrabold text-blue-800">${dateObj.getMonth() + 1}월 ${dateObj.getDate()}일</span><span class="ml-1 text-sm font-bold text-blue-500">(${days[dateObj.getDay()]})</span></span>`;
 
                                     if (events.length === 0) {
                                         container.innerHTML = `
@@ -343,7 +343,18 @@
                                     }
 
                                     container.innerHTML = events.map(ev => {
-                                        const p = ev.extendedProps || ev; // Handle both fullcalendar event and raw object
+                                        // Render holiday events with special styling
+                                        if (ev.classNames && ev.classNames.includes('holiday-text-event')) {
+                                            return `
+                        <div class="group p-3 border-l-4 border-red-400 bg-red-50 mb-3 rounded-r-lg">
+                            <div class="flex items-center gap-2">
+                                <span class="text-[10px] text-white px-1.5 py-0.5 rounded font-bold bg-red-500">공휴일</span>
+                                <h4 class="font-bold text-red-700 text-sm">${ev.title}</h4>
+                            </div>
+                        </div>
+                    `;
+                                        }
+                                        const p = ev.extendedProps || ev;
                                         return `
                         <div class="group p-3 border-l-4 border-gray-200 bg-gray-50 mb-3 rounded-r-lg">
                             <div class="flex justify-between items-start">
@@ -394,7 +405,7 @@
                                                 const target = new Date(info.dateStr);
                                                 if (!e.end) return e.startStr === info.dateStr;
                                                 return target >= start && target < end;
-                                            }).filter(e => !e.classNames.includes('holiday-text-event'));
+                                            }); // Include holidays too
 
                                             this.showEventsOnPanel(info.dateStr, dailyEvents);
                                         },
@@ -417,7 +428,7 @@
                                     try {
                                         // Fetch logic same as before: generic fetch then client filter if needed,
                                         // or filtered query if possible. To be safe, we fetch range and filter in memory for class.
-                                        const snapshot = await window.db.collection('calendar_events')
+                                        const snapshot = await window.db.collection(this.getCollectionPath('calendar_events') || 'calendar_events')
                                             .where('start', '>=', info.startStr)
                                             .where('start', '<', info.endStr)
                                             .get();

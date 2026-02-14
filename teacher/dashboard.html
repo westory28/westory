@@ -128,7 +128,7 @@
 
         <div class="flex justify-between items-center mb-4 shrink-0">
             <h1 class="text-xl md:text-2xl font-bold text-gray-800 flex items-center">
-                <i class="fas fa-calendar-alt text-blue-500 mr-2"></i>학사 일정 관리
+                <i class="fas fa-calendar-alt text-blue-500 mr-2"></i>대시보드
             </h1>
             <span id="dash-year-badge"
                 class="bg-blue-600 text-white font-bold px-3 py-1 rounded-full text-xs md:text-sm shadow-md min-w-[100px] text-center">
@@ -158,18 +158,7 @@
                             class="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg p-1.5 outline-none">
                             <option value="all">전체 보기</option>
                             <option value="common">공통 일정</option>
-                            <option value="2-1">2-1반</option>
-                            <option value="2-2">2-2반</option>
-                            <option value="2-3">2-3반</option>
-                            <option value="2-4">2-4반</option>
-                            <option value="2-5">2-5반</option>
-                            <option value="2-6">2-6반</option>
-                            <option value="2-7">2-7반</option>
-                            <option value="2-8">2-8반</option>
-                            <option value="2-9">2-9반</option>
-                            <option value="2-10">2-10반</option>
-                            <option value="2-11">2-11반</option>
-                            <option value="2-12">2-12반</option>
+                            <!-- Class options populated dynamically -->
                         </select>
                         <button onclick="app.openModal()"
                             class="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-blue-700 shadow-sm transition">
@@ -440,6 +429,33 @@
                 this.initModal();
                 this.initSearch();
                 this.initNotices();
+                this.initClassFilter();
+            },
+
+            // Dynamically populate class filter from Firestore users
+            initClassFilter: async function () {
+                try {
+                    const snapshot = await window.db.collection('users')
+                        .where('type', '==', 'student')
+                        .get();
+                    const classSet = new Set();
+                    snapshot.forEach(doc => {
+                        const d = doc.data();
+                        if (d.grade && d.class) classSet.add(`${d.grade}-${d.class}`);
+                    });
+                    const sorted = Array.from(classSet).sort((a, b) => {
+                        const [ga, ca] = a.split('-').map(Number);
+                        const [gb, cb] = b.split('-').map(Number);
+                        return ga - gb || ca - cb;
+                    });
+                    const sel = document.getElementById('view-filter');
+                    sorted.forEach(cls => {
+                        const opt = document.createElement('option');
+                        opt.value = cls;
+                        opt.textContent = `${cls}반`;
+                        sel.appendChild(opt);
+                    });
+                } catch (e) { console.error('Class filter init error:', e); }
             },
 
             //Helper function to get year/semester based collection path
@@ -450,7 +466,7 @@
                     alert('시스템 설정을 불러올 수 없습니다. 페이지를 새로고침하세요.');
                     return null;
                 }
-                return `${cfg.year}-${cfg.semester}/${collectionName}`;
+                return `years/${cfg.year}/semesters/${cfg.semester}/${collectionName}`;
             },
 
             // --- Notice Board Logic ---
@@ -594,7 +610,7 @@
                 // Format Date
                 const dateObj = new Date(dateStr);
                 const days = ['일', '월', '화', '수', '목', '금', '토'];
-                dateDisplay.innerText = `${dateObj.getMonth() + 1}월 ${dateObj.getDate()}일 (${days[dateObj.getDay()]})`;
+                dateDisplay.innerHTML = `<span class="inline-flex items-center bg-blue-50 border-2 border-blue-300 rounded-lg px-3 py-1"><span class="text-lg font-extrabold text-blue-800">${dateObj.getMonth() + 1}월 ${dateObj.getDate()}일</span><span class="ml-1 text-sm font-bold text-blue-500">(${days[dateObj.getDay()]})</span></span>`;
 
                 if (events.length === 0) {
                     container.innerHTML = `
@@ -610,9 +626,20 @@
                 }
 
                 container.innerHTML = events.map(ev => {
+                    // Render holiday events with special styling
+                    if (ev.classNames && ev.classNames.includes('holiday-text-event')) {
+                        return `
+                            <div class="group p-3 border-l-4 border-red-400 bg-red-50 mb-3 rounded-r-lg">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-[10px] text-white px-1.5 py-0.5 rounded font-bold bg-red-500">공휴일</span>
+                                    <h4 class="font-bold text-red-700 text-sm">${ev.title}</h4>
+                                </div>
+                            </div>
+                        `;
+                    }
                     // Use eventsMap to get full extendedProps if ev is a FullCalendar event object
                     const p = ev.extendedProps || this.eventsMap[ev.id];
-                    if (!p) return ''; // Should not happen if eventsMap is correctly populated
+                    if (!p) return '';
 
                     return `
                         <div onclick="app.openModal({id: '${ev.id}', extendedProps: { ...app.eventsMap['${ev.id}'] }})" 
@@ -673,7 +700,7 @@
                             // If just start date
                             if (!e.end) return e.startStr === info.dateStr;
                             return target >= start && target < end;
-                        }).filter(e => !e.classNames.includes('holiday-text-event')); // Exclude holidays
+                        }); // Include holidays too
 
                         this.showEventsOnPanel(info.dateStr, dailyEvents);
                     },
