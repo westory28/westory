@@ -1,17 +1,17 @@
-
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>단원 설정 - Westory Admin</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
+
     <!-- Quill Editor -->
     <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
     <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
-    
+
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
@@ -22,20 +22,78 @@
 
     <style>
         /* Tree Styles matching Quiz Manager */
-        .tree-node { position: relative; }
-        .tree-node.level-0 { margin-bottom: 4px; }
-        .tree-node:not(.level-0) { margin-left: 20px; border-left: 1px dashed #e5e7eb; }
-        .tree-item { display: flex; align-items: center; padding: 8px 12px; border-radius: 6px; cursor: pointer; transition: all 0.2s; margin-bottom: 2px; }
-        .tree-item:hover { background-color: #f3f4f6; }
-        .tree-item.active { background-color: #eff6ff; color: #2563eb; font-weight: bold; }
-        
-        .tree-item-title { flex-grow: 1; margin-left: 8px; }
-        .btn-action { display: none; margin-left: 8px; }
-        .tree-item:hover .btn-action { display: flex; gap: 4px; }
+        .tree-node {
+            position: relative;
+        }
 
-        .ql-container { font-family: 'Noto Sans KR', sans-serif; font-size: 1rem; height: 500px; }
-        .ql-editor strong { font-weight: bold; }
-        .cloze-input { border: none; border-bottom: 2px solid #374151; text-align: center; font-weight: bold; color: #2563eb; background: transparent; padding: 0 4px; width: 100px; display: inline-block; }
+        .tree-node.level-0 {
+            margin-bottom: 4px;
+        }
+
+        .tree-node:not(.level-0) {
+            margin-left: 20px;
+            border-left: 1px dashed #e5e7eb;
+        }
+
+        .tree-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 2px;
+        }
+
+        .tree-item:hover {
+            background-color: #f3f4f6;
+        }
+
+        .tree-item.active {
+            background-color: #eff6ff;
+            color: #2563eb;
+            font-weight: bold;
+        }
+
+        .tree-item-title {
+            flex-grow: 1;
+            margin-left: 8px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .btn-action {
+            display: none;
+            margin-left: 8px;
+        }
+
+        .tree-item:hover .btn-action {
+            display: flex;
+            gap: 4px;
+        }
+
+        .ql-container {
+            font-family: 'Noto Sans KR', sans-serif;
+            font-size: 1rem;
+            height: 500px;
+        }
+
+        .ql-editor strong {
+            font-weight: bold;
+        }
+
+        .cloze-input {
+            border: none;
+            border-bottom: 2px solid #374151;
+            text-align: center;
+            font-weight: bold;
+            color: #2563eb;
+            background: transparent;
+            padding: 0 4px;
+            width: 100px;
+            display: inline-block;
+        }
 
         /* Mobile Sidebar & Toggle */
         .sidebar-toggle-btn {
@@ -55,58 +113,88 @@
             z-index: 50;
             transition: transform 0.2s;
         }
-        .sidebar-toggle-btn:active { transform: scale(0.95); }
-        .mobile-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 40; }
+
+        .sidebar-toggle-btn:active {
+            transform: scale(0.95);
+        }
+
+        .mobile-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 40;
+        }
 
         @media (max-width: 1024px) {
             .sidebar-container {
                 position: fixed;
-                top: 0; right: 0; bottom: 0;
+                top: 0;
+                right: 0;
+                bottom: 0;
                 width: 80%;
                 max-width: 320px;
                 background: white;
                 z-index: 50;
                 transform: translateX(100%);
                 transition: transform 0.3s ease-out;
-                box-shadow: -4px 0 15px rgba(0,0,0,0.1);
-                display: flex; flex-direction: column;
+                box-shadow: -4px 0 15px rgba(0, 0, 0, 0.1);
+                display: flex;
+                flex-direction: column;
             }
-            .sidebar-container.open { transform: translateX(0); }
-            .sidebar-toggle-btn { display: flex; }
-            .mobile-overlay.open { display: block; }
-            
+
+            .sidebar-container.open {
+                transform: translateX(0);
+            }
+
+            .sidebar-toggle-btn {
+                display: flex;
+            }
+
+            .mobile-overlay.open {
+                display: block;
+            }
+
             /* Adjust content area on mobile */
-            .editor-container { min-height: calc(100vh - 80px); }
+            .editor-container {
+                min-height: calc(100vh - 80px);
+            }
         }
     </style>
 </head>
+
 <body class="bg-gray-50 min-h-screen flex flex-col">
     <!-- Header injected by AuthManager -->
 
-    <main class="flex-1 w-full max-w-7xl mx-auto px-4 lg:px-6 py-6 h-full flex flex-col relative">
-        
+    <main class="flex-1 w-full max-w-[90rem] mx-auto px-4 lg:px-6 py-6 h-full flex flex-col relative">
+
         <div class="flex justify-between items-center mb-4 shrink-0">
             <div>
-                <h1 class="text-xl lg:text-2xl font-bold text-gray-800"><i class="fas fa-sitemap text-blue-500 mr-2"></i>수업 자료 관리</h1>
+                <h1 class="text-xl lg:text-2xl font-bold text-gray-800"><i
+                        class="fas fa-sitemap text-blue-500 mr-2"></i>수업 자료 관리</h1>
             </div>
         </div>
 
         <div class="flex flex-col lg:flex-row gap-6 h-full lg:overflow-hidden pb-4 relative">
-            
+
             <!-- Mobile Overlay -->
             <div id="mobile-overlay" class="mobile-overlay" onclick="app.toggleSidebar(false)"></div>
 
             <!-- Left: Tree Structure (Sidebar) -->
-            <div id="sidebar-panel" class="sidebar-container w-full lg:w-1/3 bg-white lg:rounded-xl lg:shadow-sm lg:border border-gray-200 lg:flex lg:flex-col lg:static lg:transform-none lg:overflow-hidden min-h-[300px] lg:min-h-0">
+            <div id="sidebar-panel"
+                class="sidebar-container w-full lg:w-1/3 bg-white lg:rounded-xl lg:shadow-sm lg:border border-gray-200 lg:flex lg:flex-col lg:static lg:transform-none lg:overflow-hidden min-h-[300px] lg:min-h-0">
                 <div class="p-6 border-b bg-gray-50 font-bold text-gray-700 flex justify-between items-center shrink-0">
                     <span class="flex items-center gap-2"><i class="fas fa-list"></i> 단원 목차</span>
                     <div class="flex gap-1 items-center">
-                        <button onclick="app.addRootUnit()" class="text-xs bg-stone-800 text-white px-3 py-1.5 rounded hover:bg-stone-900 shadow-sm flex items-center transition">
+                        <button onclick="app.addRootUnit()"
+                            class="text-xs bg-stone-800 text-white px-3 py-1.5 rounded hover:bg-stone-900 shadow-sm flex items-center transition">
                             <i class="fas fa-plus mr-1"></i>추가
                         </button>
-                        <button onclick="app.saveTree()" class="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded hover:bg-blue-200 transition font-bold">저장</button>
+                        <button onclick="app.saveTree()"
+                            class="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded hover:bg-blue-200 transition font-bold">저장</button>
                         <!-- Mobile Close Button -->
-                        <button onclick="app.toggleSidebar(false)" class="lg:hidden ml-2 text-gray-400 hover:text-gray-600">
+                        <button onclick="app.toggleSidebar(false)"
+                            class="lg:hidden ml-2 text-gray-400 hover:text-gray-600">
                             <i class="fas fa-times text-lg"></i>
                         </button>
                     </div>
@@ -117,8 +205,10 @@
             </div>
 
             <!-- Right: Lesson Editor -->
-            <div class="editor-container w-full lg:w-2/3 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col relative min-h-[600px] lg:min-h-0" id="editor-panel">
-                <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 bg-white z-10 rounded-xl p-6 text-center">
+            <div class="editor-container w-full lg:w-2/3 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col relative min-h-[600px] lg:min-h-0"
+                id="editor-panel">
+                <div id="empty-state"
+                    class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 bg-white z-10 rounded-xl p-6 text-center">
                     <div class="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4">
                         <i class="far fa-hand-point-left text-4xl lg:block hidden"></i>
                         <i class="fas fa-list text-3xl lg:hidden text-blue-400"></i>
@@ -132,13 +222,16 @@
                 <div class="p-4 border-b flex flex-wrap justify-between items-center bg-gray-50 shrink-0 gap-2">
                     <div class="flex items-center gap-2 overflow-hidden">
                         <span class="bg-blue-600 text-white text-xs px-2 py-1 rounded font-bold shrink-0">EDIT</span>
-                        <span id="selected-unit-path" class="font-bold text-gray-700 truncate max-w-[150px] lg:max-w-none"></span>
+                        <span id="selected-unit-path"
+                            class="font-bold text-gray-700 truncate max-w-[150px] lg:max-w-none"></span>
                     </div>
                     <div class="flex gap-2">
-                         <button onclick="app.previewLesson()" class="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg font-bold hover:bg-gray-50 text-xs md:text-sm">
+                        <button onclick="app.previewLesson()"
+                            class="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg font-bold hover:bg-gray-50 text-xs md:text-sm">
                             <i class="fas fa-eye md:mr-2"></i><span class="hidden md:inline">미리보기</span>
                         </button>
-                        <button onclick="app.saveLesson()" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700 shadow-md text-xs md:text-sm">
+                        <button onclick="app.saveLesson()"
+                            class="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700 shadow-md text-xs md:text-sm">
                             <i class="fas fa-save md:mr-2"></i><span class="hidden md:inline">저장</span>
                         </button>
                     </div>
@@ -148,13 +241,17 @@
                     <!-- Title Input -->
                     <div>
                         <label class="block text-xs font-bold text-gray-500 mb-1">자료 제목</label>
-                        <input type="text" id="lesson-title" class="w-full text-lg font-bold border-b-2 border-gray-200 focus:border-blue-500 outline-none py-2 px-1 transition" placeholder="제목을 입력하세요">
+                        <input type="text" id="lesson-title"
+                            class="w-full text-lg font-bold border-b-2 border-gray-200 focus:border-blue-500 outline-none py-2 px-1 transition"
+                            placeholder="제목을 입력하세요">
                     </div>
 
                     <!-- Video Link -->
                     <div>
                         <label class="block text-xs font-bold text-gray-500 mb-1">YouTube 영상 링크 (선택)</label>
-                        <input type="text" id="lesson-video" class="w-full border rounded-lg px-3 py-2 text-sm bg-gray-50 focus:bg-white transition" placeholder="https://youtu.be/...">
+                        <input type="text" id="lesson-video"
+                            class="w-full border rounded-lg px-3 py-2 text-sm bg-gray-50 focus:bg-white transition"
+                            placeholder="https://youtu.be/...">
                     </div>
 
                     <!-- Content Editor -->
@@ -175,21 +272,25 @@
         </button>
 
     </main>
-    
+
     <!-- Preview Modal -->
     <div id="preview-modal" class="fixed inset-0 z-[60] hidden flex items-center justify-center">
         <div class="absolute inset-0 bg-black bg-opacity-70 backdrop-blur-sm" onclick="app.closePreview()"></div>
-        <div class="bg-white w-full max-w-4xl h-[85vh] rounded-2xl shadow-2xl z-10 flex flex-col overflow-hidden relative mx-4">
+        <div
+            class="bg-white w-full max-w-4xl h-[85vh] rounded-2xl shadow-2xl z-10 flex flex-col overflow-hidden relative mx-4">
             <div class="p-4 border-b flex justify-between items-center bg-gray-50">
                 <h3 class="font-bold text-lg"><i class="fas fa-mobile-alt mr-2"></i>학생 화면 미리보기</h3>
-                <button onclick="app.closePreview()" class="text-gray-500 hover:text-gray-800"><i class="fas fa-times text-xl"></i></button>
+                <button onclick="app.closePreview()" class="text-gray-500 hover:text-gray-800"><i
+                        class="fas fa-times text-xl"></i></button>
             </div>
             <div class="flex-1 overflow-y-auto p-4 lg:p-8 bg-gray-50">
-                <div class="max-w-2xl mx-auto bg-white p-6 lg:p-8 rounded-xl shadow-sm border border-gray-200 min-h-full">
+                <div
+                    class="max-w-2xl mx-auto bg-white p-6 lg:p-8 rounded-xl shadow-sm border border-gray-200 min-h-full">
                     <h1 id="preview-title" class="text-2xl font-bold mb-4 text-gray-900 border-b pb-4"></h1>
                     <div id="preview-video-area" class="mb-6 hidden">
                         <div class="relative pb-[56.25%] h-0 overflow-hidden rounded-xl bg-black">
-                            <iframe id="preview-iframe" class="absolute top-0 left-0 w-full h-full" frameborder="0" allowfullscreen></iframe>
+                            <iframe id="preview-iframe" class="absolute top-0 left-0 w-full h-full" frameborder="0"
+                                allowfullscreen></iframe>
                         </div>
                     </div>
                     <div id="preview-content" class="prose max-w-none text-gray-800 leading-loose"></div>
@@ -205,10 +306,14 @@
             <h3 class="font-bold text-lg text-gray-800 mb-4 flex items-center gap-2">
                 <i class="fas fa-pencil-alt text-blue-500"></i> <span id="name-modal-title">단원 이름 입력</span>
             </h3>
-            <input type="text" id="name-modal-input" class="w-full border-2 border-gray-200 rounded-lg p-3 text-lg font-bold focus:border-blue-500 focus:bg-blue-50 outline-none mb-6 transition" placeholder="이름을 입력하세요" onkeyup="if(event.key==='Enter') app.confirmNameModal()">
+            <input type="text" id="name-modal-input"
+                class="w-full border-2 border-gray-200 rounded-lg p-3 text-lg font-bold focus:border-blue-500 focus:bg-blue-50 outline-none mb-6 transition"
+                placeholder="이름을 입력하세요" onkeyup="if(event.key==='Enter') app.confirmNameModal()">
             <div class="flex justify-end gap-2">
-                <button onclick="app.closeNameModal()" class="px-4 py-2 text-gray-500 font-bold hover:bg-gray-100 rounded-lg transition">취소</button>
-                <button onclick="app.confirmNameModal()" class="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 shadow-md transition">확인</button>
+                <button onclick="app.closeNameModal()"
+                    class="px-4 py-2 text-gray-500 font-bold hover:bg-gray-100 rounded-lg transition">취소</button>
+                <button onclick="app.confirmNameModal()"
+                    class="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 shadow-md transition">확인</button>
             </div>
         </div>
     </div>
@@ -223,17 +328,17 @@
             selectedNodeId: null,
             expandedIds: new Set(),
             quill: null,
-            
+
             // Modal State
             modalMode: null, // 'root', 'child', 'rename'
             targetNode: null,
 
-            init: function() {
+            init: function () {
                 this.initQuill();
                 this.loadTree();
             },
 
-            initQuill: function() {
+            initQuill: function () {
                 this.quill = new Quill('#quill-editor', {
                     theme: 'snow',
                     modules: {
@@ -241,7 +346,7 @@
                             [{ 'header': [1, 2, 3, false] }],
                             ['bold', 'italic', 'underline', 'strike'],
                             [{ 'color': [] }, { 'background': [] }],
-                            [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                            [{ 'list': 'ordered' }, { 'list': 'bullet' }],
                             ['link', 'image'],
                             ['clean']
                         ]
@@ -250,10 +355,10 @@
                 });
             },
 
-            toggleSidebar: function(show) {
+            toggleSidebar: function (show) {
                 const panel = document.getElementById('sidebar-panel');
                 const overlay = document.getElementById('mobile-overlay');
-                if(show) {
+                if (show) {
                     panel.classList.add('open');
                     overlay.classList.add('open');
                 } else {
@@ -262,11 +367,11 @@
                 }
             },
 
-            loadTree: async function() {
+            loadTree: async function () {
                 try {
                     // 1. Try Config Path
                     let doc = await window.getCollection('curriculum').doc('tree').get();
-                    
+
                     // 2. Fallback: Global
                     if (!doc.exists) {
                         doc = await window.db.collection('curriculum').doc('tree').get();
@@ -278,43 +383,43 @@
                         this.treeData = [{ id: 'root-' + Date.now(), title: '새 대단원', children: [] }];
                     }
                     this.renderTree();
-                } catch(e) {
+                } catch (e) {
                     console.error(e);
                     document.getElementById('tree-container').innerHTML = '<p class="text-red-500">불러오기 실패</p>';
                 }
             },
 
-            renderTree: function() {
+            renderTree: function () {
                 const container = document.getElementById('tree-container');
                 container.innerHTML = '';
-                
+
                 const renderNode = (node, level, parentArr) => {
                     const el = document.createElement('div');
                     el.className = `tree-node level-${level}`;
-                    
+
                     const itemBox = document.createElement('div');
                     const isSelected = this.selectedNodeId === node.id;
                     itemBox.className = `tree-item ${isSelected ? 'active' : ''}`;
-                    
+
                     const isExpanded = this.expandedIds.has(node.id);
                     const isLeaf = level >= 2;
                     let iconClass = isLeaf ? 'fas fa-file-alt' : (isExpanded ? 'fas fa-folder-open text-yellow-500' : 'fas fa-folder text-yellow-500');
                     if (isLeaf) iconClass += ' text-gray-400';
 
-                    itemBox.onclick = (e) => { 
-                        e.stopPropagation(); 
-                        if (!isLeaf) { this.toggleExpand(node.id); } 
+                    itemBox.onclick = (e) => {
+                        e.stopPropagation();
+                        if (!isLeaf) { this.toggleExpand(node.id); }
                         else { this.selectNode(node, level); }
                     };
 
-                    const caretIcon = !isLeaf ? `<i class="fas fa-caret-${isExpanded?'down':'right'} w-4 text-gray-400 mr-1 transition-transform"></i>` : `<span class="w-4 mr-1"></span>`;
+                    const caretIcon = !isLeaf ? `<i class="fas fa-caret-${isExpanded ? 'down' : 'right'} w-4 text-gray-400 mr-1 transition-transform"></i>` : `<span class="w-4 mr-1"></span>`;
                     const titleSpan = document.createElement('span');
                     titleSpan.className = 'tree-item-title select-none';
                     titleSpan.innerText = node.title;
-                    
+
                     const actions = document.createElement('div');
                     actions.className = 'btn-action';
-                    
+
                     if (!isLeaf) {
                         const btnAdd = document.createElement('button');
                         btnAdd.className = 'text-green-600 hover:bg-green-100 p-1 rounded';
@@ -358,23 +463,23 @@
                 });
             },
 
-            toggleExpand: function(id) {
-                if(this.expandedIds.has(id)) this.expandedIds.delete(id);
+            toggleExpand: function (id) {
+                if (this.expandedIds.has(id)) this.expandedIds.delete(id);
                 else this.expandedIds.add(id);
                 this.renderTree();
             },
 
-            selectNode: function(node, level) {
+            selectNode: function (node, level) {
                 this.selectedNodeId = node.id;
-                this.renderTree(); 
-                
+                this.renderTree();
+
                 // Close sidebar on mobile upon selection
                 this.toggleSidebar(false);
 
                 const panel = document.getElementById('empty-state');
                 const pathDisplay = document.getElementById('selected-unit-path');
-                
-                if (level === 2) { 
+
+                if (level === 2) {
                     panel.classList.add('hidden');
                     pathDisplay.innerText = node.title;
                     this.loadLessonContent(node.id, node.title);
@@ -384,13 +489,13 @@
             },
 
             // --- Modal Functions ---
-            openNameModal: function(mode, node = null) {
+            openNameModal: function (mode, node = null) {
                 this.modalMode = mode;
                 this.targetNode = node;
-                
+
                 const titleEl = document.getElementById('name-modal-title');
                 const inputEl = document.getElementById('name-modal-input');
-                
+
                 if (mode === 'root') {
                     titleEl.innerText = "새 대단원 추가";
                     inputEl.value = "";
@@ -401,20 +506,20 @@
                     titleEl.innerText = "단원 이름 변경";
                     inputEl.value = node ? node.title : "";
                 }
-                
+
                 document.getElementById('name-modal').classList.remove('hidden');
                 document.getElementById('name-modal').classList.add('flex');
                 setTimeout(() => inputEl.focus(), 100);
             },
 
-            closeNameModal: function() {
+            closeNameModal: function () {
                 document.getElementById('name-modal').classList.add('hidden');
                 document.getElementById('name-modal').classList.remove('flex');
                 this.modalMode = null;
                 this.targetNode = null;
             },
 
-            confirmNameModal: function() {
+            confirmNameModal: function () {
                 const name = document.getElementById('name-modal-input').value.trim();
                 if (!name) { alert("이름을 입력해주세요."); return; }
 
@@ -439,24 +544,24 @@
                 this.closeNameModal();
             },
 
-            addRootUnit: function() {
+            addRootUnit: function () {
                 this.openNameModal('root');
             },
 
-            addChild: function(node) {
+            addChild: function (node) {
                 this.openNameModal('child', node);
             },
 
-            renameNode: function(node) {
+            renameNode: function (node) {
                 this.openNameModal('rename', node);
             },
 
-            deleteNode: function(node, parentArr) {
-                if(!confirm(`'${node.title}' 및 하위 내용을 모두 삭제하시겠습니까?`)) return;
+            deleteNode: function (node, parentArr) {
+                if (!confirm(`'${node.title}' 및 하위 내용을 모두 삭제하시겠습니까?`)) return;
                 const idx = parentArr.indexOf(node);
-                if(idx > -1) {
+                if (idx > -1) {
                     parentArr.splice(idx, 1);
-                    if(this.selectedNodeId === node.id) {
+                    if (this.selectedNodeId === node.id) {
                         this.selectedNodeId = null;
                         document.getElementById('empty-state').classList.remove('hidden');
                     }
@@ -465,27 +570,27 @@
                 }
             },
 
-            saveTree: async function(silent = false) {
+            saveTree: async function (silent = false) {
                 try {
                     // Saves to the CURRENT Semester (window.getCollection)
                     await window.getCollection('curriculum').doc('tree').set({
                         tree: this.treeData,
                         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                     });
-                    if(!silent) alert("구조가 저장되었습니다.");
-                } catch(e) { alert("저장 실패: " + e.message); }
+                    if (!silent) alert("구조가 저장되었습니다.");
+                } catch (e) { alert("저장 실패: " + e.message); }
             },
 
-            loadLessonContent: async function(unitId, unitTitle) {
-                document.getElementById('lesson-title').value = unitTitle; 
+            loadLessonContent: async function (unitId, unitTitle) {
+                document.getElementById('lesson-title').value = unitTitle;
                 document.getElementById('lesson-video').value = '';
                 this.quill.setContents([]);
                 try {
                     // 1. Try Config Path
                     let snap = await window.getCollection('lessons').where('unitId', '==', unitId).limit(1).get();
-                    
+
                     // 2. Fallback: Global
-                    if(snap.empty) {
+                    if (snap.empty) {
                         snap = await window.db.collection('lessons').where('unitId', '==', unitId).limit(1).get();
                     }
 
@@ -496,11 +601,11 @@
                         const raw = data.contentHtml || "";
                         this.quill.clipboard.dangerouslyPasteHTML(raw);
                     }
-                } catch(e) { console.error("Content load error", e); }
+                } catch (e) { console.error("Content load error", e); }
             },
 
-            saveLesson: async function() {
-                if(!this.selectedNodeId) return;
+            saveLesson: async function () {
+                if (!this.selectedNodeId) return;
                 const title = document.getElementById('lesson-title').value;
                 const video = document.getElementById('lesson-video').value;
                 const html = this.quill.root.innerHTML;
@@ -515,13 +620,13 @@
                     // Saves to the CURRENT Semester
                     const lessonRef = window.getCollection('lessons');
                     const snap = await lessonRef.where('unitId', '==', this.selectedNodeId).limit(1).get();
-                    if (snap.empty) { await lessonRef.add(data); } 
+                    if (snap.empty) { await lessonRef.add(data); }
                     else { await lessonRef.doc(snap.docs[0].id).update(data); }
                     alert("수업 자료가 저장되었습니다.");
-                } catch(e) { alert("저장 실패: " + e.message); }
+                } catch (e) { alert("저장 실패: " + e.message); }
             },
 
-            previewLesson: function() {
+            previewLesson: function () {
                 const title = document.getElementById('lesson-title').value;
                 const videoUrl = document.getElementById('lesson-video').value;
                 let html = this.quill.root.innerHTML;
@@ -543,7 +648,7 @@
                 document.getElementById('preview-modal').classList.add('flex');
             },
 
-            closePreview: function() {
+            closePreview: function () {
                 document.getElementById('preview-modal').classList.add('hidden');
                 document.getElementById('preview-modal').classList.remove('flex');
                 document.getElementById('preview-iframe').src = '';
@@ -553,4 +658,5 @@
         document.addEventListener('auth-ready', () => app.init());
     </script>
 </body>
+
 </html>
