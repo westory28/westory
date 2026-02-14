@@ -457,6 +457,59 @@
                 this.initClassFilter();
             },
 
+            // Populate 2026 Korea Holidays into Firestore
+            populate2026Holidays: async function () {
+                const holidays = [
+                    // 2026년 대한민국 공휴일
+                    { title: "신정", start: "2026-01-01", eventType: "holiday" },
+                    { title: "설날 연휴", start: "2026-01-24", eventType: "holiday" },
+                    { title: "설날", start: "2026-01-25", eventType: "holiday" },
+                    { title: "설날 연휴", start: "2026-01-26", eventType: "holiday" },
+                    { title: "대체공휴일", start: "2026-01-27", eventType: "holiday" }, // 설날 대체
+                    { title: "삼일절", start: "2026-03-01", eventType: "holiday" },
+                    { title: "대체공휴일", start: "2026-03-02", eventType: "holiday" }, // 삼일절 일요일
+                    { title: "어린이날", start: "2026-05-05", eventType: "holiday" },
+                    { title: "석가탄신일", start: "2026-05-24", eventType: "holiday" },
+                    { title: "대체공휴일", start: "2026-05-25", eventType: "holiday" }, // 석가탄신일 일요일
+                    { title: "현충일", start: "2026-06-06", eventType: "holiday" },
+                    { title: "광복절", start: "2026-08-15", eventType: "holiday" },
+                    { title: "추석 연휴", start: "2026-10-05", eventType: "holiday" },
+                    { title: "추석", start: "2026-10-06", eventType: "holiday" },
+                    { title: "추석 연휴", start: "2026-10-07", eventType: "holiday" },
+                    { title: "개천절", start: "2026-10-03", eventType: "holiday" },
+                    { title: "대체공휴일", start: "2026-10-08", eventType: "holiday" }, // 추석 대체
+                    { title: "한글날", start: "2026-10-09", eventType: "holiday" },
+                    { title: "성탄절", start: "2026-12-25", eventType: "holiday" }
+                ];
+
+                const path = this.getCollectionPath('calendar');
+                if (!path) {
+                    alert('Firestore 경로 오류');
+                    return;
+                }
+
+                try {
+                    let count = 0;
+                    for (const holiday of holidays) {
+                        const data = {
+                            ...holiday,
+                            targetType: 'common',
+                            targetClass: null,
+                            description: '대한민국 공휴일',
+                            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                        };
+                        await window.db.collection(path).add(data);
+                        count++;
+                    }
+                    alert(`${count}개의 공휴일이 추가되었습니다.`);
+                    this.refetchEvents();
+                } catch (e) {
+                    alert('공휴일 추가 실패: ' + e.message);
+                    console.error(e);
+                }
+            },
+
             // Dynamically populate class filter from Firestore users
             initClassFilter: async function () {
                 try {
@@ -827,6 +880,10 @@
                         info.dayEl.classList.add('fc-day-selected');
 
                         this.showEventsOnPanel(info.dateStr, dailyEvents);
+                    },
+                    // Double-click to add event
+                    dateDoubleClick: (info) => {
+                        this.openModal(null, info.dateStr);
                     },
                     eventClick: (info) => {
                         if (info.event.classNames.includes('holiday-text-event')) return;
