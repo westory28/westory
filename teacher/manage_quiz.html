@@ -66,6 +66,10 @@
             cursor: pointer;
             transition: all 0.2s;
             margin-bottom: 2px;
+            white-space: normal;
+            /* Allow wrapping */
+            word-break: break-all;
+            /* Break long words if needed */
         }
 
         .tree-item:hover {
@@ -527,7 +531,8 @@
                             placeholder="10"><span class="text-sm font-bold text-gray-600">개</span>
                     </div>
                     <p class="text-[10px] text-gray-400 mt-1 leading-tight">* 문제 은행에서 랜덤으로 추출됩니다.<br>* 미풀이 문항을 우선 출제하며,
-                        <br> * 지필평가 대비는 단원별 균형 출제 로직이 적용됩니다.</p>
+                        <br> * 지필평가 대비는 단원별 균형 출제 로직이 적용됩니다.
+                    </p>
                 </div>
                 <div><label class="block text-xs font-bold text-gray-500 mb-1">제한 시간 (초)</label><input type="number"
                         id="setting-time" class="w-full border rounded p-2 text-center font-bold text-lg"></div>
