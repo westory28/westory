@@ -114,7 +114,7 @@
                             <th class="p-4 w-16 text-center">번호</th>
                             <th class="p-4">이름 (클릭하여 기록 조회)</th>
                             <th class="p-4 hidden md:table-cell">이메일</th>
-                            <th class="p-4 text-center w-32">관리</th>
+                            <th class="p-4 text-center w-24">관리</th>
                         </tr>
                     </thead>
                     <tbody id="std-list" class="divide-y divide-gray-100 bg-white">
@@ -264,9 +264,9 @@
                         </td>
                         <td class="p-4 text-gray-500 text-xs font-mono hidden md:table-cell" data-label="이메일">${s.email.split('@')[0]}</td>
                         <td class="p-4 text-center" data-label="관리">
-                            <div class="flex items-center justify-center gap-2 whitespace-nowrap">
-                                <button onclick="app.openEdit('${s.id}')" class="bg-blue-100 text-blue-600 hover:bg-blue-200 py-1 px-3 rounded text-xs font-bold transition flex items-center"><i class="fas fa-edit mr-1"></i>수정</button>
-                                <button onclick="app.deleteStudent('${s.id}')" class="bg-red-100 text-red-600 hover:bg-red-200 py-1 px-3 rounded text-xs font-bold transition flex items-center"><i class="fas fa-trash mr-1"></i>삭제</button>
+                            <div class="flex flex-col gap-1 w-full">
+                                <button onclick="app.openEdit('${s.id}')" class="bg-blue-100 text-blue-600 hover:bg-blue-200 py-1 px-2 rounded text-xs font-bold transition w-full flex justify-center items-center"><i class="fas fa-edit mr-1"></i>수정</button>
+                                <button onclick="app.deleteStudent('${s.id}')" class="bg-red-100 text-red-600 hover:bg-red-200 py-1 px-2 rounded text-xs font-bold transition w-full flex justify-center items-center"><i class="fas fa-trash mr-1"></i>삭제</button>
                             </div>
                         </td>
                     </tr>
