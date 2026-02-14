@@ -281,8 +281,10 @@ class AuthManager {
                             <a href="${resolve(item.url)}" class="nav-link ${active} flex items-center gap-1">
                                 ${item.name} <i class="fas fa-chevron-down text-[10px] ml-1 opacity-50 group-hover:opacity-100 transition"></i>
                             </a>
-                            <div class="absolute top-full left-0 w-48 bg-white border border-gray-200 shadow-lg rounded-xl overflow-hidden invisible opacity-0 group-hover:visible group-hover:opacity-100 transition duration-200 transform translate-y-2 group-hover:translate-y-0 z-50">
-                                ${childrenHtml}
+                            <div class="absolute top-full left-0 w-48 pt-3 invisible opacity-0 group-hover:visible group-hover:opacity-100 transition duration-200 transform translate-y-2 group-hover:translate-y-0 z-[100]">
+                                <div class="bg-white border border-gray-200 shadow-xl rounded-xl overflow-hidden">
+                                    ${childrenHtml}
+                                </div>
                             </div>
                         </div>
                     `;
@@ -309,7 +311,7 @@ class AuthManager {
         }
 
         const headerHtml = `
-            <header>
+            <header class="z-[60]">
                 <div class="header-container">
                     <div class="flex items-center gap-4">
                         <a href="${dashboardLink}" class="logo-text"><span class="logo-we">We</span><span class="logo-story">story</span></a>
