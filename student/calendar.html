@@ -288,9 +288,24 @@
                 this.calendar.render();
             },
 
+            //Helper function to get year/semester based collection path
+            getCollectionPath: function (collectionName) {
+                const cfg = window.currentConfig;
+                if (!cfg || !cfg.year || !cfg.semester) {
+                    console.error('Global config not loaded properly');
+                    return null;
+                }
+                return `${cfg.year}-${cfg.semester}/${collectionName}`;
+            },
+
             fetchEvents: async function (info, successCallback, failureCallback) {
+                const path = this.getCollectionPath('calendar_events');
+                if (!path) {
+                    failureCallback(new Error('Collection path not available'));
+                    return;
+                }
                 try {
-                    const snapshot = await window.db.collection('calendar_events')
+                    const snapshot = await window.db.collection(path)
                         .where('start', '>=', info.startStr)
                         .where('start', '<', info.endStr)
                         .get();

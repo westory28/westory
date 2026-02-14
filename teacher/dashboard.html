@@ -442,6 +442,17 @@
                 this.initNotices();
             },
 
+            //Helper function to get year/semester based collection path
+            getCollectionPath: function (collectionName) {
+                const cfg = window.currentConfig;
+                if (!cfg || !cfg.year || !cfg.semester) {
+                    console.error('Global config not loaded properly');
+                    alert('시스템 설정을 불러올 수 없습니다. 페이지를 새로고침하세요.');
+                    return null;
+                }
+                return `${cfg.year}-${cfg.semester}/${collectionName}`;
+            },
+
             // --- Notice Board Logic ---
             initNotices: function () {
                 this.fetchNotices();
@@ -449,7 +460,10 @@
 
             fetchNotices: function () {
                 const container = document.getElementById('notice-list');
-                window.db.collection('notices').orderBy('createdAt', 'desc').onSnapshot(snapshot => {
+                const path = this.getCollectionPath('notices');
+                if (!path) return;
+
+                window.db.collection(path).orderBy('createdAt', 'desc').onSnapshot(snapshot => {
                     if (snapshot.empty) {
                         container.innerHTML = '<div class="text-center text-amber-800/50 py-10 font-bold text-sm">등록된 알림이 없습니다.</div>';
                         return;
@@ -501,7 +515,9 @@
                 document.getElementById('notice-modal').classList.add('flex');
 
                 if (id) {
-                    window.db.collection('notices').doc(id).get().then(doc => {
+                    const path = this.getCollectionPath('notices');
+                    if (!path) return;
+                    window.db.collection(path).doc(id).get().then(doc => {
                         const d = doc.data();
                         document.getElementById('notice-id').value = id;
                         document.getElementById('notice-category').value = d.category;
@@ -546,11 +562,14 @@
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
 
+                const path = this.getCollectionPath('notices');
+                if (!path) return;
+
                 try {
-                    if (id) await window.db.collection('notices').doc(id).update(data);
+                    if (id) await window.db.collection(path).doc(id).update(data);
                     else {
                         data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
-                        await window.db.collection('notices').add(data);
+                        await window.db.collection(path).add(data);
                     }
                     this.closeNoticeModal();
                 } catch (e) { alert("저장 실패: " + e.message); }
@@ -559,8 +578,10 @@
             deleteNotice: async function () {
                 const id = document.getElementById('notice-id').value;
                 if (!confirm("삭제하시겠습니까?")) return;
+                const path = this.getCollectionPath('notices');
+                if (!path) return;
                 try {
-                    await window.db.collection('notices').doc(id).delete();
+                    await window.db.collection(path).doc(id).delete();
                     this.closeNoticeModal();
                 } catch (e) { alert("삭제 실패: " + e.message); }
             },
@@ -677,8 +698,14 @@
             },
 
             fetchEvents: async function (info, successCallback, failureCallback) {
+                const path = this.getCollectionPath('calendar_events');
+                if (!path) {
+                    failureCallback(new Error('Collection path not available'));
+                    return;
+                }
+
                 try {
-                    const snapshot = await window.db.collection('calendar_events')
+                    const snapshot = await window.db.collection(path)
                         .where('start', '>=', info.startStr)
                         .where('start', '<', info.endStr)
                         .get();
@@ -827,11 +854,14 @@
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
 
+                const path = this.getCollectionPath('calendar_events');
+                if (!path) return;
+
                 try {
-                    if (id) await window.db.collection('calendar_events').doc(id).update(data);
+                    if (id) await window.db.collection(path).doc(id).update(data);
                     else {
                         data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
-                        await window.db.collection('calendar_events').add(data);
+                        await window.db.collection(path).add(data);
                     }
                     this.initialFormState = null; // Reset dirty state on save
                     this.closeModal();
@@ -843,8 +873,10 @@
                 const id = document.getElementById('event-id').value;
                 if (!id) return;
                 if (!confirm("정말 삭제하시겠습니까?")) return;
+                const path = this.getCollectionPath('calendar_events');
+                if (!path) return;
                 try {
-                    await window.db.collection('calendar_events').doc(id).delete();
+                    await window.db.collection(path).doc(id).delete();
                     this.initialFormState = null; // Reset dirty state
                     this.closeModal();
                     this.refetchEvents();

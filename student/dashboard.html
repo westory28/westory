@@ -249,14 +249,23 @@
                                     } catch (e) { console.error(e); }
                                 },
 
+                                //Helper function to get year/semester based collection path
+                                getCollectionPath: function (collectionName) {
+                                    const cfg = window.currentConfig;
+                                    if (!cfg || !cfg.year || !cfg.semester) {
+                                        console.error('Global config not loaded properly');
+                                        return null;
+                                    }
+                                    return `${cfg.year}-${cfg.semester}/${collectionName}`;
+                                },
+
                                 // --- Notice Board Logic (Read-Only) ---
                                 initNotices: function () {
                                     const container = document.getElementById('notice-list');
-                                    // Fetch all notices and filter client-side for simplicity with permissions
-                                    // Ideally, use compound queries, but 'OR' queries are limited in v8.
-                                    // We'll fetch relevant ones or all and filter.
+                                    const path = this.getCollectionPath('notices');
+                                    if (!path) return;
 
-                                    window.db.collection('notices').orderBy('createdAt', 'desc').onSnapshot(snapshot => {
+                                    window.db.collection(path).orderBy('createdAt', 'desc').onSnapshot(snapshot => {
                                         if (snapshot.empty) {
                                             container.innerHTML = '<div class="text-center text-amber-800/50 py-10 font-bold text-sm">등록된 알림이 없습니다.</div>';
                                             return;
