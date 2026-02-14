@@ -250,6 +250,11 @@
                 this.updateSemesterBadge();
                 this.loadGradingPlans();
                 this.addCriteriaRow(); // Add initial row
+
+                // Handle URL Tab Param
+                const urlParams = new URLSearchParams(window.location.search);
+                const tab = urlParams.get('tab');
+                if (tab) this.setTab(tab);
             },
 
             updateSemesterBadge: function () {

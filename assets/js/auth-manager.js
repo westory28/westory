@@ -10,8 +10,21 @@ const MENUS = {
     ],
     teacher: [
         { name: "수업 자료 관리", url: "teacher/manage_lesson.html", icon: "M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" },
-        { name: "평가 관리", url: "teacher/manage_quiz.html", icon: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" },
-        { name: "점수 관리", url: "teacher/manage_exam.html", icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" },
+        {
+            name: "평가 관리", url: "teacher/manage_quiz.html", icon: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z",
+            children: [
+                { name: "문제 등록", url: "teacher/manage_quiz.html" },
+                { name: "제출 현황", url: "teacher/manage_quiz.html?tab=log" },
+                { name: "전체 문제 은행", url: "teacher/manage_quiz.html?tab=bank" }
+            ]
+        },
+        {
+            name: "점수 관리", url: "teacher/manage_exam.html", icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
+            children: [
+                { name: "성적 산출 기준", url: "teacher/manage_exam.html" },
+                { name: "정기 시험 정답", url: "teacher/manage_exam.html?tab=omr" }
+            ]
+        },
         { name: "학생 명단 관리", url: "teacher/student-list.html", icon: "M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" }
     ]
 };
@@ -253,7 +266,30 @@ class AuthManager {
 
         // Always render navigation (User Request: Show on all pages including dashboard)
         // Hidden on mobile via style.css (.desktop-nav class)
-        navHtml = `<nav class="desktop-nav items-center h-full ml-6">${menuItems.map(item => `<a href="${resolve(item.url)}" class="nav-link ${isActive(item.url) ? 'active' : ''}">${item.name}</a>`).join('')}</nav>`;
+        navHtml = `<nav class="desktop-nav flex items-center h-full ml-6">
+            ${menuItems.map(item => {
+            const active = isActive(item.url) ? 'active' : '';
+            if (item.children) {
+                const childrenHtml = item.children.map(child => `
+                        <a href="${resolve(child.url)}" class="block px-4 py-3 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 border-b border-gray-50 last:border-0 whitespace-nowrap">
+                            ${child.name}
+                        </a>
+                    `).join('');
+
+                return `
+                        <div class="relative group h-full flex items-center">
+                            <a href="${resolve(item.url)}" class="nav-link ${active} flex items-center gap-1">
+                                ${item.name} <i class="fas fa-chevron-down text-[10px] ml-1 opacity-50 group-hover:opacity-100 transition"></i>
+                            </a>
+                            <div class="absolute top-full left-0 w-48 bg-white border border-gray-200 shadow-lg rounded-xl overflow-hidden invisible opacity-0 group-hover:visible group-hover:opacity-100 transition duration-200 transform translate-y-2 group-hover:translate-y-0 z-50">
+                                ${childrenHtml}
+                            </div>
+                        </div>
+                    `;
+            }
+            return `<a href="${resolve(item.url)}" class="nav-link ${active}">${item.name}</a>`;
+        }).join('')}
+        </nav>`;
         mobileNavHtml = `<div id="mobile-menu">${menuItems.map(item => `<a href="${resolve(item.url)}" class="mobile-link ${isActive(item.url) ? 'active' : ''}"><svg class="mobile-icon" viewBox="0 0 24 24"><path d="${item.icon}"></path></svg>${item.name}</a>`).join('')}</div>`;
         mobileToggleBtn = `<button id="mobile-menu-toggle" class="mobile-menu-btn"><i class="fas fa-bars"></i></button>`;
 
