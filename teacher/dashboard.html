@@ -137,110 +137,149 @@
         </div>
 
         <div class="flex flex-wrap items-center gap-2 w-full md:w-auto mb-4 shrink-0 justify-end">
-            <span class="text-sm font-bold text-gray-600 hidden md:inline">보기 필터:</span>
-            <select id="view-filter" onchange="app.refetchEvents()"
-                class="border border-gray-300 rounded px-3 py-2 text-sm font-bold focus:border-blue-500 outline-none">
-                <option value="all">전체 일정</option>
-                <option value="common">공통 일정만</option>
-                <option value="2-1">2-1반</option>
-                <option value="2-2">2-2반</option>
-                <option value="2-3">2-3반</option>
-                <option value="2-4">2-4반</option>
-                <option value="2-5">2-5반</option>
-                <option value="2-6">2-6반</option>
-                <option value="2-7">2-7반</option>
-                <option value="2-8">2-8반</option>
-                <option value="2-9">2-9반</option>
-                <option value="2-10">2-10반</option>
-                <option value="2-11">2-11반</option>
-                <option value="2-12">2-12반</option>
-            </select>
+            <!-- Search Button & Filter -->
+            <div class="flex items-center gap-2">
+                <button onclick="app.openSearch()"
+                    class="bg-white border border-gray-200 text-gray-600 hover:text-blue-600 hover:border-blue-300 p-2 rounded-lg shadow-sm transition"
+                    title="일정 검색">
+                    <i class="fas fa-search"></i>
+                </button>
+                <select id="view-filter" onchange="app.refetchEvents()"
+                    class="bg-white border border-gray-200 text-gray-700 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2 shadow-sm outline-none">
+                    <option value="all">전체 보기</option>
+                    <option value="common">전체 공통</option>
+                    <option value="2-1">2-1반</option>
+                    <option value="2-2">2-2반</option>
+                    <option value="2-3">2-3반</option>
+                    <option value="2-4">2-4반</option>
+                    <option value="2-5">2-5반</option>
+                    <option value="2-6">2-6반</option>
+                    <option value="2-7">2-7반</option>
+                    <option value="2-8">2-8반</option>
+                    <option value="2-9">2-9반</option>
+                    <option value="2-10">2-10반</option>
+                    <option value="2-11">2-11반</option>
+                    <option value="2-12">2-12반</option>
+                </select>
+            </div>
             <button onclick="app.openModal()"
                 class="bg-blue-600 text-white px-3 py-2 rounded text-sm font-bold hover:bg-blue-700 shadow-sm ml-1 flex-1 md:flex-none whitespace-nowrap">
                 <i class="fas fa-plus mr-1"></i> 일정 추가
             </button>
         </div>
 
-        <div
-            class="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 p-2 md:p-6 overflow-hidden flex flex-col">
-            <div id="calendar" class="h-full"></div>
-        </div>
+        <div id="calendar" class="bg-white rounded-xl shadow-sm p-4 h-[calc(100vh-180px)]"></div>
     </main>
 
-    <!-- Event Modal -->
-    <div id="event-modal" class="modal-overlay hidden">
-        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 mx-4 relative max-h-[90vh] overflow-y-auto">
-            <h3 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2 flex items-center">
-                <i class="fas fa-edit text-blue-500 mr-2"></i><span id="modal-title">일정 등록</span>
-            </h3>
+    <!-- Event Modal (Add/Edit) -->
+    <div id="event-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 m-4" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center mb-6">
+                <h3 id="modal-title" class="text-xl font-bold text-gray-800"><i
+                        class="fas fa-edit text-blue-500 mr-2"></i>일정 등록</h3>
+                <button onclick="app.attemptClose()" class="text-gray-400 hover:text-gray-600 transition">
+                    <i class="fas fa-times fa-lg"></i>
+                </button>
+            </div>
 
             <input type="hidden" id="event-id">
 
             <div class="space-y-4">
                 <div>
-                    <label class="block text-xs font-bold text-gray-500 mb-1">일정 제목</label>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">일정 제목</label>
                     <input type="text" id="event-title"
-                        class="w-full border rounded p-2 text-sm font-bold focus:border-blue-500 outline-none"
+                        class="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
                         placeholder="예: 역사 수행평가">
                 </div>
 
-                <div class="grid grid-cols-2 gap-3">
+                <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-xs font-bold text-gray-500 mb-1">시작 날짜</label>
-                        <input type="date" id="event-start" class="w-full border rounded p-2 text-sm">
+                        <label class="block text-sm font-bold text-gray-700 mb-1">시작 날짜</label>
+                        <input type="date" id="event-start"
+                            class="w-full border border-gray-300 rounded-lg p-2.5 outline-none">
                     </div>
                     <div>
-                        <label class="block text-xs font-bold text-gray-500 mb-1">종료 날짜 (선택)</label>
-                        <input type="date" id="event-end" class="w-full border rounded p-2 text-sm">
+                        <label class="block text-sm font-bold text-gray-700 mb-1">종료 날짜 (선택)</label>
+                        <input type="date" id="event-end"
+                            class="w-full border border-gray-300 rounded-lg p-2.5 outline-none" placeholder="연도-월-일">
                     </div>
                 </div>
 
                 <div>
-                    <label class="block text-xs font-bold text-gray-500 mb-1">일정 종류</label>
-                    <select id="event-type" class="w-full border rounded p-2 text-sm font-bold bg-white">
-                        <option value="performance">⚡ 수행평가 (Orange)</option>
-                        <option value="exam">🔥 정기 시험 (Red)</option>
-                        <option value="diagnosis">📝 진단평가 (Blue)</option>
-                        <option value="formative">✍️ 형성평가 (Blue)</option>
-                        <option value="event">🎉 행사/기타 (Green)</option>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">일정 종류</label>
+                    <select id="event-type"
+                        class="w-full border border-gray-300 rounded-lg p-2.5 outline-none font-bold">
+                        <option value="exam" class="text-red-600">🔴 정기 시험 (Red)</option>
+                        <option value="performance" class="text-orange-500">⚡ 수행평가 (Orange)</option>
+                        <option value="diagnosis" class="text-blue-600">📝 진단평가 (Blue)</option>
+                        <option value="formative" class="text-blue-600">📘 형성평가 (Blue)</option>
+                        <option value="event" class="text-green-600">🎉 행사 (Green)</option>
                     </select>
                 </div>
 
                 <div>
-                    <label class="block text-xs font-bold text-gray-500 mb-2">대상 선택</label>
-                    <div class="flex gap-4 mb-2">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">대상 선택</label>
+                    <div class="flex items-center space-x-4 mb-2">
                         <label class="flex items-center cursor-pointer">
                             <input type="radio" name="targetType" value="common" checked
-                                onclick="app.toggleTargetClass(false)" class="w-4 h-4 text-blue-600">
-                            <span class="ml-2 text-sm font-bold">전체 공통</span>
+                                onchange="app.toggleTargetClass(false)" class="w-4 h-4 text-blue-600">
+                            <span class="ml-2 text-sm font-bold text-gray-700">전체 공통</span>
                         </label>
                         <label class="flex items-center cursor-pointer">
-                            <input type="radio" name="targetType" value="class" onclick="app.toggleTargetClass(true)"
+                            <input type="radio" name="targetType" value="class" onchange="app.toggleTargetClass(true)"
                                 class="w-4 h-4 text-blue-600">
-                            <span class="ml-2 text-sm font-bold">반 선택</span>
+                            <span class="ml-2 text-sm font-bold text-gray-700">반 선택</span>
                         </label>
                     </div>
-                    <select id="target-class" class="w-full border rounded p-2 text-sm bg-gray-50" disabled>
-                        ${Array.from({length:12}, (_, i) => `<option value="2-${i+1}">2-${i+1}반</option>`).join('')}
+                    <select id="target-class"
+                        class="w-full border border-gray-300 rounded-lg p-2.5 outline-none bg-gray-50 transition"
+                        disabled>
+                        <!-- Options populated by JS -->
                     </select>
                 </div>
 
                 <div>
-                    <label class="block text-xs font-bold text-gray-500 mb-1">상세 내용</label>
-                    <textarea id="event-desc" class="w-full border rounded p-2 text-sm h-20 resize-none"></textarea>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">상세 내용 (선택)</label>
+                    <textarea id="event-desc" rows="3"
+                        class="w-full border border-gray-300 rounded-lg p-2.5 outline-none resize-none"
+                        placeholder="일정에 대한 상세 설명을 입력하세요..."></textarea>
                 </div>
             </div>
 
-            <div class="flex justify-between items-center mt-6 pt-4 border-t">
-                <button type="button" onclick="app.deleteEvent()" id="btn-delete"
-                    class="text-red-500 font-bold text-sm hover:text-red-700 hidden"><i
-                        class="fas fa-trash mr-1"></i>삭제</button>
-                <div class="flex gap-2 ml-auto">
-                    <button onclick="app.closeModal()"
-                        class="px-4 py-2 bg-gray-100 text-gray-600 rounded font-bold text-sm hover:bg-gray-200">취소</button>
-                    <button onclick="app.saveEvent()"
-                        class="px-6 py-2 bg-blue-600 text-white rounded font-bold text-sm hover:bg-blue-700 shadow-md">저장</button>
-                </div>
+            <div class="flex justify-end gap-2 mt-6 pt-4 border-t border-gray-100">
+                <button type="button" id="btn-delete" onclick="app.deleteEvent()"
+                    class="hidden px-4 py-2 bg-red-100 text-red-600 rounded-lg font-bold hover:bg-red-200 transition">삭제</button>
+                <div class="flex-1"></div>
+                <button type="button" onclick="app.attemptClose()"
+                    class="px-5 py-2 bg-gray-100 text-gray-600 rounded-lg font-bold hover:bg-gray-200 transition">취소</button>
+                <button type="button" onclick="app.saveEvent()"
+                    class="px-5 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 shadow-md transition transform active:scale-95">저장</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search Modal -->
+    <div id="search-modal"
+        class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-start justify-center pt-20">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 m-4" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-gray-800"><i class="fas fa-search text-blue-500 mr-2"></i>일정 검색</h3>
+                <button onclick="app.closeSearch()" class="text-gray-400 hover:text-gray-600 transition">
+                    <i class="fas fa-times fa-lg"></i>
+                </button>
+            </div>
+
+            <div class="relative mb-4">
+                <input type="text" id="search-input" onkeyup="if(event.key === 'Enter') app.executeSearch()"
+                    class="w-full border-2 border-blue-100 rounded-xl p-3 pl-10 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition font-bold text-lg"
+                    placeholder="검색어 입력 (예: 중간고사, 수행평가)">
+                <i class="fas fa-search absolute left-4 top-4 text-gray-400"></i>
+                <button onclick="app.executeSearch()"
+                    class="absolute right-2 top-2 bg-blue-600 text-white px-4 py-1.5 rounded-lg font-bold hover:bg-blue-700 transition">검색</button>
+            </div>
+
+            <div id="search-results" class="h-64 overflow-y-auto custom-scroll space-y-2">
+                <div class="text-center text-gray-400 py-10">검색어를 입력하고 엔터를 누르세요.</div>
             </div>
         </div>
     </div>
@@ -253,12 +292,13 @@
         const app = {
             calendar: null,
             colorMap: {
-                'exam': '#ef4444',
-                'performance': '#f97316',
-                'event': '#10b981',
-                'diagnosis': '#3b82f6',
-                'formative': '#3b82f6'
+                'exam': '#ef4444',       // Red
+                'performance': '#f97316', // Orange
+                'event': '#10b981',       // Green
+                'diagnosis': '#3b82f6',   // Blue
+                'formative': '#3b82f6'    // Blue
             },
+            // Korean Public Holidays (2025-2026) Verified
             holidays: {
                 // 2025
                 '2025-01-01': '신정',
@@ -271,6 +311,7 @@
                 '2025-10-05': '추석', '2025-10-06': '추석', '2025-10-07': '추석', '2025-10-08': '대체공휴일',
                 '2025-10-09': '한글날',
                 '2025-12-25': '성탄절',
+
                 // 2026
                 '2026-01-01': '신정',
                 '2026-02-16': '설날', '2026-02-17': '설날', '2026-02-18': '설날',
@@ -290,6 +331,7 @@
                 if (cfg) document.getElementById('dash-year-badge').innerText = `${cfg.year}학년도 ${cfg.semester}학기`;
                 this.initCalendar();
                 this.initModal();
+                this.initSearch();
             },
 
             initModal: function () {
@@ -300,6 +342,104 @@
                 // Overlay click
                 document.getElementById('event-modal').addEventListener('click', (e) => {
                     if (e.target.id === 'event-modal') this.attemptClose();
+                });
+            },
+
+            initSearch: function () {
+                // Overlay click for search modal
+                document.getElementById('search-modal').addEventListener('click', (e) => {
+                    if (e.target.id === 'search-modal') this.closeSearch();
+                });
+            },
+
+            openSearch: function () {
+                const modal = document.getElementById('search-modal');
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                document.getElementById('search-input').value = '';
+                document.getElementById('search-results').innerHTML = '<div class="text-center text-gray-400 py-10">검색어를 입력하고 엔터를 누르세요.</div>';
+                setTimeout(() => document.getElementById('search-input').focus(), 100);
+            },
+
+            closeSearch: function () {
+                const modal = document.getElementById('search-modal');
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            },
+
+            executeSearch: async function () {
+                const keyword = document.getElementById('search-input').value.trim();
+                if (!keyword) return;
+
+                const resultsContainer = document.getElementById('search-results');
+                resultsContainer.innerHTML = '<div class="text-center py-10"><i class="fas fa-spinner fa-spin text-blue-500 text-2xl"></i></div>';
+
+                try {
+                    // Fetch all events for the current year (Simple approach: fetch all and filter in memory, or range query)
+                    // Assuming academic year is from March to next Feb. 
+                    // To be safe and simple, let's fetch a wide range or relies on Firestore composite index if we want to filter by text (which Firestore doesn't support well).
+                    // We will fetch based on date range of the current academic year.
+                    const year = window.currentConfig?.year || new Date().getFullYear();
+                    const startStr = `${year}-01-01`;
+                    const endStr = `${parseInt(year) + 1}-12-31`; // Generous range
+
+                    const snapshot = await window.db.collection('calendar_events')
+                        .where('start', '>=', startStr)
+                        .where('start', '<=', endStr)
+                        .orderBy('start')
+                        .get();
+
+                    const matches = [];
+                    snapshot.forEach(doc => {
+                        const d = doc.data();
+                        if (d.title.includes(keyword) || (d.description && d.description.includes(keyword))) {
+                            matches.push({ id: doc.id, ...d });
+                        }
+                    });
+
+                    if (matches.length === 0) {
+                        resultsContainer.innerHTML = '<div class="text-center text-gray-500 py-10">검색 결과가 없습니다.</div>';
+                        return;
+                    }
+
+                    resultsContainer.innerHTML = matches.map(ev => `
+                        <div onclick="app.openSearchResult('${ev.id}')" class="p-3 border border-gray-100 rounded-lg hover:bg-blue-50 cursor-pointer transition flex items-center justify-between group">
+                            <div>
+                                <div class="flex items-center gap-2 mb-1">
+                                    <span class="text-xs font-bold text-white px-2 py-0.5 rounded" style="background-color: ${this.colorMap[ev.eventType]}">${ev.eventType}</span>
+                                    <span class="font-bold text-gray-800">${ev.title}</span>
+                                </div>
+                                <div class="text-xs text-gray-500">
+                                    <i class="far fa-calendar mr-1"></i>${ev.start} ${ev.end ? '~ ' + ev.end : ''}
+                                    ${ev.targetType === 'class' ? `<span class="ml-2 bg-gray-100 px-1 rounded">${ev.targetClass}반</span>` : '<span class="ml-2 bg-gray-100 px-1 rounded">전체</span>'}
+                                </div>
+                            </div>
+                            <i class="fas fa-chevron-right text-gray-300 group-hover:text-blue-500"></i>
+                        </div>
+                    `).join('');
+
+                } catch (e) {
+                    console.error(e);
+                    resultsContainer.innerHTML = '<div class="text-center text-red-500 py-10">검색 중 오류가 발생했습니다.</div>';
+                }
+            },
+
+            openSearchResult: function (eventId) {
+                // Find event in current calendar if possible, or fetch it. 
+                // Since we have the ID, let's just fetch it to be sure or use the data we have.
+                // Re-using openModal requires an event object structure similar to FullCalendar's info.event
+                // But openModal mainly needs extendedProps. Let's fetch the doc to be robust.
+                this.closeSearch();
+                window.db.collection('calendar_events').doc(eventId).get().then(doc => {
+                    if (doc.exists) {
+                        const data = doc.data();
+                        this.openModal({
+                            id: doc.id,
+                            extendedProps: data
+                        });
+                        // Optional: Move calendar to that date
+                        this.calendar.gotoDate(data.start);
+                    }
                 });
             },
 
