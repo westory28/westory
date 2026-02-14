@@ -1,6 +1,6 @@
-
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,58 +10,157 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- FullCalendar -->
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
-    
+
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-    
+
     <script src="../assets/js/firebase-config.js"></script>
     <link rel="stylesheet" href="../assets/css/style.css">
     <script src="../assets/js/auth-manager.js"></script>
 
     <style>
-        .fc-toolbar-title { font-size: 1.25em !important; font-weight: 700; color: #1f2937; }
-        .fc-button { background-color: #2563eb !important; border-color: #2563eb !important; font-weight: 600 !important; }
-        .fc-button:hover { background-color: #1d4ed8 !important; border-color: #1d4ed8 !important; }
-        .fc-button-active { background-color: #1e40af !important; border-color: #1e40af !important; }
-        .fc-daygrid-event { cursor: pointer; border-radius: 4px; padding: 2px 4px; font-size: 0.85rem; font-weight: 600; border: none; }
-        
+        .fc-toolbar-title {
+            font-size: 1.25em !important;
+            font-weight: 700;
+            color: #1f2937;
+        }
+
+        .fc-button {
+            background-color: #2563eb !important;
+            border-color: #2563eb !important;
+            font-weight: 600 !important;
+        }
+
+        .fc-button:hover {
+            background-color: #1d4ed8 !important;
+            border-color: #1d4ed8 !important;
+        }
+
+        .fc-button-active {
+            background-color: #1e40af !important;
+            border-color: #1e40af !important;
+        }
+
+        .fc-daygrid-event {
+            cursor: pointer;
+            border-radius: 4px;
+            padding: 2px 4px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            border: none;
+        }
+
         /* Korean Calendar Colors */
-        .fc-day-sun a { color: #ef4444 !important; text-decoration: none; font-weight: 700; } /* Red for Sunday */
-        .fc-day-sat a { color: #3b82f6 !important; text-decoration: none; font-weight: 700; } /* Blue for Saturday */
-        
+        .fc-day-sun a {
+            color: #ef4444 !important;
+            text-decoration: none;
+            font-weight: 700;
+        }
+
+        /* Red for Sunday */
+        .fc-day-sat a {
+            color: #3b82f6 !important;
+            text-decoration: none;
+            font-weight: 700;
+        }
+
+        /* Blue for Saturday */
+
         /* Holiday Styles */
-        .fc-day-holiday a { color: #ef4444 !important; font-weight: 700; } /* Red date number */
-        .holiday-text-event { background-color: transparent !important; border: none !important; }
-        .holiday-text-event .fc-event-title { color: #ef4444; font-size: 0.75rem; font-weight: 800; }
-        
+        .fc-day-holiday a {
+            color: #ef4444 !important;
+            font-weight: 700;
+        }
+
+        /* Red date number */
+        .holiday-text-event {
+            background-color: transparent !important;
+            border: none !important;
+        }
+
+        .holiday-text-event .fc-event-title {
+            color: #ef4444;
+            font-size: 0.75rem;
+            font-weight: 800;
+        }
+
         /* Modal Overlay */
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 100; display: flex; justify-content: center; align-items: center; }
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 100;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Mobile Optimization for Calendar */
+        @media (max-width: 768px) {
+            .fc-toolbar {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+
+            .fc-toolbar-title {
+                font-size: 1rem !important;
+            }
+
+            .fc-button {
+                padding: 0.25rem 0.6rem !important;
+                font-size: 0.75rem !important;
+            }
+
+            .fc-header-toolbar {
+                margin-bottom: 0.5rem !important;
+            }
+
+            .fc .fc-toolbar-chunk:first-child {
+                display: flex;
+                gap: 4px;
+            }
+        }
     </style>
 </head>
+
 <body class="bg-gray-50 flex flex-col h-screen">
     <!-- Header injected by AuthManager -->
 
     <main class="flex-1 w-full max-w-7xl mx-auto px-6 py-6 h-full flex flex-col overflow-hidden">
-        
-        <div class="flex justify-between items-center mb-4 shrink-0">
+
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4 shrink-0">
             <div>
-                <h1 class="text-2xl font-bold text-gray-800"><i class="fas fa-calendar-alt text-blue-500 mr-2"></i>학사 일정 관리</h1>
-                <p class="text-sm text-gray-500 mt-1">수행평가, 지필평가 등 주요 학사 일정을 관리하세요.</p>
+                <h1 class="text-xl md:text-2xl font-bold text-gray-800"><i
+                        class="fas fa-calendar-alt text-blue-500 mr-2"></i>학사 일정 관리</h1>
+                <p class="text-xs md:text-sm text-gray-500 mt-1">수행평가, 지필평가 등 주요 학사 일정을 관리하세요.</p>
             </div>
-            
-            <div class="flex items-center gap-2">
+
+            <div class="flex flex-wrap items-center gap-2 w-full md:w-auto">
                 <span class="text-sm font-bold text-gray-600">보기 필터:</span>
-                <select id="view-filter" onchange="app.refetchEvents()" class="border border-gray-300 rounded px-3 py-2 text-sm font-bold focus:border-blue-500 outline-none">
+                <select id="view-filter" onchange="app.refetchEvents()"
+                    class="flex-1 md:flex-none border border-gray-300 rounded px-3 py-2 text-sm font-bold focus:border-blue-500 outline-none">
                     <option value="all">전체 일정</option>
                     <option value="common">공통 일정만</option>
-                    <option value="2-1">2-1반</option><option value="2-2">2-2반</option><option value="2-3">2-3반</option>
-                    <option value="2-4">2-4반</option><option value="2-5">2-5반</option><option value="2-6">2-6반</option>
-                    <option value="2-7">2-7반</option><option value="2-8">2-8반</option><option value="2-9">2-9반</option>
-                    <option value="2-10">2-10반</option><option value="2-11">2-11반</option><option value="2-12">2-12반</option>
+                    <option value="2-1">2-1반</option>
+                    <option value="2-2">2-2반</option>
+                    <option value="2-3">2-3반</option>
+                    <option value="2-4">2-4반</option>
+                    <option value="2-5">2-5반</option>
+                    <option value="2-6">2-6반</option>
+                    <option value="2-7">2-7반</option>
+                    <option value="2-8">2-8반</option>
+                    <option value="2-9">2-9반</option>
+                    <option value="2-10">2-10반</option>
+                    <option value="2-11">2-11반</option>
+                    <option value="2-12">2-12반</option>
                 </select>
-                <button onclick="app.openModal()" class="bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-blue-700 shadow-sm ml-2">
+                <button onclick="app.openModal()"
+                    class="flex-1 md:flex-none bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-blue-700 shadow-sm ml-0 md:ml-2">
                     <i class="fas fa-plus mr-1"></i> 일정 추가
                 </button>
             </div>
@@ -79,15 +178,17 @@
             <h3 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2 flex items-center">
                 <i class="fas fa-edit text-blue-500 mr-2"></i><span id="modal-title">일정 등록</span>
             </h3>
-            
+
             <input type="hidden" id="event-id">
-            
+
             <div class="space-y-4">
                 <div>
                     <label class="block text-xs font-bold text-gray-500 mb-1">일정 제목</label>
-                    <input type="text" id="event-title" class="w-full border rounded p-2 text-sm font-bold focus:border-blue-500 outline-none" placeholder="예: 역사 수행평가">
+                    <input type="text" id="event-title"
+                        class="w-full border rounded p-2 text-sm font-bold focus:border-blue-500 outline-none"
+                        placeholder="예: 역사 수행평가">
                 </div>
-                
+
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="block text-xs font-bold text-gray-500 mb-1">시작 날짜</label>
@@ -114,19 +215,29 @@
                     <label class="block text-xs font-bold text-gray-500 mb-2">대상 선택</label>
                     <div class="flex gap-4 mb-2">
                         <label class="flex items-center cursor-pointer">
-                            <input type="radio" name="targetType" value="common" checked onclick="app.toggleTargetClass(false)" class="w-4 h-4 text-blue-600">
+                            <input type="radio" name="targetType" value="common" checked
+                                onclick="app.toggleTargetClass(false)" class="w-4 h-4 text-blue-600">
                             <span class="ml-2 text-sm font-bold">전체 공통</span>
                         </label>
                         <label class="flex items-center cursor-pointer">
-                            <input type="radio" name="targetType" value="class" onclick="app.toggleTargetClass(true)" class="w-4 h-4 text-blue-600">
+                            <input type="radio" name="targetType" value="class" onclick="app.toggleTargetClass(true)"
+                                class="w-4 h-4 text-blue-600">
                             <span class="ml-2 text-sm font-bold">반 선택</span>
                         </label>
                     </div>
                     <select id="target-class" class="w-full border rounded p-2 text-sm bg-gray-50" disabled>
-                        <option value="2-1">2-1반</option><option value="2-2">2-2반</option><option value="2-3">2-3반</option>
-                        <option value="2-4">2-4반</option><option value="2-5">2-5반</option><option value="2-6">2-6반</option>
-                        <option value="2-7">2-7반</option><option value="2-8">2-8반</option><option value="2-9">2-9반</option>
-                        <option value="2-10">2-10반</option><option value="2-11">2-11반</option><option value="2-12">2-12반</option>
+                        <option value="2-1">2-1반</option>
+                        <option value="2-2">2-2반</option>
+                        <option value="2-3">2-3반</option>
+                        <option value="2-4">2-4반</option>
+                        <option value="2-5">2-5반</option>
+                        <option value="2-6">2-6반</option>
+                        <option value="2-7">2-7반</option>
+                        <option value="2-8">2-8반</option>
+                        <option value="2-9">2-9반</option>
+                        <option value="2-10">2-10반</option>
+                        <option value="2-11">2-11반</option>
+                        <option value="2-12">2-12반</option>
                     </select>
                 </div>
 
@@ -137,10 +248,14 @@
             </div>
 
             <div class="flex justify-between items-center mt-6 pt-4 border-t">
-                <button type="button" onclick="app.deleteEvent()" id="btn-delete" class="text-red-500 font-bold text-sm hover:text-red-700 hidden"><i class="fas fa-trash mr-1"></i>삭제</button>
+                <button type="button" onclick="app.deleteEvent()" id="btn-delete"
+                    class="text-red-500 font-bold text-sm hover:text-red-700 hidden"><i
+                        class="fas fa-trash mr-1"></i>삭제</button>
                 <div class="flex gap-2 ml-auto">
-                    <button onclick="app.closeModal()" class="px-4 py-2 bg-gray-100 text-gray-600 rounded font-bold text-sm hover:bg-gray-200">취소</button>
-                    <button onclick="app.saveEvent()" class="px-6 py-2 bg-blue-600 text-white rounded font-bold text-sm hover:bg-blue-700 shadow-md">저장</button>
+                    <button onclick="app.closeModal()"
+                        class="px-4 py-2 bg-gray-100 text-gray-600 rounded font-bold text-sm hover:bg-gray-200">취소</button>
+                    <button onclick="app.saveEvent()"
+                        class="px-6 py-2 bg-blue-600 text-white rounded font-bold text-sm hover:bg-blue-700 shadow-md">저장</button>
                 </div>
             </div>
         </div>
@@ -160,7 +275,7 @@
                 'diagnosis': '#3b82f6',   // Blue
                 'formative': '#3b82f6'    // Blue
             },
-            
+
             // Korean Public Holidays (2025-2026) Verified with Exact Rules
             holidays: {
                 // 2025
@@ -174,7 +289,7 @@
                 '2025-10-05': '추석', '2025-10-06': '추석', '2025-10-07': '추석', '2025-10-08': '대체공휴일',
                 '2025-10-09': '한글날',
                 '2025-12-25': '성탄절',
-                
+
                 // 2026
                 '2026-01-01': '신정',
                 '2026-02-16': '설날', '2026-02-17': '설날', '2026-02-18': '설날',
@@ -189,16 +304,16 @@
                 '2026-12-25': '성탄절'
             },
 
-            init: function() {
+            init: function () {
                 document.addEventListener('auth-ready', () => {
                     this.initCalendar();
                 });
             },
 
             // --- Calendar Logic ---
-            initCalendar: function() {
+            initCalendar: function () {
                 const calendarEl = document.getElementById('calendar');
-                
+
                 // Holiday Events Array (Text for teachers too)
                 const holidayTextEvents = Object.keys(this.holidays).map(date => ({
                     title: this.holidays[date],
@@ -224,7 +339,7 @@
                         const month = String(arg.date.getMonth() + 1).padStart(2, '0');
                         const day = String(arg.date.getDate()).padStart(2, '0');
                         const dateStr = `${year}-${month}-${day}`;
-                        
+
                         if (this.holidays[dateStr]) return ['fc-day-holiday'];
                         return [];
                     },
@@ -244,13 +359,13 @@
                 this.calendar.render();
             },
 
-            fetchEvents: async function(info, successCallback, failureCallback) {
+            fetchEvents: async function (info, successCallback, failureCallback) {
                 try {
                     const snapshot = await window.db.collection('calendar_events')
                         .where('start', '>=', info.startStr)
                         .where('start', '<', info.endStr)
                         .get();
-                    
+
                     const events = [];
                     const filter = document.getElementById('view-filter').value;
 
@@ -275,18 +390,18 @@
                         });
                     });
                     successCallback(events);
-                } catch(e) { console.error(e); failureCallback(e); }
+                } catch (e) { console.error(e); failureCallback(e); }
             },
 
-            refetchEvents: function() {
-                if(this.calendar) this.calendar.refetchEvents();
+            refetchEvents: function () {
+                if (this.calendar) this.calendar.refetchEvents();
             },
 
             // --- Event Modal Logic ---
-            openModal: function(eventObj = null, dateStr = null) {
+            openModal: function (eventObj = null, dateStr = null) {
                 document.getElementById('event-modal').classList.remove('hidden');
                 document.getElementById('event-modal').classList.add('flex');
-                
+
                 if (eventObj) {
                     const p = eventObj.extendedProps;
                     document.getElementById('modal-title').innerText = "일정 수정";
@@ -296,7 +411,7 @@
                     document.getElementById('event-end').value = p.end || '';
                     document.getElementById('event-type').value = p.eventType;
                     document.getElementById('event-desc').value = p.description || '';
-                    
+
                     if (p.targetType === 'class') {
                         document.querySelector('input[name="targetType"][value="class"]').checked = true;
                         this.toggleTargetClass(true);
@@ -320,23 +435,23 @@
                 }
             },
 
-            closeModal: function() {
+            closeModal: function () {
                 document.getElementById('event-modal').classList.add('hidden');
                 document.getElementById('event-modal').classList.remove('flex');
             },
 
-            toggleTargetClass: function(enable) {
+            toggleTargetClass: function (enable) {
                 const sel = document.getElementById('target-class');
                 sel.disabled = !enable;
-                if(enable) sel.classList.remove('bg-gray-50');
+                if (enable) sel.classList.remove('bg-gray-50');
                 else sel.classList.add('bg-gray-50');
             },
 
-            saveEvent: async function() {
+            saveEvent: async function () {
                 const id = document.getElementById('event-id').value;
                 const title = document.getElementById('event-title').value;
                 const start = document.getElementById('event-start').value;
-                if(!title || !start) { alert("제목과 시작 날짜는 필수입니다."); return; }
+                if (!title || !start) { alert("제목과 시작 날짜는 필수입니다."); return; }
 
                 const data = {
                     title: title,
@@ -358,23 +473,24 @@
                     }
                     this.closeModal();
                     this.refetchEvents();
-                } catch(e) { alert("저장 실패: " + e.message); }
+                } catch (e) { alert("저장 실패: " + e.message); }
             },
 
-            deleteEvent: async function() {
+            deleteEvent: async function () {
                 const id = document.getElementById('event-id').value;
-                if(!id) return;
-                if(!confirm("정말 삭제하시겠습니까?")) return;
-                
+                if (!id) return;
+                if (!confirm("정말 삭제하시겠습니까?")) return;
+
                 try {
                     await window.db.collection('calendar_events').doc(id).delete();
                     this.closeModal();
                     this.refetchEvents();
-                } catch(e) { alert("삭제 실패: " + e.message); }
+                } catch (e) { alert("삭제 실패: " + e.message); }
             }
         };
 
         document.addEventListener('auth-ready', () => app.init());
     </script>
 </body>
+
 </html>

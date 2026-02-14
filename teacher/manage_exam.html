@@ -43,16 +43,22 @@
 
         .score-floater {
             position: fixed;
-            top: 100px;
-            right: 20px;
-            width: 220px;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            max-width: 400px;
             background: white;
-            border-radius: 12px;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            border-radius: 16px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
             border: 1px solid #e5e7eb;
-            z-index: 40;
-            padding: 1.5rem;
+            z-index: 50;
+            padding: 1rem 1.5rem;
             text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
         }
 
         .tab-btn-base {
@@ -186,19 +192,22 @@
             <!-- TAB 2: OMR Config -->
             <div id="tab-omr" class="tab-content hidden h-full relative">
 
-                <!-- Floating Score Card -->
+                <!-- Floating Score Card (Bottom Center) -->
                 <div class="score-floater">
-                    <p class="text-xs text-gray-400 font-bold uppercase mb-1">Total Score</p>
-                    <p class="text-4xl font-black text-red-500 mb-2" id="total-score">0</p>
-                    <div class="text-xs text-gray-500 font-bold bg-gray-100 rounded py-1">총 문항수: <span
-                            id="total-count">0</span></div>
+                    <div class="text-left">
+                        <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Total Score</p>
+                        <div class="flex items-baseline gap-2">
+                            <span class="text-3xl font-black text-blue-600" id="total-score">0</span>
+                            <span class="text-xs text-gray-400 font-bold">/ 문항 <span id="total-count">0</span>개</span>
+                        </div>
+                    </div>
                     <button onclick="omrApp.saveToDB()"
-                        class="w-full mt-4 bg-gray-800 text-white text-sm font-bold py-2 rounded hover:bg-gray-900 shadow-sm">
-                        <i class="fas fa-save mr-1"></i> 저장
+                        class="bg-gray-900 text-white text-sm font-bold py-3 px-6 rounded-xl hover:bg-black shadow-lg transition transform active:scale-95 whitespace-nowrap">
+                        <i class="fas fa-save mr-1"></i> 저장하기
                     </button>
                 </div>
 
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 pr-[240px]">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 pb-32">
                     <!-- Objective Section -->
                     <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                         <div class="flex justify-between items-center mb-6 pb-2 border-b">
