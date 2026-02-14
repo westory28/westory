@@ -445,11 +445,21 @@
                     <table class="w-full text-sm text-left whitespace-nowrap">
                         <thead class="bg-gray-50 text-gray-600 font-bold border-b">
                             <tr>
-                                <th class="p-4">시간</th>
-                                <th class="p-4">학생</th>
-                                <th class="p-4">점수</th>
-                                <th class="p-4">상태</th>
-                                <th class="p-4">관리</th>
+                                <th class="p-4 w-32 cursor-pointer hover:bg-gray-100"
+                                    onclick="app.sortLog('timestamp')">시간 <i class="fas fa-sort sort-icon"></i></th>
+                                <th class="p-4 w-20 cursor-pointer hover:bg-gray-100" onclick="app.sortLog('class')">반
+                                    <i class="fas fa-sort sort-icon"></i>
+                                </th>
+                                <th class="p-4 cursor-pointer hover:bg-gray-100" onclick="app.sortLog('studentName')">학생
+                                    <i class="fas fa-sort sort-icon"></i>
+                                </th>
+                                <th class="p-4 w-24 cursor-pointer hover:bg-gray-100" onclick="app.sortLog('score')">점수
+                                    <i class="fas fa-sort sort-icon"></i>
+                                </th>
+                                <th class="p-4 w-24 cursor-pointer hover:bg-gray-100" onclick="app.sortLog('status')">상태
+                                    <i class="fas fa-sort sort-icon"></i>
+                                </th>
+                                <th class="p-4 w-20">관리</th>
                             </tr>
                         </thead>
                         <tbody id="log-body" class="divide-y divide-gray-100"></tbody>
@@ -1078,7 +1088,104 @@
                 }
             },
 
-            loadByClass: function (c) { },
+            loadByClass: async function (classNum) {
+                const list = document.getElementById('log-body');
+                const count = document.getElementById('log-count');
+                list.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-400">로딩 중...</td></tr>';
+
+                try {
+                    let q = window.getCollection('quiz_submissions').orderBy('timestamp', 'desc');
+                    if (classNum !== 'all' && classNum != "") {
+                        // Note: Requires composite index if filtering by class and ordering by timestamp
+                        // For now, client-side filter might be safer if index missing, 
+                        // but let's try direct query. If it fails, we might need to filter client-side.
+                        // Assuming composite index exists or we process client-side.
+                        // Let's use client-side filtering for safety on "class" field if not indexed
+                    }
+
+                    const snap = await q.limit(50).get();
+                    this.logs = [];
+                    snap.forEach(doc => {
+                        const d = doc.data();
+                        // Filter by class if needed (doing it client-side to avoid index issues for now)
+                        if (classNum && classNum !== 'all' && d.gradeClass && !d.gradeClass.endsWith(`${classNum}반`)) return;
+
+                        this.logs.push({
+                            id: doc.id,
+                            ...d,
+                            // Extract class from gradeClass string (e.g. "3학년 2반") or user info
+                            classOnly: d.gradeClass ? d.gradeClass.split(' ')[1] : '-'
+                        });
+                    });
+
+                    count.innerText = `(${this.logs.length}건)`;
+                    this.renderLog();
+                } catch (e) {
+                    console.error(e);
+                    list.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-red-500">데이터 로드 실패</td></tr>';
+                }
+            },
+
+            renderLog: function () {
+                const list = document.getElementById('log-body');
+                if (this.logs.length === 0) {
+                    list.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-400">제출 내역이 없습니다.</td></tr>';
+                    return;
+                }
+                list.innerHTML = this.logs.map(log => {
+                    const date = log.timestamp ? new Date(log.timestamp.seconds * 1000).toLocaleString() : '-';
+                    const scoreColor = log.score >= 80 ? 'text-green-600' : (log.score >= 60 ? 'text-blue-600' : 'text-red-600');
+                    return `
+                        <tr class="hover:bg-gray-50 transition">
+                            <td class="p-4 text-gray-500">${date}</td>
+                            <td class="p-4 font-bold text-gray-600">${log.classOnly}</td>
+                            <td class="p-4">
+                                <div class="font-bold text-gray-800">${log.studentName || '이름 없음'}</div>
+                                <div class="text-xs text-gray-400">${log.email || '-'}</div>
+                            </td>
+                            <td class="p-4 font-bold ${scoreColor}">${log.score}점</td>
+                            <td class="p-4"><span class="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs font-bold">제출완료</span></td>
+                            <td class="p-4">
+                                <button onclick="app.viewLogDetail('${log.id}')" class="text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded text-xs font-bold transition">상세</button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            },
+
+            logSortField: 'timestamp',
+            logSortAsc: false,
+
+            sortLog: function (field) {
+                if (this.logSortField === field) {
+                    this.logSortAsc = !this.logSortAsc; // Toggle
+                } else {
+                    this.logSortField = field;
+                    this.logSortAsc = true; // Default to asc for new field
+                    // exception: timestamp default desc? user asked for filter function.
+                    // Let's stick to toggle.
+                    if (field === 'timestamp') this.logSortAsc = false;
+                }
+
+                // Update Icon UI
+                document.querySelectorAll('#tab-log .sort-icon').forEach(i => i.className = 'fas fa-sort sort-icon');
+                // We can't easily target specific header icon without ID, but let's assume simple re-render or global reset
+                // Ideally add 'text-blue-500' to active sort
+
+                this.logs.sort((a, b) => {
+                    let valA = a[field];
+                    let valB = b[field];
+
+                    // Handle specific fields
+                    if (field === 'class') valA = a.classOnly;
+                    if (field === 'class') valB = b.classOnly;
+
+                    if (valA < valB) return this.logSortAsc ? -1 : 1;
+                    if (valA > valB) return this.logSortAsc ? 1 : -1;
+                    return 0;
+                });
+                this.renderLog();
+            },
             filterBank: function () { },
             sortBank: function () { },
             renderBank: function () { }
