@@ -286,11 +286,9 @@
             },
 
             init: function () {
-                document.addEventListener('auth-ready', () => {
-                    const cfg = window.currentConfig;
-                    if (cfg) document.getElementById('dash-year-badge').innerText = `${cfg.year}학년도 ${cfg.semester}학기`;
-                    this.initCalendar();
-                });
+                const cfg = window.currentConfig;
+                if (cfg) document.getElementById('dash-year-badge').innerText = `${cfg.year}학년도 ${cfg.semester}학기`;
+                this.initCalendar();
             },
 
             initCalendar: function () {
