@@ -274,7 +274,7 @@
                 <div id="empty-state"
                     class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 bg-white z-20">
                     <i class="fas fa-mouse-pointer text-4xl mb-4"></i>
-                    <p class="text-lg text-center">목차에서 <strong>지필평가 대비</strong>또는<br><strong>중단원</strong>을 선택하여 문제를
+                    <p class="text-lg text-center">목차에서 <strong>정기 시험 대비</strong>또는<br><strong>중단원</strong>을 선택하여 문제를
                         관리하세요.</p>
                 </div>
 
@@ -531,7 +531,7 @@
                             placeholder="10"><span class="text-sm font-bold text-gray-600">개</span>
                     </div>
                     <p class="text-[10px] text-gray-400 mt-1 leading-tight">* 문제 은행에서 랜덤으로 추출됩니다.<br>* 미풀이 문항을 우선 출제하며,
-                        <br> * 지필평가 대비는 단원별 균형 출제 로직이 적용됩니다.
+                        <br> * 정기 시험 대비는 단원별 균형 출제 로직이 적용됩니다.
                     </p>
                 </div>
                 <div><label class="block text-xs font-bold text-gray-500 mb-1">제한 시간 (초)</label><input type="number"
@@ -580,7 +580,7 @@
                             class="w-full border p-2 rounded text-sm bg-gray-50 font-bold">
                             <option value="diagnostic">진단평가</option>
                             <option value="formative">형성평가</option>
-                            <option value="exam_prep">지필평가 대비</option>
+                            <option value="exam_prep">정기 시험 대비</option>
                         </select></div>
                     <div><label class="block text-xs font-bold text-gray-500 mb-1">유형</label><select id="edit-type"
                             class="w-full border p-2 rounded text-sm bg-gray-50">
@@ -700,7 +700,7 @@
 
                 const examNode = document.createElement('div');
                 examNode.className = 'tree-item exam-prep';
-                examNode.innerHTML = '<i class="fas fa-file-contract mr-2"></i>지필평가 대비 실전';
+                examNode.innerHTML = '<i class="fas fa-file-contract mr-2"></i>정기 시험 대비 실전';
                 examNode.onclick = () => this.selectExamPrep(examNode);
                 container.appendChild(examNode);
 
@@ -728,7 +728,7 @@
             selectExamPrep: function (el) {
                 this.resetSelection();
                 el.classList.add('active');
-                this.selectedNode = { id: 'exam_prep', title: '지필평가 대비 실전', type: 'special' };
+                this.selectedNode = { id: 'exam_prep', title: '정기 시험 대비 실전', type: 'special' };
                 this.renderEditor();
                 this.toggleSidebar(false);
                 if (window.innerWidth < 1024) document.getElementById('editor-panel').scrollIntoView({ behavior: 'smooth' });
