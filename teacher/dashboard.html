@@ -289,6 +289,18 @@
                 const cfg = window.currentConfig;
                 if (cfg) document.getElementById('dash-year-badge').innerText = `${cfg.year}학년도 ${cfg.semester}학기`;
                 this.initCalendar();
+                this.initModal();
+            },
+
+            initModal: function () {
+                // Populate class dropdown
+                const sel = document.getElementById('target-class');
+                sel.innerHTML = Array.from({ length: 12 }, (_, i) => `<option value="2-${i + 1}">2-${i + 1}반</option>`).join('');
+
+                // Overlay click
+                document.getElementById('event-modal').addEventListener('click', (e) => {
+                    if (e.target.id === 'event-modal') this.attemptClose();
+                });
             },
 
             initCalendar: function () {
@@ -365,9 +377,13 @@
 
             refetchEvents: function () { if (this.calendar) this.calendar.refetchEvents(); },
 
+            initialFormState: null,
+
             openModal: function (eventObj = null, dateStr = null) {
                 document.getElementById('event-modal').classList.remove('hidden');
                 document.getElementById('event-modal').classList.add('flex');
+
+                // Reset/Fill and Capture State
                 if (eventObj) {
                     const p = eventObj.extendedProps;
                     document.getElementById('modal-title').innerText = "일정 수정";
@@ -397,8 +413,44 @@
                     document.getElementById('event-desc').value = '';
                     document.querySelector('input[name="targetType"][value="common"]').checked = true;
                     this.toggleTargetClass(false);
+                    document.getElementById('target-class').value = '2-1'; // Default
                     document.getElementById('btn-delete').classList.add('hidden');
                 }
+
+                this.captureFormState();
+            },
+
+            captureFormState: function () {
+                this.initialFormState = {
+                    title: document.getElementById('event-title').value,
+                    start: document.getElementById('event-start').value,
+                    end: document.getElementById('event-end').value,
+                    type: document.getElementById('event-type').value,
+                    desc: document.getElementById('event-desc').value,
+                    targetType: document.querySelector('input[name="targetType"]:checked').value,
+                    targetClass: document.getElementById('target-class').value
+                };
+            },
+
+            isDirty: function () {
+                if (!this.initialFormState) return false;
+                const current = {
+                    title: document.getElementById('event-title').value,
+                    start: document.getElementById('event-start').value,
+                    end: document.getElementById('event-end').value,
+                    type: document.getElementById('event-type').value,
+                    desc: document.getElementById('event-desc').value,
+                    targetType: document.querySelector('input[name="targetType"]:checked').value,
+                    targetClass: document.getElementById('target-class').value
+                };
+                return JSON.stringify(this.initialFormState) !== JSON.stringify(current);
+            },
+
+            attemptClose: function () {
+                if (this.isDirty()) {
+                    if (!confirm("작성 중인 내용이 있습니다. 정말 닫으시겠습니까?")) return;
+                }
+                this.closeModal();
             },
 
             closeModal: function () {
@@ -435,6 +487,7 @@
                         data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
                         await window.db.collection('calendar_events').add(data);
                     }
+                    this.initialFormState = null; // Reset dirty state on save
                     this.closeModal();
                     this.refetchEvents();
                 } catch (e) { alert("저장 실패: " + e.message); }
@@ -446,6 +499,7 @@
                 if (!confirm("정말 삭제하시겠습니까?")) return;
                 try {
                     await window.db.collection('calendar_events').doc(id).delete();
+                    this.initialFormState = null; // Reset dirty state
                     this.closeModal();
                     this.refetchEvents();
                 } catch (e) { alert("삭제 실패: " + e.message); }
