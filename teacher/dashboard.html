@@ -136,40 +136,144 @@
             </span>
         </div>
 
-        <div class="flex flex-wrap items-center gap-2 w-full md:w-auto mb-4 shrink-0 justify-end">
-            <!-- Search Button & Filter -->
-            <div class="flex items-center gap-2">
-                <button onclick="app.openSearch()"
-                    class="bg-white border border-gray-200 text-gray-600 hover:text-blue-600 hover:border-blue-300 p-2 rounded-lg shadow-sm transition"
-                    title="일정 검색">
-                    <i class="fas fa-search"></i>
-                </button>
-                <select id="view-filter" onchange="app.refetchEvents()"
-                    class="bg-white border border-gray-200 text-gray-700 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2 shadow-sm outline-none">
-                    <option value="all">전체 보기</option>
-                    <option value="common">전체 공통</option>
-                    <option value="2-1">2-1반</option>
-                    <option value="2-2">2-2반</option>
-                    <option value="2-3">2-3반</option>
-                    <option value="2-4">2-4반</option>
-                    <option value="2-5">2-5반</option>
-                    <option value="2-6">2-6반</option>
-                    <option value="2-7">2-7반</option>
-                    <option value="2-8">2-8반</option>
-                    <option value="2-9">2-9반</option>
-                    <option value="2-10">2-10반</option>
-                    <option value="2-11">2-11반</option>
-                    <option value="2-12">2-12반</option>
-                </select>
-            </div>
-            <button onclick="app.openModal()"
-                class="bg-blue-600 text-white px-3 py-2 rounded text-sm font-bold hover:bg-blue-700 shadow-sm ml-1 flex-1 md:flex-none whitespace-nowrap">
-                <i class="fas fa-plus mr-1"></i> 일정 추가
-            </button>
+        <!-- Search & Filter (Moved to Top Right of Calendar Area or Global Header) -->
+        <!-- We will place it inside the calendar container header or keep it above -->
         </div>
 
-        <div id="calendar" class="bg-white rounded-xl shadow-sm p-4 h-[calc(100vh-180px)]"></div>
+        <!-- Main Content Area (Split Layout) -->
+        <div class="flex flex-col md:flex-row h-[calc(100vh-140px)] gap-4">
+
+            <!-- Left: Calendar (60%) -->
+            <div class="w-full md:w-3/5 bg-white rounded-xl shadow-sm p-4 h-full flex flex-col">
+                <div class="flex justify-between items-center mb-2">
+                    <h2 class="text-lg font-bold text-gray-800"><i class="far fa-calendar-alt mr-2 text-blue-600"></i>학사
+                        일정</h2>
+                    <div class="flex items-center gap-2">
+                        <button onclick="app.openSearch()"
+                            class="bg-gray-50 border border-gray-200 text-gray-600 hover:text-blue-600 p-1.5 rounded-lg transition"
+                            title="검색">
+                            <i class="fas fa-search"></i>
+                        </button>
+                        <select id="view-filter" onchange="app.refetchEvents()"
+                            class="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg p-1.5 outline-none">
+                            <option value="all">전체 보기</option>
+                            <option value="common">공통 일정</option>
+                            <option value="2-1">2-1반</option>
+                            <option value="2-2">2-2반</option>
+                            <option value="2-3">2-3반</option>
+                            <option value="2-4">2-4반</option>
+                            <option value="2-5">2-5반</option>
+                            <option value="2-6">2-6반</option>
+                            <option value="2-7">2-7반</option>
+                            <option value="2-8">2-8반</option>
+                            <option value="2-9">2-9반</option>
+                            <option value="2-10">2-10반</option>
+                            <option value="2-11">2-11반</option>
+                            <option value="2-12">2-12반</option>
+                        </select>
+                        <button onclick="app.openModal()"
+                            class="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-blue-700 shadow-sm transition">
+                            <i class="fas fa-plus mr-1"></i> 추가
+                        </button>
+                    </div>
+                </div>
+                <div id="calendar" class="flex-1"></div>
+            </div>
+
+            <!-- Right: Functions (40%) -->
+            <div class="w-full md:w-2/5 flex flex-col gap-4 h-full">
+
+                <!-- Right Top: Notice Board (50%) -->
+                <div
+                    class="h-1/2 bg-[#fffbeb] rounded-xl shadow-sm border border-yellow-200 p-4 flex flex-col relative overflow-hidden">
+                    <div class="flex justify-between items-center mb-3 border-b border-yellow-200 pb-2">
+                        <h3 class="text-lg font-extrabold text-amber-800 flex items-center">
+                            <i class="fas fa-thumbtack mr-2 text-amber-600"></i>알림장
+                        </h3>
+                        <button onclick="app.openNoticeModal()"
+                            class="text-amber-700 hover:text-amber-900 bg-yellow-200 hover:bg-yellow-300 px-2 py-1 rounded text-xs font-bold transition">
+                            <i class="fas fa-plus mr-1"></i>쓰기
+                        </button>
+                    </div>
+                    <div id="notice-list" class="flex-1 overflow-y-auto space-y-3 pr-2 custom-scroll">
+                        <div class="text-center text-amber-800/50 py-10 font-bold text-sm">등록된 알림이 없습니다.</div>
+                    </div>
+                </div>
+
+                <!-- Right Bottom: Event Details (50%) -->
+                <div class="h-1/2 bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col">
+                    <div class="flex justify-between items-center mb-3 border-b border-gray-100 pb-2">
+                        <h3 class="text-lg font-bold text-gray-800 flex items-center">
+                            <i class="fas fa-info-circle mr-2 text-blue-500"></i>일정 상세
+                        </h3>
+                        <span id="detail-date-display" class="text-sm font-bold text-gray-500">날짜를 선택하세요</span>
+                    </div>
+                    <div id="detail-panel-content" class="flex-1 overflow-y-auto pr-2 custom-scroll">
+                        <div class="flex flex-col items-center justify-center h-full text-gray-400">
+                            <i class="far fa-calendar-check text-4xl mb-3 text-gray-200"></i>
+                            <p class="text-sm">달력에서 날짜나 일정을 클릭하면<br>상세 내용이 여기에 표시됩니다.</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
     </main>
+
+    <!-- Notice Add/Edit Modal -->
+    <div id="notice-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+        <div class="bg-[#fffbeb] rounded-xl shadow-2xl w-full max-w-sm p-6 m-4 border-t-8 border-amber-400 relative"
+            onclick="event.stopPropagation()">
+            <button onclick="app.closeNoticeModal()" class="absolute top-4 right-4 text-amber-800 hover:text-amber-600">
+                <i class="fas fa-times fa-lg"></i>
+            </button>
+            <h3 class="text-xl font-extrabold text-amber-900 mb-6"><i class="fas fa-pen-fancy mr-2"></i>알림 쓰기</h3>
+
+            <input type="hidden" id="notice-id">
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-amber-800 mb-1">카테고리</label>
+                    <select id="notice-category"
+                        class="w-full bg-white border border-yellow-300 rounded p-2 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-amber-300"
+                        onchange="app.toggleDDayInput()">
+                        <option value="normal">📢 일반 알림</option>
+                        <option value="exam">🔥 정기 시험</option>
+                        <option value="performance">⚡ 수행평가</option>
+                        <option value="prep">🎒 수업 준비물</option>
+                        <option value="dday">⏳ D-Day 설정</option>
+                    </select>
+                </div>
+
+                <div id="dday-input-group" class="hidden">
+                    <label class="block text-xs font-bold text-amber-800 mb-1">목표 날짜</label>
+                    <input type="date" id="notice-target-date"
+                        class="w-full bg-white border border-yellow-300 rounded p-2 text-sm outline-none">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-amber-800 mb-1">알림 내용</label>
+                    <textarea id="notice-content" rows="4"
+                        class="w-full bg-white border border-yellow-300 rounded p-3 text-sm resize-none outline-none focus:ring-2 focus:ring-amber-300 placeholder-amber-800/30"
+                        placeholder="내용을 입력하세요..."></textarea>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" id="notice-common"
+                        class="w-4 h-4 text-amber-600 rounded focus:ring-amber-500 border-gray-300">
+                    <label for="notice-common" class="text-sm font-bold text-amber-900 cursor-pointer">학급 전체 공통
+                        알림</label>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-2 mt-6">
+                <button onclick="app.deleteNotice()" id="btn-delete-notice"
+                    class="hidden px-3 py-2 text-red-600 hover:bg-red-50 rounded font-bold text-sm">삭제</button>
+                <button onclick="app.saveNotice()"
+                    class="px-5 py-2 bg-amber-500 text-white rounded-lg font-bold hover:bg-amber-600 shadow-md transition transform active:scale-95">게시하기</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Event Modal (Add/Edit) -->
     <div id="event-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
@@ -298,6 +402,9 @@
                 'diagnosis': '#3b82f6',   // Blue
                 'formative': '#3b82f6'    // Blue
             },
+            typeLabelMap: {
+                'exam': '정기 시험', 'performance': '수행평가', 'event': '행사', 'diagnosis': '진단평가', 'formative': '형성평가'
+            },
             // Korean Public Holidays (2025-2026) Verified
             holidays: {
                 // 2025
@@ -332,116 +439,181 @@
                 this.initCalendar();
                 this.initModal();
                 this.initSearch();
+                this.initNotices();
             },
 
-            initModal: function () {
-                // Populate class dropdown
-                const sel = document.getElementById('target-class');
-                sel.innerHTML = Array.from({ length: 12 }, (_, i) => `<option value="2-${i + 1}">2-${i + 1}반</option>`).join('');
-
-                // Overlay click
-                document.getElementById('event-modal').addEventListener('click', (e) => {
-                    if (e.target.id === 'event-modal') this.attemptClose();
-                });
+            // --- Notice Board Logic ---
+            initNotices: function () {
+                this.fetchNotices();
             },
 
-            initSearch: function () {
-                // Overlay click for search modal
-                document.getElementById('search-modal').addEventListener('click', (e) => {
-                    if (e.target.id === 'search-modal') this.closeSearch();
-                });
-            },
-
-            openSearch: function () {
-                const modal = document.getElementById('search-modal');
-                modal.classList.remove('hidden');
-                modal.classList.add('flex');
-                document.getElementById('search-input').value = '';
-                document.getElementById('search-results').innerHTML = '<div class="text-center text-gray-400 py-10">검색어를 입력하고 엔터를 누르세요.</div>';
-                setTimeout(() => document.getElementById('search-input').focus(), 100);
-            },
-
-            closeSearch: function () {
-                const modal = document.getElementById('search-modal');
-                modal.classList.add('hidden');
-                modal.classList.remove('flex');
-            },
-
-            executeSearch: async function () {
-                const keyword = document.getElementById('search-input').value.trim();
-                if (!keyword) return;
-
-                const resultsContainer = document.getElementById('search-results');
-                resultsContainer.innerHTML = '<div class="text-center py-10"><i class="fas fa-spinner fa-spin text-blue-500 text-2xl"></i></div>';
-
-                try {
-                    // Fetch all events for the current year (Simple approach: fetch all and filter in memory, or range query)
-                    // Assuming academic year is from March to next Feb. 
-                    // To be safe and simple, let's fetch a wide range or relies on Firestore composite index if we want to filter by text (which Firestore doesn't support well).
-                    // We will fetch based on date range of the current academic year.
-                    const year = window.currentConfig?.year || new Date().getFullYear();
-                    const startStr = `${year}-01-01`;
-                    const endStr = `${parseInt(year) + 1}-12-31`; // Generous range
-
-                    const snapshot = await window.db.collection('calendar_events')
-                        .where('start', '>=', startStr)
-                        .where('start', '<=', endStr)
-                        .orderBy('start')
-                        .get();
-
-                    const matches = [];
-                    snapshot.forEach(doc => {
-                        const d = doc.data();
-                        if (d.title.includes(keyword) || (d.description && d.description.includes(keyword))) {
-                            matches.push({ id: doc.id, ...d });
-                        }
-                    });
-
-                    if (matches.length === 0) {
-                        resultsContainer.innerHTML = '<div class="text-center text-gray-500 py-10">검색 결과가 없습니다.</div>';
+            fetchNotices: function () {
+                const container = document.getElementById('notice-list');
+                window.db.collection('notices').orderBy('createdAt', 'desc').onSnapshot(snapshot => {
+                    if (snapshot.empty) {
+                        container.innerHTML = '<div class="text-center text-amber-800/50 py-10 font-bold text-sm">등록된 알림이 없습니다.</div>';
                         return;
                     }
 
-                    resultsContainer.innerHTML = matches.map(ev => `
-                        <div onclick="app.openSearchResult('${ev.id}')" class="p-3 border border-gray-100 rounded-lg hover:bg-blue-50 cursor-pointer transition flex items-center justify-between group">
-                            <div>
-                                <div class="flex items-center gap-2 mb-1">
-                                    <span class="text-xs font-bold text-white px-2 py-0.5 rounded" style="background-color: ${this.colorMap[ev.eventType]}">${ev.eventType}</span>
-                                    <span class="font-bold text-gray-800">${ev.title}</span>
+                    container.innerHTML = snapshot.docs.map(doc => {
+                        const d = doc.data();
+                        let icon = '📢';
+                        let dateInfo = '';
+
+                        if (d.category === 'exam') icon = '🔥';
+                        if (d.category === 'performance') icon = '⚡';
+                        if (d.category === 'prep') icon = '🎒';
+                        if (d.category === 'dday' && d.targetDate) {
+                            icon = '⏳';
+                            const today = new Date();
+                            today.setHours(0, 0, 0, 0);
+                            const target = new Date(d.targetDate);
+                            target.setHours(0, 0, 0, 0);
+                            const diff = Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+                            const dDayStr = diff > 0 ? `D-${diff}` : (diff === 0 ? 'D-Day' : `D+${Math.abs(diff)}`);
+                            dateInfo = `<span class="ml-2 text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold animate-pulse">${dDayStr}</span>`;
+                        }
+
+                        // Parse new lines
+                        const content = d.content.replace(/\n/g, '<br>');
+
+                        return `
+                            <div onclick="app.openNoticeModal('${doc.id}')" class="bg-white/80 p-3 rounded-lg border border-yellow-200 hover:bg-white transition cursor-pointer shadow-sm relative group">
+                                <div class="flex justify-between items-start mb-1">
+                                    <div class="flex items-center">
+                                        <span class="text-lg mr-2">${icon}</span>
+                                        ${dateInfo}
+                                    </div>
+                                    <span class="text-[10px] text-amber-800/60 font-mono">${new Date(d.createdAt.seconds * 1000).toLocaleDateString()}</span>
                                 </div>
-                                <div class="text-xs text-gray-500">
-                                    <i class="far fa-calendar mr-1"></i>${ev.start} ${ev.end ? '~ ' + ev.end : ''}
-                                    ${ev.targetType === 'class' ? `<span class="ml-2 bg-gray-100 px-1 rounded">${ev.targetClass}반</span>` : '<span class="ml-2 bg-gray-100 px-1 rounded">전체</span>'}
+                                <div class="text-gray-800 text-sm font-bold leading-relaxed whitespace-pre-wrap">${content}</div>
+                                <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition">
+                                    <i class="fas fa-edit text-amber-600 hover:text-amber-800"></i>
                                 </div>
                             </div>
-                            <i class="fas fa-chevron-right text-gray-300 group-hover:text-blue-500"></i>
-                        </div>
-                    `).join('');
+                        `;
+                    }).join('');
+                });
+            },
 
-                } catch (e) {
-                    console.error(e);
-                    resultsContainer.innerHTML = '<div class="text-center text-red-500 py-10">검색 중 오류가 발생했습니다.</div>';
+            openNoticeModal: function (id = null) {
+                document.getElementById('notice-modal').classList.remove('hidden');
+                document.getElementById('notice-modal').classList.add('flex');
+
+                if (id) {
+                    window.db.collection('notices').doc(id).get().then(doc => {
+                        const d = doc.data();
+                        document.getElementById('notice-id').value = id;
+                        document.getElementById('notice-category').value = d.category;
+                        document.getElementById('notice-content').value = d.content;
+                        document.getElementById('notice-target-date').value = d.targetDate || '';
+                        document.getElementById('notice-common').checked = (d.targetType === 'common');
+                        this.toggleDDayInput();
+                        document.getElementById('btn-delete-notice').classList.remove('hidden');
+                    });
+                } else {
+                    document.getElementById('notice-id').value = '';
+                    document.getElementById('notice-category').value = 'normal';
+                    document.getElementById('notice-content').value = '';
+                    document.getElementById('notice-target-date').value = '';
+                    document.getElementById('notice-common').checked = true;
+                    this.toggleDDayInput();
+                    document.getElementById('btn-delete-notice').classList.add('hidden');
                 }
             },
 
-            openSearchResult: function (eventId) {
-                // Find event in current calendar if possible, or fetch it. 
-                // Since we have the ID, let's just fetch it to be sure or use the data we have.
-                // Re-using openModal requires an event object structure similar to FullCalendar's info.event
-                // But openModal mainly needs extendedProps. Let's fetch the doc to be robust.
-                this.closeSearch();
-                window.db.collection('calendar_events').doc(eventId).get().then(doc => {
-                    if (doc.exists) {
-                        const data = doc.data();
-                        this.openModal({
-                            id: doc.id,
-                            extendedProps: data
-                        });
-                        // Optional: Move calendar to that date
-                        this.calendar.gotoDate(data.start);
-                    }
-                });
+            closeNoticeModal: function () {
+                document.getElementById('notice-modal').classList.add('hidden');
+                document.getElementById('notice-modal').classList.remove('flex');
             },
+
+            toggleDDayInput: function () {
+                const cat = document.getElementById('notice-category').value;
+                if (cat === 'dday') document.getElementById('dday-input-group').classList.remove('hidden');
+                else document.getElementById('dday-input-group').classList.add('hidden');
+            },
+
+            saveNotice: async function () {
+                const id = document.getElementById('notice-id').value;
+                const content = document.getElementById('notice-content').value;
+                if (!content) return alert("내용을 입력하세요.");
+
+                const data = {
+                    category: document.getElementById('notice-category').value,
+                    content: content,
+                    targetDate: document.getElementById('notice-target-date').value,
+                    targetType: document.getElementById('notice-common').checked ? 'common' : 'class', // Simple boolean for now
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+
+                try {
+                    if (id) await window.db.collection('notices').doc(id).update(data);
+                    else {
+                        data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+                        await window.db.collection('notices').add(data);
+                    }
+                    this.closeNoticeModal();
+                } catch (e) { alert("저장 실패: " + e.message); }
+            },
+
+            deleteNotice: async function () {
+                const id = document.getElementById('notice-id').value;
+                if (!confirm("삭제하시겠습니까?")) return;
+                try {
+                    await window.db.collection('notices').doc(id).delete();
+                    this.closeNoticeModal();
+                } catch (e) { alert("삭제 실패: " + e.message); }
+            },
+
+            // --- Detail Panel Logic ---
+            showEventsOnPanel: function (dateStr, events) {
+                const container = document.getElementById('detail-panel-content');
+                const dateDisplay = document.getElementById('detail-date-display');
+
+                // Format Date
+                const dateObj = new Date(dateStr);
+                const days = ['일', '월', '화', '수', '목', '금', '토'];
+                dateDisplay.innerText = `${dateObj.getMonth() + 1}월 ${dateObj.getDate()}일 (${days[dateObj.getDay()]})`;
+
+                if (events.length === 0) {
+                    container.innerHTML = `
+                        <div class="flex flex-col items-center justify-center h-40 text-gray-400">
+                            <i class="far fa-calendar-times text-3xl mb-2"></i>
+                            <p class="text-sm">일정이 없습니다.</p>
+                            <button onclick="app.openModal(null, '${dateStr}')" class="mt-3 text-blue-600 hover:text-blue-800 font-bold text-xs underline">
+                                이 날짜에 일정 추가하기
+                            </button>
+                        </div>
+                    `;
+                    return;
+                }
+
+                container.innerHTML = events.map(ev => {
+                    // Use eventsMap to get full extendedProps if ev is a FullCalendar event object
+                    const p = ev.extendedProps || this.eventsMap[ev.id];
+                    if (!p) return ''; // Should not happen if eventsMap is correctly populated
+
+                    return `
+                        <div onclick="app.openModal({id: '${ev.id}', extendedProps: { ...app.eventsMap['${ev.id}'] }})" 
+                             class="group p-3 border-l-4 border-gray-200 hover:border-blue-500 bg-gray-50 hover:bg-white transition mb-3 rounded-r-lg cursor-pointer">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="text-[10px] text-white px-1.5 py-0.5 rounded font-bold" style="background-color: ${p.backgroundColor || this.colorMap[p.eventType] || '#999'}">${this.typeLabelMap[p.eventType] || '일정'}</span>
+                                        <h4 class="font-bold text-gray-800 text-sm">${p.title}</h4>
+                                    </div>
+                                    <p class="text-xs text-gray-500">${p.start} ${p.end && p.start !== p.end ? '~ ' + p.end : ''}</p>
+                                </div>
+                                <i class="fas fa-chevron-right text-gray-300 group-hover:text-blue-500 text-xs mt-2"></i>
+                            </div>
+                            ${p.description ? `<p class="text-xs text-gray-600 mt-2 bg-gray-100 p-2 rounded">${p.description}</p>` : ''}
+                        </div>
+                    `;
+                }).join('');
+            },
+
+            // Need a way to look up full event props for editing
+            eventsMap: {},
 
             initCalendar: function () {
                 const calendarEl = document.getElementById('calendar');
@@ -467,10 +639,29 @@
                         return [];
                     },
                     events: [...holidayTextEvents, this.fetchEvents.bind(this)],
-                    dateClick: (info) => this.openModal(null, info.dateStr),
+                    dateClick: (info) => {
+                        // Find events for this date from the current view's cache or client side filter
+                        // Better: Use getEvents() from calendar and filter
+                        const allEvents = this.calendar.getEvents();
+                        const dailyEvents = allEvents.filter(e => {
+                            // Simple overlap check
+                            const start = new Date(e.startStr);
+                            const end = e.end ? new Date(e.endStr) : new Date(start);
+                            const target = new Date(info.dateStr);
+                            // Adjust for inclusive/exclusive handling if needed, but for day grid standard:
+                            // If just start date
+                            if (!e.end) return e.startStr === info.dateStr;
+                            return target >= start && target < end;
+                        }).filter(e => !e.classNames.includes('holiday-text-event')); // Exclude holidays
+
+                        this.showEventsOnPanel(info.dateStr, dailyEvents);
+                    },
                     eventClick: (info) => {
                         if (info.event.classNames.includes('holiday-text-event')) return;
-                        this.openModal(info.event);
+                        // app.openModal(info.event); // Old behavior
+                        // New behavior: Show details in panel
+                        const startStr = info.event.startStr.split('T')[0];
+                        this.showEventsOnPanel(startStr, [info.event]);
                     },
                     height: '100%',
                     contentHeight: '100%',
@@ -495,12 +686,18 @@
                     const events = [];
                     const filter = document.getElementById('view-filter').value;
 
+                    this.eventsMap = {}; // Reset cache
+
                     snapshot.forEach(doc => {
                         const d = doc.data();
                         if (filter !== 'all') {
                             if (filter === 'common') { if (d.targetType !== 'common') return; }
                             else { if (d.targetType === 'class' && d.targetClass !== filter) return; }
                         }
+
+                        // Map for quick access
+                        this.eventsMap[doc.id] = { id: doc.id, ...d };
+
                         events.push({
                             id: doc.id,
                             title: d.title,
@@ -520,23 +717,28 @@
             initialFormState: null,
 
             openModal: function (eventObj = null, dateStr = null) {
+                // If eventObj is passed from FullCalendar eventClick, it has extendedProps inside.
+                // If passed from our manual map, it is just the object.
+                // Standardize:
+                let data = eventObj;
+                if (eventObj && eventObj.extendedProps) data = { id: eventObj.id, ...eventObj.extendedProps };
+
                 document.getElementById('event-modal').classList.remove('hidden');
                 document.getElementById('event-modal').classList.add('flex');
 
                 // Reset/Fill and Capture State
-                if (eventObj) {
-                    const p = eventObj.extendedProps;
+                if (data) {
                     document.getElementById('modal-title').innerText = "일정 수정";
-                    document.getElementById('event-id').value = eventObj.id;
-                    document.getElementById('event-title').value = p.title;
-                    document.getElementById('event-start').value = p.start;
-                    document.getElementById('event-end').value = p.end || '';
-                    document.getElementById('event-type').value = p.eventType;
-                    document.getElementById('event-desc').value = p.description || '';
-                    if (p.targetType === 'class') {
+                    document.getElementById('event-id').value = data.id;
+                    document.getElementById('event-title').value = data.title;
+                    document.getElementById('event-start').value = data.start;
+                    document.getElementById('event-end').value = data.end || '';
+                    document.getElementById('event-type').value = data.eventType;
+                    document.getElementById('event-desc').value = data.description || '';
+                    if (data.targetType === 'class') {
                         document.querySelector('input[name="targetType"][value="class"]').checked = true;
                         this.toggleTargetClass(true);
-                        document.getElementById('target-class').value = p.targetClass;
+                        document.getElementById('target-class').value = data.targetClass;
                     } else {
                         document.querySelector('input[name="targetType"][value="common"]').checked = true;
                         this.toggleTargetClass(false);
@@ -559,6 +761,10 @@
 
                 this.captureFormState();
             },
+
+            // ... (rest of modal logic: captureFormState, isDirty, attemptClose, closeModal, toggleTargetClass, saveEvent, deleteEvent)
+            // Need to ensure these methods exist in the file after replacement.
+            // Since I am replacing the mid-section, I must check start/end lines carefully.
 
             captureFormState: function () {
                 this.initialFormState = {

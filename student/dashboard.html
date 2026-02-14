@@ -178,185 +178,265 @@
                     <i class="fas fa-clock mt-1 text-blue-500"></i>
                     <div>
                         <p class="font-bold text-gray-800">기간</p>
-                        <p id="detail-date">-</p>
-                    </div>
-                </div>
-                <div class="flex items-start gap-3">
-                    <i class="fas fa-align-left mt-1 text-blue-500"></i>
-                    <div>
-                        <p class="font-bold text-gray-800">상세 내용</p>
-                        <p id="detail-desc" class="whitespace-pre-wrap leading-relaxed">-</p>
-                    </div>
-                </div>
-            </div>
+                        <!-- Footer injected by AuthManager -->
 
-            <button onclick="app.closeModal()"
-                class="w-full bg-gray-800 text-white font-bold py-3 rounded-xl hover:bg-gray-900 transition">닫기</button>
-        </div>
-    </div>
+                        <script>
+                            window.AuthManager.init('student');
 
-    <!-- Footer injected by AuthManager -->
+                            const app = {
+                                calendar: null,
+                                userClassStr: null, // "2-1" etc.
+                                colorMap: {
+                                    'exam': '#ef4444',       // Red
+                                    'performance': '#f97316', // Orange
+                                    'event': '#10b981',       // Green
+                                    'diagnosis': '#3b82f6',   // Blue
+                                    'formative': '#3b82f6'    // Blue
+                                },
+                                typeLabelMap: {
+                                    'exam': '정기 시험', 'performance': '수행평가', 'event': '행사', 'diagnosis': '진단평가', 'formative': '형성평가'
+                                },
+                                holidays: {
+                                    // 2025
+                                    '2025-01-01': '신정',
+                                    '2025-01-28': '설날', '2025-01-29': '설날', '2025-01-30': '설날',
+                                    '2025-03-01': '삼일절', '2025-03-03': '대체공휴일',
+                                    '2025-05-05': '어린이날/석가탄신일', '2025-05-06': '대체공휴일',
+                                    '2025-06-06': '현충일',
+                                    '2025-08-15': '광복절',
+                                    '2025-10-03': '개천절',
+                                    '2025-10-05': '추석', '2025-10-06': '추석', '2025-10-07': '추석', '2025-10-08': '대체공휴일',
+                                    '2025-10-09': '한글날',
+                                    '2025-12-25': '성탄절',
 
-    <script>
-        window.AuthManager.init('student');
+                                    // 2026
+                                    '2026-01-01': '신정',
+                                    '2026-02-16': '설날', '2026-02-17': '설날', '2026-02-18': '설날',
+                                    '2026-03-01': '삼일절', '2026-03-02': '대체공휴일',
+                                    '2026-05-05': '어린이날',
+                                    '2026-05-24': '석가탄신일', '2026-05-25': '대체공휴일',
+                                    '2026-06-06': '현충일',
+                                    '2026-08-15': '광복절', '2026-08-17': '대체공휴일',
+                                    '2026-09-24': '추석', '2026-09-25': '추석', '2026-09-26': '추석',
+                                    '2026-10-03': '개천절', '2026-10-05': '대체공휴일',
+                                    '2026-10-09': '한글날',
+                                    '2026-12-25': '성탄절'
+                                },
 
-        const app = {
-            calendar: null,
-            userClassStr: null,
-            colorMap: {
-                'exam': '#ef4444',       // Red
-                'performance': '#f97316', // Orange
-                'event': '#10b981',       // Green
-                'diagnosis': '#3b82f6',   // Blue
-                'formative': '#3b82f6'    // Blue
-            },
-            typeLabelMap: {
-                'exam': '정기 시험', 'performance': '수행평가', 'event': '행사', 'diagnosis': '진단평가', 'formative': '형성평가'
-            },
-            holidays: {
-                // 2025
-                '2025-01-01': '신정',
-                '2025-01-28': '설날', '2025-01-29': '설날', '2025-01-30': '설날',
-                '2025-03-01': '삼일절', '2025-03-03': '대체공휴일',
-                '2025-05-05': '어린이날/석가탄신일', '2025-05-06': '대체공휴일',
-                '2025-06-06': '현충일',
-                '2025-08-15': '광복절',
-                '2025-10-03': '개천절',
-                '2025-10-05': '추석', '2025-10-06': '추석', '2025-10-07': '추석', '2025-10-08': '대체공휴일',
-                '2025-10-09': '한글날',
-                '2025-12-25': '성탄절',
+                                init: function () {
+                                    document.addEventListener('auth-ready', async (e) => {
+                                        const user = e.detail;
+                                        document.getElementById('welcome-text').innerText = `${user.displayName || '학생'}님, 환영합니다!`;
 
-                // 2026
-                '2026-01-01': '신정',
-                '2026-02-16': '설날', '2026-02-17': '설날', '2026-02-18': '설날',
-                '2026-03-01': '삼일절', '2026-03-02': '대체공휴일',
-                '2026-05-05': '어린이날',
-                '2026-05-24': '석가탄신일', '2026-05-25': '대체공휴일',
-                '2026-06-06': '현충일',
-                '2026-08-15': '광복절', '2026-08-17': '대체공휴일',
-                '2026-09-24': '추석', '2026-09-25': '추석', '2026-09-26': '추석',
-                '2026-10-03': '개천절', '2026-10-05': '대체공휴일',
-                '2026-10-09': '한글날',
-                '2026-12-25': '성탄절'
-            },
+                                        const cfg = window.currentConfig;
+                                        if (cfg) document.getElementById('semester-badge').innerText = `${cfg.year}학년도 ${cfg.semester}학기`;
 
-            init: function () {
-                document.addEventListener('auth-ready', async (e) => {
-                    const user = e.detail;
-                    document.getElementById('welcome-text').innerText = `${user.displayName || '학생'}님, 환영합니다!`;
+                                        await this.loadUserClass(user.uid);
+                                        this.initCalendar();
+                                        this.initNotices();
+                                    });
+                                },
 
-                    const cfg = window.currentConfig;
-                    if (cfg) document.getElementById('semester-badge').innerText = `${cfg.year}학년도 ${cfg.semester}학기`;
+                                loadUserClass: async function (uid) {
+                                    try {
+                                        const doc = await window.getCollection('users').doc(uid).get();
+                                        if (doc.exists) {
+                                            const d = doc.data();
+                                            if (d.grade && d.class) {
+                                                this.userClassStr = `${d.grade}-${d.class}`;
+                                            }
+                                        }
+                                    } catch (e) { console.error(e); }
+                                },
 
-                    await this.loadUserClass(user.uid);
-                    this.initCalendar();
-                });
-            },
+                                // --- Notice Board Logic (Read-Only) ---
+                                initNotices: function () {
+                                    const container = document.getElementById('notice-list');
+                                    // Fetch all notices and filter client-side for simplicity with permissions
+                                    // Ideally, use compound queries, but 'OR' queries are limited in v8.
+                                    // We'll fetch relevant ones or all and filter.
 
-            loadUserClass: async function (uid) {
-                try {
-                    const doc = await window.getCollection('users').doc(uid).get();
-                    if (doc.exists) {
-                        const d = doc.data();
-                        if (d.grade && d.class) {
-                            this.userClassStr = `${d.grade}-${d.class}`;
-                        }
-                    }
-                } catch (e) { console.error(e); }
-            },
+                                    window.db.collection('notices').orderBy('createdAt', 'desc').onSnapshot(snapshot => {
+                                        if (snapshot.empty) {
+                                            container.innerHTML = '<div class="text-center text-amber-800/50 py-10 font-bold text-sm">등록된 알림이 없습니다.</div>';
+                                            return;
+                                        }
 
-            initCalendar: function () {
-                const calendarEl = document.getElementById('calendar');
-                const holidayTextEvents = Object.keys(this.holidays).map(date => ({
-                    title: this.holidays[date], start: date, allDay: true,
-                    classNames: ['holiday-text-event']
-                }));
+                                        const notices = [];
+                                        snapshot.forEach(doc => {
+                                            const d = doc.data();
+                                            // Filter: Common OR User's Class
+                                            if (d.targetType === 'common' || (this.userClassStr && d.targetType === 'class' && d.targetClass === this.userClassStr)) {
+                                                notices.push({ id: doc.id, ...d });
+                                            }
+                                        });
 
-                this.calendar = new FullCalendar.Calendar(calendarEl, {
-                    initialView: 'dayGridMonth',
-                    locale: 'ko',
-                    headerToolbar: {
-                        left: 'prev,next today',
-                        center: 'title',
-                        right: 'dayGridMonth,listMonth'
-                    },
-                    dayCellClassNames: (arg) => {
-                        const year = arg.date.getFullYear();
-                        const month = String(arg.date.getMonth() + 1).padStart(2, '0');
-                        const day = String(arg.date.getDate()).padStart(2, '0');
-                        const dateStr = `${year}-${month}-${day}`;
-                        if (this.holidays[dateStr]) return ['fc-day-holiday'];
-                        return [];
-                    },
-                    events: [...holidayTextEvents, this.fetchEvents.bind(this)],
-                    eventClick: (info) => {
-                        if (info.event.classNames.includes('holiday-text-event')) return;
-                        this.openModal(info.event);
-                    },
-                    height: '100%',
-                    contentHeight: '100%',
-                    displayEventTime: false,
-                    fixedWeekCount: false
-                });
-                this.calendar.render();
-            },
+                                        if (notices.length === 0) {
+                                            container.innerHTML = '<div class="text-center text-amber-800/50 py-10 font-bold text-sm">우리 반 알림이 없습니다.</div>';
+                                            return;
+                                        }
 
-            fetchEvents: async function (info, successCallback, failureCallback) {
-                try {
-                    const snapshot = await window.db.collection('calendar_events')
-                        .where('start', '>=', info.startStr)
-                        .where('start', '<', info.endStr)
-                        .get();
+                                        container.innerHTML = notices.map(d => {
+                                            let icon = '📢';
+                                            let dateInfo = '';
 
-                    const events = [];
-                    snapshot.forEach(doc => {
-                        const d = doc.data();
-                        let isVisible = false;
-                        if (d.targetType === 'common') isVisible = true;
-                        else if (d.targetType === 'class' && d.targetClass === this.userClassStr) isVisible = true;
+                                            if (d.category === 'exam') icon = '🔥';
+                                            if (d.category === 'performance') icon = '⚡';
+                                            if (d.category === 'prep') icon = '🎒';
+                                            if (d.category === 'dday' && d.targetDate) {
+                                                icon = '⏳';
+                                                const today = new Date();
+                                                today.setHours(0, 0, 0, 0);
+                                                const target = new Date(d.targetDate);
+                                                target.setHours(0, 0, 0, 0);
+                                                const diff = Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+                                                const dDayStr = diff > 0 ? `D-${diff}` : (diff === 0 ? 'D-Day' : `D+${Math.abs(diff)}`);
+                                                dateInfo = `<span class="ml-2 text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold animate-pulse">${dDayStr}</span>`;
+                                            }
 
-                        if (isVisible) {
-                            events.push({
-                                title: d.title,
-                                start: d.start,
-                                end: d.end || d.start,
-                                backgroundColor: this.colorMap[d.eventType] || '#6b7280',
-                                borderColor: this.colorMap[d.eventType] || '#6b7280',
-                                extendedProps: d
-                            });
-                        }
-                    });
-                    successCallback(events);
-                } catch (e) { console.error(e); failureCallback(e); }
-            },
+                                            // Parse new lines
+                                            const content = d.content.replace(/\n/g, '<br>');
 
-            openModal: function (eventObj) {
-                const p = eventObj.extendedProps;
-                document.getElementById('detail-title').innerText = p.title;
-                document.getElementById('detail-badge').innerText = this.typeLabelMap[p.eventType] || '일정';
-                document.getElementById('detail-badge').style.backgroundColor = this.colorMap[p.eventType] || '#6b7280';
+                                            return `
+                            <div class="bg-white/80 p-3 rounded-lg border border-yellow-200 shadow-sm relative group mb-2">
+                                <div class="flex justify-between items-start mb-1">
+                                    <div class="flex items-center">
+                                        <span class="text-lg mr-2">${icon}</span>
+                                        ${dateInfo}
+                                    </div>
+                                    <span class="text-[10px] text-amber-800/60 font-mono">${new Date(d.createdAt.seconds * 1000).toLocaleDateString()}</span>
+                                </div>
+                                <div class="text-gray-800 text-sm font-bold leading-relaxed whitespace-pre-wrap">${content}</div>
+                            </div>
+                        `;
+                                        }).join('');
+                                    });
+                                },
 
-                let dateText = p.start;
-                if (p.end && p.end !== p.start) dateText += ` ~ ${p.end}`;
-                document.getElementById('detail-date').innerText = dateText;
+                                // --- Detail Panel Logic (Read-Only) ---
+                                showEventsOnPanel: function (dateStr, events) {
+                                    const container = document.getElementById('detail-panel-content');
+                                    const dateDisplay = document.getElementById('detail-date-display');
 
-                document.getElementById('detail-desc').innerText = p.description || '상세 내용이 없습니다.';
+                                    // Format Date
+                                    const dateObj = new Date(dateStr);
+                                    const days = ['일', '월', '화', '수', '목', '금', '토'];
+                                    dateDisplay.innerText = `${dateObj.getMonth() + 1}월 ${dateObj.getDate()}일 (${days[dateObj.getDay()]})`;
 
-                const modal = document.getElementById('detail-modal');
-                modal.classList.remove('hidden');
-                modal.classList.add('flex');
-            },
+                                    if (events.length === 0) {
+                                        container.innerHTML = `
+                        <div class="flex flex-col items-center justify-center h-40 text-gray-400">
+                            <i class="far fa-calendar-times text-3xl mb-2"></i>
+                            <p class="text-sm">일정이 없습니다.</p>
+                        </div>
+                    `;
+                                        return;
+                                    }
 
-            closeModal: function (e) {
-                if (e && e.target.id !== 'detail-modal') return;
-                const modal = document.getElementById('detail-modal');
-                modal.classList.add('hidden');
-                modal.classList.remove('flex');
-            }
-        };
+                                    container.innerHTML = events.map(ev => {
+                                        const p = ev.extendedProps || ev; // Handle both fullcalendar event and raw object
+                                        return `
+                        <div class="group p-3 border-l-4 border-gray-200 bg-gray-50 mb-3 rounded-r-lg">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="text-[10px] text-white px-1.5 py-0.5 rounded font-bold" style="background-color: ${p.backgroundColor || this.colorMap[p.eventType] || '#999'}">${this.typeLabelMap[p.eventType] || '일정'}</span>
+                                        <h4 class="font-bold text-gray-800 text-sm">${p.title}</h4>
+                                    </div>
+                                    <p class="text-xs text-gray-500">${p.start} ${p.end && p.start !== p.end ? '~ ' + p.end : ''}</p>
+                                </div>
+                            </div>
+                            ${p.description ? `<p class="text-xs text-gray-600 mt-2 bg-gray-100 p-2 rounded">${p.description}</p>` : ''}
+                        </div>
+                    `;
+                                    }).join('');
+                                },
 
-        app.init();
-    </script>
+                                initCalendar: function () {
+                                    const calendarEl = document.getElementById('calendar');
+                                    const holidayTextEvents = Object.keys(this.holidays).map(date => ({
+                                        title: this.holidays[date], start: date, allDay: true,
+                                        textColor: '#ef4444', backgroundColor: 'transparent', borderColor: 'transparent',
+                                        classNames: ['holiday-text-event']
+                                    }));
+
+                                    this.calendar = new FullCalendar.Calendar(calendarEl, {
+                                        initialView: 'dayGridMonth',
+                                        locale: 'ko',
+                                        headerToolbar: {
+                                            left: 'prev,next today',
+                                            center: 'title',
+                                            right: 'dayGridMonth,listMonth'
+                                        },
+                                        dayCellClassNames: (arg) => {
+                                            const year = arg.date.getFullYear();
+                                            const month = String(arg.date.getMonth() + 1).padStart(2, '0');
+                                            const day = String(arg.date.getDate()).padStart(2, '0');
+                                            if (this.holidays[`${year}-${month}-${day}`]) return ['fc-day-holiday'];
+                                            return [];
+                                        },
+                                        events: [...holidayTextEvents, this.fetchEvents.bind(this)],
+                                        dateClick: (info) => {
+                                            // Find events for this date
+                                            const allEvents = this.calendar.getEvents();
+                                            const dailyEvents = allEvents.filter(e => {
+                                                const start = new Date(e.startStr);
+                                                const end = e.end ? new Date(e.endStr) : new Date(start);
+                                                const target = new Date(info.dateStr);
+                                                if (!e.end) return e.startStr === info.dateStr;
+                                                return target >= start && target < end;
+                                            }).filter(e => !e.classNames.includes('holiday-text-event'));
+
+                                            this.showEventsOnPanel(info.dateStr, dailyEvents);
+                                        },
+                                        eventClick: (info) => {
+                                            if (info.event.classNames.includes('holiday-text-event')) return;
+                                            const startStr = info.event.startStr.split('T')[0];
+                                            this.showEventsOnPanel(startStr, [info.event]);
+                                        },
+                                        height: '100%',
+                                        contentHeight: '100%',
+                                        expandRows: true,
+                                        displayEventTime: false,
+                                        fixedWeekCount: false,
+                                        showNonCurrentDates: false,
+                                    });
+                                    this.calendar.render();
+                                },
+
+                                fetchEvents: async function (info, successCallback, failureCallback) {
+                                    try {
+                                        // Fetch logic same as before: generic fetch then client filter if needed,
+                                        // or filtered query if possible. To be safe, we fetch range and filter in memory for class.
+                                        const snapshot = await window.db.collection('calendar_events')
+                                            .where('start', '>=', info.startStr)
+                                            .where('start', '<', info.endStr)
+                                            .get();
+
+                                        const events = [];
+                                        snapshot.forEach(doc => {
+                                            const d = doc.data();
+
+                                            // Filter by Class (Common or My Class)
+                                            if (d.targetType === 'class' && d.targetClass !== this.userClassStr) return;
+
+                                            events.push({
+                                                id: doc.id,
+                                                title: d.title,
+                                                start: d.start,
+                                                end: d.end || d.start,
+                                                backgroundColor: this.colorMap[d.eventType] || '#6b7280',
+                                                borderColor: this.colorMap[d.eventType] || '#6b7280',
+                                                extendedProps: d
+                                            });
+                                        });
+                                        successCallback(events);
+                                    } catch (e) { console.error(e); failureCallback(e); }
+                                }
+                            };
+
+                            app.init();
+                        </script>
 </body>
 
 </html>
