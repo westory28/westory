@@ -447,12 +447,14 @@
                             <tr>
                                 <th class="p-4 w-32 cursor-pointer hover:bg-gray-100"
                                     onclick="app.sortLog('timestamp')">시간 <i class="fas fa-sort sort-icon"></i></th>
-                                <th class="p-4 w-20 cursor-pointer hover:bg-gray-100" onclick="app.sortLog('class')">반
+                                <th class="p-4 w-16 cursor-pointer hover:bg-gray-100" onclick="app.sortLog('class')">반
                                     <i class="fas fa-sort sort-icon"></i>
                                 </th>
-                                <th class="p-4 cursor-pointer hover:bg-gray-100" onclick="app.sortLog('studentName')">학생
+                                <th class="p-4 w-16 cursor-pointer hover:bg-gray-100" onclick="app.sortLog('number')">번호
                                     <i class="fas fa-sort sort-icon"></i>
                                 </th>
+                                <th class="p-4 w-32 cursor-pointer hover:bg-gray-100"
+                                    onclick="app.sortLog('studentName')">학생 <i class="fas fa-sort sort-icon"></i></th>
                                 <th class="p-4 w-24 cursor-pointer hover:bg-gray-100" onclick="app.sortLog('score')">점수
                                     <i class="fas fa-sort sort-icon"></i>
                                 </th>
@@ -1110,11 +1112,25 @@
                         // Filter by class if needed (doing it client-side to avoid index issues for now)
                         if (classNum && classNum !== 'all' && d.gradeClass && !d.gradeClass.endsWith(`${classNum}반`)) return;
 
+                        // Parse gradeClass string (e.g. "3학년 2반 15번")
+                        // If format is "X학년 Y반 Z번", we extract Z.
+                        // If not, try to look for 'number' in data, or default to '-'
+                        let stdNum = '-';
+                        if (d.gradeClass) {
+                            const parts = d.gradeClass.split(' ');
+                            if (parts.length >= 3) {
+                                stdNum = parseInt(parts[2].replace('번', '')) || 0;
+                            }
+                        } else if (d.number) {
+                            stdNum = d.number;
+                        }
+
                         this.logs.push({
                             id: doc.id,
                             ...d,
                             // Extract class from gradeClass string (e.g. "3학년 2반") or user info
-                            classOnly: d.gradeClass ? d.gradeClass.split(' ')[1] : '-'
+                            classOnly: d.gradeClass ? d.gradeClass.split(' ')[1] : '-',
+                            studentNumber: stdNum
                         });
                     });
 
@@ -1122,14 +1138,14 @@
                     this.renderLog();
                 } catch (e) {
                     console.error(e);
-                    list.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-red-500">데이터 로드 실패</td></tr>';
+                    list.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-red-500">데이터 로드 실패</td></tr>';
                 }
             },
 
             renderLog: function () {
                 const list = document.getElementById('log-body');
                 if (this.logs.length === 0) {
-                    list.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-400">제출 내역이 없습니다.</td></tr>';
+                    list.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-gray-400">제출 내역이 없습니다.</td></tr>';
                     return;
                 }
                 list.innerHTML = this.logs.map(log => {
@@ -1139,9 +1155,10 @@
                         <tr class="hover:bg-gray-50 transition">
                             <td class="p-4 text-gray-500">${date}</td>
                             <td class="p-4 font-bold text-gray-600">${log.classOnly}</td>
+                            <td class="p-4 font-bold text-gray-600">${log.studentNumber !== '-' ? log.studentNumber + '번' : '-'}</td>
                             <td class="p-4">
                                 <div class="font-bold text-gray-800">${log.studentName || '이름 없음'}</div>
-                                <div class="text-xs text-gray-400">${log.email || '-'}</div>
+                                <div class="text-xs text-gray-400 truncate max-w-[150px]">${log.email || '-'}</div>
                             </td>
                             <td class="p-4 font-bold ${scoreColor}">${log.score}점</td>
                             <td class="p-4"><span class="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs font-bold">제출완료</span></td>
@@ -1179,6 +1196,9 @@
                     // Handle specific fields
                     if (field === 'class') valA = a.classOnly;
                     if (field === 'class') valB = b.classOnly;
+
+                    if (field === 'number') valA = parseInt(a.studentNumber) || 0;
+                    if (field === 'number') valB = parseInt(b.studentNumber) || 0;
 
                     if (valA < valB) return this.logSortAsc ? -1 : 1;
                     if (valA > valB) return this.logSortAsc ? 1 : -1;

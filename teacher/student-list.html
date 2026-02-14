@@ -84,6 +84,27 @@
                         <i class="fas fa-users text-blue-500 mr-2"></i> 학생 명단 <span id="std-count"
                             class="text-sm font-normal text-gray-500"></span>
                     </h2>
+
+                    <!-- Class Filter (New) -->
+                    <div class="flex items-center gap-2">
+                        <select id="class-filter" onchange="app.filterList()"
+                            class="border rounded px-3 py-1.5 text-sm font-bold text-gray-700 bg-white focus:outline-none focus:border-blue-500">
+                            <option value="all">전체 학급</option>
+                            <option value="1">1반</option>
+                            <option value="2">2반</option>
+                            <option value="3">3반</option>
+                            <option value="4">4반</option>
+                            <option value="5">5반</option>
+                            <option value="6">6반</option>
+                            <option value="7">7반</option>
+                            <option value="8">8반</option>
+                            <option value="9">9반</option>
+                            <option value="10">10반</option>
+                            <option value="11">11반</option>
+                            <option value="12">12반</option>
+                        </select>
+                    </div>
+
                     <!-- Bulk Actions Toolbar -->
                     <div id="bulk-toolbar" class="flex items-center gap-2 px-3 py-1 whitespace-nowrap">
                         <span class="text-xs font-bold text-blue-800 mr-2 w-20 text-center inline-block"
@@ -105,36 +126,38 @@
                         </button>
                     </div>
                 </div>
-            </div>
-            <div class="flex gap-2 w-full md:w-auto">
-                <input type="text" id="search-input" placeholder="이름 또는 반(숫자) 검색"
-                    class="border rounded px-3 py-2 text-sm flex-1 md:w-64 focus:outline-none focus:border-blue-500">
-                <button onclick="app.filterList()"
-                    class="bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-blue-700">검색</button>
-            </div>
-        </div>
 
-        <div class="overflow-x-auto">
-            <table class="w-full text-sm text-left">
-                <thead class="bg-gray-100 text-gray-600 font-bold uppercase text-xs">
-                    <tr>
-                        <th class="p-4 w-10 text-center"><input type="checkbox" id="check-all"
-                                onclick="app.toggleSelectAll(this)"></th>
-                        <th class="p-4 w-16 text-center">학년</th>
-                        <th class="p-4 w-16 text-center">반</th>
-                        <th class="p-4 w-16 text-center">번호</th>
-                        <th class="p-4">이름 (클릭하여 기록 조회)</th>
-                        <th class="p-4 mobile-hidden md:table-cell w-48">이메일</th>
-                        <th class="p-4 text-center w-24">관리</th>
-                    </tr>
-                </thead>
-                <tbody id="std-list" class="divide-y divide-gray-100 bg-white">
-                    <tr>
-                        <td colspan="7" class="p-8 text-center text-gray-400">데이터를 불러오는 중...</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+                <!-- Search Input (Moved to Right) -->
+                <div class="flex gap-2 w-full md:w-auto">
+                    <input type="text" id="search-input" placeholder="이름 검색"
+                        class="border rounded px-3 py-2 text-sm flex-1 md:w-64 focus:outline-none focus:border-blue-500"
+                        onkeyup="if(event.key === 'Enter') app.filterList()">
+                    <button onclick="app.filterList()"
+                        class="bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-blue-700">검색</button>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm text-left">
+                    <thead class="bg-gray-100 text-gray-600 font-bold uppercase text-xs">
+                        <tr>
+                            <th class="p-4 w-10 text-center"><input type="checkbox" id="check-all"
+                                    onclick="app.toggleSelectAll(this)"></th>
+                            <th class="p-4 w-16 text-center">학년</th>
+                            <th class="p-4 w-16 text-center">반</th>
+                            <th class="p-4 w-16 text-center">번호</th>
+                            <th class="p-4">이름 (클릭하여 기록 조회)</th>
+                            <th class="p-4 mobile-hidden md:table-cell w-48">이메일</th>
+                            <th class="p-4 text-center w-24">관리</th>
+                        </tr>
+                    </thead>
+                    <tbody id="std-list" class="divide-y divide-gray-100 bg-white">
+                        <tr>
+                            <td colspan="7" class="p-8 text-center text-gray-400">데이터를 불러오는 중...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
     </main>
@@ -351,9 +374,21 @@
             },
 
             filterList: function () {
-                const q = document.getElementById('search-input').value.trim();
-                if (!q) { this.render(this.students); return; }
-                const filtered = this.students.filter(s => s.name.includes(q) || String(s.class) === q);
+                const classFilter = document.getElementById('class-filter').value;
+                const nameQuery = document.getElementById('search-input').value.trim();
+
+                let filtered = this.students;
+
+                // Filter by Class
+                if (classFilter !== 'all') {
+                    filtered = filtered.filter(s => String(s.class) === classFilter);
+                }
+
+                // Filter by Name
+                if (nameQuery) {
+                    filtered = filtered.filter(s => s.name.includes(nameQuery));
+                }
+
                 this.render(filtered);
             },
 
