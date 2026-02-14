@@ -1,6 +1,6 @@
-
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,56 +10,135 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- FullCalendar -->
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
-    
+
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-    
+
     <script src="../assets/js/firebase-config.js"></script>
     <link rel="stylesheet" href="../assets/css/style.css">
     <script src="../assets/js/auth-manager.js"></script>
 
     <style>
-        .fc-toolbar-title { font-size: 1.25em !important; font-weight: 700; color: #1f2937; }
-        .fc-button { background-color: #2563eb !important; border-color: #2563eb !important; font-weight: 600 !important; }
-        .fc-daygrid-event { cursor: pointer; border-radius: 4px; padding: 2px 4px; font-size: 0.8rem; font-weight: 600; border: none; transition: transform 0.1s; }
-        .fc-daygrid-event:hover { transform: scale(1.02); }
-        
-        /* Korean Calendar Colors */
-        .fc-day-sun a { color: #ef4444 !important; text-decoration: none; font-weight: 700; } /* Red for Sunday */
-        .fc-day-sat a { color: #3b82f6 !important; text-decoration: none; font-weight: 700; } /* Blue for Saturday */
-        
-        /* Holiday Styles */
-        .fc-day-holiday a { color: #ef4444 !important; font-weight: 700; } /* Red date number */
-        .holiday-text-event { background-color: transparent !important; border: none !important; }
-        .holiday-text-event .fc-event-title { color: #ef4444; font-size: 0.75rem; font-weight: 800; }
-        .fc-event-main { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .fc-toolbar-title {
+            font-size: 1.25em !important;
+            font-weight: 700;
+            color: #1f2937;
+        }
 
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 100; display: flex; justify-content: center; align-items: center; backdrop-filter: blur(2px); }
+        .fc-button {
+            background-color: #2563eb !important;
+            border-color: #2563eb !important;
+            font-weight: 600 !important;
+        }
+
+        .fc-daygrid-event {
+            cursor: pointer;
+            border-radius: 4px;
+            padding: 2px 4px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            border: none;
+            transition: transform 0.1s;
+        }
+
+        .fc-daygrid-event:hover {
+            transform: scale(1.02);
+        }
+
+        /* Korean Calendar Colors */
+        .fc-day-sun a {
+            color: #ef4444 !important;
+            text-decoration: none;
+            font-weight: 700;
+        }
+
+        /* Red for Sunday */
+        .fc-day-sat a {
+            color: #3b82f6 !important;
+            text-decoration: none;
+            font-weight: 700;
+        }
+
+        /* Blue for Saturday */
+
+        /* Holiday Styles */
+        .fc-day-holiday a {
+            color: #ef4444 !important;
+            font-weight: 700;
+        }
+
+        /* Red date number */
+        .holiday-text-event {
+            background-color: transparent !important;
+            border: none !important;
+        }
+
+        .holiday-text-event .fc-event-title {
+            color: #ef4444;
+            font-size: 0.75rem;
+            font-weight: 800;
+        }
+
+        .fc-event-main {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 100;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(2px);
+        }
 
         /* Mobile Optimization for Calendar */
         @media (max-width: 768px) {
-            .fc-toolbar { flex-direction: column; gap: 0.5rem; }
-            .fc-toolbar-title { font-size: 1rem !important; }
-            .fc-button { padding: 0.25rem 0.5rem !important; font-size: 0.75rem !important; }
-            .fc-header-toolbar { margin-bottom: 0.5rem !important; }
+            .fc-toolbar {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+
+            .fc-toolbar-title {
+                font-size: 1rem !important;
+            }
+
+            .fc-button {
+                padding: 0.25rem 0.5rem !important;
+                font-size: 0.75rem !important;
+            }
+
+            .fc-header-toolbar {
+                margin-bottom: 0.5rem !important;
+            }
         }
     </style>
 </head>
+
 <body class="bg-gray-50 flex flex-col h-screen">
     <!-- Header injected by AuthManager -->
 
     <main class="flex-1 w-full max-w-5xl mx-auto px-4 py-6 h-full flex flex-col overflow-hidden">
-        
+
         <div class="mb-4 shrink-0">
-            <h1 class="text-2xl font-bold text-gray-800"><i class="fas fa-calendar-check text-green-500 mr-2"></i>학사 일정</h1>
+            <h1 class="text-2xl font-bold text-gray-800"><i class="fas fa-calendar-check text-green-500 mr-2"></i>학사 일정
+            </h1>
             <p class="text-sm text-gray-500 mt-1">우리 반의 주요 일정과 평가 계획을 확인하세요.</p>
         </div>
 
-        <div class="flex-1 bg-white rounded-xl shadow-lg border border-gray-100 p-4 md:p-6 overflow-hidden flex flex-col relative">
+        <div
+            class="flex-1 bg-white rounded-xl shadow-lg border border-gray-100 p-4 md:p-6 overflow-hidden flex flex-col relative">
             <div class="flex items-center gap-4 mb-4 text-xs font-bold text-gray-500 justify-end">
-                <div class="flex items-center"><span class="w-3 h-3 rounded-full bg-red-500 mr-1"></span>지필평가</div>
+                <div class="flex items-center"><span class="w-3 h-3 rounded-full bg-red-500 mr-1"></span>정기 시험</div>
                 <div class="flex items-center"><span class="w-3 h-3 rounded-full bg-orange-500 mr-1"></span>수행평가</div>
                 <div class="flex items-center"><span class="w-3 h-3 rounded-full bg-blue-500 mr-1"></span>진단/형성</div>
                 <div class="flex items-center"><span class="w-3 h-3 rounded-full bg-green-500 mr-1"></span>행사</div>
@@ -71,12 +150,14 @@
 
     <!-- Detail Modal -->
     <div id="detail-modal" class="modal-overlay hidden" onclick="app.closeModal(event)">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 mx-4 relative transform transition-all scale-100" onclick="event.stopPropagation()">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 mx-4 relative transform transition-all scale-100"
+            onclick="event.stopPropagation()">
             <div class="mb-4">
-                <span id="detail-badge" class="px-2 py-1 rounded text-xs font-bold text-white bg-gray-500 inline-block mb-2">TYPE</span>
+                <span id="detail-badge"
+                    class="px-2 py-1 rounded text-xs font-bold text-white bg-gray-500 inline-block mb-2">TYPE</span>
                 <h3 id="detail-title" class="text-xl font-bold text-gray-900 leading-tight">일정 제목</h3>
             </div>
-            
+
             <div class="space-y-3 text-sm text-gray-600 bg-gray-50 p-4 rounded-xl border border-gray-100 mb-6">
                 <div class="flex items-start gap-3">
                     <i class="fas fa-clock mt-1 text-blue-500"></i>
@@ -94,7 +175,8 @@
                 </div>
             </div>
 
-            <button onclick="app.closeModal()" class="w-full bg-gray-800 text-white font-bold py-3 rounded-xl hover:bg-gray-900 transition">닫기</button>
+            <button onclick="app.closeModal()"
+                class="w-full bg-gray-800 text-white font-bold py-3 rounded-xl hover:bg-gray-900 transition">닫기</button>
         </div>
     </div>
 
@@ -114,9 +196,9 @@
                 'formative': '#3b82f6'    // Blue
             },
             typeLabelMap: {
-                'exam': '지필평가', 'performance': '수행평가', 'event': '행사', 'diagnosis': '진단평가', 'formative': '형성평가'
+                'exam': '정기 시험', 'performance': '수행평가', 'event': '행사', 'diagnosis': '진단평가', 'formative': '형성평가'
             },
-            
+
             // Korean Public Holidays (2025-2026) Verified with Exact Rules
             holidays: {
                 // 2025
@@ -130,7 +212,7 @@
                 '2025-10-05': '추석', '2025-10-06': '추석', '2025-10-07': '추석', '2025-10-08': '대체공휴일', // 10.5 Sun -> 10.8 Wed
                 '2025-10-09': '한글날',
                 '2025-12-25': '성탄절',
-                
+
                 // 2026
                 '2026-01-01': '신정',
                 '2026-02-16': '설날', '2026-02-17': '설날', '2026-02-18': '설날', // No Sun overlap
@@ -145,7 +227,7 @@
                 '2026-12-25': '성탄절'
             },
 
-            init: function() {
+            init: function () {
                 document.addEventListener('auth-ready', async (e) => {
                     const user = e.detail;
                     await this.loadUserClass(user.uid);
@@ -153,21 +235,21 @@
                 });
             },
 
-            loadUserClass: async function(uid) {
+            loadUserClass: async function (uid) {
                 try {
                     const doc = await window.getCollection('users').doc(uid).get();
-                    if(doc.exists) {
+                    if (doc.exists) {
                         const d = doc.data();
-                        if(d.grade && d.class) {
+                        if (d.grade && d.class) {
                             this.userClassStr = `${d.grade}-${d.class}`;
                         }
                     }
-                } catch(e) { console.error(e); }
+                } catch (e) { console.error(e); }
             },
 
-            initCalendar: function() {
+            initCalendar: function () {
                 const calendarEl = document.getElementById('calendar');
-                
+
                 // Convert holiday list to text events
                 const holidayTextEvents = Object.keys(this.holidays).map(date => ({
                     title: this.holidays[date],
@@ -190,13 +272,13 @@
                         const month = String(arg.date.getMonth() + 1).padStart(2, '0');
                         const day = String(arg.date.getDate()).padStart(2, '0');
                         const dateStr = `${year}-${month}-${day}`;
-                        
+
                         if (this.holidays[dateStr]) return ['fc-day-holiday'];
                         return [];
                     },
                     events: [...holidayTextEvents, this.fetchEvents.bind(this)],
                     eventClick: (info) => {
-                        if(info.event.classNames.includes('holiday-text-event')) return;
+                        if (info.event.classNames.includes('holiday-text-event')) return;
                         this.openModal(info.event);
                     },
                     height: '100%',
@@ -206,17 +288,17 @@
                 this.calendar.render();
             },
 
-            fetchEvents: async function(info, successCallback, failureCallback) {
+            fetchEvents: async function (info, successCallback, failureCallback) {
                 try {
                     const snapshot = await window.db.collection('calendar_events')
                         .where('start', '>=', info.startStr)
                         .where('start', '<', info.endStr)
                         .get();
-                    
+
                     const events = [];
                     snapshot.forEach(doc => {
                         const d = doc.data();
-                        
+
                         let isVisible = false;
                         if (d.targetType === 'common') isVisible = true;
                         else if (d.targetType === 'class' && d.targetClass === this.userClassStr) isVisible = true;
@@ -233,31 +315,31 @@
                         }
                     });
                     successCallback(events);
-                } catch(e) {
+                } catch (e) {
                     console.error(e);
                     failureCallback(e);
                 }
             },
 
-            openModal: function(eventObj) {
+            openModal: function (eventObj) {
                 const p = eventObj.extendedProps;
                 document.getElementById('detail-title').innerText = p.title;
                 document.getElementById('detail-badge').innerText = this.typeLabelMap[p.eventType] || '일정';
                 document.getElementById('detail-badge').style.backgroundColor = this.colorMap[p.eventType] || '#6b7280';
-                
+
                 let dateText = p.start;
-                if(p.end && p.end !== p.start) dateText += ` ~ ${p.end}`;
+                if (p.end && p.end !== p.start) dateText += ` ~ ${p.end}`;
                 document.getElementById('detail-date').innerText = dateText;
-                
+
                 document.getElementById('detail-desc').innerText = p.description || '상세 내용이 없습니다.';
-                
+
                 const modal = document.getElementById('detail-modal');
                 modal.classList.remove('hidden');
                 modal.classList.add('flex');
             },
 
-            closeModal: function(e) {
-                if(e && e.target.id !== 'detail-modal') return; 
+            closeModal: function (e) {
+                if (e && e.target.id !== 'detail-modal') return;
                 const modal = document.getElementById('detail-modal');
                 modal.classList.add('hidden');
                 modal.classList.remove('flex');
@@ -267,4 +349,5 @@
         app.init();
     </script>
 </body>
+
 </html>

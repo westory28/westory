@@ -1,6 +1,6 @@
-
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -15,30 +15,150 @@
     <script src="../assets/js/auth-manager.js"></script>
 
     <style>
-        .dashboard-container { max-width: 1280px; margin: 0 auto; padding: 24px 16px; width: 100%; } /* Mobile friendly padding */
-        @media (min-width: 768px) { .dashboard-container { padding: 24px 40px; } }
-        
-        .tab-nav { display: flex; border-bottom: 2px solid #e5e7eb; margin-bottom: 32px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
-        .tab-nav::-webkit-scrollbar { display: none; }
-        .tab-btn { flex: 1; padding: 16px 24px; text-align: center; font-weight: 700; font-size: 1.1rem; color: #9ca3af; cursor: pointer; transition: all 0.2s; border-bottom: 3px solid transparent; white-space: nowrap; min-width: fit-content; }
-        .tab-btn:hover { color: #4b5563; background-color: #f9fafb; }
-        .tab-btn.active { color: #2563eb; border-bottom-color: #2563eb; background-color: transparent; }
-        
-        .section-content { display: none; animation: fadeIn 0.3s ease-out; }
-        .section-content.active { display: block; }
-        .accordion-item { border: 1px solid #e5e7eb; border-radius: 12px; margin-bottom: 12px; overflow: hidden; background: white; transition: shadow 0.2s; }
-        .accordion-item:hover { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
-        .accordion-header { padding: 20px; background: #fff; font-weight: 700; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 1.05rem; }
-        .accordion-header:hover { background-color: #f8fafc; }
-        .accordion-body { display: none; padding: 16px 20px; background: #f8fafc; border-top: 1px solid #e5e7eb; }
-        .accordion-item.open .accordion-body { display: block; }
-        .accordion-item.open .accordion-header i { transform: rotate(180deg); }
-        .lesson-link { display: flex; align-items: center; padding: 14px 16px; margin-bottom: 8px; border-radius: 8px; background: white; border: 1px solid #e2e8f0; color: #4b5563; font-weight: 600; transition: all 0.2s; text-decoration: none; }
-        .lesson-link:hover { border-color: #3b82f6; color: #2563eb; transform: translateX(4px); box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        .lesson-link i { margin-right: 12px; font-size: 1.1em; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        .dashboard-container {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 24px 16px;
+            width: 100%;
+        }
+
+        /* Mobile friendly padding */
+        @media (min-width: 768px) {
+            .dashboard-container {
+                padding: 24px 40px;
+            }
+        }
+
+        .tab-nav {
+            display: flex;
+            border-bottom: 2px solid #e5e7eb;
+            margin-bottom: 32px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+        }
+
+        .tab-nav::-webkit-scrollbar {
+            display: none;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 16px 24px;
+            text-align: center;
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: #9ca3af;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-bottom: 3px solid transparent;
+            white-space: nowrap;
+            min-width: fit-content;
+        }
+
+        .tab-btn:hover {
+            color: #4b5563;
+            background-color: #f9fafb;
+        }
+
+        .tab-btn.active {
+            color: #2563eb;
+            border-bottom-color: #2563eb;
+            background-color: transparent;
+        }
+
+        .section-content {
+            display: none;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .section-content.active {
+            display: block;
+        }
+
+        .accordion-item {
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            margin-bottom: 12px;
+            overflow: hidden;
+            background: white;
+            transition: shadow 0.2s;
+        }
+
+        .accordion-item:hover {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        }
+
+        .accordion-header {
+            padding: 20px;
+            background: #fff;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 1.05rem;
+        }
+
+        .accordion-header:hover {
+            background-color: #f8fafc;
+        }
+
+        .accordion-body {
+            display: none;
+            padding: 16px 20px;
+            background: #f8fafc;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .accordion-item.open .accordion-body {
+            display: block;
+        }
+
+        .accordion-item.open .accordion-header i {
+            transform: rotate(180deg);
+        }
+
+        .lesson-link {
+            display: flex;
+            align-items: center;
+            padding: 14px 16px;
+            margin-bottom: 8px;
+            border-radius: 8px;
+            background: white;
+            border: 1px solid #e2e8f0;
+            color: #4b5563;
+            font-weight: 600;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+
+        .lesson-link:hover {
+            border-color: #3b82f6;
+            color: #2563eb;
+            transform: translateX(4px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .lesson-link i {
+            margin-right: 12px;
+            font-size: 1.1em;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(5px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
     </style>
 </head>
+
 <body class="bg-gray-50">
     <!-- Header injected by AuthManager -->
 
@@ -47,7 +167,9 @@
             <div>
                 <h1 class="text-3xl font-extrabold text-gray-900 tracking-tight" id="welcome-text">환영합니다!</h1>
                 <div class="flex items-center gap-2 mt-2">
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800" id="semester-badge">
+                    <span
+                        class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                        id="semester-badge">
                         2025학년도 1학기
                     </span>
                 </div>
@@ -59,7 +181,8 @@
             <!-- Assessment tab redirects -->
             <div class="tab-btn" onclick="location.href='quiz.html'"><i class="fas fa-gamepad mr-2"></i>평가</div>
             <div class="tab-btn" onclick="switchTab('score')"><i class="fas fa-chart-bar mr-2"></i>점수</div>
-            <div class="tab-btn" onclick="location.href='calendar.html'"><i class="fas fa-calendar-alt mr-2"></i>학사 일정</div>
+            <div class="tab-btn" onclick="location.href='calendar.html'"><i class="fas fa-calendar-alt mr-2"></i>학사 일정
+            </div>
         </div>
 
         <div id="tab-lesson" class="section-content active">
@@ -75,29 +198,37 @@
 
         <div id="tab-score" class="section-content">
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <div onclick="location.href='mark-exam.html'" class="group bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:border-amber-500 hover:shadow-md cursor-pointer flex flex-col justify-between transition-all h-full relative overflow-hidden">
-                    <div class="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl shadow-sm z-10">시험 기간</div>
+                <div onclick="location.href='mark-exam.html'"
+                    class="group bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:border-amber-500 hover:shadow-md cursor-pointer flex flex-col justify-between transition-all h-full relative overflow-hidden">
+                    <div
+                        class="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl shadow-sm z-10">
+                        시험 기간</div>
                     <div class="flex justify-between items-start mb-4">
-                        <div class="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center text-2xl group-hover:bg-amber-600 group-hover:text-white transition-colors">
+                        <div
+                            class="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center text-2xl group-hover:bg-amber-600 group-hover:text-white transition-colors">
                             <i class="fas fa-pen-nib"></i>
                         </div>
-                        <i class="fas fa-arrow-right text-gray-300 group-hover:text-amber-500 transition-transform group-hover:translate-x-1"></i>
+                        <i
+                            class="fas fa-arrow-right text-gray-300 group-hover:text-amber-500 transition-transform group-hover:translate-x-1"></i>
                     </div>
                     <div>
                         <h3 class="font-bold text-xl text-gray-900 mb-1 group-hover:text-amber-700">시험 자가채점</h3>
-                        <p class="text-sm text-gray-500 leading-relaxed word-keep">지필평가 직후 OMR 답안을 입력하고 점수를 확인하세요.</p>
+                        <p class="text-sm text-gray-500 leading-relaxed word-keep">정기 시험 직후 OMR 답안을 입력하고 점수를 확인하세요.</p>
                     </div>
                 </div>
-                <div onclick="location.href='score.html'" class="group bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:border-green-500 hover:shadow-md cursor-pointer flex flex-col justify-between transition-all h-full">
+                <div onclick="location.href='score.html'"
+                    class="group bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:border-green-500 hover:shadow-md cursor-pointer flex flex-col justify-between transition-all h-full">
                     <div class="flex justify-between items-start mb-4">
-                        <div class="w-14 h-14 rounded-2xl bg-green-50 text-green-600 flex items-center justify-center text-2xl group-hover:bg-green-600 group-hover:text-white transition-colors">
+                        <div
+                            class="w-14 h-14 rounded-2xl bg-green-50 text-green-600 flex items-center justify-center text-2xl group-hover:bg-green-600 group-hover:text-white transition-colors">
                             <i class="fas fa-chart-pie"></i>
                         </div>
-                        <i class="fas fa-arrow-right text-gray-300 group-hover:text-green-500 transition-transform group-hover:translate-x-1"></i>
+                        <i
+                            class="fas fa-arrow-right text-gray-300 group-hover:text-green-500 transition-transform group-hover:translate-x-1"></i>
                     </div>
                     <div>
                         <h3 class="font-bold text-xl text-gray-900 mb-1 group-hover:text-green-700">나의 성적표</h3>
-                        <p class="text-sm text-gray-500 leading-relaxed word-keep">수행평가와 지필평가를 합산한 최종 성적을 관리하세요.</p>
+                        <p class="text-sm text-gray-500 leading-relaxed word-keep">수행평가와 정기 시험을 합산한 최종 성적을 관리하세요.</p>
                     </div>
                 </div>
             </div>
@@ -115,20 +246,20 @@
             document.getElementById('welcome-text').innerText = `${user.displayName || '학생'}님, 환영합니다!`;
             const cfg = window.currentConfig;
             document.getElementById('semester-badge').innerText = `${cfg.year}학년도 ${cfg.semester}학기`;
-            
-            if(cfg.showQuiz === false) document.querySelector('[onclick*="quiz.html"]').style.display = 'none';
-            if(cfg.showScore === false) document.querySelector('[onclick="switchTab(\'score\')"]').style.display = 'none';
-            if(cfg.showLesson === false) document.querySelector('[onclick="switchTab(\'lesson\')"]').style.display = 'none';
+
+            if (cfg.showQuiz === false) document.querySelector('[onclick*="quiz.html"]').style.display = 'none';
+            if (cfg.showScore === false) document.querySelector('[onclick="switchTab(\'score\')"]').style.display = 'none';
+            if (cfg.showLesson === false) document.querySelector('[onclick="switchTab(\'lesson\')"]').style.display = 'none';
 
             loadLessons();
         });
 
         function switchTab(name) {
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            event.currentTarget.classList.add('active'); 
+            event.currentTarget.classList.add('active');
             document.querySelectorAll('.section-content').forEach(s => s.classList.remove('active'));
             const target = document.getElementById('tab-' + name);
-            if(target) target.classList.add('active');
+            if (target) target.classList.add('active');
         }
 
         async function loadLessons() {
@@ -136,13 +267,13 @@
             try {
                 // 1. Try Current Config Path
                 let treeDoc = await window.getCollection('curriculum').doc('tree').get();
-                
+
                 // 2. Fallback: Global (Legacy data)
-                if(!treeDoc.exists) {
+                if (!treeDoc.exists) {
                     treeDoc = await window.db.collection('curriculum').doc('tree').get();
                 }
 
-                if(!treeDoc.exists || !treeDoc.data().tree) {
+                if (!treeDoc.exists || !treeDoc.data().tree) {
                     container.innerHTML = '<div class="text-center py-20 text-gray-400">등록된 수업 자료가 없습니다.</div>';
                     return;
                 }
@@ -155,9 +286,9 @@
                             <i class="fas fa-chevron-down text-gray-400 transition-transform duration-200"></i>
                         </div>
                         <div class="accordion-body">
-                             ${(unit.children||[]).map(mid => `
+                             ${(unit.children || []).map(mid => `
                                 <div class="ml-4 mt-2 font-bold text-gray-600 flex items-center"><i class="fas fa-folder text-yellow-400 mr-2"></i>${mid.title}</div>
-                                ${(mid.children||[]).map(small => `
+                                ${(mid.children || []).map(small => `
                                     <a href="lesson/note.html?id=${small.id}&title=${encodeURIComponent(small.title)}" class="lesson-link ml-8 mt-1">
                                         <i class="far fa-file-alt text-blue-500"></i><span>${small.title}</span>
                                     </a>
@@ -167,9 +298,10 @@
                     </div>
                 `).join('');
                 container.innerHTML = html;
-            } catch(e) { container.innerHTML = '<div class="text-center text-red-500">자료 로드 실패</div>'; }
+            } catch (e) { container.innerHTML = '<div class="text-center text-red-500">자료 로드 실패</div>'; }
         }
         window.toggleAccordion = (id) => { document.getElementById(id).classList.toggle('open'); }
     </script>
 </body>
+
 </html>

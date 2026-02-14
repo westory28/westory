@@ -1,6 +1,6 @@
-
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,42 +9,86 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
+
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-    
+
     <!-- Config & Styles -->
     <link rel="stylesheet" href="../assets/css/style.css">
     <script src="../assets/js/firebase-config.js"></script>
     <script src="../assets/js/auth-manager.js"></script>
 
     <style>
-        .profile-card { background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); color: white; border-radius: 1.5rem; }
-        .stat-card { background: white; border-radius: 1rem; border: 1px solid #e5e7eb; box-shadow: 0 1px 2px rgba(0,0,0,0.05); padding: 1.5rem; height: 100%; }
-        .tab-btn { padding: 12px 24px; font-weight: 700; color: #9ca3af; border-bottom: 2px solid transparent; transition: all 0.2s; }
-        .tab-btn.active { color: #2563eb; border-bottom-color: #2563eb; }
-        .accordion-header { cursor: pointer; transition: background-color 0.2s; }
-        .accordion-header:hover { background-color: #f9fafb; }
-        .accordion-content { display: none; }
-        .accordion-content.open { display: block; }
-        .chart-wrapper { position: relative; height: 250px; width: 100%; }
+        .profile-card {
+            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+            color: white;
+            border-radius: 1.5rem;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 1rem;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+            padding: 1.5rem;
+            height: 100%;
+        }
+
+        .tab-btn {
+            padding: 12px 24px;
+            font-weight: 700;
+            color: #9ca3af;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .tab-btn.active {
+            color: #2563eb;
+            border-bottom-color: #2563eb;
+        }
+
+        .accordion-header {
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .accordion-header:hover {
+            background-color: #f9fafb;
+        }
+
+        .accordion-content {
+            display: none;
+        }
+
+        .accordion-content.open {
+            display: block;
+        }
+
+        .chart-wrapper {
+            position: relative;
+            height: 250px;
+            width: 100%;
+        }
     </style>
 </head>
+
 <body class="bg-gray-50 min-h-screen flex flex-col">
     <!-- Header injected by JS -->
 
     <main class="flex-grow w-full max-w-6xl mx-auto px-4 py-8">
-        
+
         <!-- 1. Profile Section -->
         <section class="mb-8">
             <div class="profile-card p-8 flex flex-col md:flex-row items-center gap-6 shadow-xl">
                 <div class="relative">
-                    <div class="w-24 h-24 bg-white/20 backdrop-blur rounded-full flex items-center justify-center text-4xl border-4 border-white/30">
+                    <div
+                        class="w-24 h-24 bg-white/20 backdrop-blur rounded-full flex items-center justify-center text-4xl border-4 border-white/30">
                         👨‍🎓
                     </div>
-                    <div class="absolute bottom-0 right-0 bg-yellow-400 text-yellow-900 text-xs font-bold px-2 py-1 rounded-full shadow-sm" id="badge-level">LV.1</div>
+                    <div class="absolute bottom-0 right-0 bg-yellow-400 text-yellow-900 text-xs font-bold px-2 py-1 rounded-full shadow-sm"
+                        id="badge-level">LV.1</div>
                 </div>
                 <div class="text-center md:text-left flex-1">
                     <h1 class="text-3xl font-extrabold mb-1" id="profile-name">학생 이름</h1>
@@ -73,7 +117,7 @@
                 <div class="flex-1 flex items-center justify-center chart-wrapper">
                     <canvas id="scoreChart"></canvas>
                 </div>
-                <p class="text-xs text-center text-gray-400 mt-2">* 입력된 수행/지필 점수 기준</p>
+                <p class="text-xs text-center text-gray-400 mt-2">* 입력된 수행/정기 시험 점수 기준</p>
             </div>
 
             <!-- Quiz Growth Chart -->
@@ -94,8 +138,10 @@
         <!-- 3. Bottom Tabs -->
         <section class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
             <div class="flex border-b border-gray-100">
-                <button onclick="app.switchTab('wrong')" class="tab-btn active" id="btn-wrong"><i class="fas fa-times-circle mr-2 text-red-400"></i>오답 노트</button>
-                <button onclick="app.switchTab('activity')" class="tab-btn" id="btn-activity"><i class="fas fa-file-alt mr-2 text-blue-400"></i>활동지 (준비중)</button>
+                <button onclick="app.switchTab('wrong')" class="tab-btn active" id="btn-wrong"><i
+                        class="fas fa-times-circle mr-2 text-red-400"></i>오답 노트</button>
+                <button onclick="app.switchTab('activity')" class="tab-btn" id="btn-activity"><i
+                        class="fas fa-file-alt mr-2 text-blue-400"></i>활동지 (준비중)</button>
             </div>
 
             <!-- Tab Content: Wrong Answers -->
@@ -110,7 +156,8 @@
 
             <!-- Tab Content: Activities -->
             <div id="tab-activity" class="p-6 hidden">
-                <div class="text-center py-20 text-gray-400 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+                <div
+                    class="text-center py-20 text-gray-400 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
                     <i class="fas fa-tools text-4xl mb-4 text-gray-300"></i>
                     <p class="font-bold">활동지 모아보기 기능은 준비 중입니다.</p>
                     <p class="text-sm mt-1">수업 시간에 작성한 빈칸 채우기 내용을 이곳에서 한눈에 볼 수 있습니다.</p>
@@ -130,7 +177,7 @@
             scoreChart: null,
             quizChart: null,
 
-            init: function() {
+            init: function () {
                 document.addEventListener('auth-ready', (e) => {
                     this.user = e.detail;
                     this.loadProfile();
@@ -138,40 +185,40 @@
                 });
             },
 
-            loadProfile: async function() {
+            loadProfile: async function () {
                 try {
                     const doc = await window.getCollection('users').doc(this.user.uid).get();
-                    if(doc.exists) {
+                    if (doc.exists) {
                         const d = doc.data();
                         document.getElementById('profile-name').innerText = d.name || "학생";
                         document.getElementById('profile-info').innerText = `${d.grade || 2}학년 ${d.class || '?'}반 ${d.number || '?'}번`;
                     } else {
                         document.getElementById('profile-name').innerText = this.user.displayName;
                     }
-                    
+
                     const config = window.currentConfig;
                     document.getElementById('score-semester-info').innerText = `${config.year}-${config.semester}`;
-                } catch(e) { console.error(e); }
+                } catch (e) { console.error(e); }
             },
 
-            loadDashboardData: async function() {
+            loadDashboardData: async function () {
                 try {
                     await Promise.all([
                         this.renderScoreChart(),
                         this.renderQuizChart(),
                         this.renderWrongAnswers()
                     ]);
-                } catch(e) { console.error("Dashboard Load Error", e); }
+                } catch (e) { console.error("Dashboard Load Error", e); }
             },
 
             // --- 1. Score Chart Logic ---
-            renderScoreChart: async function() {
+            renderScoreChart: async function () {
                 const config = window.currentConfig;
                 const scoreDocId = `${config.year}_${config.semester}`;
-                
+
                 // Fetch User Scores
                 const scoreDoc = await window.db.collection('users').doc(this.user.uid)
-                                      .collection('academic_records').doc(scoreDocId).get();
+                    .collection('academic_records').doc(scoreDocId).get();
                 const userScores = scoreDoc.exists ? scoreDoc.data().scores : {};
 
                 // Fetch Plans to map scores to subjects
@@ -188,12 +235,12 @@
                     plan.items.forEach((item, idx) => {
                         const key = `${doc.id}_${idx}`;
                         const saved = userScores[key];
-                        if(saved) {
+                        if (saved) {
                             const val = parseFloat(saved);
-                            if(!isNaN(val)) total += (val / item.maxScore) * item.ratio;
+                            if (!isNaN(val)) total += (val / item.maxScore) * item.ratio;
                         }
                     });
-                    
+
                     // Store highest if duplicates exists (or just overwrite)
                     subjects[plan.subject] = parseFloat(total.toFixed(1));
                 });
@@ -232,7 +279,7 @@
             },
 
             // --- 2. Quiz Chart Logic ---
-            renderQuizChart: async function() {
+            renderQuizChart: async function () {
                 const snap = await window.getCollection('quiz_results')
                     .where('uid', '==', this.user.uid)
                     .orderBy('timestamp', 'desc')
@@ -276,11 +323,11 @@
             },
 
             // --- 3. Wrong Answers Logic ---
-            renderWrongAnswers: async function() {
+            renderWrongAnswers: async function () {
                 // Fetch recent quiz results to extract wrong answers
                 // Note: Fetching distinct wrong answers efficiently in NoSQL is hard without a dedicated collection.
                 // We will client-side filter the recent 20 quiz results for this prototype.
-                
+
                 const snap = await window.getCollection('quiz_results')
                     .where('uid', '==', this.user.uid)
                     .orderBy('timestamp', 'desc')
@@ -316,7 +363,7 @@
                 // Split into chunks of 10 for 'in' query
                 const idsArray = Array.from(questionIds);
                 const chunks = [];
-                for (let i=0; i<idsArray.length; i+=10) chunks.push(idsArray.slice(i, i+10));
+                for (let i = 0; i < idsArray.length; i += 10) chunks.push(idsArray.slice(i, i + 10));
 
                 const questionDetails = {};
                 await Promise.all(chunks.map(async chunk => {
@@ -369,17 +416,17 @@
                 container.innerHTML = html;
             },
 
-            showEmptyChart: function(ctx, msg) {
+            showEmptyChart: function (ctx, msg) {
                 // Simple placeholder text on canvas parent or clear rect
                 const canvas = ctx.canvas;
                 const parent = canvas.parentNode;
                 parent.innerHTML = `<div class="flex items-center justify-center h-full text-gray-400 text-sm font-bold">${msg}</div>`;
             },
 
-            switchTab: function(tabName) {
+            switchTab: function (tabName) {
                 document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
                 document.getElementById('btn-' + tabName).classList.add('active');
-                
+
                 document.getElementById('tab-wrong').classList.add('hidden');
                 document.getElementById('tab-activity').classList.add('hidden');
                 document.getElementById('tab-' + tabName).classList.remove('hidden');
@@ -389,4 +436,5 @@
         app.init();
     </script>
 </body>
+
 </html>
