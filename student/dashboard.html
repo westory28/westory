@@ -132,7 +132,7 @@
     </style>
 </head>
 
-<body class="bg-gray-50 flex flex-col h-screen overflow-hidden">
+<body class="bg-gray-50 flex flex-col">
     <!-- Header injected by AuthManager -->
 
     <main class="dashboard-container">
@@ -180,6 +180,26 @@
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-2 gap-2">
                     <h2 class="text-lg font-bold text-gray-800 whitespace-nowrap"><i
                             class="far fa-calendar-alt mr-2 text-blue-600"></i>학사 일정</h2>
+
+                    <!-- Search Controls -->
+                    <div class="flex items-center gap-2">
+                        <div id="search-container" class="hidden items-center bg-gray-100 rounded-lg px-2 py-1">
+                            <input type="text" id="search-input" placeholder="일정 검색..."
+                                class="bg-transparent border-none outline-none text-sm w-32 md:w-48 text-gray-700 placeholder-gray-400"
+                                onkeyup="if(event.key === 'Enter') app.searchEvents()">
+                            <button onclick="app.searchEvents()" class="text-gray-500 hover:text-blue-600 ml-1">
+                                <i class="fas fa-search"></i>
+                            </button>
+                            <button onclick="app.closeSearch()" class="text-gray-400 hover:text-red-500 ml-2">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <button id="btn-search-trigger" onclick="app.openSearch()"
+                            class="bg-gray-50 border border-gray-200 text-gray-600 hover:text-blue-600 p-1.5 rounded-lg transition"
+                            title="일정 검색">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
                 </div>
                 <div id="calendar" class="flex-1"></div>
             </div>
@@ -242,12 +262,19 @@
                                 init: function () {
                                     document.addEventListener('auth-ready', async (e) => {
                                         const user = e.detail;
-                                        document.getElementById('welcome-text').innerText = `${user.displayName || '학생'}님, 환영합니다!`;
+                                        await this.loadUserClass(user.uid);
+
+                                        // Update Welcome Message
+                                        if (this.userClassStr) {
+                                            const [g, c] = this.userClassStr.split('-');
+                                            document.getElementById('welcome-text').innerText = `${g}학년 ${c}반의 대시보드`;
+                                        } else {
+                                            document.getElementById('welcome-text').innerText = `${user.displayName || '학생'}님의 대시보드`;
+                                        }
 
                                         const cfg = window.currentConfig;
                                         if (cfg) document.getElementById('semester-badge').innerText = `${cfg.year}학년도 ${cfg.semester}학기`;
 
-                                        await this.loadUserClass(user.uid);
                                         this.initCalendar();
                                         this.initNotices();
                                     });
@@ -265,19 +292,88 @@
                                     } catch (e) { console.error(e); }
                                 },
 
-                                //Helper function to get year/semester based collection path
                                 getCollectionPath: function (collectionName) {
                                     const cfg = window.currentConfig;
                                     if (!cfg || !cfg.year || !cfg.semester) {
                                         console.error('Global config not loaded properly');
                                         return null;
                                     }
-                                    // EXCEPTION: calendar uses years/{year}/calendar (no semester)
-                                    if (collectionName === 'calendar') {
-                                        return `years/${cfg.year}/calendar`;
-                                    }
-                                    // All other collections use semesters path
+                                    // FIXED: Calendar also uses semester path to match Teacher's write path
                                     return `years/${cfg.year}/semesters/${cfg.semester}/${collectionName}`;
+                                },
+
+                                // --- Search & Filter Logic ---
+                                openSearch: function () {
+                                    const btn = document.getElementById('btn-search-trigger');
+                                    const container = document.getElementById('search-container');
+                                    btn.classList.add('hidden');
+                                    container.classList.remove('hidden');
+                                    container.classList.add('flex');
+                                    document.getElementById('search-input').focus();
+                                },
+
+                                closeSearch: function () {
+                                    const btn = document.getElementById('btn-search-trigger');
+                                    const container = document.getElementById('search-container');
+                                    btn.classList.remove('hidden');
+                                    container.classList.add('hidden');
+                                    container.classList.remove('flex');
+                                    document.getElementById('search-input').value = '';
+                                    this.refetchEvents(); // Reset filter
+                                },
+
+                                searchEvents: function () {
+                                    this.refetchEvents();
+                                },
+
+                                refetchEvents: function () {
+                                    if (this.calendar) this.calendar.refetchEvents();
+                                },
+
+                                fetchEvents: async function (info, successCallback, failureCallback) {
+                                    try {
+                                        const path = this.getCollectionPath('calendar');
+                                        if (!path) return successCallback([]);
+
+                                        // 1. Fetch ALL events for the range (optimization: ideally server-side filter, but for now client-side)
+                                        const snapshot = await window.db.collection(path)
+                                            .where('start', '>=', info.startStr)
+                                            .where('start', '<', info.endStr)
+                                            .get();
+
+                                        const events = [];
+                                        const keyword = document.getElementById('search-input') ? document.getElementById('search-input').value.trim().toLowerCase() : '';
+
+                                        snapshot.forEach(doc => {
+                                            const d = doc.data();
+
+                                            // 2. Filter: Common OR Holiday OR My Class
+                                            const isCommon = d.targetType === 'common';
+                                            const isHoliday = d.eventType === 'holiday';
+                                            const isMyClass = d.targetType === 'class' && d.targetClass === this.userClassStr;
+
+                                            if (!isCommon && !isHoliday && !isMyClass) return;
+
+                                            // 3. Search Filter
+                                            if (keyword && !d.title.toLowerCase().includes(keyword)) return;
+
+                                            events.push({
+                                                id: doc.id,
+                                                title: d.title,
+                                                start: d.start,
+                                                end: d.end || d.start,
+                                                backgroundColor: isHoliday ? 'transparent' : (this.colorMap[d.eventType] || '#6b7280'),
+                                                borderColor: isHoliday ? 'transparent' : (this.colorMap[d.eventType] || '#6b7280'),
+                                                textColor: isHoliday ? '#ef4444' : undefined,
+                                                classNames: isHoliday ? ['holiday-text-event'] : [],
+                                                extendedProps: d
+                                            });
+                                        });
+                                        successCallback(events);
+                                    } catch (e) {
+                                        console.error(e);
+                                        failureCallback(e);
+                                    }
                                 },
 
                                 // --- Notice Board Logic (Read-Only) ---
@@ -295,7 +391,6 @@
                                         const notices = [];
                                         snapshot.forEach(doc => {
                                             const d = doc.data();
-                                            // Filter: Common OR User's Class
                                             if (d.targetType === 'common' || (this.userClassStr && d.targetType === 'class' && d.targetClass === this.userClassStr)) {
                                                 notices.push({ id: doc.id, ...d });
                                             }
@@ -307,7 +402,6 @@
                                         }
 
                                         container.innerHTML = notices.map(d => {
-                                            // Badge Style Logic
                                             let badge = '';
                                             if (d.category === 'normal') badge = '<span class="bg-red-500 text-white px-2 py-0.5 rounded text-xs font-bold">📢 공지</span>';
                                             else if (d.category === 'exam') badge = '<span class="bg-blue-500 text-white px-2 py-0.5 rounded text-xs font-bold">🔥 정기</span>';
@@ -316,31 +410,20 @@
                                             else if (d.category === 'dday') {
                                                 let dDayStr = 'D-Day';
                                                 if (d.targetDate) {
-                                                    const today = new Date();
-                                                    today.setHours(0, 0, 0, 0);
-                                                    const target = new Date(d.targetDate);
-                                                    target.setHours(0, 0, 0, 0);
+                                                    const today = new Date(); today.setHours(0, 0, 0, 0);
+                                                    const target = new Date(d.targetDate); target.setHours(0, 0, 0, 0);
                                                     const diff = Math.ceil((target - today) / (1000 * 60 * 60 * 24));
-                                                    dDayStr = diff > 0 ? `D-${diff}` : (diff === 0 ? 'D-Day' : `D+${Math.abs(diff)}`);
+                                                    dDayStr = diff > 0 ? 'D-' + diff : (diff === 0 ? 'D-Day' : 'D+' + Math.abs(diff));
                                                 }
-                                                badge = `<span class="bg-purple-500 text-white px-2 py-0.5 rounded text-xs font-bold">⏳ ${dDayStr}</span>`;
+                                                badge = '<span class="bg-purple-500 text-white px-2 py-0.5 rounded text-xs font-bold">⏳ ' + dDayStr + '</span>';
                                             } else {
                                                 badge = '<span class="bg-gray-500 text-white px-2 py-0.5 rounded text-xs font-bold">📢 알림</span>';
                                             }
-
-                                            // Parse new lines
                                             const content = d.content.replace(/\n/g, '<br>');
-
-                                            // Mobile-optimized card
-                                            return `
-                            <div class="bg-white/80 p-3 rounded-lg border border-yellow-200 shadow-sm relative group mb-2">
-                                <div class="flex justify-between items-center mb-2">
-                                    ${badge}
-                                    <span class="text-[10px] text-amber-800/60 font-mono">${new Date(d.createdAt.seconds * 1000).toLocaleDateString()}</span>
-                                </div>
-                                <div class="text-gray-800 text-sm font-bold leading-relaxed whitespace-pre-wrap">${content}</div>
-                            </div>
-                        `;
+                                            return '<div class="bg-white/80 p-3 rounded-lg border border-yellow-200 shadow-sm relative group mb-2">' +
+                                                '<div class="flex justify-between items-center mb-2">' + badge +
+                                                '<span class="text-[10px] text-amber-800/60 font-mono">' + new Date(d.createdAt.seconds * 1000).toLocaleDateString() + '</span></div>' +
+                                                '<div class="text-gray-800 text-sm font-bold leading-relaxed whitespace-pre-wrap">' + content + '</div></div>';
                                         }).join('');
                                     });
                                 },
@@ -349,55 +432,37 @@
                                 showEventsOnPanel: function (dateStr, events) {
                                     const container = document.getElementById('detail-panel-content');
                                     const dateDisplay = document.getElementById('detail-date-display');
-
-                                    // Format Date
                                     const dateObj = new Date(dateStr);
                                     const days = ['일', '월', '화', '수', '목', '금', '토'];
-                                    dateDisplay.innerHTML = `<span class="inline-flex items-center bg-blue-50 border-2 border-blue-300 rounded-lg px-3 py-1"><span class="text-lg font-extrabold text-blue-800">${dateObj.getMonth() + 1}월 ${dateObj.getDate()}일</span><span class="ml-1 text-sm font-bold text-blue-500">(${days[dateObj.getDay()]})</span></span>`;
+                                    dateDisplay.innerHTML = '<span class="inline-flex items-center bg-blue-50 border-2 border-blue-300 rounded-lg px-3 py-1"><span class="text-lg font-extrabold text-blue-800">' + (dateObj.getMonth() + 1) + '월 ' + dateObj.getDate() + '일</span><span class="ml-1 text-sm font-bold text-blue-500">(' + days[dateObj.getDay()] + ')</span></span>';
 
                                     if (events.length === 0) {
-                                        container.innerHTML = `
-                        <div class="flex flex-col items-center justify-center h-40 text-gray-400">
-                            <i class="far fa-calendar-times text-3xl mb-2"></i>
-                            <p class="text-sm">일정이 없습니다.</p>
-                        </div>
-                    `;
+                                        container.innerHTML = '<div class="flex flex-col items-center justify-center h-40 text-gray-400"><i class="far fa-calendar-times text-3xl mb-2"></i><p class="text-sm">일정이 없습니다.</p></div>';
                                         return;
                                     }
 
                                     container.innerHTML = events.map(ev => {
-                                        // Render holiday events with special styling
                                         if (ev.classNames && ev.classNames.includes('holiday-text-event')) {
-                                            return `
-                        <div class="group p-3 border-l-4 border-red-400 bg-red-50 mb-3 rounded-r-lg">
-                            <div class="flex items-center gap-2">
-                                <span class="text-[10px] text-white px-1.5 py-0.5 rounded font-bold bg-red-500">공휴일</span>
-                                <h4 class="font-bold text-red-700 text-sm">${ev.title}</h4>
-                            </div>
-                        </div>
-                    `;
+                                            return '<div class="group p-3 border-l-4 border-red-400 bg-red-50 mb-3 rounded-r-lg"><div class="flex items-center gap-2"><span class="text-[10px] text-white px-1.5 py-0.5 rounded font-bold bg-red-500">공휴일</span><h4 class="font-bold text-red-700 text-sm">' + ev.title + '</h4></div></div>';
                                         }
                                         const p = ev.extendedProps || ev;
-                                        return `
-                        <div class="group p-3 border-l-4 border-gray-200 bg-gray-50 mb-3 rounded-r-lg">
-                            <div class="flex justify-between items-start">
-                                <div>
-                                    <div class="flex items-center gap-2 mb-1">
-                                        <span class="text-[10px] text-white px-1.5 py-0.5 rounded font-bold" style="background-color: ${p.backgroundColor || this.colorMap[p.eventType] || '#999'}">${this.typeLabelMap[p.eventType] || '일정'}</span>
-                                        <h4 class="font-bold text-gray-800 text-sm">${p.title}</h4>
-                                    </div>
-                                    <p class="text-xs text-gray-500">${p.start} ${p.end && p.start !== p.end ? '~ ' + p.end : ''}</p>
-                                </div>
-                            </div>
-                            ${p.description ? `<p class="text-xs text-gray-600 mt-2 bg-gray-100 p-2 rounded">${p.description}</p>` : ''}
-                        </div>
-                    `;
+                                        const bgColor = p.backgroundColor || this.colorMap[p.eventType] || '#999';
+                                        const typeLabel = this.typeLabelMap[p.eventType] || '일정';
+                                        let html = '<div class="group p-3 border-l-4 border-gray-200 bg-gray-50 mb-3 rounded-r-lg">';
+                                        html += '<div class="flex justify-between items-start"><div>';
+                                        html += '<div class="flex items-center gap-2 mb-1">';
+                                        html += '<span class="text-[10px] text-white px-1.5 py-0.5 rounded font-bold" style="background-color:' + bgColor + '">' + typeLabel + '</span>';
+                                        html += '<h4 class="font-bold text-gray-800 text-sm">' + p.title + '</h4></div>';
+                                        html += '<p class="text-xs text-gray-500">' + p.start + (p.end && p.start !== p.end ? ' ~ ' + p.end : '') + '</p>';
+                                        html += '</div></div>';
+                                        if (p.description) html += '<p class="text-xs text-gray-600 mt-2 bg-gray-100 p-2 rounded">' + p.description + '</p>';
+                                        html += '</div>';
+                                        return html;
                                     }).join('');
                                 },
 
                                 initCalendar: function () {
                                     const calendarEl = document.getElementById('calendar');
-
                                     this.calendar = new FullCalendar.Calendar(calendarEl, {
                                         initialView: 'dayGridMonth',
                                         locale: 'ko',
@@ -414,7 +479,6 @@
                                         },
                                         events: [this.fetchEvents.bind(this)],
                                         dateClick: (info) => {
-                                            // Find events for this date
                                             const allEvents = this.calendar.getEvents();
                                             const dailyEvents = allEvents.filter(e => {
                                                 const start = new Date(e.startStr);
@@ -422,8 +486,7 @@
                                                 const target = new Date(info.dateStr);
                                                 if (!e.end) return e.startStr === info.dateStr;
                                                 return target >= start && target < end;
-                                            }); // Include holidays too
-
+                                            });
                                             this.showEventsOnPanel(info.dateStr, dailyEvents);
                                         },
                                         eventClick: (info) => {
@@ -439,39 +502,6 @@
                                         showNonCurrentDates: false,
                                     });
                                     this.calendar.render();
-                                },
-
-                                fetchEvents: async function (info, successCallback, failureCallback) {
-                                    try {
-                                        // Fetch logic same as before: generic fetch then client filter if needed,
-                                        // or filtered query if possible. To be safe, we fetch range and filter in memory for class.
-                                        const snapshot = await window.db.collection(this.getCollectionPath('calendar') || 'calendar')
-                                            .where('start', '>=', info.startStr)
-                                            .where('start', '<', info.endStr)
-                                            .get();
-
-                                        const events = [];
-                                        snapshot.forEach(doc => {
-                                            const d = doc.data();
-
-                                            // Filter by Class (Common or My Class)
-                                            if (d.targetType === 'class' && d.targetClass !== this.userClassStr) return;
-
-                                            const isHoliday = d.eventType === 'holiday';
-                                            events.push({
-                                                id: doc.id,
-                                                title: d.title,
-                                                start: d.start,
-                                                end: d.end || d.start,
-                                                backgroundColor: isHoliday ? 'transparent' : (this.colorMap[d.eventType] || '#6b7280'),
-                                                borderColor: isHoliday ? 'transparent' : (this.colorMap[d.eventType] || '#6b7280'),
-                                                textColor: isHoliday ? '#ef4444' : undefined,
-                                                classNames: isHoliday ? ['holiday-text-event'] : [],
-                                                extendedProps: d
-                                            });
-                                        });
-                                        successCallback(events);
-                                    } catch (e) { console.error(e); failureCallback(e); }
                                 }
                             };
 
