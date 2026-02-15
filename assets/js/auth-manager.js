@@ -218,26 +218,20 @@ class AuthManager {
     }
 
     async showPrivacyModal(uid) {
-        // Fetch custom privacy text
-        let privacyContent = `
-            <p class="font-bold mb-2">[수집 및 이용 목적]</p>
-            <p>1. 학습 기록 관리 및 성적 산출</p>
-            <p>2. 맞춤형 학습 콘텐츠 제공</p>
-            <p>3. 교사의 학생 지도 및 상담 자료 활용</p>
-            <br>
-            <p class="font-bold mb-2">[수집 항목]</p>
-            <p>이름, 이메일, 학년, 반, 번호, 퀴즈 응시 내역</p>
-            <br>
-            <p class="font-bold mb-2">[보유 기간]</p>
-            <p>회원 탈퇴 시 또는 졸업 시까지</p>
-        `;
+        // Load privacy text from Firestore only (no hardcoded fallback)
+        let privacyContent = '';
 
         try {
             const doc = await window.db.collection('site_settings').doc('privacy').get();
             if (doc.exists && doc.data().text) {
                 privacyContent = doc.data().text;
+            } else {
+                privacyContent = '<p class="text-center text-gray-400 py-8">등록된 동의서가 없습니다.<br>담당 교사에게 문의하세요.</p>';
             }
-        } catch (e) { console.warn("Failed to load custom privacy text", e); }
+        } catch (e) {
+            console.warn("Failed to load privacy text", e);
+            privacyContent = '<p class="text-center text-red-400 py-8">동의서를 불러오지 못했습니다.<br>네트워크를 확인하고 새로 고침하세요.</p>';
+        }
 
         const modalHtml = `
             <div id="global-privacy-modal" class="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-70 backdrop-blur-sm">
@@ -266,7 +260,10 @@ class AuthManager {
         checkbox.addEventListener('change', (e) => { btn.disabled = !e.target.checked; });
         btn.addEventListener('click', async () => {
             try {
-                await window.db.collection('users').doc(uid).update({ privacyAgreed: true });
+                await window.db.collection('users').doc(uid).update({
+                    privacyAgreed: true,
+                    privacyAgreedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
                 document.getElementById('global-privacy-modal').remove();
             } catch (e) { alert("오류 발생"); }
         });

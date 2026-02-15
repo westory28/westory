@@ -151,6 +151,13 @@
                 overflow: hidden;
             }
         }
+
+        /* Selected Date Cell Highlight */
+        .fc-day-selected {
+            background-color: #f3f4f6 !important;
+            outline: 2px solid #3b82f6 !important;
+            outline-offset: -2px !important;
+        }
     </style>
 </head>
 
@@ -613,6 +620,12 @@
                             if (!e.end) return e.startStr === info.dateStr;
                             return target >= start && target < end;
                         });
+
+                        // Visual feedback for selection
+                        if (this.selectedDateEl) this.selectedDateEl.classList.remove('fc-day-selected');
+                        this.selectedDateEl = info.dayEl;
+                        this.selectedDateEl.classList.add('fc-day-selected');
+
                         this.showEventsOnPanel(info.dateStr, dailyEvents);
                     },
                     eventClick: (info) => {
