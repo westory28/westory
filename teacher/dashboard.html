@@ -294,11 +294,30 @@
                         <label class="inline-flex items-center gap-1 cursor-pointer">
                             <input type="radio" name="notice-target" value="class" id="notice-class-radio"
                                 class="text-amber-600 focus:ring-amber-500" onchange="app.toggleNoticeClassSelect()">
-                            <span class="text-sm font-bold text-amber-900">학급 선택</span>
+                            <span class="ml-2 text-sm font-bold text-gray-700">반 선택</span>
                         </label>
-                        <select id="notice-class-select"
-                            class="hidden bg-white border border-yellow-300 rounded p-1.5 text-sm font-bold text-gray-700 outline-none">
-                            <!-- populated dynamically -->
+                    </div>
+                    <div id="notice-class-select" class="flex gap-2 hidden">
+                        <select id="notice-target-grade"
+                            class="w-1/3 border border-gray-300 rounded-lg p-2.5 outline-none bg-white font-bold text-center">
+                            <option value="1">1학년</option>
+                            <option value="2">2학년</option>
+                            <option value="3">3학년</option>
+                        </select>
+                        <select id="notice-target-class-num"
+                            class="w-2/3 border border-gray-300 rounded-lg p-2.5 outline-none bg-white font-bold">
+                            <option value="1">1반</option>
+                            <option value="2">2반</option>
+                            <option value="3">3반</option>
+                            <option value="4">4반</option>
+                            <option value="5">5반</option>
+                            <option value="6">6반</option>
+                            <option value="7">7반</option>
+                            <option value="8">8반</option>
+                            <option value="9">9반</option>
+                            <option value="10">10반</option>
+                            <option value="11">11반</option>
+                            <option value="12">12반</option>
                         </select>
                     </div>
                 </div>
@@ -480,24 +499,24 @@
             // Populate 2026 Korea Holidays into Firestore
             populate2026Holidays: async function () {
                 const holidays = [
-                    // 2026년 대한민국 공휴일
+                    // 2026년 대한민국 공휴일 (대체공휴일 포함)
                     { title: "신정", start: "2026-01-01", eventType: "holiday" },
-                    { title: "설날 연휴", start: "2026-01-24", eventType: "holiday" },
-                    { title: "설날", start: "2026-01-25", eventType: "holiday" },
-                    { title: "설날 연휴", start: "2026-01-26", eventType: "holiday" },
-                    { title: "대체공휴일", start: "2026-01-27", eventType: "holiday" }, // 설날 대체
+                    { title: "설날 연휴", start: "2026-02-16", eventType: "holiday" },
+                    { title: "설날", start: "2026-02-17", eventType: "holiday" },
+                    { title: "설날 연휴", start: "2026-02-18", eventType: "holiday" },
                     { title: "삼일절", start: "2026-03-01", eventType: "holiday" },
-                    { title: "대체공휴일", start: "2026-03-02", eventType: "holiday" }, // 삼일절 일요일
+                    { title: "삼일절 대체공휴일", start: "2026-03-02", eventType: "holiday" },
                     { title: "어린이날", start: "2026-05-05", eventType: "holiday" },
                     { title: "석가탄신일", start: "2026-05-24", eventType: "holiday" },
-                    { title: "대체공휴일", start: "2026-05-25", eventType: "holiday" }, // 석가탄신일 일요일
+                    { title: "석가탄신일 대체공휴일", start: "2026-05-25", eventType: "holiday" },
                     { title: "현충일", start: "2026-06-06", eventType: "holiday" },
                     { title: "광복절", start: "2026-08-15", eventType: "holiday" },
-                    { title: "추석 연휴", start: "2026-10-05", eventType: "holiday" },
-                    { title: "추석", start: "2026-10-06", eventType: "holiday" },
-                    { title: "추석 연휴", start: "2026-10-07", eventType: "holiday" },
+                    { title: "광복절 대체공휴일", start: "2026-08-17", eventType: "holiday" },
+                    { title: "추석 연휴", start: "2026-09-24", eventType: "holiday" },
+                    { title: "추석", start: "2026-09-25", eventType: "holiday" },
+                    { title: "추석 연휴", start: "2026-09-26", eventType: "holiday" },
                     { title: "개천절", start: "2026-10-03", eventType: "holiday" },
-                    { title: "대체공휴일", start: "2026-10-08", eventType: "holiday" }, // 추석 대체
+                    { title: "개천절 대체공휴일", start: "2026-10-05", eventType: "holiday" },
                     { title: "한글날", start: "2026-10-09", eventType: "holiday" },
                     { title: "성탄절", start: "2026-12-25", eventType: "holiday" }
                 ];
@@ -553,11 +572,6 @@
                         opt.value = cls;
                         opt.textContent = `${cls}반`;
                         sel.appendChild(opt);
-                        // Also add to notice class dropdown
-                        const noticeOpt = document.createElement('option');
-                        noticeOpt.value = cls;
-                        noticeOpt.textContent = `${cls}반`;
-                        noticeClassSel.appendChild(noticeOpt);
                     });
                 } catch (e) { console.error('Class filter init error:', e); }
             },
@@ -701,7 +715,13 @@
                         document.getElementById('notice-target-date').value = d.targetDate || '';
                         if (d.targetType === 'class') {
                             document.getElementById('notice-class-radio').checked = true;
-                            document.getElementById('notice-class-select').value = d.targetClass || '';
+                            if (d.targetClass) {
+                                const parts = d.targetClass.split('-');
+                                if (parts.length === 2) {
+                                    document.getElementById('notice-target-grade').value = parts[0];
+                                    document.getElementById('notice-target-class-num').value = parts[1];
+                                }
+                            }
                         } else {
                             document.getElementById('notice-common-radio').checked = true;
                         }
@@ -715,6 +735,8 @@
                     document.getElementById('notice-content').value = '';
                     document.getElementById('notice-target-date').value = '';
                     document.getElementById('notice-common-radio').checked = true;
+                    document.getElementById('notice-target-grade').value = '2';
+                    document.getElementById('notice-target-class-num').value = '1';
                     this.toggleNoticeClassSelect();
                     this.toggleDDayInput();
                     document.getElementById('btn-delete-notice').classList.add('hidden');
@@ -760,7 +782,7 @@
                     content: content,
                     targetDate: document.getElementById('notice-target-date').value,
                     targetType: isCommon ? 'common' : 'class',
-                    targetClass: isCommon ? '' : document.getElementById('notice-class-select').value,
+                    targetClass: isCommon ? '' : `${document.getElementById('notice-target-grade').value}-${document.getElementById('notice-target-class-num').value}`,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
 
