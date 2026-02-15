@@ -525,7 +525,13 @@
                     const p = ev.extendedProps || ev;
                     const bgColor = p.backgroundColor || this.colorMap[p.eventType] || '#999';
                     const typeLabel = this.typeLabelMap[p.eventType] || '일정';
-                    let html = '<div class="group p-3 border-l-4 border-gray-200 bg-gray-50 mb-3 rounded-r-lg">';
+                    // Escape values for onclick
+                    const safeTitle = (p.title || '').replace(/'/g, "\\'");
+                    const safeDesc = (p.description || '').replace(/'/g, "\\'").replace(/\n/g, '\\n');
+                    const safeStart = p.start || '';
+                    const safeEnd = p.end || '';
+                    const safeType = p.eventType || '';
+                    let html = '<div class="group p-3 border-l-4 border-gray-200 bg-gray-50 mb-3 rounded-r-lg cursor-pointer hover:bg-gray-100 transition" onclick="app.openDetailModal(\'' + safeType + '\', \'' + safeTitle + '\', \'' + safeStart + '\', \'' + safeEnd + '\', \'' + safeDesc + '\')">';
                     html += '<div class="flex justify-between items-start"><div>';
                     html += '<div class="flex items-center gap-2 mb-1">';
                     html += '<span class="text-[10px] text-white px-1.5 py-0.5 rounded font-bold" style="background-color:' + bgColor + '">' + typeLabel + '</span>';
@@ -536,6 +542,20 @@
                     html += '</div>';
                     return html;
                 }).join('');
+            },
+
+            openDetailModal: function (eventType, title, start, end, description) {
+                const bgColor = this.colorMap[eventType] || '#6b7280';
+                const typeLabel = this.typeLabelMap[eventType] || '일정';
+                const badgeEl = document.getElementById('detail-badge');
+                badgeEl.textContent = typeLabel;
+                badgeEl.style.backgroundColor = bgColor;
+                document.getElementById('detail-title').textContent = title;
+                document.getElementById('detail-date').textContent = start + (end && start !== end ? ' ~ ' + end : '');
+                const descEl = document.getElementById('detail-desc');
+                descEl.textContent = description || '설명 없음';
+                descEl.style.whiteSpace = 'pre-wrap';
+                document.getElementById('detail-modal').classList.remove('hidden');
             },
 
             closeDetailModal: function () {
@@ -572,8 +592,14 @@
                     },
                     eventClick: (info) => {
                         if (info.event.classNames.includes('holiday-text-event')) return;
-                        const startStr = info.event.startStr.split('T')[0];
-                        this.showEventsOnPanel(startStr, [info.event]);
+                        const p = info.event.extendedProps || {};
+                        this.openDetailModal(
+                            p.eventType || '',
+                            info.event.title || '',
+                            p.start || info.event.startStr.split('T')[0],
+                            p.end || '',
+                            p.description || ''
+                        );
                     },
                     height: '100%',
                     contentHeight: '100%',
