@@ -1171,18 +1171,24 @@
                 }
 
                 try {
-                    if (id) await window.db.collection(path).doc(id).update(data);
-                    else {
+                    let docRef;
+                    if (id) {
+                        await window.db.collection(path).doc(id).update(data);
+                        console.log('[Calendar] Update Success:', id);
+                    } else {
                         data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
-                        await window.db.collection(path).add(data);
+                        docRef = await window.db.collection(path).add(data);
+                        console.log('[Calendar] Add Success. New ID:', docRef.id);
                     }
                     alert("저장되었습니다.");
                     this.initialFormState = null; // Reset dirty state on save
                     this.closeModal();
                     this.refetchEvents();
                 } catch (e) {
-                    console.error('Save failed:', e);
-                    alert("저장 실패: " + e.message);
+                    console.error('[Calendar] Save FAILED. Error Object:', e);
+                    console.error('[Calendar] Error Code:', e.code);
+                    console.error('[Calendar] Error Message:', e.message);
+                    alert("저장 실패: " + e.message + " (See Console for details)");
                 }
             },
 
@@ -1194,10 +1200,14 @@
                 if (!path) return;
                 try {
                     await window.db.collection(path).doc(id).delete();
+                    console.log('[Calendar] Delete Success:', id);
                     this.initialFormState = null; // Reset dirty state
                     this.closeModal();
                     this.refetchEvents();
-                } catch (e) { alert("삭제 실패: " + e.message); }
+                } catch (e) {
+                    console.error('[Calendar] Delete Failed:', e);
+                    alert("삭제 실패: " + e.message);
+                }
             }
         };
 

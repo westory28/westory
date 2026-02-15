@@ -27,7 +27,7 @@ const MENUS = {
             children: [
                 { name: "문제 등록", url: "teacher/manage_quiz.html" },
                 { name: "제출 현황", url: "teacher/manage_quiz.html?tab=log" },
-                { name: "전체 문제 은행", url: "teacher/manage_quiz.html?tab=bank" }
+                { name: "문제 은행", url: "teacher/manage_quiz.html?tab=bank" }
             ]
         },
         {
