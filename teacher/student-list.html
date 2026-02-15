@@ -298,6 +298,7 @@
                     const doc = await window.db.collection('site_settings').doc('school_config').get();
                     if (doc.exists) {
                         const data = doc.data();
+                        this.schoolConfig = data; // Store config for label lookup
 
                         // Populate Grades Filter
                         if (data.grades && data.grades.length > 0) {
@@ -345,8 +346,8 @@
                 }
             },
 
-            init: function () {
-                this.loadSchoolConfig();
+            init: async function () {
+                await this.loadSchoolConfig();
                 window.getCollection('users').get().then(snap => {
                     this.students = [];
                     snap.forEach(doc => {
@@ -365,6 +366,18 @@
                 });
             },
 
+            getGradeLabel: function (gradeVal) {
+                if (!this.schoolConfig || !this.schoolConfig.grades) return gradeVal;
+                const g = this.schoolConfig.grades.find(i => i.value === String(gradeVal));
+                return g ? g.label : gradeVal;
+            },
+
+            getClassLabel: function (classVal) {
+                if (!this.schoolConfig || !this.schoolConfig.classes) return classVal;
+                const c = this.schoolConfig.classes.find(i => i.value === String(classVal));
+                return c ? c.label : classVal;
+            },
+
             render: function (list) {
                 document.getElementById('std-count').innerText = `(${list.length}명)`;
                 const tbody = document.getElementById('std-list');
@@ -379,8 +392,8 @@
                         <td class="p-4 text-center" data-label="선택">
                             <input type="checkbox" class="student-check w-4 h-4 text-blue-600 rounded focus:ring-blue-500" value="${s.id}" onclick="app.toggleSelect('${s.id}')" ${this.selectedIds.has(s.id) ? 'checked' : ''}>
                         </td>
-                        <td class="p-4 text-center text-gray-700 text-xs font-bold" data-label="학년">${s.grade}</td>
-                        <td class="p-4 text-center font-bold text-gray-600" data-label="반">${s.class}</td>
+                        <td class="p-4 text-center text-gray-700 text-xs font-bold" data-label="학년">${this.getGradeLabel(s.grade)}</td>
+                        <td class="p-4 text-center font-bold text-gray-600" data-label="반">${this.getClassLabel(s.class)}</td>
                         <td class="p-4 text-center font-bold text-gray-600" data-label="번호">${s.number}</td>
                         <td class="p-4 whitespace-nowrap" data-label="이름">
                             <span onclick="app.showHistory('${s.id}', '${s.name}', ${s.class}, ${s.number})" 
@@ -450,8 +463,11 @@
                 document.getElementById('move-class-modal').classList.add('flex');
             },
             moveSelected: async function () {
-                const targetClass = parseInt(document.getElementById('target-class-select').value);
-                if (!confirm(`선택한 ${this.selectedIds.size}명을 ${targetClass}반으로 이동하시겠습니까?`)) return;
+                const targetSelect = document.getElementById('target-class-select');
+                const targetClass = parseInt(targetSelect.value);
+                const targetLabel = targetSelect.options[targetSelect.selectedIndex].text;
+
+                if (!confirm(`선택한 ${this.selectedIds.size}명을 ${targetLabel}으로 이동하시겠습니까?`)) return;
 
                 const batch = window.db.batch();
                 this.selectedIds.forEach(id => {
@@ -491,7 +507,8 @@
             },
 
             showHistory: async function (uid, name, cls, num) {
-                document.getElementById('history-title').innerText = `${name} (${cls}반 ${num}번) 문제 풀이 모음`;
+                const classLabel = this.getClassLabel(cls);
+                document.getElementById('history-title').innerText = `${name} (${classLabel} ${num}번) 문제 풀이 모음`;
                 const content = document.getElementById('history-content');
                 content.innerHTML = '<div class="text-center p-10"><div class="loader-spinner mx-auto mb-2"></div><p>기록을 불러오는 중...</p></div>';
                 document.getElementById('history-modal').classList.remove('hidden');

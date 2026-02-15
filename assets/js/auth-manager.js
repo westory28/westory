@@ -259,7 +259,7 @@ class AuthManager {
 
         const modalHtml = `
             <div id="global-privacy-modal" class="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-70 backdrop-blur-sm">
-                <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-8 mx-4 max-h-[90vh] flex flex-col">
+                <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg md:max-w-4xl p-8 mx-4 max-h-[90vh] flex flex-col">
                     <div class="text-center mb-6 shrink-0">
                         <div class="bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">🛡️</div>
                         <h2 class="text-2xl font-bold text-gray-900">개인정보 활용 동의</h2>

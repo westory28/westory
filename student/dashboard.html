@@ -312,14 +312,7 @@
                 document.addEventListener('auth-ready', async (e) => {
                     const user = e.detail;
                     await this.loadUserClass(user.uid);
-
-                    // Update Welcome Message
-                    if (this.userClassStr) {
-                        const [g, c] = this.userClassStr.split('-');
-                        document.getElementById('welcome-text').innerText = `${g}학년 ${c}반의 대시보드`;
-                    } else {
-                        document.getElementById('welcome-text').innerText = `${user.displayName || '학생'}님의 대시보드`;
-                    }
+                    await this.updateWelcomeMessage(user); // Updated to support custom labels
 
                     const cfg = window.currentConfig;
                     if (cfg) document.getElementById('semester-badge').innerText = `${cfg.year}학년도 ${cfg.semester}학기`;
@@ -336,9 +329,38 @@
                         const d = doc.data();
                         if (d.grade && d.class) {
                             this.userClassStr = `${d.grade}-${d.class}`;
+                            this.userGrade = d.grade; // Store raw grade
+                            this.userClass = d.class; // Store raw class
                         }
                     }
                 } catch (e) { console.error(e); }
+            },
+
+            updateWelcomeMessage: async function (user) {
+                let gradeLabel = this.userGrade ? this.userGrade + '학년' : '';
+                let classLabel = this.userClass ? this.userClass + '반' : '';
+
+                try {
+                    // Fetch school config for custom labels
+                    const doc = await window.db.collection('site_settings').doc('school_config').get();
+                    if (doc.exists) {
+                        const data = doc.data();
+                        if (data.grades) {
+                            const gObj = data.grades.find(g => g.value === String(this.userGrade));
+                            if (gObj) gradeLabel = gObj.label;
+                        }
+                        if (data.classes) {
+                            const cObj = data.classes.find(c => c.value === String(this.userClass));
+                            if (cObj) classLabel = cObj.label;
+                        }
+                    }
+                } catch (e) { console.error("Config load error:", e); }
+
+                if (this.userClassStr) {
+                    document.getElementById('welcome-text').innerText = `${gradeLabel} ${classLabel}의 대시보드`;
+                } else {
+                    document.getElementById('welcome-text').innerText = `${user.displayName || '학생'}님의 대시보드`;
+                }
             },
 
             getCollectionPath: function (collectionName) {
