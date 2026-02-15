@@ -454,7 +454,8 @@
 
     <!-- Search Modal -->
     <div id="search-modal"
-        class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-start justify-center pt-20">
+        class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-start justify-center pt-20"
+        onclick="app.closeSearch()">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 m-4" onclick="event.stopPropagation()">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-xl font-bold text-gray-800"><i class="fas fa-search text-blue-500 mr-2"></i>일정 검색</h3>
@@ -483,7 +484,7 @@
     <script>
         window.AuthManager.init('teacher');
 
-        const app = {
+        window.app = {
             calendar: null,
             colorMap: {
                 'exam': '#ef4444',       // Red
@@ -682,6 +683,8 @@
             },
 
             openSearch: function () {
+                document.getElementById('search-input').value = '';
+                document.getElementById('search-results').innerHTML = '<div class="text-center text-gray-400 py-10">검색어를 입력하고 엔터를 누르세요.</div>';
                 document.getElementById('search-modal').classList.remove('hidden');
                 document.getElementById('search-modal').classList.add('flex');
                 document.getElementById('search-input').focus();
@@ -693,6 +696,7 @@
             },
 
             executeSearch: async function () {
+                console.log("Executing search...");
                 const query = document.getElementById('search-input').value.trim();
                 const resultsEl = document.getElementById('search-results');
                 if (!query) {
@@ -718,7 +722,7 @@
                     if (results.length === 0) {
                         resultsEl.innerHTML = `<div class="text-center text-gray-400 py-10">
                             <i class="far fa-folder-open text-2xl mb-2"></i><br>
-                            검색 결과가 없습니다.
+                            해당 키워드에 맞는 일정이 없습니다.
                         </div>`;
                     } else {
                         resultsEl.innerHTML = results.map(r => `
@@ -1356,8 +1360,9 @@
             }
         };
 
-        document.addEventListener('auth-ready', () => app.init());
-    </script>
+        document.addEventListener('auth-ready', () => {
+            window.app.init();
+        });</script>
 </body>
 
 </html>
