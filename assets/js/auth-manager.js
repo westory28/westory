@@ -85,31 +85,33 @@ class AuthManager {
     init(type, requireAuth = true) {
         this.userType = type;
 
-        this.loadGlobalConfig().then(() => {
-            window.auth.onAuthStateChanged((user) => {
-                if (user) {
-                    this.currentUser = user;
+        window.auth.onAuthStateChanged(async (user) => {
+            if (user) {
+                this.currentUser = user;
 
-                    this.loadHeader();
-                    this.loadFooter();
-                    this.initSessionTimer();
-                    this.updateUserInfo(user.displayName || (type === 'teacher' ? '선생님' : '학생'));
+                // Ensure config is loaded BEFORE dispatching auth-ready
+                await this.loadGlobalConfig();
 
-                    if (type === 'teacher') {
-                        if (user.email !== TEACHER_EMAIL) {
-                            alert("교사 전용 페이지입니다. 학생 대시보드로 이동합니다.");
-                            window.location.href = this.rootPrefix + 'student/dashboard.html';
-                            return;
-                        }
-                        this.initDDayBanner(true); // Teacher sees common + all class events if needed, usually just common or nothing. Let's show common.
+                this.loadHeader();
+                this.loadFooter();
+                this.initSessionTimer();
+                this.updateUserInfo(user.displayName || (type === 'teacher' ? '선생님' : '학생'));
+
+                if (type === 'teacher') {
+                    if (user.email !== TEACHER_EMAIL) {
+                        alert("교사 전용 페이지입니다. 학생 대시보드로 이동합니다.");
+                        window.location.href = this.rootPrefix + 'student/dashboard.html';
+                        return;
                     }
-
-                    this.fetchAdditionalUserData(user, type);
-                    document.dispatchEvent(new CustomEvent('auth-ready', { detail: user }));
-                } else {
-                    if (requireAuth) window.location.href = this.rootPrefix + 'index.html';
+                    this.initDDayBanner(true);
                 }
-            });
+
+                this.fetchAdditionalUserData(user, type);
+                // Now safe to dispatch, config is ready
+                document.dispatchEvent(new CustomEvent('auth-ready', { detail: user }));
+            } else {
+                if (requireAuth) window.location.href = this.rootPrefix + 'index.html';
+            }
         });
     }
 

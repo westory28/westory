@@ -529,15 +529,32 @@
 
         document.addEventListener('auth-ready', () => {
             app.init();
-
-            // Update Header Badge
-            const cfg = window.currentConfig;
-            const badge = document.getElementById('dash-year-badge');
-            if (badge && cfg) {
-                badge.className = "bg-blue-100 text-blue-700 font-bold px-3 py-1 rounded-lg text-sm border border-blue-200 ml-2";
-                badge.innerText = `${cfg.year}학년도 ${cfg.semester}학기`;
-            }
+            updateHeaderBadge();
         });
+
+        function updateHeaderBadge() {
+            const badge = document.getElementById('dash-year-badge');
+            if (!badge) return;
+
+            const update = () => {
+                const cfg = window.currentConfig;
+                if (cfg) {
+                    badge.className = "bg-blue-100 text-blue-700 font-bold px-3 py-1 rounded-lg text-sm border border-blue-200 ml-2";
+                    badge.innerText = `${cfg.year}학년도 ${cfg.semester}학기`;
+                    return true;
+                }
+                return false;
+            };
+
+            if (!update()) {
+                // Retry if config isn't ready yet (safety net)
+                let retries = 0;
+                const interval = setInterval(() => {
+                    retries++;
+                    if (update() || retries > 10) clearInterval(interval);
+                }, 500);
+            }
+        }
     </script>
 </body>
 
