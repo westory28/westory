@@ -306,7 +306,25 @@ class AuthManager {
             return `<a href="${resolve(item.url)}" class="nav-link ${active}">${item.name}</a>`;
         }).join('')}
         </nav>`;
-        mobileNavHtml = `<div id="mobile-menu">${menuItems.map(item => `<a href="${resolve(item.url)}" class="mobile-link ${isActive(item.url) ? 'active' : ''}"><svg class="mobile-icon" viewBox="0 0 24 24"><path d="${item.icon}"></path></svg>${item.name}</a>`).join('')}</div>`;
+        mobileNavHtml = `<div id="mobile-menu" class="border-t border-gray-100">
+            ${menuItems.map(item => {
+            let html = `<a href="${resolve(item.url)}" class="mobile-link ${isActive(item.url) ? 'active' : ''}">
+                    <svg class="mobile-icon" viewBox="0 0 24 24"><path d="${item.icon}"></path></svg>
+                    ${item.name}
+                </a>`;
+
+            if (item.children && item.children.length > 0) {
+                html += `<div class="bg-gray-50 border-b border-gray-100 pb-2">
+                        ${item.children.map(child => `
+                            <a href="${resolve(child.url)}" class="block pl-12 pr-4 py-2 text-sm text-gray-500 hover:text-blue-600 hover:bg-gray-100 rounded-r-full mr-2">
+                                <i class="fas fa-angle-right mr-2 text-xs opacity-50"></i>${child.name}
+                            </a>
+                        `).join('')}
+                    </div>`;
+            }
+            return html;
+        }).join('')}
+        </div>`;
         mobileToggleBtn = `<button id="mobile-menu-toggle" class="mobile-menu-btn"><i class="fas fa-bars"></i></button>`;
 
         const dashboardLink = this.userType === 'teacher' ? resolve('teacher/dashboard.html') : resolve('student/dashboard.html');
