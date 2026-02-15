@@ -396,8 +396,8 @@ class AuthManager {
     loadFooter() {
         const existingFooter = document.querySelector('footer');
         if (existingFooter) existingFooter.remove();
-        const footerHtml = ``; // User requested removal of footer text/line
-        // document.body.insertAdjacentHTML('beforeend', footerHtml);
+        const footerHtml = `<footer class="bg-white border-t border-stone-200 py-4 mt-auto"><div class="container mx-auto text-center"><p class="text-stone-400 text-xs font-bold font-mono">Copyright © 용신중학교 역사교사 방재석. All rights reserved.</p></div></footer>`;
+        document.body.insertAdjacentHTML('beforeend', footerHtml);
     }
 
     updateUserInfo(name) {
