@@ -165,17 +165,14 @@
     <!-- Header injected by AuthManager -->
 
     <main class="dashboard-container">
-        <div class="mb-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-3 shrink-0">
-            <div>
+        <div class="mb-6 flex flex-col md:flex-row justify-between items-center gap-3 shrink-0">
+            <div class="flex items-center gap-3">
                 <h1 class="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight" id="welcome-text"><i
                         class="fas fa-spinner fa-spin text-gray-300"></i></h1>
-                <div class="flex items-center gap-2 mt-2">
-                    <span
-                        class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-800"
-                        id="semester-badge">
-                        <i class="fas fa-spinner fa-spin mr-1"></i> 로딩 중
-                    </span>
-                </div>
+                <span id="semester-badge"
+                    class="bg-blue-600 text-white font-bold px-3 py-1 rounded-full text-xs md:text-sm shadow-md shrink-0">
+                    <i class="fas fa-spinner fa-spin"></i>
+                </span>
             </div>
 
 
