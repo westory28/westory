@@ -541,20 +541,27 @@
 
                 try {
                     let count = 0;
+                    const batch = window.db.batch(); // Use batch for efficiency
+
                     for (const holiday of holidays) {
+                        // Create a deterministic ID: holiday_2026-03-01
+                        const docId = `holiday_${holiday.start}_${holiday.title.replace(/\s+/g, '')}`;
+                        const docRef = window.db.collection(path).doc(docId);
+
                         const data = {
                             ...holiday,
                             targetType: 'common',
                             targetClass: null,
                             description: '대한민국 공휴일',
                             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                            updatedAt: firebase.firestore.FieldValue.serverTimestamp() // This will update timestamp on re-run
                         };
-                        await window.db.collection(path).add(data);
-                        console.log(`[Holiday] Added: ${holiday.title} to ${path}`); // Log for debugging
+                        batch.set(docRef, data, { merge: true });
+                        console.log(`[Holiday] Prepared: ${holiday.title} (${docId})`);
                         count++;
                     }
-                    alert(`${count}개의 공휴일이 추가되었습니다.`);
+                    await batch.commit();
+                    alert(`${count}개의 공휴일이 처리되었습니다. (중복 방지 적용됨)`);
                     this.refetchEvents();
                 } catch (e) {
                     alert('공휴일 추가 실패: ' + e.message);
@@ -961,7 +968,7 @@
                         const isHoliday = evts.some(e => e.startStr === dateStr && e.extendedProps && e.extendedProps.eventType === 'holiday');
                         return isHoliday ? ['fc-day-holiday'] : [];
                     },
-                    events: [this.fetchEvents.bind(this)],
+                    events: this.fetchEvents.bind(this),
                     dateClick: (info) => {
                         // Double Click Logic
                         const now = new Date().getTime();
@@ -1013,6 +1020,7 @@
             },
 
             fetchEvents: async function (info, successCallback, failureCallback) {
+                console.log("[Calendar] fetchEvents CALLED!", info); // CRITICAL LOG
                 const path = this.getCollectionPath('calendar');
                 if (!path) {
                     failureCallback(new Error('Collection path not available'));
@@ -1026,19 +1034,20 @@
                     console.log(`[Calendar] 1. Fetch Request Range: ${startYMD} ~ ${endYMD}`);
                     console.log(`[Calendar] 2. Collection Path: ${path}`);
 
-                    // DEBUG: Fetch ALL to see what's there
-                    const snapshot = await window.db.collection(path).get();
+                    // Use Range Query to avoid fetching all 100+ events every time
+                    const snapshot = await window.db.collection(path)
+                        .where('start', '>=', startYMD)
+                        .where('start', '<', endYMD) // endStr is exclusive
+                        .get();
 
-                    // .where('start', '>=', startYMD)
-                    // .where('start', '<=', endYMD) 
-                    // .get();
+                    // const snapshot = await window.db.collection(path).get(); // Revert to all for debug if needed
 
                     console.log(`[Calendar] 3. Snapshot Size: ${snapshot.size}`);
 
                     if (snapshot.size > 0) {
                         snapshot.docs.forEach(d => console.log(' -> Found Event:', d.data()));
                     } else {
-                        console.log(' -> No events found in this path.');
+                        console.log(' -> No events found in this range.');
                     }
 
                     const events = [];
@@ -1048,9 +1057,11 @@
 
                     snapshot.forEach(doc => {
                         const d = doc.data();
+                        // Filter Logic
                         if (filter !== 'all') {
-                            if (filter === 'common') { if (d.targetType !== 'common') return; }
-                            else { if (d.targetType === 'class' && d.targetClass !== filter) return; }
+                            // If filter is specific class (e.g. '1-1'), show 'common' AND '1-1'
+                            // Hide if targetType is 'class' AND targetClass != filter
+                            if (d.targetType === 'class' && d.targetClass !== filter) return;
                         }
 
                         // Map for quick access
