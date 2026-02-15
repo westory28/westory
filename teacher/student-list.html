@@ -137,27 +137,7 @@
 
                     <div class="h-6 w-px bg-gray-300 mx-1 shrink-0"></div>
 
-                    <!-- Bulk Actions Toolbar -->
-                    <div id="bulk-toolbar" class="flex items-center gap-2 whitespace-nowrap">
-                        <span
-                            class="text-xs font-bold text-blue-800 w-16 text-center inline-block hidden md:inline-block"
-                            id="selected-count-text">0명 선택</span>
-
-                        <button id="btn-promote" onclick="app.promoteSelected()" disabled
-                            class="btn-bulk text-xs px-2 py-1.5 rounded font-bold shadow-sm border flex-none shrink-0"
-                            title="일괄 진급">
-                            <i class="fas fa-level-up-alt"></i><span class="hidden sm:inline"> 진급</span>
-                        </button>
-                        <button id="btn-move" onclick="app.openMoveClassModal()" disabled
-                            class="btn-bulk text-xs px-2 py-1.5 rounded font-bold shadow-sm border flex-none shrink-0"
-                            title="반 이동">
-                            <i class="fas fa-exchange-alt"></i><span class="hidden sm:inline"> 이동</span>
-                        </button>
-                        <button id="btn-delete" onclick="app.deleteSelected()" disabled
-                            class="btn-bulk text-xs px-2 py-1.5 rounded font-bold shadow-sm border flex-none shrink-0">
-                            <i class="fas fa-trash"></i><span class="hidden sm:inline"> 삭제</span>
-                        </button>
-                    </div>
+                    <!-- Old Bulk Toolbar Removed -->
                 </div>
 
                 <!-- Search Input (Row on Mobile) -->
@@ -278,6 +258,35 @@
             <button onclick="app.moveSelected()"
                 class="w-full bg-green-600 text-white font-bold py-2 rounded hover:bg-green-700">이동 확인</button>
         </div>
+    </div>
+
+    <!-- Floating Bulk Action Bar -->
+    <div id="bulk-action-bar"
+        class="fixed bottom-8 left-1/2 transform -translate-x-1/2 bg-white rounded-full shadow-2xl border border-gray-200 py-3 px-6 flex items-center gap-4 z-40 transition-all duration-300 translate-y-32 opacity-0 hidden">
+        <div class="flex items-center gap-2">
+            <span class="bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded-full"><span
+                    id="bulk-count">0</span>명</span>
+            <span class="text-sm font-bold text-gray-700">선택됨</span>
+        </div>
+        <div class="h-4 w-px bg-gray-300"></div>
+        <div class="flex items-center gap-2">
+            <button onclick="app.promoteSelected()" class="hover:bg-gray-100 p-2 rounded-lg text-blue-600 transition"
+                title="일괄 진급">
+                <i class="fas fa-level-up-alt"></i><span class="text-xs font-bold ml-1 hidden sm:inline">진급</span>
+            </button>
+            <button onclick="app.openMoveClassModal()"
+                class="hover:bg-gray-100 p-2 rounded-lg text-green-600 transition" title="반 이동">
+                <i class="fas fa-exchange-alt"></i><span class="text-xs font-bold ml-1 hidden sm:inline">이동</span>
+            </button>
+            <button onclick="app.deleteSelected()" class="hover:bg-gray-100 p-2 rounded-lg text-red-600 transition"
+                title="선택 삭제">
+                <i class="fas fa-trash"></i><span class="text-xs font-bold ml-1 hidden sm:inline">삭제</span>
+            </button>
+        </div>
+        <div class="h-4 w-px bg-gray-300"></div>
+        <button onclick="app.clearSelection()" class="text-gray-400 hover:text-gray-600 transition">
+            <i class="fas fa-times"></i>
+        </button>
     </div>
 
     <!-- Footer injected by AuthManager -->
@@ -427,13 +436,31 @@
             },
             updateToolbar: function () {
                 const count = this.selectedIds.size;
-                document.getElementById('selected-count-text').innerText = `${count}명 선택됨`;
+                const bar = document.getElementById('bulk-action-bar');
+                const countEl = document.getElementById('bulk-count');
 
-                const btns = ['btn-promote', 'btn-move', 'btn-delete'];
-                btns.forEach(id => {
-                    document.getElementById(id).disabled = (count === 0);
-                });
+                if (count > 0) {
+                    countEl.innerText = count;
+                    bar.classList.remove('hidden');
+                    // Slight delay to allow display:block to apply before transition
+                    requestAnimationFrame(() => {
+                        bar.classList.remove('translate-y-32', 'opacity-0');
+                    });
+                } else {
+                    bar.classList.add('translate-y-32', 'opacity-0');
+                    setTimeout(() => {
+                        if (this.selectedIds.size === 0) bar.classList.add('hidden');
+                    }, 300);
+                }
             },
+
+            clearSelection: function () {
+                this.selectedIds.clear();
+                this.render(this.students); // Rerender to uncheck boxes
+                this.updateToolbar();
+            },
+
+
 
             promoteSelected: async function () {
                 if (!confirm(`선택한 ${this.selectedIds.size}명의 학년을 1씩 올리시겠습니까?`)) return;
