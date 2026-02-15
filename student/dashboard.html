@@ -157,9 +157,50 @@
             </div>
         </div>
 
+        <!-- Main Content Area (Mobile: Flex-Col / Desktop: Grid) -->
         <div
-            class="flex-1 bg-white rounded-xl shadow-lg border border-gray-100 p-4 md:p-6 overflow-hidden flex flex-col relative">
-            <div id="calendar" class="h-full"></div>
+            class="flex flex-col md:grid md:grid-cols-5 md:grid-rows-2 gap-4 h-auto md:h-[calc(100vh-140px)] min-h-[500px]">
+
+            <!-- 1. Notice Board (Mobile: Order 1 / Desktop: Order 2, Right Top) -->
+            <div
+                class="order-1 md:order-2 md:col-span-2 md:row-span-1 bg-[#fffbeb] rounded-xl shadow-sm border border-yellow-200 p-4 flex flex-col relative overflow-hidden min-h-[300px] md:min-h-0">
+                <div class="flex justify-between items-center mb-3 border-b border-yellow-200 pb-2">
+                    <h3 class="text-lg font-extrabold text-amber-800 flex items-center">
+                        <i class="fas fa-thumbtack mr-2 text-amber-600"></i>알림장
+                    </h3>
+                </div>
+                <div id="notice-list" class="flex-1 overflow-y-auto space-y-3 pr-2 custom-scroll">
+                    <div class="text-center text-amber-800/50 py-10 font-bold text-sm">등록된 알림이 없습니다.</div>
+                </div>
+            </div>
+
+            <!-- 2. Calendar (Mobile: Order 2 / Desktop: Order 1, Left Full Height) -->
+            <div
+                class="order-2 md:order-1 md:col-span-3 md:row-span-2 bg-white rounded-xl shadow-sm p-4 flex flex-col min-h-[500px] md:min-h-0">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-2 gap-2">
+                    <h2 class="text-lg font-bold text-gray-800 whitespace-nowrap"><i
+                            class="far fa-calendar-alt mr-2 text-blue-600"></i>학사 일정</h2>
+                </div>
+                <div id="calendar" class="flex-1"></div>
+            </div>
+
+            <!-- 3. Event Details (Mobile: Order 3 / Desktop: Order 3, Right Bottom) -->
+            <div
+                class="order-3 md:order-3 md:col-span-2 md:row-span-1 bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col min-h-[300px] md:min-h-0">
+                <div class="flex justify-between items-center mb-3 border-b border-gray-100 pb-2">
+                    <h3 class="text-lg font-bold text-gray-800 flex items-center">
+                        <i class="fas fa-info-circle mr-2 text-blue-500"></i>일정 상세
+                    </h3>
+                    <span id="detail-date-display" class="text-sm font-bold text-gray-500">날짜를 선택하세요</span>
+                </div>
+                <div id="detail-panel-content" class="flex-1 overflow-y-auto pr-2 custom-scroll">
+                    <div class="flex flex-col items-center justify-center h-full text-gray-400">
+                        <i class="far fa-calendar-check text-4xl mb-3 text-gray-200"></i>
+                        <p class="text-sm">달력에서 날짜나 일정을 클릭하면<br>상세 내용이 여기에 표시됩니다.</p>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </main>
 
