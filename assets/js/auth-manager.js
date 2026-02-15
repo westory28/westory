@@ -297,9 +297,9 @@ class AuthManager {
 
                 return `
                         <div class="relative group h-full flex items-center">
-                            <span class="nav-link ${active} flex items-center gap-1 cursor-pointer select-none">
+                            <a href="${resolve(item.url)}" class="nav-link ${active} flex items-center gap-1">
                                 ${item.name} <i class="fas fa-chevron-down text-[10px] ml-1 opacity-50 group-hover:opacity-100 transition"></i>
-                            </span>
+                            </a>
                             <div class="absolute top-full left-0 w-48 pt-3 invisible opacity-0 group-hover:visible group-hover:opacity-100 transition duration-200 transform translate-y-2 group-hover:translate-y-0 z-[100]">
                                 <div class="bg-white border border-gray-200 shadow-xl rounded-xl overflow-hidden">
                                     ${childrenHtml}
@@ -312,26 +312,22 @@ class AuthManager {
         }).join('')}
         </nav>`;
         mobileNavHtml = `<div id="mobile-menu" class="border-t border-gray-100">
-            ${menuItems.map((item, idx) => {
-            if (item.children && item.children.length > 0) {
-                // Parent with children: toggle instead of navigate
-                return `<div class="mobile-link ${isActive(item.url) ? 'active' : ''}" data-toggle="mobile-sub-${idx}" style="cursor:pointer;">
-                    <svg class="mobile-icon" viewBox="0 0 24 24"><path d="${item.icon}"></path></svg>
-                    ${item.name}
-                    <i class="fas fa-chevron-down text-[10px] ml-auto opacity-50 mobile-chevron"></i>
-                </div>
-                <div id="mobile-sub-${idx}" class="bg-gray-50 border-b border-gray-100 pb-2" style="display:none;">
-                    ${item.children.map(child => `
-                        <a href="${resolve(child.url)}" class="block pl-12 pr-4 py-2 text-sm text-gray-500 hover:text-blue-600 hover:bg-gray-100 rounded-r-full mr-2">
-                            <i class="fas fa-angle-right mr-2 text-xs opacity-50"></i>${child.name}
-                        </a>
-                    `).join('')}
-                </div>`;
-            }
-            return `<a href="${resolve(item.url)}" class="mobile-link ${isActive(item.url) ? 'active' : ''}">
+            ${menuItems.map(item => {
+            let html = `<a href="${resolve(item.url)}" class="mobile-link ${isActive(item.url) ? 'active' : ''}">
                     <svg class="mobile-icon" viewBox="0 0 24 24"><path d="${item.icon}"></path></svg>
                     ${item.name}
                 </a>`;
+
+            if (item.children && item.children.length > 0) {
+                html += `<div class="bg-gray-50 border-b border-gray-100 pb-2">
+                        ${item.children.map(child => `
+                            <a href="${resolve(child.url)}" class="block pl-12 pr-4 py-2 text-sm text-gray-500 hover:text-blue-600 hover:bg-gray-100 rounded-r-full mr-2">
+                                <i class="fas fa-angle-right mr-2 text-xs opacity-50"></i>${child.name}
+                            </a>
+                        `).join('')}
+                    </div>`;
+            }
+            return html;
         }).join('')}
         </div>`;
         mobileToggleBtn = `<button id="mobile-menu-toggle" class="mobile-menu-btn"><i class="fas fa-bars"></i></button>`;
@@ -396,26 +392,6 @@ class AuthManager {
             document.addEventListener('click', (e) => {
                 if (mobileMenu.classList.contains('open') && !mobileMenu.contains(e.target) && !mobileBtn.contains(e.target)) {
                     mobileMenu.classList.remove('open');
-                }
-            });
-
-            // Mobile submenu toggle (parent items with children)
-            mobileMenu.querySelectorAll('[data-toggle]').forEach(el => {
-                // If current page is a child of this parent, expand it by default
-                const subMenuId = el.getAttribute('data-toggle');
-                const subMenu = document.getElementById(subMenuId);
-                if (subMenu) {
-                    const childLinks = subMenu.querySelectorAll('a');
-                    const shouldExpand = Array.from(childLinks).some(a => currentPath.endsWith(a.getAttribute('href')?.split('/').pop().split('?')[0] || ''));
-                    if (shouldExpand) subMenu.style.display = 'block';
-
-                    el.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        const isOpen = subMenu.style.display !== 'none';
-                        subMenu.style.display = isOpen ? 'none' : 'block';
-                        const chevron = el.querySelector('.mobile-chevron');
-                        if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
-                    });
                 }
             });
         }
