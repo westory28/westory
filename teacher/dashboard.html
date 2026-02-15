@@ -957,10 +957,20 @@
                 }
 
                 try {
+                    // Extract YYYY-MM-DD for simpler lex comparison
+                    const startYMD = info.startStr.split('T')[0];
+                    const endYMD = info.endStr.split('T')[0];
+                    console.log(`[Calendar] Fetching from: ${path}, Range: ${startYMD} ~ ${endYMD}`);
+
                     const snapshot = await window.db.collection(path)
-                        .where('start', '>=', info.startStr)
-                        .where('start', '<', info.endStr)
+                        .where('start', '>=', startYMD)
+                        .where('start', '<=', endYMD) // Use <= to include logical end date if needed, or stick to <. 
+                        // Note: info.endStr in FullCalendar is exclusive. 
+                        // If we use string comparison "2026-03-01" < "2026-03-01T..." is True.
+                        // But let's just use the string.
                         .get();
+
+                    console.log(`[Calendar] Fetched ${snapshot.size} events.`);
 
                     const events = [];
                     const filter = document.getElementById('view-filter').value;
