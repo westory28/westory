@@ -45,8 +45,8 @@ const TEACHER_EMAIL = "westoria28@gmail.com";
 
 // --- Global Config State ---
 window.currentConfig = {
-    year: '2025',
-    semester: '2',
+    year: '2026',
+    semester: '1',
     showQuiz: true,
     showScore: true,
     showLesson: true
@@ -414,10 +414,7 @@ class AuthManager {
             greetingEl.textContent = name + suffix;
         }
 
-        const welcomeEl = document.getElementById('welcome-text');
-        if (welcomeEl && name) {
-            welcomeEl.innerText = `${name}님, 환영합니다!`;
-        }
+        // welcome-text is now managed by each page's own init logic (e.g. student dashboard sets grade/class)
     }
 
     initSessionTimer() {
