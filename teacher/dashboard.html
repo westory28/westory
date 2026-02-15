@@ -260,68 +260,111 @@
             <input type="hidden" id="notice-id">
 
             <div class="space-y-4">
-                <div>
-                    <label class="block text-xs font-bold text-amber-800 mb-1">카테고리</label>
-                    <select id="notice-category"
-                        class="w-full bg-white border border-yellow-300 rounded p-2 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-amber-300"
-                        onchange="app.toggleDDayInput()">
-                        <option value="normal">📢 일반 알림</option>
-                        <option value="exam">🔥 정기 시험</option>
-                        <option value="performance">⚡ 수행평가</option>
-                        <option value="prep">🎒 수업 준비물</option>
-                        <option value="dday">⏳ D-Day 설정</option>
-                    </select>
-                </div>
-
-                <div id="dday-input-group" class="hidden">
-                    <label class="block text-xs font-bold text-amber-800 mb-1">목표 날짜</label>
-                    <input type="date" id="notice-target-date"
-                        class="w-full bg-white border border-yellow-300 rounded p-2 text-sm outline-none">
-                </div>
-
-                <div>
-                    <label class="block text-xs font-bold text-amber-800 mb-1">알림 내용</label>
-                    <textarea id="notice-content" rows="5"
-                        class="w-full bg-white border border-yellow-300 rounded p-3 text-sm resize-none outline-none focus:ring-2 focus:ring-amber-300 placeholder-amber-800/30"
-                        placeholder="내용을 입력하세요..."></textarea>
-                </div>
-
-                <div>
-                    <label class="block text-xs font-bold text-amber-800 mb-2">대상 선택</label>
-                    <div class="flex items-center gap-3">
-                        <label class="inline-flex items-center gap-1 cursor-pointer">
-                            <input type="radio" name="notice-target" value="common" id="notice-common-radio" checked
-                                class="text-amber-600 focus:ring-amber-500" onchange="app.toggleNoticeClassSelect()">
-                            <span class="text-sm font-bold text-amber-900">전체 공통</span>
-                        </label>
-                        <label class="inline-flex items-center gap-1 cursor-pointer">
-                            <input type="radio" name="notice-target" value="class" id="notice-class-radio"
-                                class="text-amber-600 focus:ring-amber-500" onchange="app.toggleNoticeClassSelect()">
-                            <span class="ml-2 text-sm font-bold text-gray-700">반 선택</span>
-                        </label>
+                <div class="space-y-5">
+                    <!-- Category Selection (Radio Buttons) -->
+                    <div>
+                        <label class="block text-xs font-bold text-amber-800 mb-2">카테고리</label>
+                        <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+                            <label class="cursor-pointer">
+                                <input type="radio" name="notice-category" value="normal" checked class="peer sr-only"
+                                    onchange="app.toggleDDayInput()">
+                                <div
+                                    class="px-3 py-2 rounded-lg border border-yellow-300 bg-white text-gray-600 text-sm font-bold text-center peer-checked:bg-red-500 peer-checked:text-white peer-checked:border-red-600 transition shadow-sm">
+                                    📢 공지
+                                </div>
+                            </label>
+                            <label class="cursor-pointer">
+                                <input type="radio" name="notice-category" value="exam" class="peer sr-only"
+                                    onchange="app.toggleDDayInput()">
+                                <div
+                                    class="px-3 py-2 rounded-lg border border-yellow-300 bg-white text-gray-600 text-sm font-bold text-center peer-checked:bg-blue-500 peer-checked:text-white peer-checked:border-blue-600 transition shadow-sm">
+                                    🔥 정기
+                                </div>
+                            </label>
+                            <label class="cursor-pointer">
+                                <input type="radio" name="notice-category" value="performance" class="peer sr-only"
+                                    onchange="app.toggleDDayInput()">
+                                <div
+                                    class="px-3 py-2 rounded-lg border border-yellow-300 bg-white text-gray-600 text-sm font-bold text-center peer-checked:bg-green-500 peer-checked:text-white peer-checked:border-green-600 transition shadow-sm">
+                                    ⚡ 수행
+                                </div>
+                            </label>
+                            <label class="cursor-pointer">
+                                <input type="radio" name="notice-category" value="prep" class="peer sr-only"
+                                    onchange="app.toggleDDayInput()">
+                                <div
+                                    class="px-3 py-2 rounded-lg border border-yellow-300 bg-white text-gray-600 text-sm font-bold text-center peer-checked:bg-yellow-500 peer-checked:text-white peer-checked:border-yellow-600 transition shadow-sm">
+                                    🎒 준비
+                                </div>
+                            </label>
+                            <label class="cursor-pointer">
+                                <input type="radio" name="notice-category" value="dday" class="peer sr-only"
+                                    onchange="app.toggleDDayInput()">
+                                <div
+                                    class="px-3 py-2 rounded-lg border border-yellow-300 bg-white text-gray-600 text-sm font-bold text-center peer-checked:bg-purple-500 peer-checked:text-white peer-checked:border-purple-600 transition shadow-sm">
+                                    ⏳ D-Day
+                                </div>
+                            </label>
+                        </div>
                     </div>
-                    <div id="notice-class-select" class="flex gap-2 hidden">
-                        <select id="notice-target-grade"
-                            class="w-1/3 border border-gray-300 rounded-lg p-2.5 outline-none bg-white font-bold text-center">
-                            <option value="1">1학년</option>
-                            <option value="2">2학년</option>
-                            <option value="3">3학년</option>
-                        </select>
-                        <select id="notice-target-class-num"
-                            class="w-2/3 border border-gray-300 rounded-lg p-2.5 outline-none bg-white font-bold">
-                            <option value="1">1반</option>
-                            <option value="2">2반</option>
-                            <option value="3">3반</option>
-                            <option value="4">4반</option>
-                            <option value="5">5반</option>
-                            <option value="6">6반</option>
-                            <option value="7">7반</option>
-                            <option value="8">8반</option>
-                            <option value="9">9반</option>
-                            <option value="10">10반</option>
-                            <option value="11">11반</option>
-                            <option value="12">12반</option>
-                        </select>
+
+                    <div id="dday-input-group" class="hidden">
+                        <label class="block text-xs font-bold text-amber-800 mb-1">목표 날짜</label>
+                        <input type="date" id="notice-target-date"
+                            class="w-full bg-white border border-yellow-300 rounded p-2 text-sm outline-none">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-amber-800 mb-1">알림 내용</label>
+                        <textarea id="notice-content" rows="4"
+                            class="w-full bg-white border border-yellow-300 rounded p-3 text-sm resize-none outline-none focus:ring-2 focus:ring-amber-300 placeholder-amber-800/30"
+                            placeholder="내용을 입력하세요..."></textarea>
+                    </div>
+
+                    <!-- Target Selection (Inline) -->
+                    <div>
+                        <label class="block text-xs font-bold text-amber-800 mb-2">대상 선택</label>
+                        <div class="flex flex-wrap items-center gap-3">
+                            <label class="inline-flex items-center gap-1 cursor-pointer">
+                                <input type="radio" name="notice-target" value="common" id="notice-common-radio" checked
+                                    class="text-amber-600 focus:ring-amber-500"
+                                    onchange="app.toggleNoticeClassSelect()">
+                                <span class="text-sm font-bold text-amber-900">전체 공통</span>
+                            </label>
+                            <label class="inline-flex items-center gap-1 cursor-pointer">
+                                <input type="radio" name="notice-target" value="class" id="notice-class-radio"
+                                    class="text-amber-600 focus:ring-amber-500"
+                                    onchange="app.toggleNoticeClassSelect()">
+                                <span class="text-sm font-bold text-gray-700">반 선택</span>
+                            </label>
+
+                            <!-- Inline Class Select -->
+                            <div id="notice-class-select" class="flex items-center gap-1 hidden ml-1">
+                                <select id="notice-target-grade"
+                                    class="border border-gray-300 rounded px-2 py-1 text-sm outline-none bg-white font-bold w-16 text-center">
+                                    <option value="1">1</option>
+                                    <option value="2">2</option>
+                                    <option value="3">3</option>
+                                </select>
+                                <span class="text-gray-500 text-xs font-bold">학년</span>
+                                <select id="notice-target-class-num"
+                                    class="border border-gray-300 rounded px-2 py-1 text-sm outline-none bg-white font-bold w-16 text-center">
+                                    <option value="1">1</option>
+                                    <option value="2">2</option>
+                                    <option value="3">3</option>
+                                    <option value="4">4</option>
+                                    <option value="5">5</option>
+                                    <option value="6">6</option>
+                                    <option value="7">7</option>
+                                    <option value="8">8</option>
+                                    <option value="9">9</option>
+                                    <option value="10">10</option>
+                                    <option value="11">11</option>
+                                    <option value="12">12</option>
+                                </select>
+                                <span class="text-gray-500 text-xs font-bold">반</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -781,21 +824,26 @@
 
                     container.innerHTML = snapshot.docs.map(doc => {
                         const d = doc.data();
-                        let icon = '📢';
-                        let dateInfo = '';
 
-                        if (d.category === 'exam') icon = '🔥';
-                        if (d.category === 'performance') icon = '⚡';
-                        if (d.category === 'prep') icon = '🎒';
-                        if (d.category === 'dday' && d.targetDate) {
-                            icon = '⏳';
-                            const today = new Date();
-                            today.setHours(0, 0, 0, 0);
-                            const target = new Date(d.targetDate);
-                            target.setHours(0, 0, 0, 0);
-                            const diff = Math.ceil((target - today) / (1000 * 60 * 60 * 24));
-                            const dDayStr = diff > 0 ? `D-${diff}` : (diff === 0 ? 'D-Day' : `D+${Math.abs(diff)}`);
-                            dateInfo = `<span class="ml-2 text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold animate-pulse">${dDayStr}</span>`;
+                        // Badge Style Logic
+                        let badge = '';
+                        if (d.category === 'normal') badge = '<span class="bg-red-500 text-white px-2 py-0.5 rounded text-xs font-bold">📢 공지</span>';
+                        else if (d.category === 'exam') badge = '<span class="bg-blue-500 text-white px-2 py-0.5 rounded text-xs font-bold">🔥 정기</span>';
+                        else if (d.category === 'performance') badge = '<span class="bg-green-500 text-white px-2 py-0.5 rounded text-xs font-bold">⚡ 수행</span>';
+                        else if (d.category === 'prep') badge = '<span class="bg-yellow-500 text-white px-2 py-0.5 rounded text-xs font-bold">🎒 준비</span>';
+                        else if (d.category === 'dday') {
+                            let dDayStr = 'D-Day';
+                            if (d.targetDate) {
+                                const today = new Date();
+                                today.setHours(0, 0, 0, 0);
+                                const target = new Date(d.targetDate);
+                                target.setHours(0, 0, 0, 0);
+                                const diff = Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+                                dDayStr = diff > 0 ? `D-${diff}` : (diff === 0 ? 'D-Day' : `D+${Math.abs(diff)}`);
+                            }
+                            badge = `<span class="bg-purple-500 text-white px-2 py-0.5 rounded text-xs font-bold">⏳ ${dDayStr}</span>`;
+                        } else {
+                            badge = '<span class="bg-gray-500 text-white px-2 py-0.5 rounded text-xs font-bold">📢 알림</span>';
                         }
 
                         // Parse new lines
@@ -803,11 +851,8 @@
 
                         return `
                             <div onclick="app.openNoticeModal('${doc.id}')" class="bg-white/80 p-3 rounded-lg border border-yellow-200 hover:bg-white transition cursor-pointer shadow-sm relative group">
-                                <div class="flex justify-between items-start mb-1">
-                                    <div class="flex items-center">
-                                        <span class="text-lg mr-2">${icon}</span>
-                                        ${dateInfo}
-                                    </div>
+                                <div class="flex justify-between items-center mb-2">
+                                    ${badge}
                                     <span class="text-[10px] text-amber-800/60 font-mono">${new Date(d.createdAt.seconds * 1000).toLocaleDateString()}</span>
                                 </div>
                                 <div class="text-gray-800 text-sm font-bold leading-relaxed whitespace-pre-wrap">${content}</div>
@@ -823,16 +868,24 @@
             openNoticeModal: function (id = null) {
                 document.getElementById('notice-modal').classList.remove('hidden');
                 document.getElementById('notice-modal').classList.add('flex');
+                document.getElementById('btn-delete-notice').classList.add('hidden'); // Reset
 
                 if (id) {
                     const path = this.getCollectionPath('notices');
                     if (!path) return;
                     window.db.collection(path).doc(id).get().then(doc => {
+                        if (!doc.exists) return;
                         const d = doc.data();
                         document.getElementById('notice-id').value = id;
-                        document.getElementById('notice-category').value = d.category;
+
+                        // Set Category Radio
+                        const catRadio = document.querySelector(`input[name="notice-category"][value="${d.category}"]`);
+                        if (catRadio) catRadio.checked = true;
+
                         document.getElementById('notice-content').value = d.content;
                         document.getElementById('notice-target-date').value = d.targetDate || '';
+
+                        // Set Target Radio & Selects
                         if (d.targetType === 'class') {
                             document.getElementById('notice-class-radio').checked = true;
                             if (d.targetClass) {
@@ -845,21 +898,19 @@
                         } else {
                             document.getElementById('notice-common-radio').checked = true;
                         }
+
                         this.toggleNoticeClassSelect();
                         this.toggleDDayInput();
                         document.getElementById('btn-delete-notice').classList.remove('hidden');
                     });
                 } else {
                     document.getElementById('notice-id').value = '';
-                    document.getElementById('notice-category').value = 'normal';
+                    document.querySelector('input[name="notice-category"][value="normal"]').checked = true;
                     document.getElementById('notice-content').value = '';
                     document.getElementById('notice-target-date').value = '';
                     document.getElementById('notice-common-radio').checked = true;
-                    document.getElementById('notice-target-grade').value = '2';
-                    document.getElementById('notice-target-class-num').value = '1';
                     this.toggleNoticeClassSelect();
                     this.toggleDDayInput();
-                    document.getElementById('btn-delete-notice').classList.add('hidden');
                 }
             },
 
@@ -869,40 +920,53 @@
             },
 
             attemptCloseNotice: function (e) {
-                // If called from overlay click, e is the click event
-                if (e && e.target && e.target.id !== 'notice-modal') return;
-                const content = document.getElementById('notice-content').value.trim();
-                if (content) {
-                    if (!confirm('작성 중인 내용이 있습니다. 정말로 닫으시겠습니까?')) return;
-                }
-                this.closeNoticeModal();
+                if (e && e.target !== e.currentTarget) return; // Only close if clicking bg
+                document.getElementById('notice-modal').classList.add('hidden');
+                document.getElementById('notice-modal').classList.remove('flex');
             },
 
             toggleNoticeClassSelect: function () {
                 const isClass = document.getElementById('notice-class-radio').checked;
                 const sel = document.getElementById('notice-class-select');
-                if (isClass) sel.classList.remove('hidden');
-                else sel.classList.add('hidden');
+                if (isClass) {
+                    sel.classList.remove('hidden');
+                    sel.classList.add('flex');
+                } else {
+                    sel.classList.add('hidden');
+                    sel.classList.remove('flex');
+                }
             },
 
             toggleDDayInput: function () {
-                const cat = document.getElementById('notice-category').value;
-                if (cat === 'dday') document.getElementById('dday-input-group').classList.remove('hidden');
-                else document.getElementById('dday-input-group').classList.add('hidden');
+                const isDDay = document.querySelector('input[name="notice-category"]:checked').value === 'dday';
+                const div = document.getElementById('dday-input-group');
+                if (isDDay) div.classList.remove('hidden');
+                else div.classList.add('hidden');
             },
 
             saveNotice: async function () {
                 const id = document.getElementById('notice-id').value;
+                const category = document.querySelector('input[name="notice-category"]:checked').value;
                 const content = document.getElementById('notice-content').value;
-                if (!content) return alert("내용을 입력하세요.");
+                const targetDate = document.getElementById('notice-target-date').value;
+
+                if (!content) { alert("내용을 입력해주세요."); return; }
+                if (category === 'dday' && !targetDate) { alert("목표 날짜를 선택해주세요."); return; }
 
                 const isCommon = document.getElementById('notice-common-radio').checked;
+                let targetClass = null;
+                if (!isCommon) {
+                    const g = document.getElementById('notice-target-grade').value;
+                    const c = document.getElementById('notice-target-class-num').value;
+                    targetClass = `${g}-${c}`;
+                }
+
                 const data = {
-                    category: document.getElementById('notice-category').value,
+                    category: category,
                     content: content,
-                    targetDate: document.getElementById('notice-target-date').value,
+                    targetDate: targetDate || null,
                     targetType: isCommon ? 'common' : 'class',
-                    targetClass: isCommon ? '' : `${document.getElementById('notice-target-grade').value}-${document.getElementById('notice-target-class-num').value}`,
+                    targetClass: targetClass,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
 
@@ -910,24 +974,33 @@
                 if (!path) return;
 
                 try {
-                    if (id) await window.db.collection(path).doc(id).update(data);
-                    else {
+                    if (id) {
+                        await window.db.collection(path).doc(id).update(data);
+                    } else {
                         data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
                         await window.db.collection(path).add(data);
                     }
-                    this.closeNoticeModal();
-                } catch (e) { alert("저장 실패: " + e.message); }
+                    alert("저장되었습니다.");
+                    document.getElementById('notice-modal').classList.add('hidden');
+                } catch (e) {
+                    console.error("Save Notice Error:", e);
+                    alert("저장 실패: " + e.message);
+                }
             },
 
             deleteNotice: async function () {
                 const id = document.getElementById('notice-id').value;
-                if (!confirm("삭제하시겠습니까?")) return;
+                if (!id || !confirm("정말 삭제하시겠습니까?")) return;
+
                 const path = this.getCollectionPath('notices');
-                if (!path) return;
                 try {
                     await window.db.collection(path).doc(id).delete();
-                    this.closeNoticeModal();
-                } catch (e) { alert("삭제 실패: " + e.message); }
+                    alert("삭제되었습니다.");
+                    document.getElementById('notice-modal').classList.add('hidden');
+                } catch (e) {
+                    console.error("Delete Notice Error:", e);
+                    alert("삭제 실패");
+                }
             },
 
             // --- Detail Panel Logic ---

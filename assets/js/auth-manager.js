@@ -107,6 +107,11 @@ class AuthManager {
                 }
 
                 this.fetchAdditionalUserData(user, type);
+                // try {
+                //     firebase.analytics().setUserId(user.uid);
+                // } catch (e) {
+                //     console.warn("Analytics not supported:", e);
+                // }
                 // Now safe to dispatch, config is ready
                 document.dispatchEvent(new CustomEvent('auth-ready', { detail: user }));
             } else {

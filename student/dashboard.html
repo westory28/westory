@@ -266,33 +266,35 @@
                                         }
 
                                         container.innerHTML = notices.map(d => {
-                                            let icon = '📢';
-                                            let dateInfo = '';
-
-                                            if (d.category === 'exam') icon = '🔥';
-                                            if (d.category === 'performance') icon = '⚡';
-                                            if (d.category === 'prep') icon = '🎒';
-                                            if (d.category === 'dday' && d.targetDate) {
-                                                icon = '⏳';
-                                                const today = new Date();
-                                                today.setHours(0, 0, 0, 0);
-                                                const target = new Date(d.targetDate);
-                                                target.setHours(0, 0, 0, 0);
-                                                const diff = Math.ceil((target - today) / (1000 * 60 * 60 * 24));
-                                                const dDayStr = diff > 0 ? `D-${diff}` : (diff === 0 ? 'D-Day' : `D+${Math.abs(diff)}`);
-                                                dateInfo = `<span class="ml-2 text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold animate-pulse">${dDayStr}</span>`;
+                                            // Badge Style Logic
+                                            let badge = '';
+                                            if (d.category === 'normal') badge = '<span class="bg-red-500 text-white px-2 py-0.5 rounded text-xs font-bold">📢 공지</span>';
+                                            else if (d.category === 'exam') badge = '<span class="bg-blue-500 text-white px-2 py-0.5 rounded text-xs font-bold">🔥 정기</span>';
+                                            else if (d.category === 'performance') badge = '<span class="bg-green-500 text-white px-2 py-0.5 rounded text-xs font-bold">⚡ 수행</span>';
+                                            else if (d.category === 'prep') badge = '<span class="bg-yellow-500 text-white px-2 py-0.5 rounded text-xs font-bold">🎒 준비</span>';
+                                            else if (d.category === 'dday') {
+                                                let dDayStr = 'D-Day';
+                                                if (d.targetDate) {
+                                                    const today = new Date();
+                                                    today.setHours(0, 0, 0, 0);
+                                                    const target = new Date(d.targetDate);
+                                                    target.setHours(0, 0, 0, 0);
+                                                    const diff = Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+                                                    dDayStr = diff > 0 ? `D-${diff}` : (diff === 0 ? 'D-Day' : `D+${Math.abs(diff)}`);
+                                                }
+                                                badge = `<span class="bg-purple-500 text-white px-2 py-0.5 rounded text-xs font-bold">⏳ ${dDayStr}</span>`;
+                                            } else {
+                                                badge = '<span class="bg-gray-500 text-white px-2 py-0.5 rounded text-xs font-bold">📢 알림</span>';
                                             }
 
                                             // Parse new lines
                                             const content = d.content.replace(/\n/g, '<br>');
 
+                                            // Mobile-optimized card
                                             return `
                             <div class="bg-white/80 p-3 rounded-lg border border-yellow-200 shadow-sm relative group mb-2">
-                                <div class="flex justify-between items-start mb-1">
-                                    <div class="flex items-center">
-                                        <span class="text-lg mr-2">${icon}</span>
-                                        ${dateInfo}
-                                    </div>
+                                <div class="flex justify-between items-center mb-2">
+                                    ${badge}
                                     <span class="text-[10px] text-amber-800/60 font-mono">${new Date(d.createdAt.seconds * 1000).toLocaleDateString()}</span>
                                 </div>
                                 <div class="text-gray-800 text-sm font-bold leading-relaxed whitespace-pre-wrap">${content}</div>
