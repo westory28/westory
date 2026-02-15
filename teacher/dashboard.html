@@ -374,11 +374,31 @@
                             <span class="ml-2 text-sm font-bold text-gray-700">반 선택</span>
                         </label>
                     </div>
-                    <select id="target-class"
-                        class="w-full border border-gray-300 rounded-lg p-2.5 outline-none bg-gray-50 transition"
-                        disabled>
-                        <!-- Options populated by JS -->
-                    </select>
+                    <div class="flex gap-2">
+                        <select id="target-grade"
+                            class="w-1/3 border border-gray-300 rounded-lg p-2.5 outline-none bg-gray-50 transition font-bold text-center"
+                            disabled>
+                            <option value="1">1학년</option>
+                            <option value="2">2학년</option>
+                            <option value="3">3학년</option>
+                        </select>
+                        <select id="target-class-num"
+                            class="w-2/3 border border-gray-300 rounded-lg p-2.5 outline-none bg-gray-50 transition font-bold"
+                            disabled>
+                            <option value="1">1반</option>
+                            <option value="2">2반</option>
+                            <option value="3">3반</option>
+                            <option value="4">4반</option>
+                            <option value="5">5반</option>
+                            <option value="6">6반</option>
+                            <option value="7">7반</option>
+                            <option value="8">8반</option>
+                            <option value="9">9반</option>
+                            <option value="10">10반</option>
+                            <option value="11">11반</option>
+                            <option value="12">12반</option>
+                        </select>
+                    </div>
                 </div>
 
                 <div>
@@ -982,7 +1002,14 @@
                     if (data.targetType === 'class') {
                         document.querySelector('input[name="targetType"][value="class"]').checked = true;
                         this.toggleTargetClass(true);
-                        document.getElementById('target-class').value = data.targetClass;
+                        // Parse "2-1" -> grade=2, class=1
+                        if (data.targetClass) {
+                            const parts = data.targetClass.split('-');
+                            if (parts.length === 2) {
+                                document.getElementById('target-grade').value = parts[0];
+                                document.getElementById('target-class-num').value = parts[1];
+                            }
+                        }
                     } else {
                         document.querySelector('input[name="targetType"][value="common"]').checked = true;
                         this.toggleTargetClass(false);
@@ -999,17 +1026,15 @@
                     document.getElementById('event-desc').value = '';
                     document.querySelector('input[name="targetType"][value="common"]').checked = true;
                     this.toggleTargetClass(false);
-                    document.getElementById('target-class').value = '2-1'; // Default
+                    document.getElementById('target-grade').value = '2'; // Default
+                    document.getElementById('target-class-num').value = '1'; // Default
                     document.getElementById('btn-delete').classList.add('hidden');
                 }
 
                 this.captureFormState();
             },
 
-            // ... (rest of modal logic: captureFormState, isDirty, attemptClose, closeModal, toggleTargetClass, saveEvent, deleteEvent)
-            // Need to ensure these methods exist in the file after replacement.
-            // Since I am replacing the mid-section, I must check start/end lines carefully.
-
+            // Capture initial state for dirty checking
             captureFormState: function () {
                 this.initialFormState = {
                     title: document.getElementById('event-title').value,
@@ -1018,7 +1043,8 @@
                     type: document.getElementById('event-type').value,
                     desc: document.getElementById('event-desc').value,
                     targetType: document.querySelector('input[name="targetType"]:checked').value,
-                    targetClass: document.getElementById('target-class').value
+                    targetGrade: document.getElementById('target-grade').value,
+                    targetClassNum: document.getElementById('target-class-num').value
                 };
             },
 
@@ -1031,7 +1057,8 @@
                     type: document.getElementById('event-type').value,
                     desc: document.getElementById('event-desc').value,
                     targetType: document.querySelector('input[name="targetType"]:checked').value,
-                    targetClass: document.getElementById('target-class').value
+                    targetGrade: document.getElementById('target-grade').value,
+                    targetClassNum: document.getElementById('target-class-num').value
                 };
                 return JSON.stringify(this.initialFormState) !== JSON.stringify(current);
             },
@@ -1049,9 +1076,19 @@
             },
 
             toggleTargetClass: function (enable) {
-                const sel = document.getElementById('target-class');
-                sel.disabled = !enable;
-                if (enable) sel.classList.remove('bg-gray-50'); else sel.classList.add('bg-gray-50');
+                const gradeSel = document.getElementById('target-grade');
+                const classSel = document.getElementById('target-class-num');
+
+                gradeSel.disabled = !enable;
+                classSel.disabled = !enable;
+
+                if (enable) {
+                    gradeSel.classList.remove('bg-gray-50');
+                    classSel.classList.remove('bg-gray-50');
+                } else {
+                    gradeSel.classList.add('bg-gray-50');
+                    classSel.classList.add('bg-gray-50');
+                }
             },
 
             saveEvent: async function () {
@@ -1062,7 +1099,14 @@
 
                 const isCommon = document.querySelector('input[name="targetType"]:checked').value === 'common';
                 const targetType = isCommon ? 'common' : 'class';
-                const targetClass = isCommon ? null : document.getElementById('target-class').value;
+
+                // Construct targetClass string (e.g., "2-1")
+                let targetClass = null;
+                if (!isCommon) {
+                    const g = document.getElementById('target-grade').value;
+                    const c = document.getElementById('target-class-num').value;
+                    targetClass = `${g}-${c}`;
+                }
 
                 if (!isCommon && !targetClass) { alert("반을 선택해주세요."); return; }
 
