@@ -595,7 +595,10 @@
                         right: 'dayGridMonth,listMonth'
                     },
                     dayCellClassNames: (arg) => {
-                        const dateStr = arg.date.toISOString().split('T')[0];
+                        const y = arg.date.getFullYear();
+                        const m = String(arg.date.getMonth() + 1).padStart(2, '0');
+                        const d = String(arg.date.getDate()).padStart(2, '0');
+                        const dateStr = `${y}-${m}-${d}`;
                         const evts = this.calendar ? this.calendar.getEvents() : [];
                         const isHoliday = evts.some(e => e.startStr === dateStr && e.extendedProps && e.extendedProps.eventType === 'holiday');
                         return isHoliday ? ['fc-day-holiday'] : [];
