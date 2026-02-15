@@ -187,6 +187,11 @@
                             class="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-blue-700 shadow-sm transition">
                             <i class="fas fa-plus mr-1"></i> 추가
                         </button>
+                        <button onclick="if(confirm('2026년 공휴일을 초기화하시겠습니까? (중복 주의)')) app.populate2026Holidays()"
+                            class="bg-green-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-green-700 shadow-sm transition ml-2"
+                            title="2026 공휴일 자동 등록">
+                            <i class="fas fa-calendar-check mr-1"></i> 공휴일
+                        </button>
                     </div>
                     <!-- Search Panel (Hidden by default) -->
                     <div id="search-panel" class="hidden">
@@ -490,8 +495,8 @@
                 const cfg = window.currentConfig;
                 if (cfg) document.getElementById('dash-year-badge').innerText = `${cfg.year}학년도 ${cfg.semester}학기`;
                 this.initCalendar();
-                // this.initModal(); // Removed: No initialization needed as onclicks are in HTML
-                this.initSearch();
+                // this.initModal(); // Removed
+                // this.initSearch(); // Removed
                 this.initNotices();
                 this.initClassFilter();
             },
