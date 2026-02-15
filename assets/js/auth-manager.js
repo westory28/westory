@@ -280,7 +280,7 @@ class AuthManager {
 
         // Always render navigation (User Request: Show on all pages including dashboard)
         // Hidden on mobile via style.css (.desktop-nav class)
-        navHtml = `<nav class="desktop-nav hidden lg:flex items-center h-full ml-6">
+        navHtml = `<nav class="desktop-nav items-center h-full ml-6">
             ${menuItems.map(item => {
             const active = isActive(item.url) ? 'active' : '';
             if (item.children) {
