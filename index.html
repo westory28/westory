@@ -331,7 +331,16 @@
     </script>
 
     <script>
-        // Policy Modal
+        // Policy Modal — waits for auth state before Firestore read
+        function waitForAuth() {
+            return new Promise((resolve) => {
+                const unsubscribe = window.auth.onAuthStateChanged(user => {
+                    unsubscribe();
+                    resolve(user);
+                });
+            });
+        }
+
         async function showPolicyModal(type) {
             const modal = document.getElementById('policy-modal');
             const title = document.getElementById('policy-modal-title');
@@ -342,6 +351,12 @@
             modal.classList.remove('hidden');
 
             try {
+                // Ensure auth is ready; sign in anonymously if needed for Firestore access
+                let user = await waitForAuth();
+                if (!user) {
+                    try { await window.auth.signInAnonymously(); } catch (ae) { /* ignore */ }
+                }
+
                 const doc = await window.db.collection('site_settings').doc(type).get();
                 if (doc.exists && doc.data().text) {
                     body.innerHTML = doc.data().text;
@@ -349,7 +364,8 @@
                     body.innerHTML = '<p class="text-center text-gray-400 py-8">등록된 내용이 없습니다.</p>';
                 }
             } catch (e) {
-                body.innerHTML = '<p class="text-center text-red-400 py-8">내용을 불러오지 못했습니다.</p>';
+                console.error("Policy load error:", e);
+                body.innerHTML = '<p class="text-center text-red-400 py-8">내용을 불러오지 못했습니다.<br><span class="text-xs text-gray-400">' + e.message + '</span></p>';
             }
         }
 

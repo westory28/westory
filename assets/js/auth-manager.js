@@ -218,51 +218,88 @@ class AuthManager {
     }
 
     async showPrivacyModal(uid) {
-        // Load privacy text from Firestore only (no hardcoded fallback)
-        let privacyContent = '';
+        // Load all consent items from subcollection
+        let consentItems = [];
 
         try {
-            const doc = await window.db.collection('site_settings').doc('consent').get();
-            if (doc.exists && doc.data().text) {
-                privacyContent = doc.data().text;
-            } else {
-                privacyContent = '<p class="text-center text-gray-400 py-8">등록된 동의서가 없습니다.<br>담당 교사에게 문의하세요.</p>';
-            }
+            const snap = await window.db.collection('site_settings').doc('consent').collection('items')
+                .orderBy('order', 'asc').get();
+            snap.forEach(doc => {
+                consentItems.push({ id: doc.id, ...doc.data() });
+            });
         } catch (e) {
-            console.warn("Failed to load privacy text", e);
-            privacyContent = '<p class="text-center text-red-400 py-8">동의서를 불러오지 못했습니다.<br>네트워크를 확인하고 새로 고침하세요.</p>';
+            console.warn("Failed to load consent items", e);
+        }
+
+        // Build consent items HTML
+        let consentHtml = '';
+        if (consentItems.length === 0) {
+            consentHtml = '<p class="text-center text-gray-400 py-8">등록된 동의 항목이 없습니다.<br>담당 교사에게 문의하세요.</p>';
+        } else {
+            consentHtml = consentItems.map((item, idx) => `
+                <div class="mb-4 ${idx > 0 ? 'border-t border-gray-200 pt-4' : ''}">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="bg-purple-100 text-purple-600 font-bold text-xs px-2 py-0.5 rounded-full">${idx + 1}</span>
+                        <span class="font-bold text-gray-800 text-sm">${item.title || '제목 없음'}</span>
+                        ${item.required ? '<span class="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-semibold">필수</span>' : '<span class="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full font-semibold">선택</span>'}
+                    </div>
+                    <div class="bg-white p-3 rounded-lg text-sm text-gray-600 leading-relaxed border border-gray-100 max-h-40 overflow-y-auto mb-2">
+                        ${item.text || ''}
+                    </div>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" class="consent-check w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                            data-id="${item.id}" data-required="${item.required ? 'true' : 'false'}">
+                        <span class="text-sm font-semibold ${item.required ? 'text-gray-700' : 'text-gray-500'}">
+                            ${item.title || '위 내용'}에 동의합니다 ${item.required ? '(필수)' : '(선택)'}
+                        </span>
+                    </label>
+                </div>
+            `).join('');
         }
 
         const modalHtml = `
             <div id="global-privacy-modal" class="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-70 backdrop-blur-sm">
-                <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-8 mx-4">
-                    <div class="text-center mb-6">
+                <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-8 mx-4 max-h-[90vh] flex flex-col">
+                    <div class="text-center mb-6 shrink-0">
                         <div class="bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">🛡️</div>
                         <h2 class="text-2xl font-bold text-gray-900">개인정보 활용 동의</h2>
                         <p class="text-gray-500 text-sm mt-2">서비스 이용을 위해 최초 1회 동의가 필요합니다.</p>
                     </div>
-                    <div class="bg-gray-50 p-4 rounded-lg text-sm text-gray-600 h-60 overflow-y-auto mb-6 border border-gray-200 leading-relaxed custom-scroll">
-                        ${privacyContent}
+                    <div class="bg-gray-50 p-4 rounded-lg text-sm text-gray-600 overflow-y-auto mb-6 border border-gray-200 leading-relaxed custom-scroll flex-1 min-h-0">
+                        ${consentHtml}
                     </div>
-                    <div class="flex items-center justify-center gap-2 mb-6 cursor-pointer" onclick="document.getElementById('privacy-check').click()">
-                        <input type="checkbox" id="privacy-check" class="w-5 h-5 text-blue-600 rounded focus:ring-blue-500">
-                        <label for="privacy-check" class="font-bold text-gray-700 cursor-pointer select-none">위 내용에 동의합니다 (필수)</label>
-                    </div>
-                    <button id="btn-privacy-confirm" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition disabled:bg-gray-300 disabled:cursor-not-allowed" disabled>
+                    <button id="btn-privacy-confirm" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition disabled:bg-gray-300 disabled:cursor-not-allowed shrink-0" disabled>
                         동의하고 시작하기
                     </button>
                 </div>
             </div>
         `;
         document.body.insertAdjacentHTML('beforeend', modalHtml);
-        const checkbox = document.getElementById('privacy-check');
+
         const btn = document.getElementById('btn-privacy-confirm');
-        checkbox.addEventListener('change', (e) => { btn.disabled = !e.target.checked; });
+        const checkboxes = document.querySelectorAll('.consent-check');
+
+        const updateBtn = () => {
+            const allRequiredChecked = Array.from(checkboxes)
+                .filter(cb => cb.dataset.required === 'true')
+                .every(cb => cb.checked);
+            btn.disabled = !allRequiredChecked;
+        };
+
+        // If no consent items, allow proceeding
+        if (consentItems.length === 0) {
+            btn.disabled = false;
+        }
+
+        checkboxes.forEach(cb => cb.addEventListener('change', updateBtn));
+
         btn.addEventListener('click', async () => {
             try {
+                const agreedItems = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.dataset.id);
                 await window.db.collection('users').doc(uid).update({
                     privacyAgreed: true,
-                    privacyAgreedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    privacyAgreedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    consentAgreedItems: agreedItems
                 });
                 document.getElementById('global-privacy-modal').remove();
             } catch (e) { alert("오류 발생"); }
