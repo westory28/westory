@@ -585,6 +585,11 @@
             // --- Search Functions ---
             selectedDateEl: null, // Track selected date cell
 
+            initSearch: function () {
+                // Initialize search event listeners if needed
+                // Currently most logic is in HTML onclick attributes, but we can add global shortcuts here
+            },
+
             openSearch: function () {
                 document.getElementById('search-modal').classList.remove('hidden');
                 document.getElementById('search-modal').classList.add('flex');
