@@ -437,8 +437,50 @@ class AuthManager {
     loadFooter() {
         const existingFooter = document.querySelector('footer');
         if (existingFooter) existingFooter.remove();
-        const footerHtml = `<footer class="bg-white border-t border-stone-200 py-4 mt-auto"><div class="container mx-auto text-center"><p class="text-stone-400 text-xs font-bold font-mono">Copyright © 용신중학교 역사교사 방재석. All rights reserved.</p></div></footer>`;
+        const footerHtml = `
+            <footer class="bg-white border-t border-stone-200 py-4 mt-auto">
+                <div class="container mx-auto text-center">
+                    <div class="flex items-center justify-center gap-2 mb-2">
+                        <a href="#" onclick="window._showFooterPolicy('terms'); return false;" class="text-stone-400 hover:text-stone-600 text-xs font-medium transition">이용 약관</a>
+                        <span class="text-stone-300 text-xs">|</span>
+                        <a href="#" onclick="window._showFooterPolicy('privacy'); return false;" class="text-stone-400 hover:text-stone-600 text-xs font-medium transition">개인정보 처리 방침</a>
+                    </div>
+                    <p class="text-stone-400 text-xs font-bold font-mono">Copyright © 용신중학교 역사교사 방재석. All rights reserved.</p>
+                </div>
+            </footer>
+            <div id="footer-policy-modal" class="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm hidden" onclick="if(event.target===this)window._closeFooterPolicy()">
+                <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xl mx-4 max-h-[80vh] flex flex-col overflow-hidden">
+                    <div class="flex items-center justify-between p-5 border-b border-gray-100">
+                        <h2 id="footer-policy-title" class="text-lg font-bold text-gray-900"></h2>
+                        <button onclick="window._closeFooterPolicy()" class="text-gray-400 hover:text-gray-700 text-xl transition"><i class="fas fa-times"></i></button>
+                    </div>
+                    <div id="footer-policy-body" class="p-6 overflow-y-auto flex-1 text-sm text-gray-700 leading-relaxed"></div>
+                </div>
+            </div>`;
         document.body.insertAdjacentHTML('beforeend', footerHtml);
+
+        window._showFooterPolicy = async (type) => {
+            const modal = document.getElementById('footer-policy-modal');
+            const title = document.getElementById('footer-policy-title');
+            const body = document.getElementById('footer-policy-body');
+            title.textContent = type === 'terms' ? '이용 약관' : '개인정보 처리 방침';
+            body.innerHTML = '<p class="text-center text-gray-400 py-8"><i class="fas fa-spinner fa-spin mr-2"></i>불러오는 중...</p>';
+            modal.classList.remove('hidden');
+            try {
+                const doc = await window.db.collection('site_settings').doc(type).get();
+                if (doc.exists && doc.data().text) {
+                    body.innerHTML = doc.data().text;
+                } else {
+                    body.innerHTML = '<p class="text-center text-gray-400 py-8">등록된 내용이 없습니다.</p>';
+                }
+            } catch (e) {
+                console.error('Footer policy load error:', e);
+                body.innerHTML = '<p class="text-center text-red-400 py-8">내용을 불러오지 못했습니다.</p>';
+            }
+        };
+        window._closeFooterPolicy = () => {
+            document.getElementById('footer-policy-modal').classList.add('hidden');
+        };
     }
 
     updateUserInfo(name) {
