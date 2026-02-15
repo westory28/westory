@@ -289,7 +289,64 @@
             students: [],
             selectedIds: new Set(),
 
+            loadSchoolConfig: async function () {
+                const gradeFilter = document.getElementById('grade-filter');
+                const classFilter = document.getElementById('class-filter');
+                const targetSelect = document.getElementById('target-class-select');
+
+                try {
+                    const doc = await window.db.collection('site_settings').doc('school_config').get();
+                    if (doc.exists) {
+                        const data = doc.data();
+
+                        // Populate Grades Filter
+                        if (data.grades && data.grades.length > 0) {
+                            gradeFilter.innerHTML = '<option value="all">전학년</option>' +
+                                data.grades.map(g => `<option value="${g.value}">${g.label}</option>`).join('');
+                        }
+
+                        // Populate Classes Filter & Target Select
+                        if (data.classes && data.classes.length > 0) {
+                            const classOpts = data.classes.map(c => `<option value="${c.value}">${c.label}</option>`).join('');
+                            classFilter.innerHTML = '<option value="all">전체반</option>' + classOpts;
+                            targetSelect.innerHTML = classOpts;
+                        }
+                    } else {
+                        // Defaults
+                        this.setDefaultOptions();
+                    }
+                } catch (e) {
+                    console.warn("School config load error:", e);
+                    this.setDefaultOptions();
+                }
+            },
+
+            setDefaultOptions: function () {
+                const gradeFilter = document.getElementById('grade-filter');
+                const classFilter = document.getElementById('class-filter');
+                const targetSelect = document.getElementById('target-class-select');
+
+                // Default 1-3 Grades
+                if (gradeFilter.options.length <= 1) {
+                    gradeFilter.innerHTML = `
+                        <option value="all">전학년</option>
+                        <option value="1">1학년</option>
+                        <option value="2">2학년</option>
+                        <option value="3">3학년</option>
+                    `;
+                }
+
+                // Default 1-12 Classes
+                if (classFilter.options.length <= 1) {
+                    let html = '';
+                    for (let i = 1; i <= 12; i++) { html += `<option value="${i}">${i}반</option>`; }
+                    classFilter.innerHTML = '<option value="all">전체반</option>' + html;
+                    targetSelect.innerHTML = html;
+                }
+            },
+
             init: function () {
+                this.loadSchoolConfig();
                 window.getCollection('users').get().then(snap => {
                     this.students = [];
                     snap.forEach(doc => {

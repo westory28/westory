@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>학교급·학년·학급 관리 - Westory Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <script src="../assets/js/firebase-config.js"></script>
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <script src="../assets/js/auth-manager.js"></script>
+
+    <style>
+        .setting-sidebar {
+            width: 250px;
+            background-color: white;
+            border-right: 1px solid #e5e7eb;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-item {
+            padding: 1rem 1.5rem;
+            color: #4b5563;
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-left: 4px solid transparent;
+            display: flex;
+            align-items: center;
+            text-decoration: none;
+        }
+
+        .sidebar-item:hover {
+            background-color: #f9fafb;
+            color: #1f2937;
+        }
+
+        .sidebar-item.active {
+            background-color: #eff6ff;
+            color: #2563eb;
+            border-left-color: #2563eb;
+        }
+
+        .sidebar-item i {
+            width: 24px;
+            text-align: center;
+            margin-right: 8px;
+        }
+
+        .content-area {
+            flex: 1;
+            padding: 2rem;
+            overflow-y: auto;
+            background-color: #f8fafc;
+        }
+
+        .radio-card {
+            cursor: pointer;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 1.25rem;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .radio-card:hover {
+            border-color: #93c5fd;
+        }
+
+        .radio-card.selected {
+            border-color: #2563eb;
+            background-color: #eff6ff;
+        }
+
+        .editable-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .editable-table th {
+            background: #f9fafb;
+            padding: 0.75rem 1rem;
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: #6b7280;
+            text-align: left;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        .editable-table td {
+            padding: 0.5rem 1rem;
+            border-bottom: 1px solid #f3f4f6;
+            vertical-align: middle;
+        }
+
+        .editable-table input {
+            width: 100%;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.875rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .editable-table input:focus {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+        }
+
+        .editable-table input[readonly] {
+            background: #f9fafb;
+            color: #6b7280;
+            cursor: default;
+        }
+
+        @media (max-width: 1024px) {
+            .setting-sidebar {
+                width: 100%;
+                border-right: none;
+                border-bottom: 1px solid #e5e7eb;
+                flex-direction: row;
+                overflow-x: auto;
+                padding-bottom: 0;
+            }
+
+            .setting-sidebar .p-6 {
+                padding: 1rem;
+            }
+
+            .setting-sidebar h2 {
+                font-size: 1rem;
+            }
+
+            .sidebar-item {
+                border-left: none;
+                border-bottom: 4px solid transparent;
+                padding: 1rem;
+                white-space: nowrap;
+            }
+
+            .sidebar-item.active {
+                border-left-color: transparent;
+                border-bottom-color: #2563eb;
+            }
+
+            .content-area {
+                padding: 1.5rem;
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50 h-screen flex flex-col overflow-hidden">
+    <!-- Header injected by AuthManager -->
+
+    <main class="flex flex-col lg:flex-row flex-1 overflow-hidden">
+        <!-- Sidebar -->
+        <aside class="setting-sidebar shrink-0">
+            <div class="p-6 border-b border-gray-100 lg:border-b-0 lg:border-gray-100">
+                <h2 class="text-xl font-extrabold text-gray-800 flex items-center">
+                    <i class="fas fa-cog text-gray-400 mr-2"></i> 관리자
+                </h2>
+            </div>
+            <nav class="flex lg:flex-col flex-1 py-0 lg:py-4 overflow-x-auto">
+                <a href="settings.html" class="sidebar-item">
+                    <i class="fas fa-sliders-h"></i>기본 환경 설정
+                </a>
+                <a href="settings_school.html" class="sidebar-item active">
+                    <i class="fas fa-school"></i>학교급·학년·학급
+                </a>
+                <a href="settings_privacy.html" class="sidebar-item">
+                    <i class="fas fa-user-shield"></i>개인정보 동의 관리
+                </a>
+            </nav>
+        </aside>
+
+        <!-- Content -->
+        <div class="content-area">
+            <div class="max-w-3xl space-y-8">
+
+                <!-- Section 1: School Level -->
+                <div class="bg-white rounded-xl border border-gray-200 p-6 lg:p-8 shadow-sm">
+                    <div class="border-b border-gray-100 pb-4 mb-6">
+                        <h3 class="text-lg font-bold text-gray-900">
+                            <i class="fas fa-school text-blue-500 mr-2"></i>학교급 설정
+                        </h3>
+                        <p class="text-sm text-gray-500 mt-1">운영 중인 학교급을 선택합니다.</p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="radio-card" onclick="app.selectSchoolLevel('middle')" id="radio-middle">
+                            <div
+                                class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-lg">
+                                🏫
+                            </div>
+                            <div>
+                                <p class="font-bold text-gray-800">중학교</p>
+                                <p class="text-xs text-gray-500">Middle School</p>
+                            </div>
+                        </div>
+                        <div class="radio-card" onclick="app.selectSchoolLevel('high')" id="radio-high">
+                            <div
+                                class="w-10 h-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-lg">
+                                🎓
+                            </div>
+                            <div>
+                                <p class="font-bold text-gray-800">고등학교</p>
+                                <p class="text-xs text-gray-500">High School</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 2: Grades -->
+                <div class="bg-white rounded-xl border border-gray-200 p-6 lg:p-8 shadow-sm">
+                    <div class="border-b border-gray-100 pb-4 mb-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h3 class="text-lg font-bold text-gray-900">
+                                    <i class="fas fa-layer-group text-green-500 mr-2"></i>학년 관리
+                                </h3>
+                                <p class="text-sm text-gray-500 mt-1">학년 목록과 표시 명칭을 관리합니다.</p>
+                            </div>
+                            <button onclick="app.addGrade()"
+                                class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow transition transform active:scale-95 text-sm flex items-center gap-1">
+                                <i class="fas fa-plus"></i> 학년 추가
+                            </button>
+                        </div>
+                    </div>
+                    <div class="bg-blue-50 p-3 rounded-lg text-sm text-blue-700 border border-blue-100 mb-4">
+                        <i class="fas fa-info-circle mr-1"></i> '표시 명칭'을 수정하면 학생 가입 화면과 명단에서 해당 명칭으로 표시됩니다.
+                    </div>
+                    <div class="rounded-xl border border-gray-200 overflow-hidden">
+                        <table class="editable-table">
+                            <thead>
+                                <tr>
+                                    <th class="w-16 text-center">#</th>
+                                    <th class="w-24">값</th>
+                                    <th>표시 명칭</th>
+                                    <th class="w-16 text-center">삭제</th>
+                                </tr>
+                            </thead>
+                            <tbody id="grades-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Section 3: Classes -->
+                <div class="bg-white rounded-xl border border-gray-200 p-6 lg:p-8 shadow-sm">
+                    <div class="border-b border-gray-100 pb-4 mb-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h3 class="text-lg font-bold text-gray-900">
+                                    <i class="fas fa-users text-orange-500 mr-2"></i>학급(반) 관리
+                                </h3>
+                                <p class="text-sm text-gray-500 mt-1">학급 목록과 표시 명칭을 관리합니다.</p>
+                            </div>
+                            <button onclick="app.addClass()"
+                                class="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-lg shadow transition transform active:scale-95 text-sm flex items-center gap-1">
+                                <i class="fas fa-plus"></i> 학급 추가
+                            </button>
+                        </div>
+                    </div>
+                    <div class="bg-blue-50 p-3 rounded-lg text-sm text-blue-700 border border-blue-100 mb-4">
+                        <i class="fas fa-info-circle mr-1"></i> '표시 명칭'을 수정하면 학생 가입 화면과 명단에서 해당 명칭으로 표시됩니다.
+                    </div>
+                    <div class="rounded-xl border border-gray-200 overflow-hidden">
+                        <table class="editable-table">
+                            <thead>
+                                <tr>
+                                    <th class="w-16 text-center">#</th>
+                                    <th class="w-24">값</th>
+                                    <th>표시 명칭</th>
+                                    <th class="w-16 text-center">삭제</th>
+                                </tr>
+                            </thead>
+                            <tbody id="classes-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Save Button -->
+                <div class="text-right pb-8">
+                    <button onclick="app.save()"
+                        class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-10 rounded-xl shadow-lg transition transform active:scale-95 text-base">
+                        <i class="fas fa-save mr-2"></i>전체 저장
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <script>
+        window.AuthManager.init('teacher');
+
+        const app = {
+            schoolLevel: 'middle',
+            grades: [],
+            classes: [],
+
+            init: function () {
+                document.addEventListener('auth-ready', () => {
+                    this.loadConfig();
+                });
+            },
+
+            loadConfig: async function () {
+                try {
+                    const doc = await window.db.collection('site_settings').doc('school_config').get();
+                    if (doc.exists) {
+                        const data = doc.data();
+                        this.schoolLevel = data.schoolLevel || 'middle';
+                        this.grades = data.grades || this.defaultGrades();
+                        this.classes = data.classes || this.defaultClasses();
+                    } else {
+                        // First time: set defaults
+                        this.schoolLevel = 'middle';
+                        this.grades = this.defaultGrades();
+                        this.classes = this.defaultClasses();
+                    }
+                } catch (e) {
+                    console.error('Failed to load school config:', e);
+                    this.schoolLevel = 'middle';
+                    this.grades = this.defaultGrades();
+                    this.classes = this.defaultClasses();
+                }
+                this.render();
+            },
+
+            defaultGrades: function () {
+                return [
+                    { value: '1', label: '1학년' },
+                    { value: '2', label: '2학년' },
+                    { value: '3', label: '3학년' }
+                ];
+            },
+
+            defaultClasses: function () {
+                const arr = [];
+                for (let i = 1; i <= 15; i++) {
+                    arr.push({ value: String(i), label: i + '반' });
+                }
+                return arr;
+            },
+
+            render: function () {
+                this.renderSchoolLevel();
+                this.renderGrades();
+                this.renderClasses();
+            },
+
+            // --- School Level ---
+            selectSchoolLevel: function (level) {
+                this.schoolLevel = level;
+                this.renderSchoolLevel();
+            },
+
+            renderSchoolLevel: function () {
+                document.getElementById('radio-middle').classList.toggle('selected', this.schoolLevel === 'middle');
+                document.getElementById('radio-high').classList.toggle('selected', this.schoolLevel === 'high');
+            },
+
+            // --- Grades ---
+            renderGrades: function () {
+                const tbody = document.getElementById('grades-body');
+                tbody.innerHTML = this.grades.map((g, i) => `
+                    <tr>
+                        <td class="text-center text-sm font-bold text-gray-400">${i + 1}</td>
+                        <td><input type="text" value="${this.esc(g.value)}" readonly class="text-center font-mono"></td>
+                        <td><input type="text" value="${this.esc(g.label)}" onchange="app.grades[${i}].label = this.value" placeholder="표시 명칭"></td>
+                        <td class="text-center">
+                            <button onclick="app.removeGrade(${i})" class="text-red-400 hover:text-red-600 transition" title="삭제">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+            },
+
+            addGrade: function () {
+                const nextVal = String(this.grades.length + 1);
+                this.grades.push({ value: nextVal, label: nextVal + '학년' });
+                this.renderGrades();
+            },
+
+            removeGrade: function (idx) {
+                if (this.grades.length <= 1) { alert('최소 1개의 학년이 필요합니다.'); return; }
+                if (!confirm(`'${this.grades[idx].label}'을(를) 삭제하시겠습니까?`)) return;
+                this.grades.splice(idx, 1);
+                this.renderGrades();
+            },
+
+            // --- Classes ---
+            renderClasses: function () {
+                const tbody = document.getElementById('classes-body');
+                tbody.innerHTML = this.classes.map((c, i) => `
+                    <tr>
+                        <td class="text-center text-sm font-bold text-gray-400">${i + 1}</td>
+                        <td><input type="text" value="${this.esc(c.value)}" readonly class="text-center font-mono"></td>
+                        <td><input type="text" value="${this.esc(c.label)}" onchange="app.classes[${i}].label = this.value" placeholder="표시 명칭"></td>
+                        <td class="text-center">
+                            <button onclick="app.removeClass(${i})" class="text-red-400 hover:text-red-600 transition" title="삭제">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+            },
+
+            addClass: function () {
+                const nextVal = String(this.classes.length + 1);
+                this.classes.push({ value: nextVal, label: nextVal + '반' });
+                this.renderClasses();
+            },
+
+            removeClass: function (idx) {
+                if (this.classes.length <= 1) { alert('최소 1개의 학급이 필요합니다.'); return; }
+                if (!confirm(`'${this.classes[idx].label}'을(를) 삭제하시겠습니까?`)) return;
+                this.classes.splice(idx, 1);
+                this.renderClasses();
+            },
+
+            // --- Save ---
+            save: async function () {
+                // Collect latest label values from inputs
+                document.querySelectorAll('#grades-body tr').forEach((tr, i) => {
+                    const inputs = tr.querySelectorAll('input');
+                    this.grades[i].label = inputs[1].value.trim() || this.grades[i].value + '학년';
+                });
+                document.querySelectorAll('#classes-body tr').forEach((tr, i) => {
+                    const inputs = tr.querySelectorAll('input');
+                    this.classes[i].label = inputs[1].value.trim() || this.classes[i].value + '반';
+                });
+
+                try {
+                    await window.db.collection('site_settings').doc('school_config').set({
+                        schoolLevel: this.schoolLevel,
+                        grades: this.grades,
+                        classes: this.classes,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    alert('학교급·학년·학급 설정이 저장되었습니다.');
+                } catch (e) {
+                    alert('저장 실패: ' + e.message);
+                }
+            },
+
+            esc: function (str) {
+                const div = document.createElement('div');
+                div.textContent = str;
+                return div.innerHTML;
+            }
+        };
+
+        app.init();
+    </script>
+</body>
+
+</html>

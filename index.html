@@ -328,10 +328,76 @@
                     alert("가입 실패: " + error.message);
                 });
         }
-    </script>
 
-    <script>
-        // Policy Modal — waits for auth state before Firestore read
+        // --- Load School Config (Grades/Classes) ---
+        async function loadSchoolConfig() {
+            const gradeSelect = document.getElementById('reg-grade');
+            const classSelect = document.getElementById('reg-class');
+
+            try {
+                // Ensure auth for Firestore access
+                let user = await waitForAuth();
+                if (!user) { try { await window.auth.signInAnonymously(); } catch (ae) { } }
+
+                const doc = await window.db.collection('site_settings').doc('school_config').get();
+                if (doc.exists) {
+                    const data = doc.data();
+
+                    // Populate Grades
+                    if (data.grades && data.grades.length > 0) {
+                        gradeSelect.innerHTML = data.grades.map(g => `<option value="${g.value}">${g.label}</option>`).join('');
+                    }
+
+                    // Populate Classes
+                    if (data.classes && data.classes.length > 0) {
+                        classSelect.innerHTML = '<option value="">선택</option>' +
+                            data.classes.map(c => `<option value="${c.value}">${c.label}</option>`).join('');
+                    } else {
+                        // Default 1-15 if config exists but classes empty? Or keep default?
+                        // Let's stick to config if exists.
+                    }
+                } else {
+                    // No config found, generate defaults
+                    generateDefaultOptions();
+                }
+            } catch (e) {
+                console.warn("Failed to load school config, using defaults", e);
+                generateDefaultOptions();
+            }
+        }
+
+        function generateDefaultOptions() {
+            const gradeSelect = document.getElementById('reg-grade');
+            const classSelect = document.getElementById('reg-class');
+
+            // Default Grades 1-3
+            if (gradeSelect.options.length === 0) {
+                gradeSelect.innerHTML = `
+                    <option value="1">1학년</option>
+                    <option value="2">2학년</option>
+                    <option value="3">3학년</option>
+                `;
+            }
+
+            // Default Classes 1-12
+            if (classSelect.options.length <= 1) { // 1 because of '선택'
+                let html = '<option value="">선택</option>';
+                for (let i = 1; i <= 12; i++) {
+                    html += `<option value="${i}">${i}반</option>`;
+                }
+                classSelect.innerHTML = html;
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            // Existing init logic from previous script, if any. 
+            // Actually, the previous script didn't have a DOMContentLoaded listener, 
+            // it just ran. But let's keep it safe.
+            loadSchoolConfig();
+        });
+
+        // --- Policy Modal Logic ---
         function waitForAuth() {
             return new Promise((resolve) => {
                 const unsubscribe = window.auth.onAuthStateChanged(user => {
@@ -351,11 +417,8 @@
             modal.classList.remove('hidden');
 
             try {
-                // Ensure auth is ready; sign in anonymously if needed for Firestore access
                 let user = await waitForAuth();
-                if (!user) {
-                    try { await window.auth.signInAnonymously(); } catch (ae) { /* ignore */ }
-                }
+                if (!user) { try { await window.auth.signInAnonymously(); } catch (ae) { } }
 
                 const doc = await window.db.collection('site_settings').doc(type).get();
                 if (doc.exists && doc.data().text) {

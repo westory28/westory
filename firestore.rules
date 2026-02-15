@@ -1,0 +1,90 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // [1] 선생님 인증 함수
+    function isTeacher() {
+      return request.auth.token.email == "westoria28@gmail.com"; 
+    }
+
+    // [2] 사용자 정보 (users)
+    match /users/{userId} {
+      allow get: if request.auth != null && (request.auth.uid == userId || isTeacher());
+      allow list: if isTeacher();
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && (request.auth.uid == userId || isTeacher());
+    }
+
+    // [3] 사이트 설정 (site_settings)
+    match /site_settings/{docId} {
+      // terms, privacy, school_config는 로그인 페이지에서 비인증 사용자도 읽을 수 있어야 함
+      allow read: if docId in ['terms', 'privacy', 'school_config'] || request.auth != null;
+      allow write: if isTeacher();
+
+      // 개인정보 활용 동의서 항목 (consent > items 서브컬렉션)
+      match /items/{itemId} {
+        allow read: if request.auth != null;
+        allow write: if isTeacher();
+      }
+    }
+
+    // [4] 메타데이터 (metadata)
+    match /metadata/{docId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+
+    // [5] ★ 계층형 데이터 구조 (학년도/학기) 규칙 ★
+    match /years/{year}/semesters/{semester} {
+      
+      // 학사 일정 (calendar) - ★ 추가됨
+      match /calendar/{docId} {
+        allow read: if request.auth != null;
+        allow write: if isTeacher();
+      }
+
+      // 공지사항 (notices) - ★ 추가됨
+      match /notices/{docId} {
+        allow read: if request.auth != null;
+        allow write: if isTeacher();
+      }
+
+      // 단원 목차 (curriculum)
+      match /curriculum/{docId} {
+        allow read: if request.auth != null;
+        allow write: if isTeacher();
+      }
+      
+      // 수업 자료 (lessons)
+      match /lessons/{docId} {
+        allow read: if request.auth != null;
+        allow write: if isTeacher();
+      }
+      
+      // 문제 은행 (quiz_questions)
+      match /quiz_questions/{docId} {
+        allow read: if request.auth != null;
+        allow write: if isTeacher();
+      }
+      
+      // 성적 산출 기준 (grading_plans)
+      match /grading_plans/{docId} {
+        allow read: if request.auth != null;
+        allow write: if isTeacher();
+      }
+      
+      // 시험 설정 (exam_config)
+      match /exam_config/{docId} {
+        allow read: if request.auth != null;
+        allow write: if isTeacher();
+      }
+
+      // 퀴즈 결과 (quiz_results)
+      match /quiz_results/{resultId} {
+        allow read: if request.auth != null && (resource.data.uid == request.auth.uid || isTeacher());
+        allow create: if request.auth != null;
+        allow update, delete: if isTeacher();
+      }
+    }
+  }
+}
