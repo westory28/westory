@@ -119,6 +119,22 @@
             }
         }
 
+        /* Mobile: Allow full page scroll (desktop layout untouched) */
+        @media (max-width: 1024px) {
+            body.h-screen {
+                height: auto !important;
+            }
+
+            main {
+                overflow: visible !important;
+                height: auto !important;
+            }
+
+            .md\:h-\[calc\(100vh-140px\)\] {
+                height: auto !important;
+            }
+        }
+
         /* Selected Date Cell Highlight */
         .fc-day-selected {
             background-color: #f3f4f6 !important;

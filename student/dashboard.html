@@ -129,6 +129,28 @@
                 margin-bottom: 0.5rem !important;
             }
         }
+
+        /* Mobile: Separate containers clearly */
+        @media (max-width: 1024px) {
+            .dashboard-container {
+                overflow: visible !important;
+                height: auto !important;
+            }
+
+            .md\:h-\[calc\(100vh-140px\)\] {
+                height: auto !important;
+            }
+
+            /* Each container gets explicit spacing and borders */
+            .order-1,
+            .order-2,
+            .order-3 {
+                min-height: 280px;
+                margin-bottom: 8px;
+                border-radius: 12px;
+                overflow: hidden;
+            }
+        }
     </style>
 </head>
 
