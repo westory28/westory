@@ -127,10 +127,33 @@
             font-size: 0.75rem;
         }
 
-        /* Modal Overlay */
         .modal-overlay {
             background: rgba(0, 0, 0, 0.5);
             backdrop-filter: blur(2px);
+        }
+
+        @media (max-width: 1024px) {
+            .footer-links {
+                bottom: 20px;
+                width: 100%;
+                justify-content: center;
+                gap: 12px;
+            }
+
+            .teacher-btn-area {
+                bottom: 60px;
+                right: auto;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 100%;
+                display: flex;
+                justify-content: center;
+            }
+
+            .teacher-link {
+                background: rgba(255, 255, 255, 0.5);
+                /* slight background for visibility */
+            }
         }
     </style>
 </head>
