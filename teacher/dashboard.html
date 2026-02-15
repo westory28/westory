@@ -965,7 +965,8 @@
                     // Extract YYYY-MM-DD for simpler lex comparison
                     const startYMD = info.startStr.split('T')[0];
                     const endYMD = info.endStr.split('T')[0];
-                    console.log(`[Calendar] Fetching from: ${path}, Range: ${startYMD} ~ ${endYMD}`);
+                    console.log(`[Calendar] 1. Fetch Request Range: ${startYMD} ~ ${endYMD}`);
+                    console.log(`[Calendar] 2. Collection Path: ${path}`);
 
                     const snapshot = await window.db.collection(path)
                         .where('start', '>=', startYMD)
@@ -975,7 +976,13 @@
                         // But let's just use the string.
                         .get();
 
-                    console.log(`[Calendar] Fetched ${snapshot.size} events.`);
+                    console.log(`[Calendar] 3. Snapshot Size: ${snapshot.size}`);
+
+                    if (snapshot.size > 0) {
+                        snapshot.docs.forEach(d => console.log(' -> Found Event:', d.data()));
+                    } else {
+                        console.log(' -> No events found in this range/path.');
+                    }
 
                     const events = [];
                     const filter = document.getElementById('view-filter').value;

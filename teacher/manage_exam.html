@@ -556,7 +556,17 @@
             }
         };
 
-        document.addEventListener('auth-ready', () => app.init());
+        document.addEventListener('auth-ready', () => {
+            app.init();
+
+            // Update Header Badge
+            const cfg = window.currentConfig;
+            const badge = document.getElementById('dash-year-badge');
+            if (badge && cfg) {
+                badge.className = "bg-blue-100 text-blue-700 font-bold px-3 py-1 rounded-lg text-sm border border-blue-200 ml-2";
+                badge.innerText = `${cfg.year}학년도 ${cfg.semester}학기`;
+            }
+        });
     </script>
 </body>
 
