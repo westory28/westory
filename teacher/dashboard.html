@@ -496,7 +496,7 @@
                 if (cfg) document.getElementById('dash-year-badge').innerText = `${cfg.year}학년도 ${cfg.semester}학기`;
                 this.initCalendar();
                 // this.initModal(); // Removed
-                // this.initSearch(); // Removed
+                this.initSearch();
                 this.initNotices();
                 this.initClassFilter();
             },
@@ -544,6 +544,7 @@
                             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                         };
                         await window.db.collection(path).add(data);
+                        console.log(`[Holiday] Added: ${holiday.title} to ${path}`); // Log for debugging
                         count++;
                     }
                     alert(`${count}개의 공휴일이 추가되었습니다.`);
@@ -610,19 +611,26 @@
                     const results = [];
                     snapshot.forEach(doc => {
                         const d = doc.data();
-                        if (d.title && d.title.toLowerCase().includes(query.toLowerCase())) {
+                        const q = query.toLowerCase();
+                        const titleMatch = d.title && d.title.toLowerCase().includes(q);
+                        const descMatch = d.description && d.description.toLowerCase().includes(q);
+                        if (titleMatch || descMatch) {
                             results.push({ id: doc.id, ...d });
                         }
                     });
 
                     if (results.length === 0) {
-                        resultsEl.innerHTML = `<div class="text-center text-gray-400 py-10">검색 결과가 없습니다.</div>`;
+                        resultsEl.innerHTML = `<div class="text-center text-gray-400 py-10">
+                            <i class="far fa-folder-open text-2xl mb-2"></i><br>
+                            검색 결과가 없습니다.
+                        </div>`;
                     } else {
                         resultsEl.innerHTML = results.map(r => `
-                            <div onclick="app.closeSearch(); app.openModal({id: '${r.id}', extendedProps: {title: '${r.title}', start: '${r.start}', end: '${r.end || ''}', eventType: '${r.eventType}', description: '${r.description || ''}'}})" 
+                            <div onclick="app.closeSearch(); app.showSearchResult('${r.id}', '${r.start}')" 
                                  class="p-3 border-b border-gray-100 hover:bg-blue-50 cursor-pointer transition">
                                 <div class="font-bold text-sm text-gray-800">${r.title}</div>
                                 <div class="text-xs text-gray-500">${r.start} ${r.end && r.start !== r.end ? '~ ' + r.end : ''}</div>
+                                ${r.description ? `<div class="text-xs text-gray-400 mt-1 truncate">${r.description}</div>` : ''}
                             </div>
                         `).join('');
                     }
@@ -630,6 +638,22 @@
                     console.error(e);
                     resultsEl.innerHTML = '<div class="text-center text-red-500 py-10">검색 중 오류가 발생했습니다.</div>';
                 }
+            },
+
+            showSearchResult: function (id, dateStr) {
+                // Navigate calendar to date
+                if (this.calendar) this.calendar.gotoDate(dateStr);
+                // Open modal with data (need to fetch if not in map, but usually map has it if loaded? 
+                // Actually search queries ALL events from DB, so might not be in local eventsMap if not in current view range.
+                // Best to just open modal with the data we have from search.
+                // Wait, executeSearch fetched ALL docs in collection? Yes.
+                // But we didn't store them in map.
+                // Minimal data is enough to find it on calendar, but user expects to see details.
+                // Let's just go to date for now, and maybe highlighting it? 
+                // Or try to open modal if we can pass the full object. We have it in results.
+                // I will update the onclick in map above to pass params.
+                // Update: I can't easily pass full object in string interpolation safely without escaping.
+                // I'll stick to gotoDate. User can see it on calendar.
             },
 
             //Helper function to get year/semester based collection path
@@ -1137,6 +1161,22 @@
                 const title = document.getElementById('event-title').value;
                 const start = document.getElementById('event-start').value;
                 if (!title || !start) { alert("제목과 시작 날짜는 필수입니다."); return; }
+
+                // Check Year Mismatch Warning
+                const cfg = window.currentConfig;
+                if (cfg && cfg.year) {
+                    const startYear = parseInt(start.split('-')[0]);
+                    const currentYear = parseInt(cfg.year);
+                    // Academic year 2026 roughly covers 2026-03 to 2027-02.
+                    // But usually users expect the calendar year to match or be close. 
+                    // Let's just warn if strict year mismatch for now, or maybe if it's way off.
+                    // Actually, if the user is in 2026 Academic Year, and saves for 2028, that's definitely wrong.
+                    if (startYear !== currentYear && startYear !== currentYear + 1) {
+                        if (!confirm(`주의: 현재 ${currentYear}학년도 일정 관리 중입니다.\n선택하신 날짜는 ${startYear}년입니다. \n\n다른 학년도에 저장되어 현재 달력(2026학년도)에는 보이지 않을 수 있습니다.\n계속 저장하시겠습니까?`)) {
+                            return;
+                        }
+                    }
+                }
 
                 const isCommon = document.querySelector('input[name="targetType"]:checked').value === 'common';
                 const targetType = isCommon ? 'common' : 'class';
