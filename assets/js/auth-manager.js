@@ -222,7 +222,7 @@ class AuthManager {
         let privacyContent = '';
 
         try {
-            const doc = await window.db.collection('site_settings').doc('privacy').get();
+            const doc = await window.db.collection('site_settings').doc('consent').get();
             if (doc.exists && doc.data().text) {
                 privacyContent = doc.data().text;
             } else {

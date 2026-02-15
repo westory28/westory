@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -14,48 +15,167 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-analytics-compat.js"></script>
     <!-- Config -->
     <script src="assets/js/firebase-config.js"></script>
-    
+
     <style>
-        body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; min-height: 100vh; position: relative; }
-        .main-container { height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; }
-        .logo { font-size: 4.5rem; font-weight: 900; margin-bottom: 10px; letter-spacing: -2px; }
-        .we { color: #2563eb; } .story { color: #f59e0b; }
-        .subtitle { font-size: 1.5rem; color: #6b7280; margin-bottom: 60px; font-weight: 500; }
-        
-        .login-btn { 
-            background: #fff; border: 1px solid #e5e7eb; padding: 16px 40px; border-radius: 50px; 
-            font-size: 1.1rem; font-weight: 700; color: #374151; cursor: pointer; display: flex; align-items: center; gap: 14px; 
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); transition: all 0.2s;
+        body {
+            font-family: 'Pretendard', sans-serif;
+            background-color: #f8f9fa;
+            min-height: 100vh;
+            position: relative;
         }
-        .login-btn:hover { background: #f9fafb; transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
-        
-        .teacher-btn-area { position: absolute; bottom: 30px; right: 30px; }
-        .teacher-link { 
-            color: #9ca3af; font-size: 0.85rem; font-weight: 600; text-decoration: none; 
-            padding: 8px 16px; border: 1px solid transparent; border-radius: 8px; transition: all 0.2s;
+
+        .main-container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
         }
-        .teacher-link:hover { color: #4b5563; background-color: #e5e7eb; }
+
+        .logo {
+            font-size: 4.5rem;
+            font-weight: 900;
+            margin-bottom: 10px;
+            letter-spacing: -2px;
+        }
+
+        .we {
+            color: #2563eb;
+        }
+
+        .story {
+            color: #f59e0b;
+        }
+
+        .subtitle {
+            font-size: 1.5rem;
+            color: #6b7280;
+            margin-bottom: 60px;
+            font-weight: 500;
+        }
+
+        .login-btn {
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            padding: 16px 40px;
+            border-radius: 50px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #374151;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            transition: all 0.2s;
+        }
+
+        .login-btn:hover {
+            background: #f9fafb;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        .teacher-btn-area {
+            position: absolute;
+            bottom: 30px;
+            right: 30px;
+        }
+
+        .teacher-link {
+            color: #9ca3af;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-decoration: none;
+            padding: 8px 16px;
+            border: 1px solid transparent;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .teacher-link:hover {
+            color: #4b5563;
+            background-color: #e5e7eb;
+        }
+
+        .footer-links {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .footer-links a {
+            color: #9ca3af;
+            font-size: 0.8rem;
+            font-weight: 500;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .footer-links a:hover {
+            color: #4b5563;
+            text-decoration: underline;
+        }
+
+        .footer-links .divider {
+            color: #d1d5db;
+            font-size: 0.75rem;
+        }
 
         /* Modal Overlay */
-        .modal-overlay { background: rgba(0,0,0,0.5); backdrop-filter: blur(2px); }
+        .modal-overlay {
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(2px);
+        }
     </style>
 </head>
+
 <body>
     <div class="main-container">
         <div class="animate-bounce mb-4 text-4xl">📚</div>
         <div class="logo"><span class="we">We</span><span class="story">story</span></div>
         <div class="subtitle">우리가 써 내려가는 이야기</div>
-        
+
         <button class="login-btn" onclick="handleGoogleLogin('student')">
             <img src="https://fonts.gstatic.com/s/i/productlogos/googleg/v6/24px.svg" width="24" alt="G">
             Google 계정으로 시작하기
         </button>
     </div>
 
+    <div class="footer-links">
+        <a href="#" onclick="showPolicyModal('terms'); return false;">이용 약관</a>
+        <span class="divider">|</span>
+        <a href="#" onclick="showPolicyModal('privacy'); return false;">개인정보 처리 방침</a>
+    </div>
+
     <div class="teacher-btn-area">
         <button onclick="handleGoogleLogin('teacher')" class="teacher-link">
             <i class="fas fa-chalkboard-teacher mr-1"></i> 선생님 로그인 (관리자)
         </button>
+    </div>
+
+    <!-- Policy Modal -->
+    <div id="policy-modal" class="fixed inset-0 z-50 flex items-center justify-center hidden">
+        <div class="modal-overlay absolute inset-0" onclick="closePolicyModal()"></div>
+        <div class="bg-white rounded-2xl shadow-2xl z-10 w-full max-w-lg p-6 mx-4 transform transition-all">
+            <div class="flex items-center justify-between mb-4">
+                <h2 id="policy-modal-title" class="text-xl font-bold text-gray-800"></h2>
+                <button onclick="closePolicyModal()" class="text-gray-400 hover:text-gray-700 transition text-xl">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div id="policy-modal-body"
+                class="text-sm text-gray-600 leading-relaxed h-[400px] overflow-y-auto border border-gray-100 rounded-lg p-4 bg-gray-50">
+                <p class="text-center text-gray-400 py-8"><i class="fas fa-spinner fa-spin mr-2"></i>불러오는 중...</p>
+            </div>
+            <button onclick="closePolicyModal()"
+                class="w-full mt-4 bg-gray-800 hover:bg-gray-900 text-white font-bold py-3 rounded-xl transition">닫기</button>
+        </div>
     </div>
 
     <!-- Registration Modal -->
@@ -66,17 +186,20 @@
                 <h2 class="text-2xl font-bold text-gray-800">👋 반가워요!</h2>
                 <p class="text-gray-500 text-sm mt-1">본인 확인을 위해 정보를 정확히 입력해주세요.</p>
             </div>
-            
+
             <div class="space-y-5">
                 <div>
                     <label class="block text-xs font-bold text-gray-500 mb-1">이메일</label>
-                    <input type="text" id="reg-email" class="w-full bg-gray-100 border border-gray-200 rounded-lg p-3 text-gray-500 text-sm font-mono" readonly>
+                    <input type="text" id="reg-email"
+                        class="w-full bg-gray-100 border border-gray-200 rounded-lg p-3 text-gray-500 text-sm font-mono"
+                        readonly>
                 </div>
-                
+
                 <div class="grid grid-cols-3 gap-3">
                     <div>
                         <label class="block text-xs font-bold text-gray-500 mb-1">학년</label>
-                        <select id="reg-grade" class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                        <select id="reg-grade"
+                            class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none bg-white">
                             <option value="1">1학년</option>
                             <option value="2">2학년</option>
                             <option value="3">3학년</option>
@@ -84,24 +207,28 @@
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-gray-500 mb-1">반</label>
-                        <select id="reg-class" class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                        <select id="reg-class"
+                            class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none bg-white">
                             <option value="">선택</option>
                             <!-- JS Generates 1-12 -->
                         </select>
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-gray-500 mb-1">번호</label>
-                        <input type="number" id="reg-number" placeholder="예: 15" class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none">
+                        <input type="number" id="reg-number" placeholder="예: 15"
+                            class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none">
                     </div>
                 </div>
 
                 <div>
                     <label class="block text-xs font-bold text-gray-500 mb-1">이름</label>
-                    <input type="text" id="reg-name" placeholder="본명 (예: 김철수)" class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none">
+                    <input type="text" id="reg-name" placeholder="본명 (예: 김철수)"
+                        class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none">
                 </div>
             </div>
 
-            <button onclick="registerUser()" class="w-full mt-8 bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition shadow-lg transform active:scale-95">
+            <button onclick="registerUser()"
+                class="w-full mt-8 bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition shadow-lg transform active:scale-95">
                 입력 완료
             </button>
         </div>
@@ -114,7 +241,7 @@
 
         // Init Class Options
         const classSelect = document.getElementById('reg-class');
-        for(let i=1; i<=12; i++) {
+        for (let i = 1; i <= 12; i++) {
             const opt = document.createElement('option');
             opt.value = i;
             opt.innerText = `${i}반`;
@@ -132,7 +259,7 @@
         window.auth.onAuthStateChanged(async (user) => {
             if (user) {
                 currentUser = user;
-                
+
                 // Teacher Logic
                 if (user.email === TEACHER_EMAIL) {
                     if (loginMode === 'teacher') {
@@ -202,5 +329,34 @@
                 });
         }
     </script>
+
+    <script>
+        // Policy Modal
+        async function showPolicyModal(type) {
+            const modal = document.getElementById('policy-modal');
+            const title = document.getElementById('policy-modal-title');
+            const body = document.getElementById('policy-modal-body');
+
+            title.textContent = type === 'terms' ? '이용 약관' : '개인정보 처리 방침';
+            body.innerHTML = '<p class="text-center text-gray-400 py-8"><i class="fas fa-spinner fa-spin mr-2"></i>불러오는 중...</p>';
+            modal.classList.remove('hidden');
+
+            try {
+                const doc = await window.db.collection('site_settings').doc(type).get();
+                if (doc.exists && doc.data().text) {
+                    body.innerHTML = doc.data().text;
+                } else {
+                    body.innerHTML = '<p class="text-center text-gray-400 py-8">등록된 내용이 없습니다.</p>';
+                }
+            } catch (e) {
+                body.innerHTML = '<p class="text-center text-red-400 py-8">내용을 불러오지 못했습니다.</p>';
+            }
+        }
+
+        function closePolicyModal() {
+            document.getElementById('policy-modal').classList.add('hidden');
+        }
+    </script>
 </body>
+
 </html>

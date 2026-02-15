@@ -144,18 +144,37 @@
         <!-- Content -->
         <div class="content-area">
 
-            <div class="bg-white rounded-xl border border-gray-200 p-6 lg:p-8 shadow-sm max-w-4xl">
+            <div class="bg-white rounded-xl border border-gray-200 p-6 lg:p-8 shadow-sm max-w-4xl mb-8">
                 <div class="border-b border-gray-100 pb-4 mb-6">
-                    <h3 class="text-lg font-bold text-gray-900">개인정보 활용 동의서 관리</h3>
-                    <p class="text-sm text-gray-500 mt-1">학생들이 최초 접속 시 확인하는 동의서 문구를 수정합니다.</p>
+                    <h3 class="text-lg font-bold text-gray-900"><i
+                            class="fas fa-file-contract text-blue-500 mr-2"></i>이용 약관 관리</h3>
+                    <p class="text-sm text-gray-500 mt-1">로그인 화면 하단 '이용 약관' 클릭 시 표시되는 내용을 편집합니다.</p>
                 </div>
 
                 <div class="space-y-4">
-                    <div class="bg-blue-50 p-4 rounded-lg text-sm text-blue-800 border border-blue-100 mb-2">
-                        <i class="fas fa-edit mr-1"></i> 에디터를 사용하여 텍스트 정렬, 굵기, 크기 등을 자유롭게 편집하세요.
+                    <div class="bg-white rounded-xl shadow-inner border border-gray-200 overflow-hidden">
+                        <div id="terms-editor"></div>
                     </div>
 
-                    <!-- Quill Editor Container -->
+                    <div class="flex justify-between items-center pt-4">
+                        <button onclick="app.resetTermsDefault()"
+                            class="text-gray-500 text-sm hover:text-gray-800 underline">기본 문구로 초기화</button>
+                        <button onclick="app.saveTerms()"
+                            class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition transform active:scale-95">
+                            이용 약관 저장
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl border border-gray-200 p-6 lg:p-8 shadow-sm max-w-4xl">
+                <div class="border-b border-gray-100 pb-4 mb-6">
+                    <h3 class="text-lg font-bold text-gray-900"><i
+                            class="fas fa-user-shield text-green-500 mr-2"></i>개인정보 처리 방침 관리</h3>
+                    <p class="text-sm text-gray-500 mt-1">로그인 화면 하단 '개인정보 처리 방침' 클릭 시 표시되는 내용을 편집합니다.</p>
+                </div>
+
+                <div class="space-y-4">
                     <div class="bg-white rounded-xl shadow-inner border border-gray-200 overflow-hidden">
                         <div id="privacy-editor"></div>
                     </div>
@@ -165,6 +184,32 @@
                             class="text-gray-500 text-sm hover:text-gray-800 underline">기본 문구로 초기화</button>
                         <button onclick="app.savePrivacy()"
                             class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition transform active:scale-95">
+                            개인정보 처리 방침 저장
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl border border-gray-200 p-6 lg:p-8 shadow-sm max-w-4xl mt-8">
+                <div class="border-b border-gray-100 pb-4 mb-6">
+                    <h3 class="text-lg font-bold text-gray-900"><i
+                            class="fas fa-handshake text-purple-500 mr-2"></i>개인정보 활용 동의서 관리</h3>
+                    <p class="text-sm text-gray-500 mt-1">학생이 최초 로그인 시 동의해야 하는 개인정보 활용 동의서 내용을 편집합니다.</p>
+                </div>
+
+                <div class="space-y-4">
+                    <div class="bg-purple-50 p-3 rounded-lg text-sm text-purple-700 border border-purple-100">
+                        <i class="fas fa-info-circle mr-1"></i> 이 동의서는 학생이 처음 로그인할 때 팝업으로 표시되며, 동의해야 서비스를 이용할 수 있습니다.
+                    </div>
+                    <div class="bg-white rounded-xl shadow-inner border border-gray-200 overflow-hidden">
+                        <div id="consent-editor"></div>
+                    </div>
+
+                    <div class="flex justify-between items-center pt-4">
+                        <button onclick="app.resetConsentDefault()"
+                            class="text-gray-500 text-sm hover:text-gray-800 underline">기본 문구로 초기화</button>
+                        <button onclick="app.saveConsent()"
+                            class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition transform active:scale-95">
                             동의서 내용 저장
                         </button>
                     </div>
@@ -180,44 +225,109 @@
         window.AuthManager.init('teacher');
 
         const app = {
-            quill: null,
+            termsQuill: null,
+            privacyQuill: null,
+            consentQuill: null,
 
             init: function () {
                 document.addEventListener('auth-ready', () => {
-                    this.initQuill();
+                    this.initEditors();
+                    this.loadTermsText();
                     this.loadPrivacyText();
+                    this.loadConsentText();
                 });
             },
 
-            initQuill: function () {
-                this.quill = new Quill('#privacy-editor', {
+            initEditors: function () {
+                const toolbarOptions = [
+                    [{ 'size': ['small', false, 'large', 'huge'] }],
+                    ['bold', 'italic', 'underline'],
+                    [{ 'align': [] }],
+                    [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+                    ['clean']
+                ];
+
+                this.termsQuill = new Quill('#terms-editor', {
                     theme: 'snow',
-                    modules: {
-                        toolbar: [
-                            [{ 'size': ['small', false, 'large', 'huge'] }], // Font Size
-                            ['bold', 'italic', 'underline'], // Styling
-                            [{ 'align': [] }], // Alignment
-                            [{ 'list': 'ordered' }, { 'list': 'bullet' }], // Lists
-                            ['clean'] // Remove Formatting
-                        ]
-                    },
-                    placeholder: '여기에 동의서 내용을 입력하세요...'
+                    modules: { toolbar: toolbarOptions },
+                    placeholder: '여기에 이용 약관 내용을 입력하세요...'
+                });
+
+                this.privacyQuill = new Quill('#privacy-editor', {
+                    theme: 'snow',
+                    modules: { toolbar: toolbarOptions },
+                    placeholder: '여기에 개인정보 처리 방침 내용을 입력하세요...'
+                });
+
+                this.consentQuill = new Quill('#consent-editor', {
+                    theme: 'snow',
+                    modules: { toolbar: toolbarOptions },
+                    placeholder: '여기에 개인정보 활용 동의서 내용을 입력하세요...'
                 });
             },
 
+            // --- Terms ---
+            loadTermsText: async function () {
+                try {
+                    const doc = await window.db.collection('site_settings').doc('terms').get();
+                    if (doc.exists && doc.data().text) {
+                        this.termsQuill.clipboard.dangerouslyPasteHTML(doc.data().text);
+                    } else {
+                        this.resetTermsDefault(false);
+                    }
+                } catch (e) { console.error(e); }
+            },
+
+            saveTerms: async function () {
+                const text = this.termsQuill.root.innerHTML;
+                if (!text || text === '<p><br></p>') { alert("내용을 입력해주세요."); return; }
+
+                try {
+                    await window.db.collection('site_settings').doc('terms').set({
+                        text: text,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    alert("이용 약관이 저장되었습니다.");
+                } catch (e) { alert("저장 실패: " + e.message); }
+            },
+
+            resetTermsDefault: function (save = true) {
+                const defaultText = `
+                    <p class="ql-align-center"><strong style="font-size: large;">[이용 약관]</strong></p>
+                    <p><br></p>
+                    <p><strong>제1조 (목적)</strong></p>
+                    <p>본 약관은 Westory 서비스의 이용 조건 및 절차에 관한 사항을 규정합니다.</p>
+                    <p><br></p>
+                    <p><strong>제2조 (서비스의 내용)</strong></p>
+                    <ul>
+                        <li>학습 자료 열람 및 평가 응시</li>
+                        <li>학습 기록 및 성적 확인</li>
+                        <li>학사 일정 확인</li>
+                    </ul>
+                    <p><br></p>
+                    <p><strong>제3조 (이용자의 의무)</strong></p>
+                    <p>이용자는 타인의 계정을 도용하거나 서비스를 부정하게 이용해서는 안 됩니다.</p>
+                `;
+                this.termsQuill.clipboard.dangerouslyPasteHTML(defaultText);
+                if (save && confirm("기본 문구로 되돌리고 바로 저장하시겠습니까?")) {
+                    this.saveTerms();
+                }
+            },
+
+            // --- Privacy ---
             loadPrivacyText: async function () {
                 try {
                     const doc = await window.db.collection('site_settings').doc('privacy').get();
                     if (doc.exists && doc.data().text) {
-                        this.quill.clipboard.dangerouslyPasteHTML(doc.data().text);
+                        this.privacyQuill.clipboard.dangerouslyPasteHTML(doc.data().text);
                     } else {
-                        this.resetPrivacyDefault(false); // Load default to editor but don't save
+                        this.resetPrivacyDefault(false);
                     }
                 } catch (e) { console.error(e); }
             },
 
             savePrivacy: async function () {
-                const text = this.quill.root.innerHTML;
+                const text = this.privacyQuill.root.innerHTML;
                 if (!text || text === '<p><br></p>') { alert("내용을 입력해주세요."); return; }
 
                 try {
@@ -225,7 +335,7 @@
                         text: text,
                         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                     });
-                    alert("개인정보 활용 동의서 내용이 저장되었습니다.");
+                    alert("개인정보 처리 방침이 저장되었습니다.");
                 } catch (e) { alert("저장 실패: " + e.message); }
             },
 
@@ -247,10 +357,58 @@
                     <p>회원 탈퇴 시 또는 졸업 시까지 (졸업 후 지체 없이 파기)</p>
                 `;
 
-                this.quill.clipboard.dangerouslyPasteHTML(defaultText);
+                this.privacyQuill.clipboard.dangerouslyPasteHTML(defaultText);
 
                 if (save && confirm("기본 문구로 되돌리고 바로 저장하시겠습니까?")) {
                     this.savePrivacy();
+                }
+            },
+
+            // --- Consent ---
+            loadConsentText: async function () {
+                try {
+                    const doc = await window.db.collection('site_settings').doc('consent').get();
+                    if (doc.exists && doc.data().text) {
+                        this.consentQuill.clipboard.dangerouslyPasteHTML(doc.data().text);
+                    } else {
+                        this.resetConsentDefault(false);
+                    }
+                } catch (e) { console.error(e); }
+            },
+
+            saveConsent: async function () {
+                const text = this.consentQuill.root.innerHTML;
+                if (!text || text === '<p><br></p>') { alert("내용을 입력해주세요."); return; }
+
+                try {
+                    await window.db.collection('site_settings').doc('consent').set({
+                        text: text,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    alert("개인정보 활용 동의서가 저장되었습니다.");
+                } catch (e) { alert("저장 실패: " + e.message); }
+            },
+
+            resetConsentDefault: function (save = true) {
+                const defaultText = `
+                    <p class="ql-align-center"><strong style="font-size: large;">[개인정보 수집 및 이용 동의서]</strong></p>
+                    <p><br></p>
+                    <p><strong>1. 수집 및 이용 목적</strong></p>
+                    <ul>
+                        <li>학습 기록 관리 및 성적 산출</li>
+                        <li>맞춤형 학습 콘텐츠 제공</li>
+                        <li>교사의 학생 지도 및 상담 자료 활용</li>
+                    </ul>
+                    <p><br></p>
+                    <p><strong>2. 수집 항목</strong></p>
+                    <p>이름, 이메일, 학년, 반, 번호, 퀴즈 응시 내역 및 학습 활동 데이터</p>
+                    <p><br></p>
+                    <p><strong>3. 보유 및 이용 기간</strong></p>
+                    <p>회원 탈퇴 시 또는 졸업 시까지 (졸업 후 지체 없이 파기)</p>
+                `;
+                this.consentQuill.clipboard.dangerouslyPasteHTML(defaultText);
+                if (save && confirm("기본 문구로 되돌리고 바로 저장하시겠습니까?")) {
+                    this.saveConsent();
                 }
             }
         };
