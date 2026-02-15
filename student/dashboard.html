@@ -132,224 +132,322 @@
     </style>
 </head>
 
-<body class="bg-gray-50 flex flex-col h-screen overflow-hidden">
+<body class="bg-gray-50 flex flex-col h-screen">
     <!-- Header injected by AuthManager -->
 
-    <main class="dashboard-container">
-        <div class="mb-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-3 shrink-0">
-            <!-- Error Banner -->
-            <div id="error-banner" class="hidden w-full bg-red-50 border-l-4 border-red-500 p-4 mb-4">
-                <div class="flex">
-                    <div class="flex-shrink-0">
-                        <i class="fas fa-exclamation-circle text-red-500"></i>
-                    </div>
-                    <div class="ml-3">
-                        <p class="text-sm text-red-700 font-bold">오류가 발생했습니다</p>
-                        <p class="text-sm text-red-600 mt-1" id="error-message"></p>
-                    </div>
-                </div>
-            </div>
+    <main class="flex-1 w-full max-w-7xl mx-auto px-4 py-4 md:px-6 md:py-6 h-full flex flex-col overflow-hidden">
 
-            <div>
-                <h1 class="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight" id="welcome-text">환영합니다!
-                </h1>
-                <div class="flex items-center gap-2 mt-2">
-                    <span
-                        class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-800"
-                        id="semester-badge">
-                        <i class="fas fa-spinner fa-spin mr-1"></i> 로딩 중
-                    </span>
-                </div>
+        <div class="flex justify-between items-center mb-4 shrink-0">
+            <div class="flex items-center gap-3">
+                <h1 class="text-xl md:text-2xl font-bold text-gray-800" id="welcome-text">학생 대시보드</h1>
+                <span id="semester-badge"
+                    class="bg-blue-600 text-white font-bold px-3 py-1 rounded-full text-xs md:text-sm shadow-md min-w-[100px] text-center">
+                    <i class="fas fa-spinner fa-spin"></i>
+                </span>
             </div>
-
-            <div class="flex items-center gap-4 text-xs font-bold text-gray-500">
-                <div class="flex items-center"><span class="w-3 h-3 rounded-full bg-red-500 mr-1"></span>정기 시험</div>
-                <div class="flex items-center"><span class="w-3 h-3 rounded-full bg-orange-500 mr-1"></span>수행평가</div>
-                <div class="flex items-center"><span class="w-3 h-3 rounded-full bg-blue-500 mr-1"></span>진단/형성</div>
-                <div class="flex items-center"><span class="w-3 h-3 rounded-full bg-green-500 mr-1"></span>행사</div>
+            <div class="flex items-center gap-2 text-sm font-bold text-gray-600">
+                <span id="user-class-badge" class="px-2 py-1 bg-gray-200 rounded text-xs hidden"></span>
             </div>
         </div>
 
-        <div
-            class="flex-1 bg-white rounded-xl shadow-lg border border-gray-100 p-4 md:p-6 overflow-hidden flex flex-col relative">
-            <div id="calendar" class="h-full"></div>
+        <!-- Main Content Area (Split Layout) -->
+        <div class="flex flex-col md:flex-row h-[calc(100vh-140px)] gap-4">
+
+            <!-- Left: Calendar (60%) -->
+            <div class="w-full md:w-3/5 bg-white rounded-xl shadow-sm p-4 h-full flex flex-col">
+                <div class="flex justify-between items-center mb-2">
+                    <h2 class="text-lg font-bold text-gray-800"><i class="far fa-calendar-alt mr-2 text-blue-600"></i>학사
+                        일정</h2>
+                    <div class="flex items-center gap-2">
+                        <button onclick="app.openSearch()"
+                            class="bg-gray-50 border border-gray-200 text-gray-600 hover:text-blue-600 p-1.5 rounded-lg transition"
+                            title="검색">
+                            <i class="fas fa-search"></i>
+                        </button>
+                        <!-- Filter is automatic for students (My Class + Common), so we don't need a select -->
+                    </div>
+                </div>
+                <div id="calendar" class="flex-1"></div>
+            </div>
+
+            <!-- Right: Functions (40%) -->
+            <div class="w-full md:w-2/5 flex flex-col gap-4 h-full">
+
+                <!-- Right Top: Notice Board (50%) -->
+                <div
+                    class="h-1/2 bg-[#fffbeb] rounded-xl shadow-sm border border-yellow-200 p-4 flex flex-col relative overflow-hidden">
+                    <div class="flex justify-between items-center mb-3 border-b border-yellow-200 pb-2">
+                        <h3 class="text-lg font-extrabold text-amber-800 flex items-center">
+                            <i class="fas fa-thumbtack mr-2 text-amber-600"></i>알림장
+                        </h3>
+                        <!-- No Write Button -->
+                    </div>
+                    <div id="notice-list" class="flex-1 overflow-y-auto space-y-3 pr-2 custom-scroll">
+                        <div class="text-center text-amber-800/50 py-10 font-bold text-sm">로딩 중...</div>
+                    </div>
+                </div>
+
+                <!-- Right Bottom: Event Details (50%) -->
+                <div class="h-1/2 bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col">
+                    <div class="flex justify-between items-center mb-3 border-b border-gray-100 pb-2">
+                        <h3 class="text-lg font-bold text-gray-800 flex items-center">
+                            <i class="fas fa-info-circle mr-2 text-blue-500"></i>일정 상세
+                        </h3>
+                        <span id="detail-date-display" class="text-sm font-bold text-gray-500">날짜를 선택하세요</span>
+                    </div>
+                    <div id="detail-panel-content" class="flex-1 overflow-y-auto pr-2 custom-scroll">
+                        <div class="flex flex-col items-center justify-center h-full text-gray-400">
+                            <i class="far fa-calendar-check text-4xl mb-3 text-gray-200"></i>
+                            <p class="text-sm">달력에서 날짜나 일정을 클릭하면<br>상세 내용이 여기에 표시됩니다.</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
         </div>
     </main>
 
-    <!-- Detail Modal -->
-    <div id="detail-modal" class="modal-overlay hidden" onclick="app.closeModal(event)">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 mx-4 relative transform transition-all scale-100"
+    <!-- Notice Detail Modal (Read-Only) -->
+    <div id="notice-detail-modal"
+        class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center"
+        onclick="app.closeNoticeDetail()">
+        <div class="bg-[#fffbeb] rounded-xl shadow-2xl w-full max-w-lg p-8 m-4 border-t-8 border-amber-400 relative"
             onclick="event.stopPropagation()">
-            <div class="mb-4">
-                <span id="detail-badge"
-                    class="px-2 py-1 rounded text-xs font-bold text-white bg-gray-500 inline-block mb-2">TYPE</span>
-                <h3 id="detail-title" class="text-xl font-bold text-gray-900 leading-tight">일정 제목</h3>
+            <button onclick="app.closeNoticeDetail()"
+                class="absolute top-4 right-4 text-amber-800 hover:text-amber-600">
+                <i class="fas fa-times fa-lg"></i>
+            </button>
+            <h3 id="modal-notice-title" class="text-xl font-extrabold text-amber-900 mb-4 flex items-center">
+                <!-- Icon injected -->
+                <span id="modal-notice-category-icon" class="mr-2"></span>
+                알림 상세
+            </h3>
+
+            <div
+                class="mb-4 flex items-center justify-between text-xs font-bold text-amber-800/60 border-b border-yellow-200 pb-2">
+                <span id="modal-notice-date"></span>
+                <span id="modal-notice-target"></span>
             </div>
 
-            <div class="space-y-3 text-sm text-gray-600 bg-gray-50 p-4 rounded-xl border border-gray-100 mb-6">
-                <div class="flex items-start gap-3">
-                    <i class="fas fa-clock mt-1 text-blue-500"></i>
-                    <div>
-                        <p class="font-bold text-gray-800">기간</p>
-                        <!-- Footer injected by AuthManager -->
+            <div id="modal-notice-content"
+                class="text-gray-800 text-sm font-bold leading-relaxed whitespace-pre-wrap h-64 overflow-y-auto custom-scroll p-2">
+            </div>
+        </div>
+    </div>
 
-                        <script>
-                            window.AuthManager.init('student');
+    <!-- Search Modal (Read-Only) -->
+    <div id="search-modal"
+        class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-start justify-center pt-20"
+        onclick="app.closeSearch()">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 m-4" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-gray-800"><i class="fas fa-search text-blue-500 mr-2"></i>일정 검색</h3>
+                <button onclick="app.closeSearch()" class="text-gray-400 hover:text-gray-600 transition">
+                    <i class="fas fa-times fa-lg"></i>
+                </button>
+            </div>
 
-                            const app = {
-                                calendar: null,
-                                userClassStr: null, // "2-1" etc.
-                                colorMap: {
-                                    'exam': '#ef4444',       // Red
-                                    'performance': '#f97316', // Orange
-                                    'event': '#10b981',       // Green
-                                    'diagnosis': '#3b82f6',   // Blue
-                                    'formative': '#3b82f6'    // Blue
-                                },
-                                typeLabelMap: {
-                                    'exam': '정기 시험', 'performance': '수행평가', 'event': '행사', 'diagnosis': '진단평가', 'formative': '형성평가'
-                                },
-                                holidays: {},
+            <div class="relative mb-4">
+                <input type="text" id="modal-search-input" onkeyup="if(event.key === 'Enter') app.executeSearch()"
+                    class="w-full border-2 border-blue-100 rounded-xl p-3 pl-10 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition font-bold text-lg"
+                    placeholder="검색어 입력 (예: 중간고사, 수행평가)">
+                <i class="fas fa-search absolute left-4 top-4 text-gray-400"></i>
+                <button onclick="app.executeSearch()"
+                    class="absolute right-2 top-2 bg-blue-600 text-white px-4 py-1.5 rounded-lg font-bold hover:bg-blue-700 transition">검색</button>
+            </div>
 
-                                init: function () {
-                                    document.addEventListener('auth-ready', async (e) => {
-                                        try {
-                                            const user = e.detail;
-                                            document.getElementById('welcome-text').innerText = `${user.displayName || '학생'}님, 환영합니다!`;
+            <div id="modal-search-results" class="h-64 overflow-y-auto custom-scroll space-y-2">
+                <div class="text-center text-gray-400 py-10">검색어를 입력하고 엔터를 누르세요.</div>
+            </div>
+        </div>
+    </div>
 
-                                            const cfg = window.currentConfig;
-                                            if (cfg) {
-                                                document.getElementById('semester-badge').innerText = `${cfg.year}학년도 ${cfg.semester}학기`;
-                                            } else {
-                                                console.warn('Global config is missing');
-                                                document.getElementById('semester-badge').innerText = '설정 로드 실패';
-                                            }
 
-                                            await this.loadUserClass(user.uid);
-                                            this.initCalendar();
-                                            this.initNotices();
-                                        } catch (err) {
-                                            console.error('Dashboard Init Error:', err);
-                                            document.getElementById('error-banner').classList.remove('hidden');
-                                            document.getElementById('error-message').innerText = '초기화 중 오류: ' + err.message;
-                                        }
-                                    });
-                                },
+    <!-- Footer injected by AuthManager -->
 
-                                loadUserClass: async function (uid) {
-                                    try {
-                                        const doc = await window.getCollection('users').doc(uid).get();
-                                        if (doc.exists) {
-                                            const d = doc.data();
-                                            if (d.grade && d.class) {
-                                                this.userClassStr = `${d.grade}-${d.class}`;
-                                            }
-                                        }
-                                    } catch (e) { console.error(e); }
-                                },
+    <script>
+        window.AuthManager.init('student');
 
-                                //Helper function to get year/semester based collection path
-                                getCollectionPath: function (collectionName) {
-                                    const cfg = window.currentConfig;
-                                    if (!cfg || !cfg.year || !cfg.semester) {
-                                        console.error('Global config not loaded properly');
-                                        return null;
-                                    }
-                                    // EXCEPTION: calendar uses years/{year}/calendar (no semester)
-                                    if (collectionName === 'calendar') {
-                                        return `years/${cfg.year}/calendar`;
-                                    }
-                                    // All other collections use semesters path
-                                    return `years/${cfg.year}/semesters/${cfg.semester}/${collectionName}`;
-                                },
+        window.app = {
+            calendar: null,
+            userClassStr: null, // "2-1" etc.
+            colorMap: {
+                'exam': '#ef4444',       // Red
+                'performance': '#f97316', // Orange
+                'event': '#10b981',       // Green
+                'diagnosis': '#3b82f6',   // Blue
+                'formative': '#3b82f6'    // Blue
+            },
+            typeLabelMap: {
+                'exam': '정기 시험', 'performance': '수행평가', 'event': '행사', 'diagnosis': '진단평가', 'formative': '형성평가'
+            },
 
-                                // --- Notice Board Logic (Read-Only) ---
-                                initNotices: function () {
-                                    const container = document.getElementById('notice-list');
-                                    const path = this.getCollectionPath('notices');
-                                    if (!path) return;
+            init: function () {
+                document.addEventListener('auth-ready', async (e) => {
+                    try {
+                        const user = e.detail;
+                        document.getElementById('welcome-text').innerText = `${user.displayName || '학생'}님, 환영합니다!`;
 
-                                    window.db.collection(path).orderBy('createdAt', 'desc').onSnapshot(snapshot => {
-                                        if (snapshot.empty) {
-                                            container.innerHTML = '<div class="text-center text-amber-800/50 py-10 font-bold text-sm">등록된 알림이 없습니다.</div>';
-                                            return;
-                                        }
+                        // Load User Class Info
+                        await this.loadUserClass(user.uid);
 
-                                        const notices = [];
-                                        snapshot.forEach(doc => {
-                                            const d = doc.data();
-                                            // Filter: Common OR User's Class
-                                            if (d.targetType === 'common' || (this.userClassStr && d.targetType === 'class' && d.targetClass === this.userClassStr)) {
-                                                notices.push({ id: doc.id, ...d });
-                                            }
-                                        });
+                        const cfg = window.currentConfig;
+                        if (cfg) {
+                            document.getElementById('semester-badge').innerText = `${cfg.year}학년도 ${cfg.semester}학기`;
+                        } else {
+                            document.getElementById('semester-badge').innerText = '설정 로드 실패';
+                        }
 
-                                        if (notices.length === 0) {
-                                            container.innerHTML = '<div class="text-center text-amber-800/50 py-10 font-bold text-sm">우리 반 알림이 없습니다.</div>';
-                                            return;
-                                        }
+                        this.initCalendar();
+                        this.initNotices();
 
-                                        container.innerHTML = notices.map(d => {
-                                            let icon = '📢';
-                                            let dateInfo = '';
+                    } catch (err) {
+                        console.error('Dashboard Init Error:', err);
+                        alert('초기화 중 오류가 발생했습니다.');
+                    }
+                });
+            },
 
-                                            if (d.category === 'exam') icon = '🔥';
-                                            if (d.category === 'performance') icon = '⚡';
-                                            if (d.category === 'prep') icon = '🎒';
-                                            if (d.category === 'dday' && d.targetDate) {
-                                                icon = '⏳';
-                                                const today = new Date();
-                                                today.setHours(0, 0, 0, 0);
-                                                const target = new Date(d.targetDate);
-                                                target.setHours(0, 0, 0, 0);
-                                                const diff = Math.ceil((target - today) / (1000 * 60 * 60 * 24));
-                                                const dDayStr = diff > 0 ? `D-${diff}` : (diff === 0 ? 'D-Day' : `D+${Math.abs(diff)}`);
-                                                dateInfo = `<span class="ml-2 text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold animate-pulse">${dDayStr}</span>`;
-                                            }
+            loadUserClass: async function (uid) {
+                try {
+                    const doc = await window.getCollection('users').doc(uid).get();
+                    if (doc.exists) {
+                        const d = doc.data();
+                        if (d.grade && d.class) {
+                            this.userClassStr = `${d.grade}-${d.class}`;
+                            const badge = document.getElementById('user-class-badge');
+                            badge.innerText = `${d.grade}학년 ${d.class}반`;
+                            badge.classList.remove('hidden');
+                        }
+                    }
+                } catch (e) { console.error(e); }
+            },
 
-                                            // Parse new lines
-                                            const content = d.content.replace(/\n/g, '<br>');
+            //Helper function to get year/semester based collection path
+            getCollectionPath: function (collectionName) {
+                const cfg = window.currentConfig;
+                if (!cfg || !cfg.year || !cfg.semester) return null;
+                return `years/${cfg.year}/semesters/${cfg.semester}/${collectionName}`;
+            },
 
-                                            return `
-                            <div class="bg-white/80 p-3 rounded-lg border border-yellow-200 shadow-sm relative group mb-2">
+            // --- Notice Board Logic (Read-Only) ---
+            initNotices: function () {
+                const container = document.getElementById('notice-list');
+                const path = this.getCollectionPath('notices');
+                if (!path) return;
+
+                window.db.collection(path).orderBy('createdAt', 'desc').onSnapshot(snapshot => {
+                    if (snapshot.empty) {
+                        container.innerHTML = '<div class="text-center text-amber-800/50 py-10 font-bold text-sm">등록된 알림이 없습니다.</div>';
+                        return;
+                    }
+
+                    const notices = [];
+                    snapshot.forEach(doc => {
+                        const d = doc.data();
+                        // Filter: Common OR User's Class
+                        const isCommon = d.targetType === 'common';
+                        const isMyClass = d.targetType === 'class' && d.targetClass === this.userClassStr;
+
+                        if (isCommon || isMyClass) {
+                            notices.push({ id: doc.id, ...d });
+                        }
+                    });
+
+                    if (notices.length === 0) {
+                        container.innerHTML = '<div class="text-center text-amber-800/50 py-10 font-bold text-sm">우리 반 알림이 없습니다.</div>';
+                        return;
+                    }
+
+                    container.innerHTML = notices.map(d => {
+                        let icon = '📢';
+                        let dateInfo = '';
+                        let typeBadge = d.targetType === 'common' ? '<span class="text-[10px] bg-amber-500 text-white px-1 rounded mr-1">공통</span>' : '<span class="text-[10px] bg-blue-500 text-white px-1 rounded mr-1">학급</span>';
+
+                        if (d.category === 'exam') icon = '🔥';
+                        if (d.category === 'performance') icon = '⚡';
+                        if (d.category === 'prep') icon = '🎒';
+                        if (d.category === 'dday' && d.targetDate) {
+                            icon = '⏳';
+                            const today = new Date();
+                            today.setHours(0, 0, 0, 0);
+                            const target = new Date(d.targetDate);
+                            target.setHours(0, 0, 0, 0);
+                            const diff = Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+                            const dDayStr = diff > 0 ? `D-${diff}` : (diff === 0 ? 'D-Day' : `D+${Math.abs(diff)}`);
+                            dateInfo = `<span class="ml-2 text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold animate-pulse">${dDayStr}</span>`;
+                        }
+
+                        // Escape HTML in content for checking but render carefully
+                        // const safeContent = d.content.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+                        return `
+                            <div onclick="app.openNoticeDetail('${d.id}')" class="bg-white/80 p-3 rounded-lg border border-yellow-200 shadow-sm relative group mb-2 cursor-pointer hover:bg-yellow-50 transition">
                                 <div class="flex justify-between items-start mb-1">
                                     <div class="flex items-center">
                                         <span class="text-lg mr-2">${icon}</span>
+                                        ${typeBadge}
                                         ${dateInfo}
                                     </div>
                                     <span class="text-[10px] text-amber-800/60 font-mono">${new Date(d.createdAt.seconds * 1000).toLocaleDateString()}</span>
                                 </div>
-                                <div class="text-gray-800 text-sm font-bold leading-relaxed whitespace-pre-wrap">${content}</div>
+                                <div class="text-gray-800 text-sm font-bold leading-relaxed truncate">${d.content}</div>
                             </div>
                         `;
-                                        }).join('');
-                                    });
-                                },
+                    }).join('');
 
-                                // --- Detail Panel Logic (Read-Only) ---
-                                showEventsOnPanel: function (dateStr, events) {
-                                    const container = document.getElementById('detail-panel-content');
-                                    const dateDisplay = document.getElementById('detail-date-display');
+                    // Store notices for modal access
+                    this.noticesMap = notices.reduce((acc, curr) => { acc[curr.id] = curr; return acc; }, {});
+                });
+            },
 
-                                    // Format Date
-                                    const dateObj = new Date(dateStr);
-                                    const days = ['일', '월', '화', '수', '목', '금', '토'];
-                                    dateDisplay.innerHTML = `<span class="inline-flex items-center bg-blue-50 border-2 border-blue-300 rounded-lg px-3 py-1"><span class="text-lg font-extrabold text-blue-800">${dateObj.getMonth() + 1}월 ${dateObj.getDate()}일</span><span class="ml-1 text-sm font-bold text-blue-500">(${days[dateObj.getDay()]})</span></span>`;
+            openNoticeDetail: function (id) {
+                const n = this.noticesMap[id];
+                if (!n) return;
 
-                                    if (events.length === 0) {
-                                        container.innerHTML = `
+                let icon = '📢';
+                if (n.category === 'exam') icon = '🔥';
+                if (n.category === 'performance') icon = '⚡';
+                if (n.category === 'prep') icon = '🎒';
+                if (n.category === 'dday') icon = '⏳';
+
+                document.getElementById('modal-notice-category-icon').innerText = icon;
+                document.getElementById('modal-notice-date').innerText = new Date(n.createdAt.seconds * 1000).toLocaleString();
+                document.getElementById('modal-notice-target').innerText = n.targetType === 'common' ? '전체 공통' : `${n.targetClass}반`;
+                document.getElementById('modal-notice-content').innerText = n.content; // Use innerText for safety
+
+                document.getElementById('notice-detail-modal').classList.remove('hidden');
+            },
+
+            closeNoticeDetail: function () {
+                document.getElementById('notice-detail-modal').classList.add('hidden');
+            },
+
+
+            // --- Detail Panel Logic (Read-Only) ---
+            showEventsOnPanel: function (dateStr, events) {
+                const container = document.getElementById('detail-panel-content');
+                const dateDisplay = document.getElementById('detail-date-display');
+
+                // Format Date
+                const dateObj = new Date(dateStr);
+                const days = ['일', '월', '화', '수', '목', '금', '토'];
+                dateDisplay.innerHTML = `<span class="inline-flex items-center bg-blue-50 border-2 border-blue-300 rounded-lg px-3 py-1"><span class="text-lg font-extrabold text-blue-800">${dateObj.getMonth() + 1}월 ${dateObj.getDate()}일</span><span class="ml-1 text-sm font-bold text-blue-500">(${days[dateObj.getDay()]})</span></span>`;
+
+                if (events.length === 0) {
+                    container.innerHTML = `
                         <div class="flex flex-col items-center justify-center h-40 text-gray-400">
                             <i class="far fa-calendar-times text-3xl mb-2"></i>
                             <p class="text-sm">일정이 없습니다.</p>
                         </div>
                     `;
-                                        return;
-                                    }
+                    return;
+                }
 
-                                    container.innerHTML = events.map(ev => {
-                                        // Render holiday events with special styling
-                                        if (ev.classNames && ev.classNames.includes('holiday-text-event')) {
-                                            return `
+                container.innerHTML = events.map(ev => {
+                    // Render holiday events with special styling
+                    if (ev.classNames && ev.classNames.includes('holiday-text-event')) {
+                        return `
                         <div class="group p-3 border-l-4 border-red-400 bg-red-50 mb-3 rounded-r-lg">
                             <div class="flex items-center gap-2">
                                 <span class="text-[10px] text-white px-1.5 py-0.5 rounded font-bold bg-red-500">공휴일</span>
@@ -357,9 +455,9 @@
                             </div>
                         </div>
                     `;
-                                        }
-                                        const p = ev.extendedProps || ev;
-                                        return `
+                    }
+                    const p = ev.extendedProps || ev;
+                    return `
                         <div class="group p-3 border-l-4 border-gray-200 bg-gray-50 mb-3 rounded-r-lg">
                             <div class="flex justify-between items-start">
                                 <div>
@@ -373,91 +471,192 @@
                             ${p.description ? `<p class="text-xs text-gray-600 mt-2 bg-gray-100 p-2 rounded">${p.description}</p>` : ''}
                         </div>
                     `;
-                                    }).join('');
-                                },
+                }).join('');
+            },
 
-                                initCalendar: function () {
-                                    const calendarEl = document.getElementById('calendar');
+            initCalendar: function () {
+                const calendarEl = document.getElementById('calendar');
 
-                                    this.calendar = new FullCalendar.Calendar(calendarEl, {
-                                        initialView: 'dayGridMonth',
-                                        locale: 'ko',
-                                        headerToolbar: {
-                                            left: 'prev,next today',
-                                            center: 'title',
-                                            right: 'dayGridMonth,listMonth'
-                                        },
-                                        dayCellClassNames: (arg) => {
-                                            const dateStr = arg.date.toISOString().split('T')[0];
-                                            const evts = this.calendar ? this.calendar.getEvents() : [];
-                                            const isHoliday = evts.some(e => e.startStr === dateStr && e.extendedProps && e.extendedProps.eventType === 'holiday');
-                                            return isHoliday ? ['fc-day-holiday'] : [];
-                                        },
-                                        events: [this.fetchEvents.bind(this)],
-                                        dateClick: (info) => {
-                                            // Find events for this date
-                                            const allEvents = this.calendar.getEvents();
-                                            const dailyEvents = allEvents.filter(e => {
-                                                const start = new Date(e.startStr);
-                                                const end = e.end ? new Date(e.endStr) : new Date(start);
-                                                const target = new Date(info.dateStr);
-                                                if (!e.end) return e.startStr === info.dateStr;
-                                                return target >= start && target < end;
-                                            }); // Include holidays too
+                this.calendar = new FullCalendar.Calendar(calendarEl, {
+                    initialView: 'dayGridMonth',
+                    locale: 'ko',
+                    headerToolbar: {
+                        left: 'prev,next today',
+                        center: 'title',
+                        right: 'dayGridMonth,listMonth'
+                    },
+                    dayCellClassNames: (arg) => {
+                        // Fix for timezone offset issues in styling
+                        const date = new Date(arg.date);
+                        const localDate = new Date(date.getTime() - (date.getTimezoneOffset() * 60000));
+                        const dateStr = localDate.toISOString().split('T')[0];
 
-                                            this.showEventsOnPanel(info.dateStr, dailyEvents);
-                                        },
-                                        eventClick: (info) => {
-                                            if (info.event.classNames.includes('holiday-text-event')) return;
-                                            const startStr = info.event.startStr.split('T')[0];
-                                            this.showEventsOnPanel(startStr, [info.event]);
-                                        },
-                                        height: '100%',
-                                        contentHeight: '100%',
-                                        expandRows: true,
-                                        displayEventTime: false,
-                                        fixedWeekCount: false,
-                                        showNonCurrentDates: false,
-                                    });
-                                    this.calendar.render();
-                                },
+                        const evts = this.calendar ? this.calendar.getEvents() : [];
+                        const isHoliday = evts.some(e => {
+                            // Compare using startStr which is already YYYY-MM-DD
+                            return e.startStr === dateStr && e.extendedProps && e.extendedProps.eventType === 'holiday';
+                        });
+                        return isHoliday ? ['fc-day-holiday'] : [];
+                    },
+                    events: [this.fetchEvents.bind(this)],
+                    dateClick: (info) => {
+                        // Find events for this date
+                        const allEvents = this.calendar.getEvents();
+                        const dailyEvents = allEvents.filter(e => {
+                            // FullCalendar internal dates are UTC, but startStr/endStr are reliable for all-day events
+                            // e.startStr is YYYY-MM-DD
+                            if (e.allDay) {
+                                const start = e.startStr;
+                                const end = e.endStr || start; // Single day event has no endStr usually, or same day? FullCalendar logic varies.
+                                // Actually, end is exclusive. 
+                                // If start=2026-03-01, end=2026-03-02, it is 1 day.
 
-                                fetchEvents: async function (info, successCallback, failureCallback) {
-                                    try {
-                                        // Fetch logic same as before: generic fetch then client filter if needed,
-                                        // or filtered query if possible. To be safe, we fetch range and filter in memory for class.
-                                        const snapshot = await window.db.collection(this.getCollectionPath('calendar') || 'calendar')
-                                            .where('start', '>=', info.startStr)
-                                            .where('start', '<', info.endStr)
-                                            .get();
+                                if (!e.end) return start === info.dateStr;
+                                return info.dateStr >= start && info.dateStr < e.endStr;
+                            }
+                            return false; // We mostly deal with all-day events
+                        });
 
-                                        const events = [];
-                                        snapshot.forEach(doc => {
-                                            const d = doc.data();
+                        this.showEventsOnPanel(info.dateStr, dailyEvents);
 
-                                            // Filter by Class (Common or My Class)
-                                            if (d.targetType === 'class' && d.targetClass !== this.userClassStr) return;
+                        // Highlight selected date
+                        document.querySelectorAll('.fc-day-selected').forEach(el => el.classList.remove('fc-day-selected'));
+                        info.dayEl.classList.add('fc-day-selected');
+                    },
+                    eventClick: (info) => {
+                        const startStr = info.event.startStr.split('T')[0];
 
-                                            const isHoliday = d.eventType === 'holiday';
-                                            events.push({
-                                                id: doc.id,
-                                                title: d.title,
-                                                start: d.start,
-                                                end: d.end || d.start,
-                                                backgroundColor: isHoliday ? 'transparent' : (this.colorMap[d.eventType] || '#6b7280'),
-                                                borderColor: isHoliday ? 'transparent' : (this.colorMap[d.eventType] || '#6b7280'),
-                                                textColor: isHoliday ? '#ef4444' : undefined,
-                                                classNames: isHoliday ? ['holiday-text-event'] : [],
-                                                extendedProps: d
-                                            });
-                                        });
-                                        successCallback(events);
-                                    } catch (e) { console.error(e); failureCallback(e); }
-                                }
-                            };
+                        // Also highlight the date
+                        // Difficult to get dayEl from eventClick directly without finding it.
+                        // We will just show panel.
 
-                            app.init();
-                        </script>
+                        this.showEventsOnPanel(startStr, [info.event]);
+                    },
+                    height: '100%',
+                    contentHeight: '100%',
+                    expandRows: true, // Key for mobile to fill height
+                    displayEventTime: false,
+                    fixedWeekCount: false,
+                    showNonCurrentDates: false,
+                    windowResize: function (view) {
+                        // Handle resize if needed
+                    }
+                });
+                this.calendar.render();
+            },
+
+            fetchEvents: async function (info, successCallback, failureCallback) {
+                try {
+                    const path = this.getCollectionPath('calendar');
+                    if (!path) { successCallback([]); return; }
+
+                    const snapshot = await window.db.collection(path)
+                        .where('start', '>=', info.startStr)
+                        .where('start', '<', info.endStr)
+                        .get();
+
+                    const events = [];
+                    snapshot.forEach(doc => {
+                        const d = doc.data();
+
+                        // Filter by Class (Common or My Class)
+                        const isCommon = d.targetType === 'common';
+                        const isMyClass = d.targetType === 'class' && d.targetClass === this.userClassStr;
+
+                        if (!isCommon && !isMyClass) return;
+
+                        const isHoliday = d.eventType === 'holiday';
+                        events.push({
+                            id: doc.id,
+                            title: d.title,
+                            start: d.start,
+                            end: d.end || d.start,
+                            backgroundColor: isHoliday ? 'transparent' : (this.colorMap[d.eventType] || '#6b7280'),
+                            borderColor: isHoliday ? 'transparent' : (this.colorMap[d.eventType] || '#6b7280'),
+                            textColor: isHoliday ? '#ef4444' : undefined,
+                            classNames: isHoliday ? ['holiday-text-event'] : [],
+                            extendedProps: d
+                        });
+                    });
+                    successCallback(events);
+                } catch (e) {
+                    console.error("Fetch Events Error:", e);
+                    failureCallback(e);
+                }
+            },
+
+            // --- Search Functions (Read Only) ---
+            openSearch: function () {
+                document.getElementById('modal-search-input').value = '';
+                document.getElementById('modal-search-results').innerHTML = '<div class="text-center text-gray-400 py-10">검색어를 입력하고 엔터를 누르세요.</div>';
+                document.getElementById('search-modal').classList.remove('hidden');
+                document.getElementById('search-modal').classList.add('flex');
+                document.getElementById('modal-search-input').focus();
+            },
+
+            closeSearch: function () {
+                document.getElementById('search-modal').classList.add('hidden');
+                document.getElementById('search-modal').classList.remove('flex');
+            },
+
+            executeSearch: async function () {
+                const query = document.getElementById('modal-search-input').value.trim();
+                const resultsEl = document.getElementById('modal-search-results');
+                if (!query) {
+                    resultsEl.innerHTML = '<div class="text-center text-gray-400 py-10">검색어를 입력하세요.</div>';
+                    return;
+                }
+                resultsEl.innerHTML = '<div class="text-center text-gray-400 py-10"><i class="fas fa-spinner fa-spin mr-2"></i>검색 중...</div>';
+
+                try {
+                    const path = this.getCollectionPath('calendar');
+                    const snapshot = await window.db.collection(path).get();
+                    const results = [];
+                    snapshot.forEach(doc => {
+                        const d = doc.data();
+
+                        // Strict Filtering in Search too
+                        const isCommon = d.targetType === 'common';
+                        const isMyClass = d.targetType === 'class' && d.targetClass === this.userClassStr;
+                        if (!isCommon && !isMyClass) return;
+
+                        const q = query.toLowerCase();
+                        const titleMatch = d.title && d.title.toLowerCase().includes(q);
+                        const descMatch = d.description && d.description.toLowerCase().includes(q);
+                        if (titleMatch || descMatch) {
+                            results.push({ id: doc.id, ...d });
+                        }
+                    });
+
+                    if (results.length === 0) {
+                        resultsEl.innerHTML = `<div class="text-center text-gray-400 py-10">
+                            <i class="far fa-folder-open text-2xl mb-2"></i><br>
+                            해당 키워드에 맞는 일정이 없습니다.
+                        </div>`;
+                    } else {
+                        resultsEl.innerHTML = results.map(r => `
+                            <div onclick="app.closeSearch(); app.showSearchResult('${r.id}', '${r.start}')" 
+                                 class="p-3 border-b border-gray-100 hover:bg-blue-50 cursor-pointer transition">
+                                <div class="font-bold text-sm text-gray-800">${r.title}</div>
+                                <div class="text-xs text-gray-500">${r.start} ${r.end && r.start !== r.end ? '~ ' + r.end : ''}</div>
+                                ${r.description ? `<div class="text-xs text-gray-400 mt-1 truncate">${r.description}</div>` : ''}
+                            </div>
+                        `).join('');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    resultsEl.innerHTML = '<div class="text-center text-red-500 py-10">검색 중 오류가 발생했습니다.</div>';
+                }
+            },
+
+            showSearchResult: function (id, dateStr) {
+                if (this.calendar) this.calendar.gotoDate(dateStr);
+            },
+        };
+
+        // Expose to window for inline onclick handlers
+        window.app = app;
+    </script>
 </body>
 
 </html>
