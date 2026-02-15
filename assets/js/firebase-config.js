@@ -17,4 +17,8 @@ if (!firebase.apps.length) {
 // This prevents "Cannot access before initialization" errors caused by const/let hoisting issues
 window.db = firebase.firestore();
 window.auth = firebase.auth();
-window.analytics = firebase.analytics();
+try {
+    window.analytics = firebase.analytics();
+} catch (e) {
+    console.warn("Analytics not supported or failed to initialize:", e);
+}
