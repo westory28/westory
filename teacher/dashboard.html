@@ -858,26 +858,31 @@
                     },
                     events: [this.fetchEvents.bind(this)],
                     dateClick: (info) => {
-                        // Find events for this date from the current view's cache or client side filter
-                        // Better: Use getEvents() from calendar and filter
+                        // Double Click Logic
+                        const now = new Date().getTime();
+                        if (this.lastDateClick && (now - this.lastDateClick < 300) && (this.lastDateClickStr === info.dateStr)) {
+                            // Double Click Detected -> Open Add Modal
+                            this.openModal(null, info.dateStr);
+                            this.lastDateClick = 0;
+                            return;
+                        }
+                        this.lastDateClick = now;
+                        this.lastDateClickStr = info.dateStr;
+
+                        // Single Click Logic (Show Details)
                         const allEvents = this.calendar.getEvents();
                         const dailyEvents = allEvents.filter(e => {
-                            // Simple overlap check
                             const start = new Date(e.startStr);
                             const end = e.end ? new Date(e.endStr) : new Date(start);
                             const target = new Date(info.dateStr);
-                            // Adjust for inclusive/exclusive handling if needed, but for day grid standard:
-                            // If just start date
                             if (!e.end) return e.startStr === info.dateStr;
                             return target >= start && target < end;
-                        }); // Include holidays too
+                        });
 
-                        // Highlight selected date cell
-                        if (this.selectedDateEl) {
-                            this.selectedDateEl.classList.remove('fc-day-selected');
-                        }
+                        // Visual Feedback for Selection
+                        if (this.selectedDateEl) this.selectedDateEl.classList.remove('fc-day-selected');
                         this.selectedDateEl = info.dayEl;
-                        info.dayEl.classList.add('fc-day-selected');
+                        this.selectedDateEl.classList.add('fc-day-selected');
 
                         this.showEventsOnPanel(info.dateStr, dailyEvents);
                     },
@@ -1055,19 +1060,30 @@
                 const start = document.getElementById('event-start').value;
                 if (!title || !start) { alert("제목과 시작 날짜는 필수입니다."); return; }
 
+                const isCommon = document.querySelector('input[name="targetType"]:checked').value === 'common';
+                const targetType = isCommon ? 'common' : 'class';
+                const targetClass = isCommon ? null : document.getElementById('target-class').value;
+
+                if (!isCommon && !targetClass) { alert("반을 선택해주세요."); return; }
+
                 const data = {
                     title: title,
                     start: start,
                     end: document.getElementById('event-end').value || null,
                     eventType: document.getElementById('event-type').value,
-                    targetType: document.querySelector('input[name="targetType"]:checked').value,
-                    targetClass: document.querySelector('input[name="targetType"]:checked').value === 'class' ? document.getElementById('target-class').value : null,
+                    targetType: targetType,
+                    targetClass: targetClass,
                     description: document.getElementById('event-desc').value,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
 
                 const path = this.getCollectionPath('calendar');
-                if (!path) return;
+                console.log('Attempting to save event to path:', path, 'Data:', data);
+
+                if (!path) {
+                    alert("저장 경로를 찾을 수 없습니다. (학년도/학기 설정 확인 필요)");
+                    return;
+                }
 
                 try {
                     if (id) await window.db.collection(path).doc(id).update(data);
@@ -1075,10 +1091,14 @@
                         data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
                         await window.db.collection(path).add(data);
                     }
+                    alert("저장되었습니다.");
                     this.initialFormState = null; // Reset dirty state on save
                     this.closeModal();
                     this.refetchEvents();
-                } catch (e) { alert("저장 실패: " + e.message); }
+                } catch (e) {
+                    console.error('Save failed:', e);
+                    alert("저장 실패: " + e.message);
+                }
             },
 
             deleteEvent: async function () {

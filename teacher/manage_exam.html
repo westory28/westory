@@ -97,11 +97,7 @@
                 <p class="text-sm text-gray-500 mt-1">성적 산출 기준을 설정하고, 정기 시험 정답을 관리하세요.</p>
             </div>
             <!-- Enhanced Semester Badge -->
-            <div class="bg-blue-600 text-white px-3 py-1.5 md:px-4 md:py-2 rounded-lg shadow-md flex items-center">
-                <i class="fas fa-calendar-alt mr-2 text-sm md:text-base"></i>
-                <span id="current-term-badge" class="font-bold text-sm md:text-lg tracking-wide">로딩 중...</span>
-                <span class="text-[10px] md:text-xs ml-2 opacity-80 font-normal">기준</span>
-            </div>
+            <!-- Badge Removed -->
         </div>
 
         <!-- Tabs -->
@@ -234,6 +230,14 @@
 
         </div>
     </main>
+
+    <!-- Bottom Status Bar -->
+    <div
+        class="fixed bottom-0 left-0 w-full bg-blue-600 text-white text-xs py-1 text-center z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+        <i class="fas fa-calendar-alt mr-1"></i>
+        <span id="current-term-badge" class="font-bold tracking-wide">로딩 중...</span>
+        <span class="opacity-80 font-normal ml-1">기준 성적 관리 중</span>
+    </div>
 
     <!-- Footer injected by AuthManager -->
 

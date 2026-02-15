@@ -85,6 +85,17 @@
                             class="text-sm font-normal text-gray-500"></span>
                     </h2>
 
+                    <!-- Grade Filter (New) -->
+                    <div class="flex items-center gap-2">
+                        <select id="grade-filter" onchange="app.filterList()"
+                            class="border rounded px-3 py-1.5 text-sm font-bold text-gray-700 bg-white focus:outline-none focus:border-blue-500">
+                            <option value="all">전체 학년</option>
+                            <option value="1">1학년</option>
+                            <option value="2">2학년</option>
+                            <option value="3">3학년</option>
+                        </select>
+                    </div>
+
                     <!-- Class Filter (New) -->
                     <div class="flex items-center gap-2">
                         <select id="class-filter" onchange="app.filterList()"
@@ -374,10 +385,16 @@
             },
 
             filterList: function () {
+                const gradeFilter = document.getElementById('grade-filter').value;
                 const classFilter = document.getElementById('class-filter').value;
                 const nameQuery = document.getElementById('search-input').value.trim();
 
                 let filtered = this.students;
+
+                // Filter by Grade
+                if (gradeFilter !== 'all') {
+                    filtered = filtered.filter(s => String(s.grade) === gradeFilter);
+                }
 
                 // Filter by Class
                 if (classFilter !== 'all') {

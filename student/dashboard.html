@@ -137,6 +137,19 @@
 
     <main class="dashboard-container">
         <div class="mb-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-3 shrink-0">
+            <!-- Error Banner -->
+            <div id="error-banner" class="hidden w-full bg-red-50 border-l-4 border-red-500 p-4 mb-4">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-exclamation-circle text-red-500"></i>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm text-red-700 font-bold">오류가 발생했습니다</p>
+                        <p class="text-sm text-red-600 mt-1" id="error-message"></p>
+                    </div>
+                </div>
+            </div>
+
             <div>
                 <h1 class="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight" id="welcome-text">환영합니다!
                 </h1>
@@ -200,15 +213,26 @@
 
                                 init: function () {
                                     document.addEventListener('auth-ready', async (e) => {
-                                        const user = e.detail;
-                                        document.getElementById('welcome-text').innerText = `${user.displayName || '학생'}님, 환영합니다!`;
+                                        try {
+                                            const user = e.detail;
+                                            document.getElementById('welcome-text').innerText = `${user.displayName || '학생'}님, 환영합니다!`;
 
-                                        const cfg = window.currentConfig;
-                                        if (cfg) document.getElementById('semester-badge').innerText = `${cfg.year}학년도 ${cfg.semester}학기`;
+                                            const cfg = window.currentConfig;
+                                            if (cfg) {
+                                                document.getElementById('semester-badge').innerText = `${cfg.year}학년도 ${cfg.semester}학기`;
+                                            } else {
+                                                console.warn('Global config is missing');
+                                                document.getElementById('semester-badge').innerText = '설정 로드 실패';
+                                            }
 
-                                        await this.loadUserClass(user.uid);
-                                        this.initCalendar();
-                                        this.initNotices();
+                                            await this.loadUserClass(user.uid);
+                                            this.initCalendar();
+                                            this.initNotices();
+                                        } catch (err) {
+                                            console.error('Dashboard Init Error:', err);
+                                            document.getElementById('error-banner').classList.remove('hidden');
+                                            document.getElementById('error-message').innerText = '초기화 중 오류: ' + err.message;
+                                        }
                                     });
                                 },
 
