@@ -93,6 +93,21 @@
             <button onclick="app.setTab('omr')" id="btn-tab-omr" class="tab-btn-base">2. 정기 시험 정답 (OMR)</button>
         </div>
 
+        <!-- Immediately apply URL tab param before page renders -->
+        <script>
+            (function () {
+                const t = new URLSearchParams(window.location.search).get('tab');
+                if (t) {
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+                    const target = document.getElementById('tab-' + t);
+                    if (target) target.classList.remove('hidden');
+                    document.querySelectorAll('.tab-btn-base').forEach(b => b.classList.remove('tab-btn-active'));
+                    const btn = document.getElementById('btn-tab-' + t);
+                    if (btn) btn.classList.add('tab-btn-active');
+                }
+            })();
+        </script>
+
         <!-- Content Container -->
         <div class="bg-white border-x border-b border-gray-200 rounded-b-lg p-6 flex-1 min-h-[700px] relative">
 

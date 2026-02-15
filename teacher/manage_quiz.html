@@ -251,6 +251,21 @@
                 은행</button>
         </div>
 
+        <!-- Immediately apply URL tab param before page renders -->
+        <script>
+            (function () {
+                const t = new URLSearchParams(window.location.search).get('tab');
+                if (t) {
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+                    const target = document.getElementById('tab-' + t);
+                    if (target) target.classList.remove('hidden');
+                    document.querySelectorAll('.tab-btn-base').forEach(b => b.classList.remove('tab-btn-active'));
+                    const btn = document.getElementById('btn-tab-' + t);
+                    if (btn) btn.classList.add('tab-btn-active');
+                }
+            })();
+        </script>
+
         <!-- TAB 1: Assessment Management (Tree + Editor) -->
         <div id="tab-manage"
             class="tab-content h-full flex flex-col lg:flex-row gap-6 lg:overflow-hidden pb-2 relative">
