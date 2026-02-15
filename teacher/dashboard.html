@@ -508,27 +508,79 @@
                 this.initClassFilter();
             },
 
+            // Delete all holidays for the current semester path before populating
+            resetHolidays: async function (path) {
+                console.log(`[Holiday] Resetting holidays in ${path}...`);
+                const snapshot = await window.db.collection(path).where('eventType', '==', 'holiday').get();
+
+                // Also check for legacy 'targetType: common' + 'description: 대한민국 공휴일' just in case
+                const snapshot2 = await window.db.collection(path)
+                    .where('description', '==', '대한민국 공휴일').get();
+
+                const batch = window.db.batch();
+                let count = 0;
+
+                const deleteDoc = (doc) => {
+                    batch.delete(doc.ref);
+                    count++;
+                };
+
+                snapshot.forEach(deleteDoc);
+                snapshot2.forEach(deleteDoc);
+
+                if (count > 0) {
+                    await batch.commit();
+                    console.log(`[Holiday] Deleted ${count} existing holiday records.`);
+                }
+            },
+
             // Populate 2026 Korea Holidays into Firestore
             populate2026Holidays: async function () {
+                if (!confirm('기존 공휴일 데이터를 모두 삭제하고 2026년 공휴일(대체공휴일 포함)을 다시 등록하시겠습니까?')) return;
+
+                // Define 2026 Holidays strictly based on User Rule:
+                // "If overlap with Sat/Sun or other holiday -> Next first non-holiday"
+                // 2026 Holidays:
+                // 1.1 (Thu) New Year
+                // 2.16-18 (Mon-Wed) Seollal. No overlap.
+                // 3.1 (Sun) Samil. Overlap Sun -> Sub: 3.2 (Mon).
+                // 5.5 (Tue) Child.
+                // 5.24 (Sun) Buddha. Overlap Sun -> Sub: 5.25 (Mon).
+                // 6.6 (Sat) Memorial. Overlap Sat -> Sub: 6.8 (Mon) (Skip Sun).
+                // 8.15 (Sat) Gwangbok. Overlap Sat -> Sub: 8.17 (Mon) (Skip Sun).
+                // 9.24 (Thu) - 9.26 (Sat) Chuseok. 9.26 overlaps Sat. -> Sub: 9.28 (Mon) (Skip 9.27 Sun).
+                // 10.3 (Sat) Gaecheon. Overlap Sat -> Sub: 10.5 (Mon) (Skip Sun).
+                // 10.9 (Fri) Hangeul.
+                // 12.25 (Fri) Xmas.
+
                 const holidays = [
-                    // 2026년 대한민국 공휴일 (대체공휴일 포함)
                     { title: "신정", start: "2026-01-01", eventType: "holiday" },
                     { title: "설날 연휴", start: "2026-02-16", eventType: "holiday" },
                     { title: "설날", start: "2026-02-17", eventType: "holiday" },
                     { title: "설날 연휴", start: "2026-02-18", eventType: "holiday" },
+
                     { title: "삼일절", start: "2026-03-01", eventType: "holiday" },
-                    { title: "삼일절 대체공휴일", start: "2026-03-02", eventType: "holiday" },
+                    { title: "삼일절 대체공휴일", start: "2026-03-02", eventType: "holiday" }, // Sun -> Mon
+
                     { title: "어린이날", start: "2026-05-05", eventType: "holiday" },
-                    { title: "석가탄신일", start: "2026-05-24", eventType: "holiday" },
-                    { title: "석가탄신일 대체공휴일", start: "2026-05-25", eventType: "holiday" },
+
+                    { title: "부처님오신날", start: "2026-05-24", eventType: "holiday" },
+                    { title: "부처님오신날 대체공휴일", start: "2026-05-25", eventType: "holiday" }, // Sun -> Mon
+
                     { title: "현충일", start: "2026-06-06", eventType: "holiday" },
+                    { title: "현충일 대체공휴일", start: "2026-06-08", eventType: "holiday" }, // Sat -> Mon
+
                     { title: "광복절", start: "2026-08-15", eventType: "holiday" },
-                    { title: "광복절 대체공휴일", start: "2026-08-17", eventType: "holiday" },
+                    { title: "광복절 대체공휴일", start: "2026-08-17", eventType: "holiday" }, // Sat -> Mon
+
                     { title: "추석 연휴", start: "2026-09-24", eventType: "holiday" },
                     { title: "추석", start: "2026-09-25", eventType: "holiday" },
-                    { title: "추석 연휴", start: "2026-09-26", eventType: "holiday" },
+                    { title: "추석 연휴", start: "2026-09-26", eventType: "holiday" }, // Sat
+                    { title: "추석 대체공휴일", start: "2026-09-28", eventType: "holiday" }, // Sat -> Mon (Skip Sun 27)
+
                     { title: "개천절", start: "2026-10-03", eventType: "holiday" },
-                    { title: "개천절 대체공휴일", start: "2026-10-05", eventType: "holiday" },
+                    { title: "개천절 대체공휴일", start: "2026-10-05", eventType: "holiday" }, // Sat -> Mon
+
                     { title: "한글날", start: "2026-10-09", eventType: "holiday" },
                     { title: "성탄절", start: "2026-12-25", eventType: "holiday" }
                 ];
@@ -540,11 +592,15 @@
                 }
 
                 try {
+                    // 1. Reset existing holidays
+                    await this.resetHolidays(path);
+
+                    // 2. Add new holidays
                     let count = 0;
-                    const batch = window.db.batch(); // Use batch for efficiency
+                    const batch = window.db.batch();
 
                     for (const holiday of holidays) {
-                        // Create a deterministic ID: holiday_2026-03-01
+                        // Deterministic ID
                         const docId = `holiday_${holiday.start}_${holiday.title.replace(/\s+/g, '')}`;
                         const docRef = window.db.collection(path).doc(docId);
 
@@ -554,17 +610,16 @@
                             targetClass: null,
                             description: '대한민국 공휴일',
                             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                            updatedAt: firebase.firestore.FieldValue.serverTimestamp() // This will update timestamp on re-run
+                            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                         };
-                        batch.set(docRef, data, { merge: true });
-                        console.log(`[Holiday] Prepared: ${holiday.title} (${docId})`);
+                        batch.set(docRef, data);
                         count++;
                     }
                     await batch.commit();
-                    alert(`${count}개의 공휴일이 처리되었습니다. (중복 방지 적용됨)`);
+                    alert(`총 ${count}개의 공휴일이 등록되었습니다.\n(기존 중복 데이터는 삭제되었습니다.)`);
                     this.refetchEvents();
                 } catch (e) {
-                    alert('공휴일 추가 실패: ' + e.message);
+                    alert('공휴일 등록 실패: ' + e.message);
                     console.error(e);
                 }
             },
@@ -962,9 +1017,15 @@
                         right: 'dayGridMonth,listMonth'
                     },
                     dayCellClassNames: (arg) => {
-                        // Check loaded events for holiday type
-                        const dateStr = arg.date.toISOString().split('T')[0];
+                        // Fix for "+1 day" error: Use local date string instead of UTC
+                        // arg.date is a Date object. By default .toISOString() converts to UTC.
+                        // We need the YYYY-MM-DD that matches the cell's visual date (Local).
+                        const offset = arg.date.getTimezoneOffset() * 60000;
+                        const localDate = new Date(arg.date.getTime() - offset);
+                        const dateStr = localDate.toISOString().split('T')[0];
+
                         const evts = this.calendar ? this.calendar.getEvents() : [];
+                        // Check if any holiday starts on this date
                         const isHoliday = evts.some(e => e.startStr === dateStr && e.extendedProps && e.extendedProps.eventType === 'holiday');
                         return isHoliday ? ['fc-day-holiday'] : [];
                     },
