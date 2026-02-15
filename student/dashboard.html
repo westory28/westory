@@ -554,10 +554,19 @@
                     const path = this.getCollectionPath('calendar');
                     if (!path) { successCallback([]); return; }
 
+                    // Fix: Extract YYYY-MM-DD for simpler lex comparison
+                    const startYMD = info.startStr.split('T')[0];
+                    const endYMD = info.endStr.split('T')[0];
+
+                    console.log(`[Student] Fetching events from ${path}`);
+                    console.log(`[Student] Range: ${startYMD} ~ ${endYMD}`);
+
                     const snapshot = await window.db.collection(path)
-                        .where('start', '>=', info.startStr)
-                        .where('start', '<', info.endStr)
+                        .where('start', '>=', startYMD)
+                        .where('start', '<', endYMD)
                         .get();
+
+                    console.log(`[Student] Found ${snapshot.size} events in range.`);
 
                     const events = [];
                     snapshot.forEach(doc => {
@@ -568,7 +577,12 @@
                         const isMyClass = d.targetType === 'class' && d.targetClass === this.userClassStr;
                         const isHoliday = d.eventType === 'holiday';
 
-                        if (!isCommon && !isMyClass && !isHoliday) return;
+                        if (!isCommon && !isMyClass && !isHoliday) {
+                            console.log(`[Student] Filtered out event: ${d.title} (Type: ${d.targetType}, Class: ${d.targetClass})`);
+                            return;
+                        }
+
+                        console.log(`[Student] Included event: ${d.title}`);
 
                         events.push({
                             id: doc.id,
