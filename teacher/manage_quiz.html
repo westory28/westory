@@ -494,9 +494,9 @@
         <div id="tab-bank" class="tab-content hidden h-full overflow-hidden flex flex-col">
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col h-full overflow-hidden">
                 <div class="p-4 border-b bg-gray-50 flex flex-wrap gap-3 items-center shrink-0">
+                    <!-- Group 1: Unit hierarchy -->
                     <div class="flex flex-wrap items-center gap-2">
                         <i class="fas fa-filter text-gray-400"></i>
-                        <!-- Minimal Selects for Problem Bank -->
                         <select id="filter-big" onchange="app.filterBank('big')"
                             class="minimal-select text-sm w-28 text-gray-700">
                             <option value="">대단원 전체</option>
@@ -512,28 +512,32 @@
                             <option value="">소단원 전체</option>
                         </select>
                     </div>
-                    <!-- Separator with more margin -->
-                    <!-- Separator with more margin -->
-                    <div class="h-4 w-px bg-gray-300 mx-4 hidden md:block"></div>
-                    <div class="flex items-center gap-2">
-                        <select id="filter-type" onchange="app.filterBank('type')"
-                            class="minimal-select text-sm w-24 text-gray-700">
-                            <option value="">유형 전체</option>
-                            <option value="choice">객관식</option>
-                            <option value="ox">O/X</option>
-                            <option value="word">단답형</option>
-                            <option value="order">순서</option>
-                        </select>
-                        <div class="h-4 w-px bg-gray-300 mx-4 hidden md:block"></div>
-                        <select id="filter-eval-type" onchange="app.filterBank('evalType')"
-                            class="minimal-select text-sm w-24 text-gray-700">
-                            <option value="">평가 구분</option>
-                            <option value="diagnosis">진단평가</option>
-                            <option value="formative">형성평가</option>
-                            <option value="exam">정기시험</option>
-                        </select>
-                    </div>
+
+                    <!-- Divider -->
+                    <div class="h-5 w-px bg-gray-300 mx-1 hidden md:block"></div>
+
+                    <!-- Group 2: Type -->
+                    <select id="filter-type" onchange="app.filterBank('type')"
+                        class="minimal-select text-sm w-24 text-gray-700">
+                        <option value="">유형 전체</option>
+                        <option value="choice">객관식</option>
+                        <option value="ox">O/X</option>
+                        <option value="word">단답형</option>
+                        <option value="order">순서</option>
                     </select>
+
+                    <!-- Divider -->
+                    <div class="h-5 w-px bg-gray-300 mx-1 hidden md:block"></div>
+
+                    <!-- Group 3: Eval type -->
+                    <select id="filter-eval-type" onchange="app.filterBank('evalType')"
+                        class="minimal-select text-sm w-24 text-gray-700">
+                        <option value="">평가 구분</option>
+                        <option value="diagnosis">진단평가</option>
+                        <option value="formative">형성평가</option>
+                        <option value="exam">정기시험</option>
+                    </select>
+
                     <div class="ml-auto text-xs text-gray-500">총 <span id="bank-total-count"
                             class="font-bold text-blue-600">0</span>문제</div>
                 </div>
