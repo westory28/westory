@@ -540,8 +540,25 @@
             const badge = document.getElementById('dash-year-badge');
             if (!badge) return;
 
-            const update = () => {
-                const cfg = window.currentConfig;
+            const update = async () => {
+                // Force fetch if missing or looks like default (2025)
+                // Actually, just fetch to be safe if it's not matching 2026? 
+                // No, just try to use window.currentConfig. 
+                // If it's 2025, maybe we should try to re-fetch?
+                // Let's explicitly fetch from DB here to confirm.
+                let cfg = window.currentConfig;
+
+                // If cfg is missing or year is 2025 (suspect default), try explicitly fetching
+                if (!cfg || cfg.year === '2025') {
+                    try {
+                        const doc = await window.db.collection('site_settings').doc('config').get();
+                        if (doc.exists) {
+                            cfg = doc.data();
+                            window.currentConfig = cfg; // Update global
+                        }
+                    } catch (e) { console.error("Force fetch failed", e); }
+                }
+
                 if (cfg && cfg.year && cfg.semester) {
                     badge.className = "bg-blue-100 text-blue-700 font-bold px-3 py-1 rounded-lg text-sm border border-blue-200 ml-2";
                     badge.innerText = `${cfg.year}학년도 ${cfg.semester}학기`;
@@ -550,15 +567,21 @@
                 return false;
             };
 
-            // Try immediately
-            if (!update()) {
-                // Retry every 500ms for up to 10 seconds (20 retries)
-                let retries = 0;
-                const interval = setInterval(() => {
-                    retries++;
-                    if (update() || retries > 20) clearInterval(interval);
-                }, 500);
-            }
+            // Try immediately (and async)
+            update();
+
+            // Polling as backup
+            let retries = 0;
+            const interval = setInterval(() => {
+                retries++;
+                // We don't await here, just trigger. 
+                // But update() is now async. It's fine.
+                // If update() returns true (promise), we stop? 
+                // No, update() doesn't return value now. 
+                // Let's make it return true if successful.
+                update().then(res => { if (res) clearInterval(interval); });
+                if (retries > 20) clearInterval(interval);
+            }, 1000);
         }
     </script>
 </body>

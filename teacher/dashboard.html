@@ -187,11 +187,18 @@
                             class="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-blue-700 shadow-sm transition">
                             <i class="fas fa-plus mr-1"></i> 추가
                         </button>
-                        <button onclick="if(confirm('2026년 공휴일을 초기화하시겠습니까? (중복 주의)')) app.populate2026Holidays()"
-                            class="bg-green-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-green-700 shadow-sm transition ml-2"
-                            title="2026 공휴일 자동 등록">
-                            <i class="fas fa-calendar-check mr-1"></i> 공휴일
-                        </button>
+                        <div class="flex items-center gap-2 ml-2">
+                            <button onclick="app.populate2026Holidays()"
+                                class="bg-green-600 text-white px-2 py-1.5 rounded-md hover:bg-green-700 transition flex items-center gap-1 shadow-sm text-xs font-bold"
+                                title="2026년 공휴일 자동 등록">
+                                <i class="fas fa-calendar-check"></i> 공휴일
+                            </button>
+                            <button onclick="app.checkSchedule()"
+                                class="bg-gray-600 text-white px-2 py-1.5 rounded-md hover:bg-gray-700 transition flex items-center gap-1 shadow-sm text-xs font-bold"
+                                title="데이터 확인">
+                                <i class="fas fa-database"></i> 확인
+                            </button>
+                        </div>
                     </div>
                     <!-- Search Panel (Hidden by default) -->
                     <div id="search-panel" class="hidden">
@@ -580,6 +587,28 @@
                         sel.appendChild(opt);
                     });
                 } catch (e) { console.error('Class filter init error:', e); }
+            },
+
+            // --- Debug Tool ---
+            checkSchedule: async function () {
+                const cfg = window.currentConfig;
+                if (!cfg) { alert("설정 로드 실패"); return; }
+                const path = `years/${cfg.year}/semesters/${cfg.semester}/calendar`;
+                alert(`데이터 확인 중: ${path}`);
+                try {
+                    const snapshot = await window.db.collection(path).get();
+                    let count = 0;
+                    let msg = "";
+                    snapshot.forEach(doc => {
+                        count++;
+                        const d = doc.data();
+                        if (count <= 5) msg += `${d.start}: ${d.title}\n`;
+                    });
+                    alert(`총 ${count}개의 일정이 발견되었습니다.\n\n${msg}${count > 5 ? '...' : ''}`);
+                    console.log("Check Complete", path, count);
+                } catch (e) {
+                    alert("데이터 확인 실패: " + e.message);
+                }
             },
 
             // --- Search Functions ---
@@ -997,20 +1026,19 @@
                     console.log(`[Calendar] 1. Fetch Request Range: ${startYMD} ~ ${endYMD}`);
                     console.log(`[Calendar] 2. Collection Path: ${path}`);
 
-                    const snapshot = await window.db.collection(path)
-                        .where('start', '>=', startYMD)
-                        .where('start', '<=', endYMD) // Use <= to include logical end date if needed, or stick to <. 
-                        // Note: info.endStr in FullCalendar is exclusive. 
-                        // If we use string comparison "2026-03-01" < "2026-03-01T..." is True.
-                        // But let's just use the string.
-                        .get();
+                    // DEBUG: Fetch ALL to see what's there
+                    const snapshot = await window.db.collection(path).get();
+
+                    // .where('start', '>=', startYMD)
+                    // .where('start', '<=', endYMD) 
+                    // .get();
 
                     console.log(`[Calendar] 3. Snapshot Size: ${snapshot.size}`);
 
                     if (snapshot.size > 0) {
                         snapshot.docs.forEach(d => console.log(' -> Found Event:', d.data()));
                     } else {
-                        console.log(' -> No events found in this range/path.');
+                        console.log(' -> No events found in this path.');
                     }
 
                     const events = [];
