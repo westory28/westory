@@ -138,8 +138,8 @@
     <main class="dashboard-container">
         <div class="mb-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-3 shrink-0">
             <div>
-                <h1 class="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight" id="welcome-text">환영합니다!
-                </h1>
+                <h1 class="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight" id="welcome-text"><i
+                        class="fas fa-spinner fa-spin text-gray-300"></i></h1>
                 <div class="flex items-center gap-2 mt-2">
                     <span
                         class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-800"
@@ -333,13 +333,19 @@
                                 fetchEvents: async function (info, successCallback, failureCallback) {
                                     try {
                                         const path = this.getCollectionPath('calendar');
-                                        if (!path) return successCallback([]);
+                                        if (!path) { console.error('[Student Calendar] No collection path'); return successCallback([]); }
 
-                                        // 1. Fetch ALL events for the range (optimization: ideally server-side filter, but for now client-side)
+                                        // CRITICAL FIX: Extract YYYY-MM-DD from ISO string (matches Teacher's format)
+                                        const startYMD = info.startStr.split('T')[0];
+                                        const endYMD = info.endStr.split('T')[0];
+                                        console.log('[Student Calendar] fetchEvents called. Path:', path, 'Range:', startYMD, '~', endYMD);
+
                                         const snapshot = await window.db.collection(path)
-                                            .where('start', '>=', info.startStr)
-                                            .where('start', '<', info.endStr)
+                                            .where('start', '>=', startYMD)
+                                            .where('start', '<', endYMD)
                                             .get();
+
+                                        console.log('[Student Calendar] Snapshot size:', snapshot.size);
 
                                         const events = [];
                                         const keyword = document.getElementById('search-input') ? document.getElementById('search-input').value.trim().toLowerCase() : '';
@@ -347,14 +353,14 @@
                                         snapshot.forEach(doc => {
                                             const d = doc.data();
 
-                                            // 2. Filter: Common OR Holiday OR My Class
+                                            // Filter: Common OR Holiday OR My Class
                                             const isCommon = d.targetType === 'common';
                                             const isHoliday = d.eventType === 'holiday';
                                             const isMyClass = d.targetType === 'class' && d.targetClass === this.userClassStr;
 
                                             if (!isCommon && !isHoliday && !isMyClass) return;
 
-                                            // 3. Search Filter
+                                            // Search keyword filter
                                             if (keyword && !d.title.toLowerCase().includes(keyword)) return;
 
                                             events.push({
@@ -369,9 +375,10 @@
                                                 extendedProps: d
                                             });
                                         });
+                                        console.log('[Student Calendar] Events after filter:', events.length);
                                         successCallback(events);
                                     } catch (e) {
-                                        console.error(e);
+                                        console.error('[Student Calendar] fetchEvents error:', e);
                                         failureCallback(e);
                                     }
                                 },
