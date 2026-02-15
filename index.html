@@ -160,9 +160,16 @@
 
 <body>
     <div class="main-container">
-        <div class="animate-bounce mb-4 text-4xl">📚</div>
+        <div id="main-emoji" class="animate-bounce mb-4 text-4xl"></div>
         <div class="logo"><span class="we">We</span><span class="story">story</span></div>
-        <div class="subtitle">우리가 써 내려가는 이야기</div>
+        <div id="main-subtitle" class="subtitle"></div>
+
+        <!-- D-Day Widget -->
+        <div id="dday-widget"
+            class="hidden flex items-center gap-3 mb-8 px-5 py-2 bg-white rounded-full shadow-sm border border-gray-200 animate-pulse">
+            <span id="dday-title" class="text-sm font-bold text-gray-500"></span>
+            <span id="dday-count" class="text-lg font-extrabold text-blue-600"></span>
+        </div>
 
         <button class="login-btn" onclick="handleGoogleLogin('student')">
             <img src="https://fonts.gstatic.com/s/i/productlogos/googleg/v6/24px.svg" width="24" alt="G">
@@ -418,7 +425,58 @@
             // Actually, the previous script didn't have a DOMContentLoaded listener, 
             // it just ran. But let's keep it safe.
             loadSchoolConfig();
+            loadInterfaceConfig();
         });
+
+        // --- Load Interface Config ---
+        async function loadInterfaceConfig() {
+            try {
+                // Determine if we need to sign in anonymously for reading
+                let user = await waitForAuth();
+                if (!user) { try { await window.auth.signInAnonymously(); } catch (ae) { } }
+
+                const doc = await window.db.collection('site_settings').doc('interface_config').get();
+                if (doc.exists) {
+                    const data = doc.data();
+
+                    // 1. Emoji & Subtitle
+                    document.getElementById('main-emoji').innerText = data.mainEmoji || '📚';
+                    document.getElementById('main-subtitle').innerText = data.mainSubtitle || '우리가 써 내려가는 이야기';
+
+                    // 2. D-Day
+                    if (data.ddayEnabled && data.ddayDate && data.ddayTitle) {
+                        const targetDate = new Date(data.ddayDate);
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0); // Normalize today
+                        targetDate.setHours(0, 0, 0, 0); // Normalize target
+
+                        const diffTime = targetDate - today;
+                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                        let ddayStr = '';
+                        if (diffDays > 0) ddayStr = `D-${diffDays}`;
+                        else if (diffDays === 0) ddayStr = `D-Day`;
+                        else ddayStr = `D+${Math.abs(diffDays)}`;
+
+                        document.getElementById('dday-title').innerText = data.ddayTitle;
+                        document.getElementById('dday-count').innerText = ddayStr;
+
+                        const widget = document.getElementById('dday-widget');
+                        widget.classList.remove('hidden');
+
+                        // Special styles for D-Day
+                        if (diffDays === 0) {
+                            widget.classList.add('bg-red-50', 'border-red-100');
+                            document.getElementById('dday-count').classList.replace('text-blue-600', 'text-red-500');
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn("Failed to load interface config:", e);
+                document.getElementById('main-emoji').innerText = '📚';
+                document.getElementById('main-subtitle').innerText = '우리가 써 내려가는 이야기';
+            }
+        }
 
         // --- Policy Modal Logic ---
         function waitForAuth() {

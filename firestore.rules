@@ -18,7 +18,7 @@ service cloud.firestore {
     // [3] 사이트 설정 (site_settings)
     match /site_settings/{docId} {
       // terms, privacy, school_config는 로그인 페이지에서 비인증 사용자도 읽을 수 있어야 함
-      allow read: if docId in ['terms', 'privacy', 'school_config'] || request.auth != null;
+      allow read: if docId in ['terms', 'privacy', 'school_config', 'interface_config'] || request.auth != null;
       allow write: if isTeacher();
 
       // 개인정보 활용 동의서 항목 (consent > items 서브컬렉션)
