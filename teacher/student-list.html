@@ -79,72 +79,74 @@
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <div
                 class="p-6 border-b bg-gray-50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 min-h-[88px]">
-                <div class="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 w-full md:w-auto">
-                    <h2 class="text-lg font-bold text-gray-800 whitespace-nowrap mb-2 md:mb-0">
-                        <i class="fas fa-users text-blue-500 mr-2"></i> 학생 명단 <span id="std-count"
-                            class="text-sm font-normal text-gray-500"></span>
-                    </h2>
+                <h2 class="text-lg font-bold text-gray-800 whitespace-nowrap mb-2 md:mb-0">
+                    <i class="fas fa-users text-blue-500 mr-2"></i> 학생 명단 <span id="std-count"
+                        class="text-sm font-normal text-gray-500"></span>
+                </h2>
+            </div>
+            <!-- Toolbar -->
+            <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4 p-6 pt-0">
 
-                    <!-- Grade Filter (New) -->
-                    <div class="flex items-center gap-2">
-                        <select id="grade-filter" onchange="app.filterList()"
-                            class="border rounded px-3 py-1.5 text-sm font-bold text-gray-700 bg-white focus:outline-none focus:border-blue-500">
-                            <option value="all">전체 학년</option>
-                            <option value="1">1학년</option>
-                            <option value="2">2학년</option>
-                            <option value="3">3학년</option>
-                        </select>
-                    </div>
+                <!-- Filters & Bulk Actions -->
+                <div class="flex flex-row items-center gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
+                    <select id="grade-filter" onchange="app.filterList()"
+                        class="border rounded px-3 py-1.5 text-sm font-bold text-gray-700 bg-white focus:outline-none focus:border-blue-500 shrink-0">
+                        <option value="all">전학년</option>
+                        <option value="1">1학년</option>
+                        <option value="2">2학년</option>
+                        <option value="3">3학년</option>
+                    </select>
+                    <select id="class-filter" onchange="app.filterList()"
+                        class="border rounded px-3 py-1.5 text-sm font-bold text-gray-700 bg-white focus:outline-none focus:border-blue-500 shrink-0">
+                        <option value="all">전체반</option>
+                        <option value="1">1반</option>
+                        <option value="2">2반</option>
+                        <option value="3">3반</option>
+                        <option value="4">4반</option>
+                        <option value="5">5반</option>
+                        <option value="6">6반</option>
+                        <option value="7">7반</option>
+                        <option value="8">8반</option>
+                        <option value="9">9반</option>
+                        <option value="10">10반</option>
+                        <option value="11">11반</option>
+                        <option value="12">12반</option>
+                    </select>
 
-                    <!-- Class Filter (New) -->
-                    <div class="flex items-center gap-2">
-                        <select id="class-filter" onchange="app.filterList()"
-                            class="border rounded px-3 py-1.5 text-sm font-bold text-gray-700 bg-white focus:outline-none focus:border-blue-500">
-                            <option value="all">전체 학급</option>
-                            <option value="1">1반</option>
-                            <option value="2">2반</option>
-                            <option value="3">3반</option>
-                            <option value="4">4반</option>
-                            <option value="5">5반</option>
-                            <option value="6">6반</option>
-                            <option value="7">7반</option>
-                            <option value="8">8반</option>
-                            <option value="9">9반</option>
-                            <option value="10">10반</option>
-                            <option value="11">11반</option>
-                            <option value="12">12반</option>
-                        </select>
-                    </div>
+                    <div class="h-6 w-px bg-gray-300 mx-1 shrink-0"></div>
 
                     <!-- Bulk Actions Toolbar -->
-                    <div id="bulk-toolbar" class="flex items-center gap-2 px-3 py-1 whitespace-nowrap">
-                        <span class="text-xs font-bold text-blue-800 mr-2 w-20 text-center inline-block"
-                            id="selected-count-text">0명 선택됨</span>
-                        <div class="h-4 w-px bg-gray-300 mx-1"></div>
+                    <div id="bulk-toolbar" class="flex items-center gap-2 whitespace-nowrap">
+                        <span
+                            class="text-xs font-bold text-blue-800 w-16 text-center inline-block hidden md:inline-block"
+                            id="selected-count-text">0명 선택</span>
+
                         <button id="btn-promote" onclick="app.promoteSelected()" disabled
-                            class="btn-bulk text-xs px-2 py-1 md:px-3 md:py-1.5 rounded font-bold shadow-sm border flex-none"
-                            title="학년을 1씩 올립니다">
-                            <i class="fas fa-level-up-alt mr-1"></i><span class="hidden sm:inline">일괄 </span>진급
+                            class="btn-bulk text-xs px-2 py-1.5 rounded font-bold shadow-sm border flex-none shrink-0"
+                            title="일괄 진급">
+                            <i class="fas fa-level-up-alt"></i><span class="hidden sm:inline"> 진급</span>
                         </button>
                         <button id="btn-move" onclick="app.openMoveClassModal()" disabled
-                            class="btn-bulk text-xs px-2 py-1 md:px-3 md:py-1.5 rounded font-bold shadow-sm border flex-none"
-                            title="반을 변경합니다">
-                            <i class="fas fa-exchange-alt mr-1"></i><span class="hidden sm:inline">반 </span>이동
+                            class="btn-bulk text-xs px-2 py-1.5 rounded font-bold shadow-sm border flex-none shrink-0"
+                            title="반 이동">
+                            <i class="fas fa-exchange-alt"></i><span class="hidden sm:inline"> 이동</span>
                         </button>
                         <button id="btn-delete" onclick="app.deleteSelected()" disabled
-                            class="btn-bulk text-xs px-2 py-1 md:px-3 md:py-1.5 rounded font-bold shadow-sm border flex-none">
-                            <i class="fas fa-trash mr-1"></i><span class="hidden sm:inline">일괄 </span>삭제
+                            class="btn-bulk text-xs px-2 py-1.5 rounded font-bold shadow-sm border flex-none shrink-0">
+                            <i class="fas fa-trash"></i><span class="hidden sm:inline"> 삭제</span>
                         </button>
                     </div>
                 </div>
 
-                <!-- Search Input (Moved to Right) -->
-                <div class="flex gap-2 w-full md:w-auto">
+                <!-- Search Input (Row on Mobile) -->
+                <div class="flex flex-row gap-2 w-full md:w-auto">
                     <input type="text" id="search-input" placeholder="이름 검색"
-                        class="border rounded px-3 py-2 text-sm flex-1 md:w-64 focus:outline-none focus:border-blue-500"
+                        class="border rounded px-3 py-2 text-sm flex-1 md:w-64 focus:outline-none focus:border-blue-500 box-border min-w-0"
                         onkeyup="if(event.key === 'Enter') app.filterList()">
                     <button onclick="app.filterList()"
-                        class="bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-blue-700">검색</button>
+                        class="bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-blue-700 whitespace-nowrap shrink-0">
+                        검색
+                    </button>
                 </div>
             </div>
 

@@ -163,86 +163,86 @@
         <!-- We will place it inside the calendar container header or keep it above -->
         </div>
 
-        <!-- Main Content Area (Split Layout) -->
-        <div class="flex flex-col md:flex-row h-[calc(100vh-140px)] gap-4">
+        <!-- Main Content Area (Mobile: Flex-Col / Desktop: Grid) -->
+        <div
+            class="flex flex-col md:grid md:grid-cols-5 md:grid-rows-2 gap-4 h-auto md:h-[calc(100vh-140px)] min-h-[500px]">
 
-            <!-- Left: Calendar (60%) -->
-            <div class="w-full md:w-3/5 bg-white rounded-xl shadow-sm p-4 h-full flex flex-col">
-                <div class="flex justify-between items-center mb-2">
-                    <h2 class="text-lg font-bold text-gray-800"><i class="far fa-calendar-alt mr-2 text-blue-600"></i>학사
-                        일정</h2>
-                    <div class="flex items-center gap-2">
+            <!-- 1. Notice Board (Mobile: Order 1 / Desktop: Order 2, Right Top) -->
+            <div
+                class="order-1 md:order-2 md:col-span-2 md:row-span-1 bg-[#fffbeb] rounded-xl shadow-sm border border-yellow-200 p-4 flex flex-col relative overflow-hidden min-h-[300px] md:min-h-0">
+                <div class="flex justify-between items-center mb-3 border-b border-yellow-200 pb-2">
+                    <h3 class="text-lg font-extrabold text-amber-800 flex items-center">
+                        <i class="fas fa-thumbtack mr-2 text-amber-600"></i>알림장
+                    </h3>
+                    <button onclick="app.openNoticeModal()"
+                        class="text-amber-700 hover:text-amber-900 bg-yellow-200 hover:bg-yellow-300 px-2 py-1 rounded text-xs font-bold transition">
+                        <i class="fas fa-plus mr-1"></i>쓰기
+                    </button>
+                </div>
+                <div id="notice-list" class="flex-1 overflow-y-auto space-y-3 pr-2 custom-scroll">
+                    <div class="text-center text-amber-800/50 py-10 font-bold text-sm">등록된 알림이 없습니다.</div>
+                </div>
+            </div>
+
+            <!-- 2. Calendar (Mobile: Order 2 / Desktop: Order 1, Left Full Height) -->
+            <div
+                class="order-2 md:order-1 md:col-span-3 md:row-span-2 bg-white rounded-xl shadow-sm p-4 flex flex-col min-h-[500px] md:min-h-0">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-2 gap-2">
+                    <h2 class="text-lg font-bold text-gray-800 whitespace-nowrap"><i
+                            class="far fa-calendar-alt mr-2 text-blue-600"></i>학사 일정</h2>
+
+                    <div class="flex flex-wrap items-center gap-2 w-full md:w-auto">
                         <button onclick="app.openSearch()"
-                            class="bg-gray-50 border border-gray-200 text-gray-600 hover:text-blue-600 p-1.5 rounded-lg transition"
+                            class="bg-gray-50 border border-gray-200 text-gray-600 hover:text-blue-600 p-1.5 rounded-lg transition shrink-0"
                             title="검색">
                             <i class="fas fa-search"></i>
                         </button>
                         <select id="view-filter" onchange="app.refetchEvents()"
-                            class="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg p-1.5 outline-none">
-                            <option value="all">전체 보기</option>
-                            <option value="common">공통 일정</option>
+                            class="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg p-1.5 outline-none shrink-0 max-w-[100px]">
+                            <option value="all">전체</option>
+                            <option value="common">공통</option>
                             <!-- Class options populated dynamically -->
                         </select>
-                        <button onclick="app.openModal()"
-                            class="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-blue-700 shadow-sm transition">
-                            <i class="fas fa-plus mr-1"></i> 추가
-                        </button>
-                        <div class="flex items-center gap-2 ml-2">
+
+                        <!-- Action Buttons Group -->
+                        <div class="flex items-center gap-1 ml-auto md:ml-2">
+                            <button onclick="app.openModal()"
+                                class="bg-blue-600 text-white px-2 py-1.5 rounded-md text-xs font-bold hover:bg-blue-700 shadow-sm transition whitespace-nowrap">
+                                <i class="fas fa-plus"></i> 추가
+                            </button>
                             <button onclick="app.populate2026Holidays()"
-                                class="bg-green-600 text-white px-2 py-1.5 rounded-md hover:bg-green-700 transition flex items-center gap-1 shadow-sm text-xs font-bold"
+                                class="bg-green-600 text-white px-2 py-1.5 rounded-md hover:bg-green-700 transition shadow-sm text-xs font-bold whitespace-nowrap"
                                 title="2026년 공휴일 자동 등록">
                                 <i class="fas fa-calendar-check"></i> 공휴일
                             </button>
                             <button onclick="app.checkSchedule()"
-                                class="bg-gray-600 text-white px-2 py-1.5 rounded-md hover:bg-gray-700 transition flex items-center gap-1 shadow-sm text-xs font-bold"
+                                class="bg-gray-600 text-white px-2 py-1.5 rounded-md hover:bg-gray-700 transition shadow-sm text-xs font-bold whitespace-nowrap"
                                 title="데이터 확인">
                                 <i class="fas fa-database"></i> 확인
                             </button>
                         </div>
                     </div>
-                    <!-- Search Panel (Hidden by default) -->
-
                 </div>
                 <div id="calendar" class="flex-1"></div>
             </div>
 
-            <!-- Right: Functions (40%) -->
-            <div class="w-full md:w-2/5 flex flex-col gap-4 h-full">
-
-                <!-- Right Top: Notice Board (50%) -->
-                <div
-                    class="h-1/2 bg-[#fffbeb] rounded-xl shadow-sm border border-yellow-200 p-4 flex flex-col relative overflow-hidden">
-                    <div class="flex justify-between items-center mb-3 border-b border-yellow-200 pb-2">
-                        <h3 class="text-lg font-extrabold text-amber-800 flex items-center">
-                            <i class="fas fa-thumbtack mr-2 text-amber-600"></i>알림장
-                        </h3>
-                        <button onclick="app.openNoticeModal()"
-                            class="text-amber-700 hover:text-amber-900 bg-yellow-200 hover:bg-yellow-300 px-2 py-1 rounded text-xs font-bold transition">
-                            <i class="fas fa-plus mr-1"></i>쓰기
-                        </button>
-                    </div>
-                    <div id="notice-list" class="flex-1 overflow-y-auto space-y-3 pr-2 custom-scroll">
-                        <div class="text-center text-amber-800/50 py-10 font-bold text-sm">등록된 알림이 없습니다.</div>
+            <!-- 3. Event Details (Mobile: Order 3 / Desktop: Order 3, Right Bottom) -->
+            <div
+                class="order-3 md:order-3 md:col-span-2 md:row-span-1 bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col min-h-[300px] md:min-h-0">
+                <div class="flex justify-between items-center mb-3 border-b border-gray-100 pb-2">
+                    <h3 class="text-lg font-bold text-gray-800 flex items-center">
+                        <i class="fas fa-info-circle mr-2 text-blue-500"></i>일정 상세
+                    </h3>
+                    <span id="detail-date-display" class="text-sm font-bold text-gray-500">날짜를 선택하세요</span>
+                </div>
+                <div id="detail-panel-content" class="flex-1 overflow-y-auto pr-2 custom-scroll">
+                    <div class="flex flex-col items-center justify-center h-full text-gray-400">
+                        <i class="far fa-calendar-check text-4xl mb-3 text-gray-200"></i>
+                        <p class="text-sm">달력에서 날짜나 일정을 클릭하면<br>상세 내용이 여기에 표시됩니다.</p>
                     </div>
                 </div>
-
-                <!-- Right Bottom: Event Details (50%) -->
-                <div class="h-1/2 bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col">
-                    <div class="flex justify-between items-center mb-3 border-b border-gray-100 pb-2">
-                        <h3 class="text-lg font-bold text-gray-800 flex items-center">
-                            <i class="fas fa-info-circle mr-2 text-blue-500"></i>일정 상세
-                        </h3>
-                        <span id="detail-date-display" class="text-sm font-bold text-gray-500">날짜를 선택하세요</span>
-                    </div>
-                    <div id="detail-panel-content" class="flex-1 overflow-y-auto pr-2 custom-scroll">
-                        <div class="flex flex-col items-center justify-center h-full text-gray-400">
-                            <i class="far fa-calendar-check text-4xl mb-3 text-gray-200"></i>
-                            <p class="text-sm">달력에서 날짜나 일정을 클릭하면<br>상세 내용이 여기에 표시됩니다.</p>
-                        </div>
-                    </div>
-                </div>
-
             </div>
+
         </div>
     </main>
 
