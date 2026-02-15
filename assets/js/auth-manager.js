@@ -150,7 +150,8 @@ class AuthManager {
 
         try {
             // Fetch future events
-            const calPath = `years/${window.currentConfig.year}/calendar`;
+            // Fetch future events - Corrected to use Semester path
+            const calPath = `years/${window.currentConfig.year}/semesters/${window.currentConfig.semester}/calendar`;
             const snapshot = await window.db.collection(calPath)
                 .where('start', '>=', todayStr)
                 .orderBy('start')

@@ -490,7 +490,7 @@
                 const cfg = window.currentConfig;
                 if (cfg) document.getElementById('dash-year-badge').innerText = `${cfg.year}학년도 ${cfg.semester}학기`;
                 this.initCalendar();
-                this.initModal();
+                // this.initModal(); // Removed: No initialization needed as onclicks are in HTML
                 this.initSearch();
                 this.initNotices();
                 this.initClassFilter();
@@ -635,10 +635,10 @@
                     alert('시스템 설정을 불러올 수 없습니다. 페이지를 새로고침하세요.');
                     return null;
                 }
-                // EXCEPTION: calendar uses years/{year}/calendar (no semester)
-                if (collectionName === 'calendar') {
-                    return `years/${cfg.year}/calendar`;
-                }
+                // EXCEPTION: calendar uses years/{year}/calendar (no semester) -> REMOVED to match Rules
+                // if (collectionName === 'calendar') {
+                //    return `years/${cfg.year}/calendar`;
+                // }
                 // All other collections use semesters path
                 return `years/${cfg.year}/semesters/${cfg.semester}/${collectionName}`;
             },
@@ -928,10 +928,7 @@
 
                         this.showEventsOnPanel(info.dateStr, dailyEvents);
                     },
-                    // Double-click to add event
-                    dateDoubleClick: (info) => {
-                        this.openModal(null, info.dateStr);
-                    },
+
                     eventClick: (info) => {
                         if (info.event.classNames.includes('holiday-text-event')) return;
                         // app.openModal(info.event); // Old behavior
