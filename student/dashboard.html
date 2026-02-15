@@ -224,8 +224,8 @@
         </div>
     </main>
 
-    <!-- Detail Modal -->
-    <div id="detail-modal" class="modal-overlay hidden" onclick="app.closeModal(event)">
+    <!-- Detail Modal (Read-Only) -->
+    <div id="detail-modal" class="modal-overlay hidden" onclick="app.closeDetailModal()">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 mx-4 relative transform transition-all scale-100"
             onclick="event.stopPropagation()">
             <div class="mb-4">
@@ -233,287 +233,307 @@
                     class="px-2 py-1 rounded text-xs font-bold text-white bg-gray-500 inline-block mb-2">TYPE</span>
                 <h3 id="detail-title" class="text-xl font-bold text-gray-900 leading-tight">일정 제목</h3>
             </div>
-
             <div class="space-y-3 text-sm text-gray-600 bg-gray-50 p-4 rounded-xl border border-gray-100 mb-6">
                 <div class="flex items-start gap-3">
                     <i class="fas fa-clock mt-1 text-blue-500"></i>
                     <div>
                         <p class="font-bold text-gray-800">기간</p>
-                        <!-- Footer injected by AuthManager -->
+                        <p id="detail-date" class="text-gray-600">-</p>
+                    </div>
+                </div>
+                <div class="flex items-start gap-3">
+                    <i class="fas fa-align-left mt-1 text-green-500"></i>
+                    <div>
+                        <p class="font-bold text-gray-800">설명</p>
+                        <p id="detail-desc" class="text-gray-600">-</p>
+                    </div>
+                </div>
+            </div>
+            <button onclick="app.closeDetailModal()"
+                class="w-full py-2.5 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition">닫기</button>
+        </div>
+    </div>
 
-                        <script>
-                            window.AuthManager.init('student');
+    <!-- Footer injected by AuthManager -->
 
-                            const app = {
-                                calendar: null,
-                                userClassStr: null, // "2-1" etc.
-                                colorMap: {
-                                    'exam': '#ef4444',       // Red
-                                    'performance': '#f97316', // Orange
-                                    'event': '#10b981',       // Green
-                                    'diagnosis': '#3b82f6',   // Blue
-                                    'formative': '#3b82f6'    // Blue
-                                },
-                                typeLabelMap: {
-                                    'exam': '정기 시험', 'performance': '수행평가', 'event': '행사', 'diagnosis': '진단평가', 'formative': '형성평가'
-                                },
-                                holidays: {},
+    <script>
 
-                                init: function () {
-                                    document.addEventListener('auth-ready', async (e) => {
-                                        const user = e.detail;
-                                        await this.loadUserClass(user.uid);
+        window.AuthManager.init('student');
 
-                                        // Update Welcome Message
-                                        if (this.userClassStr) {
-                                            const [g, c] = this.userClassStr.split('-');
-                                            document.getElementById('welcome-text').innerText = `${g}학년 ${c}반의 대시보드`;
-                                        } else {
-                                            document.getElementById('welcome-text').innerText = `${user.displayName || '학생'}님의 대시보드`;
-                                        }
+        const app = {
+            calendar: null,
+            userClassStr: null, // "2-1" etc.
+            colorMap: {
+                'exam': '#ef4444',       // Red
+                'performance': '#f97316', // Orange
+                'event': '#10b981',       // Green
+                'diagnosis': '#3b82f6',   // Blue
+                'formative': '#3b82f6'    // Blue
+            },
+            typeLabelMap: {
+                'exam': '정기 시험', 'performance': '수행평가', 'event': '행사', 'diagnosis': '진단평가', 'formative': '형성평가'
+            },
+            holidays: {},
 
-                                        const cfg = window.currentConfig;
-                                        if (cfg) document.getElementById('semester-badge').innerText = `${cfg.year}학년도 ${cfg.semester}학기`;
+            init: function () {
+                document.addEventListener('auth-ready', async (e) => {
+                    const user = e.detail;
+                    await this.loadUserClass(user.uid);
 
-                                        this.initCalendar();
-                                        this.initNotices();
-                                    });
-                                },
+                    // Update Welcome Message
+                    if (this.userClassStr) {
+                        const [g, c] = this.userClassStr.split('-');
+                        document.getElementById('welcome-text').innerText = `${g}학년 ${c}반의 대시보드`;
+                    } else {
+                        document.getElementById('welcome-text').innerText = `${user.displayName || '학생'}님의 대시보드`;
+                    }
 
-                                loadUserClass: async function (uid) {
-                                    try {
-                                        const doc = await window.getCollection('users').doc(uid).get();
-                                        if (doc.exists) {
-                                            const d = doc.data();
-                                            if (d.grade && d.class) {
-                                                this.userClassStr = `${d.grade}-${d.class}`;
-                                            }
-                                        }
-                                    } catch (e) { console.error(e); }
-                                },
+                    const cfg = window.currentConfig;
+                    if (cfg) document.getElementById('semester-badge').innerText = `${cfg.year}학년도 ${cfg.semester}학기`;
 
-                                getCollectionPath: function (collectionName) {
-                                    const cfg = window.currentConfig;
-                                    if (!cfg || !cfg.year || !cfg.semester) {
-                                        console.error('Global config not loaded properly');
-                                        return null;
-                                    }
-                                    // FIXED: Calendar also uses semester path to match Teacher's write path
-                                    return `years/${cfg.year}/semesters/${cfg.semester}/${collectionName}`;
-                                },
+                    this.initCalendar();
+                    this.initNotices();
+                });
+            },
 
-                                // --- Search & Filter Logic ---
-                                openSearch: function () {
-                                    const btn = document.getElementById('btn-search-trigger');
-                                    const container = document.getElementById('search-container');
-                                    btn.classList.add('hidden');
-                                    container.classList.remove('hidden');
-                                    container.classList.add('flex');
-                                    document.getElementById('search-input').focus();
-                                },
+            loadUserClass: async function (uid) {
+                try {
+                    const doc = await window.getCollection('users').doc(uid).get();
+                    if (doc.exists) {
+                        const d = doc.data();
+                        if (d.grade && d.class) {
+                            this.userClassStr = `${d.grade}-${d.class}`;
+                        }
+                    }
+                } catch (e) { console.error(e); }
+            },
 
-                                closeSearch: function () {
-                                    const btn = document.getElementById('btn-search-trigger');
-                                    const container = document.getElementById('search-container');
-                                    btn.classList.remove('hidden');
-                                    container.classList.add('hidden');
-                                    container.classList.remove('flex');
-                                    document.getElementById('search-input').value = '';
-                                    this.refetchEvents(); // Reset filter
-                                },
+            getCollectionPath: function (collectionName) {
+                const cfg = window.currentConfig;
+                if (!cfg || !cfg.year || !cfg.semester) {
+                    console.error('Global config not loaded properly');
+                    return null;
+                }
+                // FIXED: Calendar also uses semester path to match Teacher's write path
+                return `years/${cfg.year}/semesters/${cfg.semester}/${collectionName}`;
+            },
 
-                                searchEvents: function () {
-                                    this.refetchEvents();
-                                },
+            // --- Search & Filter Logic ---
+            openSearch: function () {
+                const btn = document.getElementById('btn-search-trigger');
+                const container = document.getElementById('search-container');
+                btn.classList.add('hidden');
+                container.classList.remove('hidden');
+                container.classList.add('flex');
+                document.getElementById('search-input').focus();
+            },
 
-                                refetchEvents: function () {
-                                    if (this.calendar) this.calendar.refetchEvents();
-                                },
+            closeSearch: function () {
+                const btn = document.getElementById('btn-search-trigger');
+                const container = document.getElementById('search-container');
+                btn.classList.remove('hidden');
+                container.classList.add('hidden');
+                container.classList.remove('flex');
+                document.getElementById('search-input').value = '';
+                this.refetchEvents(); // Reset filter
+            },
 
-                                fetchEvents: async function (info, successCallback, failureCallback) {
-                                    try {
-                                        const path = this.getCollectionPath('calendar');
-                                        if (!path) { console.error('[Student Calendar] No collection path'); return successCallback([]); }
+            searchEvents: function () {
+                this.refetchEvents();
+            },
 
-                                        // CRITICAL FIX: Extract YYYY-MM-DD from ISO string (matches Teacher's format)
-                                        const startYMD = info.startStr.split('T')[0];
-                                        const endYMD = info.endStr.split('T')[0];
-                                        console.log('[Student Calendar] fetchEvents called. Path:', path, 'Range:', startYMD, '~', endYMD);
+            refetchEvents: function () {
+                if (this.calendar) this.calendar.refetchEvents();
+            },
 
-                                        const snapshot = await window.db.collection(path)
-                                            .where('start', '>=', startYMD)
-                                            .where('start', '<', endYMD)
-                                            .get();
+            fetchEvents: async function (info, successCallback, failureCallback) {
+                try {
+                    const path = this.getCollectionPath('calendar');
+                    if (!path) { console.error('[Student Calendar] No collection path'); return successCallback([]); }
 
-                                        console.log('[Student Calendar] Snapshot size:', snapshot.size);
+                    // CRITICAL FIX: Extract YYYY-MM-DD from ISO string (matches Teacher's format)
+                    const startYMD = info.startStr.split('T')[0];
+                    const endYMD = info.endStr.split('T')[0];
+                    console.log('[Student Calendar] fetchEvents called. Path:', path, 'Range:', startYMD, '~', endYMD);
 
-                                        const events = [];
-                                        const keyword = document.getElementById('search-input') ? document.getElementById('search-input').value.trim().toLowerCase() : '';
+                    const snapshot = await window.db.collection(path)
+                        .where('start', '>=', startYMD)
+                        .where('start', '<', endYMD)
+                        .get();
 
-                                        snapshot.forEach(doc => {
-                                            const d = doc.data();
+                    console.log('[Student Calendar] Snapshot size:', snapshot.size);
 
-                                            // Filter: Common OR Holiday OR My Class
-                                            const isCommon = d.targetType === 'common';
-                                            const isHoliday = d.eventType === 'holiday';
-                                            const isMyClass = d.targetType === 'class' && d.targetClass === this.userClassStr;
+                    const events = [];
+                    const keyword = document.getElementById('search-input') ? document.getElementById('search-input').value.trim().toLowerCase() : '';
 
-                                            if (!isCommon && !isHoliday && !isMyClass) return;
+                    snapshot.forEach(doc => {
+                        const d = doc.data();
 
-                                            // Search keyword filter
-                                            if (keyword && !d.title.toLowerCase().includes(keyword)) return;
+                        // Filter: Common OR Holiday OR My Class
+                        const isCommon = d.targetType === 'common';
+                        const isHoliday = d.eventType === 'holiday';
+                        const isMyClass = d.targetType === 'class' && d.targetClass === this.userClassStr;
 
-                                            events.push({
-                                                id: doc.id,
-                                                title: d.title,
-                                                start: d.start,
-                                                end: d.end || d.start,
-                                                backgroundColor: isHoliday ? 'transparent' : (this.colorMap[d.eventType] || '#6b7280'),
-                                                borderColor: isHoliday ? 'transparent' : (this.colorMap[d.eventType] || '#6b7280'),
-                                                textColor: isHoliday ? '#ef4444' : undefined,
-                                                classNames: isHoliday ? ['holiday-text-event'] : [],
-                                                extendedProps: d
-                                            });
-                                        });
-                                        console.log('[Student Calendar] Events after filter:', events.length);
-                                        successCallback(events);
-                                    } catch (e) {
-                                        console.error('[Student Calendar] fetchEvents error:', e);
-                                        failureCallback(e);
-                                    }
-                                },
+                        if (!isCommon && !isHoliday && !isMyClass) return;
 
-                                // --- Notice Board Logic (Read-Only) ---
-                                initNotices: function () {
-                                    const container = document.getElementById('notice-list');
-                                    const path = this.getCollectionPath('notices');
-                                    if (!path) return;
+                        // Search keyword filter
+                        if (keyword && !d.title.toLowerCase().includes(keyword)) return;
 
-                                    window.db.collection(path).orderBy('createdAt', 'desc').onSnapshot(snapshot => {
-                                        if (snapshot.empty) {
-                                            container.innerHTML = '<div class="text-center text-amber-800/50 py-10 font-bold text-sm">등록된 알림이 없습니다.</div>';
-                                            return;
-                                        }
+                        events.push({
+                            id: doc.id,
+                            title: d.title,
+                            start: d.start,
+                            end: d.end || d.start,
+                            backgroundColor: isHoliday ? 'transparent' : (this.colorMap[d.eventType] || '#6b7280'),
+                            borderColor: isHoliday ? 'transparent' : (this.colorMap[d.eventType] || '#6b7280'),
+                            textColor: isHoliday ? '#ef4444' : undefined,
+                            classNames: isHoliday ? ['holiday-text-event'] : [],
+                            extendedProps: d
+                        });
+                    });
+                    console.log('[Student Calendar] Events after filter:', events.length);
+                    successCallback(events);
+                } catch (e) {
+                    console.error('[Student Calendar] fetchEvents error:', e);
+                    failureCallback(e);
+                }
+            },
 
-                                        const notices = [];
-                                        snapshot.forEach(doc => {
-                                            const d = doc.data();
-                                            if (d.targetType === 'common' || (this.userClassStr && d.targetType === 'class' && d.targetClass === this.userClassStr)) {
-                                                notices.push({ id: doc.id, ...d });
-                                            }
-                                        });
+            // --- Notice Board Logic (Read-Only) ---
+            initNotices: function () {
+                const container = document.getElementById('notice-list');
+                const path = this.getCollectionPath('notices');
+                if (!path) return;
 
-                                        if (notices.length === 0) {
-                                            container.innerHTML = '<div class="text-center text-amber-800/50 py-10 font-bold text-sm">우리 반 알림이 없습니다.</div>';
-                                            return;
-                                        }
+                window.db.collection(path).orderBy('createdAt', 'desc').onSnapshot(snapshot => {
+                    if (snapshot.empty) {
+                        container.innerHTML = '<div class="text-center text-amber-800/50 py-10 font-bold text-sm">등록된 알림이 없습니다.</div>';
+                        return;
+                    }
 
-                                        container.innerHTML = notices.map(d => {
-                                            let badge = '';
-                                            if (d.category === 'normal') badge = '<span class="bg-red-500 text-white px-2 py-0.5 rounded text-xs font-bold">📢 공지</span>';
-                                            else if (d.category === 'exam') badge = '<span class="bg-blue-500 text-white px-2 py-0.5 rounded text-xs font-bold">🔥 정기</span>';
-                                            else if (d.category === 'performance') badge = '<span class="bg-green-500 text-white px-2 py-0.5 rounded text-xs font-bold">⚡ 수행</span>';
-                                            else if (d.category === 'prep') badge = '<span class="bg-yellow-500 text-white px-2 py-0.5 rounded text-xs font-bold">🎒 준비</span>';
-                                            else if (d.category === 'dday') {
-                                                let dDayStr = 'D-Day';
-                                                if (d.targetDate) {
-                                                    const today = new Date(); today.setHours(0, 0, 0, 0);
-                                                    const target = new Date(d.targetDate); target.setHours(0, 0, 0, 0);
-                                                    const diff = Math.ceil((target - today) / (1000 * 60 * 60 * 24));
-                                                    dDayStr = diff > 0 ? 'D-' + diff : (diff === 0 ? 'D-Day' : 'D+' + Math.abs(diff));
-                                                }
-                                                badge = '<span class="bg-purple-500 text-white px-2 py-0.5 rounded text-xs font-bold">⏳ ' + dDayStr + '</span>';
-                                            } else {
-                                                badge = '<span class="bg-gray-500 text-white px-2 py-0.5 rounded text-xs font-bold">📢 알림</span>';
-                                            }
-                                            const content = d.content.replace(/\n/g, '<br>');
-                                            return '<div class="bg-white/80 p-3 rounded-lg border border-yellow-200 shadow-sm relative group mb-2">' +
-                                                '<div class="flex justify-between items-center mb-2">' + badge +
-                                                '<span class="text-[10px] text-amber-800/60 font-mono">' + new Date(d.createdAt.seconds * 1000).toLocaleDateString() + '</span></div>' +
-                                                '<div class="text-gray-800 text-sm font-bold leading-relaxed whitespace-pre-wrap">' + content + '</div></div>';
-                                        }).join('');
-                                    });
-                                },
+                    const notices = [];
+                    snapshot.forEach(doc => {
+                        const d = doc.data();
+                        if (d.targetType === 'common' || (this.userClassStr && d.targetType === 'class' && d.targetClass === this.userClassStr)) {
+                            notices.push({ id: doc.id, ...d });
+                        }
+                    });
 
-                                // --- Detail Panel Logic (Read-Only) ---
-                                showEventsOnPanel: function (dateStr, events) {
-                                    const container = document.getElementById('detail-panel-content');
-                                    const dateDisplay = document.getElementById('detail-date-display');
-                                    const dateObj = new Date(dateStr);
-                                    const days = ['일', '월', '화', '수', '목', '금', '토'];
-                                    dateDisplay.innerHTML = '<span class="inline-flex items-center bg-blue-50 border-2 border-blue-300 rounded-lg px-3 py-1"><span class="text-lg font-extrabold text-blue-800">' + (dateObj.getMonth() + 1) + '월 ' + dateObj.getDate() + '일</span><span class="ml-1 text-sm font-bold text-blue-500">(' + days[dateObj.getDay()] + ')</span></span>';
+                    if (notices.length === 0) {
+                        container.innerHTML = '<div class="text-center text-amber-800/50 py-10 font-bold text-sm">우리 반 알림이 없습니다.</div>';
+                        return;
+                    }
 
-                                    if (events.length === 0) {
-                                        container.innerHTML = '<div class="flex flex-col items-center justify-center h-40 text-gray-400"><i class="far fa-calendar-times text-3xl mb-2"></i><p class="text-sm">일정이 없습니다.</p></div>';
-                                        return;
-                                    }
+                    container.innerHTML = notices.map(d => {
+                        let badge = '';
+                        if (d.category === 'normal') badge = '<span class="bg-red-500 text-white px-2 py-0.5 rounded text-xs font-bold">📢 공지</span>';
+                        else if (d.category === 'exam') badge = '<span class="bg-blue-500 text-white px-2 py-0.5 rounded text-xs font-bold">🔥 정기</span>';
+                        else if (d.category === 'performance') badge = '<span class="bg-green-500 text-white px-2 py-0.5 rounded text-xs font-bold">⚡ 수행</span>';
+                        else if (d.category === 'prep') badge = '<span class="bg-yellow-500 text-white px-2 py-0.5 rounded text-xs font-bold">🎒 준비</span>';
+                        else if (d.category === 'dday') {
+                            let dDayStr = 'D-Day';
+                            if (d.targetDate) {
+                                const today = new Date(); today.setHours(0, 0, 0, 0);
+                                const target = new Date(d.targetDate); target.setHours(0, 0, 0, 0);
+                                const diff = Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+                                dDayStr = diff > 0 ? 'D-' + diff : (diff === 0 ? 'D-Day' : 'D+' + Math.abs(diff));
+                            }
+                            badge = '<span class="bg-purple-500 text-white px-2 py-0.5 rounded text-xs font-bold">⏳ ' + dDayStr + '</span>';
+                        } else {
+                            badge = '<span class="bg-gray-500 text-white px-2 py-0.5 rounded text-xs font-bold">📢 알림</span>';
+                        }
+                        const content = d.content.replace(/\n/g, '<br>');
+                        return '<div class="bg-white/80 p-3 rounded-lg border border-yellow-200 shadow-sm relative group mb-2">' +
+                            '<div class="flex justify-between items-center mb-2">' + badge +
+                            '<span class="text-[10px] text-amber-800/60 font-mono">' + new Date(d.createdAt.seconds * 1000).toLocaleDateString() + '</span></div>' +
+                            '<div class="text-gray-800 text-sm font-bold leading-relaxed whitespace-pre-wrap">' + content + '</div></div>';
+                    }).join('');
+                });
+            },
 
-                                    container.innerHTML = events.map(ev => {
-                                        if (ev.classNames && ev.classNames.includes('holiday-text-event')) {
-                                            return '<div class="group p-3 border-l-4 border-red-400 bg-red-50 mb-3 rounded-r-lg"><div class="flex items-center gap-2"><span class="text-[10px] text-white px-1.5 py-0.5 rounded font-bold bg-red-500">공휴일</span><h4 class="font-bold text-red-700 text-sm">' + ev.title + '</h4></div></div>';
-                                        }
-                                        const p = ev.extendedProps || ev;
-                                        const bgColor = p.backgroundColor || this.colorMap[p.eventType] || '#999';
-                                        const typeLabel = this.typeLabelMap[p.eventType] || '일정';
-                                        let html = '<div class="group p-3 border-l-4 border-gray-200 bg-gray-50 mb-3 rounded-r-lg">';
-                                        html += '<div class="flex justify-between items-start"><div>';
-                                        html += '<div class="flex items-center gap-2 mb-1">';
-                                        html += '<span class="text-[10px] text-white px-1.5 py-0.5 rounded font-bold" style="background-color:' + bgColor + '">' + typeLabel + '</span>';
-                                        html += '<h4 class="font-bold text-gray-800 text-sm">' + p.title + '</h4></div>';
-                                        html += '<p class="text-xs text-gray-500">' + p.start + (p.end && p.start !== p.end ? ' ~ ' + p.end : '') + '</p>';
-                                        html += '</div></div>';
-                                        if (p.description) html += '<p class="text-xs text-gray-600 mt-2 bg-gray-100 p-2 rounded">' + p.description + '</p>';
-                                        html += '</div>';
-                                        return html;
-                                    }).join('');
-                                },
+            // --- Detail Panel Logic (Read-Only) ---
+            showEventsOnPanel: function (dateStr, events) {
+                const container = document.getElementById('detail-panel-content');
+                const dateDisplay = document.getElementById('detail-date-display');
+                const dateObj = new Date(dateStr);
+                const days = ['일', '월', '화', '수', '목', '금', '토'];
+                dateDisplay.innerHTML = '<span class="inline-flex items-center bg-blue-50 border-2 border-blue-300 rounded-lg px-3 py-1"><span class="text-lg font-extrabold text-blue-800">' + (dateObj.getMonth() + 1) + '월 ' + dateObj.getDate() + '일</span><span class="ml-1 text-sm font-bold text-blue-500">(' + days[dateObj.getDay()] + ')</span></span>';
 
-                                initCalendar: function () {
-                                    const calendarEl = document.getElementById('calendar');
-                                    this.calendar = new FullCalendar.Calendar(calendarEl, {
-                                        initialView: 'dayGridMonth',
-                                        locale: 'ko',
-                                        headerToolbar: {
-                                            left: 'prev,next today',
-                                            center: 'title',
-                                            right: 'dayGridMonth,listMonth'
-                                        },
-                                        dayCellClassNames: (arg) => {
-                                            const dateStr = arg.date.toISOString().split('T')[0];
-                                            const evts = this.calendar ? this.calendar.getEvents() : [];
-                                            const isHoliday = evts.some(e => e.startStr === dateStr && e.extendedProps && e.extendedProps.eventType === 'holiday');
-                                            return isHoliday ? ['fc-day-holiday'] : [];
-                                        },
-                                        events: [this.fetchEvents.bind(this)],
-                                        dateClick: (info) => {
-                                            const allEvents = this.calendar.getEvents();
-                                            const dailyEvents = allEvents.filter(e => {
-                                                const start = new Date(e.startStr);
-                                                const end = e.end ? new Date(e.endStr) : new Date(start);
-                                                const target = new Date(info.dateStr);
-                                                if (!e.end) return e.startStr === info.dateStr;
-                                                return target >= start && target < end;
-                                            });
-                                            this.showEventsOnPanel(info.dateStr, dailyEvents);
-                                        },
-                                        eventClick: (info) => {
-                                            if (info.event.classNames.includes('holiday-text-event')) return;
-                                            const startStr = info.event.startStr.split('T')[0];
-                                            this.showEventsOnPanel(startStr, [info.event]);
-                                        },
-                                        height: '100%',
-                                        contentHeight: '100%',
-                                        expandRows: true,
-                                        displayEventTime: false,
-                                        fixedWeekCount: false,
-                                        showNonCurrentDates: false,
-                                    });
-                                    this.calendar.render();
-                                }
-                            };
+                if (events.length === 0) {
+                    container.innerHTML = '<div class="flex flex-col items-center justify-center h-40 text-gray-400"><i class="far fa-calendar-times text-3xl mb-2"></i><p class="text-sm">일정이 없습니다.</p></div>';
+                    return;
+                }
 
-                            app.init();
-                        </script>
+                container.innerHTML = events.map(ev => {
+                    if (ev.classNames && ev.classNames.includes('holiday-text-event')) {
+                        return '<div class="group p-3 border-l-4 border-red-400 bg-red-50 mb-3 rounded-r-lg"><div class="flex items-center gap-2"><span class="text-[10px] text-white px-1.5 py-0.5 rounded font-bold bg-red-500">공휴일</span><h4 class="font-bold text-red-700 text-sm">' + ev.title + '</h4></div></div>';
+                    }
+                    const p = ev.extendedProps || ev;
+                    const bgColor = p.backgroundColor || this.colorMap[p.eventType] || '#999';
+                    const typeLabel = this.typeLabelMap[p.eventType] || '일정';
+                    let html = '<div class="group p-3 border-l-4 border-gray-200 bg-gray-50 mb-3 rounded-r-lg">';
+                    html += '<div class="flex justify-between items-start"><div>';
+                    html += '<div class="flex items-center gap-2 mb-1">';
+                    html += '<span class="text-[10px] text-white px-1.5 py-0.5 rounded font-bold" style="background-color:' + bgColor + '">' + typeLabel + '</span>';
+                    html += '<h4 class="font-bold text-gray-800 text-sm">' + p.title + '</h4></div>';
+                    html += '<p class="text-xs text-gray-500">' + p.start + (p.end && p.start !== p.end ? ' ~ ' + p.end : '') + '</p>';
+                    html += '</div></div>';
+                    if (p.description) html += '<p class="text-xs text-gray-600 mt-2 bg-gray-100 p-2 rounded">' + p.description + '</p>';
+                    html += '</div>';
+                    return html;
+                }).join('');
+            },
+
+            closeDetailModal: function () {
+                document.getElementById('detail-modal').classList.add('hidden');
+            },
+
+            initCalendar: function () {
+                const calendarEl = document.getElementById('calendar');
+                this.calendar = new FullCalendar.Calendar(calendarEl, {
+                    initialView: 'dayGridMonth',
+                    locale: 'ko',
+                    headerToolbar: {
+                        left: 'prev,next today',
+                        center: 'title',
+                        right: 'dayGridMonth,listMonth'
+                    },
+                    dayCellClassNames: (arg) => {
+                        const dateStr = arg.date.toISOString().split('T')[0];
+                        const evts = this.calendar ? this.calendar.getEvents() : [];
+                        const isHoliday = evts.some(e => e.startStr === dateStr && e.extendedProps && e.extendedProps.eventType === 'holiday');
+                        return isHoliday ? ['fc-day-holiday'] : [];
+                    },
+                    events: this.fetchEvents.bind(this),
+                    dateClick: (info) => {
+                        const allEvents = this.calendar.getEvents();
+                        const dailyEvents = allEvents.filter(e => {
+                            const start = new Date(e.startStr);
+                            const end = e.end ? new Date(e.endStr) : new Date(start);
+                            const target = new Date(info.dateStr);
+                            if (!e.end) return e.startStr === info.dateStr;
+                            return target >= start && target < end;
+                        });
+                        this.showEventsOnPanel(info.dateStr, dailyEvents);
+                    },
+                    eventClick: (info) => {
+                        if (info.event.classNames.includes('holiday-text-event')) return;
+                        const startStr = info.event.startStr.split('T')[0];
+                        this.showEventsOnPanel(startStr, [info.event]);
+                    },
+                    height: '100%',
+                    contentHeight: '100%',
+                    expandRows: true,
+                    displayEventTime: false,
+                    fixedWeekCount: false,
+                    showNonCurrentDates: false,
+                });
+                this.calendar.render();
+            }
+        };
+
+        app.init();
+    </script>
 </body>
 
 </html>
