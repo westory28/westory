@@ -133,13 +133,12 @@
 </head>
 
 <body class="bg-gray-50 flex flex-col h-screen">
-    <!-- Header injected by AuthManager -->
 
     <main class="flex-1 w-full max-w-7xl mx-auto px-4 py-4 md:px-6 md:py-6 h-full flex flex-col overflow-hidden">
 
         <div class="flex justify-between items-center mb-4 shrink-0">
             <div class="flex items-center gap-3">
-                <h1 class="text-xl md:text-2xl font-bold text-gray-800" id="welcome-text">학생 대시보드</h1>
+                <h1 class="text-xl md:text-2xl font-bold text-gray-800">대시보드</h1>
                 <span id="semester-badge"
                     class="bg-blue-600 text-white font-bold px-3 py-1 rounded-full text-xs md:text-sm shadow-md min-w-[100px] text-center">
                     <i class="fas fa-spinner fa-spin"></i>
@@ -217,10 +216,9 @@
                 class="absolute top-4 right-4 text-amber-800 hover:text-amber-600">
                 <i class="fas fa-times fa-lg"></i>
             </button>
-            <h3 id="modal-notice-title" class="text-xl font-extrabold text-amber-900 mb-4 flex items-center">
-                <!-- Icon injected -->
+            <h3 class="text-xl font-extrabold text-amber-900 mb-4 flex items-center">
                 <span id="modal-notice-category-icon" class="mr-2"></span>
-                알림 상세
+                <span id="modal-notice-title">알림 상세</span>
             </h3>
 
             <div
@@ -263,8 +261,6 @@
     </div>
 
 
-    <!-- Footer injected by AuthManager -->
-
     <script>
         window.AuthManager.init('student');
 
@@ -281,13 +277,14 @@
             typeLabelMap: {
                 'exam': '정기 시험', 'performance': '수행평가', 'event': '행사', 'diagnosis': '진단평가', 'formative': '형성평가'
             },
+            initialized: false, // Add this flag
 
             init: function () {
-                document.addEventListener('auth-ready', async (e) => {
-                    try {
-                        const user = e.detail;
-                        document.getElementById('welcome-text').innerText = `${user.displayName || '학생'}님, 환영합니다!`;
+                const runInit = async (user) => {
+                    if (this.initialized) return;
+                    this.initialized = true;
 
+                    try {
                         // Load User Class Info
                         await this.loadUserClass(user.uid);
 
@@ -305,7 +302,14 @@
                         console.error('Dashboard Init Error:', err);
                         alert('초기화 중 오류가 발생했습니다.');
                     }
-                });
+                };
+
+                // Check if already ready
+                if (window.AuthManager.currentUser) {
+                    runInit(window.AuthManager.currentUser);
+                } else {
+                    document.addEventListener('auth-ready', (e) => runInit(e.detail));
+                }
             },
 
             loadUserClass: async function (uid) {
@@ -334,7 +338,10 @@
             initNotices: function () {
                 const container = document.getElementById('notice-list');
                 const path = this.getCollectionPath('notices');
-                if (!path) return;
+                if (!path) {
+                    container.innerHTML = '<div class="text-center text-amber-800/50 py-10 font-bold text-sm">설정 오류</div>';
+                    return;
+                }
 
                 window.db.collection(path).orderBy('createdAt', 'desc').onSnapshot(snapshot => {
                     if (snapshot.empty) {
@@ -355,7 +362,7 @@
                     });
 
                     if (notices.length === 0) {
-                        container.innerHTML = '<div class="text-center text-amber-800/50 py-10 font-bold text-sm">우리 반 알림이 없습니다.</div>';
+                        container.innerHTML = '<div class="text-center text-amber-800/50 py-10 font-bold text-sm">등록된 알림이 없습니다.</div>';
                         return;
                     }
 
@@ -610,6 +617,10 @@
 
                 try {
                     const path = this.getCollectionPath('calendar');
+                    if (!path) {
+                        resultsEl.innerHTML = '<div class="text-center text-red-500 py-10">설정 오류로 검색할 수 없습니다.</div>';
+                        return;
+                    }
                     const snapshot = await window.db.collection(path).get();
                     const results = [];
                     snapshot.forEach(doc => {
@@ -656,6 +667,9 @@
 
         // Expose to window for inline onclick handlers
         window.app = app;
+
+        // Run Init Trigger
+        app.init();
     </script>
 </body>
 
