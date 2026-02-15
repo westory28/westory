@@ -201,16 +201,7 @@
                         </div>
                     </div>
                     <!-- Search Panel (Hidden by default) -->
-                    <div id="search-panel" class="hidden">
-                        <div class="p-3 border-b border-gray-200">
-                            <input type="text" id="search-input" placeholder="일정 제목 검색..."
-                                class="w-full border border-gray-300 rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                                oninput="app.performSearch(this.value)">
-                        </div>
-                        <div id="search-results" class="p-3 text-sm text-gray-500">
-                            검색어를 입력하세요
-                        </div>
-                    </div>
+
                 </div>
                 <div id="calendar" class="flex-1"></div>
             </div>
@@ -465,7 +456,7 @@
             </div>
 
             <div class="relative mb-4">
-                <input type="text" id="search-input" onkeyup="if(event.key === 'Enter') app.executeSearch()"
+                <input type="text" id="modal-search-input" onkeyup="if(event.key === 'Enter') app.executeSearch()"
                     class="w-full border-2 border-blue-100 rounded-xl p-3 pl-10 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition font-bold text-lg"
                     placeholder="검색어 입력 (예: 중간고사, 수행평가)">
                 <i class="fas fa-search absolute left-4 top-4 text-gray-400"></i>
@@ -473,7 +464,7 @@
                     class="absolute right-2 top-2 bg-blue-600 text-white px-4 py-1.5 rounded-lg font-bold hover:bg-blue-700 transition">검색</button>
             </div>
 
-            <div id="search-results" class="h-64 overflow-y-auto custom-scroll space-y-2">
+            <div id="modal-search-results" class="h-64 overflow-y-auto custom-scroll space-y-2">
                 <div class="text-center text-gray-400 py-10">검색어를 입력하고 엔터를 누르세요.</div>
             </div>
         </div>
@@ -683,11 +674,11 @@
             },
 
             openSearch: function () {
-                document.getElementById('search-input').value = '';
-                document.getElementById('search-results').innerHTML = '<div class="text-center text-gray-400 py-10">검색어를 입력하고 엔터를 누르세요.</div>';
+                document.getElementById('modal-search-input').value = '';
+                document.getElementById('modal-search-results').innerHTML = '<div class="text-center text-gray-400 py-10">검색어를 입력하고 엔터를 누르세요.</div>';
                 document.getElementById('search-modal').classList.remove('hidden');
                 document.getElementById('search-modal').classList.add('flex');
-                document.getElementById('search-input').focus();
+                document.getElementById('modal-search-input').focus();
             },
 
             closeSearch: function () {
@@ -697,8 +688,8 @@
 
             executeSearch: async function () {
                 console.log("Executing search...");
-                const query = document.getElementById('search-input').value.trim();
-                const resultsEl = document.getElementById('search-results');
+                const query = document.getElementById('modal-search-input').value.trim();
+                const resultsEl = document.getElementById('modal-search-results');
                 if (!query) {
                     resultsEl.innerHTML = '<div class="text-center text-gray-400 py-10">검색어를 입력하세요.</div>';
                     return;
