@@ -181,25 +181,11 @@
                     <h2 class="text-lg font-bold text-gray-800 whitespace-nowrap"><i
                             class="far fa-calendar-alt mr-2 text-blue-600"></i>학사 일정</h2>
 
-                    <!-- Search Controls -->
-                    <div class="flex items-center gap-2">
-                        <div id="search-container" class="hidden items-center bg-gray-100 rounded-lg px-2 py-1">
-                            <input type="text" id="search-input" placeholder="일정 검색..."
-                                class="bg-transparent border-none outline-none text-sm w-32 md:w-48 text-gray-700 placeholder-gray-400"
-                                onkeyup="if(event.key === 'Enter') app.searchEvents()">
-                            <button onclick="app.searchEvents()" class="text-gray-500 hover:text-blue-600 ml-1">
-                                <i class="fas fa-search"></i>
-                            </button>
-                            <button onclick="app.closeSearch()" class="text-gray-400 hover:text-red-500 ml-2">
-                                <i class="fas fa-times"></i>
-                            </button>
-                        </div>
-                        <button id="btn-search-trigger" onclick="app.openSearch()"
-                            class="bg-gray-50 border border-gray-200 text-gray-600 hover:text-blue-600 p-1.5 rounded-lg transition"
-                            title="일정 검색">
-                            <i class="fas fa-search"></i>
-                        </button>
-                    </div>
+                    <button onclick="app.openSearch()"
+                        class="bg-gray-50 border border-gray-200 text-gray-600 hover:text-blue-600 p-1.5 rounded-lg transition"
+                        title="일정 검색">
+                        <i class="fas fa-search"></i>
+                    </button>
                 </div>
                 <div id="calendar" class="flex-1"></div>
             </div>
@@ -254,10 +240,33 @@
         </div>
     </div>
 
+    <!-- Search Modal -->
+    <div id="search-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 items-start justify-center pt-20"
+        onclick="app.closeSearch()">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 m-4" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-gray-800"><i class="fas fa-search text-blue-500 mr-2"></i>일정 검색</h3>
+                <button onclick="app.closeSearch()" class="text-gray-400 hover:text-gray-600 transition">
+                    <i class="fas fa-times fa-lg"></i>
+                </button>
+            </div>
+            <div class="relative mb-4">
+                <input type="text" id="modal-search-input" onkeyup="if(event.key === 'Enter') app.executeSearch()"
+                    class="w-full border-2 border-blue-100 rounded-xl p-3 pl-10 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition font-bold text-lg"
+                    placeholder="검색어 입력 (예: 중간고사, 수행평가)">
+                <i class="fas fa-search absolute left-4 top-4 text-gray-400"></i>
+                <button onclick="app.executeSearch()"
+                    class="absolute right-2 top-2 bg-blue-600 text-white px-4 py-1.5 rounded-lg font-bold hover:bg-blue-700 transition">검색</button>
+            </div>
+            <div id="modal-search-results" class="h-64 overflow-y-auto custom-scroll space-y-2">
+                <div class="text-center text-gray-400 py-10">검색어를 입력하고 엔터를 누르세요.</div>
+            </div>
+        </div>
+    </div>
+
     <!-- Footer injected by AuthManager -->
 
     <script>
-
         window.AuthManager.init('student');
 
         const app = {
@@ -318,32 +327,81 @@
                 return `years/${cfg.year}/semesters/${cfg.semester}/${collectionName}`;
             },
 
-            // --- Search & Filter Logic ---
+            // --- Search Functions (Modal-Based, like Teacher) ---
             openSearch: function () {
-                const btn = document.getElementById('btn-search-trigger');
-                const container = document.getElementById('search-container');
-                btn.classList.add('hidden');
-                container.classList.remove('hidden');
-                container.classList.add('flex');
-                document.getElementById('search-input').focus();
+                document.getElementById('modal-search-input').value = '';
+                document.getElementById('modal-search-results').innerHTML = '<div class="text-center text-gray-400 py-10">검색어를 입력하고 엔터를 누르세요.</div>';
+                document.getElementById('search-modal').classList.remove('hidden');
+                document.getElementById('search-modal').classList.add('flex');
+                document.getElementById('modal-search-input').focus();
             },
 
             closeSearch: function () {
-                const btn = document.getElementById('btn-search-trigger');
-                const container = document.getElementById('search-container');
-                btn.classList.remove('hidden');
-                container.classList.add('hidden');
-                container.classList.remove('flex');
-                document.getElementById('search-input').value = '';
-                this.refetchEvents(); // Reset filter
+                document.getElementById('search-modal').classList.add('hidden');
+                document.getElementById('search-modal').classList.remove('flex');
             },
 
-            searchEvents: function () {
-                this.refetchEvents();
+            executeSearch: async function () {
+                const query = document.getElementById('modal-search-input').value.trim();
+                const resultsEl = document.getElementById('modal-search-results');
+                if (!query) {
+                    resultsEl.innerHTML = '<div class="text-center text-gray-400 py-10">검색어를 입력하세요.</div>';
+                    return;
+                }
+                resultsEl.innerHTML = '<div class="text-center text-gray-400 py-10"><i class="fas fa-spinner fa-spin mr-2"></i>검색 중...</div>';
+
+                try {
+                    const path = this.getCollectionPath('calendar');
+                    if (!path) { resultsEl.innerHTML = '<div class="text-center text-red-500 py-10">경로 오류</div>'; return; }
+                    const snapshot = await window.db.collection(path).get();
+                    const results = [];
+                    const q = query.toLowerCase();
+
+                    snapshot.forEach(doc => {
+                        const d = doc.data();
+                        // Student filter: common, holiday, or my class only
+                        const isCommon = d.targetType === 'common';
+                        const isHoliday = d.eventType === 'holiday';
+                        const isMyClass = d.targetType === 'class' && d.targetClass === this.userClassStr;
+                        if (!isCommon && !isHoliday && !isMyClass) return;
+
+                        const titleMatch = d.title && d.title.toLowerCase().includes(q);
+                        const descMatch = d.description && d.description.toLowerCase().includes(q);
+                        if (titleMatch || descMatch) {
+                            results.push({ id: doc.id, ...d });
+                        }
+                    });
+
+                    if (results.length === 0) {
+                        resultsEl.innerHTML = `<div class="text-center text-gray-400 py-10">
+                            <i class="far fa-folder-open text-2xl mb-2"></i><br>
+                            "${query}"이(가) 포함된 제목 또는 내용이 없습니다.
+                        </div>`;
+                    } else {
+                        resultsEl.innerHTML = results.map(r => {
+                            const bgColor = this.colorMap[r.eventType] || '#6b7280';
+                            const typeLabel = this.typeLabelMap[r.eventType] || '일정';
+                            return `
+                                <div onclick="app.closeSearch(); app.showSearchResult('${r.start}')" 
+                                     class="p-3 border-b border-gray-100 hover:bg-blue-50 cursor-pointer rounded-lg transition">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="text-[10px] text-white px-1.5 py-0.5 rounded font-bold" style="background-color:${bgColor}">${typeLabel}</span>
+                                        <span class="font-bold text-sm text-gray-800">${r.title}</span>
+                                    </div>
+                                    <div class="text-xs text-gray-500">${r.start}${r.end && r.start !== r.end ? ' ~ ' + r.end : ''}</div>
+                                    ${r.description ? `<div class="text-xs text-gray-400 mt-1 truncate">${r.description}</div>` : ''}
+                                </div>
+                            `;
+                        }).join('');
+                    }
+                } catch (e) {
+                    console.error('[Student Search] Error:', e);
+                    resultsEl.innerHTML = '<div class="text-center text-red-500 py-10">검색 중 오류가 발생했습니다.</div>';
+                }
             },
 
-            refetchEvents: function () {
-                if (this.calendar) this.calendar.refetchEvents();
+            showSearchResult: function (dateStr) {
+                if (this.calendar) this.calendar.gotoDate(dateStr);
             },
 
             fetchEvents: async function (info, successCallback, failureCallback) {
@@ -364,7 +422,6 @@
                     console.log('[Student Calendar] Snapshot size:', snapshot.size);
 
                     const events = [];
-                    const keyword = document.getElementById('search-input') ? document.getElementById('search-input').value.trim().toLowerCase() : '';
 
                     snapshot.forEach(doc => {
                         const d = doc.data();
@@ -375,9 +432,6 @@
                         const isMyClass = d.targetType === 'class' && d.targetClass === this.userClassStr;
 
                         if (!isCommon && !isHoliday && !isMyClass) return;
-
-                        // Search keyword filter
-                        if (keyword && !d.title.toLowerCase().includes(keyword)) return;
 
                         events.push({
                             id: doc.id,
