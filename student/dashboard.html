@@ -138,14 +138,11 @@
 
         <div class="flex justify-between items-center mb-4 shrink-0">
             <div class="flex items-center gap-3">
-                <h1 class="text-xl md:text-2xl font-bold text-gray-800">대시보드</h1>
+                <h1 id="dashboard-title" class="text-xl md:text-2xl font-bold text-gray-800">대시보드</h1>
                 <span id="semester-badge"
                     class="bg-blue-600 text-white font-bold px-3 py-1 rounded-full text-xs md:text-sm shadow-md min-w-[100px] text-center">
                     <i class="fas fa-spinner fa-spin"></i>
                 </span>
-            </div>
-            <div class="flex items-center gap-2 text-sm font-bold text-gray-600">
-                <span id="user-class-badge" class="px-2 py-1 bg-gray-200 rounded text-xs hidden"></span>
             </div>
         </div>
 
@@ -319,9 +316,9 @@
                         const d = doc.data();
                         if (d.grade && d.class) {
                             this.userClassStr = `${d.grade}-${d.class}`;
-                            const badge = document.getElementById('user-class-badge');
-                            badge.innerText = `${d.grade}학년 ${d.class}반`;
-                            badge.classList.remove('hidden');
+                            document.getElementById('dashboard-title').innerText = `${d.grade}학년 ${d.class}반의 대시보드`;
+                        } else {
+                            document.getElementById('dashboard-title').innerText = '대시보드';
                         }
                     }
                 } catch (e) { console.error(e); }
@@ -566,13 +563,13 @@
                     snapshot.forEach(doc => {
                         const d = doc.data();
 
-                        // Filter by Class (Common or My Class)
+                        // Filter by Class (Common or My Class) OR Holiday
                         const isCommon = d.targetType === 'common';
                         const isMyClass = d.targetType === 'class' && d.targetClass === this.userClassStr;
-
-                        if (!isCommon && !isMyClass) return;
-
                         const isHoliday = d.eventType === 'holiday';
+
+                        if (!isCommon && !isMyClass && !isHoliday) return;
+
                         events.push({
                             id: doc.id,
                             title: d.title,
@@ -629,7 +626,9 @@
                         // Strict Filtering in Search too
                         const isCommon = d.targetType === 'common';
                         const isMyClass = d.targetType === 'class' && d.targetClass === this.userClassStr;
-                        if (!isCommon && !isMyClass) return;
+                        const isHoliday = d.eventType === 'holiday';
+
+                        if (!isCommon && !isMyClass && !isHoliday) return;
 
                         const q = query.toLowerCase();
                         const titleMatch = d.title && d.title.toLowerCase().includes(q);
