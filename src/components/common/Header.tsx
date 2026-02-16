@@ -128,7 +128,7 @@ const Header: React.FC = () => {
                                         {item.name}
                                         <i className="fas fa-chevron-down text-[10px] ml-1 opacity-50 group-hover:opacity-100 transition"></i>
                                     </Link>
-                                    <div className="absolute top-full left-0 w-52 pt-1.5 invisible opacity-0 group-hover:visible group-hover:opacity-100 transition duration-200 transform translate-y-1 group-hover:translate-y-0 z-[100]">
+                                    <div className="absolute top-[calc(100%-2px)] left-0 w-52 pt-0 invisible opacity-0 group-hover:visible group-hover:opacity-100 transition duration-150 transform translate-y-0 z-[100]">
                                         <div className="bg-white border border-gray-200 shadow-xl rounded-xl overflow-hidden">
                                             {item.children?.map((child, childIdx) => (
                                                 <Link

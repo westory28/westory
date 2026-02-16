@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
@@ -17,6 +17,7 @@ interface TeacherCalendarSectionProps {
     calendarRef: React.RefObject<FullCalendar>;
     filterClass: string;
     onFilterChange: (cls: string) => void;
+    selectedDate?: string | null;
 }
 
 type HolidayItem = { title: string; start: string; eventType?: 'holiday' };
@@ -46,7 +47,7 @@ const DEFAULT_2026_HOLIDAYS: HolidayItem[] = [
 ];
 
 const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
-    events, onDateClick, onEventClick, onAddEvent, onSearchClick, calendarRef, filterClass, onFilterChange,
+    events, onDateClick, onEventClick, onAddEvent, onSearchClick, calendarRef, filterClass, onFilterChange, selectedDate,
 }) => {
     const { config } = useAuth();
 
@@ -61,6 +62,21 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
         classNames: e.eventType === 'holiday' ? ['holiday-text-event'] : [],
         extendedProps: { ...e },
     }));
+
+    const holidayDateSet = useMemo(() => {
+        const set = new Set<string>();
+        events.forEach((eventItem) => {
+            if (eventItem.eventType === 'holiday') {
+                set.add(eventItem.start);
+            }
+        });
+        return set;
+    }, [events]);
+
+    const toLocalYmd = (date: Date) => {
+        const offset = date.getTimezoneOffset() * 60000;
+        return new Date(date.getTime() - offset).toISOString().split('T')[0];
+    };
 
     const loadHolidaySource = async (): Promise<HolidayItem[]> => {
         const byConfig = await getDoc(doc(db, 'site_settings', 'holidays_2026'));
@@ -160,8 +176,24 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                     dayMaxEvents
                     fixedWeekCount={false}
                     showNonCurrentDates={false}
+                    dayCellClassNames={(arg) => {
+                        const dateStr = toLocalYmd(arg.date);
+                        const classes: string[] = [];
+                        if (holidayDateSet.has(dateStr)) classes.push('fc-day-holiday');
+                        if (selectedDate === dateStr) classes.push('fc-day-selected');
+                        return classes;
+                    }}
                 />
             </div>
+
+            <style>{`
+                .fc-day-sun a { color: #ef4444 !important; text-decoration: none; font-weight: 700 !important; }
+                .fc-day-sat a { color: #3b82f6 !important; text-decoration: none; font-weight: 700 !important; }
+                .fc-day-holiday a { color: #ef4444 !important; text-decoration: none; font-weight: 700 !important; }
+                .holiday-text-event { background-color: transparent !important; border: none !important; }
+                .holiday-text-event .fc-event-title { color: #ef4444 !important; font-weight: 800 !important; }
+                .fc-day-selected { background-color: #eff6ff !important; outline: 2px solid #3b82f6 !important; outline-offset: -2px !important; }
+            `}</style>
         </div>
     );
 };

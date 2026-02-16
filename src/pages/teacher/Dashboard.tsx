@@ -132,6 +132,7 @@ const TeacherDashboard: React.FC = () => {
                             calendarRef={calendarRef}
                             filterClass={filterClass}
                             onFilterChange={setFilterClass}
+                            selectedDate={selectedDate}
                         />
                     </div>
 
