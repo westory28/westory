@@ -12,6 +12,7 @@ import TeacherDashboard from './pages/teacher/Dashboard';
 import StudentList from './pages/teacher/StudentList';
 import ManageQuiz from './pages/teacher/ManageQuiz';
 import ManageExam from './pages/teacher/ManageExam';
+import Settings from './pages/teacher/Settings';
 
 
 
