@@ -9,7 +9,6 @@ import TeacherCalendarSection from './components/TeacherCalendarSection';
 import EventDetailPanel from '../student/components/EventDetailPanel'; // Reuse student panel for basic viewing
 import SearchModal from '../student/components/SearchModal'; // Reuse search modal
 import EventModal from './components/EventModal';
-import Header from '../../components/common/Header';
 
 const TeacherDashboard: React.FC = () => {
     const { userData, config } = useAuth();
@@ -100,9 +99,7 @@ const TeacherDashboard: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 flex flex-col">
-            <Header />
-            <div className="dashboard-container w-full max-w-7xl mx-auto px-4 py-6 flex-1">
+        <div className="dashboard-container w-full max-w-7xl mx-auto px-4 py-6 flex-1">
                 <div className="mb-6 flex flex-col md:flex-row justify-between items-center gap-3 shrink-0">
                     <div className="flex items-center gap-3">
                         <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">
@@ -157,7 +154,6 @@ const TeacherDashboard: React.FC = () => {
                     initialDate={modalInitialDate}
                     onSave={() => { /* Real-time updates handle refresh */ }}
                 />
-            </div>
         </div>
     );
 };
