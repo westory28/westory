@@ -34,11 +34,27 @@ const QuillEditor: React.FC<QuillEditorProps> = ({
     const hostRef = useRef<HTMLDivElement | null>(null);
     const quillRef = useRef<any>(null);
     const syncingRef = useRef(false);
+    const onChangeRef = useRef(onChange);
+    const toolbarRef = useRef(toolbar);
+    const placeholderRef = useRef(placeholder || '');
     const [ready, setReady] = useState(false);
+
+    useEffect(() => {
+        onChangeRef.current = onChange;
+    }, [onChange]);
+
+    useEffect(() => {
+        toolbarRef.current = toolbar;
+    }, [toolbar]);
+
+    useEffect(() => {
+        placeholderRef.current = placeholder || '';
+    }, [placeholder]);
 
     useEffect(() => {
         if (!hostRef.current) return;
         let canceled = false;
+        let changeHandler: (() => void) | null = null;
 
         const waitForQuill = () =>
             new Promise<void>((resolve, reject) => {
@@ -69,8 +85,8 @@ const QuillEditor: React.FC<QuillEditorProps> = ({
 
                 const quill = new window.Quill(hostRef.current, {
                     theme: 'snow',
-                    modules: { toolbar },
-                    placeholder: placeholder || '',
+                    modules: { toolbar: toolbarRef.current },
+                    placeholder: placeholderRef.current,
                 });
 
                 quillRef.current = quill;
@@ -78,11 +94,11 @@ const QuillEditor: React.FC<QuillEditorProps> = ({
                 quill.clipboard.dangerouslyPasteHTML(value || '');
                 syncingRef.current = false;
 
-                quill.on('text-change', () => {
+                changeHandler = () => {
                     if (!quillRef.current || syncingRef.current) return;
-                    onChange(quillRef.current.root.innerHTML);
-                });
-
+                    onChangeRef.current(quillRef.current.root.innerHTML);
+                };
+                quill.on('text-change', changeHandler);
                 setReady(true);
             })
             .catch((error) => {
@@ -92,9 +108,15 @@ const QuillEditor: React.FC<QuillEditorProps> = ({
 
         return () => {
             canceled = true;
+            if (quillRef.current && changeHandler) {
+                quillRef.current.off('text-change', changeHandler);
+            }
             quillRef.current = null;
+            if (hostRef.current) {
+                hostRef.current.innerHTML = '';
+            }
         };
-    }, [onChange, placeholder, toolbar]);
+    }, []);
 
     useEffect(() => {
         if (!quillRef.current) return;

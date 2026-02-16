@@ -1,21 +1,34 @@
-﻿import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { MENUS } from '../../constants/menus';
+
+const SESSION_DURATION_SECONDS = 60 * 60;
+const SESSION_EXPIRY_KEY = 'sessionExpiry';
+
+const formatCountdown = (seconds: number) => {
+    const safe = Math.max(0, seconds);
+    const minutes = Math.floor(safe / 60);
+    const remain = safe % 60;
+    return `${String(minutes).padStart(2, '0')}:${String(remain).padStart(2, '0')}`;
+};
 
 const Header: React.FC = () => {
     const { currentUser, userData, config, logout } = useAuth();
     const location = useLocation();
     const navigate = useNavigate();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [sessionExpiry, setSessionExpiry] = useState<number | null>(null);
+    const [remainingSeconds, setRemainingSeconds] = useState(SESSION_DURATION_SECONDS);
+    const timeoutHandledRef = useRef(false);
 
-    if (!currentUser || !userData) return null;
+    const isReady = !!currentUser && !!userData;
 
     const portal: 'teacher' | 'student' = location.pathname.startsWith('/teacher')
         ? 'teacher'
         : location.pathname.startsWith('/student')
             ? 'student'
-            : (userData.role === 'teacher' ? 'teacher' : 'student');
+            : (userData?.role === 'teacher' ? 'teacher' : 'student');
 
     const isTeacherPortal = portal === 'teacher';
     const menuItems = MENUS[portal] || [];
@@ -23,14 +36,69 @@ const Header: React.FC = () => {
 
     const isActive = (url: string) => location.pathname.startsWith(url.split('?')[0]);
 
-    const handleLogout = async () => {
+    const performLogout = async (isTimeout: boolean) => {
         try {
+            localStorage.removeItem(SESSION_EXPIRY_KEY);
+            if (isTimeout) {
+                alert('세션이 만료되어 자동 로그아웃됩니다.');
+            }
             await logout();
             navigate('/', { replace: true });
         } catch (error) {
             console.error('Logout failed', error);
         }
     };
+
+    const handleLogout = async () => {
+        await performLogout(false);
+    };
+
+    const extendSession = () => {
+        const expiry = Date.now() + SESSION_DURATION_SECONDS * 1000;
+        localStorage.setItem(SESSION_EXPIRY_KEY, String(expiry));
+        setSessionExpiry(expiry);
+        setRemainingSeconds(SESSION_DURATION_SECONDS);
+        timeoutHandledRef.current = false;
+    };
+
+    useEffect(() => {
+        setMobileMenuOpen(false);
+    }, [location.pathname, location.search]);
+
+    useEffect(() => {
+        if (!currentUser) return;
+        timeoutHandledRef.current = false;
+        const now = Date.now();
+        const saved = Number(localStorage.getItem(SESSION_EXPIRY_KEY));
+        const nextExpiry = Number.isFinite(saved) && saved > now
+            ? saved
+            : now + SESSION_DURATION_SECONDS * 1000;
+        localStorage.setItem(SESSION_EXPIRY_KEY, String(nextExpiry));
+        setSessionExpiry(nextExpiry);
+    }, [currentUser]);
+
+    useEffect(() => {
+        if (!sessionExpiry || !currentUser) return;
+
+        const tick = () => {
+            const diffMs = sessionExpiry - Date.now();
+            if (diffMs <= 0) {
+                setRemainingSeconds(0);
+                if (!timeoutHandledRef.current) {
+                    timeoutHandledRef.current = true;
+                    void performLogout(true);
+                }
+                return;
+            }
+            setRemainingSeconds(Math.ceil(diffMs / 1000));
+        };
+
+        tick();
+        const timerId = window.setInterval(tick, 1000);
+        return () => window.clearInterval(timerId);
+    }, [currentUser, sessionExpiry]);
+
+    if (!isReady || !userData) return null;
 
     return (
         <header>
@@ -86,6 +154,12 @@ const Header: React.FC = () => {
                         </span>
                     )}
 
+                    {isTeacherPortal && (
+                        <Link to="/teacher/settings" className="text-gray-400 hover:text-blue-600 transition" title="설정">
+                            <i className="fas fa-cog fa-lg"></i>
+                        </Link>
+                    )}
+
                     <span className="user-greeting">
                         {userData.name} {isTeacherPortal ? '교사' : '학생'}
                     </span>
@@ -96,11 +170,15 @@ const Header: React.FC = () => {
                         </Link>
                     )}
 
-                    {isTeacherPortal && (
-                        <Link to="/teacher/settings" className="text-gray-400 hover:text-blue-600 transition" title="설정">
-                            <i className="fas fa-cog fa-lg"></i>
-                        </Link>
-                    )}
+                    <div className="flex items-center gap-1 md:gap-2 px-3 py-1 bg-stone-100 rounded-full border border-stone-200">
+                        <i className="fas fa-stopwatch text-stone-400 text-xs"></i>
+                        <span className={`font-mono font-bold text-sm w-[42px] text-center ${remainingSeconds < 300 ? 'text-red-500' : 'text-stone-600'}`}>
+                            {formatCountdown(remainingSeconds)}
+                        </span>
+                        <button onClick={extendSession} className="text-stone-400 hover:text-blue-600 transition p-1" title="시간 연장">
+                            <i className="fas fa-redo-alt text-xs"></i>
+                        </button>
+                    </div>
 
                     <button onClick={handleLogout} className="btn-logout">
                         로그아웃

@@ -31,12 +31,19 @@ export const MENUS: Record<'student' | 'teacher', MenuItem[]> = {
             icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
             children: [
                 { name: '나의 성적표', url: '/student/score' },
+                { name: '학기 시험 답안', url: '/student/history' },
             ],
         },
     ],
     teacher: [
-        { name: '학사 일정 관리', url: '/teacher/schedule', icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
-        { name: '수업 자료 관리', url: '/teacher/lesson', icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253' },
+        {
+            name: '수업 자료 관리',
+            url: '/teacher/lesson',
+            icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253',
+            children: [
+                { name: '수업 자료', url: '/teacher/lesson' },
+            ],
+        },
         {
             name: '평가 관리',
             url: '/teacher/quiz',
@@ -53,10 +60,18 @@ export const MENUS: Record<'student' | 'teacher', MenuItem[]> = {
             icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
             children: [
                 { name: '성적 산출 기준', url: '/teacher/exam' },
-                { name: '정기 시험 답안', url: '/teacher/exam?tab=omr' },
+                { name: '학기 시험 답안', url: '/teacher/exam?tab=omr' },
             ],
         },
-        { name: '학생 명단 관리', url: '/teacher/students', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z' },
-        { name: '관리자 페이지', url: '/teacher/settings', icon: '' },
+        {
+            name: '학생 명단 관리',
+            url: '/teacher/students',
+            icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z',
+        },
+        {
+            name: '관리자 페이지',
+            url: '/teacher/settings',
+            icon: '',
+        },
     ],
 };
