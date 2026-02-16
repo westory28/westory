@@ -10,9 +10,9 @@
     <!-- FullCalendar -->
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
 
-    <link rel="modulepreload" href="/assets/js/firebase-config.js">
+    <link rel="modulepreload" href="../assets/js/firebase-config.js">
     <link rel="modulepreload" href="../assets/js/auth-manager.js">
-    <script type="module" src="/assets/js/firebase-config.js"></script>
+    <script type="module" src="../assets/js/firebase-config.js"></script>
     <link rel="stylesheet" href="../assets/css/style.css">
     <script type="module" src="../assets/js/auth-manager.js"></script>
 
@@ -393,6 +393,7 @@
                 resultsEl.innerHTML = '<div class="text-center text-gray-400 py-10"><i class="fas fa-spinner fa-spin mr-2"></i>검색 중...</div>';
 
                 try {
+                    if (!window.db) { throw new Error("Database not initialized"); }
                     const path = this.getCollectionPath('calendar');
                     if (!path) { resultsEl.innerHTML = '<div class="text-center text-red-500 py-10">경로 오류</div>'; return; }
                     const snapshot = await window.db.collection(path).get();
@@ -665,7 +666,7 @@
 
         app.init();
     </script>
-    <script type="module" src="/assets/js/nav-optimizer.js"></script>
+    <script type="module" src="../assets/js/nav-optimizer.js"></script>
 </body>
 
 </html>

@@ -8,149 +8,430 @@
     <!-- Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Config -->
-    <link rel="modulepreload" href="/assets/js/firebase-config.js">
-    <script type="module" src="/assets/js/firebase-config.js"></script>
+    <!-- Module Preloads -->
+    <link rel="modulepreload" href="./assets/js/firebase-config.js">
+    <!-- Main Config Script -->
+    <script type="module" src="./assets/js/firebase-config.js"></script>
 
-    <style>
-        body {
-            font-family: 'Pretendard', sans-serif;
-            background-color: #f8f9fa;
-            min-height: 100vh;
-            position: relative;
-        }
+    <script>
+        // Global Error Handler for debugging
+        window.onerror = function (msg, url, line, col, error) {
+            // Note: In production you might not want this, but for debugging User's issue it's critical
+            console.error("Global Error:", msg, url, line, error);
+            // alert("오류 발생: " + msg); // Uncomment if desperate
+        };
+    </script>
 
-        .main-container {
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-        }
+    <script type="module">
+        // Use relative path for safety
+        import { auth, db, firebase } from './assets/js/firebase-config.js';
 
-        .logo {
-            font-size: 4.5rem;
-            font-weight: 900;
-            margin-bottom: 10px;
-            letter-spacing: -2px;
-        }
+        // Log for debugging
+        console.log("Modules imported successfully in index.html");
 
-        .we {
-            color: #2563eb;
-        }
+        try {
+            const TEACHER_EMAIL = "westoria28@gmail.com";
+            let currentUser = null;
+            let loginMode = 'student'; // 'student' or 'teacher'
 
-        .story {
-            color: #f59e0b;
-        }
-
-        .subtitle {
-            font-size: 1.5rem;
-            color: #6b7280;
-            margin-bottom: 60px;
-            font-weight: 500;
-        }
-
-        .login-btn {
-            background: #fff;
-            border: 1px solid #e5e7eb;
-            padding: 16px 40px;
-            border-radius: 50px;
-            font-size: 1.1rem;
-            font-weight: 700;
-            color: #374151;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-            transition: all 0.2s;
-        }
-
-        .login-btn:hover {
-            background: #f9fafb;
-            transform: translateY(-2px);
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-        }
-
-        .teacher-btn-area {
-            position: absolute;
-            bottom: 30px;
-            right: 30px;
-        }
-
-        .teacher-link {
-            color: #9ca3af;
-            font-size: 0.85rem;
-            font-weight: 600;
-            text-decoration: none;
-            padding: 8px 16px;
-            border: 1px solid transparent;
-            border-radius: 8px;
-            transition: all 0.2s;
-        }
-
-        .teacher-link:hover {
-            color: #4b5563;
-            background-color: #e5e7eb;
-        }
-
-        .footer-links {
-            position: absolute;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }
-
-        .footer-links a {
-            color: #9ca3af;
-            font-size: 0.8rem;
-            font-weight: 500;
-            text-decoration: none;
-            transition: color 0.2s;
-        }
-
-        .footer-links a:hover {
-            color: #4b5563;
-            text-decoration: underline;
-        }
-
-        .footer-links .divider {
-            color: #d1d5db;
-            font-size: 0.75rem;
-        }
-
-        .modal-overlay {
-            background: rgba(0, 0, 0, 0.5);
-            backdrop-filter: blur(2px);
-        }
-
-        @media (max-width: 1024px) {
-            .footer-links {
-                bottom: 20px;
-                width: 100%;
-                justify-content: center;
-                gap: 12px;
+            // Define functions first
+            function handleGoogleLogin(mode) {
+                console.log("handleGoogleLogin called", mode);
+                loginMode = mode;
+                if (!firebase || !auth) {
+                    alert("Firebase가 초기화되지 않았습니다. 잠시 후 다시 시도해주세요.");
+                    return;
+                }
+                const provider = new firebase.auth.GoogleAuthProvider();
+                auth.signInWithPopup(provider).catch((error) => {
+                    console.error("Login Error:", error);
+                    alert("로그인 실패: " + error.message);
+                });
             }
 
-            .teacher-btn-area {
-                bottom: 60px;
-                right: auto;
-                left: 50%;
-                transform: translateX(-50%);
-                width: 100%;
-                display: flex;
-                justify-content: center;
+            async function showPolicyModal(type) {
+                console.log("showPolicyModal called", type);
+                const modal = document.getElementById('policy-modal');
+                const title = document.getElementById('policy-modal-title');
+                const body = document.getElementById('policy-modal-body');
+
+                title.textContent = type === 'terms' ? '이용 약관' : '개인정보 처리 방침';
+                body.innerHTML = '<p class="text-center text-gray-400 py-8"><i class="fas fa-spinner fa-spin mr-2"></i>불러오는 중...</p>';
+                modal.classList.remove('hidden');
+
+                try {
+                    let user = await waitForAuth();
+                    if (!user) { try { await auth.signInAnonymously(); } catch (ae) { console.warn("Anon Auth failed", ae); } }
+
+                    const doc = await db.collection('site_settings').doc(type).get();
+                    if (doc.exists && doc.data().text) {
+                        body.innerHTML = doc.data().text;
+                    } else {
+                        body.innerHTML = '<p class="text-center text-gray-400 py-8">등록된 내용이 없습니다.</p>';
+                    }
+                } catch (e) {
+                    console.error("Policy load error:", e);
+                    body.innerHTML = '<p class="text-center text-red-400 py-8">내용을 불러오지 못했습니다.<br><span class="text-xs text-gray-400">' + e.message + '</span></p>';
+                }
             }
 
-            .teacher-link {
-                background: rgba(255, 255, 255, 0.5);
-                /* slight background for visibility */
+            function closePolicyModal() {
+                document.getElementById('policy-modal').classList.add('hidden');
             }
+
+            function registerUser() {
+                const grade = document.getElementById('reg-grade').value;
+                const cls = document.getElementById('reg-class').value;
+                const num = document.getElementById('reg-number').value;
+                const name = document.getElementById('reg-name').value.trim();
+
+                if (!grade || !cls || !num || !name) {
+                    alert("모든 정보를 입력해주세요.");
+                    return;
+                }
+
+                const userData = {
+                    email: currentUser.email,
+                    grade: parseInt(grade),
+                    class: parseInt(cls),
+                    number: parseInt(num),
+                    name: name,
+                    uid: currentUser.uid,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    photoURL: currentUser.photoURL,
+                    privacyAgreed: false // Will be handled in dashboard
+                };
+
+                db.collection('users').doc(currentUser.uid).set(userData)
+                    .then(() => {
+                        window.location.href = 'student/dashboard.html';
+                    })
+                    .catch((error) => {
+                        alert("가입 실패: " + error.message);
+                    });
+            }
+
+            // Expose functions to window explicilty
+            window.handleGoogleLogin = handleGoogleLogin;
+            window.registerUser = registerUser;
+            window.showPolicyModal = showPolicyModal;
+            window.closePolicyModal = closePolicyModal;
+            console.log("Functions exposed to window");
+
+            // Init Class Options
+            const classSelect = document.getElementById('reg-class');
+            if (classSelect) {
+                for (let i = 1; i <= 12; i++) {
+                    const opt = document.createElement('option');
+                    opt.value = i;
+                    opt.innerText = `${i}반`;
+                    classSelect.appendChild(opt);
+                }
+            }
+
+            auth.onAuthStateChanged(async (user) => {
+                if (user) {
+                    currentUser = user;
+                    console.log("User detected:", user.email);
+
+                    // Teacher Logic
+                    if (user.email === TEACHER_EMAIL) {
+                        if (loginMode === 'teacher') {
+                            window.location.href = 'teacher/dashboard.html';
+                        } else {
+                            window.location.href = 'student/dashboard.html';
+                        }
+                        return;
+                    }
+
+                    // Student Logic
+                    if (loginMode === 'teacher') {
+                        alert("관리자 계정이 아닙니다.");
+                        await auth.signOut();
+                        return;
+                    }
+
+                    // Check DB
+                    try {
+                        const doc = await db.collection('users').doc(user.uid).get();
+                        if (doc.exists) {
+                            window.location.href = 'student/dashboard.html';
+                        } else {
+                            // Show Register
+                            document.getElementById('reg-email').value = user.email;
+                            document.getElementById('reg-name').value = user.displayName || '';
+                            document.getElementById('register-modal').classList.remove('hidden');
+                            document.getElementById('register-modal').style.display = 'flex';
+                        }
+                    } catch (error) {
+                        console.error(error);
+                        alert("오류 발생");
+                    }
+                }
+            });
+
+            // Utils
+            function waitForAuth() {
+                return new Promise((resolve) => {
+                    const unsubscribe = auth.onAuthStateChanged(user => {
+                        unsubscribe();
+                        resolve(user);
+                    });
+                });
+            }
+
+            // --- Load School Config (Grades/Classes) ---
+            async function loadSchoolConfig() {
+                const gradeSelect = document.getElementById('reg-grade');
+                const classSelect = document.getElementById('reg-class');
+
+                try {
+                    let user = await waitForAuth();
+                    if (!user) { try { await auth.signInAnonymously(); } catch (ae) { } }
+
+                    const doc = await db.collection('site_settings').doc('school_config').get();
+                    if (doc.exists) {
+                        const data = doc.data();
+                        if (data.grades && data.grades.length > 0) {
+                            gradeSelect.innerHTML = data.grades.map(g => `<option value="${g.value}">${g.label}</option>`).join('');
+                        }
+                        if (data.classes && data.classes.length > 0) {
+                            classSelect.innerHTML = '<option value="">선택</option>' +
+                                data.classes.map(c => `<option value="${c.value}">${c.label}</option>`).join('');
+                        }
+                    } else {
+                        generateDefaultOptions();
+                    }
+                } catch (e) {
+                    console.warn("Failed to load school config, using defaults", e);
+                    generateDefaultOptions();
+                }
+            }
+
+            function generateDefaultOptions() {
+                const gradeSelect = document.getElementById('reg-grade');
+                const classSelect = document.getElementById('reg-class');
+                if (gradeSelect.options.length === 0) {
+                    gradeSelect.innerHTML = `
+                        <option value="1">1학년</option>
+                        <option value="2">2학년</option>
+                        <option value="3">3학년</option>
+                    `;
+                }
+                if (classSelect.options.length <= 1) {
+                    let html = '<option value="">선택</option>';
+                    for (let i = 1; i <= 12; i++) {
+                        html += `<option value="${i}">${i}반</option>`;
+                    }
+                    classSelect.innerHTML = html;
+                }
+            }
+
+            // --- Load Interface Config ---
+            async function loadInterfaceConfig() {
+                try {
+                    let user = await waitForAuth();
+                    if (!user) { try { await auth.signInAnonymously(); } catch (ae) { } }
+
+                    const doc = await db.collection('site_settings').doc('interface_config').get();
+                    if (doc.exists) {
+                        const data = doc.data();
+                        const emojiEl = document.getElementById('main-emoji');
+                        const subEl = document.getElementById('main-subtitle');
+
+                        if (emojiEl) emojiEl.innerText = data.mainEmoji || '📚';
+                        if (subEl) subEl.innerText = data.mainSubtitle || '우리가 써 내려가는 이야기';
+
+                        // D-Day
+                        if (data.ddayEnabled && data.ddayDate && data.ddayTitle) {
+                            const targetDate = new Date(data.ddayDate);
+                            const today = new Date();
+                            today.setHours(0, 0, 0, 0);
+                            targetDate.setHours(0, 0, 0, 0);
+
+                            const diffTime = targetDate - today;
+                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                            let ddayStr = '';
+                            if (diffDays > 0) ddayStr = `D-${diffDays}`;
+                            else if (diffDays === 0) ddayStr = `D-Day`;
+                            else ddayStr = `D+${Math.abs(diffDays)}`;
+
+                            const dtEl = document.getElementById('dday-title');
+                            const dcEl = document.getElementById('dday-count');
+                            const wEl = document.getElementById('dday-widget');
+
+                            if (dtEl) dtEl.innerText = data.ddayTitle;
+                            if (dcEl) dcEl.innerText = ddayStr;
+                            if (wEl) {
+                                wEl.classList.remove('hidden');
+                                if (diffDays === 0) {
+                                    wEl.classList.add('bg-red-50', 'border-red-100');
+                                    dcEl.classList.replace('text-blue-600', 'text-red-500');
+                                }
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn("Failed to load interface config:", e);
+                }
+            }
+
+            // Initialize
+            // Use window.addEventListener to be safe
+            document.addEventListener('DOMContentLoaded', () => {
+                loadSchoolConfig();
+                loadInterfaceConfig();
+            });
+            // If DOM is already ready (unlikely in type=module but possible)
+            if (document.readyState === 'complete' || document.readyState === 'interactive') {
+                loadSchoolConfig();
+                loadInterfaceConfig();
+            }
+
+        } catch (err) {
+            console.error("Critical Script Error:", err);
+            alert("페이지 로딩 중 오류가 발생했습니다: " + err.message);
         }
+    </script>
+    body {
+    font-family: 'Pretendard', sans-serif;
+    background-color: #f8f9fa;
+    min-height: 100vh;
+    position: relative;
+    }
+
+    .main-container {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    }
+
+    .logo {
+    font-size: 4.5rem;
+    font-weight: 900;
+    margin-bottom: 10px;
+    letter-spacing: -2px;
+    }
+
+    .we {
+    color: #2563eb;
+    }
+
+    .story {
+    color: #f59e0b;
+    }
+
+    .subtitle {
+    font-size: 1.5rem;
+    color: #6b7280;
+    margin-bottom: 60px;
+    font-weight: 500;
+    }
+
+    .login-btn {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    padding: 16px 40px;
+    border-radius: 50px;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #374151;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    transition: all 0.2s;
+    }
+
+    .login-btn:hover {
+    background: #f9fafb;
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    }
+
+    .teacher-btn-area {
+    position: absolute;
+    bottom: 30px;
+    right: 30px;
+    }
+
+    .teacher-link {
+    color: #9ca3af;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-decoration: none;
+    padding: 8px 16px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    transition: all 0.2s;
+    }
+
+    .teacher-link:hover {
+    color: #4b5563;
+    background-color: #e5e7eb;
+    }
+
+    .footer-links {
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    }
+
+    .footer-links a {
+    color: #9ca3af;
+    font-size: 0.8rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: color 0.2s;
+    }
+
+    .footer-links a:hover {
+    color: #4b5563;
+    text-decoration: underline;
+    }
+
+    .footer-links .divider {
+    color: #d1d5db;
+    font-size: 0.75rem;
+    }
+
+    .modal-overlay {
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(2px);
+    }
+
+    @media (max-width: 1024px) {
+    .footer-links {
+    bottom: 20px;
+    width: 100%;
+    justify-content: center;
+    gap: 12px;
+    }
+
+    .teacher-btn-area {
+    bottom: 60px;
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    }
+
+    .teacher-link {
+    background: rgba(255, 255, 255, 0.5);
+    /* slight background for visibility */
+    }
+    }
     </style>
 </head>
 
@@ -260,268 +541,7 @@
         </div>
     </div>
 
-    <script type="module">
-        import { auth, db, firebase } from '/assets/js/firebase-config.js';
-
-        const TEACHER_EMAIL = "westoria28@gmail.com";
-        let currentUser = null;
-        let loginMode = 'student'; // 'student' or 'teacher'
-
-        // Expose functions to window for onclick handlers
-        window.handleGoogleLogin = handleGoogleLogin;
-        window.registerUser = registerUser;
-        window.showPolicyModal = showPolicyModal;
-        window.closePolicyModal = closePolicyModal;
-
-        // Init Class Options
-        const classSelect = document.getElementById('reg-class');
-        for (let i = 1; i <= 12; i++) {
-            const opt = document.createElement('option');
-            opt.value = i;
-            opt.innerText = `${i}반`;
-            classSelect.appendChild(opt);
-        }
-
-        function handleGoogleLogin(mode) {
-            loginMode = mode;
-            const provider = new firebase.auth.GoogleAuthProvider();
-            auth.signInWithPopup(provider).catch((error) => {
-                alert("로그인 실패: " + error.message);
-            });
-        }
-
-        auth.onAuthStateChanged(async (user) => {
-            if (user) {
-                currentUser = user;
-
-                // Teacher Logic
-                if (user.email === TEACHER_EMAIL) {
-                    if (loginMode === 'teacher') {
-                        window.location.href = 'teacher/dashboard.html';
-                    } else {
-                        // Teacher logged in via main button -> allow student view access
-                        window.location.href = 'student/dashboard.html';
-                    }
-                    return;
-                }
-
-                // Student Logic
-                if (loginMode === 'teacher') {
-                    alert("관리자 계정이 아닙니다.");
-                    await auth.signOut();
-                    return;
-                }
-
-                // Check DB
-                try {
-                    const doc = await db.collection('users').doc(user.uid).get();
-                    if (doc.exists) {
-                        window.location.href = 'student/dashboard.html';
-                    } else {
-                        // Show Register
-                        document.getElementById('reg-email').value = user.email;
-                        document.getElementById('reg-name').value = user.displayName || '';
-                        document.getElementById('register-modal').classList.remove('hidden');
-                        document.getElementById('register-modal').style.display = 'flex';
-                    }
-                } catch (error) {
-                    console.error(error);
-                    alert("오류 발생");
-                }
-            }
-        });
-
-        function registerUser() {
-            const grade = document.getElementById('reg-grade').value;
-            const cls = document.getElementById('reg-class').value;
-            const num = document.getElementById('reg-number').value;
-            const name = document.getElementById('reg-name').value.trim();
-
-            if (!grade || !cls || !num || !name) {
-                alert("모든 정보를 입력해주세요.");
-                return;
-            }
-
-            const userData = {
-                email: currentUser.email,
-                grade: parseInt(grade),
-                class: parseInt(cls),
-                number: parseInt(num),
-                name: name,
-                uid: currentUser.uid,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                photoURL: currentUser.photoURL,
-                privacyAgreed: false // Will be handled in dashboard
-            };
-
-            db.collection('users').doc(currentUser.uid).set(userData)
-                .then(() => {
-                    window.location.href = 'student/dashboard.html';
-                })
-                .catch((error) => {
-                    alert("가입 실패: " + error.message);
-                });
-        }
-
-        // --- Load School Config (Grades/Classes) ---
-        async function loadSchoolConfig() {
-            const gradeSelect = document.getElementById('reg-grade');
-            const classSelect = document.getElementById('reg-class');
-
-            try {
-                // Ensure auth for Firestore access
-                let user = await waitForAuth();
-                if (!user) { try { await auth.signInAnonymously(); } catch (ae) { } }
-
-                const doc = await db.collection('site_settings').doc('school_config').get();
-                if (doc.exists) {
-                    const data = doc.data();
-
-                    // Populate Grades
-                    if (data.grades && data.grades.length > 0) {
-                        gradeSelect.innerHTML = data.grades.map(g => `<option value="${g.value}">${g.label}</option>`).join('');
-                    }
-
-                    // Populate Classes
-                    if (data.classes && data.classes.length > 0) {
-                        classSelect.innerHTML = '<option value="">선택</option>' +
-                            data.classes.map(c => `<option value="${c.value}">${c.label}</option>`).join('');
-                    } else {
-                        // Default 1-15 if config exists but classes empty? Or keep default?
-                        // Let's stick to config if exists.
-                    }
-                } else {
-                    // No config found, generate defaults
-                    generateDefaultOptions();
-                }
-            } catch (e) {
-                console.warn("Failed to load school config, using defaults", e);
-                generateDefaultOptions();
-            }
-        }
-
-        function generateDefaultOptions() {
-            const gradeSelect = document.getElementById('reg-grade');
-            const classSelect = document.getElementById('reg-class');
-
-            // Default Grades 1-3
-            if (gradeSelect.options.length === 0) {
-                gradeSelect.innerHTML = `
-                    <option value="1">1학년</option>
-                    <option value="2">2학년</option>
-                    <option value="3">3학년</option>
-                `;
-            }
-
-            // Default Classes 1-12
-            if (classSelect.options.length <= 1) { // 1 because of '선택'
-                let html = '<option value="">선택</option>';
-                for (let i = 1; i <= 12; i++) {
-                    html += `<option value="${i}">${i}반</option>`;
-                }
-                classSelect.innerHTML = html;
-            }
-        }
-
-        // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
-            // Existing init logic from previous script, if any. 
-            // Actually, the previous script didn't have a DOMContentLoaded listener, 
-            // it just ran. But let's keep it safe.
-            loadSchoolConfig();
-            loadInterfaceConfig();
-        });
-
-        // --- Load Interface Config ---
-        async function loadInterfaceConfig() {
-            try {
-                // Determine if we need to sign in anonymously for reading
-                let user = await waitForAuth();
-                if (!user) { try { await auth.signInAnonymously(); } catch (ae) { } }
-
-                const doc = await db.collection('site_settings').doc('interface_config').get();
-                if (doc.exists) {
-                    const data = doc.data();
-
-                    // 1. Emoji & Subtitle
-                    document.getElementById('main-emoji').innerText = data.mainEmoji || '📚';
-                    document.getElementById('main-subtitle').innerText = data.mainSubtitle || '우리가 써 내려가는 이야기';
-
-                    // 2. D-Day
-                    if (data.ddayEnabled && data.ddayDate && data.ddayTitle) {
-                        const targetDate = new Date(data.ddayDate);
-                        const today = new Date();
-                        today.setHours(0, 0, 0, 0); // Normalize today
-                        targetDate.setHours(0, 0, 0, 0); // Normalize target
-
-                        const diffTime = targetDate - today;
-                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-                        let ddayStr = '';
-                        if (diffDays > 0) ddayStr = `D-${diffDays}`;
-                        else if (diffDays === 0) ddayStr = `D-Day`;
-                        else ddayStr = `D+${Math.abs(diffDays)}`;
-
-                        document.getElementById('dday-title').innerText = data.ddayTitle;
-                        document.getElementById('dday-count').innerText = ddayStr;
-
-                        const widget = document.getElementById('dday-widget');
-                        widget.classList.remove('hidden');
-
-                        // Special styles for D-Day
-                        if (diffDays === 0) {
-                            widget.classList.add('bg-red-50', 'border-red-100');
-                            document.getElementById('dday-count').classList.replace('text-blue-600', 'text-red-500');
-                        }
-                    }
-                }
-            } catch (e) {
-                console.warn("Failed to load interface config:", e);
-                document.getElementById('main-emoji').innerText = '📚';
-                document.getElementById('main-subtitle').innerText = '우리가 써 내려가는 이야기';
-            }
-        }
-
-        // --- Policy Modal Logic ---
-        function waitForAuth() {
-            return new Promise((resolve) => {
-                const unsubscribe = auth.onAuthStateChanged(user => {
-                    unsubscribe();
-                    resolve(user);
-                });
-            });
-        }
-
-        async function showPolicyModal(type) {
-            const modal = document.getElementById('policy-modal');
-            const title = document.getElementById('policy-modal-title');
-            const body = document.getElementById('policy-modal-body');
-
-            title.textContent = type === 'terms' ? '이용 약관' : '개인정보 처리 방침';
-            body.innerHTML = '<p class="text-center text-gray-400 py-8"><i class="fas fa-spinner fa-spin mr-2"></i>불러오는 중...</p>';
-            modal.classList.remove('hidden');
-
-            try {
-                let user = await waitForAuth();
-                if (!user) { try { await auth.signInAnonymously(); } catch (ae) { } }
-
-                const doc = await db.collection('site_settings').doc(type).get();
-                if (doc.exists && doc.data().text) {
-                    body.innerHTML = doc.data().text;
-                } else {
-                    body.innerHTML = '<p class="text-center text-gray-400 py-8">등록된 내용이 없습니다.</p>';
-                }
-            } catch (e) {
-                console.error("Policy load error:", e);
-                body.innerHTML = '<p class="text-center text-red-400 py-8">내용을 불러오지 못했습니다.<br><span class="text-xs text-gray-400">' + e.message + '</span></p>';
-            }
-        }
-
-        function closePolicyModal() {
-            document.getElementById('policy-modal').classList.add('hidden');
-        }
-    </script>
-    <script type="module" src="/assets/js/nav-optimizer.js"></script>
+    <script type="module" src="./assets/js/nav-optimizer.js"></script>
 </body>
 
 </html>
