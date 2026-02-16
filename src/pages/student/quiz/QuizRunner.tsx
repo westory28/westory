@@ -1,0 +1,454 @@
+import React, { useEffect, useState, useRef } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { db } from '../../../lib/firebase';
+import { collection, query, where, getDocs, doc, getDoc, addDoc, orderBy, serverTimestamp } from 'firebase/firestore';
+import { useAuth } from '../../../contexts/AuthContext';
+import Chart from 'chart.js/auto';
+
+// Interfaces
+interface Question {
+    id: number;
+    type: 'choice' | 'ox' | 'short';
+    question: string;
+    options?: string[]; // For choice
+    answer: string | number;
+    explanation?: string;
+    image?: string;
+    refBig?: string;
+    refMid?: string;
+    category?: string;
+}
+
+interface QuizConfig {
+    active: boolean;
+    timeLimit?: number;
+    allowRetake?: boolean;
+    cooldown?: number;
+    questionCount?: number;
+}
+
+const QuizRunner: React.FC = () => {
+    const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
+    const { userData } = useAuth();
+    const unitId = searchParams.get('unitId');
+    const category = searchParams.get('category');
+    const title = searchParams.get('title') || '평가';
+
+    // States for Flow
+    const [view, setView] = useState<'loading' | 'intro' | 'quiz' | 'result'>('loading');
+    const [errorMsg, setErrorMsg] = useState<string | null>(null);
+    const [blockReason, setBlockReason] = useState<string | null>(null);
+
+    // Data States
+    const [config, setConfig] = useState<QuizConfig | null>(null);
+    const [allQuestions, setAllQuestions] = useState<Question[]>([]);
+    const [selectedQuestions, setSelectedQuestions] = useState<Question[]>([]);
+    const [historyCount, setHistoryCount] = useState(0);
+
+    // Quiz Execution States
+    const [currentIndex, setCurrentIndex] = useState(0);
+    const [answers, setAnswers] = useState<{ [key: number]: string }>({});
+    const [timeLeft, setTimeLeft] = useState(0);
+    const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Result States
+    const [score, setScore] = useState(0);
+    const [results, setResults] = useState<any[]>([]);
+
+    useEffect(() => {
+        if (!unitId || !category || !userData) return;
+        initializeQuiz();
+        return () => {
+            if (timerRef.current) clearInterval(timerRef.current);
+        };
+    }, [unitId, category, userData]);
+
+    const initializeQuiz = async () => {
+        try {
+            // 1. Fetch Config
+            const settingsDoc = await getDoc(doc(db, 'assessment_config', 'settings'));
+            const key = `${unitId}_${category}`;
+            const settingsData = settingsDoc.exists() ? settingsDoc.data() : {};
+            const quizConfig: QuizConfig = settingsData[key] || { active: true, timeLimit: 60, allowRetake: true, cooldown: 0, questionCount: 10 };
+
+            setConfig(quizConfig);
+
+            if (!quizConfig.active && unitId !== 'exam_prep') {
+                throw new Error("현재 비활성화된 평가입니다.");
+            }
+
+            // 2. Fetch Questions
+            let qQuery;
+            const qRef = collection(db, 'quiz_questions');
+            if (unitId === 'exam_prep') {
+                qQuery = query(qRef, where('category', '==', 'exam_prep'));
+            } else {
+                qQuery = query(qRef, where('unitId', '==', unitId), where('category', '==', category));
+            }
+
+            const qSnap = await getDocs(qQuery);
+            const fetchedQuestions: Question[] = [];
+            qSnap.forEach(d => fetchedQuestions.push({ id: parseInt(d.id), ...d.data() } as Question));
+
+            if (fetchedQuestions.length === 0) throw new Error("등록된 문제가 없습니다.");
+            setAllQuestions(fetchedQuestions);
+
+            // 3. Check History
+            const hRef = collection(db, 'quiz_results');
+            const hQuery = query(
+                hRef,
+                where('uid', '==', userData?.uid),
+                where('unitId', '==', unitId),
+                where('category', '==', category),
+                orderBy('timestamp', 'desc')
+            );
+            const hSnap = await getDocs(hQuery);
+            setHistoryCount(hSnap.size);
+
+            if (!quizConfig.allowRetake && !hSnap.empty && unitId !== 'exam_prep') {
+                setBlockReason("재응시가 허용되지 않는 평가입니다.");
+                setView('intro');
+                return;
+            }
+
+            if ((quizConfig.cooldown || 0) > 0 && !hSnap.empty) {
+                const lastAttempt = hSnap.docs[0].data().timestamp?.toDate();
+                if (lastAttempt) {
+                    const diffMins = (new Date().getTime() - lastAttempt.getTime()) / 1000 / 60;
+                    if (diffMins < (quizConfig.cooldown || 0)) {
+                        const remain = Math.ceil((quizConfig.cooldown || 0) - diffMins);
+                        setBlockReason(`재응시 대기 시간: ${remain}분 남음`);
+                        setView('intro');
+                        return;
+                    }
+                }
+            }
+
+            // Ready to start
+            const solvedIds = new Set<number>();
+            hSnap.forEach(doc => {
+                const d = doc.data();
+                if (d.details) d.details.forEach((log: any) => solvedIds.add(parseInt(log.id)));
+            });
+
+            // Smart Selection Logic (Simplified)
+            selectQuestions(fetchedQuestions, solvedIds, quizConfig.questionCount || 10);
+
+            setView('intro');
+
+        } catch (err: any) {
+            setErrorMsg(err.message || '초기화 중 오류 발생');
+            setView('intro'); // Show error in intro View or generic error
+        }
+    };
+
+    const selectQuestions = (all: Question[], solvedIds: Set<number>, targetCount: number) => {
+        let pool = all.filter(q => !solvedIds.has(q.id));
+        if (pool.length < targetCount) {
+            pool = [...all]; // Fallback
+        }
+        // Shuffle
+        const selected = pool.sort(() => 0.5 - Math.random()).slice(0, targetCount);
+        setSelectedQuestions(selected);
+    };
+
+    const startQuiz = () => {
+        setCurrentIndex(0);
+        setAnswers({});
+        setTimeLeft(config?.timeLimit || 60);
+        setView('quiz');
+
+        // Start Timer
+        if (timerRef.current) clearInterval(timerRef.current);
+        timerRef.current = setInterval(() => {
+            setTimeLeft(prev => {
+                if (prev <= 1) {
+                    if (timerRef.current) clearInterval(timerRef.current);
+                    finishQuiz(true); // Timeout
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+    };
+
+    const handleAnswer = (val: string) => {
+        const qId = selectedQuestions[currentIndex].id;
+        setAnswers(prev => ({ ...prev, [qId]: val }));
+    };
+
+    const nextQuestion = () => {
+        // Confirmation if empty?
+        // if (!answers[selectedQuestions[currentIndex].id] && !confirm("정답을 입력하지 않았습니다. 넘어가시겠습니까?")) return;
+
+        if (currentIndex < selectedQuestions.length - 1) {
+            setCurrentIndex(prev => prev + 1);
+        } else {
+            finishQuiz();
+        }
+    };
+
+    const finishQuiz = async (isTimeout = false) => {
+        if (timerRef.current) clearInterval(timerRef.current);
+        if (isTimeout) alert("제한시간이 종료되었습니다.");
+
+        let correctCnt = 0;
+        const resultDetails: any[] = [];
+        const logDetails: any[] = [];
+
+        selectedQuestions.forEach(q => {
+            const userAns = (answers[q.id] || "").toString().replace(/\s+/g, '').trim();
+            const realAns = q.answer.toString().replace(/\s+/g, '').trim();
+            const isCorrect = (userAns === realAns);
+            if (isCorrect) correctCnt++;
+
+            resultDetails.push({
+                q: q.question,
+                u: answers[q.id],
+                a: q.answer,
+                correct: isCorrect,
+                exp: q.explanation
+            });
+
+            logDetails.push({ id: q.id, correct: isCorrect, u: userAns }); // For DB
+        });
+
+        const finalScore = Math.round((correctCnt / selectedQuestions.length) * 100);
+        setScore(finalScore);
+        setResults(resultDetails);
+
+        // Save to Firestore
+        if (userData) {
+            try {
+                await addDoc(collection(db, 'quiz_results'), {
+                    uid: userData.uid,
+                    name: userData.name || 'Student',
+                    class: userData.class || 0,
+                    number: userData.number || 0,
+                    unitId: unitId,
+                    category: category,
+                    score: finalScore,
+                    details: logDetails,
+                    status: isTimeout ? '시간초과' : '완료',
+                    timestamp: serverTimestamp(),
+                    timeString: new Date().toLocaleString()
+                });
+            } catch (e) {
+                console.error("Failed to save result", e);
+            }
+        }
+
+        setView('result');
+    };
+
+    // Render Views
+    if (view === 'loading') return <div className="flex h-screen items-center justify-center font-bold text-gray-500">로딩 중...</div>;
+
+    if (view === 'intro') {
+        const timeLimit = config?.timeLimit || 60;
+        const qCount = config?.questionCount || 10;
+
+        return (
+            <div className="max-w-2xl mx-auto px-4 py-8 min-h-screen flex flex-col items-center justify-center text-center animate-fadeIn">
+                <div className="bg-white p-8 rounded-2xl shadow-lg border border-gray-100 w-full relative">
+                    <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-6">
+                        <i className="fas fa-file-signature"></i>
+                    </div>
+                    <h1 className="text-2xl font-bold text-gray-900 mb-2">{title}</h1>
+                    <p className="text-gray-500 mb-6 font-medium bg-gray-50 inline-block px-4 py-1 rounded-full text-sm">
+                        {category === 'diagnostic' ? '진단평가' : (category === 'formative' ? '형성평가' : '실전 모의고사')}
+                    </p>
+
+                    <div className="space-y-4 mb-8 text-left bg-blue-50 p-5 rounded-xl border border-blue-100 text-sm">
+                        <div className="flex justify-between border-b border-blue-200 pb-2">
+                            <span className="text-gray-600">제한 시간</span>
+                            <span className="font-bold text-blue-800">{timeLimit}초</span>
+                        </div>
+                        <div className="flex justify-between border-b border-blue-200 pb-2">
+                            <span className="text-gray-600">출제 문항 수</span>
+                            <span className="font-bold text-blue-800">{qCount}문항</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-gray-600">나의 기록</span>
+                            <span className="font-bold text-gray-800">{historyCount}회 응시</span>
+                        </div>
+                    </div>
+
+                    {errorMsg && <div className="text-red-500 font-bold mb-4">{errorMsg}</div>}
+
+                    {!blockReason ? (
+                        <button onClick={startQuiz} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-md transition transform active:scale-95 text-lg">
+                            평가 시작하기
+                        </button>
+                    ) : (
+                        <div className="text-red-500 font-bold p-4 bg-red-50 rounded-xl border border-red-100">
+                            <i className="fas fa-ban mr-2"></i>{blockReason}
+                        </div>
+                    )}
+
+                    <button onClick={() => navigate(-1)} className="mt-4 text-gray-400 text-sm hover:underline">돌아가기</button>
+                </div>
+            </div>
+        );
+    }
+
+    if (view === 'quiz') {
+        const q = selectedQuestions[currentIndex];
+        const progress = ((timeLeft / (config?.timeLimit || 60)) * 100);
+        const currentAns = answers[q.id] || '';
+
+        return (
+            <div className="max-w-2xl mx-auto px-4 py-8 min-h-screen flex flex-col animate-fadeIn">
+                <div className="flex justify-between items-center mb-6">
+                    <div className="font-bold text-gray-500">
+                        <span className="text-blue-600">{currentIndex + 1}</span> / {selectedQuestions.length}
+                    </div>
+                    <div className="flex items-center gap-2 bg-white px-3 py-1 rounded-full shadow-sm border border-gray-200">
+                        <i className="fas fa-stopwatch text-red-500"></i>
+                        <span className="font-mono font-bold text-lg text-gray-700 w-12 text-center">
+                            {Math.floor(timeLeft / 60).toString().padStart(2, '0')}:{Math.floor(timeLeft % 60).toString().padStart(2, '0')}
+                        </span>
+                    </div>
+                </div>
+
+                <div className="w-full bg-gray-200 rounded-full h-2 mb-8 overflow-hidden">
+                    <div
+                        className={`h-2 rounded-full transition-all duration-1000 ease-linear ${progress < 20 ? 'bg-red-500' : 'bg-blue-500'}`}
+                        style={{ width: `${progress}%` }}
+                    ></div>
+                </div>
+
+                <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-gray-200 flex-1 flex flex-col">
+                    {q.image && (
+                        <div className="mb-4 text-center">
+                            <img src={q.image} className="max-h-48 mx-auto rounded-lg border border-gray-100" alt="Question" />
+                        </div>
+                    )}
+
+                    <h2 className="text-xl md:text-2xl font-bold text-gray-800 mb-8 leading-snug break-keep">
+                        {q.question}
+                    </h2>
+
+                    <div className="space-y-3 flex-1">
+                        {q.type === 'choice' && q.options?.map((opt, i) => (
+                            <div
+                                key={i}
+                                onClick={() => handleAnswer(opt)}
+                                className={`
+                                    border-2 rounded-xl p-4 cursor-pointer transition flex items-center
+                                    ${currentAns === opt ? 'border-blue-500 bg-blue-50 text-blue-800 font-bold' : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'}
+                                `}
+                            >
+                                <div className={`w-7 h-7 rounded-full flex items-center justify-center mr-3 text-sm font-bold ${currentAns === opt ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500'}`}>{i + 1}</div>
+                                <div>{opt}</div>
+                            </div>
+                        ))}
+
+                        {q.type === 'ox' && ['O', 'X'].map((opt) => (
+                            <div
+                                key={opt}
+                                onClick={() => handleAnswer(opt)}
+                                className={`
+                                    border-2 rounded-xl p-6 cursor-pointer transition text-center text-xl font-bold
+                                    ${currentAns === opt ? 'border-blue-500 bg-blue-50 text-blue-800' : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'}
+                                `}
+                            >
+                                {opt}
+                            </div>
+                        ))}
+
+                        {q.type === 'short' && (
+                            <input
+                                type="text"
+                                value={currentAns}
+                                onChange={(e) => handleAnswer(e.target.value)}
+                                className="w-full border-b-2 border-gray-300 p-3 text-lg focus:border-blue-500 outline-none text-center bg-transparent"
+                                placeholder="정답을 입력하세요"
+                            />
+                        )}
+                    </div>
+
+                    <div className="mt-8 pt-4 border-t border-gray-100 flex justify-end">
+                        <button
+                            onClick={nextQuestion}
+                            className="bg-gray-800 text-white px-8 py-3 rounded-xl font-bold hover:bg-gray-900 transition shadow-lg flex items-center"
+                        >
+                            {currentIndex === selectedQuestions.length - 1 ? '제출 하기' : '다음 문제'}
+                            {currentIndex === selectedQuestions.length - 1 ? <i className="fas fa-check ml-2"></i> : <i className="fas fa-arrow-right ml-2"></i>}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (view === 'result') {
+        return (
+            <div className="max-w-2xl mx-auto px-4 py-8 min-h-screen text-center animate-fadeIn">
+                <div className="bg-white p-8 rounded-2xl shadow-xl border-t-8 border-blue-500 mb-8">
+                    <h2 className="text-3xl font-black text-gray-800 mb-2">평가 종료</h2>
+                    <p className="text-gray-500 mb-8">수고하셨습니다! 결과를 확인하세요.</p>
+
+                    <div className="relative w-48 h-48 mx-auto mb-6 flex items-center justify-center rounded-full border-8 border-blue-50">
+                        {/* Simple Score Display instead of Chart.js for simplicity/speed in this component, or we can add Chart later */}
+                        <div className="flex flex-col items-center justify-center">
+                            <span className="text-5xl font-black text-blue-600">{score}</span>
+                            <span className="text-sm text-gray-400 font-bold">점</span>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 mb-6">
+                        <button
+                            onClick={() => document.getElementById('review-section')?.classList.toggle('hidden')}
+                            className="bg-white border-2 border-gray-200 text-gray-700 font-bold py-3 rounded-xl hover:bg-gray-50 transition"
+                        >
+                            오답 노트
+                        </button>
+                        <button
+                            onClick={() => navigate('/student/quiz')}
+                            className="bg-gray-800 text-white font-bold py-3 rounded-xl hover:bg-gray-900 shadow-md transition"
+                        >
+                            목록으로
+                        </button>
+                    </div>
+                </div>
+
+                <div id="review-section" className="hidden text-left bg-white p-6 rounded-2xl shadow-lg border border-red-100 animate-slideDown">
+                    <h3 className="font-bold text-lg text-red-500 mb-4 border-b pb-2">
+                        <i className="fas fa-check-circle mr-2"></i>채점 결과 확인
+                    </h3>
+                    <div className="space-y-6">
+                        {results.map((r, i) => (
+                            <div key={i} className={`border-b pb-4 last:border-0 ${r.correct ? 'opacity-50' : ''}`}>
+                                <div className="flex gap-2 items-start mb-2">
+                                    <span className={`text-xs font-bold px-2 py-1 rounded ${r.correct ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                                        Q{i + 1}
+                                    </span>
+                                    <div className="font-bold text-gray-800">{r.q}</div>
+                                </div>
+                                <div className="flex gap-4 text-sm ml-8 mb-2">
+                                    <span className={`font-bold ${r.correct ? 'text-green-500' : 'text-red-500 line-through'}`}>
+                                        {r.u || '(미입력)'}
+                                    </span>
+                                    {!r.correct && (
+                                        <span className="text-blue-600 font-bold">
+                                            <i className="fas fa-arrow-right mr-1"></i>{r.a}
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="ml-8 bg-gray-50 p-3 rounded text-xs text-gray-600">
+                                    {r.exp || '해설 없음'}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    return <div></div>;
+};
+
+export default QuizRunner;

@@ -5,7 +5,10 @@ import MainLayout from './components/layout/MainLayout';
 import Login from './pages/Login';
 import StudentDashboard from './pages/student/Dashboard';
 import StudentNote from './pages/student/lesson/Note';
+import StudentQuizIndex from './pages/student/quiz/QuizIndex';
+import QuizRunner from './pages/student/quiz/QuizRunner';
 import TeacherDashboard from './pages/teacher/Dashboard';
+
 
 
 const App: React.FC = () => {
@@ -23,6 +26,16 @@ const App: React.FC = () => {
                         <Route path="/student/lesson/note" element={
                             <MainLayout>
                                 <StudentNote />
+                            </MainLayout>
+                        } />
+                        <Route path="/student/quiz" element={
+                            <MainLayout>
+                                <StudentQuizIndex />
+                            </MainLayout>
+                        } />
+                        <Route path="/student/quiz/run" element={
+                            <MainLayout>
+                                <QuizRunner />
                             </MainLayout>
                         } />
                         <Route path="/teacher/dashboard" element={
