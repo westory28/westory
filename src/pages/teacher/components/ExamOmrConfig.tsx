@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { db } from '../../../lib/firebase';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { useAuth } from '../../../contexts/AuthContext';
+import { getSemesterDocPath } from '../../../lib/semesterScope';
 
 interface ObjectiveItem {
     score: number;
@@ -17,18 +19,22 @@ interface SubjectiveItem {
 }
 
 const ExamOmrConfig: React.FC = () => {
+    const { config } = useAuth();
     const [objective, setObjective] = useState<ObjectiveItem[]>([]);
     const [subjective, setSubjective] = useState<SubjectiveItem[]>([]);
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
         loadConfig();
-    }, []);
+    }, [config]);
 
     const loadConfig = async () => {
         setLoading(true);
         try {
-            const snap = await getDoc(doc(db, 'exam_config', 'final_exam'));
+            let snap = await getDoc(doc(db, getSemesterDocPath(config, 'exam_config', 'final_exam')));
+            if (!snap.exists()) {
+                snap = await getDoc(doc(db, 'exam_config', 'final_exam'));
+            }
             if (snap.exists()) {
                 const d = snap.data();
                 setObjective(d.objective || []);
@@ -43,11 +49,19 @@ const ExamOmrConfig: React.FC = () => {
 
     const handleSave = async () => {
         try {
-            await setDoc(doc(db, 'exam_config', 'final_exam'), {
-                objective,
-                subjective,
-                updatedAt: serverTimestamp()
-            });
+            try {
+                await setDoc(doc(db, getSemesterDocPath(config, 'exam_config', 'final_exam')), {
+                    objective,
+                    subjective,
+                    updatedAt: serverTimestamp()
+                });
+            } catch {
+                await setDoc(doc(db, 'exam_config', 'final_exam'), {
+                    objective,
+                    subjective,
+                    updatedAt: serverTimestamp()
+                });
+            }
             alert("저장되었습니다.");
         } catch (e) {
             console.error(e);

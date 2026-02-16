@@ -4,7 +4,6 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import listPlugin from '@fullcalendar/list';
 import { useAuth } from '../../contexts/AuthContext';
-import Header from '../../components/common/Header';
 import { db } from '../../lib/firebase';
 import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
 
@@ -139,7 +138,6 @@ const Calendar = () => {
 
     return (
         <div className="bg-gray-50 flex flex-col min-h-screen">
-            <Header />
             <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-6 h-full flex flex-col">
                 <div className="mb-4 shrink-0">
                     <h1 className="text-2xl font-bold text-gray-800"><i className="fas fa-calendar-check text-green-500 mr-2"></i>학사 일정</h1>

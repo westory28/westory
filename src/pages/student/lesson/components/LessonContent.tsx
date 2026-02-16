@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { db } from '../../../../lib/firebase';
 import { collection, query, where, getDocs, limit } from 'firebase/firestore';
+import { useAuth } from '../../../../contexts/AuthContext';
+import { getSemesterCollectionPath } from '../../../../lib/semesterScope';
 
 interface LessonContentProps {
     unitId: string | null;
@@ -14,6 +16,7 @@ interface LessonData {
 }
 
 const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) => {
+    const { config } = useAuth();
     const [lesson, setLesson] = useState<LessonData | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(false);
@@ -31,8 +34,17 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
             setLoading(true);
             setError(false);
             try {
-                const q = query(collection(db, 'lessons'), where('unitId', '==', unitId), limit(1));
-                const snap = await getDocs(q);
+                const semesterQuery = query(
+                    collection(db, getSemesterCollectionPath(config, 'lessons')),
+                    where('unitId', '==', unitId),
+                    limit(1)
+                );
+                let snap = await getDocs(semesterQuery);
+
+                if (snap.empty) {
+                    const legacyQuery = query(collection(db, 'lessons'), where('unitId', '==', unitId), limit(1));
+                    snap = await getDocs(legacyQuery);
+                }
 
                 if (!snap.empty) {
                     setLesson(snap.docs[0].data() as LessonData);
@@ -48,7 +60,7 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
         };
 
         fetchLesson();
-    }, [unitId]);
+    }, [config, unitId]);
 
     // Parse HTML and inject inputs
     const renderContent = (html: string) => {

@@ -1,9 +1,7 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { MENUS } from '../../constants/menus';
-
-const TEACHER_EMAIL = 'westoria28@gmail.com';
 
 const Header: React.FC = () => {
     const { currentUser, userData, config, logout } = useAuth();
@@ -13,9 +11,15 @@ const Header: React.FC = () => {
 
     if (!currentUser || !userData) return null;
 
-    const isTeacher = userData.role === 'teacher' || currentUser.email === TEACHER_EMAIL;
-    const menuItems = MENUS[isTeacher ? 'teacher' : 'student'] || [];
-    const home = isTeacher ? '/teacher/dashboard' : '/student/dashboard';
+    const portal: 'teacher' | 'student' = location.pathname.startsWith('/teacher')
+        ? 'teacher'
+        : location.pathname.startsWith('/student')
+            ? 'student'
+            : (userData.role === 'teacher' ? 'teacher' : 'student');
+
+    const isTeacherPortal = portal === 'teacher';
+    const menuItems = MENUS[portal] || [];
+    const home = `/${portal}/dashboard`;
 
     const isActive = (url: string) => location.pathname.startsWith(url.split('?')[0]);
 
@@ -38,11 +42,40 @@ const Header: React.FC = () => {
                     </Link>
 
                     <nav className="desktop-nav ml-4">
-                        {menuItems.map((item, idx) => (
-                            <Link key={`${item.url}-${idx}`} to={item.url} className={`nav-link ${isActive(item.url) ? 'active' : ''}`}>
-                                {item.name}
-                            </Link>
-                        ))}
+                        {menuItems.map((item, idx) => {
+                            const hasChildren = !!item.children?.length;
+                            const active = isActive(item.url) || !!item.children?.some((child) => isActive(child.url));
+
+                            if (!hasChildren) {
+                                return (
+                                    <Link key={`${item.url}-${idx}`} to={item.url} className={`nav-link ${active ? 'active' : ''}`}>
+                                        {item.name}
+                                    </Link>
+                                );
+                            }
+
+                            return (
+                                <div key={`${item.url}-${idx}`} className="relative group h-full flex items-center">
+                                    <Link to={item.url} className={`nav-link ${active ? 'active' : ''} flex items-center gap-1`}>
+                                        {item.name}
+                                        <i className="fas fa-chevron-down text-[10px] ml-1 opacity-50 group-hover:opacity-100 transition"></i>
+                                    </Link>
+                                    <div className="absolute top-full left-0 w-56 pt-3 invisible opacity-0 group-hover:visible group-hover:opacity-100 transition duration-200 transform translate-y-2 group-hover:translate-y-0 z-[100]">
+                                        <div className="bg-white border border-gray-200 shadow-xl rounded-xl overflow-hidden">
+                                            {item.children?.map((child, childIdx) => (
+                                                <Link
+                                                    key={`${child.url}-${childIdx}`}
+                                                    to={child.url}
+                                                    className={`block px-4 py-3 text-sm border-b border-gray-50 last:border-0 whitespace-nowrap ${isActive(child.url) ? 'text-blue-600 bg-blue-50 font-bold' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'}`}
+                                                >
+                                                    {child.name}
+                                                </Link>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </nav>
                 </div>
 
@@ -54,16 +87,16 @@ const Header: React.FC = () => {
                     )}
 
                     <span className="user-greeting">
-                        {userData.name} {isTeacher ? '교사' : '학생'}
+                        {userData.name} {isTeacherPortal ? '교사' : '학생'}
                     </span>
 
-                    {!isTeacher && (
+                    {!isTeacherPortal && (
                         <Link to="/student/mypage" className="text-gray-400 hover:text-blue-600 transition" title="마이페이지">
                             <i className="fas fa-user-circle fa-lg"></i>
                         </Link>
                     )}
 
-                    {isTeacher && (
+                    {isTeacherPortal && (
                         <Link to="/teacher/settings" className="text-gray-400 hover:text-blue-600 transition" title="설정">
                             <i className="fas fa-cog fa-lg"></i>
                         </Link>
@@ -85,14 +118,30 @@ const Header: React.FC = () => {
 
             <div id="mobile-menu" className={mobileMenuOpen ? 'open' : ''}>
                 {menuItems.map((item, idx) => (
-                    <Link
-                        key={`${item.url}-mobile-${idx}`}
-                        to={item.url}
-                        className={`mobile-link ${isActive(item.url) ? 'active' : ''}`}
-                        onClick={() => setMobileMenuOpen(false)}
-                    >
-                        {item.name}
-                    </Link>
+                    <div key={`${item.url}-mobile-${idx}`}>
+                        <Link
+                            to={item.url}
+                            className={`mobile-link ${isActive(item.url) ? 'active' : ''}`}
+                            onClick={() => setMobileMenuOpen(false)}
+                        >
+                            {item.name}
+                        </Link>
+                        {!!item.children?.length && (
+                            <div className="bg-gray-50 border-b border-gray-100 pb-2">
+                                {item.children.map((child, childIdx) => (
+                                    <Link
+                                        key={`${child.url}-mobile-child-${childIdx}`}
+                                        to={child.url}
+                                        className={`block pl-12 pr-4 py-2 text-sm rounded-r-full mr-2 ${isActive(child.url) ? 'text-blue-600 font-bold bg-blue-50' : 'text-gray-500 hover:text-blue-600 hover:bg-gray-100'}`}
+                                        onClick={() => setMobileMenuOpen(false)}
+                                    >
+                                        <i className="fas fa-angle-right mr-2 text-xs opacity-50"></i>
+                                        {child.name}
+                                    </Link>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 ))}
             </div>
         </header>

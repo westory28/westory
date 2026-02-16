@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { db } from '../../../lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { useAuth } from '../../../contexts/AuthContext';
+import { getSemesterDocPath } from '../../../lib/semesterScope';
 
 interface QuizSettingsModalProps {
     isOpen: boolean;
@@ -10,6 +12,7 @@ interface QuizSettingsModalProps {
 }
 
 const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({ isOpen, onClose, nodeId, category }) => {
+    const { config } = useAuth();
     const [settings, setSettings] = useState({
         active: false,
         questionCount: 10,
@@ -23,15 +26,19 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({ isOpen, onClose, 
         if (isOpen && nodeId) {
             loadSettings();
         }
-    }, [isOpen, nodeId, category]);
+    }, [config, isOpen, nodeId, category]);
 
     const loadSettings = async () => {
         setLoading(true);
         try {
             const key = `${nodeId}_${category}`;
-            const snap = await getDoc(doc(db, 'assessment_config', 'settings'));
+            let snap = await getDoc(doc(db, getSemesterDocPath(config, 'assessment_config', 'settings')));
+            if (!snap.exists()) {
+                snap = await getDoc(doc(db, 'assessment_config', 'settings'));
+            }
+
             if (snap.exists()) {
-                const data = snap.data();
+                const data = snap.data() as Record<string, any>;
                 if (data[key]) {
                     setSettings({
                         active: data[key].active ?? false,
@@ -55,7 +62,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({ isOpen, onClose, 
     const handleSave = async () => {
         try {
             const key = `${nodeId}_${category}`;
-            await setDoc(doc(db, 'assessment_config', 'settings'), {
+            await setDoc(doc(db, getSemesterDocPath(config, 'assessment_config', 'settings')), {
                 [key]: settings
             }, { merge: true });
             alert("설정이 저장되었습니다.");

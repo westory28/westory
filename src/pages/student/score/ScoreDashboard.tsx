@@ -4,6 +4,7 @@ import { collection, query, orderBy, getDocs, doc, getDoc, setDoc, serverTimesta
 import { useAuth } from '../../../contexts/AuthContext';
 import GradeChart from './components/GradeChart';
 import ScoreCard from './components/ScoreCard';
+import { getSemesterCollectionPath } from '../../../lib/semesterScope';
 
 interface GradingPlan {
     id: string;
@@ -34,25 +35,33 @@ const ScoreDashboard: React.FC = () => {
     useEffect(() => {
         if (userData && config) {
             setSemester(config.semester); // Sync with global config initially
-            // Maybe set grade from user profile? 
-            // setGrade(userData.grade || '1'); // If available
-            fetchData();
         }
     }, [userData, config]);
 
-    const fetchData = async () => {
+    useEffect(() => {
+        if (userData && config) {
+            fetchData(semester);
+        }
+    }, [userData, config, semester]);
+
+    const fetchData = async (targetSemester: string = semester) => {
         setLoading(true);
         try {
             // 1. Fetch Plans
-            const q = query(collection(db, 'grading_plans'), orderBy('createdAt', 'desc'));
-            const snap = await getDocs(q);
+            let snap = await getDocs(query(
+                collection(db, getSemesterCollectionPath({ year: config?.year || '2026', semester: targetSemester }, 'grading_plans')),
+                orderBy('createdAt', 'desc')
+            ));
+            if (snap.empty) {
+                snap = await getDocs(query(collection(db, 'grading_plans'), orderBy('createdAt', 'desc')));
+            }
             const loadedPlans: GradingPlan[] = [];
             snap.forEach(d => loadedPlans.push({ id: d.id, ...d.data() } as GradingPlan));
             setPlans(loadedPlans);
 
             // 2. Fetch User Scores
             const year = config?.year || '2025';
-            const scoreDocId = `${year}_${semester}`;
+            const scoreDocId = `${year}_${targetSemester}`;
             // IMPORTANT: Based on previous logic, scores are stored under users/{uid}/academic_records/{scoreDocId}
             if (userData) {
                 const scoreRef = doc(db, 'users', userData.uid, 'academic_records', scoreDocId);
@@ -70,26 +79,6 @@ const ScoreDashboard: React.FC = () => {
             setLoading(false);
         }
     };
-
-    // Re-fetch user scores when semester changes? 
-    // Ideally we should refetch scores when semester changes, plans are global but filtered.
-    useEffect(() => {
-        if (!loading && userData) {
-            const reloadScores = async () => {
-                const year = config?.year || '2025';
-                const scoreDocId = `${year}_${semester}`;
-                const scoreRef = doc(db, 'users', userData.uid, 'academic_records', scoreDocId);
-                const scoreSnap = await getDoc(scoreRef);
-                if (scoreSnap.exists()) {
-                    setUserScores(scoreSnap.data().scores || {});
-                } else {
-                    setUserScores({});
-                }
-            };
-            reloadScores();
-        }
-    }, [semester]);
-
 
     const handleScoreChange = (planId: string, idx: number, val: string) => {
         const numVal = parseFloat(val);
@@ -136,10 +125,12 @@ const ScoreDashboard: React.FC = () => {
 
         let filtered = plans.filter(p => {
             const pGrade = p.targetGrade || "2";
-            const pYear = p.academicYear || "2025";
-            const pSem = p.semester || "1";
+            const pYear = p.academicYear;
+            const pSem = p.semester;
             // Filter logic matches existing dashboard
-            return String(pGrade) === grade && pYear === year && pSem === semester;
+            const yearMatch = !pYear || pYear === year;
+            const semesterMatch = !pSem || pSem === semester;
+            return String(pGrade) === grade && yearMatch && semesterMatch;
         });
 
         // Calculate Totals

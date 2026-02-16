@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { db } from '../../../../lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { useAuth } from '../../../../contexts/AuthContext';
+import { getSemesterDocPath } from '../../../../lib/semesterScope';
 
 interface LessonSidebarProps {
     isOpen: boolean;
@@ -24,22 +25,16 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({ isOpen, onClose, onSelect
 
     useEffect(() => {
         const fetchTree = async () => {
-            // Priority 1: Config Year/Semester Curriculum
-            // Priority 2: Global Curriculum (Fallback)
-            // For now, let's assume global or specific path based on legacy logic.
-            // Legacy: window.getCollection('curriculum').doc('tree') -> falls back to 'curriculum/tree'
-
             try {
-                let docRef = doc(db, 'curriculum', 'tree');
-                // If we had semester specific curriculum, we'd check that here.
-                // But legacy code seems to default to global 'curriculum' collection mostly or uses a helper.
-                // Let's stick to global 'curriculum/tree' for now as per legacy fallback.
+                const semesterTree = await getDoc(doc(db, getSemesterDocPath(config, 'curriculum', 'tree')));
+                if (semesterTree.exists() && semesterTree.data().tree) {
+                    setTree(semesterTree.data().tree);
+                    return;
+                }
 
-                const docSnap = await getDoc(docRef);
-                if (docSnap.exists() && docSnap.data().tree) {
-                    setTree(docSnap.data().tree);
-                } else {
-                    console.log("No curriculum tree found.");
+                const globalTree = await getDoc(doc(db, 'curriculum', 'tree'));
+                if (globalTree.exists() && globalTree.data().tree) {
+                    setTree(globalTree.data().tree);
                 }
             } catch (error) {
                 console.error("Error fetching curriculum:", error);
@@ -49,7 +44,7 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({ isOpen, onClose, onSelect
         };
 
         fetchTree();
-    }, []);
+    }, [config]);
 
     const toggleGroup = (index: number) => {
         const newSet = new Set(expandedGroups);

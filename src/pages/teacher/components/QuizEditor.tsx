@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { db } from '../../../lib/firebase';
 import { collection, query, where, getDocs, doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { useAuth } from '../../../contexts/AuthContext';
+import { getSemesterCollectionPath, getSemesterDocPath } from '../../../lib/semesterScope';
 
 interface TreeUnit {
     id: string;
@@ -33,6 +35,7 @@ interface QuizEditorProps {
 }
 
 const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeData, onOpenSettings }) => {
+    const { config } = useAuth();
     const [questions, setQuestions] = useState<Question[]>([]);
     const [category, setCategory] = useState<string>('diagnostic');
     const [loading, setLoading] = useState(false);
@@ -62,13 +65,17 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
         }
         setEpFilter({ big: '', mid: '', small: '' });
         fetchQuestions();
-    }, [node, type]);
+    }, [config, node, type]);
 
     const fetchQuestions = async () => {
         setLoading(true);
         try {
-            const q = query(collection(db, 'quiz_questions'), where('unitId', '==', node.id));
-            const snap = await getDocs(q);
+            const scopedQuestionsRef = collection(db, getSemesterCollectionPath(config, 'quiz_questions'));
+            let snap = await getDocs(query(scopedQuestionsRef, where('unitId', '==', node.id)));
+            if (snap.empty) {
+                const legacyQuestionsRef = collection(db, 'quiz_questions');
+                snap = await getDocs(query(legacyQuestionsRef, where('unitId', '==', node.id)));
+            }
             const list: Question[] = [];
             snap.forEach(d => list.push({ id: parseInt(d.id), ...d.data() } as Question));
             setQuestions(list);
@@ -122,7 +129,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
 
         try {
             // @ts-ignore - serverTimestamp type mismatch usually fine in standard usage
-            await setDoc(doc(db, 'quiz_questions', String(newId)), {
+            await setDoc(doc(db, getSemesterDocPath(config, 'quiz_questions', String(newId))), {
                 ...newQ,
                 createdAt: serverTimestamp()
             });
@@ -146,7 +153,11 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
     const handleDelete = async (id: number) => {
         if (!confirm("삭제하시겠습니까?")) return;
         try {
-            await deleteDoc(doc(db, 'quiz_questions', String(id)));
+            try {
+                await deleteDoc(doc(db, getSemesterDocPath(config, 'quiz_questions', String(id))));
+            } catch {
+                await deleteDoc(doc(db, 'quiz_questions', String(id)));
+            }
             setQuestions(questions.filter(q => q.id !== id));
         } catch (e) {
             console.error("Delete failed", e);

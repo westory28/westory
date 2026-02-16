@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { db } from '../../../lib/firebase';
 import { collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, getDocs, query, orderBy } from 'firebase/firestore';
 import { useAuth } from '../../../contexts/AuthContext';
+import { getSemesterCollectionPath, getSemesterDocPath } from '../../../lib/semesterScope';
 
 interface GradingItem {
     type: '정기' | '수행';
@@ -34,13 +35,18 @@ const ExamGradingPlan: React.FC = () => {
 
     useEffect(() => {
         loadPlans();
-    }, []);
+    }, [userConfig]);
 
     const loadPlans = async () => {
         setLoading(true);
         try {
-            const q = query(collection(db, 'grading_plans'), orderBy('createdAt', 'desc'));
-            const snap = await getDocs(q);
+            let snap = await getDocs(query(
+                collection(db, getSemesterCollectionPath(userConfig, 'grading_plans')),
+                orderBy('createdAt', 'desc')
+            ));
+            if (snap.empty) {
+                snap = await getDocs(query(collection(db, 'grading_plans'), orderBy('createdAt', 'desc')));
+            }
             const list: GradingPlan[] = [];
             snap.forEach(d => list.push({ id: d.id, ...d.data() } as GradingPlan));
             setPlans(list);
@@ -86,10 +92,14 @@ const ExamGradingPlan: React.FC = () => {
 
         try {
             if (editId) {
-                await updateDoc(doc(db, 'grading_plans', editId), data);
+                try {
+                    await updateDoc(doc(db, getSemesterDocPath(userConfig, 'grading_plans', editId)), data);
+                } catch {
+                    await updateDoc(doc(db, 'grading_plans', editId), data);
+                }
                 alert("수정되었습니다.");
             } else {
-                await addDoc(collection(db, 'grading_plans'), {
+                await addDoc(collection(db, getSemesterCollectionPath(userConfig, 'grading_plans')), {
                     ...data,
                     createdAt: serverTimestamp()
                 });
@@ -120,7 +130,11 @@ const ExamGradingPlan: React.FC = () => {
 
     const handleDelete = async (id: string) => {
         if (confirm("삭제하시겠습니까?")) {
-            await deleteDoc(doc(db, 'grading_plans', id));
+            try {
+                await deleteDoc(doc(db, getSemesterDocPath(userConfig, 'grading_plans', id)));
+            } catch {
+                await deleteDoc(doc(db, 'grading_plans', id));
+            }
             setPlans(plans.filter(p => p.id !== id));
         }
     };

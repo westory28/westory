@@ -4,7 +4,6 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import listPlugin from '@fullcalendar/list';
 import { useAuth } from '../../contexts/AuthContext';
-import Header from '../../components/common/Header';
 import { db } from '../../lib/firebase';
 import { doc, getDoc, collection, getDocs, addDoc, updateDoc, deleteDoc, serverTimestamp, query, where } from 'firebase/firestore';
 
@@ -214,7 +213,6 @@ const ManageSchedule = () => {
 
     return (
         <div className="bg-gray-50 flex flex-col min-h-screen">
-            <Header />
             <main className="flex-1 w-full max-w-7xl mx-auto px-6 py-6 h-full flex flex-col">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4 shrink-0">
                     <div>

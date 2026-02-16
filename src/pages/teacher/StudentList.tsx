@@ -4,7 +4,6 @@ import { collection, getDocs, doc, writeBatch, deleteDoc } from 'firebase/firest
 import StudentEditModal from './components/StudentEditModal';
 import StudentHistoryModal from './components/StudentHistoryModal';
 import MoveClassModal from './components/MoveClassModal';
-import Header from '../../components/common/Header';
 
 interface Student {
     id: string;
@@ -142,7 +141,6 @@ const StudentList: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col">
-            <Header />
             <div className="max-w-7xl mx-auto px-4 py-8 animate-fadeIn w-full flex-1">
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden min-h-[600px] flex flex-col">
                     {/* Header */}

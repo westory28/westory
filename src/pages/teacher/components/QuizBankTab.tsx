@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { db } from '../../../lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
+import { useAuth } from '../../../contexts/AuthContext';
+import { getSemesterCollectionPath } from '../../../lib/semesterScope';
 
 interface Question {
     id: number;
@@ -13,6 +15,7 @@ interface Question {
 }
 
 const QuizBankTab: React.FC = () => {
+    const { config } = useAuth();
     const [questions, setQuestions] = useState<Question[]>([]);
     const [loading, setLoading] = useState(false);
 
@@ -23,7 +26,10 @@ const QuizBankTab: React.FC = () => {
         const load = async () => {
             setLoading(true);
             try {
-                const snap = await getDocs(collection(db, 'quiz_questions'));
+                let snap = await getDocs(collection(db, getSemesterCollectionPath(config, 'quiz_questions')));
+                if (snap.empty) {
+                    snap = await getDocs(collection(db, 'quiz_questions'));
+                }
                 const list: Question[] = [];
                 snap.forEach(d => list.push({ id: parseInt(d.id), ...d.data() } as Question));
                 setQuestions(list);
@@ -31,7 +37,7 @@ const QuizBankTab: React.FC = () => {
             finally { setLoading(false); }
         };
         load();
-    }, []);
+    }, [config]);
 
     const filtered = typeFilter ? questions.filter(q => q.type === typeFilter) : questions;
 

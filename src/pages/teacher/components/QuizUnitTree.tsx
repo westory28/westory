@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { db } from '../../../lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
+import { useAuth } from '../../../contexts/AuthContext';
+import { getSemesterDocPath } from '../../../lib/semesterScope';
 
 interface TreeUnit {
     id: string;
@@ -13,22 +15,29 @@ interface QuizUnitTreeProps {
 }
 
 const QuizUnitTree: React.FC<QuizUnitTreeProps> = ({ onSelect }) => {
+    const { config } = useAuth();
     const [treeData, setTreeData] = useState<TreeUnit[]>([]);
     const [activeId, setActiveId] = useState<string | null>(null);
 
     useEffect(() => {
         const loadTree = async () => {
             try {
-                const snap = await getDoc(doc(db, 'curriculum', 'tree'));
-                if (snap.exists()) {
-                    setTreeData(snap.data().tree || []);
+                const scopedTree = await getDoc(doc(db, getSemesterDocPath(config, 'curriculum', 'tree')));
+                if (scopedTree.exists()) {
+                    setTreeData(scopedTree.data().tree || []);
+                    return;
+                }
+
+                const legacyTree = await getDoc(doc(db, 'curriculum', 'tree'));
+                if (legacyTree.exists()) {
+                    setTreeData(legacyTree.data().tree || []);
                 }
             } catch (e) {
                 console.error("Failed to load curriculum tree", e);
             }
         };
         loadTree();
-    }, []);
+    }, [config]);
 
     const handleSelect = (node: TreeUnit, type: 'special' | 'normal', parentTitle?: string) => {
         setActiveId(node.id);

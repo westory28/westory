@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import Header from '../../components/common/Header';
 import { db } from '../../lib/firebase';
 import { doc, getDoc, collection, getDocs, query, where, orderBy, documentId } from 'firebase/firestore';
 import {
@@ -201,7 +200,6 @@ const StudentHistory = () => {
     if (loading) {
         return (
             <div className="min-h-screen bg-stone-50 flex flex-col">
-                <Header />
                 <div className="flex-1 flex items-center justify-center">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-stone-400 mx-auto mb-2"></div>
@@ -214,7 +212,6 @@ const StudentHistory = () => {
 
     return (
         <div className="bg-stone-50 min-h-screen flex flex-col font-sans text-stone-800">
-            <Header />
             <main className="flex-grow w-full max-w-3xl mx-auto px-4 py-8">
                 <div className="bg-white rounded-2xl shadow-lg border border-stone-100 overflow-hidden mb-8">
                     <div className="p-8 text-center bg-gradient-to-b from-white to-stone-50">

@@ -6,7 +6,9 @@ import QuizBankTab from './components/QuizBankTab';
 import QuizSettingsModal from './components/QuizSettingsModal';
 import { db } from '../../lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
-import Header from '../../components/common/Header';
+import { useSearchParams } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
+import { getSemesterDocPath } from '../../lib/semesterScope';
 
 interface TreeUnit {
     id: string;
@@ -15,6 +17,8 @@ interface TreeUnit {
 }
 
 const ManageQuiz: React.FC = () => {
+    const { config } = useAuth();
+    const [searchParams] = useSearchParams();
     const [activeTab, setActiveTab] = useState<'manage' | 'log' | 'bank'>('manage');
     const [selectedNode, setSelectedNode] = useState<{ id: string, title: string } | null>(null);
     const [selectedNodeType, setSelectedNodeType] = useState<'special' | 'normal'>('normal');
@@ -25,16 +29,29 @@ const ManageQuiz: React.FC = () => {
     const [settingsCategory, setSettingsCategory] = useState('diagnostic');
 
     useEffect(() => {
+        const requestedTab = searchParams.get('tab');
+        if (requestedTab === 'log') setActiveTab('log');
+        else if (requestedTab === 'bank') setActiveTab('bank');
+        else setActiveTab('manage');
+    }, [searchParams]);
+
+    useEffect(() => {
         const loadTree = async () => {
             try {
-                const snap = await getDoc(doc(db, 'curriculum', 'tree'));
-                if (snap.exists()) {
-                    setTreeData(snap.data().tree || []);
+                const semesterTree = await getDoc(doc(db, getSemesterDocPath(config, 'curriculum', 'tree')));
+                if (semesterTree.exists()) {
+                    setTreeData(semesterTree.data().tree || []);
+                    return;
+                }
+
+                const legacyTree = await getDoc(doc(db, 'curriculum', 'tree'));
+                if (legacyTree.exists()) {
+                    setTreeData(legacyTree.data().tree || []);
                 }
             } catch (e) { console.error(e); }
         };
         loadTree();
-    }, []);
+    }, [config]);
 
     const handleNodeSelect = (node: TreeUnit, type: 'special' | 'normal', pTitle?: string) => {
         setSelectedNode(node);
@@ -47,7 +64,6 @@ const ManageQuiz: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col">
-            <Header />
             <main className="flex-1 w-full max-w-7xl mx-auto px-4 lg:px-6 py-6 flex flex-col">
                 {/* Tabs */}
                 <div className="flex border-b border-gray-200 mb-4 bg-white rounded-t-lg px-2 shrink-0 overflow-x-auto">

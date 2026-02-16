@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import Header from '../../components/common/Header';
 import { db } from '../../lib/firebase';
 import { doc, getDoc, collection, getDocs, query, where, orderBy, limit, documentId } from 'firebase/firestore';
 import {
@@ -256,7 +255,6 @@ const MyPage = () => {
 
     return (
         <div className="bg-gray-50 min-h-screen flex flex-col">
-            <Header />
             <main className="flex-grow w-full max-w-6xl mx-auto px-4 py-8">
 
                 {/* 1. Profile Section */}

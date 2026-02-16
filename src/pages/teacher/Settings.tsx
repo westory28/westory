@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Header from '../../components/common/Header';
 import SettingsGeneral from './components/SettingsGeneral';
 import SettingsSchool from './components/SettingsSchool';
 import SettingsInterface from './components/SettingsInterface';
@@ -12,7 +11,6 @@ const Settings: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col">
-            <Header />
             <main className="flex flex-col lg:flex-row flex-1 p-6 lg:p-10 gap-8 max-w-7xl mx-auto w-full">
                 {/* Sidebar Navigation */}
                 <aside className="w-full lg:w-64 shrink-0">

@@ -4,11 +4,12 @@ import { db } from '../../../lib/firebase';
 import { collection, query, where, getDocs, doc, getDoc, addDoc, orderBy, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../../../contexts/AuthContext';
 import Chart from 'chart.js/auto';
+import { getSemesterCollectionPath, getSemesterDocPath } from '../../../lib/semesterScope';
 
 // Interfaces
 interface Question {
     id: number;
-    type: 'choice' | 'ox' | 'short';
+    type: 'choice' | 'ox' | 'short' | 'word';
     question: string;
     options?: string[]; // For choice
     answer: string | number;
@@ -30,7 +31,7 @@ interface QuizConfig {
 const QuizRunner: React.FC = () => {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
-    const { userData } = useAuth();
+    const { userData, config } = useAuth();
     const unitId = searchParams.get('unitId');
     const category = searchParams.get('category');
     const title = searchParams.get('title') || '평가';
@@ -62,12 +63,15 @@ const QuizRunner: React.FC = () => {
         return () => {
             if (timerRef.current) clearInterval(timerRef.current);
         };
-    }, [unitId, category, userData]);
+    }, [config, unitId, category, userData]);
 
     const initializeQuiz = async () => {
         try {
             // 1. Fetch Config
-            const settingsDoc = await getDoc(doc(db, 'assessment_config', 'settings'));
+            let settingsDoc = await getDoc(doc(db, getSemesterDocPath(config, 'assessment_config', 'settings')));
+            if (!settingsDoc.exists()) {
+                settingsDoc = await getDoc(doc(db, 'assessment_config', 'settings'));
+            }
             const key = `${unitId}_${category}`;
             const settingsData = settingsDoc.exists() ? settingsDoc.data() : {};
             const quizConfig: QuizConfig = settingsData[key] || { active: true, timeLimit: 60, allowRetake: true, cooldown: 0, questionCount: 10 };
@@ -80,14 +84,22 @@ const QuizRunner: React.FC = () => {
 
             // 2. Fetch Questions
             let qQuery;
-            const qRef = collection(db, 'quiz_questions');
+            const qRef = collection(db, getSemesterCollectionPath(config, 'quiz_questions'));
             if (unitId === 'exam_prep') {
                 qQuery = query(qRef, where('category', '==', 'exam_prep'));
             } else {
                 qQuery = query(qRef, where('unitId', '==', unitId), where('category', '==', category));
             }
 
-            const qSnap = await getDocs(qQuery);
+            let qSnap = await getDocs(qQuery);
+            if (qSnap.empty) {
+                const legacyRef = collection(db, 'quiz_questions');
+                if (unitId === 'exam_prep') {
+                    qSnap = await getDocs(query(legacyRef, where('category', '==', 'exam_prep')));
+                } else {
+                    qSnap = await getDocs(query(legacyRef, where('unitId', '==', unitId), where('category', '==', category)));
+                }
+            }
             const fetchedQuestions: Question[] = [];
             qSnap.forEach(d => fetchedQuestions.push({ id: parseInt(d.id), ...d.data() } as Question));
 
@@ -95,7 +107,7 @@ const QuizRunner: React.FC = () => {
             setAllQuestions(fetchedQuestions);
 
             // 3. Check History
-            const hRef = collection(db, 'quiz_results');
+            const hRef = collection(db, getSemesterCollectionPath(config, 'quiz_results'));
             const hQuery = query(
                 hRef,
                 where('uid', '==', userData?.uid),
@@ -103,7 +115,17 @@ const QuizRunner: React.FC = () => {
                 where('category', '==', category),
                 orderBy('timestamp', 'desc')
             );
-            const hSnap = await getDocs(hQuery);
+            let hSnap = await getDocs(hQuery);
+            if (hSnap.empty) {
+                const legacyHistoryQuery = query(
+                    collection(db, 'quiz_results'),
+                    where('uid', '==', userData?.uid),
+                    where('unitId', '==', unitId),
+                    where('category', '==', category),
+                    orderBy('timestamp', 'desc')
+                );
+                hSnap = await getDocs(legacyHistoryQuery);
+            }
             setHistoryCount(hSnap.size);
 
             if (!quizConfig.allowRetake && !hSnap.empty && unitId !== 'exam_prep') {
@@ -221,7 +243,7 @@ const QuizRunner: React.FC = () => {
         // Save to Firestore
         if (userData) {
             try {
-                await addDoc(collection(db, 'quiz_results'), {
+                await addDoc(collection(db, getSemesterCollectionPath(config, 'quiz_results')), {
                     uid: userData.uid,
                     name: userData.name || 'Student',
                     class: userData.class || 0,
@@ -358,7 +380,7 @@ const QuizRunner: React.FC = () => {
                             </div>
                         ))}
 
-                        {q.type === 'short' && (
+                        {(q.type === 'short' || q.type === 'word') && (
                             <input
                                 type="text"
                                 value={currentAns}

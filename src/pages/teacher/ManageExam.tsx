@@ -1,14 +1,18 @@
 import React, { useState } from 'react';
 import ExamGradingPlan from './components/ExamGradingPlan';
 import ExamOmrConfig from './components/ExamOmrConfig';
-import Header from '../../components/common/Header';
+import { useSearchParams } from 'react-router-dom';
 
 const ManageExam: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'preview' | 'omr'>('preview');
+    const [searchParams] = useSearchParams();
+
+    React.useEffect(() => {
+        setActiveTab(searchParams.get('tab') === 'omr' ? 'omr' : 'preview');
+    }, [searchParams]);
 
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col">
-            <Header />
             <main className="w-full max-w-7xl mx-auto px-4 py-6 flex-1 flex flex-col">
                 <div className="flex justify-between items-end mb-4 flex-shrink-0">
                     <div>

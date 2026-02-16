@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import Header from '../../components/common/Header';
 import { db } from '../../lib/firebase';
 import { doc, getDoc, collection, setDoc, getDocs, addDoc, updateDoc, serverTimestamp, query, where, limit } from 'firebase/firestore';
+import QuillEditor from '../../components/common/QuillEditor';
+import { getSemesterCollectionPath, getSemesterDocPath } from '../../lib/semesterScope';
 
 interface TreeNode {
     id: string;
@@ -18,7 +19,7 @@ interface LessonData {
 }
 
 const ManageLesson = () => {
-    const { user } = useAuth();
+    const { config } = useAuth();
     const [treeData, setTreeData] = useState<TreeNode[]>([]);
     const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
     const [selectedNodeTitle, setSelectedNodeTitle] = useState<string>("");
@@ -40,7 +41,7 @@ const ManageLesson = () => {
 
     useEffect(() => {
         loadTree();
-    }, []);
+    }, [config]);
 
     const loadTree = async () => {
         try {
@@ -49,13 +50,17 @@ const ManageLesson = () => {
             // For now, let's assume it is global or hardcoded to a collection for simplicity, or we check config.
             // Let's us 'curriculum' collection in root for now as per original code fallback
 
-            const docRef = doc(db, 'curriculum', 'tree');
-            const docSnap = await getDoc(docRef);
+            const scopedDoc = await getDoc(doc(db, getSemesterDocPath(config, 'curriculum', 'tree')));
+            if (scopedDoc.exists() && scopedDoc.data().tree) {
+                setTreeData(scopedDoc.data().tree);
+                return;
+            }
 
-            if (docSnap.exists() && docSnap.data().tree) {
-                setTreeData(docSnap.data().tree);
+            const globalDoc = await getDoc(doc(db, 'curriculum', 'tree'));
+            if (globalDoc.exists() && globalDoc.data().tree) {
+                setTreeData(globalDoc.data().tree);
             } else {
-                setTreeData([{ id: 'root-' + Date.now(), title: '새 대단원', children: [] }]);
+                setTreeData([{ id: `root-${Date.now()}`, title: '????⑥썝', children: [] }]);
             }
         } catch (e) {
             console.error(e);
@@ -64,13 +69,13 @@ const ManageLesson = () => {
 
     const saveTree = async (newData: TreeNode[]) => {
         try {
-            await setDoc(doc(db, 'curriculum', 'tree'), {
+            await setDoc(doc(db, getSemesterDocPath(config, 'curriculum', 'tree')), {
                 tree: newData,
                 updatedAt: serverTimestamp()
             });
             setTreeData(newData);
         } catch (e) {
-            alert("구조 저장 실패");
+            alert("援ъ“ ????ㅽ뙣");
         }
     };
 
@@ -137,7 +142,7 @@ const ManageLesson = () => {
     };
 
     const handleDeleteNode = (node: TreeNode, parentArr: TreeNode[]) => {
-        if (!window.confirm(`'${node.title}' 및 하위 내용을 삭제하시겠습니까?`)) return;
+        if (!window.confirm(`'${node.title}' 諛??섏쐞 ?댁슜????젣?섏떆寃좎뒿?덇퉴?`)) return;
 
         // Recursive delete in local state
         // We need to find parent array in the real tree data
@@ -181,7 +186,7 @@ const ManageLesson = () => {
                             <button
                                 onClick={(e) => { e.stopPropagation(); openModal('child', node); }}
                                 className="text-green-600 hover:bg-green-100 p-1 rounded"
-                                title="하위 단원 추가"
+                                title="?섏쐞 ?⑥썝 異붽?"
                             >
                                 <i className="fas fa-plus text-xs"></i>
                             </button>
@@ -189,14 +194,14 @@ const ManageLesson = () => {
                         <button
                             onClick={(e) => { e.stopPropagation(); openModal('rename', node); }}
                             className="text-blue-600 hover:bg-blue-100 p-1 rounded"
-                            title="이름 변경"
+                            title="?대쫫 蹂寃?
                         >
                             <i className="fas fa-pen text-xs"></i>
                         </button>
                         <button
                             onClick={(e) => { e.stopPropagation(); handleDeleteNode(node, parentArr); }}
                             className="text-red-600 hover:bg-red-100 p-1 rounded"
-                            title="삭제"
+                            title="??젣"
                         >
                             <i className="fas fa-trash text-xs"></i>
                         </button>
@@ -220,9 +225,15 @@ const ManageLesson = () => {
         setLessonContent("");
 
         try {
-            const lessonsRef = collection(db, 'lessons');
-            const q = query(lessonsRef, where('unitId', '==', unitId), limit(1));
-            const snap = await getDocs(q);
+            const scopedLessonsRef = collection(db, getSemesterCollectionPath(config, 'lessons'));
+            const scopedQuery = query(scopedLessonsRef, where('unitId', '==', unitId), limit(1));
+            let snap = await getDocs(scopedQuery);
+
+            if (snap.empty) {
+                const legacyLessonsRef = collection(db, 'lessons');
+                const legacyQuery = query(legacyLessonsRef, where('unitId', '==', unitId), limit(1));
+                snap = await getDocs(legacyQuery);
+            }
 
             if (!snap.empty) {
                 const d = snap.docs[0].data() as LessonData;
@@ -239,7 +250,7 @@ const ManageLesson = () => {
         if (!selectedNodeId) return;
 
         try {
-            const lessonsRef = collection(db, 'lessons');
+            const lessonsRef = collection(db, getSemesterCollectionPath(config, 'lessons'));
             const q = query(lessonsRef, where('unitId', '==', selectedNodeId), limit(1));
             const snap = await getDocs(q);
 
@@ -256,9 +267,9 @@ const ManageLesson = () => {
             } else {
                 await updateDoc(doc(lessonsRef, snap.docs[0].id), { ...data });
             }
-            alert("저장되었습니다.");
+            alert("??λ릺?덉뒿?덈떎.");
         } catch (e) {
-            alert("저장 실패");
+            alert("????ㅽ뙣");
         }
     };
 
@@ -280,7 +291,7 @@ const ManageLesson = () => {
                         key={i}
                         type="text"
                         readOnly
-                        value={`정답: ${ans}`}
+                        value={`?뺣떟: ${ans}`}
                         className="border-b-2 border-blue-500 text-blue-600 font-bold text-center px-2 py-0.5 mx-1 w-32 bg-transparent"
                     />
                 );
@@ -300,22 +311,21 @@ const ManageLesson = () => {
 
     return (
         <div className="bg-gray-50 flex flex-col min-h-screen">
-            <Header />
             <main className="flex-1 w-full max-w-[90rem] mx-auto px-4 lg:px-6 py-6 h-full flex flex-col">
                 <div className="flex justify-between items-center mb-4 shrink-0">
-                    <h1 className="text-xl lg:text-2xl font-bold text-gray-800"><i className="fas fa-sitemap text-blue-500 mr-2"></i>수업 자료 관리</h1>
+                    <h1 className="text-xl lg:text-2xl font-bold text-gray-800"><i className="fas fa-sitemap text-blue-500 mr-2"></i>?섏뾽 ?먮즺 愿由?/h1>
                 </div>
 
                 <div className="flex flex-col lg:flex-row gap-6 h-full pb-4">
                     {/* Sidebar */}
                     <div className="w-full lg:w-1/3 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col min-h-[400px]">
                         <div className="p-4 border-b bg-gray-50 font-bold text-gray-700 flex justify-between items-center">
-                            <span className="flex items-center gap-2"><i className="fas fa-list"></i> 단원 목차</span>
+                            <span className="flex items-center gap-2"><i className="fas fa-list"></i> ?⑥썝 紐⑹감</span>
                             <button
                                 onClick={() => openModal('root')}
                                 className="text-xs bg-stone-800 text-white px-3 py-1.5 rounded hover:bg-stone-900 shadow-sm flex items-center transition"
                             >
-                                <i className="fas fa-plus mr-1"></i>추가
+                                <i className="fas fa-plus mr-1"></i>異붽?
                             </button>
                         </div>
                         <div className="flex-1 overflow-y-auto p-4">
@@ -330,8 +340,8 @@ const ManageLesson = () => {
                         {!selectedNodeId ? (
                             <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400">
                                 <i className="far fa-hand-point-left text-4xl mb-4 lg:block hidden"></i>
-                                <p className="text-lg font-bold">수업 자료를 선택해주세요</p>
-                                <p className="text-sm mt-2">왼쪽 목차에서 <strong>소단원</strong>을 선택하세요.</p>
+                                <p className="text-lg font-bold">?섏뾽 ?먮즺瑜??좏깮?댁＜?몄슂</p>
+                                <p className="text-sm mt-2">?쇱そ 紐⑹감?먯꽌 <strong>?뚮떒??/strong>???좏깮?섏꽭??</p>
                             </div>
                         ) : (
                             <>
@@ -342,26 +352,26 @@ const ManageLesson = () => {
                                     </div>
                                     <div className="flex gap-2">
                                         <button onClick={handlePreview} className="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg font-bold hover:bg-gray-50 text-xs md:text-sm">
-                                            미리보기
+                                            誘몃━蹂닿린
                                         </button>
                                         <button onClick={saveLesson} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700 shadow-md text-xs md:text-sm">
-                                            저장
+                                            ???
                                         </button>
                                     </div>
                                 </div>
                                 <div className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-4">
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-500 mb-1">자료 제목</label>
+                                        <label className="block text-xs font-bold text-gray-500 mb-1">?먮즺 ?쒕ぉ</label>
                                         <input
                                             type="text"
                                             className="w-full text-lg font-bold border-b-2 border-gray-200 focus:border-blue-500 outline-none py-2 px-1 transition"
                                             value={lessonTitle}
                                             onChange={e => setLessonTitle(e.target.value)}
-                                            placeholder="제목을 입력하세요"
+                                            placeholder="?쒕ぉ???낅젰?섏꽭??
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-500 mb-1">YouTube 영상 링크 (선택)</label>
+                                        <label className="block text-xs font-bold text-gray-500 mb-1">YouTube ?곸긽 留곹겕 (?좏깮)</label>
                                         <input
                                             type="text"
                                             className="w-full border rounded-lg px-3 py-2 text-sm bg-gray-50 focus:bg-white transition"
@@ -372,16 +382,23 @@ const ManageLesson = () => {
                                     </div>
                                     <div className="flex-1 flex flex-col h-full min-h-[400px]">
                                         <label className="block text-xs font-bold text-gray-500 mb-1 flex justify-between">
-                                            <span>학습 내용 (HTML)</span>
-                                            <span className="text-blue-600 text-[10px]">빈칸: [정답]</span>
+                                            <span>?숈뒿 ?댁슜 (HTML)</span>
+                                            <span className="text-blue-600 text-[10px]">鍮덉뭏: [?뺣떟]</span>
                                         </label>
-                                        <textarea
-                                            className="w-full flex-1 border rounded-lg p-4 font-mono text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                        <QuillEditor
                                             value={lessonContent}
-                                            onChange={e => setLessonContent(e.target.value)}
-                                            placeholder="<div>학습 내용을 HTML로 작성하세요...</div>"
-                                        ></textarea>
-                                        <p className="text-xs text-gray-400 mt-1">* 현재 Rich Text Editor(Quill) 라이브러리 부재로 HTML 직접 입력 모드입니다.</p>
+                                            onChange={setLessonContent}
+                                            placeholder="여기에 수업 내용을 작성하세요. 빈칸 문제는 [정답] 형식을 사용하세요."
+                                            minHeight={460}
+                                            toolbar={[
+                                                [{ header: [1, 2, 3, false] }],
+                                                ['bold', 'italic', 'underline', 'strike'],
+                                                [{ color: [] }, { background: [] }],
+                                                [{ list: 'ordered' }, { list: 'bullet' }],
+                                                ['link', 'image'],
+                                                ['clean']
+                                            ]}
+                                        />
                                     </div>
                                 </div>
                             </>
@@ -395,20 +412,20 @@ const ManageLesson = () => {
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
                     <div className="bg-white rounded-xl shadow-2xl w-96 p-6">
                         <h3 className="font-bold text-lg text-gray-800 mb-4">
-                            {modalMode === 'root' ? "새 대단원 추가" : (modalMode === 'child' ? "하위 단원 추가" : "이름 변경")}
+                            {modalMode === 'root' ? "????⑥썝 異붽?" : (modalMode === 'child' ? "?섏쐞 ?⑥썝 異붽?" : "?대쫫 蹂寃?)}
                         </h3>
                         <input
                             type="text"
                             autoFocus
                             className="w-full border-2 border-gray-200 rounded-lg p-3 text-lg font-bold focus:border-blue-500 outline-none mb-6"
-                            placeholder="이름 입력"
+                            placeholder="?대쫫 ?낅젰"
                             value={modalInput}
                             onChange={e => setModalInput(e.target.value)}
                             onKeyDown={e => e.key === 'Enter' && handleModalConfirm()}
                         />
                         <div className="flex justify-end gap-2">
-                            <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-gray-500 font-bold hover:bg-gray-100 rounded-lg">취소</button>
-                            <button onClick={handleModalConfirm} className="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700">확인</button>
+                            <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-gray-500 font-bold hover:bg-gray-100 rounded-lg">痍⑥냼</button>
+                            <button onClick={handleModalConfirm} className="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700">?뺤씤</button>
                         </div>
                     </div>
                 </div>
@@ -419,7 +436,7 @@ const ManageLesson = () => {
                 <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setPreviewOpen(false)}>
                     <div className="bg-white w-full max-w-4xl h-[85vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden relative" onClick={e => e.stopPropagation()}>
                         <div className="p-4 border-b flex justify-between items-center bg-gray-50">
-                            <h3 className="font-bold text-lg"><i className="fas fa-mobile-alt mr-2"></i>학생 화면 미리보기</h3>
+                            <h3 className="font-bold text-lg"><i className="fas fa-mobile-alt mr-2"></i>?숈깮 ?붾㈃ 誘몃━蹂닿린</h3>
                             <button onClick={() => setPreviewOpen(false)} className="text-gray-500 hover:text-gray-800"><i className="fas fa-times text-xl"></i></button>
                         </div>
                         <div className="flex-1 overflow-y-auto p-4 lg:p-8 bg-gray-50">
@@ -452,3 +469,4 @@ const ManageLesson = () => {
 };
 
 export default ManageLesson;
+

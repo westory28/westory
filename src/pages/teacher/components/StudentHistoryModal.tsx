@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { db } from '../../../lib/firebase';
 import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
+import { useAuth } from '../../../contexts/AuthContext';
+import { getSemesterCollectionPath } from '../../../lib/semesterScope';
 
 interface StudentHistoryModalProps {
     isOpen: boolean;
@@ -10,6 +12,7 @@ interface StudentHistoryModalProps {
 }
 
 const StudentHistoryModal: React.FC<StudentHistoryModalProps> = ({ isOpen, onClose, studentId, studentName }) => {
+    const { config } = useAuth();
     const [historyGroups, setHistoryGroups] = useState<{ [date: string]: any[] }>({});
     const [loading, setLoading] = useState(false);
     const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
@@ -18,17 +21,21 @@ const StudentHistoryModal: React.FC<StudentHistoryModalProps> = ({ isOpen, onClo
         if (isOpen && studentId) {
             fetchHistory();
         }
-    }, [isOpen, studentId]);
+    }, [config, isOpen, studentId]);
 
     const fetchHistory = async () => {
         setLoading(true);
         try {
-            const q = query(
-                collection(db, 'quiz_results'),
+            let q = query(
+                collection(db, getSemesterCollectionPath(config, 'quiz_results')),
                 where('uid', '==', studentId),
                 orderBy('timestamp', 'desc')
             );
-            const snap = await getDocs(q);
+            let snap = await getDocs(q);
+            if (snap.empty) {
+                q = query(collection(db, 'quiz_results'), where('uid', '==', studentId), orderBy('timestamp', 'desc'));
+                snap = await getDocs(q);
+            }
 
             const groups: { [date: string]: any[] } = {};
             snap.forEach(doc => {

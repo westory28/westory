@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { db } from '../../../lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { useAuth } from '../../../contexts/AuthContext';
+import { getSemesterDocPath } from '../../../lib/semesterScope';
 
 interface TreeItem {
     id: string;
@@ -30,19 +31,27 @@ const QuizIndex: React.FC = () => {
         const fetchData = async () => {
             try {
                 // 1. Fetch Curriculum Tree
-                // Try legacy global path first as per HTML logic
-                let treeDoc = await getDoc(doc(db, 'curriculum', 'tree'));
+                let treeDoc = await getDoc(doc(db, getSemesterDocPath(config, 'curriculum', 'tree')));
+                if (!treeDoc.exists()) {
+                    treeDoc = await getDoc(doc(db, 'curriculum', 'tree'));
+                }
                 if (treeDoc.exists() && treeDoc.data().tree) {
                     setTree(treeDoc.data().tree);
                 }
 
                 // 2. Fetch Assessment Config
-                let settingsDoc = await getDoc(doc(db, 'assessment_config', 'settings'));
+                let settingsDoc = await getDoc(doc(db, getSemesterDocPath(config, 'assessment_config', 'settings')));
+                if (!settingsDoc.exists()) {
+                    settingsDoc = await getDoc(doc(db, 'assessment_config', 'settings'));
+                }
                 if (settingsDoc.exists()) {
                     setAssessmentConfig(settingsDoc.data() as AssessmentConfig);
                 } else {
                     // Fallback check for status doc (legacy)
-                    let statusDoc = await getDoc(doc(db, 'assessment_config', 'status'));
+                    let statusDoc = await getDoc(doc(db, getSemesterDocPath(config, 'assessment_config', 'status')));
+                    if (!statusDoc.exists()) {
+                        statusDoc = await getDoc(doc(db, 'assessment_config', 'status'));
+                    }
                     if (statusDoc.exists()) {
                         const raw = statusDoc.data();
                         const converted: AssessmentConfig = {};
@@ -61,7 +70,7 @@ const QuizIndex: React.FC = () => {
         };
 
         fetchData();
-    }, []);
+    }, [config]);
 
     const toggleAccordion = (index: number) => {
         const newSet = new Set(expandedItems);
