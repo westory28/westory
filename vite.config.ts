@@ -24,6 +24,17 @@ export default defineConfig(({ mode }) => {
         input: {
           main: path.resolve(__dirname, 'index.html'),
         },
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('firebase')) return 'vendor-firebase';
+              if (id.includes('@fullcalendar')) return 'vendor-calendar';
+              if (id.includes('chart.js') || id.includes('react-chartjs-2')) return 'vendor-chart';
+              if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) return 'vendor-react';
+              return 'vendor-misc';
+            }
+          },
+        },
       },
     },
   };
