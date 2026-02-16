@@ -28,7 +28,8 @@ try {
 }
 
 // Export for module usage
-export { app, db, auth, analytics };
+// Export for module usage
+export { app, db, auth, analytics, firebase };
 
 // Attach to window for backward compatibility with existing non-module scripts
 window.firebase = firebase;

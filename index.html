@@ -261,6 +261,8 @@
     </div>
 
     <script type="module">
+        import { auth, db, firebase } from '/assets/js/firebase-config.js';
+
         const TEACHER_EMAIL = "westoria28@gmail.com";
         let currentUser = null;
         let loginMode = 'student'; // 'student' or 'teacher'
@@ -283,12 +285,12 @@
         function handleGoogleLogin(mode) {
             loginMode = mode;
             const provider = new firebase.auth.GoogleAuthProvider();
-            window.auth.signInWithPopup(provider).catch((error) => {
+            auth.signInWithPopup(provider).catch((error) => {
                 alert("로그인 실패: " + error.message);
             });
         }
 
-        window.auth.onAuthStateChanged(async (user) => {
+        auth.onAuthStateChanged(async (user) => {
             if (user) {
                 currentUser = user;
 
@@ -306,13 +308,13 @@
                 // Student Logic
                 if (loginMode === 'teacher') {
                     alert("관리자 계정이 아닙니다.");
-                    await window.auth.signOut();
+                    await auth.signOut();
                     return;
                 }
 
                 // Check DB
                 try {
-                    const doc = await window.db.collection('users').doc(user.uid).get();
+                    const doc = await db.collection('users').doc(user.uid).get();
                     if (doc.exists) {
                         window.location.href = 'student/dashboard.html';
                     } else {
@@ -352,7 +354,7 @@
                 privacyAgreed: false // Will be handled in dashboard
             };
 
-            window.db.collection('users').doc(currentUser.uid).set(userData)
+            db.collection('users').doc(currentUser.uid).set(userData)
                 .then(() => {
                     window.location.href = 'student/dashboard.html';
                 })
@@ -369,9 +371,9 @@
             try {
                 // Ensure auth for Firestore access
                 let user = await waitForAuth();
-                if (!user) { try { await window.auth.signInAnonymously(); } catch (ae) { } }
+                if (!user) { try { await auth.signInAnonymously(); } catch (ae) { } }
 
-                const doc = await window.db.collection('site_settings').doc('school_config').get();
+                const doc = await db.collection('site_settings').doc('school_config').get();
                 if (doc.exists) {
                     const data = doc.data();
 
@@ -435,9 +437,9 @@
             try {
                 // Determine if we need to sign in anonymously for reading
                 let user = await waitForAuth();
-                if (!user) { try { await window.auth.signInAnonymously(); } catch (ae) { } }
+                if (!user) { try { await auth.signInAnonymously(); } catch (ae) { } }
 
-                const doc = await window.db.collection('site_settings').doc('interface_config').get();
+                const doc = await db.collection('site_settings').doc('interface_config').get();
                 if (doc.exists) {
                     const data = doc.data();
 
@@ -483,7 +485,7 @@
         // --- Policy Modal Logic ---
         function waitForAuth() {
             return new Promise((resolve) => {
-                const unsubscribe = window.auth.onAuthStateChanged(user => {
+                const unsubscribe = auth.onAuthStateChanged(user => {
                     unsubscribe();
                     resolve(user);
                 });
@@ -501,9 +503,9 @@
 
             try {
                 let user = await waitForAuth();
-                if (!user) { try { await window.auth.signInAnonymously(); } catch (ae) { } }
+                if (!user) { try { await auth.signInAnonymously(); } catch (ae) { } }
 
-                const doc = await window.db.collection('site_settings').doc(type).get();
+                const doc = await db.collection('site_settings').doc(type).get();
                 if (doc.exists && doc.data().text) {
                     body.innerHTML = doc.data().text;
                 } else {

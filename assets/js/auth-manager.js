@@ -1,6 +1,7 @@
 
 
-// Menu Configurations
+import { db, auth, firebase } from './firebase-config.js';
+
 const MENUS = {
     student: [
         {
@@ -56,10 +57,10 @@ window.currentConfig = {
 window.getCollection = function (collectionName) {
     const globalCollections = ['users', 'site_settings', 'metadata'];
     if (globalCollections.includes(collectionName)) {
-        return window.db.collection(collectionName);
+        return db.collection(collectionName);
     }
     // All collections use semesters path (curriculum, notices, quiz, etc.)
-    return window.db.collection('years')
+    return db.collection('years')
         .doc(window.currentConfig.year)
         .collection('semesters')
         .doc(window.currentConfig.semester)
@@ -85,7 +86,7 @@ class AuthManager {
     init(type, requireAuth = true) {
         this.userType = type;
 
-        window.auth.onAuthStateChanged(async (user) => {
+        auth.onAuthStateChanged(async (user) => {
             if (user) {
                 this.currentUser = user;
 
@@ -122,7 +123,7 @@ class AuthManager {
 
     async loadGlobalConfig() {
         try {
-            const doc = await window.db.collection('site_settings').doc('config').get();
+            const doc = await db.collection('site_settings').doc('config').get();
             if (doc.exists) {
                 const data = doc.data();
                 window.currentConfig = { ...window.currentConfig, ...data };
@@ -134,7 +135,7 @@ class AuthManager {
 
     async fetchAdditionalUserData(user, type) {
         try {
-            const doc = await window.db.collection('users').doc(user.uid).get();
+            const doc = await db.collection('users').doc(user.uid).get();
             if (doc.exists) {
                 const data = doc.data();
                 this.userData = data; // Store for D-Day logic
