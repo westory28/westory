@@ -389,10 +389,10 @@ const ManageLesson: React.FC = () => {
                                     </div>
                                     <div className="flex gap-2">
                                         <button onClick={() => setPreviewOpen(true)} className="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg font-bold hover:bg-gray-50 text-xs md:text-sm">
-                                            <i className="fas fa-eye md:mr-2"></i><span className="hidden md:inline">미리보기</span>
+                                            <i className="fas fa-eye mr-2"></i><span>미리보기</span>
                                         </button>
                                         <button onClick={() => void saveLesson()} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700 shadow-md text-xs md:text-sm">
-                                            <i className="fas fa-save md:mr-2"></i><span className="hidden md:inline">저장</span>
+                                            <i className="fas fa-save mr-2"></i><span>저장</span>
                                         </button>
                                     </div>
                                 </div>
