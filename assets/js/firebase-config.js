@@ -1,3 +1,8 @@
+import firebase from 'firebase/compat/app';
+import 'firebase/compat/auth';
+import 'firebase/compat/firestore';
+import 'firebase/compat/analytics';
+
 const firebaseConfig = {
     apiKey: "AIzaSyAOlPQ5PFmL0zxmGrGcuEBnqBXisph7kPU",
     authDomain: "history-quiz-yongsin.firebaseapp.com",
@@ -8,17 +13,25 @@ const firebaseConfig = {
     measurementId: "G-LHN97D7R2R"
 };
 
-// Initialize Firebase if not already initialized
-if (!firebase.apps.length) {
-    firebase.initializeApp(firebaseConfig);
-}
+// Initialize Firebase
+const app = firebase.initializeApp(firebaseConfig);
 
-// Export for use in other scripts by attaching to window
-// This prevents "Cannot access before initialization" errors caused by const/let hoisting issues
-window.db = firebase.firestore();
-window.auth = firebase.auth();
+// Initialize services
+const db = firebase.firestore();
+const auth = firebase.auth();
+let analytics = null;
+
 try {
-    window.analytics = firebase.analytics();
+    analytics = firebase.analytics();
 } catch (e) {
     console.warn("Analytics not supported or failed to initialize:", e);
 }
+
+// Export for module usage
+export { app, db, auth, analytics };
+
+// Attach to window for backward compatibility with existing non-module scripts
+window.firebase = firebase;
+window.db = db;
+window.auth = auth;
+window.analytics = analytics;

@@ -9,14 +9,11 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <!-- Firebase -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
 
     <!-- Config & Styles -->
     <link rel="stylesheet" href="../assets/css/style.css">
-    <script src="../assets/js/firebase-config.js"></script>
-    <script src="../assets/js/auth-manager.js"></script>
+    <script type="module" src="../assets/js/firebase-config.js"></script>
+    <script type="module" src="../assets/js/auth-manager.js"></script>
 
     <style>
         .exam-banner {
@@ -57,9 +54,7 @@
             transform: rotate(-15deg);
         }
 
-        .unit-list-container {
-            /* Removed background/border from container to let items separate */
-        }
+
 
         /* Accordion Styles - Separated Cards */
         .acc-item {
@@ -243,10 +238,10 @@
 
     <!-- Footer injected by AuthManager -->
 
-    <script>
+    <script type="module">
         window.AuthManager.init('student');
 
-        const app = {
+        window.app = {
             config: {},
             tree: [],
 
@@ -395,6 +390,7 @@
 
         app.init();
     </script>
+    <script type="module" src="/assets/js/nav-optimizer.js"></script>
 </body>
 
 </html>

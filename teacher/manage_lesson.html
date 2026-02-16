@@ -13,12 +13,9 @@
     <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
 
     <!-- Firebase -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-    <script src="../assets/js/firebase-config.js"></script>
+    <script type="module" src="../assets/js/firebase-config.js"></script>
     <link rel="stylesheet" href="../assets/css/style.css">
-    <script src="../assets/js/auth-manager.js"></script>
+    <script type="module" src="../assets/js/auth-manager.js"></script>
 
     <style>
         /* Tree Styles matching Quiz Manager */
@@ -320,10 +317,10 @@
 
     <!-- Footer injected by AuthManager -->
 
-    <script>
+    <script type="module">
         window.AuthManager.init('teacher');
 
-        const app = {
+        window.app = {
             treeData: [],
             selectedNodeId: null,
             expandedIds: new Set(),

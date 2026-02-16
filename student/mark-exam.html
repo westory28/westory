@@ -6,18 +6,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WeStory - 정기 시험 답안</title>
     <!-- Tailwind & Icons -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Removed CDN scripts for Tailwind and Font Awesome -->
 
     <!-- Firebase -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <script type="module" src="../assets/js/firebase-config.js"></script>
 
     <!-- Common Config & Styles -->
     <link rel="stylesheet" href="../assets/css/style.css">
-    <script src="../assets/js/firebase-config.js"></script>
-    <script src="../assets/js/auth-manager.js"></script>
+    <script type="module" src="../assets/js/auth-manager.js"></script>
+
 
     <style>
         .score-card {
@@ -161,7 +158,8 @@
                 onclick="app.toggleAgree()">
                 <div id="checkbox-ui"
                     class="w-5 h-5 border-2 border-stone-300 rounded flex items-center justify-center text-white transition-colors">
-                    <i class="fas fa-check text-xs"></i></div>
+                    <i class="fas fa-check text-xs"></i>
+                </div>
                 <label class="cursor-pointer text-stone-700 text-sm font-bold">위 내용을 확인하였으며 동의합니다.</label>
             </div>
             <button id="btn-start" onclick="app.startExam()" disabled
@@ -215,10 +213,10 @@
 
     <!-- Footer injected by AuthManager -->
 
-    <script>
+    <script type="module">
         window.AuthManager.init('student');
 
-        const app = {
+        window.app = {
             state: { totalScore: 0, maxScore: 0, examData: null, userMarks: {}, isAgreed: false },
 
             init: function () {
@@ -415,6 +413,7 @@
 
         window.onload = function () { app.init(); };
     </script>
+    <script type="module" src="/assets/js/nav-optimizer.js"></script>
 </body>
 
 </html>

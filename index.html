@@ -8,13 +8,8 @@
     <!-- Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Firebase -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-analytics-compat.js"></script>
     <!-- Config -->
-    <script src="assets/js/firebase-config.js"></script>
+    <script type="module" src="/assets/js/firebase-config.js"></script>
 
     <style>
         body {
@@ -264,10 +259,16 @@
         </div>
     </div>
 
-    <script>
+    <script type="module">
         const TEACHER_EMAIL = "westoria28@gmail.com";
         let currentUser = null;
         let loginMode = 'student'; // 'student' or 'teacher'
+
+        // Expose functions to window for onclick handlers
+        window.handleGoogleLogin = handleGoogleLogin;
+        window.registerUser = registerUser;
+        window.showPolicyModal = showPolicyModal;
+        window.closePolicyModal = closePolicyModal;
 
         // Init Class Options
         const classSelect = document.getElementById('reg-class');
@@ -517,6 +518,7 @@
             document.getElementById('policy-modal').classList.add('hidden');
         }
     </script>
+    <script type="module" src="/assets/js/nav-optimizer.js"></script>
 </body>
 
 </html>

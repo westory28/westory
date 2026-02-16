@@ -1,53 +1,77 @@
-
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>내 기록 보기 - WeStory</title>
-    <!-- Tailwind & Chart.js -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
+
     <!-- Firebase -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-    
+    <!-- Firebase -->
+    <script type="module" src="../assets/js/firebase-config.js"></script>
+
     <!-- Config & Styles -->
     <link rel="stylesheet" href="../assets/css/style.css">
-    <script src="../assets/js/firebase-config.js"></script>
-    <script src="../assets/js/auth-manager.js"></script>
+    <script type="module" src="../assets/js/auth-manager.js"></script>
+
 
     <style>
-        .modal-scroll::-webkit-scrollbar { width: 8px; }
-        .modal-scroll::-webkit-scrollbar-track { background: #f1f1f1; }
-        .modal-scroll::-webkit-scrollbar-thumb { background: #d6d3d1; border-radius: 4px; }
-        .modal-scroll::-webkit-scrollbar-thumb:hover { background: #a8a29e; }
+        .modal-scroll::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .modal-scroll::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        .modal-scroll::-webkit-scrollbar-thumb {
+            background: #d6d3d1;
+            border-radius: 4px;
+        }
+
+        .modal-scroll::-webkit-scrollbar-thumb:hover {
+            background: #a8a29e;
+        }
     </style>
 </head>
+
 <body class="bg-stone-50 min-h-screen flex flex-col font-sans text-stone-800">
     <!-- Header injected by JS -->
     <div id="loading-overlay" class="fixed inset-0 bg-white z-[60] flex items-center justify-center">
-        <div class="text-center"><div class="loader-spinner mx-auto"></div><p class="text-stone-500 font-bold mt-4">학생 데이터를 통합하는 중...</p></div>
+        <div class="text-center">
+            <div class="loader-spinner mx-auto"></div>
+            <p class="text-stone-500 font-bold mt-4">학생 데이터를 통합하는 중...</p>
+        </div>
     </div>
 
     <main class="flex-grow w-full max-w-3xl mx-auto px-4 py-8">
         <div class="bg-white rounded-2xl shadow-lg border border-stone-100 overflow-hidden mb-8">
             <div class="p-8 text-center bg-gradient-to-b from-white to-stone-50">
-                <div class="w-24 h-24 bg-white border-4 border-amber-100 rounded-full flex items-center justify-center text-4xl mb-4 shadow-sm mx-auto">🎓</div>
+                <div
+                    class="w-24 h-24 bg-white border-4 border-amber-100 rounded-full flex items-center justify-center text-4xl mb-4 shadow-sm mx-auto">
+                    🎓</div>
                 <h2 id="profile-name" class="text-2xl font-bold text-stone-900 mb-1">학생 이름</h2>
                 <p id="profile-info" class="text-stone-500 text-sm font-medium">정보 로딩 중...</p>
-                <span class="inline-block mt-2 bg-stone-100 px-2 py-1 rounded text-xs text-stone-500 font-bold" id="hist-semester-badge"></span>
+                <span class="inline-block mt-2 bg-stone-100 px-2 py-1 rounded text-xs text-stone-500 font-bold"
+                    id="hist-semester-badge"></span>
             </div>
             <div class="grid grid-cols-3 border-t border-b border-stone-100">
-                <div class="p-6 text-center border-r border-stone-100 hover:bg-stone-50 transition"><div class="text-xs text-stone-400 font-bold mb-1 uppercase tracking-wider">총 응시</div><div id="stat-total" class="font-bold text-2xl text-stone-800">-</div></div>
-                <div class="p-6 text-center border-r border-stone-100 hover:bg-stone-50 transition"><div class="text-xs text-stone-400 font-bold mb-1 uppercase tracking-wider">최고 점수</div><div id="stat-best" class="font-bold text-2xl text-amber-500">-</div></div>
-                <div class="p-6 text-center hover:bg-stone-50 transition"><div class="text-xs text-stone-400 font-bold mb-1 uppercase tracking-wider">평균 점수</div><div id="stat-avg" class="font-bold text-2xl text-stone-800">-</div></div>
+                <div class="p-6 text-center border-r border-stone-100 hover:bg-stone-50 transition">
+                    <div class="text-xs text-stone-400 font-bold mb-1 uppercase tracking-wider">총 응시</div>
+                    <div id="stat-total" class="font-bold text-2xl text-stone-800">-</div>
+                </div>
+                <div class="p-6 text-center border-r border-stone-100 hover:bg-stone-50 transition">
+                    <div class="text-xs text-stone-400 font-bold mb-1 uppercase tracking-wider">최고 점수</div>
+                    <div id="stat-best" class="font-bold text-2xl text-amber-500">-</div>
+                </div>
+                <div class="p-6 text-center hover:bg-stone-50 transition">
+                    <div class="text-xs text-stone-400 font-bold mb-1 uppercase tracking-wider">평균 점수</div>
+                    <div id="stat-avg" class="font-bold text-2xl text-stone-800">-</div>
+                </div>
             </div>
             <div class="p-6 h-64 bg-white">
-                <h3 class="text-sm font-bold text-stone-700 mb-4 flex items-center"><span class="w-1.5 h-4 bg-amber-500 mr-2 rounded-full"></span> 성적 변화 그래프</h3>
+                <h3 class="text-sm font-bold text-stone-700 mb-4 flex items-center"><span
+                        class="w-1.5 h-4 bg-amber-500 mr-2 rounded-full"></span> 성적 변화 그래프</h3>
                 <div class="h-full pb-6"><canvas id="scoreChart"></canvas></div>
             </div>
         </div>
@@ -60,26 +84,42 @@
         </div>
     </main>
     <!-- Footer injected by AuthManager -->
-    <div id="detail-modal" class="fixed inset-0 bg-black bg-opacity-60 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm" onclick="window.app.closeModal(event)">
-        <div class="bg-white w-full max-w-3xl h-[85vh] rounded-xl shadow-2xl flex flex-col overflow-hidden animate-[fade-in_0.2s_ease-out]" onclick="event.stopPropagation()">
+    <div id="detail-modal"
+        class="fixed inset-0 bg-black bg-opacity-60 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm"
+        onclick="window.app.closeModal(event)">
+        <div class="bg-white w-full max-w-3xl h-[85vh] rounded-xl shadow-2xl flex flex-col overflow-hidden animate-[fade-in_0.2s_ease-out]"
+            onclick="event.stopPropagation()">
             <div class="p-5 border-b border-stone-200 flex justify-between items-center bg-stone-50">
-                <div><h3 class="font-bold text-xl text-stone-900">📄 오답 노트 & 해설</h3><p id="modal-date" class="text-sm text-stone-500 mt-1">-</p></div>
-                <button onclick="window.app.closeModal()" class="text-stone-400 hover:text-stone-700 p-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
+                <div>
+                    <h3 class="font-bold text-xl text-stone-900">📄 오답 노트 & 해설</h3>
+                    <p id="modal-date" class="text-sm text-stone-500 mt-1">-</p>
+                </div>
+                <button onclick="window.app.closeModal()" class="text-stone-400 hover:text-stone-700 p-2"><svg
+                        xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M6 18L18 6M6 6l12 12" />
+                    </svg></button>
             </div>
-            <div id="modal-loading" class="hidden flex-1 flex flex-col items-center justify-center text-stone-400"><div class="animate-spin rounded-full h-10 w-10 border-b-2 border-stone-400 mb-3"></div><p>문제 정보를 불러오는 중입니다...</p></div>
+            <div id="modal-loading" class="hidden flex-1 flex flex-col items-center justify-center text-stone-400">
+                <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-stone-400 mb-3"></div>
+                <p>문제 정보를 불러오는 중입니다...</p>
+            </div>
             <div id="modal-content" class="flex-1 overflow-y-auto p-6 bg-stone-100 modal-scroll space-y-6 hidden"></div>
-            <div class="p-4 border-t border-stone-200 bg-white text-right"><button onclick="window.app.closeModal()" class="bg-stone-800 text-white px-6 py-2 rounded-lg hover:bg-stone-700 transition font-bold text-sm">닫기</button></div>
+            <div class="p-4 border-t border-stone-200 bg-white text-right"><button onclick="window.app.closeModal()"
+                    class="bg-stone-800 text-white px-6 py-2 rounded-lg hover:bg-stone-700 transition font-bold text-sm">닫기</button>
+            </div>
         </div>
     </div>
 
-    <script>
+    <script type="module">
         window.AuthManager.init('student');
 
         window.app = {
             currentUser: null,
             historyData: [],
 
-            init: function() {
+            init: function () {
                 document.addEventListener('auth-ready', (e) => {
                     this.currentUser = e.detail;
                     document.getElementById('hist-semester-badge').innerText = `${window.currentConfig.year}학년도 ${window.currentConfig.semester}학기`;
@@ -87,7 +127,7 @@
                 });
             },
 
-            loadData: async function() {
+            loadData: async function () {
                 try {
                     const userDoc = await window.getCollection('users').doc(this.currentUser.uid).get();
                     if (!userDoc.exists) { alert("학생 정보를 찾을 수 없습니다."); location.href = '../index.html'; return; }
@@ -97,9 +137,9 @@
 
                     // Changed: Use dynamic collection for Results
                     const snapshot = await window.getCollection('quiz_results')
-                          .where('uid', '==', this.currentUser.uid)
-                          .orderBy('timestamp', 'desc')
-                          .get();
+                        .where('uid', '==', this.currentUser.uid)
+                        .orderBy('timestamp', 'desc')
+                        .get();
 
                     let allResults = [];
                     snapshot.forEach(doc => allResults.push(doc.data()));
@@ -123,14 +163,14 @@
                 document.getElementById('loading-overlay').style.display = 'none';
             },
 
-            renderHistoryList: function() {
+            renderHistoryList: function () {
                 const container = document.getElementById('history-list');
                 container.innerHTML = this.historyData.map((item, index) => `
                     <div onclick="window.app.openModal(${index})" class="p-6 flex justify-between items-center bg-white hover:bg-amber-50 transition cursor-pointer group border-b border-stone-100 last:border-0">
                         <div class="flex items-center gap-5">
                             <div class="bg-stone-50 p-3 rounded-2xl text-stone-400 group-hover:bg-amber-100 group-hover:text-amber-600 transition shadow-sm relative border border-stone-100"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg></div>
                             <div>
-                                <div class="font-bold text-lg text-stone-800 group-hover:text-stone-900 mb-1">${item.timeString ? item.timeString.split('오')[0] : '날짜 없음'}<span class="text-xs font-medium text-stone-500 ml-1 bg-stone-100 px-2 py-0.5 rounded-full">${item.timeString && item.timeString.includes('오후')?'오후':'오전'}</span></div>
+                                <div class="font-bold text-lg text-stone-800 group-hover:text-stone-900 mb-1">${item.timeString ? item.timeString.split('오')[0] : '날짜 없음'}<span class="text-xs font-medium text-stone-500 ml-1 bg-stone-100 px-2 py-0.5 rounded-full">${item.timeString && item.timeString.includes('오후') ? '오후' : '오전'}</span></div>
                                 <div class="text-sm text-stone-400 flex gap-2 items-center"><span class="group-hover:text-amber-600 transition">상세보기 및 오답확인</span></div>
                             </div>
                         </div>
@@ -142,7 +182,7 @@
                 `).join('');
             },
 
-            openModal: async function(index) {
+            openModal: async function (index) {
                 const modal = document.getElementById('detail-modal');
                 const loading = document.getElementById('modal-loading');
                 const content = document.getElementById('modal-content');
@@ -151,7 +191,7 @@
 
                 try {
                     const record = this.historyData[index];
-                    if(record.timeString) dateEl.innerText = `${record.timeString} 응시 기록`;
+                    if (record.timeString) dateEl.innerText = `${record.timeString} 응시 기록`;
                     const userLogs = record.details || [];
                     if (userLogs.length === 0) throw new Error("저장된 문제 정보가 없습니다.");
 
@@ -169,15 +209,15 @@
                     }));
 
                     content.innerHTML = userLogs.map((log, i) => {
-                        const realQuestion = questionMap[log.id]; 
+                        const realQuestion = questionMap[log.id];
                         const isCorrect = log.correct;
                         const userAns = log.u || "미입력";
-                        
+
                         if (!realQuestion) return `<div class="p-4 bg-red-50 text-red-500 rounded">문제 정보를 찾을 수 없습니다. (ID: ${log.id})</div>`;
                         const correctAns = realQuestion.answer;
                         const explanation = realQuestion.explanation;
 
-                        return `<div class="bg-white p-6 rounded-xl shadow-sm border ${isCorrect ? 'border-stone-200' : 'border-red-300 bg-red-50'} transition hover:shadow-md"><div class="flex items-start gap-3 mb-4"><span class="bg-stone-800 text-white text-sm font-bold px-2.5 py-1 rounded shrink-0 mt-0.5">Q${i+1}</span><h4 class="text-lg font-bold text-stone-800 flex-1 leading-snug break-keep">${this.linkify(realQuestion.question)}</h4><span class="text-2xl shrink-0">${isCorrect ? '✅' : '❌'}</span></div><div class="flex flex-wrap gap-3 mb-4 text-sm"><div class="bg-white px-4 py-2.5 rounded-lg border ${isCorrect ? 'border-green-200 text-green-700' : 'border-red-300 text-red-600'} shadow-sm flex items-center gap-2"><span class="font-bold">✍️ 내가 쓴 답:</span><span class="text-lg font-bold">${userAns}</span></div>${!isCorrect ? `<div class="bg-white px-4 py-2.5 rounded-lg border border-green-500 text-green-700 shadow-sm flex items-center gap-2"><span class="font-bold">💯 정답:</span><span class="text-lg font-bold">${correctAns}</span></div>` : ''}</div><div class="bg-stone-100 p-4 rounded-lg text-sm text-stone-700 leading-relaxed border border-stone-200"><span class="font-bold text-indigo-600 block mb-1">💡 해설</span>${this.linkify(explanation || '해설 정보가 없습니다.')}</div></div>`;
+                        return `<div class="bg-white p-6 rounded-xl shadow-sm border ${isCorrect ? 'border-stone-200' : 'border-red-300 bg-red-50'} transition hover:shadow-md"><div class="flex items-start gap-3 mb-4"><span class="bg-stone-800 text-white text-sm font-bold px-2.5 py-1 rounded shrink-0 mt-0.5">Q${i + 1}</span><h4 class="text-lg font-bold text-stone-800 flex-1 leading-snug break-keep">${this.linkify(realQuestion.question)}</h4><span class="text-2xl shrink-0">${isCorrect ? '✅' : '❌'}</span></div><div class="flex flex-wrap gap-3 mb-4 text-sm"><div class="bg-white px-4 py-2.5 rounded-lg border ${isCorrect ? 'border-green-200 text-green-700' : 'border-red-300 text-red-600'} shadow-sm flex items-center gap-2"><span class="font-bold">✍️ 내가 쓴 답:</span><span class="text-lg font-bold">${userAns}</span></div>${!isCorrect ? `<div class="bg-white px-4 py-2.5 rounded-lg border border-green-500 text-green-700 shadow-sm flex items-center gap-2"><span class="font-bold">💯 정답:</span><span class="text-lg font-bold">${correctAns}</span></div>` : ''}</div><div class="bg-stone-100 p-4 rounded-lg text-sm text-stone-700 leading-relaxed border border-stone-200"><span class="font-bold text-indigo-600 block mb-1">💡 해설</span>${this.linkify(explanation || '해설 정보가 없습니다.')}</div></div>`;
                     }).join('');
                     loading.classList.add('hidden'); loading.style.display = 'none'; content.classList.remove('hidden');
 
@@ -188,38 +228,40 @@
                 }
             },
 
-            closeModal: function(e) {
-                if(e && e.target.id !== 'detail-modal') return;
+            closeModal: function (e) {
+                if (e && e.target.id !== 'detail-modal') return;
                 document.getElementById('detail-modal').classList.add('hidden');
                 document.body.style.overflow = 'auto';
             },
 
-            linkify: function(text) {
-                if(!text) return "";
+            linkify: function (text) {
+                if (!text) return "";
                 const urlRegex = /(https?:\/\/[^\s]+)/g;
-                return text.replace(urlRegex, function(url) {
+                return text.replace(urlRegex, function (url) {
                     return '<a href="' + url + '" target="_blank" class="text-blue-600 underline font-bold hover:text-blue-800">참고 자료 보기</a>';
                 });
             },
 
-            updateStats: function(list) {
-                if(list.length === 0) return;
+            updateStats: function (list) {
+                if (list.length === 0) return;
                 const scores = list.map(i => i.score);
                 document.getElementById('stat-total').innerText = list.length + "회";
                 document.getElementById('stat-best').innerText = Math.max(...scores) + "점";
                 document.getElementById('stat-avg').innerText = Math.round(scores.reduce((a, b) => a + b, 0) / list.length) + "점";
             },
 
-            renderChart: function(list) {
-                const ctxEl = document.getElementById('scoreChart'); if(!ctxEl) return;
+            renderChart: function (list) {
+                const ctxEl = document.getElementById('scoreChart'); if (!ctxEl) return;
                 if (window.myChart) window.myChart.destroy();
-                const ctx = ctxEl.getContext('2d'); if(list.length === 0) return;
+                const ctx = ctxEl.getContext('2d'); if (list.length === 0) return;
                 const reversedList = [...list].reverse();
                 window.myChart = new Chart(ctx, { type: 'line', data: { labels: reversedList.map((_, i) => i + 1 + "회"), datasets: [{ label: '점수', data: reversedList.map(i => i.score), borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.1)', borderWidth: 3, fill: true, tension: 0.3, pointBackgroundColor: '#fff', pointBorderColor: '#f59e0b', pointRadius: 5, pointHoverRadius: 7, pointBorderWidth: 2 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } }, scales: { y: { beginAtZero: true, max: 100, grid: { borderDash: [2, 4], color: '#f3f4f6' } }, x: { display: false, grid: { display: false } } }, interaction: { mode: 'nearest', axis: 'x', intersect: false } } });
             }
         };
 
-        window.onload = function() { window.app.init(); };
+        window.onload = function () { window.app.init(); };
     </script>
+    <script type="module" src="/assets/js/nav-optimizer.js"></script>
 </body>
+
 </html>

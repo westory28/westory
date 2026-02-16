@@ -12,13 +12,11 @@
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
 
     <!-- Firebase -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-
-    <script src="../assets/js/firebase-config.js"></script>
+    <!-- Firebase -->
+    <script type="module" src="../assets/js/firebase-config.js"></script>
     <link rel="stylesheet" href="../assets/css/style.css">
-    <script src="../assets/js/auth-manager.js"></script>
+    <script type="module" src="../assets/js/auth-manager.js"></script>
+
 
     <style>
         .fc-toolbar-title {
@@ -189,10 +187,10 @@
 
     <!-- Footer injected by AuthManager -->
 
-    <script>
+    <script type="module">
         window.AuthManager.init('student');
 
-        const app = {
+        window.app = {
             calendar: null,
             userClassStr: null,
             colorMap: {
@@ -348,6 +346,7 @@
 
         app.init();
     </script>
+    <script type="module" src="/assets/js/nav-optimizer.js"></script>
 </body>
 
 </html>

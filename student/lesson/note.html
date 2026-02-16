@@ -1,6 +1,6 @@
-
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,73 +8,292 @@
     <!-- Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
+
     <!-- Firebase -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-    <script src="../../assets/js/firebase-config.js"></script>
+    <script type="module" src="../../assets/js/firebase-config.js"></script>
     <link rel="stylesheet" href="../../assets/css/style.css">
-    <script src="../../assets/js/auth-manager.js"></script>
+    <script type="module" src="../../assets/js/auth-manager.js"></script>
 
     <style>
-        body { height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
-        main { flex: 1; display: flex; overflow: hidden; height: 100%; }
-        
+        body {
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        main {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+            height: 100%;
+        }
+
         /* Sidebar */
-        .lesson-sidebar { width: 300px; background: white; border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; height: 100%; transition: transform 0.3s; z-index: 40; }
-        .sidebar-header { padding: 16px; border-bottom: 1px solid #f3f4f6; font-weight: 800; color: #1f2937; display: flex; justify-content: space-between; align-items: center; }
-        .sidebar-content { flex: 1; overflow-y: auto; padding: 12px; }
-        
+        .lesson-sidebar {
+            width: 300px;
+            background: white;
+            border-right: 1px solid #e5e7eb;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            transition: transform 0.3s;
+            z-index: 40;
+        }
+
+        .sidebar-header {
+            padding: 16px;
+            border-bottom: 1px solid #f3f4f6;
+            font-weight: 800;
+            color: #1f2937;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+        }
+
         /* Tree Items */
-        .tree-group { margin-bottom: 12px; }
-        .tree-header { font-size: 0.95rem; font-weight: 700; color: #374151; padding: 8px 12px; cursor: pointer; display: flex; align-items: center; border-radius: 6px; transition: background 0.2s; }
-        .tree-header:hover { background-color: #f3f4f6; }
-        .tree-header i { margin-right: 8px; font-size: 0.8em; color: #9ca3af; transition: transform 0.2s; }
-        .tree-group.open .tree-header i { transform: rotate(90deg); color: #3b82f6; }
-        .tree-children { display: none; padding-left: 12px; margin-top: 4px; }
-        .tree-group.open .tree-children { display: block; }
-        
-        .lesson-item { display: flex; align-items: center; padding: 8px 12px; font-size: 0.9rem; color: #6b7280; border-radius: 6px; cursor: pointer; transition: all 0.2s; text-decoration: none; margin-bottom: 2px; }
-        .lesson-item:hover { background-color: #eff6ff; color: #2563eb; }
-        .lesson-item.active { background-color: #2563eb; color: white; font-weight: 700; }
-        .lesson-item i { margin-right: 8px; font-size: 1rem; }
+        .tree-group {
+            margin-bottom: 12px;
+        }
+
+        .tree-header {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #374151;
+            padding: 8px 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+
+        .tree-header:hover {
+            background-color: #f3f4f6;
+        }
+
+        .tree-header i {
+            margin-right: 8px;
+            font-size: 0.8em;
+            color: #9ca3af;
+            transition: transform 0.2s;
+        }
+
+        .tree-group.open .tree-header i {
+            transform: rotate(90deg);
+            color: #3b82f6;
+        }
+
+        .tree-children {
+            display: none;
+            padding-left: 12px;
+            margin-top: 4px;
+        }
+
+        .tree-group.open .tree-children {
+            display: block;
+        }
+
+        .lesson-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            font-size: 0.9rem;
+            color: #6b7280;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            margin-bottom: 2px;
+        }
+
+        .lesson-item:hover {
+            background-color: #eff6ff;
+            color: #2563eb;
+        }
+
+        .lesson-item.active {
+            background-color: #2563eb;
+            color: white;
+            font-weight: 700;
+        }
+
+        .lesson-item i {
+            margin-right: 8px;
+            font-size: 1rem;
+        }
 
         /* Main Content */
-        .content-container { flex: 1; overflow-y: auto; padding: 32px; background-color: #f9fafb; position: relative; }
-        .note-wrapper { max-width: 800px; margin: 0 auto; }
+        .content-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 32px;
+            background-color: #f9fafb;
+            position: relative;
+        }
 
-        .cloze-input { border: none; border-bottom: 2px solid #374151; text-align: center; font-weight: bold; color: #2563eb; background: transparent; padding: 0 4px; width: 100px; transition: all 0.2s; }
-        .cloze-input:focus { outline: none; border-bottom-color: #2563eb; background-color: #eff6ff; }
-        .cloze-input.correct { border-bottom-color: #22c55e; color: #15803d; background-color: #dcfce7; pointer-events: none; }
-        .cloze-input.wrong { border-bottom-color: #ef4444; color: #b91c1c; background-color: #fee2e2; }
-        .youtube-container { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 24px; }
-        .youtube-container iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-        .note-section { background: white; padding: 40px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border: 1px solid #e5e7eb; line-height: 2.2; font-size: 1.05rem; }
-        
+        .note-wrapper {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .cloze-input {
+            border: none;
+            border-bottom: 2px solid #374151;
+            text-align: center;
+            font-weight: bold;
+            color: #2563eb;
+            background: transparent;
+            padding: 0 4px;
+            width: 100px;
+            transition: all 0.2s;
+        }
+
+        .cloze-input:focus {
+            outline: none;
+            border-bottom-color: #2563eb;
+            background-color: #eff6ff;
+        }
+
+        .cloze-input.correct {
+            border-bottom-color: #22c55e;
+            color: #15803d;
+            background-color: #dcfce7;
+            pointer-events: none;
+        }
+
+        .cloze-input.wrong {
+            border-bottom-color: #ef4444;
+            color: #b91c1c;
+            background-color: #fee2e2;
+        }
+
+        .youtube-container {
+            position: relative;
+            padding-bottom: 56.25%;
+            height: 0;
+            overflow: hidden;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 24px;
+        }
+
+        .youtube-container iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .note-section {
+            background: white;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e5e7eb;
+            line-height: 2.2;
+            font-size: 1.05rem;
+        }
+
         /* Quill Content Styles */
-        .note-section h1, .note-section h2 { font-weight: bold; margin-top: 1em; margin-bottom: 0.5em; }
-        .note-section h1 { font-size: 1.5em; }
-        .note-section h2 { font-size: 1.25em; border-left: 4px solid #2563eb; padding-left: 10px; }
-        .note-section p { margin-bottom: 0.5em; }
-        .note-section img { max-width: 100%; border-radius: 8px; margin: 10px 0; }
-        
+        .note-section h1,
+        .note-section h2 {
+            font-weight: bold;
+            margin-top: 1em;
+            margin-bottom: 0.5em;
+        }
+
+        .note-section h1 {
+            font-size: 1.5em;
+        }
+
+        .note-section h2 {
+            font-size: 1.25em;
+            border-left: 4px solid #2563eb;
+            padding-left: 10px;
+        }
+
+        .note-section p {
+            margin-bottom: 0.5em;
+        }
+
+        .note-section img {
+            max-width: 100%;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+
         /* Mobile/Tablet Toggle */
-        .sidebar-toggle { display: none; position: absolute; bottom: 20px; left: 20px; z-index: 50; background: #1f2937; color: white; width: 50px; height: 50px; border-radius: 50%; align-items: center; justify-content: center; box-shadow: 0 4px 6px rgba(0,0,0,0.2); cursor: pointer; }
-        
+        .sidebar-toggle {
+            display: none;
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            z-index: 50;
+            background: #1f2937;
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+        }
+
         /* Breakpoint set to 1024px for tablet support */
         @media (max-width: 1024px) {
-            .lesson-sidebar { position: fixed; left: 0; top: 64px; bottom: 0; transform: translateX(-100%); width: 80%; max-width: 320px; }
-            .lesson-sidebar.show { transform: translateX(0); }
-            .sidebar-toggle { display: flex; }
-            .content-container { padding: 20px 16px; }
-            .note-section { padding: 24px; }
+            .lesson-sidebar {
+                position: fixed;
+                left: 0;
+                top: 64px;
+                bottom: 0;
+                transform: translateX(-100%);
+                width: 80%;
+                max-width: 320px;
+            }
+
+            .lesson-sidebar.show {
+                transform: translateX(0);
+            }
+
+            .sidebar-toggle {
+                display: flex;
+            }
+
+            .content-container {
+                padding: 20px 16px;
+            }
+
+            .note-section {
+                padding: 24px;
+            }
         }
-        
-        .overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 30; }
-        .overlay.show { display: block; }
+
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 30;
+        }
+
+        .overlay.show {
+            display: block;
+        }
     </style>
 </head>
+
 <body>
     <!-- Header injected by AuthManager -->
 
@@ -96,7 +315,7 @@
         <!-- Content -->
         <div class="content-container">
             <button class="sidebar-toggle" onclick="toggleSidebar()"><i class="fas fa-list"></i></button>
-            
+
             <div class="note-wrapper">
                 <!-- Loading / Empty State -->
                 <div id="loading-state" class="text-center py-32">
@@ -109,7 +328,8 @@
                 <div id="content-area" class="hidden animate-[fadeIn_0.3s_ease-out]">
                     <!-- Title -->
                     <div class="mb-6">
-                        <span class="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded mb-2 inline-block">학습 자료</span>
+                        <span class="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded mb-2 inline-block">학습
+                            자료</span>
                         <h1 class="text-3xl font-extrabold text-gray-900 leading-tight" id="lesson-title"></h1>
                     </div>
 
@@ -123,8 +343,12 @@
 
                     <!-- Action Buttons -->
                     <div class="mt-8 flex justify-center gap-4 pb-10">
-                        <button onclick="resetInputs()" class="px-6 py-3 bg-white border-2 border-gray-200 text-gray-600 font-bold rounded-xl shadow-sm hover:bg-gray-50 transition"><i class="fas fa-undo mr-2"></i>다시 풀기</button>
-                        <button onclick="checkAnswers()" class="px-8 py-3 bg-blue-600 text-white font-bold rounded-xl shadow-lg hover:bg-blue-700 transition transform active:scale-95"><i class="fas fa-check mr-2"></i>정답 확인</button>
+                        <button onclick="resetInputs()"
+                            class="px-6 py-3 bg-white border-2 border-gray-200 text-gray-600 font-bold rounded-xl shadow-sm hover:bg-gray-50 transition"><i
+                                class="fas fa-undo mr-2"></i>다시 풀기</button>
+                        <button onclick="checkAnswers()"
+                            class="px-8 py-3 bg-blue-600 text-white font-bold rounded-xl shadow-lg hover:bg-blue-700 transition transform active:scale-95"><i
+                                class="fas fa-check mr-2"></i>정답 확인</button>
                     </div>
                 </div>
             </div>
@@ -133,20 +357,20 @@
 
     <!-- Footer injected by AuthManager -->
 
-    <script>
+    <script type="module">
         window.AuthManager.init('student');
 
         let currentLessonId = null;
 
         document.addEventListener('auth-ready', async () => {
             await loadTree();
-            
+
             // Check URL Params for deep linking
             const params = new URLSearchParams(window.location.search);
             const unitId = params.get('id');
             const titleParam = params.get('title');
 
-            if(unitId) {
+            if (unitId) {
                 loadLessonContent(unitId, titleParam);
             }
         });
@@ -161,7 +385,7 @@
             try {
                 // 1. Try Current Config Path
                 let doc = await window.getCollection('curriculum').doc('tree').get();
-                
+
                 // 2. Fallback: Global (Legacy)
                 if (!doc.exists) {
                     doc = await window.db.collection('curriculum').doc('tree').get();
@@ -178,7 +402,7 @@
                 tree.forEach((big, idx) => {
                     // Default open if it's the first one or if user hasn't selected anything
                     const isOpen = idx === 0 ? 'open' : '';
-                    
+
                     html += `
                         <div class="tree-group ${isOpen}">
                             <div class="tree-header" onclick="this.parentElement.classList.toggle('open')">
@@ -208,13 +432,13 @@
             }
         }
 
-        window.onSelectLesson = function(id, title) {
+        window.onSelectLesson = function (id, title) {
             // Update URL without reload
             const newUrl = `${window.location.pathname}?id=${id}&title=${encodeURIComponent(title)}`;
-            window.history.pushState({path: newUrl}, '', newUrl);
-            
+            window.history.pushState({ path: newUrl }, '', newUrl);
+
             // Close sidebar on mobile/tablet
-            if(window.innerWidth < 1024) toggleSidebar();
+            if (window.innerWidth < 1024) toggleSidebar();
 
             loadLessonContent(id, title);
         };
@@ -223,29 +447,29 @@
             // Update Active State in Sidebar
             document.querySelectorAll('.lesson-item').forEach(el => el.classList.remove('active'));
             const activeItem = document.getElementById(`item-${unitId}`);
-            if(activeItem) activeItem.classList.add('active');
+            if (activeItem) activeItem.classList.add('active');
 
             // Show Loading
             document.getElementById('loading-state').classList.add('hidden');
             document.getElementById('content-area').classList.add('hidden');
-            
+
             try {
                 // 1. Try Config Path
                 let snap = await window.getCollection('lessons').where('unitId', '==', unitId).limit(1).get();
-                
+
                 // 2. Fallback: Global
-                if(snap.empty) {
+                if (snap.empty) {
                     snap = await window.db.collection('lessons').where('unitId', '==', unitId).limit(1).get();
                 }
 
-                if(snap.empty) {
+                if (snap.empty) {
                     showEmptyState();
                     return;
                 }
 
                 const data = snap.docs[0].data();
                 renderLesson(data, fallbackTitle);
-            } catch(e) {
+            } catch (e) {
                 console.error(e);
                 showEmptyState(); // Show empty state even on error for better UX as per request
             }
@@ -266,8 +490,8 @@
             document.getElementById('content-area').classList.remove('hidden');
 
             document.getElementById('lesson-title').innerText = data.title || fallbackTitle || '제목 없음';
-            
-            if(data.videoUrl) {
+
+            if (data.videoUrl) {
                 const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
                 const match = data.videoUrl.match(regExp);
                 if (match && match[2].length === 11) {
@@ -284,16 +508,16 @@
             html = html.replace(/\[(.*?)\]/g, (match, p1) => {
                 return `<input type="text" class="cloze-input" data-answer="${p1}" placeholder="빈칸" autocomplete="off">`;
             });
-            
+
             document.getElementById('lesson-body').innerHTML = html;
-            
+
             // Scroll to top
             document.querySelector('.content-container').scrollTop = 0;
         }
 
-        window.checkAnswers = function() {
+        window.checkAnswers = function () {
             const inputs = document.querySelectorAll('.cloze-input');
-            if(inputs.length === 0) { alert("채점할 빈칸이 없습니다."); return; }
+            if (inputs.length === 0) { alert("채점할 빈칸이 없습니다."); return; }
 
             let correctCount = 0;
             inputs.forEach(input => {
@@ -309,11 +533,13 @@
             if (correctCount === inputs.length) alert("🎉 훌륭합니다! 모든 빈칸을 완벽하게 채웠습니다.");
         };
 
-        window.resetInputs = function() {
-            if(!confirm("입력한 내용을 모두 지우시겠습니까?")) return;
+        window.resetInputs = function () {
+            if (!confirm("입력한 내용을 모두 지우시겠습니까?")) return;
             const inputs = document.querySelectorAll('.cloze-input');
             inputs.forEach(input => { input.value = ''; input.classList.remove('correct', 'wrong'); });
         };
     </script>
+    <script type="module" src="/assets/js/nav-optimizer.js"></script>
 </body>
+
 </html>

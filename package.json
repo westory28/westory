@@ -9,11 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
-
+    "firebase": "^12.9.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
-    
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }

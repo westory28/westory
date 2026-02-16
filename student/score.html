@@ -1,6 +1,6 @@
-
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,68 +9,365 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
+
     <!-- Firebase -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-    
+
     <!-- Config & Styles -->
     <link rel="stylesheet" href="../assets/css/style.css">
-    <script src="../assets/js/firebase-config.js"></script>
-    <script src="../assets/js/auth-manager.js"></script>
+    <script type="module" src="../assets/js/firebase-config.js"></script>
+    <script type="module" src="../assets/js/auth-manager.js"></script>
 
     <style>
-        .page-header { margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 15px; }
-        .page-title { font-size: 24px; font-weight: 700; color: #111; margin: 0; display: flex; align-items: baseline; }
-        .user-greeting { font-size: 16px; color: #2563eb; margin-top: 5px; font-weight: 600; }
-        .alert-box { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; padding: 15px; border-radius: 6px; margin-bottom: 25px; font-size: 14px; font-weight: bold; text-align: center; line-height: 1.6; word-break: keep-all; }
-        .control-panel { background-color: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px; display: flex; gap: 15px; flex-wrap: wrap; align-items: center; }
-        .filter-group { display: flex; align-items: center; gap: 8px; }
-        .filter-label { font-size: 14px; font-weight: bold; color: #555; white-space: nowrap; }
-        select { padding: 8px 12px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; min-width: 100px; }
-        .dashboard-grid { display: grid; grid-template-columns: 1fr 340px; gap: 25px; }
-        @media (max-width: 900px) { .dashboard-grid { grid-template-columns: 1fr; } }
-        .subject-card { background: #fff; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e1e4e8; border-left: 5px solid #ccc; transition: all 0.2s; }
-        .subject-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); transform: translateY(-2px); }
-        .card-header { padding: 18px 25px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
-        .subject-name { font-size: 18px; font-weight: 700; color: #222; }
-        .score-info { text-align: right; }
-        .total-score { font-size: 20px; font-weight: bold; color: #adb5bd; transition: color 0.3s;}
-        .grade-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; color: #fff; margin-left: 8px; vertical-align: middle; }
-        .toggle-text { font-size: 12px; color: #999; margin-top: 4px; }
-        .card-body { padding: 0 25px 25px 25px; display: none; background-color: #fafbfc; border-top: 1px solid #eee; }
-        .card-body.expanded { display: block; }
-        .input-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px dashed #eee; }
-        .input-item:last-child { border-bottom: none; }
-        .item-label { font-size: 14px; color: #333; }
-        .item-sub { font-size: 12px; color: #888; margin-top: 2px; }
-        .type-tag { font-size: 11px; padding: 2px 5px; border-radius: 3px; background: #eee; color: #555; margin-right: 6px; }
-        .score-input { width: 70px; padding: 6px; border: 1px solid #ccc; border-radius: 4px; text-align: center; font-size: 15px; }
-        .chart-panel { background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #e1e4e8; height: fit-content; position: sticky; top: 84px; }
-        .chart-title { font-size: 16px; font-weight: bold; margin-bottom: 15px; color: #333; border-bottom: 1px solid #eee; padding-bottom: 10px;}
-        .chart-wrapper { position: relative; height: 300px; width: 100%; }
-        .grade-scale-bar { display: flex; height: 30px; border-radius: 6px; overflow: hidden; margin-top: 20px; font-weight: bold; color: white; text-shadow: 0 1px 1px rgba(0,0,0,0.2); font-size: 11px; }
-        .scale-segment { flex: 1; display: flex; justify-content: center; align-items: center; }
-        .scale-note { font-size: 11px; color: #666; margin-top: 10px; text-align: right; }
-        .bg-A { background-color: #fa5252; } 
-        .bg-B { background-color: #fd7e14; } 
-        .bg-C { background-color: #fab005; } 
-        .bg-D { background-color: #51cf66; } 
-        .bg-E { background-color: #339af0; } 
-        .bg-none { background-color: #adb5bd; }
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 9999; display: flex; justify-content: center; align-items: center; backdrop-filter: blur(3px); }
-        .modal-content { background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 480px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2); position: relative; }
-        .modal-check-area { margin-bottom: 20px; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 10px; border-radius: 6px; border: 1px solid #e5e7eb; cursor: pointer; transition: background 0.2s; }
-        .modal-check-area:hover { background: #f9fafb; }
-        .btn-confirm { background-color: #2563eb; color: white; border: none; padding: 14px 0; width: 100%; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: all 0.2s; }
-        .btn-confirm:disabled { background-color: #d1d5db; cursor: not-allowed; color: #9ca3af; }
-        .save-indicator { position: fixed; bottom: 20px; right: 20px; background: #333; color: white; padding: 10px 20px; border-radius: 30px; font-size: 12px; display: none; align-items: center; gap: 8px; shadow-lg; z-index: 100; }
+        .page-header {
+            margin-bottom: 30px;
+            border-bottom: 2px solid #333;
+            padding-bottom: 15px;
+        }
+
+        .page-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #111;
+            margin: 0;
+            display: flex;
+            align-items: baseline;
+        }
+
+        .user-greeting {
+            font-size: 16px;
+            color: #2563eb;
+            margin-top: 5px;
+            font-weight: 600;
+        }
+
+        .alert-box {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 25px;
+            font-size: 14px;
+            font-weight: bold;
+            text-align: center;
+            line-height: 1.6;
+            word-break: keep-all;
+        }
+
+        .control-panel {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .filter-label {
+            font-size: 14px;
+            font-weight: bold;
+            color: #555;
+            white-space: nowrap;
+        }
+
+        select {
+            padding: 8px 12px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: white;
+            cursor: pointer;
+            min-width: 100px;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 340px;
+            gap: 25px;
+        }
+
+        @media (max-width: 900px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .subject-card {
+            background: #fff;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border: 1px solid #e1e4e8;
+            border-left: 5px solid #ccc;
+            transition: all 0.2s;
+        }
+
+        .subject-card:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            transform: translateY(-2px);
+        }
+
+        .card-header {
+            padding: 18px 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .subject-name {
+            font-size: 18px;
+            font-weight: 700;
+            color: #222;
+        }
+
+        .score-info {
+            text-align: right;
+        }
+
+        .total-score {
+            font-size: 20px;
+            font-weight: bold;
+            color: #adb5bd;
+            transition: color 0.3s;
+        }
+
+        .grade-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            color: #fff;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+
+        .toggle-text {
+            font-size: 12px;
+            color: #999;
+            margin-top: 4px;
+        }
+
+        .card-body {
+            padding: 0 25px 25px 25px;
+            display: none;
+            background-color: #fafbfc;
+            border-top: 1px solid #eee;
+        }
+
+        .card-body.expanded {
+            display: block;
+        }
+
+        .input-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px dashed #eee;
+        }
+
+        .input-item:last-child {
+            border-bottom: none;
+        }
+
+        .item-label {
+            font-size: 14px;
+            color: #333;
+        }
+
+        .item-sub {
+            font-size: 12px;
+            color: #888;
+            margin-top: 2px;
+        }
+
+        .type-tag {
+            font-size: 11px;
+            padding: 2px 5px;
+            border-radius: 3px;
+            background: #eee;
+            color: #555;
+            margin-right: 6px;
+        }
+
+        .score-input {
+            width: 70px;
+            padding: 6px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 15px;
+        }
+
+        .chart-panel {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #e1e4e8;
+            height: fit-content;
+            position: sticky;
+            top: 84px;
+        }
+
+        .chart-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #333;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        .chart-wrapper {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
+
+        .grade-scale-bar {
+            display: flex;
+            height: 30px;
+            border-radius: 6px;
+            overflow: hidden;
+            margin-top: 20px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+            font-size: 11px;
+        }
+
+        .scale-segment {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .scale-note {
+            font-size: 11px;
+            color: #666;
+            margin-top: 10px;
+            text-align: right;
+        }
+
+        .bg-A {
+            background-color: #fa5252;
+        }
+
+        .bg-B {
+            background-color: #fd7e14;
+        }
+
+        .bg-C {
+            background-color: #fab005;
+        }
+
+        .bg-D {
+            background-color: #51cf66;
+        }
+
+        .bg-E {
+            background-color: #339af0;
+        }
+
+        .bg-none {
+            background-color: #adb5bd;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(3px);
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 480px;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            position: relative;
+        }
+
+        .modal-check-area {
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #e5e7eb;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .modal-check-area:hover {
+            background: #f9fafb;
+        }
+
+        .btn-confirm {
+            background-color: #2563eb;
+            color: white;
+            border: none;
+            padding: 14px 0;
+            width: 100%;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-confirm:disabled {
+            background-color: #d1d5db;
+            cursor: not-allowed;
+            color: #9ca3af;
+        }
+
+        .save-indicator {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #333;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 30px;
+            font-size: 12px;
+            display: none;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            z-index: 100;
+        }
     </style>
 </head>
+
 <body>
-    <div id="loadingOverlay" style="position:fixed; top:0; left:0; width:100%; height:100%; background:#fff; z-index:9999; display:flex; justify-content:center; align-items:center; flex-direction:column; color:#666;">
-        <div class="loader-spinner"></div><p class="mt-4">로딩 중...</p>
+    <div id="loadingOverlay"
+        style="position:fixed; top:0; left:0; width:100%; height:100%; background:#fff; z-index:9999; display:flex; justify-content:center; align-items:center; flex-direction:column; color:#666;">
+        <div class="loader-spinner"></div>
+        <p class="mt-4">로딩 중...</p>
     </div>
     <!-- Header injected by JS -->
     <div id="appSection" class="hidden">
@@ -78,7 +375,9 @@
             <div class="modal-content">
                 <div class="text-4xl mb-2">⚠️</div>
                 <h3 class="text-xl font-bold text-amber-600 mb-4">주의사항 안내</h3>
-                <div class="text-sm text-stone-600 mb-6 leading-relaxed">이 결과는 <strong>참고용 시뮬레이션</strong>이며,<br>정확한 성적은 <u>나이스(NEIS)</u> 및 <u>성적 통지표</u>를 확인하세요.</div>
+                <div class="text-sm text-stone-600 mb-6 leading-relaxed">이 결과는 <strong>참고용 시뮬레이션</strong>이며,<br>정확한 성적은
+                    <u>나이스(NEIS)</u> 및 <u>성적 통지표</u>를 확인하세요.
+                </div>
                 <div class="text-xs text-stone-400 mb-4 bg-stone-50 p-2 rounded">입력한 점수는 사용자의 계정에 안전하게 저장됩니다.</div>
                 <div class="modal-check-area" onclick="document.getElementById('agreeCheck').click()">
                     <input type="checkbox" id="agreeCheck" onclick="event.stopPropagation()">
@@ -104,7 +403,12 @@
                         <option value="2">2학기</option>
                     </select>
                 </div>
-                <div class="filter-group"><span class="filter-label">학년</span><select id="gradeFilter" onchange="renderDashboard()"><option value="1">1학년</option><option value="2">2학년</option><option value="3">3학년</option></select></div>
+                <div class="filter-group"><span class="filter-label">학년</span><select id="gradeFilter"
+                        onchange="renderDashboard()">
+                        <option value="1">1학년</option>
+                        <option value="2">2학년</option>
+                        <option value="3">3학년</option>
+                    </select></div>
                 <div class="filter-group" style="margin-left:auto;">
                     <span class="filter-label">정렬</span>
                     <select id="sortFilter" onchange="renderDashboard()">
@@ -115,39 +419,47 @@
                 </div>
             </div>
             <div class="dashboard-grid">
-                <div class="left-content"><div id="subjectsList"></div></div>
+                <div class="left-content">
+                    <div id="subjectsList"></div>
+                </div>
                 <div class="right-sidebar">
                     <div class="chart-panel">
                         <div class="chart-title">성취도 그래프</div>
                         <div class="chart-wrapper"><canvas id="gradeChart"></canvas></div>
-                        <div class="grade-scale-bar"><div class="scale-segment bg-A">A</div><div class="scale-segment bg-B">B</div><div class="scale-segment bg-C">C</div><div class="scale-segment bg-D">D</div><div class="scale-segment bg-E">E</div></div>
+                        <div class="grade-scale-bar">
+                            <div class="scale-segment bg-A">A</div>
+                            <div class="scale-segment bg-B">B</div>
+                            <div class="scale-segment bg-C">C</div>
+                            <div class="scale-segment bg-D">D</div>
+                            <div class="scale-segment bg-E">E</div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-    
+
     <div id="saveIndicator" class="save-indicator"><i class="fas fa-sync fa-spin"></i> 저장 중...</div>
 
     <!-- Footer injected by AuthManager -->
-    <script>
+    <script type="module">
         window.AuthManager.init('student');
         let allGradingPlans = [];
         let userScores = {}; // Format: { [planId_itemIdx]: value }
         let myChart = null;
         let saveTimeout = null;
         let currentUser = null;
-        
+
         const SUBJECT_PRIORITY = ['국어', '영어', '수학', '사회', '역사', '도덕', '과학', '기술', '가정', '기술가정', '기가', '정보', '음악', '미술', '체육'];
 
         document.addEventListener('auth-ready', async (e) => {
             document.getElementById('loadingOverlay').style.display = 'none';
             document.getElementById('appSection').classList.remove('hidden');
             document.getElementById('warningModal').classList.remove('hidden');
-            
+
             // Set Title Year
             document.getElementById('displayYear').innerText = `(${window.currentConfig.year}학년도)`;
-            
+
             // Set Filters from Global Config
             document.getElementById('semesterFilter').value = window.currentConfig.semester;
 
@@ -166,16 +478,16 @@
         btnStart.addEventListener('click', () => { document.getElementById('warningModal').classList.add('hidden'); });
 
         function getGradeInfo(score, hasData, subjectName) {
-            if (!hasData) return { grade: '-', colorCode: '#adb5bd', class: 'bg-none', text: '미입력' }; 
+            if (!hasData) return { grade: '-', colorCode: '#adb5bd', class: 'bg-none', text: '미입력' };
             const roundedScore = Math.round(score);
-            
+
             // Arts & PE Logic (80/60)
             const isArtsPE = ['음악', '미술', '체육'].some(key => subjectName.includes(key));
-            
+
             if (isArtsPE) {
                 if (roundedScore >= 80) return { grade: 'A', colorCode: '#fa5252', class: 'bg-A', text: `${score}점` };
-                if (roundedScore >= 60) return { grade: 'B', colorCode: '#fab005', class: 'bg-C', text: `${score}점` }; 
-                return { grade: 'C', colorCode: '#339af0', class: 'bg-E', text: `${score}점` }; 
+                if (roundedScore >= 60) return { grade: 'B', colorCode: '#fab005', class: 'bg-C', text: `${score}점` };
+                return { grade: 'C', colorCode: '#339af0', class: 'bg-E', text: `${score}점` };
             } else {
                 if (roundedScore >= 90) return { grade: 'A', colorCode: '#fa5252', class: 'bg-A', text: `${score}점` };
                 if (roundedScore >= 80) return { grade: 'B', colorCode: '#fd7e14', class: 'bg-B', text: `${score}점` };
@@ -196,10 +508,10 @@
                 const year = window.currentConfig.year; // Use global config
                 const sem = document.getElementById('semesterFilter').value;
                 const scoreDocId = `${year}_${sem}`;
-                
+
                 const scoreDoc = await window.db.collection('users').doc(currentUser.uid)
-                                      .collection('academic_records').doc(scoreDocId).get();
-                
+                    .collection('academic_records').doc(scoreDocId).get();
+
                 if (scoreDoc.exists) {
                     userScores = scoreDoc.data().scores || {};
                 } else {
@@ -213,20 +525,20 @@
         window.toggleCard = (header) => {
             const body = header.nextElementSibling;
             const hint = header.querySelector('.toggle-text');
-            if (body.classList.contains('expanded')) { body.classList.remove('expanded'); hint.innerText = '▼ 점수 입력하기'; } 
+            if (body.classList.contains('expanded')) { body.classList.remove('expanded'); hint.innerText = '▼ 점수 입력하기'; }
             else { body.classList.add('expanded'); hint.innerText = '▲ 접기'; }
         };
 
         function calculateTotal(plan) {
-            let total = 0; let hasData = false; 
+            let total = 0; let hasData = false;
             plan.items.forEach((item, idx) => {
                 // Modified: Read from userScores object instead of localStorage
                 const key = `${plan.id}_${idx}`;
                 const saved = userScores[key];
-                if(saved !== undefined && saved !== null && saved !== "") { 
-                    hasData = true; 
-                    const val = parseFloat(saved); 
-                    if(!isNaN(val)) total += (val / item.maxScore) * item.ratio; 
+                if (saved !== undefined && saved !== null && saved !== "") {
+                    hasData = true;
+                    const val = parseFloat(saved);
+                    if (!isNaN(val)) total += (val / item.maxScore) * item.ratio;
                 }
             });
             return { score: parseFloat(total.toFixed(1)), hasData: hasData };
@@ -241,9 +553,9 @@
             container.innerHTML = '';
 
             let filteredPlans = allGradingPlans.filter(plan => {
-                const pGrade = plan.targetGrade || "2"; 
+                const pGrade = plan.targetGrade || "2";
                 const pYear = plan.academicYear || "2025";
-                const pSem = plan.semester || "1"; 
+                const pSem = plan.semester || "1";
                 return String(pGrade) === gradeFilter && pYear === yearFilter && pSem === semesterFilter;
             });
 
@@ -263,7 +575,7 @@
                     };
                     const idxA = getIdx(a.subject);
                     const idxB = getIdx(b.subject);
-                    if(idxA !== idxB) return idxA - idxB;
+                    if (idxA !== idxB) return idxA - idxB;
                     return a.subject.localeCompare(b.subject);
                 });
             } else {
@@ -305,20 +617,20 @@
         };
 
         function handleInput(e) {
-            const planId = e.target.dataset.planid; 
-            const idx = e.target.dataset.idx; 
+            const planId = e.target.dataset.planid;
+            const idx = e.target.dataset.idx;
             const max = parseFloat(e.target.dataset.max);
             let val = parseFloat(e.target.value);
-            
-            if (!isNaN(val)) { 
-                if(val > max) { val = max; e.target.value = max; } 
-                if(val < 0) { val = 0; e.target.value = 0; } 
+
+            if (!isNaN(val)) {
+                if (val > max) { val = max; e.target.value = max; }
+                if (val < 0) { val = 0; e.target.value = 0; }
             }
-            
+
             // Update Local State
             const key = `${planId}_${idx}`;
             userScores[key] = e.target.value; // Store as string to keep empty inputs empty if cleared
-            
+
             updateCardUI(planId);
             debounceSave();
         }
@@ -327,24 +639,24 @@
             const indicator = document.getElementById('saveIndicator');
             indicator.style.display = 'flex';
             indicator.innerHTML = '<i class="fas fa-sync fa-spin"></i> 저장 중...';
-            
-            if(saveTimeout) clearTimeout(saveTimeout);
-            
+
+            if (saveTimeout) clearTimeout(saveTimeout);
+
             saveTimeout = setTimeout(async () => {
                 const year = window.currentConfig.year;
                 const sem = document.getElementById('semesterFilter').value;
                 const scoreDocId = `${year}_${sem}`;
-                
+
                 try {
                     await window.db.collection('users').doc(currentUser.uid)
                         .collection('academic_records').doc(scoreDocId).set({
                             scores: userScores,
                             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                         }, { merge: true });
-                    
+
                     indicator.innerHTML = '<i class="fas fa-check"></i> 저장 완료';
                     setTimeout(() => { indicator.style.display = 'none'; }, 2000);
-                } catch(e) {
+                } catch (e) {
                     console.error(e);
                     indicator.innerHTML = '<i class="fas fa-exclamation-triangle"></i> 저장 실패';
                 }
@@ -352,23 +664,25 @@
         }
 
         function updateCardUI(planId) {
-            const plan = allGradingPlans.find(p => p.id === planId); if(!plan) return;
+            const plan = allGradingPlans.find(p => p.id === planId); if (!plan) return;
             const { score, hasData } = calculateTotal(plan); const info = getGradeInfo(score, hasData, plan.subject);
             const textEl = document.getElementById(`score_text_${planId}`); const badgeEl = document.getElementById(`grade_badge_${planId}`);
             textEl.innerText = info.text; textEl.style.color = info.colorCode;
             badgeEl.innerText = info.grade; badgeEl.className = `grade-badge ${info.class}`;
             badgeEl.closest('.subject-card').style.borderLeftColor = info.colorCode;
-            if(myChart) {
+            if (myChart) {
                 const idx = myChart.data.labels.indexOf(plan.subject);
-                if(idx !== -1) { myChart.data.datasets[0].data[idx] = score; myChart.data.datasets[0].backgroundColor[idx] = info.colorCode; myChart.update(); }
+                if (idx !== -1) { myChart.data.datasets[0].data[idx] = score; myChart.data.datasets[0].backgroundColor[idx] = info.colorCode; myChart.update(); }
             }
         }
 
         function updateChart(labels, data, colors) {
             const ctx = document.getElementById('gradeChart').getContext('2d');
-            if(myChart) myChart.destroy();
+            if (myChart) myChart.destroy();
             myChart = new Chart(ctx, { type: 'bar', data: { labels: labels, datasets: [{ label: '환산 점수', data: data, backgroundColor: colors, borderRadius: 4, barPercentage: 0.6 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 100 }, x: { ticks: { font: { size: 12 } } } }, plugins: { legend: { display: false } } } });
         }
     </script>
+    <script type="module" src="/assets/js/nav-optimizer.js"></script>
 </body>
+
 </html>
