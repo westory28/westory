@@ -128,13 +128,13 @@ const Header: React.FC = () => {
                                         {item.name}
                                         <i className="fas fa-chevron-down text-[10px] ml-1 opacity-50 group-hover:opacity-100 transition"></i>
                                     </Link>
-                                    <div className="absolute top-[calc(100%-4px)] left-0 w-44 pt-0 invisible opacity-0 group-hover:visible group-hover:opacity-100 transition duration-150 transform translate-y-0 z-[100]">
+                                    <div className="absolute top-[calc(100%-8px)] left-0 w-[10.5rem] pt-0 invisible opacity-0 group-hover:visible group-hover:opacity-100 transition duration-150 transform translate-y-0 z-[100]">
                                         <div className="bg-white border border-gray-200 shadow-xl rounded-xl overflow-hidden">
                                             {item.children?.map((child, childIdx) => (
                                                 <Link
                                                     key={`${child.url}-${childIdx}`}
                                                     to={child.url}
-                                                    className={`block px-3 py-2.5 text-[13px] border-b border-gray-50 last:border-0 whitespace-nowrap font-bold ${isActive(child.url) ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'}`}
+                                                    className={`block px-2.5 py-3 text-[13px] border-b border-gray-50 last:border-0 whitespace-nowrap font-bold ${isActive(child.url) ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'}`}
                                                 >
                                                     {child.name}
                                                 </Link>
