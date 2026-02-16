@@ -123,10 +123,18 @@ class AuthManager {
 
     async loadGlobalConfig() {
         try {
-            const doc = await db.collection('site_settings').doc('config').get();
+            const configPromise = db.collection('site_settings').doc('config').get();
+            const interfacePromise = db.collection('site_settings').doc('interface_config').get();
+
+            const [doc, interfaceDoc] = await Promise.all([configPromise, interfacePromise]);
+
             if (doc.exists) {
                 const data = doc.data();
                 window.currentConfig = { ...window.currentConfig, ...data };
+            }
+
+            if (interfaceDoc.exists) {
+                this.interfaceConfig = interfaceDoc.data();
             }
         } catch (e) {
             console.warn("Config load failed, using default", e);
@@ -446,7 +454,7 @@ class AuthManager {
                         <span class="text-stone-300 text-xs">|</span>
                         <a href="#" onclick="window._showFooterPolicy('privacy'); return false;" class="text-stone-400 hover:text-stone-600 text-xs font-medium transition">개인정보 처리 방침</a>
                     </div>
-                    <p class="text-stone-400 text-xs font-bold font-mono">Copyright © 용신중학교 역사교사 방재석. All rights reserved.</p>
+                    <p class="text-stone-400 text-xs font-bold font-mono">${this.interfaceConfig?.footerText || 'Copyright © 용신중학교 역사교사 방재석. All rights reserved.'}</p>
                 </div>
             </footer>
             <div id="footer-policy-modal" class="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm hidden" onclick="if(event.target===this)window._closeFooterPolicy()">

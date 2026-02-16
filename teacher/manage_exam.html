@@ -277,7 +277,10 @@
                     const div = document.getElementById('tab-' + t);
                     if (t === tabName) {
                         if (btn) btn.classList.add('tab-btn-active');
-                        if (div) div.classList.remove('hidden');
+                        if (div) {
+                            div.classList.remove('hidden');
+                            div.style.display = 'block';
+                        }
                         if (t === 'omr') {
                             try {
                                 if (window.omrApp) window.omrApp.init();
@@ -286,7 +289,10 @@
                         }
                     } else {
                         if (btn) btn.classList.remove('tab-btn-active');
-                        if (div) div.classList.add('hidden');
+                        if (div) {
+                            div.classList.add('hidden');
+                            div.style.display = 'none';
+                        }
                     }
                 });
             },
