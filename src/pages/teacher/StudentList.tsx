@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { db } from '../../../lib/firebase';
+import { db } from '../../lib/firebase';
 import { collection, getDocs, doc, writeBatch, deleteDoc } from 'firebase/firestore';
 import StudentEditModal from './components/StudentEditModal';
 import StudentHistoryModal from './components/StudentHistoryModal';
