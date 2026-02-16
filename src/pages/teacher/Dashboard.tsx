@@ -131,7 +131,7 @@ const TeacherDashboard: React.FC = () => {
 
                     {/* 3. Event Details (Mobile: Order 3 / Desktop: Order 3, Right Bottom) */}
                     <div className="order-3 md:order-3 md:col-span-2 md:row-span-1">
-                        <EventDetailPanel selectedDate={selectedDate} events={dailyEvents} />
+                        <EventDetailPanel selectedDate={selectedDate} events={dailyEvents} onEventClick={handleEventClick} />
                     </div>
                 </div>
 

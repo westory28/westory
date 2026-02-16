@@ -4,6 +4,7 @@ import { CalendarEvent } from '../../../types';
 interface EventDetailPanelProps {
     selectedDate: string | null;
     events: CalendarEvent[];
+    onEventClick?: (event: CalendarEvent) => void;
 }
 
 const COLOR_MAP: Record<string, string> = {
@@ -24,7 +25,7 @@ const TYPE_LABEL_MAP: Record<string, string> = {
     holiday: '공휴일',
 };
 
-const EventDetailPanel: React.FC<EventDetailPanelProps> = ({ selectedDate, events }) => {
+const EventDetailPanel: React.FC<EventDetailPanelProps> = ({ selectedDate, events, onEventClick }) => {
     const formatDateHeader = (dateStr: string) => {
         const dateObj = new Date(dateStr);
         const days = ['일', '월', '화', '수', '목', '금', '토'];
@@ -76,7 +77,21 @@ const EventDetailPanel: React.FC<EventDetailPanelProps> = ({ selectedDate, event
                         }
 
                         return (
-                            <div key={event.id} className="group p-3 border-l-4 border-gray-200 bg-gray-50 mb-3 rounded-r-lg hover:bg-gray-100 transition">
+                            <div
+                                key={event.id}
+                                className={`group p-3 border-l-4 border-gray-200 bg-gray-50 mb-3 rounded-r-lg transition ${onEventClick ? 'hover:bg-gray-100 cursor-pointer' : ''}`}
+                                onClick={() => onEventClick?.(event)}
+                                role={onEventClick ? 'button' : undefined}
+                                tabIndex={onEventClick ? 0 : undefined}
+                                onKeyDown={(e) => {
+                                    if (!onEventClick) return;
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault();
+                                        onEventClick(event);
+                                    }
+                                }}
+                                title={onEventClick ? '클릭하여 일정 수정' : undefined}
+                            >
                                 <div className="flex items-center gap-2 mb-1">
                                     <span className="text-[10px] text-white px-1.5 py-0.5 rounded font-bold" style={{ backgroundColor: bgColor }}>
                                         {typeLabel}
