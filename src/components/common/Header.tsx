@@ -5,7 +5,7 @@ import { MENUS } from '../../constants/menus';
 
 const Header: React.FC = () => {
     const { currentUser, userData, config, logout } = useAuth();
-    const location = useLocation();
+    const navigate = useNavigate();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
     if (!currentUser || !userData) return null;
@@ -19,7 +19,7 @@ const Header: React.FC = () => {
     const handleLogout = async () => {
         try {
             await logout();
-            window.location.href = '/'; // Force reload/redirect
+            navigate('/', { replace: true });
         } catch (error) {
             console.error("Logout failed", error);
         }
