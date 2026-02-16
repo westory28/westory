@@ -151,7 +151,24 @@
                     </div>
                 </div>
 
-                <!-- Section 2: D-Day -->
+                <!-- Section 2: Footer Settings -->
+                <div class="bg-white rounded-xl border border-gray-200 p-6 lg:p-8 shadow-sm">
+                    <div class="border-b border-gray-100 pb-4 mb-6">
+                        <h3 class="text-lg font-bold text-gray-900">
+                            <i class="fas fa-copyright text-gray-500 mr-2"></i>푸터(Footer) 설정
+                        </h3>
+                        <p class="text-sm text-gray-500 mt-1">사이트 하단의 저작권 문구를 설정합니다.</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">저작권 문구</label>
+                        <input type="text" id="footer-text"
+                            placeholder="예: Copyright © 용신중학교 역사교사 방재석. All rights reserved."
+                            class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none font-mono text-sm">
+                    </div>
+                </div>
+
+                <!-- Section 3: D-Day -->
                 <div class="bg-white rounded-xl border border-gray-200 p-6 lg:p-8 shadow-sm">
                     <div class="border-b border-gray-100 pb-4 mb-6">
                         <div class="flex items-center justify-between">
@@ -185,31 +202,14 @@
                                 class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none">
                         </div>
                     </div>
-                    <!-- Section 3: Footer Settings -->
-                    <div class="bg-white rounded-xl border border-gray-200 p-6 lg:p-8 shadow-sm">
-                        <div class="border-b border-gray-100 pb-4 mb-6">
-                            <h3 class="text-lg font-bold text-gray-900">
-                                <i class="fas fa-copyright text-gray-500 mr-2"></i>푸터(Footer) 설정
-                            </h3>
-                            <p class="text-sm text-gray-500 mt-1">사이트 하단의 저작권 문구를 설정합니다.</p>
-                        </div>
+                </div>
 
-                        <div>
-                            <label class="block text-sm font-bold text-gray-700 mb-2">저작권 문구</label>
-                            <input type="text" id="footer-text"
-                                placeholder="예: Copyright © 용신중학교 역사교사 방재석. All rights reserved."
-                                class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none font-mono text-sm">
-                        </div>
-                    </div>
-
-                    <!-- Save Button -->
-                    <div class="text-right pb-8">
-                        <button onclick="app.save()"
-                            class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-10 rounded-xl shadow-lg transition transform active:scale-95 text-base">
-                            <i class="fas fa-save mr-2"></i>전체 저장
-                        </button>
-                    </div>
-
+                <!-- Save Button -->
+                <div class="text-right pb-8">
+                    <button onclick="app.save()"
+                        class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-10 rounded-xl shadow-lg transition transform active:scale-95 text-base">
+                        <i class="fas fa-save mr-2"></i>전체 저장
+                    </button>
                 </div>
             </div>
     </main>
