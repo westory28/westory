@@ -1,393 +1,323 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { doc, getDoc } from 'firebase/firestore';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../lib/firebase';
-import { doc, getDoc, collection, getDocs, query, where, orderBy, documentId } from 'firebase/firestore';
-import {
-    Chart as ChartJS,
-    CategoryScale,
-    LinearScale,
-    PointElement,
-    LineElement,
-    Title,
-    Tooltip,
-    Legend,
-    Filler,
-} from 'chart.js';
-import { Line } from 'react-chartjs-2';
+import { getSemesterDocPath } from '../../lib/semesterScope';
 
-ChartJS.register(
-    CategoryScale,
-    LinearScale,
-    PointElement,
-    LineElement,
-    Title,
-    Tooltip,
-    Legend,
-    Filler
-);
-
-interface UserProfile {
-    name: string;
-    class?: string;
-    number?: string;
-}
-
-interface QuizResult {
+interface ObjectiveItem {
     score: number;
-    timestamp: any;
-    timeString?: string;
-    details?: any[];
+    answer: number;
 }
 
-const StudentHistory = () => {
-    const { user } = useAuth();
-    const [profile, setProfile] = useState<UserProfile | null>(null);
-    const [historyData, setHistoryData] = useState<QuizResult[]>([]);
-    const [chartData, setChartData] = useState<any>(null);
-    const [stats, setStats] = useState({ total: 0, best: 0, avg: 0 });
-    const [currentConfig, setCurrentConfig] = useState<{ year: string; semester: string } | null>(null);
+interface SubjectiveSubItem {
+    score: number;
+    answer: string;
+}
+
+interface SubjectiveItem {
+    subItems: SubjectiveSubItem[];
+}
+
+interface ExamConfig {
+    objective: ObjectiveItem[];
+    subjective: SubjectiveItem[];
+}
+
+interface ObjectiveMark {
+    selected: number;
+    isCorrect: boolean;
+}
+
+const StudentExamAnswer: React.FC = () => {
+    const { config } = useAuth();
+    const [examConfig, setExamConfig] = useState<ExamConfig | null>(null);
     const [loading, setLoading] = useState(true);
-
-    // Modal State
-    const [modalOpen, setModalOpen] = useState(false);
-    const [selectedResult, setSelectedResult] = useState<QuizResult | null>(null);
-    const [modalContent, setModalContent] = useState<any[]>([]);
-    const [modalLoading, setModalLoading] = useState(false);
+    const [objectiveMarks, setObjectiveMarks] = useState<Record<number, ObjectiveMark>>({});
+    const [subjectiveRevealed, setSubjectiveRevealed] = useState<Record<string, boolean>>({});
+    const [subjectiveGrades, setSubjectiveGrades] = useState<Record<string, boolean | undefined>>({});
 
     useEffect(() => {
-        const fetchConfig = async () => {
+        const loadExamConfig = async () => {
+            setLoading(true);
             try {
-                const configDoc = await getDoc(doc(db, 'site_settings', 'config'));
-                if (configDoc.exists()) {
-                    setCurrentConfig(configDoc.data() as { year: string; semester: string });
+                let snap;
+                if (config) {
+                    snap = await getDoc(doc(db, getSemesterDocPath(config, 'exam_config', 'final_exam')));
                 }
-            } catch (error) {
-                console.error("Error fetching config:", error);
-            }
-        };
-        fetchConfig();
-    }, []);
-
-    useEffect(() => {
-        if (!user || !currentConfig) return;
-
-        const loadData = async () => {
-            try {
-                // Load User
-                const userDoc = await getDoc(doc(db, 'users', user.uid));
-                if (userDoc.exists()) {
-                    setProfile(userDoc.data() as UserProfile);
+                if (!snap || !snap.exists()) {
+                    snap = await getDoc(doc(db, 'exam_config', 'final_exam'));
                 }
 
-                // Load History
-                // Path: years/{year}/semesters/{semester}/quiz_results
-                const resultsRef = collection(db, 'years', currentConfig.year, 'semesters', currentConfig.semester, 'quiz_results');
-                const q = query(resultsRef, where('uid', '==', user.uid), orderBy('timestamp', 'desc'));
-                const snap = await getDocs(q);
+                if (!snap.exists()) {
+                    setExamConfig(null);
+                    return;
+                }
 
-                const results: QuizResult[] = [];
-                snap.forEach(doc => results.push(doc.data() as QuizResult));
-
-                setHistoryData(results);
-                updateStats(results);
-                renderChart(results);
+                const data = snap.data();
+                setExamConfig({
+                    objective: Array.isArray(data.objective) ? data.objective : [],
+                    subjective: Array.isArray(data.subjective) ? data.subjective : [],
+                });
             } catch (error) {
-                console.error("Error loading history:", error);
+                console.error('Failed to load exam config:', error);
+                setExamConfig(null);
             } finally {
                 setLoading(false);
             }
         };
 
-        loadData();
-    }, [user, currentConfig]);
+        void loadExamConfig();
+    }, [config]);
 
-    const updateStats = (list: QuizResult[]) => {
-        if (list.length === 0) {
-            setStats({ total: 0, best: 0, avg: 0 });
-            return;
-        }
-        const scores = list.map(i => i.score);
-        const total = list.length;
-        const best = Math.max(...scores);
-        const avg = Math.round(scores.reduce((a, b) => a + b, 0) / total);
-        setStats({ total, best, avg });
-    };
+    const maxScore = useMemo(() => {
+        if (!examConfig) return 0;
+        const objectiveTotal = examConfig.objective.reduce((sum, item) => sum + (Number(item.score) || 0), 0);
+        const subjectiveTotal = examConfig.subjective.reduce(
+            (sum, parent) => sum + (parent.subItems || []).reduce((subSum, sub) => subSum + (Number(sub.score) || 0), 0),
+            0
+        );
+        return objectiveTotal + subjectiveTotal;
+    }, [examConfig]);
 
-    const renderChart = (list: QuizResult[]) => {
-        if (list.length === 0) {
-            setChartData(null);
-            return;
-        }
-        const reversedList = [...list].reverse();
-        setChartData({
-            labels: reversedList.map((_, i) => i + 1 + "회"),
-            datasets: [{
-                label: '점수',
-                data: reversedList.map(i => i.score),
-                borderColor: '#f59e0b',
-                backgroundColor: 'rgba(245, 158, 11, 0.1)',
-                borderWidth: 3,
-                fill: true,
-                tension: 0.3,
-                pointBackgroundColor: '#fff',
-                pointBorderColor: '#f59e0b',
-                pointRadius: 5,
-                pointHoverRadius: 7,
-                pointBorderWidth: 2
-            }]
-        });
-    };
+    const objectiveScore = useMemo(() => {
+        if (!examConfig) return 0;
+        return Object.entries(objectiveMarks).reduce((sum, [indexStr, mark]) => {
+            if (!mark.isCorrect) return sum;
+            const question = examConfig.objective[Number(indexStr)];
+            return sum + (Number(question?.score) || 0);
+        }, 0);
+    }, [examConfig, objectiveMarks]);
 
-    const openModal = async (result: QuizResult) => {
-        setSelectedResult(result);
-        setModalOpen(true);
-        setModalLoading(true);
-        setModalContent([]);
-
-        try {
-            const userLogs = result.details || [];
-            if (userLogs.length === 0) throw new Error("저장된 문제 정보가 없습니다.");
-
-            const ids = userLogs.map(log => String(log.id));
-            const chunks = [];
-            for (let i = 0; i < ids.length; i += 10) chunks.push(ids.slice(i, i + 10));
-
-            const questionMap: { [key: string]: any } = {};
-            const questionsRef = collection(db, 'years', currentConfig!.year, 'semesters', currentConfig!.semester, 'quiz_questions');
-
-            await Promise.all(chunks.map(async (chunk) => {
-                const qSnap = await getDocs(query(questionsRef, where(documentId(), 'in', chunk)));
-                qSnap.forEach(doc => { questionMap[doc.id] = doc.data(); });
-            }));
-
-            const content = userLogs.map((log) => {
-                const realQuestion = questionMap[log.id];
-                return {
-                    ...log,
-                    question: realQuestion?.question || "문제 정보를 찾을 수 없습니다.",
-                    answer: realQuestion?.answer || "",
-                    explanation: realQuestion?.explanation || "해설 정보가 없습니다.",
-                    isFound: !!realQuestion
-                };
+    const subjectiveScore = useMemo(() => {
+        if (!examConfig) return 0;
+        let total = 0;
+        examConfig.subjective.forEach((parent, pIdx) => {
+            (parent.subItems || []).forEach((sub, sIdx) => {
+                const key = `${pIdx}-${sIdx}`;
+                if (subjectiveGrades[key]) {
+                    total += Number(sub.score) || 0;
+                }
             });
-            setModalContent(content);
-
-        } catch (e) {
-            console.error(e);
-            alert("문제 정보를 불러오는 중 오류가 발생했습니다.");
-        } finally {
-            setModalLoading(false);
-        }
-    };
-
-    const closeModal = () => {
-        setModalOpen(false);
-        setSelectedResult(null);
-    };
-
-    const linkify = (text: string) => {
-        if (!text) return null;
-        const urlRegex = /(https?:\/\/[^\s]+)/g;
-        const parts = text.split(urlRegex);
-        return parts.map((part, i) => {
-            if (part.match(urlRegex)) {
-                return <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline font-bold hover:text-blue-800">참고 자료 보기</a>;
-            }
-            return part;
         });
+        return total;
+    }, [examConfig, subjectiveGrades]);
+
+    const totalScore = objectiveScore + subjectiveScore;
+
+    const hasAnyInput = useMemo(() => {
+        if (!examConfig) return false;
+        const hasObjective = examConfig.objective.length > 0;
+        const hasSubjective = examConfig.subjective.some((parent) => (parent.subItems || []).length > 0);
+        return hasObjective || hasSubjective;
+    }, [examConfig]);
+
+    const handleObjectiveSelect = (index: number, selected: number) => {
+        if (!examConfig) return;
+        const answer = Number(examConfig.objective[index]?.answer) || 0;
+        setObjectiveMarks((prev) => ({
+            ...prev,
+            [index]: {
+                selected,
+                isCorrect: selected === answer,
+            },
+        }));
+    };
+
+    const revealSubjective = (key: string) => {
+        setSubjectiveRevealed((prev) => ({ ...prev, [key]: true }));
+    };
+
+    const gradeSubjective = (key: string, isCorrect: boolean) => {
+        setSubjectiveGrades((prev) => ({ ...prev, [key]: isCorrect }));
     };
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-stone-50 flex flex-col">
-                <div className="flex-1 flex items-center justify-center">
-                    <div className="text-center">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-stone-400 mx-auto mb-2"></div>
-                        <p className="text-stone-500 font-bold">학생 데이터를 통합하는 중...</p>
-                    </div>
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="text-center text-gray-500">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-400 mx-auto mb-2"></div>
+                    <p className="font-bold">시험 답안을 불러오는 중...</p>
                 </div>
             </div>
         );
     }
 
+    if (!hasAnyInput) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex flex-col">
+                <main className="flex-1 w-full max-w-4xl mx-auto px-4 py-8">
+                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-10 text-center">
+                        <div className="text-4xl text-gray-300 mb-3">
+                            <i className="fas fa-file-alt"></i>
+                        </div>
+                        <h1 className="text-2xl font-bold text-gray-800 mb-2">정기 시험 답안</h1>
+                        <p className="text-gray-500 font-bold">아직 입력된게 없습니다.</p>
+                        <p className="text-sm text-gray-400 mt-2">교사가 정기 시험 답안을 입력하면 이곳에 표시됩니다.</p>
+                    </div>
+                </main>
+            </div>
+        );
+    }
+
     return (
-        <div className="bg-stone-50 min-h-screen flex flex-col font-sans text-stone-800">
-            <main className="flex-grow w-full max-w-3xl mx-auto px-4 py-8">
-                <div className="bg-white rounded-2xl shadow-lg border border-stone-100 overflow-hidden mb-8">
-                    <div className="p-8 text-center bg-gradient-to-b from-white to-stone-50">
-                        <div className="w-24 h-24 bg-white border-4 border-amber-100 rounded-full flex items-center justify-center text-4xl mb-4 shadow-sm mx-auto">
-                            🎓
-                        </div>
-                        <h2 className="text-2xl font-bold text-stone-900 mb-1">{profile?.name || user?.displayName}</h2>
-                        <p className="text-stone-500 text-sm font-medium">
-                            {profile ? `${profile.class || '?'}반 ${profile.number || '?'}번` : '정보 로딩 중...'} | {user?.email}
-                        </p>
-                        <span className="inline-block mt-2 bg-stone-100 px-2 py-1 rounded text-xs text-stone-500 font-bold">
-                            {currentConfig?.year}학년도 {currentConfig?.semester}학기
-                        </span>
-                    </div>
-                    <div className="grid grid-cols-3 border-t border-b border-stone-100">
-                        <div className="p-6 text-center border-r border-stone-100 hover:bg-stone-50 transition">
-                            <div className="text-xs text-stone-400 font-bold mb-1 uppercase tracking-wider">총 응시</div>
-                            <div className="font-bold text-2xl text-stone-800">{stats.total}회</div>
-                        </div>
-                        <div className="p-6 text-center border-r border-stone-100 hover:bg-stone-50 transition">
-                            <div className="text-xs text-stone-400 font-bold mb-1 uppercase tracking-wider">최고 점수</div>
-                            <div className="font-bold text-2xl text-amber-500">{stats.best}점</div>
-                        </div>
-                        <div className="p-6 text-center hover:bg-stone-50 transition">
-                            <div className="text-xs text-stone-400 font-bold mb-1 uppercase tracking-wider">평균 점수</div>
-                            <div className="font-bold text-2xl text-stone-800">{stats.avg}점</div>
-                        </div>
-                    </div>
-                    <div className="p-6 h-64 bg-white relative">
-                        <h3 className="text-sm font-bold text-stone-700 mb-4 flex items-center">
-                            <span className="w-1.5 h-4 bg-amber-500 mr-2 rounded-full"></span> 성적 변화 그래프
-                        </h3>
-                        <div className="h-full pb-6 relative">
-                            {chartData && (
-                                <Line
-                                    data={chartData}
-                                    options={{
-                                        responsive: true,
-                                        maintainAspectRatio: false,
-                                        plugins: { legend: { display: false } },
-                                        scales: {
-                                            y: { beginAtZero: true, max: 100, grid: { color: '#f3f4f6' } },
-                                            x: { display: false, grid: { display: false } }
-                                        }
-                                    }}
-                                />
-                            )}
+        <div className="min-h-screen bg-gray-50 flex flex-col">
+            <main className="flex-1 w-full max-w-4xl mx-auto px-4 py-8">
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm px-6 py-4 mb-6 flex items-center justify-between">
+                    <h1 className="text-xl md:text-2xl font-bold text-gray-800 flex items-center gap-2">
+                        <i className="fas fa-clipboard-check text-blue-500"></i>
+                        정기 시험 답안
+                    </h1>
+                    <div className="text-right">
+                        <div className="text-xs text-gray-400 font-bold">내 점수</div>
+                        <div className="text-2xl font-black text-blue-600">
+                            {totalScore}
+                            <span className="text-sm font-bold text-gray-500 ml-1">/ {maxScore}점</span>
                         </div>
                     </div>
                 </div>
 
-                <div className="bg-white rounded-2xl shadow-lg border border-stone-100 overflow-hidden">
-                    <div className="px-6 py-5 border-b border-stone-100 flex items-center justify-between bg-white">
-                        <h3 className="font-bold text-stone-800 flex items-center text-lg">📚 상세 학습 기록</h3>
-                        <span className="text-xs text-stone-400 bg-stone-100 px-2 py-1 rounded">최신순</span>
-                    </div>
-                    <div className="divide-y divide-stone-100">
-                        {historyData.length === 0 ? (
-                            <div className="py-20 text-center">
-                                <div className="bg-stone-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">📝</div>
-                                <p className="text-stone-500 font-bold">아직 푼 문제가 없습니다.</p>
-                            </div>
-                        ) : (
-                            historyData.map((item, index) => (
-                                <div
-                                    key={index}
-                                    onClick={() => openModal(item)}
-                                    className="p-6 flex justify-between items-center bg-white hover:bg-amber-50 transition cursor-pointer group"
-                                >
-                                    <div className="flex items-center gap-5">
-                                        <div className="bg-stone-50 p-3 rounded-2xl text-stone-400 group-hover:bg-amber-100 group-hover:text-amber-600 transition shadow-sm relative border border-stone-100">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                            </svg>
-                                        </div>
-                                        <div>
-                                            <div className="font-bold text-lg text-stone-800 group-hover:text-stone-900 mb-1">
-                                                {item.timeString ? item.timeString.split('오')[0] : '날짜 없음'}
-                                                <span className="text-xs font-medium text-stone-500 ml-1 bg-stone-100 px-2 py-0.5 rounded-full">
-                                                    {item.timeString && item.timeString.includes('오후') ? '오후' : '오전'}
-                                                </span>
+                <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-6">
+                    <h2 className="font-bold text-lg text-gray-800 mb-4 border-b border-gray-100 pb-2">
+                        <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded mr-2">선택형</span>
+                        객관식 답안
+                    </h2>
+
+                    {examConfig?.objective.length ? (
+                        <div className="space-y-3">
+                            {examConfig.objective.map((item, index) => {
+                                const mark = objectiveMarks[index];
+                                const answer = Number(item.answer) || 0;
+
+                                return (
+                                    <div key={index} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0">
+                                        <div className="flex items-center gap-4">
+                                            <span className="w-8 text-center text-blue-600 font-bold">{index + 1}</span>
+                                            <div className="flex gap-2">
+                                                {[1, 2, 3, 4, 5].map((choice) => {
+                                                    const isSelected = mark?.selected === choice;
+                                                    const isCorrectSelected = isSelected && mark?.isCorrect;
+                                                    const isWrongSelected = isSelected && !mark?.isCorrect;
+                                                    const isMissedAnswer = !!mark && !mark.isCorrect && choice === answer;
+
+                                                    return (
+                                                        <button
+                                                            key={choice}
+                                                            onClick={() => handleObjectiveSelect(index, choice)}
+                                                            className={`w-8 h-8 rounded-full border font-bold text-sm transition ${
+                                                                isCorrectSelected
+                                                                    ? 'bg-green-500 text-white border-green-500'
+                                                                    : isWrongSelected
+                                                                        ? 'bg-red-500 text-white border-red-500'
+                                                                        : isMissedAnswer
+                                                                            ? 'bg-white text-green-600 border-2 border-green-500'
+                                                                            : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                                                            }`}
+                                                        >
+                                                            {choice}
+                                                        </button>
+                                                    );
+                                                })}
                                             </div>
-                                            <div className="text-sm text-stone-400 flex gap-2 items-center">
-                                                <span className="group-hover:text-amber-600 transition">상세보기 및 오답확인</span>
-                                            </div>
                                         </div>
-                                    </div>
-                                    <div className="text-right flex items-center gap-6">
-                                        <div className="text-center">
-                                            <span className={`block text-2xl font-black ${item.score >= 80 ? 'text-green-500' : (item.score >= 60 ? 'text-amber-500' : 'text-red-400')}`}>
-                                                {item.score}
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-xs font-bold text-gray-400">{item.score}점</span>
+                                            <span className={`w-6 text-center font-black ${mark ? (mark.isCorrect ? 'text-green-600' : 'text-red-500') : 'text-gray-300'}`}>
+                                                {mark ? (mark.isCorrect ? 'O' : 'X') : '-'}
                                             </span>
-                                            <span className="text-[10px] text-stone-400 font-bold">SCORE</span>
                                         </div>
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-stone-300 group-hover:text-amber-400 transform group-hover:translate-x-1 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                                        </svg>
                                     </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </div>
-            </main>
-
-            {/* Modal */}
-            {modalOpen && (
-                <div
-                    className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-[fade-in_0.2s_ease-out]"
-                    onClick={closeModal}
-                >
-                    <div
-                        className="bg-white w-full max-w-3xl h-[85vh] rounded-xl shadow-2xl flex flex-col overflow-hidden"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div className="p-5 border-b border-stone-200 flex justify-between items-center bg-stone-50">
-                            <div>
-                                <h3 className="font-bold text-xl text-stone-900">📄 오답 노트 & 해설</h3>
-                                <p className="text-sm text-stone-500 mt-1">
-                                    {selectedResult?.timeString ? `${selectedResult.timeString} 응시 기록` : '-'}
-                                </p>
-                            </div>
-                            <button onClick={closeModal} className="text-stone-400 hover:text-stone-700 p-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            </button>
+                                );
+                            })}
                         </div>
+                    ) : (
+                        <p className="text-sm text-gray-400">등록된 객관식 문항이 없습니다.</p>
+                    )}
+                </section>
 
-                        <div className="flex-1 overflow-y-auto p-6 bg-stone-100 space-y-6">
-                            {modalLoading ? (
-                                <div className="flex flex-col items-center justify-center h-full text-stone-400">
-                                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-stone-400 mb-3"></div>
-                                    <p>문제 정보를 불러오는 중입니다...</p>
-                                </div>
-                            ) : (
-                                modalContent.map((log, i) => (
-                                    <div key={i} className={`bg-white p-6 rounded-xl shadow-sm border transition hover:shadow-md ${log.correct ? 'border-stone-200' : 'border-red-300 bg-red-50/50'}`}>
-                                        <div className="flex items-start gap-3 mb-4">
-                                            <span className="bg-stone-800 text-white text-sm font-bold px-2.5 py-1 rounded shrink-0 mt-0.5">Q{i + 1}</span>
-                                            <h4 className="text-lg font-bold text-stone-800 flex-1 leading-snug break-keep">
-                                                {linkify(log.question)}
-                                            </h4>
-                                            <span className="text-2xl shrink-0">{log.correct ? '✅' : '❌'}</span>
-                                        </div>
-                                        <div className="flex flex-wrap gap-3 mb-4 text-sm">
-                                            <div className={`bg-white px-4 py-2.5 rounded-lg border shadow-sm flex items-center gap-2 ${log.correct ? 'border-green-200 text-green-700' : 'border-red-300 text-red-600'}`}>
-                                                <span className="font-bold">✍️ 내가 쓴 답:</span>
-                                                <span className="text-lg font-bold">{log.u || "미입력"}</span>
-                                            </div>
-                                            {!log.correct && (
-                                                <div className="bg-white px-4 py-2.5 rounded-lg border border-green-500 text-green-700 shadow-sm flex items-center gap-2">
-                                                    <span className="font-bold">💯 정답:</span>
-                                                    <span className="text-lg font-bold">{log.answer}</span>
+                <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+                    <h2 className="font-bold text-lg text-gray-800 mb-4 border-b border-gray-100 pb-2">
+                        <span className="bg-indigo-100 text-indigo-700 text-xs px-2 py-1 rounded mr-2">논술형</span>
+                        서술형 답안
+                    </h2>
+
+                    <div className="bg-yellow-50 text-yellow-800 text-sm p-3 rounded mb-4">
+                        <i className="fas fa-info-circle mr-1"></i>
+                        정답을 확인한 후 <strong>정답 인정</strong> 또는 <strong>오답</strong>을 선택하세요.
+                    </div>
+
+                    {examConfig?.subjective.some((parent) => (parent.subItems || []).length > 0) ? (
+                        <div className="space-y-4">
+                            {examConfig.subjective.map((parent, pIdx) => (
+                                <div key={pIdx} className="border border-gray-200 rounded-lg overflow-hidden">
+                                    <div className="bg-gray-50 px-4 py-2 font-bold text-gray-700">서술형 {pIdx + 1}번</div>
+                                    <div className="p-4 space-y-4">
+                                        {(parent.subItems || []).map((sub, sIdx) => {
+                                            const key = `${pIdx}-${sIdx}`;
+                                            const revealed = !!subjectiveRevealed[key];
+                                            const grade = subjectiveGrades[key];
+                                            return (
+                                                <div key={key} className="border-b border-gray-100 pb-4 last:border-b-0 last:pb-0">
+                                                    <div className="flex items-center justify-between mb-2">
+                                                        <span className="text-sm font-bold text-gray-700">({sIdx + 1}) 소문항</span>
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="text-xs text-gray-400 font-bold">{sub.score}점</span>
+                                                            <span className={`w-6 text-center font-black ${grade === undefined ? 'text-gray-300' : grade ? 'text-green-600' : 'text-red-500'}`}>
+                                                                {grade === undefined ? '-' : grade ? 'O' : 'X'}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    {!revealed ? (
+                                                        <button
+                                                            onClick={() => revealSubjective(key)}
+                                                            className="w-full py-2.5 border-2 border-dashed border-indigo-200 text-indigo-500 rounded font-bold hover:bg-indigo-50 transition"
+                                                        >
+                                                            <i className="fas fa-eye mr-2"></i>정답 보기
+                                                        </button>
+                                                    ) : (
+                                                        <div className="bg-gray-50 rounded p-3">
+                                                            <div className="text-xs font-bold text-gray-500 mb-1">모범 답안</div>
+                                                            <div className="text-sm font-bold text-red-600 whitespace-pre-wrap mb-3">
+                                                                {sub.answer || '-'}
+                                                            </div>
+                                                            <div className="flex gap-2">
+                                                                <button
+                                                                    onClick={() => gradeSubjective(key, true)}
+                                                                    className={`flex-1 py-2 rounded font-bold border transition ${
+                                                                        grade === true
+                                                                            ? 'bg-green-500 text-white border-green-500'
+                                                                            : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                                                                    }`}
+                                                                >
+                                                                    정답 인정
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => gradeSubjective(key, false)}
+                                                                    className={`flex-1 py-2 rounded font-bold border transition ${
+                                                                        grade === false
+                                                                            ? 'bg-red-500 text-white border-red-500'
+                                                                            : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                                                                    }`}
+                                                                >
+                                                                    오답
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
-                                            )}
-                                        </div>
-                                        <div className="bg-stone-100 p-4 rounded-lg text-sm text-stone-700 leading-relaxed border border-stone-200">
-                                            <span className="font-bold text-indigo-600 block mb-1">💡 해설</span>
-                                            {linkify(log.explanation)}
-                                        </div>
+                                            );
+                                        })}
                                     </div>
-                                ))
-                            )}
+                                </div>
+                            ))}
                         </div>
-
-                        <div className="p-4 border-t border-stone-200 bg-white text-right">
-                            <button onClick={closeModal} className="bg-stone-800 text-white px-6 py-2 rounded-lg hover:bg-stone-700 transition font-bold text-sm">
-                                닫기
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+                    ) : (
+                        <p className="text-sm text-gray-400">등록된 서술형 문항이 없습니다.</p>
+                    )}
+                </section>
+            </main>
         </div>
     );
 };
 
-export default StudentHistory;
+export default StudentExamAnswer;
