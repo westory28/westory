@@ -13,6 +13,11 @@ import StudentList from './pages/teacher/StudentList';
 import ManageQuiz from './pages/teacher/ManageQuiz';
 import ManageExam from './pages/teacher/ManageExam';
 import Settings from './pages/teacher/Settings';
+import ManageSchedule from './pages/teacher/ManageSchedule';
+import ManageLesson from './pages/teacher/ManageLesson';
+import MyPage from './pages/student/MyPage';
+import StudentHistory from './pages/student/History';
+import Calendar from './pages/student/Calendar';
 
 
 
@@ -70,6 +75,38 @@ const App: React.FC = () => {
                         <Route path="/teacher/manage_exam.html" element={
                             <MainLayout>
                                 <ManageExam />
+                            </MainLayout>
+                        } />
+                        <Route path="/teacher/settings" element={
+                            <MainLayout>
+                                <Settings />
+                            </MainLayout>
+                        } />
+                        <Route path="/teacher/manage_schedule.html" element={
+                            <MainLayout>
+                                <ManageSchedule />
+                            </MainLayout>
+                        } />
+                        <Route path="/teacher/manage_lesson.html" element={
+                            <MainLayout>
+                                <ManageLesson />
+                            </MainLayout>
+                        } />
+
+                        {/* Student Pages */}
+                        <Route path="/student/mypage.html" element={
+                            <MainLayout>
+                                <MyPage />
+                            </MainLayout>
+                        } />
+                        <Route path="/student/history.html" element={
+                            <MainLayout>
+                                <StudentHistory />
+                            </MainLayout>
+                        } />
+                        <Route path="/student/calendar.html" element={
+                            <MainLayout>
+                                <Calendar />
                             </MainLayout>
                         } />
                         {/* Fallback */}

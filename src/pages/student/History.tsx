@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
 import Header from '../../components/common/Header';
 import { db } from '../../lib/firebase';
 import { doc, getDoc, collection, getDocs, query, where, orderBy, documentId } from 'firebase/firestore';
@@ -40,7 +40,7 @@ interface QuizResult {
     details?: any[];
 }
 
-const History = () => {
+const StudentHistory = () => {
     const { user } = useAuth();
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [historyData, setHistoryData] = useState<QuizResult[]>([]);
@@ -393,4 +393,4 @@ const History = () => {
     );
 };
 
-export default History;
+export default StudentHistory;
