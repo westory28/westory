@@ -203,7 +203,7 @@ const ManageLesson: React.FC = () => {
                     <span className="flex-1 truncate text-sm">{node.title}</span>
 
                     {canManageUnit && (
-                        <div className="hidden group-hover:flex gap-1 ml-2">
+                        <div className="flex gap-1 ml-2 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity">
                             {!isLeaf && (
                                 <button
                                     onClick={(e) => {
@@ -389,10 +389,10 @@ const ManageLesson: React.FC = () => {
                                     </div>
                                     <div className="flex gap-2">
                                         <button onClick={() => setPreviewOpen(true)} className="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg font-bold hover:bg-gray-50 text-xs md:text-sm">
-                                            <i className="fas fa-eye lg:mr-2"></i><span className="hidden lg:inline">미리보기</span>
+                                            <i className="fas fa-eye md:mr-2"></i><span className="hidden md:inline">미리보기</span>
                                         </button>
                                         <button onClick={() => void saveLesson()} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700 shadow-md text-xs md:text-sm">
-                                            <i className="fas fa-save lg:mr-2"></i><span className="hidden lg:inline">저장</span>
+                                            <i className="fas fa-save md:mr-2"></i><span className="hidden md:inline">저장</span>
                                         </button>
                                     </div>
                                 </div>
