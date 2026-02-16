@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { collection, query, orderBy, onSnapshot, where } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../contexts/AuthContext';
 
@@ -31,7 +31,7 @@ const NoticeBoard: React.FC = () => {
             snapshot.forEach((doc) => {
                 const d = doc.data() as Notice;
                 if (d.targetType === 'common' || (userClassStr && d.targetType === 'class' && d.targetClass === userClassStr)) {
-                    loadedNotices.push({ id: doc.id, ...d });
+                    loadedNotices.push({ ...d, id: doc.id });
                 }
             });
             setNotices(loadedNotices);

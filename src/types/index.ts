@@ -31,9 +31,10 @@ export interface UserData {
 export interface CalendarEvent {
     id: string;
     title: string;
+    description?: string;
     start: string;
     end?: string;
-    eventType: 'exam' | 'performance' | 'event';
+    eventType: 'exam' | 'performance' | 'event' | 'holiday';
     targetType: 'all' | 'class';
     targetClass?: string;
     dDay?: number;
