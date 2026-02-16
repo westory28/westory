@@ -23,6 +23,7 @@ const ManageSchedule = () => {
     const [events, setEvents] = useState<any[]>([]);
     const [currentConfig, setCurrentConfig] = useState<{ year: string; semester: string } | null>(null);
     const [filter, setFilter] = useState('all');
+    const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
     // Modal State
     const [modalOpen, setModalOpen] = useState(false);
@@ -150,6 +151,7 @@ const ManageSchedule = () => {
     }, [currentConfig, filter]);
 
     const handleDateClick = (arg: any) => {
+        setSelectedDate(arg.dateStr);
         openModal(null, arg.dateStr);
     };
 
@@ -281,7 +283,10 @@ const ManageSchedule = () => {
                         height="100%"
                         dayCellClassNames={(arg) => {
                             const dateStr = toLocalYmd(arg.date);
-                            return holidayDateSet.has(dateStr) ? ['fc-day-holiday'] : [];
+                            const classes: string[] = [];
+                            if (holidayDateSet.has(dateStr)) classes.push('fc-day-holiday');
+                            if (selectedDate === dateStr) classes.push('fc-day-selected');
+                            return classes;
                         }}
                     />
                 </div>
@@ -428,6 +433,7 @@ const ManageSchedule = () => {
                 .fc-day-sun a { color: #ef4444 !important; text-decoration: none; font-weight: 700 !important; }
                 .fc-day-sat a { color: #3b82f6 !important; text-decoration: none; font-weight: 700 !important; }
                 .fc-day-holiday a { color: #ef4444 !important; font-weight: 700 !important; text-decoration: none; }
+                .fc-day-selected { background-color: #eff6ff !important; outline: 2px solid #3b82f6 !important; outline-offset: -2px !important; }
                 .holiday-text-event { background-color: transparent !important; border: none !important; }
                 .holiday-text-event .fc-event-title { color: #ef4444; font-size: 0.75rem; font-weight: 800; }
             `}</style>
