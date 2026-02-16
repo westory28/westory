@@ -11,11 +11,10 @@ import SearchModal from '../student/components/SearchModal'; // Reuse search mod
 import EventModal from './components/EventModal';
 
 const TeacherDashboard: React.FC = () => {
-    const { userData, config } = useAuth();
+    const { config } = useAuth();
     const [events, setEvents] = useState<CalendarEvent[]>([]);
     const [selectedDate, setSelectedDate] = useState<string | null>(null);
     const [dailyEvents, setDailyEvents] = useState<CalendarEvent[]>([]);
-    const [welcomeText, setWelcomeText] = useState('교사 대시보드');
 
     // UI State
     const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -25,13 +24,6 @@ const TeacherDashboard: React.FC = () => {
     const [filterClass, setFilterClass] = useState('all');
 
     const calendarRef = useRef<FullCalendar>(null);
-
-    // Initial welcome text
-    useEffect(() => {
-        if (userData) {
-            setWelcomeText(`${userData.name || '선생님'}의 대시보드`);
-        }
-    }, [userData]);
 
     // Fetch Events real-time
     useEffect(() => {
@@ -85,9 +77,9 @@ const TeacherDashboard: React.FC = () => {
         setIsEventModalOpen(true);
     };
 
-    const handleAddEvent = () => {
+    const handleAddEvent = (dateStr?: string) => {
         setSelectedEvent(undefined);
-        setModalInitialDate(selectedDate || new Date().toISOString().split('T')[0]);
+        setModalInitialDate(dateStr || selectedDate || new Date().toISOString().split('T')[0]);
         setIsEventModalOpen(true);
     };
 
@@ -103,7 +95,7 @@ const TeacherDashboard: React.FC = () => {
                 <div className="mb-6 flex flex-col md:flex-row justify-between items-center gap-3 shrink-0">
                     <div className="flex items-center gap-3">
                         <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">
-                            {welcomeText}
+                            대시보드
                         </h1>
                         {config && (
                             <span className="bg-blue-600 text-white font-bold px-3 py-1 rounded-full text-xs md:text-sm shadow-md shrink-0">
@@ -126,6 +118,7 @@ const TeacherDashboard: React.FC = () => {
                         <TeacherCalendarSection
                             events={events}
                             onDateClick={handleDateClick}
+                            onDateDoubleClick={handleAddEvent}
                             onEventClick={handleEventClick}
                             onAddEvent={handleAddEvent}
                             onSearchClick={() => setIsSearchOpen(true)}

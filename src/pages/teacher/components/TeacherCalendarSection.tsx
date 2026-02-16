@@ -11,6 +11,7 @@ import { collection, doc, getDoc, getDocs, query, where, writeBatch } from 'fire
 interface TeacherCalendarSectionProps {
     events: CalendarEvent[];
     onDateClick: (dateStr: string) => void;
+    onDateDoubleClick: (dateStr: string) => void;
     onEventClick: (event: CalendarEvent) => void;
     onAddEvent: () => void;
     onSearchClick: () => void;
@@ -47,7 +48,7 @@ const DEFAULT_2026_HOLIDAYS: HolidayItem[] = [
 ];
 
 const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
-    events, onDateClick, onEventClick, onAddEvent, onSearchClick, calendarRef, filterClass, onFilterChange, selectedDate,
+    events, onDateClick, onDateDoubleClick, onEventClick, onAddEvent, onSearchClick, calendarRef, filterClass, onFilterChange, selectedDate,
 }) => {
     const { config } = useAuth();
 
@@ -170,6 +171,13 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                     headerToolbar={{ left: 'prev,next today', center: 'title', right: 'dayGridMonth,listMonth' }}
                     events={fcEvents}
                     dateClick={(arg) => onDateClick(arg.dateStr)}
+                    dayCellDidMount={(arg) => {
+                        arg.el.ondblclick = () => {
+                            const dateStr = toLocalYmd(arg.date);
+                            onDateClick(dateStr);
+                            onDateDoubleClick(dateStr);
+                        };
+                    }}
                     eventClick={(arg) => onEventClick(arg.event.extendedProps as CalendarEvent)}
                     height="100%"
                     contentHeight="100%"

@@ -13,7 +13,8 @@ const Login: React.FC = () => {
     const [loginMode, setLoginMode] = useState<'student' | 'teacher'>('student');
     const [policyOpen, setPolicyOpen] = useState(false);
     const [policyTitle, setPolicyTitle] = useState('');
-    const [policyBody, setPolicyBody] = useState('불러오는 중...');
+    const [policyHtml, setPolicyHtml] = useState('');
+    const [policyLoading, setPolicyLoading] = useState(false);
 
     useEffect(() => {
         if (loading || !currentUser) return;
@@ -70,13 +71,20 @@ const Login: React.FC = () => {
     const showPolicy = async (type: 'terms' | 'privacy') => {
         setPolicyOpen(true);
         setPolicyTitle(type === 'terms' ? '이용 약관' : '개인정보 처리 방침');
-        setPolicyBody('불러오는 중...');
+        setPolicyLoading(true);
+        setPolicyHtml('');
         try {
             const snap = await getDoc(doc(db, 'site_settings', type));
-            setPolicyBody(snap.exists() ? ((snap.data() as { text?: string }).text || '등록된 내용이 없습니다.') : '등록된 내용이 없습니다.');
+            if (snap.exists() && snap.data().text) {
+                setPolicyHtml((snap.data() as { text?: string }).text || '');
+            } else {
+                setPolicyHtml('<p class="text-center text-gray-400 py-8">등록된 내용이 없습니다.</p>');
+            }
         } catch (e) {
             console.error('Policy load error:', e);
-            setPolicyBody('내용을 불러오지 못했습니다.');
+            setPolicyHtml('<p class="text-center text-red-400 py-8">내용을 불러오지 못했습니다.</p>');
+        } finally {
+            setPolicyLoading(false);
         }
     };
 
@@ -86,10 +94,10 @@ const Login: React.FC = () => {
         <div className="min-h-screen bg-gray-50 relative">
             <div className="h-screen flex flex-col items-center justify-center px-4">
                 <div className="text-5xl mb-4 animate-bounce">{interfaceConfig?.mainEmoji || '📚'}</div>
-                <h1 className="text-6xl font-black tracking-tight mb-2">
+                <h1 className="text-6xl font-black tracking-tight mb-3">
                     <span className="text-blue-600">We</span><span className="text-amber-500">story</span>
                 </h1>
-                <p className="text-gray-500 text-xl font-medium mb-10">{interfaceConfig?.mainSubtitle || '우리가 써 내려가는 이야기'}</p>
+                <p className="text-gray-500 text-xl font-medium mb-12">{interfaceConfig?.mainSubtitle || '우리가 써 내려가는 이야기'}</p>
 
                 <button
                     onClick={() => handleLogin('student')}
@@ -114,13 +122,23 @@ const Login: React.FC = () => {
             </div>
 
             {policyOpen && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4" onClick={() => setPolicyOpen(false)}>
-                    <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-                        <div className="p-5 border-b border-gray-100 flex items-center justify-between">
-                            <h2 className="font-bold text-lg">{policyTitle}</h2>
-                            <button onClick={() => setPolicyOpen(false)} className="text-gray-400 hover:text-gray-700"><i className="fas fa-times"></i></button>
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm" onClick={() => setPolicyOpen(false)}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl mx-4 max-h-[80vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between p-5 border-b border-gray-100">
+                            <h2 className="text-lg font-bold text-gray-900">{policyTitle}</h2>
+                            <button onClick={() => setPolicyOpen(false)} className="text-gray-400 hover:text-gray-700 text-xl transition">
+                                <i className="fas fa-times"></i>
+                            </button>
                         </div>
-                        <div className="p-5 text-sm text-gray-700 overflow-auto whitespace-pre-wrap">{policyBody}</div>
+                        <div className="p-6 overflow-y-auto flex-1 text-sm text-gray-700 leading-relaxed">
+                            {policyLoading ? (
+                                <p className="text-center text-gray-400 py-8">
+                                    <i className="fas fa-spinner fa-spin mr-2"></i>불러오는 중...
+                                </p>
+                            ) : (
+                                <div dangerouslySetInnerHTML={{ __html: policyHtml }} />
+                            )}
+                        </div>
                     </div>
                 </div>
             )}

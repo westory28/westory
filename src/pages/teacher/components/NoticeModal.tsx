@@ -110,11 +110,11 @@ const NoticeModal: React.FC<NoticeModalProps> = ({ isOpen, onClose, noticeData, 
                         <label className="block text-xs font-bold text-amber-800 mb-2">카테고리</label>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                             {[
-                                { val: 'normal', label: '📢 공지', color: 'bg-red-500 border-red-600 text-white' },
-                                { val: 'exam', label: '🔥 정기', color: 'bg-blue-500 border-blue-600 text-white' },
-                                { val: 'performance', label: '⚡ 수행', color: 'bg-green-500 border-green-600 text-white' },
-                                { val: 'prep', label: '🎒 준비', color: 'bg-yellow-500 border-yellow-600 text-white' },
-                                { val: 'dday', label: '⏳ D-Day', color: 'bg-purple-500 border-purple-600 text-white' },
+                                { val: 'normal', label: '📢 공지', activeClass: 'bg-red-500 border-red-600 text-white' },
+                                { val: 'exam', label: '🔥 정기', activeClass: 'bg-blue-500 border-blue-600 text-white' },
+                                { val: 'performance', label: '⚡ 수행', activeClass: 'bg-green-500 border-green-600 text-white' },
+                                { val: 'prep', label: '🎒 준비', activeClass: 'bg-yellow-500 border-yellow-600 text-white' },
+                                { val: 'dday', label: '⏳ D-Day', activeClass: 'bg-purple-500 border-purple-600 text-white' },
                             ].map((opt) => (
                                 <label key={opt.val} className="cursor-pointer">
                                     <input
@@ -125,7 +125,7 @@ const NoticeModal: React.FC<NoticeModalProps> = ({ isOpen, onClose, noticeData, 
                                         onChange={e => setCategory(e.target.value)}
                                         className="peer sr-only"
                                     />
-                                    <div className={`px-3 py-2 rounded-lg border border-yellow-300 bg-white text-gray-600 text-sm font-bold text-center peer-checked:${opt.color} transition shadow-sm`}>
+                                    <div className={`px-3 py-2 rounded-lg border text-sm font-bold text-center transition shadow-sm ${category === opt.val ? opt.activeClass : 'border-yellow-300 bg-white text-gray-900'}`}>
                                         {opt.label}
                                     </div>
                                 </label>
