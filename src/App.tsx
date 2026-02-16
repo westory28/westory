@@ -4,7 +4,9 @@ import { AuthProvider } from './contexts/AuthContext';
 import MainLayout from './components/layout/MainLayout';
 import Login from './pages/Login';
 import StudentDashboard from './pages/student/Dashboard';
+import StudentNote from './pages/student/lesson/Note';
 import TeacherDashboard from './pages/teacher/Dashboard';
+
 
 const App: React.FC = () => {
     return (
@@ -16,6 +18,11 @@ const App: React.FC = () => {
                         <Route path="/student/dashboard" element={
                             <MainLayout>
                                 <StudentDashboard />
+                            </MainLayout>
+                        } />
+                        <Route path="/student/lesson/note" element={
+                            <MainLayout>
+                                <StudentNote />
                             </MainLayout>
                         } />
                         <Route path="/teacher/dashboard" element={
