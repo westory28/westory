@@ -62,17 +62,17 @@ const App: React.FC = () => {
                                 <TeacherDashboard />
                             </MainLayout>
                         } />
-                        <Route path="/teacher/student-list" element={
+                        <Route path="/teacher/students" element={
                             <MainLayout>
                                 <StudentList />
                             </MainLayout>
                         } />
-                        <Route path="/teacher/manage_quiz.html" element={
+                        <Route path="/teacher/quiz" element={
                             <MainLayout>
                                 <ManageQuiz />
                             </MainLayout>
                         } />
-                        <Route path="/teacher/manage_exam.html" element={
+                        <Route path="/teacher/exam" element={
                             <MainLayout>
                                 <ManageExam />
                             </MainLayout>
@@ -82,29 +82,29 @@ const App: React.FC = () => {
                                 <Settings />
                             </MainLayout>
                         } />
-                        <Route path="/teacher/manage_schedule.html" element={
+                        <Route path="/teacher/schedule" element={
                             <MainLayout>
                                 <ManageSchedule />
                             </MainLayout>
                         } />
-                        <Route path="/teacher/manage_lesson.html" element={
+                        <Route path="/teacher/lesson" element={
                             <MainLayout>
                                 <ManageLesson />
                             </MainLayout>
                         } />
 
                         {/* Student Pages */}
-                        <Route path="/student/mypage.html" element={
+                        <Route path="/student/mypage" element={
                             <MainLayout>
                                 <MyPage />
                             </MainLayout>
                         } />
-                        <Route path="/student/history.html" element={
+                        <Route path="/student/history" element={
                             <MainLayout>
                                 <StudentHistory />
                             </MainLayout>
                         } />
-                        <Route path="/student/calendar.html" element={
+                        <Route path="/student/calendar" element={
                             <MainLayout>
                                 <Calendar />
                             </MainLayout>
