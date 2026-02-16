@@ -295,6 +295,12 @@
                         class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-10 rounded-xl shadow-lg transition transform active:scale-95 text-base">
                         <i class="fas fa-save mr-2"></i>전체 저장
                     </button>
+                    <!-- Debug Area -->
+                    <div id="debug-log"
+                        class="mt-4 p-4 bg-gray-100 rounded-lg border border-gray-300 max-h-40 overflow-y-auto text-left hidden">
+                    </div>
+                    <button onclick="document.getElementById('debug-log').classList.toggle('hidden')"
+                        class="text-xs text-gray-400 mt-2 underline">디버그 로그 표시/숨김</button>
                 </div>
 
             </div>
@@ -433,6 +439,23 @@
 
             // --- Save ---
             save: async function () {
+                logDebug("Save initiated...");
+
+                // Check Auth
+                if (!window.AuthManager.currentUser) {
+                    logDebug("Error: No user logged in.");
+                    alert("로그인 상태가 아닙니다.");
+                    return;
+                }
+                logDebug("User: " + window.AuthManager.currentUser.email);
+
+                // Check DB
+                if (!window.db) {
+                    logDebug("Error: window.db is undefined.");
+                    alert("데이터베이스 연결 오류.");
+                    return;
+                }
+
                 // Collect latest label values from inputs
                 document.querySelectorAll('#grades-body tr').forEach((tr, i) => {
                     const inputs = tr.querySelectorAll('input');
@@ -443,6 +466,8 @@
                     this.classes[i].label = inputs[1].value.trim() || this.classes[i].value + '반';
                 });
 
+                logDebug("Data prepared. Attempting Firestore write...");
+
                 try {
                     await window.db.collection('site_settings').doc('school_config').set({
                         schoolLevel: this.schoolLevel,
@@ -450,8 +475,11 @@
                         classes: this.classes,
                         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                     });
+                    logDebug("Write successful!");
                     alert('학교급·학년·학급 설정이 저장되었습니다.');
                 } catch (e) {
+                    console.error(e);
+                    logDebug("Write failed: " + e.message + " (Code: " + e.code + ")");
                     alert('저장 실패: ' + e.message);
                 }
             },
@@ -465,6 +493,18 @@
 
         window.app = app;
         app.init();
+
+        // Debug Helper
+        function logDebug(msg) {
+            console.log(msg);
+            const debugEl = document.getElementById('debug-log');
+            if (debugEl) {
+                const p = document.createElement('div');
+                p.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+                p.className = 'text-xs text-gray-600 border-b border-gray-100 py-1';
+                debugEl.prepend(p);
+            }
+        }
     </script>
 </body>
 
