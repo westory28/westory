@@ -181,6 +181,7 @@ const ManageLesson: React.FC = () => {
         const isExpanded = expandedIds.has(node.id);
         const isSelected = selectedNodeId === node.id;
         const isLeaf = level >= 2;
+        const canManageUnit = level <= 1;
 
         return (
             <div style={{ marginLeft: level > 0 ? 16 : 0 }} className="mb-1 select-none">
@@ -201,40 +202,42 @@ const ManageLesson: React.FC = () => {
                     </div>
                     <span className="flex-1 truncate text-sm">{node.title}</span>
 
-                    <div className="hidden group-hover:flex gap-1 ml-2">
-                        {!isLeaf && (
+                    {canManageUnit && (
+                        <div className="hidden group-hover:flex gap-1 ml-2">
+                            {!isLeaf && (
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        openModal('child', node);
+                                    }}
+                                    className="text-green-600 hover:bg-green-100 p-1 rounded"
+                                    title="하위 단원 추가"
+                                >
+                                    <i className="fas fa-plus text-xs"></i>
+                                </button>
+                            )}
                             <button
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    openModal('child', node);
+                                    openModal('rename', node);
                                 }}
-                                className="text-green-600 hover:bg-green-100 p-1 rounded"
-                                title="하위 단원 추가"
+                                className="text-blue-600 hover:bg-blue-100 p-1 rounded"
+                                title="단원명 수정"
                             >
-                                <i className="fas fa-plus text-xs"></i>
+                                <i className="fas fa-pen text-xs"></i>
                             </button>
-                        )}
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                openModal('rename', node);
-                            }}
-                            className="text-blue-600 hover:bg-blue-100 p-1 rounded"
-                            title="이름 변경"
-                        >
-                            <i className="fas fa-pen text-xs"></i>
-                        </button>
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteNode(node);
-                            }}
-                            className="text-red-600 hover:bg-red-100 p-1 rounded"
-                            title="삭제"
-                        >
-                            <i className="fas fa-trash text-xs"></i>
-                        </button>
-                    </div>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteNode(node);
+                                }}
+                                className="text-red-600 hover:bg-red-100 p-1 rounded"
+                                title="삭제"
+                            >
+                                <i className="fas fa-trash text-xs"></i>
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 {isExpanded && node.children?.length > 0 && (
@@ -386,10 +389,10 @@ const ManageLesson: React.FC = () => {
                                     </div>
                                     <div className="flex gap-2">
                                         <button onClick={() => setPreviewOpen(true)} className="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg font-bold hover:bg-gray-50 text-xs md:text-sm">
-                                            <i className="fas fa-eye md:mr-2"></i><span className="hidden md:inline">미리보기</span>
+                                            <i className="fas fa-eye lg:mr-2"></i><span className="hidden lg:inline">미리보기</span>
                                         </button>
                                         <button onClick={() => void saveLesson()} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700 shadow-md text-xs md:text-sm">
-                                            <i className="fas fa-save md:mr-2"></i><span className="hidden md:inline">저장</span>
+                                            <i className="fas fa-save lg:mr-2"></i><span className="hidden lg:inline">저장</span>
                                         </button>
                                     </div>
                                 </div>
@@ -452,13 +455,13 @@ const ManageLesson: React.FC = () => {
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
                     <div className="bg-white rounded-xl shadow-2xl w-96 p-6">
                         <h3 className="font-bold text-lg text-gray-800 mb-4">
-                            {modalMode === 'root' ? '새 대단원 추가' : modalMode === 'child' ? '하위 단원 추가' : '이름 변경'}
+                            {modalMode === 'root' ? '새 대단원 추가' : modalMode === 'child' ? '하위 단원 추가' : '단원명 수정'}
                         </h3>
                         <input
                             type="text"
                             autoFocus
                             className="w-full border-2 border-gray-200 rounded-lg p-3 text-lg font-bold focus:border-blue-500 outline-none mb-6"
-                            placeholder="이름 입력"
+                            placeholder="단원명 입력"
                             value={modalInput}
                             onChange={(e) => setModalInput(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handleModalConfirm()}

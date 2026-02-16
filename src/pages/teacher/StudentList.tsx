@@ -14,10 +14,13 @@ interface Student {
     email: string;
 }
 
+const STUDENTS_PER_PAGE = 50;
+
 const StudentList: React.FC = () => {
     const [students, setStudents] = useState<Student[]>([]);
     const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
     const [loading, setLoading] = useState(true);
+    const [currentPage, setCurrentPage] = useState(1);
 
     const [gradeFilter, setGradeFilter] = useState('all');
     const [classFilter, setClassFilter] = useState('all');
@@ -37,6 +40,16 @@ const StudentList: React.FC = () => {
     useEffect(() => {
         applyFilters();
     }, [students, gradeFilter, classFilter, searchQuery]);
+
+    const totalPages = Math.max(1, Math.ceil(filteredStudents.length / STUDENTS_PER_PAGE));
+    const pageStart = (currentPage - 1) * STUDENTS_PER_PAGE;
+    const pagedStudents = filteredStudents.slice(pageStart, pageStart + STUDENTS_PER_PAGE);
+
+    useEffect(() => {
+        if (currentPage > totalPages) {
+            setCurrentPage(totalPages);
+        }
+    }, [currentPage, totalPages]);
 
     const fetchStudents = async () => {
         setLoading(true);
@@ -73,6 +86,7 @@ const StudentList: React.FC = () => {
         if (classFilter !== 'all') result = result.filter((s) => String(s.class) === classFilter);
         if (searchQuery.trim()) result = result.filter((s) => s.name.includes(searchQuery.trim()));
         setFilteredStudents(result);
+        setCurrentPage(1);
     };
 
     const handleSelectAll = (checked: boolean) => {
@@ -80,7 +94,7 @@ const StudentList: React.FC = () => {
             setSelectedIds(new Set());
             return;
         }
-        setSelectedIds(new Set(filteredStudents.map((s) => s.id)));
+        setSelectedIds(new Set(pagedStudents.map((s) => s.id)));
     };
 
     const handleSelect = (id: string) => {
@@ -131,9 +145,18 @@ const StudentList: React.FC = () => {
         }
     };
 
+    const handleRefreshList = async () => {
+        setGradeFilter('all');
+        setClassFilter('all');
+        setSearchQuery('');
+        setCurrentPage(1);
+        setSelectedIds(new Set());
+        await fetchStudents();
+    };
+
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col">
-            <div className="max-w-7xl mx-auto px-4 py-6 animate-fadeIn w-full flex-1">
+            <div className="max-w-6xl mx-auto px-3 py-6 animate-fadeIn w-full flex-1">
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden min-h-[600px] flex flex-col">
                     <div className="p-5 border-b bg-gray-50 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
                         <h2 className="text-lg font-bold text-gray-800 whitespace-nowrap">
@@ -164,6 +187,13 @@ const StudentList: React.FC = () => {
                                     <option key={i + 1} value={i + 1}>{i + 1}반</option>
                                 ))}
                             </select>
+                            <button
+                                onClick={() => void handleRefreshList()}
+                                className="border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-600 hover:text-blue-600 hover:border-blue-500 transition"
+                                title="명단 새로고침 및 필터 초기화"
+                            >
+                                <i className={`fas fa-sync-alt ${loading ? 'animate-spin' : ''}`}></i>
+                            </button>
                         </div>
 
                         <div className="flex gap-2 w-full md:w-auto">
@@ -191,7 +221,7 @@ const StudentList: React.FC = () => {
                                         <input
                                             type="checkbox"
                                             onChange={(e) => handleSelectAll(e.target.checked)}
-                                            checked={filteredStudents.length > 0 && selectedIds.size === filteredStudents.length}
+                                            checked={pagedStudents.length > 0 && pagedStudents.every((s) => selectedIds.has(s.id))}
                                             className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
                                         />
                                     </th>
@@ -209,7 +239,7 @@ const StudentList: React.FC = () => {
                                 ) : filteredStudents.length === 0 ? (
                                     <tr><td colSpan={7} className="p-10 text-center text-gray-400">학생 데이터가 없습니다.</td></tr>
                                 ) : (
-                                    filteredStudents.map((student) => (
+                                    pagedStudents.map((student) => (
                                         <tr key={student.id} className="hover:bg-blue-50 transition group">
                                             <td className="p-4 text-center">
                                                 <input
@@ -264,6 +294,19 @@ const StudentList: React.FC = () => {
                             </tbody>
                         </table>
                     </div>
+                    {!loading && filteredStudents.length > STUDENTS_PER_PAGE && (
+                        <div className="px-5 py-3 border-t border-gray-100 bg-white flex items-center justify-center gap-1.5">
+                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                                <button
+                                    key={page}
+                                    onClick={() => setCurrentPage(page)}
+                                    className={`min-w-8 h-8 px-2 rounded-md text-xs font-bold transition ${currentPage === page ? 'bg-blue-600 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-blue-600'}`}
+                                >
+                                    {page}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 {selectedIds.size > 0 && (
