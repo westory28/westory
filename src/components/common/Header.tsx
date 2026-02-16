@@ -160,13 +160,14 @@ const Header: React.FC = () => {
                         </Link>
                     )}
 
-                    <span className="user-greeting">
-                        {userData.name} {isTeacherPortal ? '교사' : '학생'}
-                    </span>
-
-                    {!isTeacherPortal && (
-                        <Link to="/student/mypage" className="text-gray-400 hover:text-blue-600 transition" title="마이페이지">
-                            <i className="fas fa-user-circle fa-lg"></i>
+                    {isTeacherPortal ? (
+                        <span className="user-greeting">
+                            {userData.name} 교사
+                        </span>
+                    ) : (
+                        <Link to="/student/mypage" className="user-greeting inline-flex items-center gap-2 hover:text-blue-600 transition" title="마이페이지">
+                            <i className="fas fa-user-circle"></i>
+                            <span>{userData.name} 학생</span>
                         </Link>
                     )}
 
