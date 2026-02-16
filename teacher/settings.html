@@ -216,6 +216,13 @@
     <script type="module">
         window.AuthManager.init('teacher');
 
+        // Expose functions globally for onclick handlers
+        window.saveConfig = saveConfig;
+
+        // Note: The previous code had functions defined at top level inside module.
+        // We need to attach them to window.
+        // Use window.currentConfig which is set by AuthManager or load it manually.
+
         document.addEventListener('auth-ready', () => {
             loadConfig();
         });

@@ -554,6 +554,9 @@
             }
         };
 
+        window.app = app;
+        window.omrApp = omrApp;
+
         document.addEventListener('auth-ready', () => {
             app.init();
             // Also try to update on event, just in case
