@@ -11,6 +11,8 @@ import StudentScoreDashboard from './pages/student/score/ScoreDashboard';
 import TeacherDashboard from './pages/teacher/Dashboard';
 import StudentList from './pages/teacher/StudentList';
 import ManageQuiz from './pages/teacher/ManageQuiz';
+import ManageExam from './pages/teacher/ManageExam';
+
 
 
 
@@ -62,6 +64,11 @@ const App: React.FC = () => {
                         <Route path="/teacher/manage_quiz.html" element={
                             <MainLayout>
                                 <ManageQuiz />
+                            </MainLayout>
+                        } />
+                        <Route path="/teacher/manage_exam.html" element={
+                            <MainLayout>
+                                <ManageExam />
                             </MainLayout>
                         } />
                         {/* Fallback */}
