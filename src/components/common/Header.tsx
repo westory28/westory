@@ -3,6 +3,8 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { MENUS } from '../../constants/menus';
 
+const TEACHER_EMAIL = 'westoria28@gmail.com';
+
 const Header: React.FC = () => {
     const { currentUser, userData, config, logout } = useAuth();
     const location = useLocation();
@@ -11,7 +13,7 @@ const Header: React.FC = () => {
 
     if (!currentUser || !userData) return null;
 
-    const isTeacher = userData.role === 'teacher';
+    const isTeacher = userData.role === 'teacher' || currentUser.email === TEACHER_EMAIL;
     const menuItems = MENUS[isTeacher ? 'teacher' : 'student'] || [];
     const home = isTeacher ? '/teacher/dashboard' : '/student/dashboard';
 
