@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
@@ -6,7 +6,7 @@ import listPlugin from '@fullcalendar/list';
 import { CalendarEvent } from '../../../types';
 import { useAuth } from '../../../contexts/AuthContext';
 import { db } from '../../../lib/firebase';
-import { collection, writeBatch, doc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, where, writeBatch } from 'firebase/firestore';
 
 interface TeacherCalendarSectionProps {
     events: CalendarEvent[];
@@ -19,14 +19,38 @@ interface TeacherCalendarSectionProps {
     onFilterChange: (cls: string) => void;
 }
 
+type HolidayItem = { title: string; start: string; eventType?: 'holiday' };
+
+const DEFAULT_2026_HOLIDAYS: HolidayItem[] = [
+    { title: '신정', start: '2026-01-01', eventType: 'holiday' },
+    { title: '설날 연휴', start: '2026-02-16', eventType: 'holiday' },
+    { title: '설날', start: '2026-02-17', eventType: 'holiday' },
+    { title: '설날 연휴', start: '2026-02-18', eventType: 'holiday' },
+    { title: '삼일절', start: '2026-03-01', eventType: 'holiday' },
+    { title: '삼일절 대체공휴일', start: '2026-03-02', eventType: 'holiday' },
+    { title: '어린이날', start: '2026-05-05', eventType: 'holiday' },
+    { title: '부처님오신날', start: '2026-05-24', eventType: 'holiday' },
+    { title: '부처님오신날 대체공휴일', start: '2026-05-25', eventType: 'holiday' },
+    { title: '현충일', start: '2026-06-06', eventType: 'holiday' },
+    { title: '현충일 대체공휴일', start: '2026-06-08', eventType: 'holiday' },
+    { title: '광복절', start: '2026-08-15', eventType: 'holiday' },
+    { title: '광복절 대체공휴일', start: '2026-08-17', eventType: 'holiday' },
+    { title: '추석 연휴', start: '2026-09-24', eventType: 'holiday' },
+    { title: '추석', start: '2026-09-25', eventType: 'holiday' },
+    { title: '추석 연휴', start: '2026-09-26', eventType: 'holiday' },
+    { title: '추석 대체공휴일', start: '2026-09-28', eventType: 'holiday' },
+    { title: '개천절', start: '2026-10-03', eventType: 'holiday' },
+    { title: '개천절 대체공휴일', start: '2026-10-05', eventType: 'holiday' },
+    { title: '한글날', start: '2026-10-09', eventType: 'holiday' },
+    { title: '성탄절', start: '2026-12-25', eventType: 'holiday' },
+];
+
 const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
-    events, onDateClick, onEventClick, onAddEvent, onSearchClick, calendarRef,
-    filterClass, onFilterChange
+    events, onDateClick, onEventClick, onAddEvent, onSearchClick, calendarRef, filterClass, onFilterChange,
 }) => {
     const { config } = useAuth();
 
-    // Convert events for FullCalendar
-    const fcEvents = events.map(e => ({
+    const fcEvents = events.map((e) => ({
         id: e.id,
         title: e.title,
         start: e.start,
@@ -35,66 +59,54 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
         borderColor: 'transparent',
         textColor: e.eventType === 'holiday' ? '#ef4444' : undefined,
         classNames: e.eventType === 'holiday' ? ['holiday-text-event'] : [],
-        extendedProps: { ...e }
+        extendedProps: { ...e },
     }));
 
-    // Populate 2026 Holidays
-    const populateHolidays = async () => {
-        if (!config || !confirm('기존 공휴일 데이터를 모두 삭제하고 2026년 공휴일(대체공휴일 포함)을 다시 등록하시겠습니까?')) return;
+    const loadHolidaySource = async (): Promise<HolidayItem[]> => {
+        const byConfig = await getDoc(doc(db, 'site_settings', 'holidays_2026'));
+        if (byConfig.exists()) {
+            const data = byConfig.data() as { items?: HolidayItem[] };
+            if (Array.isArray(data.items) && data.items.length > 0) {
+                return data.items.map((it) => ({ ...it, eventType: 'holiday' }));
+            }
+        }
+        return DEFAULT_2026_HOLIDAYS;
+    };
 
-        const holidays = [
-            { title: "신정", start: "2026-01-01" },
-            { title: "설날 연휴", start: "2026-02-16" },
-            { title: "설날", start: "2026-02-17" },
-            { title: "설날 연휴", start: "2026-02-18" },
-            { title: "삼일절", start: "2026-03-01" },
-            { title: "삼일절 대체공휴일", start: "2026-03-02" },
-            { title: "어린이날", start: "2026-05-05" },
-            { title: "부처님오신날", start: "2026-05-24" },
-            { title: "부처님오신날 대체공휴일", start: "2026-05-25" },
-            { title: "현충일", start: "2026-06-06" },
-            { title: "현충일 대체공휴일", start: "2026-06-08" },
-            { title: "광복절", start: "2026-08-15" },
-            { title: "광복절 대체공휴일", start: "2026-08-17" },
-            { title: "추석 연휴", start: "2026-09-24" },
-            { title: "추석", start: "2026-09-25" },
-            { title: "추석 연휴", start: "2026-09-26" },
-            { title: "추석 대체공휴일", start: "2026-09-28" },
-            { title: "개천절", start: "2026-10-03" },
-            { title: "개천절 대체공휴일", start: "2026-10-05" },
-            { title: "한글날", start: "2026-10-09" },
-            { title: "성탄절", start: "2026-12-25" }
-        ];
+    const populateHolidays = async () => {
+        if (!config) return;
+        if (!confirm('기존 공휴일을 초기화하고 다시 불러오시겠습니까?')) return;
 
         try {
             const path = `years/${config.year}/semesters/${config.semester}/calendar`;
+            const holidayQuery = query(collection(db, path), where('eventType', '==', 'holiday'));
+            const holidaySnap = await getDocs(holidayQuery);
+
+            const holidays = await loadHolidaySource();
             const batch = writeBatch(db);
 
-            // Note: In a real app, we should delete existing holidays first. 
-            // For simplicity/safety, we'll just add/overwrite by ID in this migration step 
-            // or we'd need to query and delete first like in legacy code.
-            // Let's implement delete logic briefly if possible, or just overwrite with deterministic IDs.
-
-            // Using deterministic IDs to avoid duplicates on re-run
-            holidays.forEach(h => {
+            holidaySnap.forEach((snap) => batch.delete(snap.ref));
+            holidays.forEach((h) => {
                 const docId = `holiday_${h.start}_${h.title.replace(/\s+/g, '')}`;
-                const docRef = doc(db, path, docId);
-                batch.set(docRef, {
-                    ...h,
+                const ref = doc(db, path, docId);
+                batch.set(ref, {
+                    title: h.title,
+                    start: h.start,
+                    end: h.start,
                     eventType: 'holiday',
                     targetType: 'common',
                     targetClass: null,
                     description: '대한민국 공휴일',
-                    createdAt: new Date(), // serverTimestamp cannot be used inside array map easily without import
-                    updatedAt: new Date()
+                    updatedAt: new Date(),
+                    createdAt: new Date(),
                 });
             });
 
             await batch.commit();
-            alert(`총 ${holidays.length}개의 공휴일이 등록되었습니다.`);
+            alert(`공휴일 ${holidays.length}건을 적용했습니다.`);
         } catch (e: any) {
             console.error(e);
-            alert('공휴일 등록 실패: ' + e.message);
+            alert(`공휴일 적용 실패: ${e.message}`);
         }
     };
 
@@ -106,11 +118,7 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                 </h2>
 
                 <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-                    <button
-                        onClick={onSearchClick}
-                        className="bg-gray-50 border border-gray-200 text-gray-600 hover:text-blue-600 p-1.5 rounded-lg transition shrink-0"
-                        title="검색"
-                    >
+                    <button onClick={onSearchClick} className="bg-gray-50 border border-gray-200 text-gray-600 hover:text-blue-600 p-1.5 rounded-lg transition shrink-0" title="검색">
                         <i className="fas fa-search"></i>
                     </button>
 
@@ -121,25 +129,16 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                     >
                         <option value="all">전체</option>
                         <option value="common">공통</option>
-                        {Array.from({ length: 3 }, (_, g) =>
-                            Array.from({ length: 12 }, (_, c) => (
-                                <option key={`${g + 1}-${c + 1}`} value={`${g + 1}-${c + 1}`}>{g + 1}-{c + 1}반</option>
-                            ))
-                        ).flat()}
+                        {Array.from({ length: 3 }, (_, g) => Array.from({ length: 12 }, (_, c) => (
+                            <option key={`${g + 1}-${c + 1}`} value={`${g + 1}-${c + 1}`}>{g + 1}-{c + 1}반</option>
+                        ))).flat()}
                     </select>
 
                     <div className="flex items-center gap-1 ml-auto md:ml-2">
-                        <button
-                            onClick={onAddEvent}
-                            className="bg-blue-600 text-white px-2 py-1.5 rounded-md text-xs font-bold hover:bg-blue-700 shadow-sm transition whitespace-nowrap"
-                        >
+                        <button onClick={onAddEvent} className="bg-blue-600 text-white px-2 py-1.5 rounded-md text-xs font-bold hover:bg-blue-700 shadow-sm transition whitespace-nowrap">
                             <i className="fas fa-plus"></i> 추가
                         </button>
-                        <button
-                            onClick={populateHolidays}
-                            className="bg-green-600 text-white px-2 py-1.5 rounded-md hover:bg-green-700 transition shadow-sm text-xs font-bold whitespace-nowrap hidden lg:block"
-                            title="2026년 공휴일 자동 등록"
-                        >
+                        <button onClick={populateHolidays} className="bg-green-600 text-white px-2 py-1.5 rounded-md hover:bg-green-700 transition shadow-sm text-xs font-bold whitespace-nowrap" title="공휴일 불러오기">
                             <i className="fas fa-calendar-check"></i> 공휴일
                         </button>
                     </div>
@@ -152,17 +151,13 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                     plugins={[dayGridPlugin, interactionPlugin, listPlugin]}
                     initialView="dayGridMonth"
                     locale="ko"
-                    headerToolbar={{
-                        left: 'prev,next today',
-                        center: 'title',
-                        right: 'dayGridMonth,listMonth'
-                    }}
+                    headerToolbar={{ left: 'prev,next today', center: 'title', right: 'dayGridMonth,listMonth' }}
                     events={fcEvents}
                     dateClick={(arg) => onDateClick(arg.dateStr)}
                     eventClick={(arg) => onEventClick(arg.event.extendedProps as CalendarEvent)}
                     height="100%"
                     contentHeight="100%"
-                    dayMaxEvents={true}
+                    dayMaxEvents
                     fixedWeekCount={false}
                     showNonCurrentDates={false}
                 />

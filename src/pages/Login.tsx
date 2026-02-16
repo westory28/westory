@@ -8,26 +8,19 @@ import { useAuth } from '../contexts/AuthContext';
 const TEACHER_EMAIL = 'westoria28@gmail.com';
 
 const Login: React.FC = () => {
-    const { currentUser, userData, config, interfaceConfig, loading } = useAuth();
+    const { currentUser, userData, interfaceConfig, loading } = useAuth();
     const navigate = useNavigate();
     const [loginMode, setLoginMode] = useState<'student' | 'teacher'>('student');
+    const [policyOpen, setPolicyOpen] = useState(false);
+    const [policyTitle, setPolicyTitle] = useState('');
+    const [policyBody, setPolicyBody] = useState('불러오는 중...');
 
     useEffect(() => {
         if (loading || !currentUser) return;
 
-        if (currentUser.email === TEACHER_EMAIL) {
-            navigate(loginMode === 'teacher' ? '/teacher/dashboard' : '/student/dashboard');
-            return;
-        }
-
-        if (userData?.role === 'teacher') {
-            navigate('/teacher/dashboard');
-            return;
-        }
-
-        if (userData?.role === 'student') {
-            navigate('/student/dashboard');
-        }
+        const isTeacher = currentUser.email === TEACHER_EMAIL || userData?.role === 'teacher';
+        if (isTeacher && loginMode === 'teacher') navigate('/teacher/dashboard');
+        else navigate('/student/dashboard');
     }, [loading, currentUser, userData, loginMode, navigate]);
 
     const handleLogin = async (mode: 'student' | 'teacher') => {
@@ -59,8 +52,10 @@ const Login: React.FC = () => {
                     lastLogin: serverTimestamp(),
                 });
             } else {
+                const prev = userSnap.data() as { role?: string };
                 await setDoc(userRef, {
                     lastLogin: serverTimestamp(),
+                    role: isTeacher ? 'teacher' : (prev.role || 'student'),
                 }, { merge: true });
             }
 
@@ -68,66 +63,67 @@ const Login: React.FC = () => {
             else navigate('/student/dashboard');
         } catch (error) {
             console.error('Login failed', error);
-            const code = (error as { code?: string })?.code || '';
-
-            if (code === 'auth/unauthorized-domain') {
-                alert('Firebase 인증 도메인에 localhost 또는 127.0.0.1이 등록되어야 합니다.');
-                return;
-            }
-            if (code === 'auth/popup-blocked') {
-                alert('브라우저에서 팝업이 차단되었습니다. 팝업 차단 해제 후 다시 시도해 주세요.');
-                return;
-            }
-            if (code === 'auth/popup-closed-by-user') {
-                alert('로그인 창이 닫혀 취소되었습니다. 다시 시도해 주세요.');
-                return;
-            }
-
             alert('로그인에 실패했습니다.');
         }
     };
 
-    if (loading) {
-        return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
-    }
+    const showPolicy = async (type: 'terms' | 'privacy') => {
+        setPolicyOpen(true);
+        setPolicyTitle(type === 'terms' ? '이용 약관' : '개인정보 처리 방침');
+        setPolicyBody('불러오는 중...');
+        try {
+            const snap = await getDoc(doc(db, 'site_settings', type));
+            setPolicyBody(snap.exists() ? ((snap.data() as { text?: string }).text || '등록된 내용이 없습니다.') : '등록된 내용이 없습니다.');
+        } catch (e) {
+            console.error('Policy load error:', e);
+            setPolicyBody('내용을 불러오지 못했습니다.');
+        }
+    };
+
+    if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
 
     return (
-        <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4 relative">
-            <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden transform transition-all hover:scale-[1.01] duration-300">
-                <div className="bg-blue-600 p-8 text-center relative overflow-hidden">
-                    <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-blue-500 to-indigo-600 opacity-90"></div>
-                    <div className="relative z-10">
-                        <div className="text-6xl mb-2 animate-bounce">{interfaceConfig?.mainEmoji || '📚'}</div>
-                        <h1 className="text-3xl font-extrabold text-white tracking-tight mb-2">Westory</h1>
-                        <p className="text-blue-100 font-medium">{interfaceConfig?.mainSubtitle || '우리가 써 내려가는 이야기'}</p>
-                    </div>
-                </div>
+        <div className="min-h-screen bg-gray-50 relative">
+            <div className="h-screen flex flex-col items-center justify-center px-4">
+                <div className="text-5xl mb-4 animate-bounce">{interfaceConfig?.mainEmoji || '📚'}</div>
+                <h1 className="text-6xl font-black tracking-tight mb-2">
+                    <span className="text-blue-600">We</span><span className="text-amber-500">story</span>
+                </h1>
+                <p className="text-gray-500 text-xl font-medium mb-10">{interfaceConfig?.mainSubtitle || '우리가 써 내려가는 이야기'}</p>
 
-                <div className="p-8">
-                    <button
-                        onClick={() => handleLogin('student')}
-                        className="w-full flex items-center justify-center gap-3 bg-white border border-gray-300 text-gray-700 font-bold py-3 px-4 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition transform active:scale-95 shadow-sm"
-                    >
-                        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
-                        <span>Google 계정으로 시작하기</span>
-                    </button>
-
-                    <div className="mt-8 text-center">
-                        <p className="text-xs text-gray-400">
-                            &copy; {config?.year || '2026'} Westory. All rights reserved.
-                        </p>
-                    </div>
-                </div>
+                <button
+                    onClick={() => handleLogin('student')}
+                    className="bg-white border border-gray-200 px-10 py-4 rounded-full text-lg font-bold text-gray-700 shadow hover:bg-gray-50 transition flex items-center gap-3"
+                >
+                    <img src="https://fonts.gstatic.com/s/i/productlogos/googleg/v6/24px.svg" width={24} height={24} alt="Google" />
+                    Google 계정으로 시작하기
+                </button>
             </div>
 
-            <div className="mt-4">
-                <button
-                    onClick={() => handleLogin('teacher')}
-                    className="text-xs text-gray-500 hover:text-gray-700 px-3 py-2 rounded-md hover:bg-gray-100 transition"
-                >
+            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 text-xs">
+                <button onClick={() => showPolicy('terms')} className="text-gray-400 hover:text-gray-600">이용 약관</button>
+                <span className="text-gray-300">|</span>
+                <button onClick={() => showPolicy('privacy')} className="text-gray-400 hover:text-gray-600">개인정보 처리 방침</button>
+            </div>
+
+            <div className="absolute bottom-8 right-8">
+                <button onClick={() => handleLogin('teacher')} className="text-gray-400 hover:text-gray-700 text-xs font-semibold px-3 py-2 rounded hover:bg-gray-200/60 transition">
+                    <i className="fas fa-chalkboard-teacher mr-1"></i>
                     관리자 로그인
                 </button>
             </div>
+
+            {policyOpen && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4" onClick={() => setPolicyOpen(false)}>
+                    <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+                        <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+                            <h2 className="font-bold text-lg">{policyTitle}</h2>
+                            <button onClick={() => setPolicyOpen(false)} className="text-gray-400 hover:text-gray-700"><i className="fas fa-times"></i></button>
+                        </div>
+                        <div className="p-5 text-sm text-gray-700 overflow-auto whitespace-pre-wrap">{policyBody}</div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

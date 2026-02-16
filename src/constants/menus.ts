@@ -21,7 +21,6 @@ export const MENUS = {
                 { name: '나의 성적표', url: '/student/score' },
             ],
         },
-        { name: '캘린더', url: '/student/calendar', icon: '' },
     ],
     teacher: [
         { name: '학사 일정 관리', url: '/teacher/schedule', icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
@@ -45,6 +44,5 @@ export const MENUS = {
             ],
         },
         { name: '학생 명단 관리', url: '/teacher/students', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z' },
-        { name: '설정', url: '/teacher/settings', icon: '' },
     ],
 };

@@ -4,6 +4,8 @@ import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { SystemConfig, InterfaceConfig, UserData } from '../types';
 
+const TEACHER_EMAIL = 'westoria28@gmail.com';
+
 interface AuthContextType {
     // Backward-compatible alias for legacy pages.
     user: User | null;
@@ -59,7 +61,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     try {
                         const userSnap = await getDoc(doc(db, 'users', user.uid));
                         if (userSnap.exists()) {
-                            setUserData(userSnap.data() as UserData);
+                            const raw = userSnap.data() as UserData;
+                            const normalizedRole = user.email === TEACHER_EMAIL ? 'teacher' : raw.role;
+                            setUserData({ ...raw, role: normalizedRole });
                         }
                     } catch (e) {
                         console.error("Failed to fetch user data", e);

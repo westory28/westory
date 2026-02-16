@@ -6,33 +6,32 @@ interface EventDetailPanelProps {
     events: CalendarEvent[];
 }
 
-const colorMap: Record<string, string> = {
-    'exam': '#ef4444',       // Red
-    'performance': '#f97316', // Orange
-    'event': '#10b981',       // Green
-    'diagnosis': '#3b82f6',   // Blue
-    'formative': '#3b82f6',    // Blue
-    'holiday': 'transparent'
+const COLOR_MAP: Record<string, string> = {
+    exam: '#ef4444',
+    performance: '#f97316',
+    event: '#10b981',
+    diagnosis: '#3b82f6',
+    formative: '#3b82f6',
+    holiday: 'transparent',
 };
 
-const typeLabelMap: Record<string, string> = {
-    'exam': '정기 시험', 'performance': '수행평가', 'event': '행사', 'diagnosis': '진단평가', 'formative': '형성평가', 'holiday': '공휴일'
+const TYPE_LABEL_MAP: Record<string, string> = {
+    exam: '정기 시험',
+    performance: '수행평가',
+    event: '행사',
+    diagnosis: '진단평가',
+    formative: '형성평가',
+    holiday: '공휴일',
 };
 
 const EventDetailPanel: React.FC<EventDetailPanelProps> = ({ selectedDate, events }) => {
-
-    // Helper to format date header
     const formatDateHeader = (dateStr: string) => {
         const dateObj = new Date(dateStr);
         const days = ['일', '월', '화', '수', '목', '금', '토'];
         return (
             <span className="inline-flex items-center bg-blue-50 border-2 border-blue-300 rounded-lg px-3 py-1">
-                <span className="text-lg font-extrabold text-blue-800">
-                    {dateObj.getMonth() + 1}월 {dateObj.getDate()}일
-                </span>
-                <span className="ml-1 text-sm font-bold text-blue-500">
-                    ({days[dateObj.getDay()]})
-                </span>
+                <span className="text-lg font-extrabold text-blue-800">{dateObj.getMonth() + 1}월 {dateObj.getDate()}일</span>
+                <span className="ml-1 text-sm font-bold text-blue-500">({days[dateObj.getDay()]})</span>
             </span>
         );
     };
@@ -52,7 +51,7 @@ const EventDetailPanel: React.FC<EventDetailPanelProps> = ({ selectedDate, event
                 {!selectedDate ? (
                     <div className="flex flex-col items-center justify-center h-full text-gray-400">
                         <i className="far fa-calendar-check text-4xl mb-3 text-gray-200"></i>
-                        <p className="text-sm text-center">달력에서 날짜나 일정을 클릭하면<br />상세 내용이 여기에 표시됩니다.</p>
+                        <p className="text-sm text-center">달력에서 날짜 또는 일정을 클릭하면 상세 내용이 표시됩니다.</p>
                     </div>
                 ) : events.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-40 text-gray-400">
@@ -60,10 +59,10 @@ const EventDetailPanel: React.FC<EventDetailPanelProps> = ({ selectedDate, event
                         <p className="text-sm">일정이 없습니다.</p>
                     </div>
                 ) : (
-                    events.map(event => {
+                    events.map((event) => {
                         const isHoliday = event.eventType === 'holiday';
-                        const bgColor = isHoliday ? 'transparent' : (colorMap[event.eventType] || '#999');
-                        const typeLabel = typeLabelMap[event.eventType] || '일정';
+                        const bgColor = isHoliday ? 'transparent' : (COLOR_MAP[event.eventType] || '#999');
+                        const typeLabel = TYPE_LABEL_MAP[event.eventType] || '일정';
 
                         if (isHoliday) {
                             return (
@@ -78,21 +77,21 @@ const EventDetailPanel: React.FC<EventDetailPanelProps> = ({ selectedDate, event
 
                         return (
                             <div key={event.id} className="group p-3 border-l-4 border-gray-200 bg-gray-50 mb-3 rounded-r-lg hover:bg-gray-100 transition">
-                                <div className="flex justify-between items-start">
-                                    <div className="w-full">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <span className="text-[10px] text-white px-1.5 py-0.5 rounded font-bold" style={{ backgroundColor: bgColor }}>
-                                                {typeLabel}
-                                            </span>
-                                            <h4 className="font-bold text-gray-800 text-sm">{event.title}</h4>
-                                        </div>
-                                        <p className="text-xs text-gray-500">
-                                            {event.start}
-                                            {event.end && event.start !== event.end ? ` ~ ${event.end}` : ''}
-                                        </p>
-                                    </div>
+                                <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-[10px] text-white px-1.5 py-0.5 rounded font-bold" style={{ backgroundColor: bgColor }}>
+                                        {typeLabel}
+                                    </span>
+                                    <h4 className="font-bold text-gray-800 text-sm">{event.title}</h4>
                                 </div>
-                                {/* Description would go here if available in type */}
+                                <p className="text-xs text-gray-500">
+                                    {event.start}
+                                    {event.end && event.start !== event.end ? ` ~ ${event.end}` : ''}
+                                </p>
+                                {event.description && (
+                                    <p className="text-xs text-gray-600 mt-2 bg-gray-100 p-2 rounded whitespace-pre-wrap">
+                                        {event.description}
+                                    </p>
+                                )}
                             </div>
                         );
                     })
