@@ -194,7 +194,7 @@ const ManageLesson = () => {
                         <button
                             onClick={(e) => { e.stopPropagation(); openModal('rename', node); }}
                             className="text-blue-600 hover:bg-blue-100 p-1 rounded"
-                            title="?대쫫 蹂寃?
+                            title="Rename"
                         >
                             <i className="fas fa-pen text-xs"></i>
                         </button>
@@ -313,7 +313,7 @@ const ManageLesson = () => {
         <div className="bg-gray-50 flex flex-col min-h-screen">
             <main className="flex-1 w-full max-w-[90rem] mx-auto px-4 lg:px-6 py-6 h-full flex flex-col">
                 <div className="flex justify-between items-center mb-4 shrink-0">
-                    <h1 className="text-xl lg:text-2xl font-bold text-gray-800"><i className="fas fa-sitemap text-blue-500 mr-2"></i>?섏뾽 ?먮즺 愿由?/h1>
+                    <h1 className="text-xl lg:text-2xl font-bold text-gray-800"><i className="fas fa-sitemap text-blue-500 mr-2"></i>Lesson Content Manager</h1>
                 </div>
 
                 <div className="flex flex-col lg:flex-row gap-6 h-full pb-4">
@@ -341,7 +341,7 @@ const ManageLesson = () => {
                             <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400">
                                 <i className="far fa-hand-point-left text-4xl mb-4 lg:block hidden"></i>
                                 <p className="text-lg font-bold">?섏뾽 ?먮즺瑜??좏깮?댁＜?몄슂</p>
-                                <p className="text-sm mt-2">?쇱そ 紐⑹감?먯꽌 <strong>?뚮떒??/strong>???좏깮?섏꽭??</p>
+                                <p className="text-sm mt-2">Select a leaf item from the left tree.</p>
                             </div>
                         ) : (
                             <>
@@ -367,7 +367,7 @@ const ManageLesson = () => {
                                             className="w-full text-lg font-bold border-b-2 border-gray-200 focus:border-blue-500 outline-none py-2 px-1 transition"
                                             value={lessonTitle}
                                             onChange={e => setLessonTitle(e.target.value)}
-                                            placeholder="?쒕ぉ???낅젰?섏꽭??
+                                            placeholder="Enter a lesson title"
                                         />
                                     </div>
                                     <div>
@@ -412,7 +412,7 @@ const ManageLesson = () => {
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
                     <div className="bg-white rounded-xl shadow-2xl w-96 p-6">
                         <h3 className="font-bold text-lg text-gray-800 mb-4">
-                            {modalMode === 'root' ? "????⑥썝 異붽?" : (modalMode === 'child' ? "?섏쐞 ?⑥썝 異붽?" : "?대쫫 蹂寃?)}
+                            {modalMode === 'root' ? "Add top-level unit" : (modalMode === 'child' ? "Add child unit" : "Rename")}
                         </h3>
                         <input
                             type="text"

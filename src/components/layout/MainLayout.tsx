@@ -1,6 +1,5 @@
 import React, { useEffect } from 'react';
 import Header from '../common/Header';
-import Footer from '../common/Footer';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -22,7 +21,6 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             <main className="flex-1 w-full">
                 {children}
             </main>
-            <Footer />
         </div>
     );
 };

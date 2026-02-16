@@ -42,7 +42,7 @@ const QuizRunner: React.FC = () => {
     const [blockReason, setBlockReason] = useState<string | null>(null);
 
     // Data States
-    const [config, setConfig] = useState<QuizConfig | null>(null);
+    const [quizConfig, setQuizConfig] = useState<QuizConfig | null>(null);
     const [allQuestions, setAllQuestions] = useState<Question[]>([]);
     const [selectedQuestions, setSelectedQuestions] = useState<Question[]>([]);
     const [historyCount, setHistoryCount] = useState(0);
@@ -76,7 +76,7 @@ const QuizRunner: React.FC = () => {
             const settingsData = settingsDoc.exists() ? settingsDoc.data() : {};
             const quizConfig: QuizConfig = settingsData[key] || { active: true, timeLimit: 60, allowRetake: true, cooldown: 0, questionCount: 10 };
 
-            setConfig(quizConfig);
+            setQuizConfig(quizConfig);
 
             if (!quizConfig.active && unitId !== 'exam_prep') {
                 throw new Error("현재 비활성화된 평가입니다.");
@@ -178,7 +178,7 @@ const QuizRunner: React.FC = () => {
     const startQuiz = () => {
         setCurrentIndex(0);
         setAnswers({});
-        setTimeLeft(config?.timeLimit || 60);
+        setTimeLeft(quizConfig?.timeLimit || 60);
         setView('quiz');
 
         // Start Timer
@@ -268,8 +268,8 @@ const QuizRunner: React.FC = () => {
     if (view === 'loading') return <div className="flex h-screen items-center justify-center font-bold text-gray-500">로딩 중...</div>;
 
     if (view === 'intro') {
-        const timeLimit = config?.timeLimit || 60;
-        const qCount = config?.questionCount || 10;
+        const timeLimit = quizConfig?.timeLimit || 60;
+        const qCount = quizConfig?.questionCount || 10;
 
         return (
             <div className="max-w-2xl mx-auto px-4 py-8 min-h-screen flex flex-col items-center justify-center text-center animate-fadeIn">
@@ -317,7 +317,7 @@ const QuizRunner: React.FC = () => {
 
     if (view === 'quiz') {
         const q = selectedQuestions[currentIndex];
-        const progress = ((timeLeft / (config?.timeLimit || 60)) * 100);
+        const progress = ((timeLeft / (quizConfig?.timeLimit || 60)) * 100);
         const currentAns = answers[q.id] || '';
 
         return (
