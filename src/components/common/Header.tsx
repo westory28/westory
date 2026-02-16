@@ -128,13 +128,13 @@ const Header: React.FC = () => {
                                         {item.name}
                                         <i className="fas fa-chevron-down text-[10px] ml-1 opacity-50 group-hover:opacity-100 transition"></i>
                                     </Link>
-                                    <div className="absolute top-full left-0 w-56 pt-3 invisible opacity-0 group-hover:visible group-hover:opacity-100 transition duration-200 transform translate-y-2 group-hover:translate-y-0 z-[100]">
+                                    <div className="absolute top-full left-0 w-52 pt-1.5 invisible opacity-0 group-hover:visible group-hover:opacity-100 transition duration-200 transform translate-y-1 group-hover:translate-y-0 z-[100]">
                                         <div className="bg-white border border-gray-200 shadow-xl rounded-xl overflow-hidden">
                                             {item.children?.map((child, childIdx) => (
                                                 <Link
                                                     key={`${child.url}-${childIdx}`}
                                                     to={child.url}
-                                                    className={`block px-4 py-3 text-sm border-b border-gray-50 last:border-0 whitespace-nowrap ${isActive(child.url) ? 'text-blue-600 bg-blue-50 font-bold' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'}`}
+                                                    className={`block px-3 py-2 text-[13px] border-b border-gray-50 last:border-0 whitespace-nowrap font-bold ${isActive(child.url) ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'}`}
                                                 >
                                                     {child.name}
                                                 </Link>
@@ -205,12 +205,12 @@ const Header: React.FC = () => {
                             {item.name}
                         </Link>
                         {!!item.children?.length && (
-                            <div className="bg-gray-50 border-b border-gray-100 pb-2">
+                            <div className="bg-gray-50 border-b border-gray-100 pb-1">
                                 {item.children.map((child, childIdx) => (
                                     <Link
                                         key={`${child.url}-mobile-child-${childIdx}`}
                                         to={child.url}
-                                        className={`block pl-12 pr-4 py-2 text-sm rounded-r-full mr-2 ${isActive(child.url) ? 'text-blue-600 font-bold bg-blue-50' : 'text-gray-500 hover:text-blue-600 hover:bg-gray-100'}`}
+                                        className={`block pl-12 pr-4 py-1.5 text-sm rounded-r-full mr-2 font-bold ${isActive(child.url) ? 'text-blue-600 bg-blue-50' : 'text-gray-500 hover:text-blue-600 hover:bg-gray-100'}`}
                                         onClick={() => setMobileMenuOpen(false)}
                                     >
                                         <i className="fas fa-angle-right mr-2 text-xs opacity-50"></i>

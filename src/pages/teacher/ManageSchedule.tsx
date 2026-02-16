@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
@@ -53,6 +53,28 @@ const ManageSchedule = () => {
         '2025-06-06': '현충일', '2025-08-15': '광복절', '2025-10-03': '개천절',
         '2025-10-09': '한글날', '2025-12-25': '성탄절'
     };
+
+    const toLocalYmd = (date: Date) => {
+        const offset = date.getTimezoneOffset() * 60000;
+        return new Date(date.getTime() - offset).toISOString().split('T')[0];
+    };
+
+    const holidayDateSet = useMemo(() => {
+        const set = new Set<string>();
+        events.forEach((eventItem: any) => {
+            const date = String(eventItem.start || '').split('T')[0];
+            const title = String(eventItem.title || '');
+            const isHolidayEvent =
+                eventItem.classNames?.includes('holiday-text-event') ||
+                eventItem.extendedProps?.eventType === 'holiday' ||
+                /공휴일|대체공휴일/.test(title);
+
+            if (date && isHolidayEvent) {
+                set.add(date);
+            }
+        });
+        return set;
+    }, [events]);
 
 
     useEffect(() => {
@@ -258,8 +280,8 @@ const ManageSchedule = () => {
                         eventClick={handleEventClick}
                         height="100%"
                         dayCellClassNames={(arg) => {
-                            // Holiday styling if needed directly on cell
-                            return [];
+                            const dateStr = toLocalYmd(arg.date);
+                            return holidayDateSet.has(dateStr) ? ['fc-day-holiday'] : [];
                         }}
                     />
                 </div>
@@ -403,7 +425,9 @@ const ManageSchedule = () => {
                 .fc-toolbar-title { font-size: 1.25em !important; font-weight: 700; color: #1f2937; }
                 .fc-button { background-color: #2563eb !important; border-color: #2563eb !important; font-weight: 600 !important; }
                 .fc-daygrid-event { cursor: pointer; border-radius: 4px; padding: 2px 4px; font-size: 0.85rem; font-weight: 600; border: none; }
-                .fc-day-sun a { color: #ef4444 !important; text-decoration: none; }
+                .fc-day-sun a { color: #ef4444 !important; text-decoration: none; font-weight: 700 !important; }
+                .fc-day-sat a { color: #3b82f6 !important; text-decoration: none; font-weight: 700 !important; }
+                .fc-day-holiday a { color: #ef4444 !important; font-weight: 700 !important; text-decoration: none; }
                 .holiday-text-event { background-color: transparent !important; border: none !important; }
                 .holiday-text-event .fc-event-title { color: #ef4444; font-size: 0.75rem; font-weight: 800; }
             `}</style>

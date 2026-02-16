@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
@@ -47,6 +47,28 @@ const Calendar = () => {
         'diagnosis': '진단평가',
         'formative': '형성평가'
     };
+
+    const toLocalYmd = (date: Date) => {
+        const offset = date.getTimezoneOffset() * 60000;
+        return new Date(date.getTime() - offset).toISOString().split('T')[0];
+    };
+
+    const holidayDateSet = useMemo(() => {
+        const set = new Set<string>();
+        events.forEach((eventItem: any) => {
+            const date = String(eventItem.start || '').split('T')[0];
+            const title = String(eventItem.title || '');
+            const isHolidayEvent =
+                eventItem.classNames?.includes('holiday-text-event') ||
+                eventItem.extendedProps?.eventType === 'holiday' ||
+                /공휴일|대체공휴일/.test(title);
+
+            if (date && isHolidayEvent) {
+                set.add(date);
+            }
+        });
+        return set;
+    }, [events]);
 
     useEffect(() => {
         const fetchConfig = async () => {
@@ -166,8 +188,8 @@ const Calendar = () => {
                             eventClick={handleEventClick}
                             height="auto" // Allow it to grow
                             dayCellClassNames={(arg) => {
-                                // Simple holiday check if needed, though we handle holidays as events
-                                return [];
+                                const dateStr = toLocalYmd(arg.date);
+                                return holidayDateSet.has(dateStr) ? ['fc-day-holiday'] : [];
                             }}
                         />
                     </div>
@@ -219,8 +241,9 @@ const Calendar = () => {
                 .fc-toolbar-title { font-size: 1.25em !important; font-weight: 700; color: #1f2937; }
                 .fc-button { background-color: #2563eb !important; border-color: #2563eb !important; font-weight: 600 !important; }
                 .fc-daygrid-event { cursor: pointer; border-radius: 4px; padding: 2px 4px; font-size: 0.8rem; font-weight: 600; border: none; }
-                .fc-day-sun a { color: #ef4444 !important; text-decoration: none; }
-                .fc-day-sat a { color: #3b82f6 !important; text-decoration: none; }
+                .fc-day-sun a { color: #ef4444 !important; text-decoration: none; font-weight: 700 !important; }
+                .fc-day-sat a { color: #3b82f6 !important; text-decoration: none; font-weight: 700 !important; }
+                .fc-day-holiday a { color: #ef4444 !important; text-decoration: none; font-weight: 700 !important; }
                 .holiday-text-event { background-color: transparent !important; border: none !important; }
                 .holiday-text-event .fc-event-title { color: #ef4444; font-size: 0.75rem; font-weight: 800; }
             `}</style>

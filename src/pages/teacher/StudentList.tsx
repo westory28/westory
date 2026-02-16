@@ -202,7 +202,7 @@ const StudentList: React.FC = () => {
                                     <th className="p-4 w-16 text-center">반</th>
                                     <th className="p-4 w-16 text-center">번호</th>
                                     <th className="p-4 w-32">이름</th>
-                                    <th className="p-4 hidden md:table-cell">이메일</th>
+                                    <th className="p-4 w-64">이메일</th>
                                     <th className="p-4 text-center w-24">관리</th>
                                 </tr>
                             </thead>
@@ -233,7 +233,7 @@ const StudentList: React.FC = () => {
                                                     {s.name} <i className="fas fa-folder-open text-xs text-gray-300 group-hover:text-blue-400 ml-2"></i>
                                                 </button>
                                             </td>
-                                            <td className="p-4 text-gray-500 text-xs font-mono hidden md:table-cell">{s.email}</td>
+                                            <td className="p-4 text-gray-500 text-xs font-mono">{s.email}</td>
                                             <td className="p-4 text-center">
                                                 <div className="flex gap-1 justify-center">
                                                     <button
