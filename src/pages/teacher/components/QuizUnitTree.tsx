@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { db } from '../../../../lib/firebase';
+import { db } from '../../../lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 
 interface TreeUnit {
@@ -40,8 +40,8 @@ const QuizUnitTree: React.FC<QuizUnitTreeProps> = ({ onSelect }) => {
             {/* Exam Prep Special Node */}
             <div
                 className={`flex items-center p-3 rounded-lg cursor-pointer transition mb-4 border ${activeId === 'exam_prep'
-                        ? 'bg-yellow-50 border-yellow-400 text-yellow-800 font-bold'
-                        : 'bg-yellow-50 border-yellow-200 text-yellow-700 hover:bg-yellow-100'
+                    ? 'bg-yellow-50 border-yellow-400 text-yellow-800 font-bold'
+                    : 'bg-yellow-50 border-yellow-200 text-yellow-700 hover:bg-yellow-100'
                     }`}
                 onClick={() => handleSelect({ id: 'exam_prep', title: '정기 시험 대비 실전' }, 'special')}
             >
@@ -58,8 +58,8 @@ const QuizUnitTree: React.FC<QuizUnitTreeProps> = ({ onSelect }) => {
                                     <div
                                         key={mid.id}
                                         className={`flex items-center px-3 py-2 rounded-lg cursor-pointer text-sm transition ${activeId === mid.id
-                                                ? 'bg-blue-50 text-blue-600 font-bold'
-                                                : 'hover:bg-gray-100 text-gray-600'
+                                            ? 'bg-blue-50 text-blue-600 font-bold'
+                                            : 'hover:bg-gray-100 text-gray-600'
                                             }`}
                                         onClick={() => handleSelect(mid, 'normal', big.title)}
                                     >

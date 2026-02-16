@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { db } from '../../../../lib/firebase';
+import { db } from '../../../lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 
 interface Question {
@@ -70,7 +70,7 @@ const QuizBankTab: React.FC = () => {
                                     <td className="p-3 text-center text-gray-500 text-xs">{q.id}</td>
                                     <td className="p-3 text-center">
                                         <span className={`px-2 py-1 rounded text-xs font-bold ${q.category === 'diagnostic' ? 'bg-green-100 text-green-700' :
-                                                q.category === 'formative' ? 'bg-yellow-100 text-yellow-700' : 'bg-purple-100 text-purple-700'
+                                            q.category === 'formative' ? 'bg-yellow-100 text-yellow-700' : 'bg-purple-100 text-purple-700'
                                             }`}>
                                             {q.category === 'diagnostic' ? '진단' : q.category === 'formative' ? '형성' : '실전'}
                                         </span>
