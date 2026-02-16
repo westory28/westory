@@ -294,144 +294,145 @@
             alert("페이지 로딩 중 오류가 발생했습니다: " + err.message);
         }
     </script>
-    body {
-    font-family: 'Pretendard', sans-serif;
-    background-color: #f8f9fa;
-    min-height: 100vh;
-    position: relative;
-    }
+    <style>
+        body {
+            font-family: 'Pretendard', sans-serif;
+            background-color: #f8f9fa;
+            min-height: 100vh;
+            position: relative;
+        }
 
-    .main-container {
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    padding: 20px;
-    }
+        .main-container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
 
-    .logo {
-    font-size: 4.5rem;
-    font-weight: 900;
-    margin-bottom: 10px;
-    letter-spacing: -2px;
-    }
+        .logo {
+            font-size: 4.5rem;
+            font-weight: 900;
+            margin-bottom: 10px;
+            letter-spacing: -2px;
+        }
 
-    .we {
-    color: #2563eb;
-    }
+        .we {
+            color: #2563eb;
+        }
 
-    .story {
-    color: #f59e0b;
-    }
+        .story {
+            color: #f59e0b;
+        }
 
-    .subtitle {
-    font-size: 1.5rem;
-    color: #6b7280;
-    margin-bottom: 60px;
-    font-weight: 500;
-    }
+        .subtitle {
+            font-size: 1.5rem;
+            color: #6b7280;
+            margin-bottom: 60px;
+            font-weight: 500;
+        }
 
-    .login-btn {
-    background: #fff;
-    border: 1px solid #e5e7eb;
-    padding: 16px 40px;
-    border-radius: 50px;
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: #374151;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    transition: all 0.2s;
-    }
+        .login-btn {
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            padding: 16px 40px;
+            border-radius: 50px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #374151;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            transition: all 0.2s;
+        }
 
-    .login-btn:hover {
-    background: #f9fafb;
-    transform: translateY(-2px);
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-    }
+        .login-btn:hover {
+            background: #f9fafb;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
 
-    .teacher-btn-area {
-    position: absolute;
-    bottom: 30px;
-    right: 30px;
-    }
+        .teacher-btn-area {
+            position: absolute;
+            bottom: 30px;
+            right: 30px;
+        }
 
-    .teacher-link {
-    color: #9ca3af;
-    font-size: 0.85rem;
-    font-weight: 600;
-    text-decoration: none;
-    padding: 8px 16px;
-    border: 1px solid transparent;
-    border-radius: 8px;
-    transition: all 0.2s;
-    }
+        .teacher-link {
+            color: #9ca3af;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-decoration: none;
+            padding: 8px 16px;
+            border: 1px solid transparent;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
 
-    .teacher-link:hover {
-    color: #4b5563;
-    background-color: #e5e7eb;
-    }
+        .teacher-link:hover {
+            color: #4b5563;
+            background-color: #e5e7eb;
+        }
 
-    .footer-links {
-    position: absolute;
-    bottom: 30px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    }
+        .footer-links {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
 
-    .footer-links a {
-    color: #9ca3af;
-    font-size: 0.8rem;
-    font-weight: 500;
-    text-decoration: none;
-    transition: color 0.2s;
-    }
+        .footer-links a {
+            color: #9ca3af;
+            font-size: 0.8rem;
+            font-weight: 500;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
 
-    .footer-links a:hover {
-    color: #4b5563;
-    text-decoration: underline;
-    }
+        .footer-links a:hover {
+            color: #4b5563;
+            text-decoration: underline;
+        }
 
-    .footer-links .divider {
-    color: #d1d5db;
-    font-size: 0.75rem;
-    }
+        .footer-links .divider {
+            color: #d1d5db;
+            font-size: 0.75rem;
+        }
 
-    .modal-overlay {
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(2px);
-    }
+        .modal-overlay {
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(2px);
+        }
 
-    @media (max-width: 1024px) {
-    .footer-links {
-    bottom: 20px;
-    width: 100%;
-    justify-content: center;
-    gap: 12px;
-    }
+        @media (max-width: 1024px) {
+            .footer-links {
+                bottom: 20px;
+                width: 100%;
+                justify-content: center;
+                gap: 12px;
+            }
 
-    .teacher-btn-area {
-    bottom: 60px;
-    right: auto;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 100%;
-    display: flex;
-    justify-content: center;
-    }
+            .teacher-btn-area {
+                bottom: 60px;
+                right: auto;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 100%;
+                display: flex;
+                justify-content: center;
+            }
 
-    .teacher-link {
-    background: rgba(255, 255, 255, 0.5);
-    /* slight background for visibility */
-    }
-    }
+            .teacher-link {
+                background: rgba(255, 255, 255, 0.5);
+                /* slight background for visibility */
+            }
+        }
     </style>
 </head>
 

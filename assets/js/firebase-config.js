@@ -1,7 +1,9 @@
-import firebase from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js';
+import 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js';
 import 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js';
 import 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js';
 import 'https://www.gstatic.com/firebasejs/10.7.1/firebase-analytics-compat.js';
+
+const firebase = window.firebase;
 
 const firebaseConfig = {
     apiKey: "AIzaSyAOlPQ5PFmL0zxmGrGcuEBnqBXisph7kPU",
