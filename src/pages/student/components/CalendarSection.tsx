@@ -45,7 +45,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
         const set = new Set<string>();
         events.forEach((eventItem) => {
             if (eventItem.eventType === 'holiday') {
-                set.add(eventItem.start);
+                set.add(String(eventItem.start).split('T')[0]);
             }
         });
         return set;
@@ -65,6 +65,8 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             .fc-day-selected { background-color: #eff6ff !important; outline: 2px solid #3b82f6 !important; outline-offset: -2px !important; }
             .fc-day-sun a { color: #ef4444 !important; text-decoration: none; font-weight: 700; }
             .fc-day-sat a { color: #3b82f6 !important; text-decoration: none; font-weight: 700; }
+            .fc-day-holiday a { color: #ef4444 !important; text-decoration: none; font-weight: 700 !important; }
+            .fc-day-holiday .fc-daygrid-day-number { color: #ef4444 !important; font-weight: 700 !important; }
             .fc-toolbar-title { font-size: 1.25em !important; font-weight: 700; color: #1f2937; }
             .fc-button { background-color: #2563eb !important; border-color: #2563eb !important; font-weight: 600 !important; }
         `;
