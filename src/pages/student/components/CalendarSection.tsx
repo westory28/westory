@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
@@ -12,9 +12,17 @@ interface CalendarSectionProps {
     onEventClick: (event: CalendarEvent) => void;
     onSearchClick: () => void;
     calendarRef: React.RefObject<FullCalendar>;
+    selectedDate?: string | null;
 }
 
-const CalendarSection: React.FC<CalendarSectionProps> = ({ events, onDateClick, onEventClick, onSearchClick, calendarRef }) => {
+const CalendarSection: React.FC<CalendarSectionProps> = ({
+    events,
+    onDateClick,
+    onEventClick,
+    onSearchClick,
+    calendarRef,
+    selectedDate,
+}) => {
 
     // Convert logic for holidays to classNames or verify events structure
     // Since we pass pre-processed events from Dashboard, we can just use them.
@@ -33,13 +41,28 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({ events, onDateClick, 
         extendedProps: { ...e }
     }));
 
+    const holidayDateSet = useMemo(() => {
+        const set = new Set<string>();
+        events.forEach((eventItem) => {
+            if (eventItem.eventType === 'holiday') {
+                set.add(eventItem.start);
+            }
+        });
+        return set;
+    }, [events]);
+
+    const toLocalYmd = (date: Date) => {
+        const offset = date.getTimezoneOffset() * 60000;
+        return new Date(date.getTime() - offset).toISOString().split('T')[0];
+    };
+
     // Custom CSS for holiday text event
     useEffect(() => {
         const style = document.createElement('style');
         style.innerHTML = `
             .holiday-text-event { background-color: transparent !important; border: none !important; }
             .holiday-text-event .fc-event-title { color: #ef4444; font-size: 0.75rem; font-weight: 800; }
-            .fc-day-selected { background-color: #f3f4f6 !important; outline: 2px solid #3b82f6 !important; outline-offset: -2px !important; }
+            .fc-day-selected { background-color: #eff6ff !important; outline: 2px solid #3b82f6 !important; outline-offset: -2px !important; }
             .fc-day-sun a { color: #ef4444 !important; text-decoration: none; font-weight: 700; }
             .fc-day-sat a { color: #3b82f6 !important; text-decoration: none; font-weight: 700; }
             .fc-toolbar-title { font-size: 1.25em !important; font-weight: 700; color: #1f2937; }
@@ -82,9 +105,13 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({ events, onDateClick, 
                     dayMaxEvents={true}
                     fixedWeekCount={false}
                     showNonCurrentDates={false}
-                // dayCellClassNames logic mainly for holidays which we handle via events mostly, 
-                // or we can add logic to check holiday events on that day.
-                // Simplified for migration: rely on events rendering.
+                    dayCellClassNames={(arg) => {
+                        const dateStr = toLocalYmd(arg.date);
+                        const classes: string[] = [];
+                        if (holidayDateSet.has(dateStr)) classes.push('fc-day-holiday');
+                        if (selectedDate === dateStr) classes.push('fc-day-selected');
+                        return classes;
+                    }}
                 />
             </div>
         </div>

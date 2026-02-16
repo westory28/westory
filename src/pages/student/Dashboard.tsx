@@ -115,6 +115,7 @@ const StudentDashboard: React.FC = () => {
                         onEventClick={handleEventClick}
                         onSearchClick={() => setIsSearchOpen(true)}
                         calendarRef={calendarRef}
+                        selectedDate={selectedDate}
                     />
                 </div>
 
