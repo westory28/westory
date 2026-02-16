@@ -93,7 +93,8 @@
         <!-- Immediately apply URL tab param before page renders -->
         <script>
             (function () {
-                const t = new URLSearchParams(window.location.search).get('tab') || 'preview';
+                const urlParams = new URLSearchParams(window.location.search);
+                const t = urlParams.get('tab') || 'preview';
                 document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
                 const target = document.getElementById('tab-' + t);
                 if (target) target.classList.remove('hidden');
@@ -259,8 +260,8 @@
 
                 // Handle URL Tab Param
                 const urlParams = new URLSearchParams(window.location.search);
-                const tab = urlParams.get('tab');
-                if (tab) this.setTab(tab);
+                const tab = urlParams.get('tab') || 'preview'; // Default explicitly
+                this.setTab(tab);
             },
 
             updateSemesterBadge: function () {

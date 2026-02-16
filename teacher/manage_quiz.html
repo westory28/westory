@@ -684,8 +684,8 @@
 
                 // Handle URL Tab Param
                 const urlParams = new URLSearchParams(window.location.search);
-                const tab = urlParams.get('tab');
-                if (tab) this.setTab(tab);
+                const tab = urlParams.get('tab') || 'manage';
+                this.setTab(tab);
             },
 
             toggleSidebar: function (show) {
