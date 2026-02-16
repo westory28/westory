@@ -19,7 +19,10 @@ const db = getFirestore(app);
 let analytics = null;
 
 try {
-    analytics = getAnalytics(app);
+    const isBrowser = typeof window !== 'undefined';
+    if (isBrowser && firebaseConfig.measurementId) {
+        analytics = getAnalytics(app);
+    }
 } catch (e) {
     console.warn("Analytics not supported:", e);
 }

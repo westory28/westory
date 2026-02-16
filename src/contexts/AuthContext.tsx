@@ -5,8 +5,12 @@ import { auth, db } from '../lib/firebase';
 import { SystemConfig, InterfaceConfig, UserData } from '../types';
 
 interface AuthContextType {
+    // Backward-compatible alias for legacy pages.
+    user: User | null;
     currentUser: User | null;
     userData: UserData | null;
+    // Backward-compatible alias for legacy pages.
+    userConfig: SystemConfig | null;
     config: SystemConfig | null;
     interfaceConfig: InterfaceConfig | null;
     loading: boolean;
@@ -43,24 +47,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, []);
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (user) => {
-            setCurrentUser(user);
-            if (user) {
-                try {
-                    const userSnap = await getDoc(doc(db, 'users', user.uid));
-                    if (userSnap.exists()) {
-                        setUserData(userSnap.data() as UserData);
-                    }
-                } catch (e) {
-                    console.error("Failed to fetch user data", e);
-                }
-            } else {
-                setUserData(null);
-            }
+        let unsubscribe: () => void = () => undefined;
+        const loadingGuard = window.setTimeout(() => {
             setLoading(false);
-        });
+        }, 5000);
 
-        return unsubscribe;
+        try {
+            unsubscribe = onAuthStateChanged(auth, async (user) => {
+                setCurrentUser(user);
+                if (user) {
+                    try {
+                        const userSnap = await getDoc(doc(db, 'users', user.uid));
+                        if (userSnap.exists()) {
+                            setUserData(userSnap.data() as UserData);
+                        }
+                    } catch (e) {
+                        console.error("Failed to fetch user data", e);
+                    }
+                } else {
+                    setUserData(null);
+                }
+                setLoading(false);
+                window.clearTimeout(loadingGuard);
+            });
+        } catch (e) {
+            console.error("Failed to initialize auth listener", e);
+            setLoading(false);
+            window.clearTimeout(loadingGuard);
+        }
+
+        return () => {
+            window.clearTimeout(loadingGuard);
+            unsubscribe();
+        };
     }, []);
 
     const logout = async () => {
@@ -68,8 +87,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const value = {
+        user: currentUser,
         currentUser,
         userData,
+        userConfig: config,
         config,
         interfaceConfig,
         loading,
