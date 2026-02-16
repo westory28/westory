@@ -1,7 +1,7 @@
-import firebase from 'firebase/compat/app';
-import 'firebase/compat/auth';
-import 'firebase/compat/firestore';
-import 'firebase/compat/analytics';
+import firebase from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js';
+import 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js';
+import 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js';
+import 'https://www.gstatic.com/firebasejs/10.7.1/firebase-analytics-compat.js';
 
 const firebaseConfig = {
     apiKey: "AIzaSyAOlPQ5PFmL0zxmGrGcuEBnqBXisph7kPU",
