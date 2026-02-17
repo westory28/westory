@@ -71,10 +71,6 @@ header {
     .desktop-nav {
         display: flex !important;
     }
-
-    .nav-link {
-        margin: 0 0.85rem;
-    }
 }
 
 .nav-link {
@@ -89,6 +85,12 @@ header {
     border-bottom: 3px solid transparent;
     transition: all 0.2s;
     white-space: nowrap;
+}
+
+@media (min-width: 1024px) {
+    .nav-link {
+        margin: 0 0.85rem;
+    }
 }
 
 .nav-link:hover {
