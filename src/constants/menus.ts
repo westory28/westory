@@ -10,7 +10,10 @@ export interface MenuItem {
     children?: MenuChild[];
 }
 
-export const MENUS: Record<'student' | 'teacher', MenuItem[]> = {
+export type PortalType = 'student' | 'teacher';
+export type MenuConfig = Record<PortalType, MenuItem[]>;
+
+export const MENUS: MenuConfig = {
     student: [
         {
             name: '학습',
@@ -69,4 +72,53 @@ export const MENUS: Record<'student' | 'teacher', MenuItem[]> = {
             icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z',
         },
     ],
+};
+
+const deepCloneMenus = (menus: MenuConfig): MenuConfig =>
+    JSON.parse(JSON.stringify(menus)) as MenuConfig;
+
+const toSafeText = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
+
+const sanitizeChildren = (children: unknown): MenuChild[] => {
+    if (!Array.isArray(children)) return [];
+    return children
+        .map((child) => ({
+            name: toSafeText((child as MenuChild)?.name),
+            url: toSafeText((child as MenuChild)?.url),
+        }))
+        .filter((child) => child.name && child.url);
+};
+
+export const cloneDefaultMenus = (): MenuConfig => deepCloneMenus(MENUS);
+
+export const sanitizeMenuConfig = (raw: unknown): MenuConfig => {
+    const fallback = cloneDefaultMenus();
+    if (!raw || typeof raw !== 'object') {
+        return fallback;
+    }
+
+    const parsePortal = (portal: PortalType) => {
+        const source = (raw as Record<string, unknown>)[portal];
+        if (!Array.isArray(source)) {
+            return fallback[portal];
+        }
+
+        return source
+            .map((item) => ({
+                name: toSafeText((item as MenuItem)?.name),
+                url: toSafeText((item as MenuItem)?.url),
+                icon: toSafeText((item as MenuItem)?.icon),
+                children: sanitizeChildren((item as MenuItem)?.children),
+            }))
+            .filter((item) => item.name && item.url)
+            .map((item) => ({
+                ...item,
+                icon: item.icon || fallback[portal].find((x) => x.url === item.url)?.icon || '',
+            }));
+    };
+
+    return {
+        student: parsePortal('student'),
+        teacher: parsePortal('teacher'),
+    };
 };

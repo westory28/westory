@@ -1,7 +1,9 @@
 ﻿import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { MENUS } from '../../constants/menus';
+import { doc, getDoc } from 'firebase/firestore';
+import { MENUS, cloneDefaultMenus, sanitizeMenuConfig, type MenuConfig } from '../../constants/menus';
+import { db } from '../../lib/firebase';
 
 const SESSION_DURATION_SECONDS = 60 * 60;
 const SESSION_EXPIRY_KEY = 'sessionExpiry';
@@ -21,6 +23,7 @@ const Header: React.FC = () => {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [sessionExpiry, setSessionExpiry] = useState<number | null>(null);
     const [remainingSeconds, setRemainingSeconds] = useState(SESSION_DURATION_SECONDS);
+    const [menuConfig, setMenuConfig] = useState<MenuConfig>(() => cloneDefaultMenus());
     const timeoutHandledRef = useRef(false);
 
     const isReady = !!currentUser;
@@ -36,7 +39,7 @@ const Header: React.FC = () => {
             : (isTeacherUser ? 'teacher' : 'student');
 
     const isTeacherPortal = portal === 'teacher';
-    const menuItems = MENUS[portal] || [];
+    const menuItems = menuConfig[portal] || MENUS[portal] || [];
     const home = `/${portal}/dashboard`;
     const profileTarget = isTeacherPortal ? '/teacher/settings' : '/student/mypage';
     const profileLabel = `${displayName} ${isTeacherPortal ? '교사' : '학생'}`;
@@ -104,6 +107,24 @@ const Header: React.FC = () => {
     useEffect(() => {
         setMobileMenuOpen(false);
     }, [location.pathname, location.search]);
+
+    useEffect(() => {
+        const loadMenuConfig = async () => {
+            try {
+                const menuSnap = await getDoc(doc(db, 'site_settings', 'menu_config'));
+                if (menuSnap.exists()) {
+                    setMenuConfig(sanitizeMenuConfig(menuSnap.data()));
+                    return;
+                }
+            } catch (error) {
+                console.error('Failed to load menu config:', error);
+            }
+
+            setMenuConfig(cloneDefaultMenus());
+        };
+
+        void loadMenuConfig();
+    }, []);
 
     useEffect(() => {
         if (!currentUser) return;
