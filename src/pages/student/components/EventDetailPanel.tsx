@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useState } from 'react';
 import { CalendarEvent } from '../../../types';
 
 interface EventDetailPanelProps {
@@ -26,20 +26,15 @@ const TYPE_LABEL_MAP: Record<string, string> = {
 };
 
 const EventDetailPanel: React.FC<EventDetailPanelProps> = ({ selectedDate, events, onEventClick }) => {
-    const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
-
-    useEffect(() => {
-        setSelectedEventId(null);
-    }, [selectedDate]);
-
-    const selectedEvent = useMemo(
-        () => events.find((event) => event.id === selectedEventId) || null,
-        [events, selectedEventId],
-    );
+    const [detailModalEvent, setDetailModalEvent] = useState<CalendarEvent | null>(null);
+    const isTeacherMode = !!onEventClick;
 
     const handleSelectEvent = (event: CalendarEvent) => {
-        setSelectedEventId(event.id);
-        onEventClick?.(event);
+        if (isTeacherMode) {
+            onEventClick?.(event);
+            return;
+        }
+        setDetailModalEvent(event);
     };
 
     const formatDateHeader = (dateStr: string) => {
@@ -95,7 +90,7 @@ const EventDetailPanel: React.FC<EventDetailPanelProps> = ({ selectedDate, event
                         return (
                             <div
                                 key={event.id}
-                                className={`group p-3 border-l-4 mb-3 rounded-r-lg transition cursor-pointer ${selectedEventId === event.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'}`}
+                                className="group p-3 border-l-4 mb-3 rounded-r-lg transition cursor-pointer border-gray-200 bg-gray-50 hover:bg-gray-100"
                                 onClick={() => handleSelectEvent(event)}
                                 role="button"
                                 tabIndex={0}
@@ -105,7 +100,7 @@ const EventDetailPanel: React.FC<EventDetailPanelProps> = ({ selectedDate, event
                                         handleSelectEvent(event);
                                     }
                                 }}
-                                title="클릭하면 상세 일정 내용을 표시합니다"
+                                title={isTeacherMode ? '클릭하여 일정 수정' : '클릭하면 상세 일정 내용을 표시합니다'}
                             >
                                 <div className="flex items-center gap-2 mb-1">
                                     <span className="text-[10px] text-white px-1.5 py-0.5 rounded font-bold" style={{ backgroundColor: bgColor }}>
@@ -123,21 +118,44 @@ const EventDetailPanel: React.FC<EventDetailPanelProps> = ({ selectedDate, event
                 )}
             </div>
 
-            {selectedDate && events.length > 0 && (
+            {!isTeacherMode && selectedDate && events.length > 0 && (
                 <div className="mt-3 border-t border-gray-100 pt-3">
-                    {selectedEvent ? (
-                        <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
-                            <div className="flex items-center gap-2 mb-1">
-                                <i className="fas fa-file-alt text-blue-500 text-xs"></i>
-                                <p className="text-sm font-bold text-blue-900">{selectedEvent.title}</p>
-                            </div>
-                            <p className="text-xs text-blue-700 whitespace-pre-wrap">
-                                {selectedEvent.description?.trim() || '상세 내용이 등록되지 않았습니다.'}
-                            </p>
+                    <p className="text-xs text-gray-400 px-1">일정 바를 클릭하면 상세 내용이 팝업으로 표시됩니다.</p>
+                </div>
+            )}
+
+            {!isTeacherMode && detailModalEvent && (
+                <div
+                    className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+                    onClick={() => setDetailModalEvent(null)}
+                >
+                    <div
+                        className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between p-4 border-b border-gray-100">
+                            <h4 className="font-bold text-gray-900">일정 상세</h4>
+                            <button
+                                onClick={() => setDetailModalEvent(null)}
+                                className="text-gray-400 hover:text-gray-700 transition"
+                                aria-label="팝업 닫기"
+                            >
+                                <i className="fas fa-times"></i>
+                            </button>
                         </div>
-                    ) : (
-                        <p className="text-xs text-gray-400 px-1">일정 바를 클릭하면 상세 내용이 표시됩니다.</p>
-                    )}
+                        <div className="p-4 space-y-2">
+                            <p className="text-sm font-bold text-gray-900">{detailModalEvent.title}</p>
+                            <p className="text-xs text-gray-500">
+                                {detailModalEvent.start}
+                                {detailModalEvent.end && detailModalEvent.start !== detailModalEvent.end ? ` ~ ${detailModalEvent.end}` : ''}
+                            </p>
+                            <div className="bg-gray-50 border border-gray-100 rounded-lg p-3">
+                                <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                                    {detailModalEvent.description?.trim() || '상세 내용이 등록되지 않았습니다.'}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
