@@ -71,6 +71,10 @@ header {
     .desktop-nav {
         display: flex !important;
     }
+
+    .nav-link {
+        margin: 0 0.85rem;
+    }
 }
 
 .nav-link {
