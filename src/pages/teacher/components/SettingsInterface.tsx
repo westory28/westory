@@ -15,6 +15,15 @@ const DEFAULT_INTERFACE_CONFIG = {
 };
 
 const DEFAULT_PARENT_ICON = 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253';
+const SITEMAP_HEADER_COLORS = [
+    'bg-blue-700',
+    'bg-amber-600',
+    'bg-lime-700',
+    'bg-sky-700',
+    'bg-indigo-700',
+    'bg-cyan-700',
+    'bg-rose-700',
+];
 
 const normalizeMenuUrl = (value: string) => {
     const trimmed = value.trim();
@@ -43,6 +52,9 @@ const SettingsInterface: React.FC = () => {
         teacher: { name: '', url: '' },
     });
     const [childDrafts, setChildDrafts] = useState<Record<string, { name: string; url: string }>>({});
+
+    const getSitemapHeaderClass = (index: number) =>
+        SITEMAP_HEADER_COLORS[index % SITEMAP_HEADER_COLORS.length];
 
     useEffect(() => {
         const loadSettings = async () => {
@@ -422,6 +434,47 @@ const SettingsInterface: React.FC = () => {
                         <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-sm text-blue-700">
                             <i className="fas fa-sitemap mr-1"></i>
                             사이트맵 구조로 상위/하위 메뉴를 정리합니다. 이름 변경, 순서 이동, 삭제 후 저장을 눌러주세요.
+                        </div>
+
+                        <div className="border border-gray-200 rounded-xl p-4 bg-white space-y-5">
+                            <div className="flex items-center justify-between">
+                                <h4 className="text-sm font-bold text-gray-700">전체 사이트맵 미리보기</h4>
+                                <span className="text-xs text-gray-400">현재 편집 상태 기준</span>
+                            </div>
+
+                            {(['student', 'teacher'] as PortalType[]).map((portal) => (
+                                <div key={`sitemap-preview-${portal}`} className="space-y-3">
+                                    <div className="flex items-center gap-2">
+                                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${portal === 'student' ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'}`}>
+                                            {portal === 'student' ? '학생 대시보드' : '교사 대시보드'}
+                                        </span>
+                                        <span className="text-xs text-gray-500">상위 {menuConfig[portal].length}개</span>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                                        {menuConfig[portal].map((item, idx) => (
+                                            <div key={`preview-${portal}-${item.url}-${idx}`} className="border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
+                                                <div className={`px-3 py-2.5 text-white text-sm font-bold ${getSitemapHeaderClass(idx)}`}>
+                                                    {item.name}
+                                                </div>
+                                                <div className="p-3 bg-white min-h-[110px]">
+                                                    {item.children && item.children.length > 0 ? (
+                                                        <ul className="space-y-1.5">
+                                                            {item.children.map((child, childIdx) => (
+                                                                <li key={`preview-child-${child.url}-${childIdx}`} className="text-sm text-gray-700 border-b border-dashed border-gray-200 pb-1">
+                                                                    • {child.name}
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    ) : (
+                                                        <p className="text-sm text-gray-400">하위 메뉴 없음</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
                         </div>
 
                         <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
