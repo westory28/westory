@@ -35,8 +35,8 @@ export interface CalendarEvent {
     description?: string;
     start: string;
     end?: string;
-    eventType: 'exam' | 'performance' | 'event' | 'holiday';
-    targetType: 'all' | 'class';
+    eventType: 'exam' | 'performance' | 'event' | 'diagnosis' | 'formative' | 'holiday';
+    targetType: 'all' | 'common' | 'class';
     targetClass?: string;
     dDay?: number;
 }

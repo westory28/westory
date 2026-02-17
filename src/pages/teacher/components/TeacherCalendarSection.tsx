@@ -23,6 +23,14 @@ interface TeacherCalendarSectionProps {
 
 type HolidayItem = { title: string; start: string; eventType?: 'holiday' };
 
+const EVENT_COLOR_MAP: Record<string, string> = {
+    exam: '#ef4444',
+    performance: '#f97316',
+    event: '#10b981',
+    diagnosis: '#3b82f6',
+    formative: '#3b82f6',
+};
+
 const DEFAULT_2026_HOLIDAYS: HolidayItem[] = [
     { title: '신정', start: '2026-01-01', eventType: 'holiday' },
     { title: '설날 연휴', start: '2026-02-16', eventType: 'holiday' },
@@ -57,8 +65,8 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
         title: e.title,
         start: e.start,
         end: e.end,
-        backgroundColor: e.eventType === 'holiday' ? 'transparent' : undefined,
-        borderColor: 'transparent',
+        backgroundColor: e.eventType === 'holiday' ? 'transparent' : (EVENT_COLOR_MAP[e.eventType] || '#6b7280'),
+        borderColor: e.eventType === 'holiday' ? 'transparent' : (EVENT_COLOR_MAP[e.eventType] || '#6b7280'),
         textColor: e.eventType === 'holiday' ? '#ef4444' : undefined,
         classNames: e.eventType === 'holiday' ? ['holiday-text-event'] : [],
         extendedProps: { ...e },

@@ -62,11 +62,13 @@ const TeacherDashboard: React.FC = () => {
     const handleDateClick = (dateStr: string) => {
         setSelectedDate(dateStr);
         const filtered = events.filter(e => {
-            if (!e.end) return e.start === dateStr;
             const start = new Date(e.start);
-            const end = new Date(e.end);
+            const end = new Date(e.end || e.start);
             const target = new Date(dateStr);
-            return target >= start && target < end;
+            start.setHours(0, 0, 0, 0);
+            end.setHours(0, 0, 0, 0);
+            target.setHours(0, 0, 0, 0);
+            return target >= start && target <= end;
         });
         setDailyEvents(filtered);
     };

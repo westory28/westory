@@ -6,6 +6,14 @@ import listPlugin from '@fullcalendar/list';
 import { CalendarEvent } from '../../../types';
 // import '@fullcalendar/react/dist/vdom'; // Not needed for v6+
 
+const EVENT_COLOR_MAP: Record<string, string> = {
+    exam: '#ef4444',
+    performance: '#f97316',
+    event: '#10b981',
+    diagnosis: '#3b82f6',
+    formative: '#3b82f6',
+};
+
 interface CalendarSectionProps {
     events: CalendarEvent[];
     onDateClick: (dateStr: string) => void;
@@ -34,8 +42,8 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
         title: e.title,
         start: e.start,
         end: e.end,
-        backgroundColor: e.eventType === 'holiday' ? 'transparent' : undefined, // Handled by CSS class usually or specific prop
-        borderColor: 'transparent',
+        backgroundColor: e.eventType === 'holiday' ? 'transparent' : (EVENT_COLOR_MAP[e.eventType] || '#6b7280'),
+        borderColor: e.eventType === 'holiday' ? 'transparent' : (EVENT_COLOR_MAP[e.eventType] || '#6b7280'),
         textColor: e.eventType === 'holiday' ? '#ef4444' : undefined,
         classNames: e.eventType === 'holiday' ? ['holiday-text-event'] : [],
         extendedProps: { ...e }
