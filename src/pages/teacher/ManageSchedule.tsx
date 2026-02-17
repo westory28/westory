@@ -37,6 +37,7 @@ const ManageSchedule = () => {
         targetClass: '2-1',
         description: ''
     });
+    const [endEnabled, setEndEnabled] = useState(false);
     const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
     const calendarRef = useRef<FullCalendar>(null);
 
@@ -174,6 +175,7 @@ const ManageSchedule = () => {
                 targetClass: eventData.targetClass || '2-1',
                 description: eventData.description || ''
             });
+            setEndEnabled(Boolean(eventData.end && eventData.end !== eventData.start));
         } else {
             setIsEditMode(false);
             setSelectedEventId(null);
@@ -186,6 +188,7 @@ const ManageSchedule = () => {
                 targetClass: '2-1',
                 description: ''
             });
+            setEndEnabled(false);
         }
         setModalOpen(true);
     };
@@ -193,6 +196,15 @@ const ManageSchedule = () => {
     const closeModal = () => {
         setModalOpen(false);
     };
+
+    useEffect(() => {
+        if (!modalOpen || formData.eventType !== 'exam' || endEnabled) return;
+        setEndEnabled(true);
+        setFormData((prev) => ({
+            ...prev,
+            end: prev.end || prev.start || '',
+        }));
+    }, [modalOpen, formData.eventType, endEnabled]);
 
     const handleSave = async () => {
         if (!formData.title || !formData.start) {
@@ -202,8 +214,10 @@ const ManageSchedule = () => {
         if (!currentConfig) return;
 
         const calRef = collection(db, 'years', currentConfig.year, 'calendar');
+        const finalEnd = endEnabled ? (formData.end || formData.start) : formData.start;
         const dataToSave = {
             ...formData,
+            end: finalEnd,
             updatedAt: serverTimestamp()
         };
 
@@ -313,24 +327,56 @@ const ManageSchedule = () => {
                                 />
                             </div>
 
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                            <div className={`grid ${endEnabled ? 'grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]' : 'grid-cols-[minmax(0,1fr)_78px]'} md:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)] gap-2 items-end`}>
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 mb-1">시작 날짜</label>
                                     <input
                                         type="date"
-                                        className="w-full min-w-0 border rounded p-2 text-sm"
+                                        className="w-full min-w-0 border rounded p-2 text-xs md:text-sm"
                                         value={formData.start}
-                                        onChange={(e) => setFormData({ ...formData, start: e.target.value })}
+                                        onChange={(e) => {
+                                            const nextStart = e.target.value;
+                                            setFormData((prev) => ({
+                                                ...prev,
+                                                start: nextStart,
+                                                end: endEnabled && !prev.end ? nextStart : prev.end,
+                                            }));
+                                        }}
                                     />
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 mb-1">종료 날짜 (선택)</label>
                                     <input
                                         type="date"
-                                        className="w-full min-w-0 border rounded p-2 text-sm"
+                                        className={`w-full min-w-0 border rounded p-2 text-xs md:text-sm ${endEnabled ? 'opacity-100' : 'opacity-70 cursor-pointer'}`}
                                         value={formData.end}
+                                        disabled={!endEnabled}
                                         onChange={(e) => setFormData({ ...formData, end: e.target.value })}
                                     />
+                                    {!endEnabled && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setEndEnabled(true);
+                                                setFormData((prev) => ({ ...prev, end: prev.end || prev.start }));
+                                            }}
+                                            className="mt-1 text-[10px] text-gray-500 hover:text-gray-700 underline"
+                                        >
+                                            종료 활성화
+                                        </button>
+                                    )}
+                                    {endEnabled && formData.eventType !== 'exam' && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setEndEnabled(false);
+                                                setFormData((prev) => ({ ...prev, end: '' }));
+                                            }}
+                                            className="mt-1 text-[10px] text-gray-500 hover:text-gray-700 underline"
+                                        >
+                                            종료 비활성화
+                                        </button>
+                                    )}
                                 </div>
                             </div>
 
