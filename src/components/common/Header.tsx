@@ -54,6 +54,26 @@ const Header: React.FC = () => {
         return true;
     };
 
+    const isChildActive = (childUrl: string, siblings: Array<{ url: string }>) => {
+        const [childPath, childQuery] = childUrl.split('?');
+        if (!location.pathname.startsWith(childPath)) return false;
+
+        if (childQuery) {
+            return isActive(childUrl);
+        }
+
+        const hasQuerySiblingOnSamePath = siblings.some((sibling) => {
+            const [siblingPath, siblingQuery] = sibling.url.split('?');
+            return siblingPath === childPath && !!siblingQuery;
+        });
+
+        if (hasQuerySiblingOnSamePath) {
+            return location.search.length === 0;
+        }
+
+        return true;
+    };
+
     const performLogout = async (isTimeout: boolean) => {
         try {
             localStorage.removeItem(SESSION_EXPIRY_KEY);
@@ -132,7 +152,7 @@ const Header: React.FC = () => {
                     <nav className="desktop-nav ml-4">
                         {menuItems.map((item, idx) => {
                             const hasChildren = !!item.children?.length;
-                            const active = isActive(item.url) || !!item.children?.some((child) => isActive(child.url));
+                            const active = isActive(item.url) || !!item.children?.some((child) => isChildActive(child.url, item.children || []));
 
                             if (!hasChildren) {
                                 return (
@@ -154,7 +174,7 @@ const Header: React.FC = () => {
                                                 <Link
                                                     key={`${child.url}-${childIdx}`}
                                                     to={child.url}
-                                                    className={`block px-2.5 py-3 text-[13px] border-b border-gray-50 last:border-0 whitespace-nowrap font-bold ${isActive(child.url) ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'}`}
+                                                    className={`block px-2.5 py-3 text-[13px] border-b border-gray-50 last:border-0 whitespace-nowrap font-bold ${isChildActive(child.url, item.children || []) ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'}`}
                                                 >
                                                     {child.name}
                                                 </Link>
@@ -226,7 +246,7 @@ const Header: React.FC = () => {
                     <div key={`${item.url}-mobile-${idx}`}>
                         <Link
                             to={item.url}
-                            className={`mobile-link ${isActive(item.url) ? 'active' : ''}`}
+                            className={`mobile-link ${isActive(item.url) || !!item.children?.some((child) => isChildActive(child.url, item.children || [])) ? 'active' : ''}`}
                             onClick={() => setMobileMenuOpen(false)}
                         >
                             {item.name}
@@ -237,7 +257,7 @@ const Header: React.FC = () => {
                                     <Link
                                         key={`${child.url}-mobile-child-${childIdx}`}
                                         to={child.url}
-                                        className={`block pl-12 pr-4 py-1.5 text-sm rounded-r-full mr-2 font-bold ${isActive(child.url) ? 'text-blue-600 bg-blue-50' : 'text-gray-500 hover:text-blue-600 hover:bg-gray-100'}`}
+                                        className={`block pl-12 pr-4 py-1.5 text-sm rounded-r-full mr-2 font-bold ${isChildActive(child.url, item.children || []) ? 'text-blue-600 bg-blue-50' : 'text-gray-500 hover:text-blue-600 hover:bg-gray-100'}`}
                                         onClick={() => setMobileMenuOpen(false)}
                                     >
                                         <i className="fas fa-angle-right mr-2 text-xs opacity-50"></i>
