@@ -3,6 +3,7 @@ import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../contexts/AuthContext';
 import NoticeModal from './NoticeModal';
+import { getYearSemester } from '../../../lib/semesterScope';
 
 interface Notice {
     id: string;
@@ -22,9 +23,9 @@ const TeacherNoticeBoard: React.FC = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
 
     useEffect(() => {
-        if (!config || !config.year || !config.semester) return;
+        const { year, semester } = getYearSemester(config);
 
-        const path = `years/${config.year}/semesters/${config.semester}/notices`;
+        const path = `years/${year}/semesters/${semester}/notices`;
         const q = query(collection(db, path), orderBy('createdAt', 'desc'));
 
         const unsubscribe = onSnapshot(q, (snapshot) => {

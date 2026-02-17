@@ -5,6 +5,7 @@ import { MENUS } from '../../constants/menus';
 
 const SESSION_DURATION_SECONDS = 60 * 60;
 const SESSION_EXPIRY_KEY = 'sessionExpiry';
+const TEACHER_EMAIL = 'westoria28@gmail.com';
 
 const formatCountdown = (seconds: number) => {
     const safe = Math.max(0, seconds);
@@ -22,13 +23,15 @@ const Header: React.FC = () => {
     const [remainingSeconds, setRemainingSeconds] = useState(SESSION_DURATION_SECONDS);
     const timeoutHandledRef = useRef(false);
 
-    const isReady = !!currentUser && !!userData;
+    const isReady = !!currentUser;
+    const isTeacherUser = userData?.role === 'teacher' || currentUser?.email === TEACHER_EMAIL;
+    const displayName = userData?.name || currentUser?.displayName || '사용자';
 
     const portal: 'teacher' | 'student' = location.pathname.startsWith('/teacher')
         ? 'teacher'
         : location.pathname.startsWith('/student')
             ? 'student'
-            : (userData?.role === 'teacher' ? 'teacher' : 'student');
+            : (isTeacherUser ? 'teacher' : 'student');
 
     const isTeacherPortal = portal === 'teacher';
     const menuItems = MENUS[portal] || [];
@@ -98,7 +101,7 @@ const Header: React.FC = () => {
         return () => window.clearInterval(timerId);
     }, [currentUser, sessionExpiry]);
 
-    if (!isReady || !userData) return null;
+    if (!isReady) return null;
 
     return (
         <header>
@@ -162,12 +165,18 @@ const Header: React.FC = () => {
 
                     {isTeacherPortal ? (
                         <span className="user-greeting">
-                            {userData.name} 교사
+                            {displayName} 교사
                         </span>
                     ) : (
                         <Link to="/student/mypage" className="user-greeting inline-flex items-center gap-2 hover:text-blue-600 transition" title="마이페이지">
                             <i className="fas fa-user-circle"></i>
-                            <span>{userData.name} 학생</span>
+                            <span>{displayName}</span>
+                        </Link>
+                    )}
+
+                    {!isTeacherPortal && (
+                        <Link to="/student/mypage" className="md:hidden text-gray-500 hover:text-blue-600 transition p-1" title="마이페이지">
+                            <i className="fas fa-user-circle text-lg"></i>
                         </Link>
                     )}
 

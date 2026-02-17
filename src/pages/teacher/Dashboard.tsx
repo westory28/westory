@@ -9,6 +9,7 @@ import TeacherCalendarSection from './components/TeacherCalendarSection';
 import EventDetailPanel from '../student/components/EventDetailPanel'; // Reuse student panel for basic viewing
 import SearchModal from '../student/components/SearchModal'; // Reuse search modal
 import EventModal from './components/EventModal';
+import { getYearSemester } from '../../lib/semesterScope';
 
 const TeacherDashboard: React.FC = () => {
     const { config } = useAuth();
@@ -27,9 +28,9 @@ const TeacherDashboard: React.FC = () => {
 
     // Fetch Events real-time
     useEffect(() => {
-        if (!config || !config.year || !config.semester) return;
+        const { year, semester } = getYearSemester(config);
 
-        const path = `years/${config.year}/semesters/${config.semester}/calendar`;
+        const path = `years/${year}/semesters/${semester}/calendar`;
         const unsubscribe = onSnapshot(collection(db, path), (snapshot) => {
             const loadedEvents: CalendarEvent[] = [];
 

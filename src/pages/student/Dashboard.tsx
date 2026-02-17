@@ -8,35 +8,32 @@ import NoticeBoard from './components/NoticeBoard';
 import CalendarSection from './components/CalendarSection';
 import EventDetailPanel from './components/EventDetailPanel';
 import SearchModal from './components/SearchModal';
+import { getYearSemester } from '../../lib/semesterScope';
 
 const StudentDashboard: React.FC = () => {
     const { userData, config } = useAuth();
     const [events, setEvents] = useState<CalendarEvent[]>([]);
     const [selectedDate, setSelectedDate] = useState<string | null>(null);
     const [dailyEvents, setDailyEvents] = useState<CalendarEvent[]>([]);
-    const [welcomeText, setWelcomeText] = useState('학생 대시보드');
+    const [welcomeText, setWelcomeText] = useState('0학년 00반의 대시보드');
     const [isSearchOpen, setIsSearchOpen] = useState(false);
 
     const calendarRef = useRef<FullCalendar>(null);
 
     // Initial welcome text
     useEffect(() => {
-        if (userData) {
-            if (userData.grade && userData.class) {
-                setWelcomeText(`${userData.grade}학년 ${userData.class}반의 대시보드`);
-            } else {
-                setWelcomeText(`${userData.name || '학생'}님의 대시보드`);
-            }
-        }
+        const gradeLabel = userData?.grade ? String(userData.grade) : '0';
+        const classLabel = userData?.class ? String(userData.class) : '00';
+        setWelcomeText(`${gradeLabel}학년 ${classLabel}반의 대시보드`);
     }, [userData]);
 
     // Fetch Events real-time
     useEffect(() => {
-        if (!config || !userData) return;
+        const { year, semester } = getYearSemester(config);
 
-        const path = `years/${config.year}/semesters/${config.semester}/calendar`;
+        const path = `years/${year}/semesters/${semester}/calendar`;
         const unsubscribe = onSnapshot(collection(db, path), (snapshot) => {
-            const userClassStr = (userData.grade && userData.class) ? `${userData.grade}-${userData.class}` : null;
+            const userClassStr = (userData?.grade && userData?.class) ? `${userData.grade}-${userData.class}` : null;
             const loadedEvents: CalendarEvent[] = [];
 
             snapshot.forEach(doc => {

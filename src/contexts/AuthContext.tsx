@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { SystemConfig, InterfaceConfig, UserData } from '../types';
 
@@ -59,11 +59,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 setCurrentUser(user);
                 if (user) {
                     try {
-                        const userSnap = await getDoc(doc(db, 'users', user.uid));
+                        const userRef = doc(db, 'users', user.uid);
+                        const userSnap = await getDoc(userRef);
+                        const normalizedRole = user.email === TEACHER_EMAIL ? 'teacher' : 'student';
                         if (userSnap.exists()) {
                             const raw = userSnap.data() as UserData;
-                            const normalizedRole = user.email === TEACHER_EMAIL ? 'teacher' : raw.role;
-                            setUserData({ ...raw, role: normalizedRole });
+                            setUserData({
+                                ...raw,
+                                uid: user.uid,
+                                role: user.email === TEACHER_EMAIL ? 'teacher' : (raw.role || normalizedRole),
+                            });
+                        } else {
+                            const bootstrapUser: UserData = {
+                                uid: user.uid,
+                                email: user.email || '',
+                                name: user.displayName || '사용자',
+                                role: normalizedRole,
+                                grade: normalizedRole === 'student' ? '0' : '',
+                                class: normalizedRole === 'student' ? '00' : '',
+                                number: normalizedRole === 'student' ? '0' : '',
+                            };
+                            await setDoc(userRef, {
+                                ...bootstrapUser,
+                                createdAt: serverTimestamp(),
+                                lastLogin: serverTimestamp(),
+                            }, { merge: true });
+                            setUserData(bootstrapUser);
                         }
                     } catch (e) {
                         console.error("Failed to fetch user data", e);

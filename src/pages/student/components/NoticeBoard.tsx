@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../contexts/AuthContext';
+import { getYearSemester } from '../../../lib/semesterScope';
 
 interface Notice {
     id: string;
@@ -19,13 +20,13 @@ const NoticeBoard: React.FC = () => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (!config || !config.year || !config.semester || !userData) return;
+        const { year, semester } = getYearSemester(config);
 
-        const path = `years/${config.year}/semesters/${config.semester}/notices`;
+        const path = `years/${year}/semesters/${semester}/notices`;
         const q = query(collection(db, path), orderBy('createdAt', 'desc'));
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const userClassStr = (userData.grade && userData.class) ? `${userData.grade}-${userData.class}` : null;
+            const userClassStr = (userData?.grade && userData?.class) ? `${userData.grade}-${userData.class}` : null;
 
             const loadedNotices: Notice[] = [];
             snapshot.forEach((doc) => {
