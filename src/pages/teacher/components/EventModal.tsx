@@ -123,14 +123,14 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
                         />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                         <div>
                             <label className="block text-sm font-bold text-gray-700 mb-1">시작 날짜</label>
                             <input
                                 type="date"
                                 value={start}
                                 onChange={e => setStart(e.target.value)}
-                                className="w-full border border-gray-300 rounded-lg p-2.5 outline-none"
+                                className="w-full min-w-0 border border-gray-300 rounded-lg p-2.5 outline-none"
                             />
                         </div>
                         <div>
@@ -139,7 +139,7 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
                                 type="date"
                                 value={end}
                                 onChange={e => setEnd(e.target.value)}
-                                className="w-full border border-gray-300 rounded-lg p-2.5 outline-none"
+                                className="w-full min-w-0 border border-gray-300 rounded-lg p-2.5 outline-none"
                             />
                         </div>
                     </div>
