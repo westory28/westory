@@ -572,13 +572,6 @@ const Login: React.FC = () => {
                             학생 로그인 (계정 선택)
                         </button>
                         <button
-                            onClick={() => handleLogin('teacher')}
-                            disabled={authBusy}
-                            className="w-full bg-white border border-gray-300 px-6 py-3 rounded-full text-sm font-bold text-gray-700 shadow hover:bg-gray-50 transition disabled:opacity-60 disabled:cursor-not-allowed"
-                        >
-                            관리자 로그인 (계정 선택)
-                        </button>
-                        <button
                             onClick={async () => {
                                 clearRoleCache();
                                 await signOut(auth);
@@ -598,14 +591,6 @@ const Login: React.FC = () => {
                         >
                             <img src="https://fonts.gstatic.com/s/i/productlogos/googleg/v6/24px.svg" width={24} height={24} alt="Google" />
                             학생 로그인
-                        </button>
-                        <button
-                            onClick={() => handleLogin('teacher')}
-                            disabled={authBusy}
-                            className="w-full bg-white border border-gray-300 px-8 py-4 rounded-full text-lg font-bold text-gray-700 shadow hover:bg-gray-50 transition flex items-center justify-center gap-3 disabled:opacity-60 disabled:cursor-not-allowed"
-                        >
-                            <i className="fas fa-chalkboard-teacher"></i>
-                            관리자 로그인
                         </button>
                     </div>
                 )}
