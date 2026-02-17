@@ -137,7 +137,7 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
                     </div>
 
                     <div className="flex items-end gap-1.5 flex-nowrap overflow-hidden">
-                        <div className="flex-1 min-w-0">
+                        <div className="w-[55%] min-w-0">
                             <label className="block text-[11px] md:text-sm font-bold text-gray-700 mb-1">시작 날짜</label>
                             <input
                                 type="date"
@@ -149,10 +149,10 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
                                         setEnd(nextStart);
                                     }
                                 }}
-                                className="w-full min-w-0 border border-gray-300 rounded-lg p-2 text-xs md:text-sm md:p-2.5 outline-none"
+                                className="w-full min-w-0 border border-gray-300 rounded-lg p-1.5 text-[10px] md:text-sm md:p-2.5 outline-none"
                             />
                         </div>
-                        <div className={`${endEnabled ? 'w-[39%] min-w-[92px]' : 'w-[60px]'} shrink-0`}>
+                        <div className={`${endEnabled ? 'w-[45%] min-w-[80px]' : 'w-[56px]'} shrink-0`}>
                             <label className="block text-[10px] md:text-xs font-bold text-gray-500 mb-1">{endEnabled ? '종료 날짜' : '종료'}</label>
                             {endEnabled ? (
                                 <div className="flex items-center gap-1">
@@ -160,7 +160,7 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
                                         type="date"
                                         value={end}
                                         onChange={(e) => setEnd(e.target.value)}
-                                        className="w-full min-w-0 border border-gray-300 rounded-lg p-2 text-xs md:text-sm md:p-2.5 outline-none"
+                                        className="w-full min-w-0 border border-gray-300 rounded-lg p-1.5 text-[10px] md:text-sm md:p-2.5 outline-none"
                                     />
                                     {eventType !== 'exam' && (
                                         <button

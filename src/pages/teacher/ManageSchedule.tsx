@@ -328,11 +328,11 @@ const ManageSchedule = () => {
                             </div>
 
                             <div className="flex items-end gap-1.5 flex-nowrap overflow-hidden">
-                                <div className="flex-1 min-w-0">
+                                <div className="w-[55%] min-w-0">
                                     <label className="block text-xs font-bold text-gray-500 mb-1">시작 날짜</label>
                                     <input
                                         type="date"
-                                        className="w-full min-w-0 border rounded p-2 text-xs md:text-sm"
+                                        className="w-full min-w-0 border rounded p-1.5 text-[10px] md:text-sm"
                                         value={formData.start}
                                         onChange={(e) => {
                                             const nextStart = e.target.value;
@@ -344,11 +344,11 @@ const ManageSchedule = () => {
                                         }}
                                     />
                                 </div>
-                                <div className={`${endEnabled ? 'w-[39%] min-w-[92px]' : 'w-[60px]'} shrink-0`}>
+                                <div className={`${endEnabled ? 'w-[45%] min-w-[80px]' : 'w-[56px]'} shrink-0`}>
                                     <label className="block text-xs font-bold text-gray-500 mb-1">종료 날짜 (선택)</label>
                                     <input
                                         type="date"
-                                        className={`w-full min-w-0 border rounded p-2 text-xs md:text-sm ${endEnabled ? 'opacity-100' : 'opacity-70 cursor-pointer'}`}
+                                        className={`w-full min-w-0 border rounded p-1.5 text-[10px] md:text-sm ${endEnabled ? 'opacity-100' : 'opacity-70 cursor-pointer'}`}
                                         value={formData.end}
                                         disabled={!endEnabled}
                                         onChange={(e) => setFormData({ ...formData, end: e.target.value })}
