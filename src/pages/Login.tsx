@@ -92,7 +92,7 @@ const Login: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 relative">
-            <div className="h-screen flex flex-col items-center justify-center px-4">
+            <div className="min-h-screen md:h-screen flex flex-col items-center justify-center px-4 pb-24 md:pb-0">
                 <div className="text-5xl mb-4 animate-bounce">{interfaceConfig?.mainEmoji || '📚'}</div>
                 <h1 className="text-6xl font-black tracking-tight mb-3">
                     <span className="text-blue-600">We</span><span className="text-amber-500">story</span>
@@ -108,13 +108,20 @@ const Login: React.FC = () => {
                 </button>
             </div>
 
-            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 text-xs">
+            <div className="absolute bottom-6 md:bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 text-xs px-4 md:px-0 whitespace-nowrap">
                 <button onClick={() => showPolicy('terms')} className="text-gray-400 hover:text-gray-600">이용 약관</button>
                 <span className="text-gray-300">|</span>
                 <button onClick={() => showPolicy('privacy')} className="text-gray-400 hover:text-gray-600">개인정보 처리 방침</button>
             </div>
 
-            <div className="absolute bottom-8 right-8">
+            <div className="absolute bottom-14 left-1/2 -translate-x-1/2 md:hidden">
+                <button onClick={() => handleLogin('teacher')} className="text-gray-400 hover:text-gray-700 text-xs font-semibold px-3 py-2 rounded hover:bg-gray-200/60 transition whitespace-nowrap">
+                    <i className="fas fa-chalkboard-teacher mr-1"></i>
+                    관리자 로그인
+                </button>
+            </div>
+
+            <div className="absolute bottom-8 right-8 hidden md:block">
                 <button onClick={() => handleLogin('teacher')} className="text-gray-400 hover:text-gray-700 text-xs font-semibold px-3 py-2 rounded hover:bg-gray-200/60 transition">
                     <i className="fas fa-chalkboard-teacher mr-1"></i>
                     관리자 로그인

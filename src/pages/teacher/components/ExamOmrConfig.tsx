@@ -105,18 +105,18 @@ const ExamOmrConfig: React.FC = () => {
     return (
         <div className="h-full relative pb-20">
             {/* Bottom Floater */}
-            <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-white border border-gray-200 shadow-2xl rounded-2xl px-6 py-3 flex items-center gap-4 z-50 animate-fadeUp">
-                <div className="flex items-center gap-3 text-sm font-bold">
+            <div className="fixed bottom-3 md:bottom-4 left-1/2 -translate-x-1/2 bg-white border border-gray-200 shadow-2xl rounded-2xl px-3 md:px-6 py-2.5 md:py-3 w-[calc(100%-1rem)] max-w-[720px] md:w-auto flex items-center justify-between md:justify-center gap-3 md:gap-4 z-50 animate-fadeUp">
+                <div className="flex items-center gap-2 md:gap-3 text-xs md:text-sm font-bold">
                     <span className="text-gray-500">총점</span>
-                    <span className="text-2xl font-extrabold text-blue-600">{getTotals().score}</span>
+                    <span className="text-xl md:text-2xl font-extrabold text-blue-600">{getTotals().score}</span>
                     <span className="text-gray-400">점</span>
                     <span className="mx-1 text-gray-300">|</span>
                     <span className="text-gray-500">문항</span>
-                    <span className="text-lg font-extrabold text-gray-700">{getTotals().count}</span>
+                    <span className="text-base md:text-lg font-extrabold text-gray-700">{getTotals().count}</span>
                 </div>
                 <button
                     onClick={handleSave}
-                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2 rounded-xl text-sm transition shadow-md"
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 md:px-5 py-2 rounded-xl text-sm transition shadow-md whitespace-nowrap"
                 >
                     <i className="fas fa-save mr-1"></i>저장
                 </button>

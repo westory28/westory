@@ -16,3 +16,45 @@
         padding: 24px 40px;
     }
 }
+
+@media (max-width: 1023px) {
+    .dashboard-container {
+        height: auto !important;
+        overflow: visible !important;
+    }
+
+    .md\:h-\[calc\(100vh-140px\)\] {
+        height: auto !important;
+    }
+
+    .calendar-wrapper {
+        min-height: 420px;
+    }
+
+    .fc .fc-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.5rem;
+    }
+
+    .fc .fc-toolbar-chunk {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+
+    .fc .fc-toolbar-title {
+        font-size: 1rem !important;
+        text-align: center;
+    }
+
+    .fc .fc-button {
+        padding: 0.25rem 0.55rem !important;
+        font-size: 0.75rem !important;
+    }
+
+    .fc .fc-header-toolbar {
+        margin-bottom: 0.5rem !important;
+    }
+}

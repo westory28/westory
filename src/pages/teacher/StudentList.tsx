@@ -214,7 +214,7 @@ const StudentList: React.FC = () => {
                     </div>
 
                     <div className="overflow-x-auto flex-1">
-                        <table className="w-full text-sm text-left">
+                        <table className="w-full min-w-[560px] md:min-w-0 text-sm text-left">
                             <thead className="bg-gray-100 text-gray-600 font-bold uppercase text-xs">
                                 <tr>
                                     <th className="p-4 w-10 text-center">
@@ -225,9 +225,9 @@ const StudentList: React.FC = () => {
                                             className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
                                         />
                                     </th>
-                                    <th className="p-4 w-16 text-center">학년</th>
-                                    <th className="p-4 w-16 text-center">반</th>
-                                    <th className="p-4 w-16 text-center">번호</th>
+                                    <th className="p-4 w-16 text-center hidden md:table-cell">학년</th>
+                                    <th className="p-4 w-16 text-center hidden md:table-cell">반</th>
+                                    <th className="p-4 w-16 text-center hidden md:table-cell">번호</th>
                                     <th className="p-4 w-32">이름</th>
                                     <th className="p-4 w-64">이메일</th>
                                     <th className="p-4 text-center w-36">관리</th>
@@ -249,9 +249,9 @@ const StudentList: React.FC = () => {
                                                     className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
                                                 />
                                             </td>
-                                            <td className="p-4 text-center text-gray-700 font-bold">{student.grade}</td>
-                                            <td className="p-4 text-center font-bold text-gray-600">{student.class}</td>
-                                            <td className="p-4 text-center font-bold text-gray-600">{student.number}</td>
+                                            <td className="p-4 text-center text-gray-700 font-bold hidden md:table-cell">{student.grade}</td>
+                                            <td className="p-4 text-center font-bold text-gray-600 hidden md:table-cell">{student.class}</td>
+                                            <td className="p-4 text-center font-bold text-gray-600 hidden md:table-cell">{student.number}</td>
                                             <td className="p-4 whitespace-nowrap">
                                                 <button
                                                     onClick={() => {
@@ -310,30 +310,30 @@ const StudentList: React.FC = () => {
                 </div>
 
                 {selectedIds.size > 0 && (
-                    <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 bg-white rounded-full shadow-2xl border border-gray-200 py-3 px-6 flex items-center gap-4 z-40 animate-slideUp">
+                    <div className="fixed bottom-4 md:bottom-8 left-1/2 transform -translate-x-1/2 bg-white rounded-2xl md:rounded-full shadow-2xl border border-gray-200 py-2.5 md:py-3 px-3 md:px-6 w-[calc(100%-1rem)] max-w-[720px] md:w-auto flex flex-wrap md:flex-nowrap items-center justify-center gap-2 md:gap-4 z-40 animate-slideUp">
                         <div className="flex items-center justify-center leading-tight whitespace-nowrap gap-2">
                             <span className="bg-blue-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">
                                 {selectedIds.size}명
                             </span>
                             <span className="text-xs font-bold text-gray-700">선택됨</span>
                         </div>
-                        <div className="h-4 w-px bg-gray-300"></div>
+                        <div className="hidden md:block h-4 w-px bg-gray-300"></div>
                         <div className="flex items-center gap-2">
                             <button onClick={() => void handleBulkPromote()} className="hover:bg-gray-100 px-3 py-2 rounded-lg text-blue-600 transition flex items-center gap-1">
                                 <i className="fas fa-level-up-alt"></i>
-                                <span className="text-xs font-bold">진급</span>
+                                <span className="text-[11px] md:text-xs font-bold">진급</span>
                             </button>
                             <button onClick={() => setMoveClassModalOpen(true)} className="hover:bg-gray-100 px-3 py-2 rounded-lg text-green-600 transition flex items-center gap-1">
                                 <i className="fas fa-exchange-alt"></i>
-                                <span className="text-xs font-bold">반 교체</span>
+                                <span className="text-[11px] md:text-xs font-bold">반 교체</span>
                             </button>
                             <button onClick={() => void handleBulkDelete()} className="hover:bg-gray-100 px-3 py-2 rounded-lg text-red-600 transition flex items-center gap-1">
                                 <i className="fas fa-trash"></i>
-                                <span className="text-xs font-bold">삭제</span>
+                                <span className="text-[11px] md:text-xs font-bold">삭제</span>
                             </button>
                         </div>
-                        <div className="h-4 w-px bg-gray-300"></div>
-                        <button onClick={() => setSelectedIds(new Set())} className="text-gray-400 hover:text-gray-600 transition">
+                        <div className="hidden md:block h-4 w-px bg-gray-300"></div>
+                        <button onClick={() => setSelectedIds(new Set())} className="text-gray-400 hover:text-gray-600 transition p-1">
                             <i className="fas fa-times"></i>
                         </button>
                     </div>
