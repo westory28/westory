@@ -602,6 +602,16 @@ const Login: React.FC = () => {
                 <button onClick={() => showPolicy('privacy')} className="text-gray-400 hover:text-gray-600">개인정보 처리 방침</button>
             </div>
 
+            <div className="absolute bottom-12 left-1/2 -translate-x-1/2 md:hidden z-20">
+                <button
+                    onClick={() => handleLogin('teacher')}
+                    className="text-gray-400 hover:text-gray-700 text-xs font-semibold px-2 py-1 rounded hover:bg-gray-200/60 transition whitespace-nowrap"
+                >
+                    <i className="fas fa-chalkboard-teacher mr-1"></i>
+                    관리자 로그인
+                </button>
+            </div>
+
             <div className="fixed bottom-8 right-8 hidden lg:block z-30">
                 <button
                     onClick={() => handleLogin('teacher')}
