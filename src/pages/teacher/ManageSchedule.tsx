@@ -313,12 +313,12 @@ const ManageSchedule = () => {
                                 />
                             </div>
 
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 mb-1">시작 날짜</label>
                                     <input
                                         type="date"
-                                        className="w-full border rounded p-2 text-sm"
+                                        className="w-full min-w-0 border rounded p-2 text-sm"
                                         value={formData.start}
                                         onChange={(e) => setFormData({ ...formData, start: e.target.value })}
                                     />
@@ -327,7 +327,7 @@ const ManageSchedule = () => {
                                     <label className="block text-xs font-bold text-gray-500 mb-1">종료 날짜 (선택)</label>
                                     <input
                                         type="date"
-                                        className="w-full border rounded p-2 text-sm"
+                                        className="w-full min-w-0 border rounded p-2 text-sm"
                                         value={formData.end}
                                         onChange={(e) => setFormData({ ...formData, end: e.target.value })}
                                     />
