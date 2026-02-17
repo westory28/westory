@@ -75,9 +75,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                                 email: user.email || '',
                                 name: user.displayName || '사용자',
                                 role: normalizedRole,
-                                grade: normalizedRole === 'student' ? '0' : '',
-                                class: normalizedRole === 'student' ? '00' : '',
-                                number: normalizedRole === 'student' ? '0' : '',
+                                grade: '',
+                                class: '',
+                                number: '',
                             };
                             await setDoc(userRef, {
                                 ...bootstrapUser,

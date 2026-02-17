@@ -25,7 +25,7 @@ const Header: React.FC = () => {
 
     const isReady = !!currentUser;
     const isTeacherUser = userData?.role === 'teacher' || currentUser?.email === TEACHER_EMAIL;
-    const displayName = userData?.name || currentUser?.displayName || '사용자';
+    const displayName = (userData?.name || '').trim() || '사용자';
 
     const portal: 'teacher' | 'student' = location.pathname.startsWith('/teacher')
         ? 'teacher'
@@ -152,7 +152,7 @@ const Header: React.FC = () => {
 
                 <div className="header-right">
                     {config && (
-                        <span className="hidden md:inline-block text-xs font-mono bg-gray-100 text-gray-500 px-2 py-1 rounded border border-gray-200">
+                        <span className="hidden lg:inline-block text-xs font-mono bg-gray-100 text-gray-500 px-2 py-1 rounded border border-gray-200">
                             {config.year}-{config.semester}
                         </span>
                     )}
@@ -168,19 +168,21 @@ const Header: React.FC = () => {
                             {displayName} 교사
                         </span>
                     ) : (
-                        <Link to="/student/mypage" className="user-greeting inline-flex items-center gap-2 hover:text-blue-600 transition" title="마이페이지">
-                            <i className="fas fa-user-circle"></i>
-                            <span>{displayName}</span>
+                        <Link to="/student/mypage" className="user-greeting hover:text-blue-600 transition" title="마이페이지">
+                            <span className="inline-flex items-center gap-2">
+                                <i className="fas fa-user-circle"></i>
+                                <span>{displayName}</span>
+                            </span>
                         </Link>
                     )}
 
                     {!isTeacherPortal && (
-                        <Link to="/student/mypage" className="md:hidden text-gray-500 hover:text-blue-600 transition p-1" title="마이페이지">
+                        <Link to="/student/mypage" className="lg:hidden text-gray-500 hover:text-blue-600 transition p-1" title="마이페이지">
                             <i className="fas fa-user-circle text-lg"></i>
                         </Link>
                     )}
 
-                    <div className="flex items-center gap-1 md:gap-2 px-3 py-1 bg-stone-100 rounded-full border border-stone-200">
+                    <div className="hidden lg:flex items-center gap-1 md:gap-2 px-3 py-1 bg-stone-100 rounded-full border border-stone-200">
                         <i className="fas fa-stopwatch text-stone-400 text-xs"></i>
                         <span className={`font-mono font-bold text-sm w-[42px] text-center ${remainingSeconds < 300 ? 'text-red-500' : 'text-stone-600'}`}>
                             {formatCountdown(remainingSeconds)}

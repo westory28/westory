@@ -15,16 +15,21 @@ const StudentDashboard: React.FC = () => {
     const [events, setEvents] = useState<CalendarEvent[]>([]);
     const [selectedDate, setSelectedDate] = useState<string | null>(null);
     const [dailyEvents, setDailyEvents] = useState<CalendarEvent[]>([]);
-    const [welcomeText, setWelcomeText] = useState('0학년 00반의 대시보드');
+    const [welcomeText, setWelcomeText] = useState('학년/반 정보를 불러오는 중...');
     const [isSearchOpen, setIsSearchOpen] = useState(false);
 
     const calendarRef = useRef<FullCalendar>(null);
 
     // Initial welcome text
     useEffect(() => {
-        const gradeLabel = userData?.grade ? String(userData.grade) : '0';
-        const classLabel = userData?.class ? String(userData.class) : '00';
-        setWelcomeText(`${gradeLabel}학년 ${classLabel}반의 대시보드`);
+        if (!userData) return;
+        const gradeLabel = userData.grade ? String(userData.grade).trim() : '';
+        const classLabel = userData.class ? String(userData.class).trim() : '';
+        if (gradeLabel && classLabel) {
+            setWelcomeText(`${gradeLabel}학년 ${classLabel}반의 대시보드`);
+        } else {
+            setWelcomeText(`${(userData.name || '이름 미설정').trim()}님의 대시보드`);
+        }
     }, [userData]);
 
     // Fetch Events real-time
