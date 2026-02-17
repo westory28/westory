@@ -15,7 +15,7 @@ const formatCountdown = (seconds: number) => {
 };
 
 const Header: React.FC = () => {
-    const { currentUser, userData, config, logout } = useAuth();
+    const { currentUser, userData, logout } = useAuth();
     const location = useLocation();
     const navigate = useNavigate();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -157,13 +157,6 @@ const Header: React.FC = () => {
                 </div>
 
                 <div className="header-right">
-                    {config && (
-                        <span className="hidden lg:inline-block text-xs font-mono bg-gray-100 text-gray-500 px-2 py-1 rounded border border-gray-200">
-                            {config.year}-{config.semester}
-                        </span>
-                    )}
-
-
                     {isTeacherPortal && (
                         <Link to="/teacher/settings" className="text-gray-400 hover:text-blue-600 transition" title="설정">
                             <i className="fas fa-cog fa-lg"></i>
