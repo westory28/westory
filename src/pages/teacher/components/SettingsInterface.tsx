@@ -14,6 +14,14 @@ const DEFAULT_INTERFACE_CONFIG = {
     footerText: '',
 };
 
+const DEFAULT_PARENT_ICON = 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253';
+
+const normalizeMenuUrl = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return '';
+    return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+};
+
 const moveInArray = <T,>(items: T[], from: number, to: number): T[] => {
     if (to < 0 || to >= items.length) return items;
     const next = [...items];
@@ -30,6 +38,11 @@ const SettingsInterface: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [savingInterface, setSavingInterface] = useState(false);
     const [savingMenu, setSavingMenu] = useState(false);
+    const [parentDraft, setParentDraft] = useState<Record<PortalType, { name: string; url: string }>>({
+        student: { name: '', url: '' },
+        teacher: { name: '', url: '' },
+    });
+    const [childDrafts, setChildDrafts] = useState<Record<string, { name: string; url: string }>>({});
 
     useEffect(() => {
         const loadSettings = async () => {
@@ -130,6 +143,80 @@ const SettingsInterface: React.FC = () => {
                 };
             }),
         );
+    };
+
+    const updateParentDraft = (portal: PortalType, field: 'name' | 'url', value: string) => {
+        setParentDraft((prev) => ({
+            ...prev,
+            [portal]: {
+                ...prev[portal],
+                [field]: value,
+            },
+        }));
+    };
+
+    const addParent = (portal: PortalType) => {
+        const name = parentDraft[portal].name.trim();
+        const url = normalizeMenuUrl(parentDraft[portal].url);
+
+        if (!name || !url) {
+            alert('상위 메뉴 이름과 URL을 모두 입력하세요.');
+            return;
+        }
+
+        updatePortalMenus(portal, (menus) => [
+            ...menus,
+            {
+                name,
+                url,
+                icon: DEFAULT_PARENT_ICON,
+                children: [],
+            },
+        ]);
+
+        setParentDraft((prev) => ({
+            ...prev,
+            [portal]: { name: '', url: '' },
+        }));
+    };
+
+    const getChildDraftKey = (portal: PortalType, parentIndex: number) => `${portal}-${parentIndex}`;
+
+    const updateChildDraft = (portal: PortalType, parentIndex: number, field: 'name' | 'url', value: string) => {
+        const key = getChildDraftKey(portal, parentIndex);
+        setChildDrafts((prev) => ({
+            ...prev,
+            [key]: {
+                name: field === 'name' ? value : prev[key]?.name || '',
+                url: field === 'url' ? value : prev[key]?.url || '',
+            },
+        }));
+    };
+
+    const addChild = (portal: PortalType, parentIndex: number) => {
+        const key = getChildDraftKey(portal, parentIndex);
+        const name = (childDrafts[key]?.name || '').trim();
+        const url = normalizeMenuUrl(childDrafts[key]?.url || '');
+
+        if (!name || !url) {
+            alert('하위 메뉴 이름과 URL을 모두 입력하세요.');
+            return;
+        }
+
+        updatePortalMenus(portal, (menus) =>
+            menus.map((item, idx) => {
+                if (idx !== parentIndex) return item;
+                return {
+                    ...item,
+                    children: [...(item.children || []), { name, url }],
+                };
+            }),
+        );
+
+        setChildDrafts((prev) => ({
+            ...prev,
+            [key]: { name: '', url: '' },
+        }));
     };
 
     const saveInterfaceConfig = async () => {
@@ -337,6 +424,33 @@ const SettingsInterface: React.FC = () => {
                             사이트맵 구조로 상위/하위 메뉴를 정리합니다. 이름 변경, 순서 이동, 삭제 후 저장을 눌러주세요.
                         </div>
 
+                        <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
+                            <h4 className="text-sm font-bold text-gray-700 mb-3">상위 메뉴 추가</h4>
+                            <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_auto] gap-2">
+                                <input
+                                    type="text"
+                                    value={parentDraft[activePortal].name}
+                                    onChange={(e) => updateParentDraft(activePortal, 'name', e.target.value)}
+                                    placeholder="상위 메뉴 이름"
+                                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                />
+                                <input
+                                    type="text"
+                                    value={parentDraft[activePortal].url}
+                                    onChange={(e) => updateParentDraft(activePortal, 'url', e.target.value)}
+                                    placeholder="/teacher/custom-page"
+                                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => addParent(activePortal)}
+                                    className="px-4 py-2.5 rounded-lg text-sm font-bold bg-blue-600 hover:bg-blue-700 text-white"
+                                >
+                                    상위 추가
+                                </button>
+                            </div>
+                        </div>
+
                         <div className="space-y-4">
                             {menuConfig[activePortal].map((item, parentIndex) => (
                                 <div key={`${activePortal}-${item.url}-${parentIndex}`} className="border border-gray-200 rounded-xl overflow-hidden">
@@ -380,6 +494,30 @@ const SettingsInterface: React.FC = () => {
                                     </div>
 
                                     <div className="p-4 space-y-3 bg-white">
+                                        <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_auto] gap-2">
+                                            <input
+                                                type="text"
+                                                value={childDrafts[getChildDraftKey(activePortal, parentIndex)]?.name || ''}
+                                                onChange={(e) => updateChildDraft(activePortal, parentIndex, 'name', e.target.value)}
+                                                placeholder="하위 메뉴 이름"
+                                                className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                            />
+                                            <input
+                                                type="text"
+                                                value={childDrafts[getChildDraftKey(activePortal, parentIndex)]?.url || ''}
+                                                onChange={(e) => updateChildDraft(activePortal, parentIndex, 'url', e.target.value)}
+                                                placeholder="/teacher/custom-page?tab=1"
+                                                className="w-full border border-gray-300 rounded-lg p-2 text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => addChild(activePortal, parentIndex)}
+                                                className="px-3 py-2 rounded-lg text-sm font-bold bg-sky-600 hover:bg-sky-700 text-white"
+                                            >
+                                                하위 추가
+                                            </button>
+                                        </div>
+
                                         {item.children && item.children.length > 0 ? (
                                             item.children.map((child, childIndex) => (
                                                 <div key={`${child.url}-${childIndex}`} className="rounded-lg border border-gray-200 p-3">
