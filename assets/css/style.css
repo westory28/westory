@@ -102,7 +102,7 @@ header {
     gap: 1rem;
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1023px) {
     .header-container {
         padding: 0 0.5rem;
     }
@@ -142,7 +142,7 @@ header {
     }
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1023px) {
     .user-greeting {
         max-width: 120px;
         font-size: 0.73rem;
@@ -169,7 +169,7 @@ header {
     background-color: #f5f5f4;
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1023px) {
     .btn-logout {
         font-size: 0.75rem;
         padding: 0.35rem 0.45rem;
@@ -254,7 +254,7 @@ header {
 
 /* Utilities */
 .hidden {
-    display: none !important;
+    display: none;
 }
 
 /* Loading Overlay */

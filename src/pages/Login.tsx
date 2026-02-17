@@ -282,7 +282,7 @@ const Login: React.FC = () => {
             <div className="fixed bottom-8 right-8 hidden lg:block z-30">
                 <button
                     onClick={() => handleLogin('teacher')}
-                    className="text-gray-500 hover:text-gray-800 text-sm font-bold px-3 py-2 rounded hover:bg-gray-200/60 transition"
+                    className="text-gray-400 hover:text-gray-700 text-xs font-semibold px-2 py-1 rounded hover:bg-gray-200/60 transition"
                 >
                     <i className="fas fa-chalkboard-teacher mr-1"></i>
                     관리자 로그인

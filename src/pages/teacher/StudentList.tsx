@@ -229,7 +229,7 @@ const StudentList: React.FC = () => {
                                     <th className="p-4 w-16 text-center">반</th>
                                     <th className="p-4 w-16 text-center">번호</th>
                                     <th className="p-4 w-32">이름</th>
-                                    <th className="p-4 w-64 hidden md:table-cell">이메일</th>
+                                    <th className="p-4 w-64 hidden lg:table-cell">이메일</th>
                                     <th className="p-4 text-center w-36">관리</th>
                                 </tr>
                             </thead>
@@ -264,7 +264,7 @@ const StudentList: React.FC = () => {
                                                     <i className="fas fa-folder-open text-xs text-gray-300 group-hover:text-blue-400 ml-2"></i>
                                                 </button>
                                             </td>
-                                            <td className="p-4 text-gray-500 text-xs font-mono hidden md:table-cell">{student.email}</td>
+                                            <td className="p-4 text-gray-500 text-xs font-mono hidden lg:table-cell">{student.email}</td>
                                             <td className="p-4 text-center">
                                                 <div className="flex gap-1 justify-center">
                                                     <button
@@ -276,7 +276,7 @@ const StudentList: React.FC = () => {
                                                         title="수정"
                                                     >
                                                         <i className="fas fa-edit"></i>
-                                                        <span className="hidden md:inline">수정</span>
+                                                        <span className="hidden lg:inline">수정</span>
                                                     </button>
                                                     <button
                                                         onClick={() => void handleDelete(student.id)}
@@ -284,7 +284,7 @@ const StudentList: React.FC = () => {
                                                         title="삭제"
                                                     >
                                                         <i className="fas fa-trash"></i>
-                                                        <span className="hidden md:inline">삭제</span>
+                                                        <span className="hidden lg:inline">삭제</span>
                                                     </button>
                                                 </div>
                                             </td>
