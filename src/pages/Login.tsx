@@ -1,11 +1,12 @@
-﻿import React, { useState } from 'react';
-import { GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+﻿import React, { useEffect, useRef, useState } from 'react';
+import { GoogleAuthProvider, User, signInWithPopup, signOut } from 'firebase/auth';
 import {
     collection,
     doc,
     getDoc,
     getDocs,
     limit,
+    orderBy,
     query,
     serverTimestamp,
     setDoc,
@@ -18,6 +19,48 @@ import type { UserData } from '../types';
 
 const TEACHER_EMAIL = 'westoria28@gmail.com';
 const ROLE_SESSION_KEY = 'westoryPortalRole';
+
+interface SchoolOption {
+    value: string;
+    label: string;
+}
+
+interface StudentProfileForm {
+    email: string;
+    grade: string;
+    className: string;
+    number: string;
+    name: string;
+}
+
+interface ConsentItem {
+    id: string;
+    title: string;
+    text: string;
+    required: boolean;
+    order: number;
+}
+
+interface StudentOnboardingResult {
+    name: string;
+    grade: string;
+    classValue: string;
+    number: string;
+    privacyAgreed: boolean;
+    consentAgreedItems: string[];
+    newlyAgreedPrivacy: boolean;
+}
+
+const defaultGradeOptions: SchoolOption[] = [
+    { value: '1', label: '1학년' },
+    { value: '2', label: '2학년' },
+    { value: '3', label: '3학년' },
+];
+
+const defaultClassOptions: SchoolOption[] = Array.from({ length: 12 }, (_, i) => ({
+    value: String(i + 1),
+    label: `${i + 1}반`,
+}));
 
 const getSavedRole = (): UserData['role'] | null => {
     const saved = sessionStorage.getItem(ROLE_SESSION_KEY) || localStorage.getItem(ROLE_SESSION_KEY);
@@ -60,6 +103,8 @@ const pickStudentRosterProfile = async (email: string): Promise<Partial<UserData
                     class: className,
                     number,
                     customNameConfirmed: data.customNameConfirmed === true,
+                    privacyAgreed: data.privacyAgreed === true,
+                    consentAgreedItems: Array.isArray(data.consentAgreedItems) ? data.consentAgreedItems : [],
                 };
             }
         });
@@ -71,42 +116,323 @@ const pickStudentRosterProfile = async (email: string): Promise<Partial<UserData
     }
 };
 
-const promptStudentName = (initialValue = ''): string | null => {
-    let defaultValue = initialValue;
-    while (true) {
-        const input = window.prompt('학생 이름을 입력해주세요.', defaultValue);
-        if (input === null) return null;
-        const trimmed = input.trim();
-        if (trimmed) return trimmed.slice(0, 20);
-        alert('이름을 입력해주세요.');
-        defaultValue = '';
-    }
-};
-
 const Login: React.FC = () => {
     const { currentUser, userData, interfaceConfig, loading } = useAuth();
     const navigate = useNavigate();
+
+    const [authBusy, setAuthBusy] = useState(false);
 
     const [policyOpen, setPolicyOpen] = useState(false);
     const [policyTitle, setPolicyTitle] = useState('');
     const [policyHtml, setPolicyHtml] = useState('');
     const [policyLoading, setPolicyLoading] = useState(false);
 
+    const [gradeOptions, setGradeOptions] = useState<SchoolOption[]>(defaultGradeOptions);
+    const [classOptions, setClassOptions] = useState<SchoolOption[]>(defaultClassOptions);
+
+    const [profileModalOpen, setProfileModalOpen] = useState(false);
+    const [profileForm, setProfileForm] = useState<StudentProfileForm>({
+        email: '',
+        grade: defaultGradeOptions[0].value,
+        className: '',
+        number: '',
+        name: '',
+    });
+    const profileResolverRef = useRef<((value: StudentProfileForm | null) => void) | null>(null);
+
+    const [consentModalOpen, setConsentModalOpen] = useState(false);
+    const [consentItems, setConsentItems] = useState<ConsentItem[]>([]);
+    const [consentChecked, setConsentChecked] = useState<Record<string, boolean>>({});
+    const consentResolverRef = useRef<((value: string[] | null) => void) | null>(null);
+
     const preferredRole = getSavedRole();
     const isTeacherUser = (preferredRole || userData?.role) === 'teacher';
-
-    const goToDashboard = () => {
-        navigate(isTeacherUser ? '/teacher/dashboard' : '/student/dashboard');
-    };
 
     const clearRoleCache = () => {
         sessionStorage.removeItem(ROLE_SESSION_KEY);
         localStorage.removeItem(ROLE_SESSION_KEY);
     };
 
+    useEffect(() => {
+        const loadSchoolConfig = async () => {
+            try {
+                const schoolSnap = await getDoc(doc(db, 'site_settings', 'school_config'));
+                if (!schoolSnap.exists()) return;
+
+                const data = schoolSnap.data() as {
+                    grades?: Array<{ value?: string; label?: string }>;
+                    classes?: Array<{ value?: string; label?: string }>;
+                };
+
+                if (Array.isArray(data.grades) && data.grades.length > 0) {
+                    const nextGrades = data.grades
+                        .map((item) => ({
+                            value: normalizeSchoolField(item.value),
+                            label: (item.label || '').trim(),
+                        }))
+                        .filter((item) => item.value && item.label);
+                    if (nextGrades.length > 0) {
+                        setGradeOptions(nextGrades);
+                    }
+                }
+
+                if (Array.isArray(data.classes) && data.classes.length > 0) {
+                    const nextClasses = data.classes
+                        .map((item) => ({
+                            value: normalizeSchoolField(item.value),
+                            label: (item.label || '').trim(),
+                        }))
+                        .filter((item) => item.value && item.label);
+                    if (nextClasses.length > 0) {
+                        setClassOptions(nextClasses);
+                    }
+                }
+            } catch (error) {
+                console.warn('Failed to load school config', error);
+            }
+        };
+
+        void loadSchoolConfig();
+    }, []);
+
+    useEffect(() => {
+        return () => {
+            if (profileResolverRef.current) {
+                profileResolverRef.current(null);
+                profileResolverRef.current = null;
+            }
+            if (consentResolverRef.current) {
+                consentResolverRef.current(null);
+                consentResolverRef.current = null;
+            }
+        };
+    }, []);
+
+    const openProfileModal = (initial: StudentProfileForm): Promise<StudentProfileForm | null> => {
+        setProfileForm(initial);
+        setProfileModalOpen(true);
+        return new Promise((resolve) => {
+            profileResolverRef.current = resolve;
+        });
+    };
+
+    const closeProfileModal = (result: StudentProfileForm | null) => {
+        setProfileModalOpen(false);
+        const resolver = profileResolverRef.current;
+        profileResolverRef.current = null;
+        resolver?.(result);
+    };
+
+    const handleProfileSubmit = () => {
+        const name = profileForm.name.trim().slice(0, 20);
+        const grade = normalizeSchoolField(profileForm.grade);
+        const classValue = normalizeSchoolField(profileForm.className);
+        const number = normalizeSchoolField(profileForm.number);
+
+        if (!name || !grade || !classValue || !number) {
+            alert('이름, 학년, 반, 번호를 모두 입력해주세요.');
+            return;
+        }
+
+        closeProfileModal({
+            email: profileForm.email,
+            name,
+            grade,
+            className: classValue,
+            number,
+        });
+    };
+
+    const handleProfileCancel = () => {
+        closeProfileModal(null);
+    };
+
+    const loadConsentItems = async (): Promise<ConsentItem[]> => {
+        try {
+            const consentQuery = query(collection(db, 'site_settings', 'consent', 'items'), orderBy('order', 'asc'));
+            const snap = await getDocs(consentQuery);
+            const items: ConsentItem[] = [];
+            snap.forEach((docSnap) => {
+                const data = docSnap.data() as Partial<ConsentItem>;
+                items.push({
+                    id: docSnap.id,
+                    title: (data.title || '').trim() || '동의 항목',
+                    text: data.text || '',
+                    required: data.required === true,
+                    order: Number(data.order) || 0,
+                });
+            });
+            return items;
+        } catch (error) {
+            console.warn('Failed to load consent items', error);
+            return [];
+        }
+    };
+
+    const openConsentModal = (items: ConsentItem[], preChecked: string[]): Promise<string[] | null> => {
+        if (items.length === 0) {
+            return Promise.resolve([]);
+        }
+
+        const checkedMap: Record<string, boolean> = {};
+        items.forEach((item) => {
+            checkedMap[item.id] = preChecked.includes(item.id);
+        });
+
+        setConsentItems(items);
+        setConsentChecked(checkedMap);
+        setConsentModalOpen(true);
+
+        return new Promise((resolve) => {
+            consentResolverRef.current = resolve;
+        });
+    };
+
+    const closeConsentModal = (result: string[] | null) => {
+        setConsentModalOpen(false);
+        const resolver = consentResolverRef.current;
+        consentResolverRef.current = null;
+        resolver?.(result);
+    };
+
+    const consentReady = consentItems
+        .filter((item) => item.required)
+        .every((item) => consentChecked[item.id]);
+
+    const handleConsentConfirm = () => {
+        if (!consentReady) {
+            alert('필수 동의 항목에 체크해주세요.');
+            return;
+        }
+        const agreedItems = consentItems.filter((item) => consentChecked[item.id]).map((item) => item.id);
+        closeConsentModal(agreedItems);
+    };
+
+    const handleConsentCancel = () => {
+        closeConsentModal(null);
+    };
+
+    const completeStudentOnboarding = async (
+        user: User,
+        existing: Partial<UserData> | null,
+        rosterProfile: Partial<UserData> | null,
+    ): Promise<StudentOnboardingResult | null> => {
+        let resolvedName = (existing?.name || '').trim() || (rosterProfile?.name || '').trim() || (user.displayName || '').trim();
+        let gradeValue = normalizeSchoolField(existing?.grade) || normalizeSchoolField(rosterProfile?.grade);
+        let classValue = normalizeSchoolField(existing?.class) || normalizeSchoolField(rosterProfile?.class);
+        let numberValue = normalizeSchoolField(existing?.number) || normalizeSchoolField(rosterProfile?.number);
+        const customNameConfirmed = existing?.customNameConfirmed === true;
+
+        const needsProfileInput = !customNameConfirmed || !resolvedName || !gradeValue || !classValue || !numberValue;
+
+        if (needsProfileInput) {
+            const profile = await openProfileModal({
+                email: user.email || '',
+                name: resolvedName,
+                grade: gradeValue || gradeOptions[0]?.value || '1',
+                className: classValue,
+                number: numberValue,
+            });
+
+            if (!profile) return null;
+
+            resolvedName = profile.name.trim().slice(0, 20);
+            gradeValue = normalizeSchoolField(profile.grade);
+            classValue = normalizeSchoolField(profile.className);
+            numberValue = normalizeSchoolField(profile.number);
+        }
+
+        if (!resolvedName || !gradeValue || !classValue || !numberValue) {
+            alert('학생 정보 입력이 완료되지 않았습니다.');
+            return null;
+        }
+
+        const existingConsentItems = Array.isArray(existing?.consentAgreedItems)
+            ? existing.consentAgreedItems.filter((item): item is string => typeof item === 'string')
+            : [];
+        let privacyAgreed = existing?.privacyAgreed === true;
+        let consentAgreedItems = existingConsentItems;
+
+        if (!privacyAgreed) {
+            const items = await loadConsentItems();
+            const selected = await openConsentModal(items, existingConsentItems);
+            if (selected === null) return null;
+            privacyAgreed = true;
+            consentAgreedItems = selected;
+        }
+
+        return {
+            name: resolvedName,
+            grade: gradeValue,
+            classValue,
+            number: numberValue,
+            privacyAgreed,
+            consentAgreedItems,
+            newlyAgreedPrivacy: existing?.privacyAgreed !== true && privacyAgreed,
+        };
+    };
+
+    const goToDashboard = async () => {
+        if (!currentUser) return;
+        if (isTeacherUser) {
+            navigate('/teacher/dashboard');
+            return;
+        }
+
+        if (authBusy) return;
+        setAuthBusy(true);
+
+        try {
+            const userRef = doc(db, 'users', currentUser.uid);
+            const userSnap = await getDoc(userRef);
+            const existing = userSnap.exists() ? (userSnap.data() as Partial<UserData>) : null;
+            const setup = await completeStudentOnboarding(currentUser, existing, null);
+            if (!setup) {
+                clearRoleCache();
+                await signOut(auth);
+                return;
+            }
+
+            const updatePayload: Record<string, unknown> = {
+                uid: currentUser.uid,
+                email: currentUser.email || '',
+                photoURL: currentUser.photoURL || '',
+                role: 'student',
+                name: setup.name,
+                customNameConfirmed: true,
+                grade: setup.grade,
+                class: setup.classValue,
+                number: setup.number,
+                privacyAgreed: setup.privacyAgreed,
+                consentAgreedItems: setup.consentAgreedItems,
+                lastLogin: serverTimestamp(),
+            };
+
+            if (setup.newlyAgreedPrivacy) {
+                updatePayload.privacyAgreedAt = serverTimestamp();
+            }
+
+            if (!userSnap.exists()) {
+                updatePayload.createdAt = serverTimestamp();
+            }
+
+            await setDoc(userRef, updatePayload, { merge: true });
+            sessionStorage.setItem(ROLE_SESSION_KEY, 'student');
+            localStorage.setItem(ROLE_SESSION_KEY, 'student');
+            navigate('/student/dashboard');
+        } catch (error) {
+            console.error('Failed to continue student onboarding', error);
+            alert('학생 정보 확인 중 오류가 발생했습니다.');
+        } finally {
+            setAuthBusy(false);
+        }
+    };
+
     const handleLogin = async (mode: 'student' | 'teacher') => {
+        if (authBusy) return;
         const provider = new GoogleAuthProvider();
         provider.setCustomParameters({ prompt: 'select_account' });
+        setAuthBusy(true);
 
         try {
             const result = await signInWithPopup(auth, provider);
@@ -129,29 +455,23 @@ const Login: React.FC = () => {
                 ? await pickStudentRosterProfile(user.email || '')
                 : null;
 
-            const existingName = (existing?.name || '').trim() || (rosterProfile?.name || '').trim();
-            const customNameConfirmed = existing?.customNameConfirmed === true;
-            const gradeValue = normalizeSchoolField(existing?.grade) || normalizeSchoolField(rosterProfile?.grade);
-            const classValue = normalizeSchoolField(existing?.class) || normalizeSchoolField(rosterProfile?.class);
-            const numberValue = normalizeSchoolField(existing?.number) || normalizeSchoolField(rosterProfile?.number);
+            let resolvedName = (existing?.name || '').trim() || (rosterProfile?.name || '').trim();
+            let onboardingResult: StudentOnboardingResult | null = null;
 
-            let resolvedName = existingName;
-
-            if (nextRole === 'student' && (!resolvedName || !customNameConfirmed)) {
-                const entered = promptStudentName(existingName || user.displayName || '');
-                if (!entered) {
+            if (nextRole === 'student') {
+                onboardingResult = await completeStudentOnboarding(user, existing, rosterProfile);
+                if (!onboardingResult) {
                     clearRoleCache();
                     await signOut(auth);
                     return;
                 }
-                resolvedName = entered;
-            }
-
-            if (nextRole === 'teacher' && !resolvedName) {
+                resolvedName = onboardingResult.name;
+            } else if (!resolvedName) {
                 resolvedName = (user.displayName || '교사').trim() || '교사';
             }
 
             const basePayload: Record<string, unknown> = {
+                uid: user.uid,
                 email: user.email || '',
                 photoURL: user.photoURL || '',
                 role: nextRole,
@@ -163,18 +483,28 @@ const Login: React.FC = () => {
             }
 
             if (nextRole === 'student') {
+                if (!onboardingResult) {
+                    clearRoleCache();
+                    await signOut(auth);
+                    return;
+                }
                 basePayload.customNameConfirmed = true;
-                basePayload.grade = gradeValue;
-                basePayload.class = classValue;
-                basePayload.number = numberValue;
+                basePayload.grade = onboardingResult.grade;
+                basePayload.class = onboardingResult.classValue;
+                basePayload.number = onboardingResult.number;
+                basePayload.privacyAgreed = onboardingResult.privacyAgreed;
+                basePayload.consentAgreedItems = onboardingResult.consentAgreedItems;
+                if (onboardingResult.newlyAgreedPrivacy) {
+                    basePayload.privacyAgreedAt = serverTimestamp();
+                }
             }
 
             if (!userSnap.exists()) {
                 await setDoc(userRef, {
                     ...basePayload,
-                    grade: nextRole === 'student' ? gradeValue : '',
-                    class: nextRole === 'student' ? classValue : '',
-                    number: nextRole === 'student' ? numberValue : '',
+                    grade: nextRole === 'student' && onboardingResult ? onboardingResult.grade : '',
+                    class: nextRole === 'student' && onboardingResult ? onboardingResult.classValue : '',
+                    number: nextRole === 'student' && onboardingResult ? onboardingResult.number : '',
                     createdAt: serverTimestamp(),
                 }, { merge: true });
             } else {
@@ -187,6 +517,8 @@ const Login: React.FC = () => {
         } catch (error) {
             console.error('Login failed', error);
             alert('로그인에 실패했습니다.');
+        } finally {
+            setAuthBusy(false);
         }
     };
 
@@ -216,7 +548,7 @@ const Login: React.FC = () => {
     return (
         <div className="min-h-screen bg-gray-50 relative">
             <div className="min-h-screen md:h-screen flex flex-col items-center justify-center px-4 pb-24 md:pb-0">
-                <div className="text-5xl mb-4 animate-bounce">{interfaceConfig?.mainEmoji || '📚'}</div>
+                <div className="text-5xl mb-4 animate-bounce">{interfaceConfig?.mainEmoji || '\u{1F4DA}'}</div>
                 <h1 className="text-6xl font-black tracking-tight mb-3">
                     <span className="text-blue-600">We</span><span className="text-amber-500">story</span>
                 </h1>
@@ -227,19 +559,22 @@ const Login: React.FC = () => {
                         <p className="text-sm text-gray-500 break-all text-center px-2">{currentUser.email || '로그인 계정'}</p>
                         <button
                             onClick={goToDashboard}
-                            className="w-full bg-blue-600 text-white border border-blue-600 px-6 py-3 rounded-full text-base font-bold shadow hover:bg-blue-700 transition"
+                            disabled={authBusy}
+                            className="w-full bg-blue-600 text-white border border-blue-600 px-6 py-3 rounded-full text-base font-bold shadow hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
                         >
-                            계속하기
+                            {authBusy ? '처리 중...' : '계속하기'}
                         </button>
                         <button
                             onClick={() => handleLogin('student')}
-                            className="w-full bg-white border border-gray-300 px-6 py-3 rounded-full text-sm font-bold text-gray-700 shadow hover:bg-gray-50 transition"
+                            disabled={authBusy}
+                            className="w-full bg-white border border-gray-300 px-6 py-3 rounded-full text-sm font-bold text-gray-700 shadow hover:bg-gray-50 transition disabled:opacity-60 disabled:cursor-not-allowed"
                         >
                             학생 로그인 (계정 선택)
                         </button>
                         <button
                             onClick={() => handleLogin('teacher')}
-                            className="w-full bg-white border border-gray-300 px-6 py-3 rounded-full text-sm font-bold text-gray-700 shadow hover:bg-gray-50 transition"
+                            disabled={authBusy}
+                            className="w-full bg-white border border-gray-300 px-6 py-3 rounded-full text-sm font-bold text-gray-700 shadow hover:bg-gray-50 transition disabled:opacity-60 disabled:cursor-not-allowed"
                         >
                             관리자 로그인 (계정 선택)
                         </button>
@@ -248,7 +583,8 @@ const Login: React.FC = () => {
                                 clearRoleCache();
                                 await signOut(auth);
                             }}
-                            className="w-full bg-white border border-gray-200 px-6 py-3 rounded-full text-sm font-bold text-gray-700 shadow hover:bg-gray-50 transition"
+                            disabled={authBusy}
+                            className="w-full bg-white border border-gray-200 px-6 py-3 rounded-full text-sm font-bold text-gray-700 shadow hover:bg-gray-50 transition disabled:opacity-60 disabled:cursor-not-allowed"
                         >
                             다른 계정으로 로그인
                         </button>
@@ -257,14 +593,16 @@ const Login: React.FC = () => {
                     <div className="w-full max-w-sm flex flex-col gap-3">
                         <button
                             onClick={() => handleLogin('student')}
-                            className="w-full bg-white border border-gray-200 px-8 py-4 rounded-full text-lg font-bold text-gray-700 shadow hover:bg-gray-50 transition flex items-center justify-center gap-3"
+                            disabled={authBusy}
+                            className="w-full bg-white border border-gray-200 px-8 py-4 rounded-full text-lg font-bold text-gray-700 shadow hover:bg-gray-50 transition flex items-center justify-center gap-3 disabled:opacity-60 disabled:cursor-not-allowed"
                         >
                             <img src="https://fonts.gstatic.com/s/i/productlogos/googleg/v6/24px.svg" width={24} height={24} alt="Google" />
                             학생 로그인
                         </button>
                         <button
                             onClick={() => handleLogin('teacher')}
-                            className="w-full bg-white border border-gray-300 px-8 py-4 rounded-full text-lg font-bold text-gray-700 shadow hover:bg-gray-50 transition flex items-center justify-center gap-3"
+                            disabled={authBusy}
+                            className="w-full bg-white border border-gray-300 px-8 py-4 rounded-full text-lg font-bold text-gray-700 shadow hover:bg-gray-50 transition flex items-center justify-center gap-3 disabled:opacity-60 disabled:cursor-not-allowed"
                         >
                             <i className="fas fa-chalkboard-teacher"></i>
                             관리자 로그인
@@ -310,8 +648,160 @@ const Login: React.FC = () => {
                     </div>
                 </div>
             )}
+
+            {profileModalOpen && (
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={handleProfileCancel}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 md:p-8 mx-4" onClick={(e) => e.stopPropagation()}>
+                        <div className="text-center mb-5">
+                            <h2 className="text-2xl font-bold text-gray-800">{'\u{1F44B} 반가워요!'}</h2>
+                            <p className="text-sm text-gray-500 mt-1">최초 로그인 학생 정보를 입력해주세요.</p>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 mb-1">이메일</label>
+                                <input
+                                    type="text"
+                                    value={profileForm.email}
+                                    readOnly
+                                    className="w-full bg-gray-100 border border-gray-200 rounded-lg p-3 text-gray-500 text-sm font-mono"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 mb-1">학년</label>
+                                    <select
+                                        value={profileForm.grade}
+                                        onChange={(e) => setProfileForm((prev) => ({ ...prev, grade: e.target.value }))}
+                                        className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                                    >
+                                        {gradeOptions.map((grade) => (
+                                            <option key={grade.value} value={grade.value}>{grade.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 mb-1">반</label>
+                                    <select
+                                        value={profileForm.className}
+                                        onChange={(e) => setProfileForm((prev) => ({ ...prev, className: e.target.value }))}
+                                        className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                                    >
+                                        <option value="">선택</option>
+                                        {classOptions.map((cls) => (
+                                            <option key={cls.value} value={cls.value}>{cls.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 mb-1">번호</label>
+                                    <input
+                                        type="number"
+                                        value={profileForm.number}
+                                        min={1}
+                                        max={99}
+                                        onChange={(e) => setProfileForm((prev) => ({ ...prev, number: e.target.value }))}
+                                        placeholder="예: 15"
+                                        className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 mb-1">이름</label>
+                                <input
+                                    type="text"
+                                    value={profileForm.name}
+                                    maxLength={20}
+                                    onChange={(e) => setProfileForm((prev) => ({ ...prev, name: e.target.value }))}
+                                    placeholder="본명 (예: 김철수)"
+                                    className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="mt-6 flex items-center justify-end gap-2">
+                            <button
+                                onClick={handleProfileCancel}
+                                className="px-4 py-2 rounded-lg text-sm font-bold text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition"
+                            >
+                                취소
+                            </button>
+                            <button
+                                onClick={handleProfileSubmit}
+                                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-xl transition shadow-lg"
+                            >
+                                입력 완료
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {consentModalOpen && (
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={handleConsentCancel}>
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg md:max-w-3xl p-6 md:p-8 mx-4 max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+                        <div className="text-center mb-5 shrink-0">
+                            <div className="bg-blue-100 w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3 text-2xl">{'\u{1F6E1}\uFE0F'}</div>
+                            <h2 className="text-xl md:text-2xl font-bold text-gray-900">개인정보 활용 동의</h2>
+                            <p className="text-gray-500 text-sm mt-2">서비스 이용을 위해 최초 1회 동의가 필요합니다.</p>
+                        </div>
+
+                        <div className="bg-gray-50 p-4 rounded-lg text-sm text-gray-600 overflow-y-auto mb-5 border border-gray-200 leading-relaxed flex-1 min-h-0 space-y-4">
+                            {consentItems.length === 0 && (
+                                <p className="text-center text-gray-400 py-6">등록된 동의 항목이 없습니다.</p>
+                            )}
+
+                            {consentItems.map((item, idx) => (
+                                <div key={item.id} className={idx > 0 ? 'border-t border-gray-200 pt-4' : ''}>
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <span className="bg-purple-100 text-purple-600 font-bold text-xs px-2 py-0.5 rounded-full">{idx + 1}</span>
+                                        <span className="font-bold text-gray-800 text-sm">{item.title || '동의 항목'}</span>
+                                        {item.required ? (
+                                            <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-semibold">필수</span>
+                                        ) : (
+                                            <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full font-semibold">선택</span>
+                                        )}
+                                    </div>
+                                    <div className="bg-white p-3 rounded-lg text-sm text-gray-600 border border-gray-100 max-h-44 overflow-y-auto mb-2">
+                                        <div dangerouslySetInnerHTML={{ __html: item.text || '' }} />
+                                    </div>
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={!!consentChecked[item.id]}
+                                            onChange={(e) => setConsentChecked((prev) => ({ ...prev, [item.id]: e.target.checked }))}
+                                            className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                                        />
+                                        <span className={`text-sm font-semibold ${item.required ? 'text-gray-700' : 'text-gray-500'}`}>
+                                            {item.title || '위 내용'}에 동의합니다 {item.required ? '(필수)' : '(선택)'}
+                                        </span>
+                                    </label>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="shrink-0 flex items-center justify-end gap-2">
+                            <button
+                                onClick={handleConsentCancel}
+                                className="px-4 py-2 rounded-lg text-sm font-bold text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition"
+                            >
+                                취소
+                            </button>
+                            <button
+                                onClick={handleConsentConfirm}
+                                disabled={!consentReady}
+                                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-xl transition disabled:bg-gray-300 disabled:cursor-not-allowed"
+                            >
+                                동의하고 시작하기
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
 
 export default Login;
+
