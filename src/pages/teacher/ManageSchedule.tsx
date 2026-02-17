@@ -309,7 +309,7 @@ const ManageSchedule = () => {
             {/* Modal */}
             {modalOpen && (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 relative">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-4 md:p-6 relative">
                         <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2 flex items-center">
                             <i className="fas fa-edit text-blue-500 mr-2"></i>
                             {isEditMode ? "일정 수정" : "일정 등록"}
@@ -327,8 +327,8 @@ const ManageSchedule = () => {
                                 />
                             </div>
 
-                            <div className={`grid ${endEnabled ? 'grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]' : 'grid-cols-[minmax(0,1fr)_78px]'} md:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)] gap-2 items-end`}>
-                                <div>
+                            <div className="flex items-end gap-1.5 flex-nowrap overflow-hidden">
+                                <div className="flex-1 min-w-0">
                                     <label className="block text-xs font-bold text-gray-500 mb-1">시작 날짜</label>
                                     <input
                                         type="date"
@@ -344,7 +344,7 @@ const ManageSchedule = () => {
                                         }}
                                     />
                                 </div>
-                                <div>
+                                <div className={`${endEnabled ? 'w-[39%] min-w-[92px]' : 'w-[60px]'} shrink-0`}>
                                     <label className="block text-xs font-bold text-gray-500 mb-1">종료 날짜 (선택)</label>
                                     <input
                                         type="date"
@@ -387,11 +387,11 @@ const ManageSchedule = () => {
                                     value={formData.eventType}
                                     onChange={(e) => setFormData({ ...formData, eventType: e.target.value as any })}
                                 >
-                                    <option value="performance">⚡ 수행평가 (Orange)</option>
-                                    <option value="exam">🔥 지필평가 (Red)</option>
-                                    <option value="diagnosis">📝 진단평가 (Blue)</option>
-                                    <option value="formative">✍️ 형성평가 (Blue)</option>
-                                    <option value="event">🎉 행사/기타 (Green)</option>
+                                    <option value="exam">🔴 정기 시험</option>
+                                    <option value="performance">🟠 수행평가</option>
+                                    <option value="event">🟢 행사/기타</option>
+                                    <option value="diagnosis">🔵 진단평가</option>
+                                    <option value="formative">🔵 형성평가</option>
                                 </select>
                             </div>
 

@@ -116,7 +116,7 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-[60] flex items-center justify-center" onClick={onClose}>
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 m-4" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-4 md:p-6 m-4" onClick={(e) => e.stopPropagation()}>
                 <div className="flex justify-between items-center mb-6">
                     <h3 className="text-xl font-bold text-gray-800"><i className="fas fa-edit text-blue-500 mr-2"></i>일정 등록</h3>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition">
@@ -136,7 +136,7 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
                         />
                     </div>
 
-                    <div className="flex items-end gap-2 flex-nowrap overflow-hidden">
+                    <div className="flex items-end gap-1.5 flex-nowrap overflow-hidden">
                         <div className="flex-1 min-w-0">
                             <label className="block text-[11px] md:text-sm font-bold text-gray-700 mb-1">시작 날짜</label>
                             <input
@@ -152,7 +152,7 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
                                 className="w-full min-w-0 border border-gray-300 rounded-lg p-2 text-xs md:text-sm md:p-2.5 outline-none"
                             />
                         </div>
-                        <div className={`${endEnabled ? 'w-[44%] min-w-[130px]' : 'w-[78px]'} shrink-0`}>
+                        <div className={`${endEnabled ? 'w-[39%] min-w-[92px]' : 'w-[60px]'} shrink-0`}>
                             <label className="block text-[10px] md:text-xs font-bold text-gray-500 mb-1">{endEnabled ? '종료 날짜' : '종료'}</label>
                             {endEnabled ? (
                                 <div className="flex items-center gap-1">
@@ -198,11 +198,11 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
                             onChange={(e) => setEventType(e.target.value)}
                             className="w-full border border-gray-300 rounded-lg p-2.5 outline-none font-bold"
                         >
-                            <option value="exam">📖 정기 시험</option>
-                            <option value="performance">📝 수행평가</option>
-                            <option value="diagnosis">🔷 진단평가</option>
-                            <option value="formative">🔲 형성평가</option>
-                            <option value="event">🎉 행사</option>
+                            <option value="exam">🔴 정기 시험</option>
+                            <option value="performance">🟠 수행평가</option>
+                            <option value="event">🟢 행사</option>
+                            <option value="diagnosis">🔵 진단평가</option>
+                            <option value="formative">🔵 형성평가</option>
                         </select>
                     </div>
 
