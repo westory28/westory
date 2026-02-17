@@ -173,7 +173,7 @@ const Header: React.FC = () => {
                         {profileLabel}
                     </Link>
 
-                    <span className={`lg:hidden font-mono font-bold text-xs min-w-[36px] text-center ${remainingSeconds < 300 ? 'text-red-500' : 'text-stone-600'}`}>
+                    <span className={`lg:hidden inline-flex items-center justify-center font-mono font-bold text-xs min-w-[46px] px-2 py-1 rounded-md border border-stone-300 bg-stone-100 ${remainingSeconds < 300 ? 'text-red-500 border-red-300 bg-red-50' : 'text-stone-600'}`}>
                         {formatCountdown(remainingSeconds)}
                     </span>
 
