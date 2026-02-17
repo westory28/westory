@@ -19,6 +19,7 @@ export interface UserData {
     uid: string;
     email: string;
     name?: string;
+    customNameConfirmed?: boolean;
     grade?: string;
     class?: string;
     number?: string;

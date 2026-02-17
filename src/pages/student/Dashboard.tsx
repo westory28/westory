@@ -10,6 +10,16 @@ import EventDetailPanel from './components/EventDetailPanel';
 import SearchModal from './components/SearchModal';
 import { getYearSemester } from '../../lib/semesterScope';
 
+const normalizeClassValue = (value: unknown): string => {
+    const normalized = String(value ?? '').trim();
+    if (!normalized) return '';
+    const digits = normalized.match(/\d+/)?.[0] || '';
+    if (!digits) return normalized;
+    const parsed = Number(digits);
+    if (!Number.isFinite(parsed) || parsed <= 0) return '';
+    return String(parsed);
+};
+
 const StudentDashboard: React.FC = () => {
     const { userData, config } = useAuth();
     const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -23,8 +33,8 @@ const StudentDashboard: React.FC = () => {
     // Initial welcome text
     useEffect(() => {
         if (!userData) return;
-        const gradeLabel = userData.grade ? String(userData.grade).trim() : '';
-        const classLabel = userData.class ? String(userData.class).trim() : '';
+        const gradeLabel = normalizeClassValue(userData.grade);
+        const classLabel = normalizeClassValue(userData.class);
         if (gradeLabel && classLabel) {
             setWelcomeText(`${gradeLabel}학년 ${classLabel}반의 대시보드`);
         } else {
@@ -38,7 +48,9 @@ const StudentDashboard: React.FC = () => {
 
         const path = `years/${year}/semesters/${semester}/calendar`;
         const unsubscribe = onSnapshot(collection(db, path), (snapshot) => {
-            const userClassStr = (userData?.grade && userData?.class) ? `${userData.grade}-${userData.class}` : null;
+            const gradeLabel = normalizeClassValue(userData?.grade);
+            const classLabel = normalizeClassValue(userData?.class);
+            const userClassStr = gradeLabel && classLabel ? `${gradeLabel}-${classLabel}` : null;
             const loadedEvents: CalendarEvent[] = [];
 
             snapshot.forEach(doc => {

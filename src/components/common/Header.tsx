@@ -5,7 +5,7 @@ import { MENUS } from '../../constants/menus';
 
 const SESSION_DURATION_SECONDS = 60 * 60;
 const SESSION_EXPIRY_KEY = 'sessionExpiry';
-const TEACHER_EMAIL = 'westoria28@gmail.com';
+const ROLE_SESSION_KEY = 'westoryPortalRole';
 
 const formatCountdown = (seconds: number) => {
     const safe = Math.max(0, seconds);
@@ -24,8 +24,10 @@ const Header: React.FC = () => {
     const timeoutHandledRef = useRef(false);
 
     const isReady = !!currentUser;
-    const isTeacherUser = userData?.role === 'teacher' || currentUser?.email === TEACHER_EMAIL;
-    const displayName = (userData?.name || '').trim() || '사용자';
+    const savedRole = sessionStorage.getItem(ROLE_SESSION_KEY) || localStorage.getItem(ROLE_SESSION_KEY);
+    const sessionRole = savedRole === 'teacher' || savedRole === 'student' ? savedRole : null;
+    const isTeacherUser = (sessionRole || userData?.role) === 'teacher';
+    const displayName = (userData?.name || '').trim() || '이름 미설정';
 
     const portal: 'teacher' | 'student' = location.pathname.startsWith('/teacher')
         ? 'teacher'
@@ -36,12 +38,16 @@ const Header: React.FC = () => {
     const isTeacherPortal = portal === 'teacher';
     const menuItems = MENUS[portal] || [];
     const home = `/${portal}/dashboard`;
+    const profileTarget = isTeacherPortal ? '/teacher/dashboard' : '/student/mypage';
+    const profileLabel = `${displayName} ${isTeacherPortal ? '교사' : '학생'}`;
 
     const isActive = (url: string) => location.pathname.startsWith(url.split('?')[0]);
 
     const performLogout = async (isTimeout: boolean) => {
         try {
             localStorage.removeItem(SESSION_EXPIRY_KEY);
+            sessionStorage.removeItem(ROLE_SESSION_KEY);
+            localStorage.removeItem(ROLE_SESSION_KEY);
             if (isTimeout) {
                 alert('세션이 만료되어 자동 로그아웃됩니다.');
             }
@@ -157,31 +163,6 @@ const Header: React.FC = () => {
                         </span>
                     )}
 
-                    {isTeacherPortal && (
-                        <Link to="/teacher/settings" className="text-gray-400 hover:text-blue-600 transition" title="설정">
-                            <i className="fas fa-cog fa-lg"></i>
-                        </Link>
-                    )}
-
-                    {isTeacherPortal ? (
-                        <span className="user-greeting">
-                            {displayName} 교사
-                        </span>
-                    ) : (
-                        <Link to="/student/mypage" className="user-greeting hover:text-blue-600 transition" title="마이페이지">
-                            <span className="inline-flex items-center gap-2">
-                                <i className="fas fa-user-circle"></i>
-                                <span>{displayName}</span>
-                            </span>
-                        </Link>
-                    )}
-
-                    {!isTeacherPortal && (
-                        <Link to="/student/mypage" className="lg:hidden text-gray-500 hover:text-blue-600 transition p-1" title="마이페이지">
-                            <i className="fas fa-user-circle text-lg"></i>
-                        </Link>
-                    )}
-
                     <div className="hidden lg:flex items-center gap-1 md:gap-2 px-3 py-1 bg-stone-100 rounded-full border border-stone-200">
                         <i className="fas fa-stopwatch text-stone-400 text-xs"></i>
                         <span className={`font-mono font-bold text-sm w-[42px] text-center ${remainingSeconds < 300 ? 'text-red-500' : 'text-stone-600'}`}>
@@ -191,6 +172,22 @@ const Header: React.FC = () => {
                             <i className="fas fa-redo-alt text-xs"></i>
                         </button>
                     </div>
+
+                    {isTeacherPortal && (
+                        <Link to="/teacher/settings" className="text-gray-400 hover:text-blue-600 transition" title="설정">
+                            <i className="fas fa-cog fa-lg"></i>
+                        </Link>
+                    )}
+
+                    {!isTeacherPortal && (
+                        <Link to="/student/mypage" className="text-gray-500 hover:text-blue-600 transition p-1" title="마이페이지">
+                            <i className="fas fa-user-circle text-lg"></i>
+                        </Link>
+                    )}
+
+                    <Link to={profileTarget} className="user-greeting header-user-link inline-flex items-center hover:text-blue-600 transition" title={isTeacherPortal ? '관리자 페이지' : '마이페이지'}>
+                        {profileLabel}
+                    </Link>
 
                     <button onClick={handleLogout} className="btn-logout">
                         로그아웃

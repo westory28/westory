@@ -4,8 +4,6 @@ import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { SystemConfig, InterfaceConfig, UserData } from '../types';
 
-const TEACHER_EMAIL = 'westoria28@gmail.com';
-
 interface AuthContextType {
     // Backward-compatible alias for legacy pages.
     user: User | null;
@@ -61,19 +59,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     try {
                         const userRef = doc(db, 'users', user.uid);
                         const userSnap = await getDoc(userRef);
-                        const normalizedRole = user.email === TEACHER_EMAIL ? 'teacher' : 'student';
+                        const normalizedRole: UserData['role'] = 'student';
                         if (userSnap.exists()) {
                             const raw = userSnap.data() as UserData;
                             setUserData({
                                 ...raw,
                                 uid: user.uid,
-                                role: user.email === TEACHER_EMAIL ? 'teacher' : (raw.role || normalizedRole),
+                                role: raw.role === 'teacher' ? 'teacher' : normalizedRole,
                             });
                         } else {
                             const bootstrapUser: UserData = {
                                 uid: user.uid,
                                 email: user.email || '',
-                                name: user.displayName || '사용자',
+                                name: '',
+                                customNameConfirmed: false,
                                 role: normalizedRole,
                                 grade: '',
                                 class: '',

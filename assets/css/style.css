@@ -102,22 +102,50 @@ header {
     gap: 1rem;
 }
 
-@media (max-width: 1023px) {
+@media (max-width: 1024px) {
+    .header-container {
+        padding: 0 0.5rem;
+    }
+
+    .logo-text {
+        font-size: 1.2rem;
+    }
+
     .header-right {
-        gap: 0.35rem;
+        gap: 0.2rem;
     }
 }
 
 .user-greeting {
-    font-size: 0.875rem;
+    font-size: 0.78rem;
     font-weight: 600;
     color: #4b5563;
-    display: none;
+    display: inline-flex !important;
+    align-items: center;
+    flex-shrink: 0;
+    white-space: nowrap;
+    max-width: 110px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.header-user-link {
+    display: inline-flex !important;
+    align-items: center;
+    min-width: 0;
 }
 
 @media (min-width: 1024px) {
     .user-greeting {
-        display: block;
+        font-size: 0.875rem;
+        max-width: none;
+    }
+}
+
+@media (max-width: 1024px) {
+    .user-greeting {
+        max-width: 120px;
+        font-size: 0.73rem;
     }
 }
 
@@ -139,6 +167,13 @@ header {
 .btn-logout:hover {
     color: #292524;
     background-color: #f5f5f4;
+}
+
+@media (max-width: 1024px) {
+    .btn-logout {
+        font-size: 0.75rem;
+        padding: 0.35rem 0.45rem;
+    }
 }
 
 /* Mobile Menu Button */

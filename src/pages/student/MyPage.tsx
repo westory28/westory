@@ -43,7 +43,7 @@ interface QuizResult {
 }
 
 const MyPage = () => {
-    const { user } = useAuth();
+    const { user, userData } = useAuth();
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [quizCount, setQuizCount] = useState(0);
     const [scoreCount, setScoreCount] = useState(0);
@@ -271,7 +271,7 @@ const MyPage = () => {
                             </div>
                         </div>
                         <div className="text-center md:text-left flex-1 z-10">
-                            <h1 className="text-3xl font-extrabold mb-1">{profile?.name || user?.displayName || '학생'}</h1>
+                            <h1 className="text-3xl font-extrabold mb-1">{profile?.name || userData?.name || '학생'}</h1>
                             <p className="text-blue-100 font-medium mb-3">
                                 {profile ? `${profile.grade || '--'}학년 ${profile.class || '--'}반 ${profile.number || '--'}번` : '--학년 --반 --번'}
                             </p>

@@ -32,7 +32,7 @@ const Note: React.FC = () => {
                 {/* Mobile FAB to toggle sidebar */}
                 <button
                     onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                    className="lg:hidden absolute bottom-6 left-6 w-12 h-12 bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center z-20 hover:bg-gray-700 transition"
+                    className="lg:hidden fixed bottom-6 right-6 w-12 h-12 bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center z-30 hover:bg-gray-700 transition"
                 >
                     <i className="fas fa-list"></i>
                 </button>

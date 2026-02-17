@@ -68,14 +68,15 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({ isOpen, onClose, onSelect
 
             <aside
                 className={`
-                    fixed lg:static inset-y-0 left-0 z-40
+                    fixed lg:static inset-y-0 right-0 left-auto lg:right-auto z-40
                     w-[80%] max-w-[320px] lg:w-[300px] lg:max-w-none
-                    bg-white border-r border-gray-200 shadow-xl lg:shadow-none
+                    bg-white border-l border-gray-200 lg:border-l-0 lg:border-r shadow-xl lg:shadow-none
                     transform transition-transform duration-300 ease-in-out
                     flex flex-col
-                    ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+                    ${isOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'}
                     mt-16 lg:mt-0 lg:h-[calc(100vh-64px)]
                 `}
+                style={{ right: 0, left: 'auto' }}
             >
                 <div className="p-4 border-b border-gray-100 font-extrabold text-gray-800 flex justify-between items-center bg-white sticky top-0">
                     <span>📑 수업 목차</span>

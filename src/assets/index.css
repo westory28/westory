@@ -17,7 +17,7 @@
     }
 }
 
-@media (max-width: 1023px) {
+@media (max-width: 1024px) {
     .dashboard-container {
         height: auto !important;
         overflow: visible !important;
@@ -32,29 +32,53 @@
     }
 
     .fc .fc-toolbar {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 0.5rem;
+        display: grid !important;
+        grid-template-columns: auto minmax(0, 1fr) auto !important;
+        align-items: center !important;
+        gap: 0.35rem;
     }
 
     .fc .fc-toolbar-chunk {
-        display: flex;
-        justify-content: center;
-        flex-wrap: wrap;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        flex-wrap: nowrap !important;
         gap: 4px;
     }
 
+    .fc .fc-toolbar-chunk:first-child {
+        justify-content: flex-start;
+    }
+
+    .fc .fc-toolbar-chunk:last-child {
+        justify-content: flex-end;
+    }
+
     .fc .fc-toolbar-title {
-        font-size: 1rem !important;
+        font-size: 0.95rem !important;
         text-align: center;
+        white-space: nowrap;
     }
 
     .fc .fc-button {
-        padding: 0.25rem 0.55rem !important;
-        font-size: 0.75rem !important;
+        padding: 0.22rem 0.45rem !important;
+        font-size: 0.72rem !important;
+    }
+
+    .fc .fc-button-group {
+        display: inline-flex !important;
+        flex-wrap: nowrap !important;
     }
 
     .fc .fc-header-toolbar {
-        margin-bottom: 0.5rem !important;
+        margin-bottom: 0.4rem !important;
+        overflow-x: auto;
+        overflow-y: hidden;
+        white-space: nowrap;
+        scrollbar-width: none;
+    }
+
+    .fc .fc-header-toolbar::-webkit-scrollbar {
+        display: none;
     }
 }

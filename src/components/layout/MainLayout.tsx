@@ -4,7 +4,7 @@ import Footer from '../common/Footer';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-const TEACHER_EMAIL = 'westoria28@gmail.com';
+const ROLE_SESSION_KEY = 'westoryPortalRole';
 
 const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { currentUser, userData, loading } = useAuth();
@@ -18,7 +18,9 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         }
 
         if (!loading && currentUser) {
-            const inferredRole = userData?.role || (currentUser.email === TEACHER_EMAIL ? 'teacher' : 'student');
+            const savedRole = sessionStorage.getItem(ROLE_SESSION_KEY) || localStorage.getItem(ROLE_SESSION_KEY);
+            const sessionRole = savedRole === 'teacher' || savedRole === 'student' ? savedRole : null;
+            const inferredRole = sessionRole || userData?.role || 'student';
             if (location.pathname.startsWith('/teacher') && inferredRole !== 'teacher') {
                 navigate('/student/dashboard', { replace: true });
             } else if (location.pathname.startsWith('/student') && inferredRole === 'teacher') {
