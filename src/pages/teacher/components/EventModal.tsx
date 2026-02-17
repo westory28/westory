@@ -136,8 +136,8 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
                         />
                     </div>
 
-                    <div className="flex items-end gap-1.5 flex-nowrap overflow-hidden">
-                        <div className="w-[55%] min-w-0">
+                    <div className={`grid ${endEnabled ? 'grid-cols-2' : 'grid-cols-[minmax(0,1fr)_64px]'} gap-1.5 items-end overflow-hidden`}>
+                        <div className="min-w-0 overflow-hidden">
                             <label className="block text-[11px] md:text-sm font-bold text-gray-700 mb-1">시작 날짜</label>
                             <input
                                 type="date"
@@ -149,10 +149,11 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
                                         setEnd(nextStart);
                                     }
                                 }}
-                                className="w-full min-w-0 border border-gray-300 rounded-lg p-1.5 text-[10px] md:text-sm md:p-2.5 outline-none"
+                                className="block w-full max-w-full min-w-0 border border-gray-300 rounded-lg p-1.5 text-[10px] md:text-sm md:p-2.5 outline-none"
+                                style={{ minWidth: 0 }}
                             />
                         </div>
-                        <div className={`${endEnabled ? 'w-[45%] min-w-[80px]' : 'w-[56px]'} shrink-0`}>
+                        <div className="min-w-0 overflow-hidden">
                             <label className="block text-[10px] md:text-xs font-bold text-gray-500 mb-1">{endEnabled ? '종료 날짜' : '종료'}</label>
                             {endEnabled ? (
                                 <div className="flex items-center gap-1">
@@ -160,7 +161,8 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
                                         type="date"
                                         value={end}
                                         onChange={(e) => setEnd(e.target.value)}
-                                        className="w-full min-w-0 border border-gray-300 rounded-lg p-1.5 text-[10px] md:text-sm md:p-2.5 outline-none"
+                                        className="block w-full max-w-full min-w-0 border border-gray-300 rounded-lg p-1.5 text-[10px] md:text-sm md:p-2.5 outline-none"
+                                        style={{ minWidth: 0 }}
                                     />
                                     {eventType !== 'exam' && (
                                         <button
