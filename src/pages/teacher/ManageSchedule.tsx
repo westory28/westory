@@ -327,12 +327,12 @@ const ManageSchedule = () => {
                                 />
                             </div>
 
-                            <div className="flex items-end gap-1.5 flex-nowrap overflow-hidden">
-                                <div className="w-[55%] min-w-0">
+                            <div className={`grid ${endEnabled ? 'grid-cols-[minmax(0,1fr)_minmax(92px,42%)]' : 'grid-cols-[minmax(0,1fr)_64px]'} gap-1.5 items-end overflow-hidden`}>
+                                <div className="min-w-0 overflow-hidden">
                                     <label className="block text-xs font-bold text-gray-500 mb-1">시작 날짜</label>
                                     <input
                                         type="date"
-                                        className="w-full min-w-0 border rounded p-1.5 text-[10px] md:text-sm"
+                                        className="block w-full max-w-full min-w-0 border rounded p-1.5 text-[10px] md:text-sm"
                                         value={formData.start}
                                         onChange={(e) => {
                                             const nextStart = e.target.value;
@@ -344,25 +344,25 @@ const ManageSchedule = () => {
                                         }}
                                     />
                                 </div>
-                                <div className={`${endEnabled ? 'w-[45%] min-w-[80px]' : 'w-[56px]'} shrink-0`}>
-                                    <label className="block text-xs font-bold text-gray-500 mb-1">종료 날짜 (선택)</label>
-                                    <input
-                                        type="date"
-                                        className={`w-full min-w-0 border rounded p-1.5 text-[10px] md:text-sm ${endEnabled ? 'opacity-100' : 'opacity-70 cursor-pointer'}`}
-                                        value={formData.end}
-                                        disabled={!endEnabled}
-                                        onChange={(e) => setFormData({ ...formData, end: e.target.value })}
-                                    />
-                                    {!endEnabled && (
+                                <div className="min-w-0 overflow-hidden">
+                                    <label className="block text-xs font-bold text-gray-500 mb-1">{endEnabled ? '종료 날짜' : '종료'}</label>
+                                    {endEnabled ? (
+                                        <input
+                                            type="date"
+                                            className="block w-full max-w-full min-w-0 border rounded p-1.5 text-[10px] md:text-sm"
+                                            value={formData.end}
+                                            onChange={(e) => setFormData({ ...formData, end: e.target.value })}
+                                        />
+                                    ) : (
                                         <button
                                             type="button"
                                             onClick={() => {
                                                 setEndEnabled(true);
                                                 setFormData((prev) => ({ ...prev, end: prev.end || prev.start }));
                                             }}
-                                            className="mt-1 text-[10px] text-gray-500 hover:text-gray-700 underline"
+                                            className="h-[34px] w-full rounded border border-gray-300 text-[10px] font-semibold text-gray-700"
                                         >
-                                            종료 활성화
+                                            종료+
                                         </button>
                                     )}
                                     {endEnabled && formData.eventType !== 'exam' && (
