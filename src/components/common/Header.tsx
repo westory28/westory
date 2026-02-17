@@ -38,7 +38,7 @@ const Header: React.FC = () => {
     const isTeacherPortal = portal === 'teacher';
     const menuItems = MENUS[portal] || [];
     const home = `/${portal}/dashboard`;
-    const profileTarget = isTeacherPortal ? '/teacher/dashboard' : '/student/mypage';
+    const profileTarget = isTeacherPortal ? '/teacher/settings' : '/student/mypage';
     const profileLabel = `${displayName} ${isTeacherPortal ? '교사' : '학생'}`;
 
     const isActive = (url: string) => {
@@ -180,7 +180,7 @@ const Header: React.FC = () => {
                         </Link>
                     )}
 
-                    <Link to={profileTarget} className="user-greeting header-user-link inline-flex items-center hover:text-blue-600 transition" title={isTeacherPortal ? '관리자 페이지' : '마이페이지'}>
+                    <Link to={profileTarget} className="user-greeting header-user-link inline-flex items-center hover:text-blue-600 transition cursor-pointer" title={isTeacherPortal ? '관리자 페이지' : '마이페이지'}>
                         {profileLabel}
                     </Link>
 

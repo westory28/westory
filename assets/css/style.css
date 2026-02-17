@@ -42,12 +42,14 @@ header {
 
 /* Logo */
 .logo-text {
-    font-size: 1.5rem;
+    font-size: 1.62rem;
     font-weight: 800;
     letter-spacing: -0.025em;
     cursor: pointer;
     display: flex;
     align-items: center;
+    height: 100%;
+    line-height: 1;
     text-decoration: none;
 }
 
@@ -108,7 +110,7 @@ header {
     }
 
     .logo-text {
-        font-size: 1.2rem;
+        font-size: 1.3rem;
     }
 
     .header-right {
