@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+﻿import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { MENUS } from '../../constants/menus';
@@ -163,15 +163,6 @@ const Header: React.FC = () => {
                         </span>
                     )}
 
-                    <div className="hidden lg:flex items-center gap-1 md:gap-2 px-3 py-1 bg-stone-100 rounded-full border border-stone-200">
-                        <i className="fas fa-stopwatch text-stone-400 text-xs"></i>
-                        <span className={`font-mono font-bold text-sm w-[42px] text-center ${remainingSeconds < 300 ? 'text-red-500' : 'text-stone-600'}`}>
-                            {formatCountdown(remainingSeconds)}
-                        </span>
-                        <button onClick={extendSession} className="text-stone-400 hover:text-blue-600 transition p-1" title="시간 연장">
-                            <i className="fas fa-redo-alt text-xs"></i>
-                        </button>
-                    </div>
 
                     {isTeacherPortal && (
                         <Link to="/teacher/settings" className="text-gray-400 hover:text-blue-600 transition" title="설정">
@@ -188,6 +179,17 @@ const Header: React.FC = () => {
                     <Link to={profileTarget} className="user-greeting header-user-link inline-flex items-center hover:text-blue-600 transition" title={isTeacherPortal ? '관리자 페이지' : '마이페이지'}>
                         {profileLabel}
                     </Link>
+
+                    <div className="hidden lg:flex items-center gap-1 md:gap-2 px-3 py-1 bg-stone-100 rounded-full border border-stone-200">
+                        <i className="fas fa-stopwatch text-stone-400 text-xs"></i>
+                        <span className={`font-mono font-bold text-sm w-[42px] text-center ${remainingSeconds < 300 ? 'text-red-500' : 'text-stone-600'}`}>
+                            {formatCountdown(remainingSeconds)}
+                        </span>
+                        <button onClick={extendSession} className="text-stone-400 hover:text-blue-600 transition p-1" title="시간 연장">
+                            <i className="fas fa-redo-alt text-xs"></i>
+                        </button>
+                    </div>
+
 
                     <button onClick={handleLogout} className="btn-logout">
                         로그아웃
