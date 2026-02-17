@@ -202,6 +202,14 @@ const Header: React.FC = () => {
                 </div>
             </div>
 
+            {mobileMenuOpen && (
+                <div
+                    className="fixed inset-0 top-16 z-40 lg:hidden bg-transparent"
+                    onClick={() => setMobileMenuOpen(false)}
+                    aria-hidden="true"
+                ></div>
+            )}
+
             <div id="mobile-menu" className={mobileMenuOpen ? 'open' : ''}>
                 {menuItems.map((item, idx) => (
                     <div key={`${item.url}-mobile-${idx}`}>
