@@ -41,7 +41,18 @@ const Header: React.FC = () => {
     const profileTarget = isTeacherPortal ? '/teacher/dashboard' : '/student/mypage';
     const profileLabel = `${displayName} ${isTeacherPortal ? '교사' : '학생'}`;
 
-    const isActive = (url: string) => location.pathname.startsWith(url.split('?')[0]);
+    const isActive = (url: string) => {
+        const [targetPath, targetQuery] = url.split('?');
+        if (!location.pathname.startsWith(targetPath)) return false;
+        if (!targetQuery) return true;
+
+        const currentParams = new URLSearchParams(location.search);
+        const targetParams = new URLSearchParams(targetQuery);
+        for (const [key, value] of targetParams.entries()) {
+            if (currentParams.get(key) !== value) return false;
+        }
+        return true;
+    };
 
     const performLogout = async (isTimeout: boolean) => {
         try {
