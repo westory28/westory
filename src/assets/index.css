@@ -11,6 +11,10 @@
     width: 100%;
 }
 
+.fc .fc-toolbar-title {
+    font-weight: 800 !important;
+}
+
 @media (min-width: 768px) {
     .dashboard-container {
         padding: 24px 40px;
