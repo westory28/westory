@@ -57,6 +57,7 @@ const QuizRunner: React.FC = () => {
     const [timeLeft, setTimeLeft] = useState(0);
     const [hintUsedCount, setHintUsedCount] = useState(0);
     const [revealedHints, setRevealedHints] = useState<Record<number, boolean>>({});
+    const [orderOptionMap, setOrderOptionMap] = useState<Record<number, string[]>>({});
     const timerRef = useRef<NodeJS.Timeout | null>(null);
 
     // Result States
@@ -183,6 +184,18 @@ const QuizRunner: React.FC = () => {
         // Shuffle
         const selected = pool.sort(() => 0.5 - Math.random()).slice(0, targetCount);
         setSelectedQuestions(selected);
+
+        // 순서 나열형은 학생에게 보기 순서를 섞어서 보여주되,
+        // 한 번 시작한 응시에서는 동일 문항에 대해 고정 순서를 유지한다.
+        const nextOrderMap: Record<number, string[]> = {};
+        selected.forEach((q) => {
+            if (q.type !== 'order') return;
+            const base = (q.options && q.options.length > 0)
+                ? [...q.options]
+                : String(q.answer || '').split(ORDER_DELIMITER).filter(Boolean);
+            nextOrderMap[q.id] = [...base].sort(() => 0.5 - Math.random());
+        });
+        setOrderOptionMap(nextOrderMap);
     };
 
     const startQuiz = () => {
@@ -466,7 +479,7 @@ const QuizRunner: React.FC = () => {
                         {q.type === 'order' && (
                             <div className="space-y-4">
                                 <div className="flex flex-wrap gap-2">
-                                    {(q.options || []).map((opt, i) => {
+                                    {(orderOptionMap[q.id] || q.options || []).map((opt, i) => {
                                         const selected = parseOrderAnswer(currentAns).includes(opt);
                                         return (
                                             <button
