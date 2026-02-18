@@ -101,12 +101,20 @@ const StudentList: React.FC = () => {
             snap.forEach((d) => {
                 const data = d.data();
                 if (data.role !== 'teacher') {
+                    const resolvedName =
+                        String(
+                            data.name ||
+                            data.displayName ||
+                            data.nickname ||
+                            data.customName ||
+                            '',
+                        ).trim();
                     list.push({
                         id: d.id,
                         grade: parseGradeValue(data),
                         class: parseClassValue(data),
                         number: parseNumberValue(data),
-                        name: data.name || '',
+                        name: resolvedName,
                         email: data.email || '',
                     });
                 }
@@ -164,7 +172,12 @@ const StudentList: React.FC = () => {
         let result = students;
         if (gradeFilter !== 'all') result = result.filter((s) => String(s.grade) === gradeFilter);
         if (classFilter !== 'all') result = result.filter((s) => String(s.class) === classFilter);
-        if (searchQuery.trim()) result = result.filter((s) => s.name.includes(searchQuery.trim()));
+        const q = searchQuery.trim().toLowerCase();
+        if (q) {
+            result = result.filter((s) =>
+                s.name.toLowerCase().includes(q) || s.email.toLowerCase().includes(q),
+            );
+        }
         setFilteredStudents(result);
         setCurrentPage(1);
     };
@@ -185,7 +198,7 @@ const StudentList: React.FC = () => {
     };
 
     const handleDelete = async (id: string) => {
-        if (!window.confirm('?뺣쭚 ??젣?섏떆寃좎뒿?덇퉴? (蹂듦뎄 遺덇?)')) return;
+        if (!window.confirm('정말 삭제하시겠습니까? (복구 불가)')) return;
         try {
             await deleteDoc(doc(db, 'users', id));
             void fetchStudents();
@@ -195,7 +208,7 @@ const StudentList: React.FC = () => {
     };
 
     const handleBulkDelete = async () => {
-        if (!window.confirm(`?좏깮??${selectedIds.size}紐낆쓣 ?뺣쭚 ??젣?섏떆寃좎뒿?덇퉴?`)) return;
+        if (!window.confirm(`선택한 ${selectedIds.size}명을 정말 삭제하시겠습니까?`)) return;
         try {
             const batch = writeBatch(db);
             selectedIds.forEach((id) => batch.delete(doc(db, 'users', id)));
@@ -208,7 +221,7 @@ const StudentList: React.FC = () => {
     };
 
     const handleBulkPromote = async () => {
-        if (!window.confirm(`?좏깮??${selectedIds.size}紐낆쓽 ?숇뀈??1 ?щ━?쒓쿋?듬땲源?`)) return;
+        if (!window.confirm(`선택한 ${selectedIds.size}명의 학년을 1 올리시겠습니까?`)) return;
         try {
             const batch = writeBatch(db);
             selectedIds.forEach((id) => {
@@ -240,8 +253,8 @@ const StudentList: React.FC = () => {
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden min-h-[600px] flex flex-col">
                     <div className="p-5 border-b bg-gray-50 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
                         <h2 className="text-lg font-bold text-gray-800 whitespace-nowrap">
-                            <i className="fas fa-users text-blue-500 mr-2"></i> ?숈깮 紐낅떒
-                            <span className="text-sm font-normal text-gray-500 ml-2">({filteredStudents.length}紐?</span>
+                            <i className="fas fa-users text-blue-500 mr-2"></i> 학생 명단
+                            <span className="text-sm font-normal text-gray-500 ml-2">({filteredStudents.length}명)</span>
                         </h2>
                     </div>
 
@@ -340,7 +353,7 @@ const StudentList: React.FC = () => {
                                                     }}
                                                     className="font-bold text-gray-800 hover:text-blue-600 hover:underline flex items-center group-hover:text-blue-600"
                                                 >
-                                                    {student.name}
+                                                    {student.name || '(이름 없음)'}
                                                     <i className="fas fa-folder-open text-xs text-gray-300 group-hover:text-blue-400 ml-2"></i>
                                                 </button>
                                             </td>
