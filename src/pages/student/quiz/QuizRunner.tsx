@@ -1,7 +1,7 @@
 ﻿import React, { useEffect, useState, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { db } from '../../../lib/firebase';
-import { collection, query, where, getDocs, doc, getDoc, addDoc, orderBy, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../../../contexts/AuthContext';
 import Chart from 'chart.js/auto';
 import { getSemesterCollectionPath, getSemesterDocPath } from '../../../lib/semesterScope';
@@ -113,41 +113,44 @@ const QuizRunner: React.FC = () => {
             if (fetchedQuestions.length === 0) throw new Error("?깅줉??臾몄젣媛 ?놁뒿?덈떎.");
             setAllQuestions(fetchedQuestions);
 
-            // 3. Check History
+            // 3. Check History (avoid composite index by sorting client-side)
             const hRef = collection(db, getSemesterCollectionPath(config, 'quiz_results'));
-            const hQuery = query(
+            const historyQuery = query(
                 hRef,
                 where('uid', '==', userData?.uid),
                 where('unitId', '==', unitId),
                 where('category', '==', category),
-                orderBy('timestamp', 'desc')
             );
-            let hSnap = await getDocs(hQuery);
+            let hSnap = await getDocs(historyQuery);
             if (hSnap.empty) {
                 const legacyHistoryQuery = query(
                     collection(db, 'quiz_results'),
                     where('uid', '==', userData?.uid),
                     where('unitId', '==', unitId),
                     where('category', '==', category),
-                    orderBy('timestamp', 'desc')
                 );
                 hSnap = await getDocs(legacyHistoryQuery);
             }
-            setHistoryCount(hSnap.size);
+            const historyDocs = [...hSnap.docs].sort((a, b) => {
+                const aSec = a.data().timestamp?.seconds || 0;
+                const bSec = b.data().timestamp?.seconds || 0;
+                return bSec - aSec;
+            });
+            setHistoryCount(historyDocs.length);
 
-            if (!quizConfig.allowRetake && !hSnap.empty && unitId !== 'exam_prep') {
-                setBlockReason("?ъ쓳?쒓? ?덉슜?섏? ?딅뒗 ?됯??낅땲??");
+            if (!quizConfig.allowRetake && historyDocs.length > 0 && unitId !== 'exam_prep') {
+                setBlockReason("재응시가 허용되지 않는 평가입니다.");
                 setView('intro');
                 return;
             }
 
-            if ((quizConfig.cooldown || 0) > 0 && !hSnap.empty) {
-                const lastAttempt = hSnap.docs[0].data().timestamp?.toDate();
+            if ((quizConfig.cooldown || 0) > 0 && historyDocs.length > 0) {
+                const lastAttempt = historyDocs[0].data().timestamp?.toDate();
                 if (lastAttempt) {
                     const diffMins = (new Date().getTime() - lastAttempt.getTime()) / 1000 / 60;
                     if (diffMins < (quizConfig.cooldown || 0)) {
                         const remain = Math.ceil((quizConfig.cooldown || 0) - diffMins);
-                        setBlockReason(`?ъ쓳???湲??쒓컙: ${remain}遺??⑥쓬`);
+                        setBlockReason(`재응시 대기 시간: ${remain}분 남음`);
                         setView('intro');
                         return;
                     }
@@ -156,7 +159,7 @@ const QuizRunner: React.FC = () => {
 
             // Ready to start
             const solvedIds = new Set<number>();
-            hSnap.forEach(doc => {
+            historyDocs.forEach(doc => {
                 const d = doc.data();
                 if (d.details) d.details.forEach((log: any) => solvedIds.add(parseInt(log.id)));
             });
@@ -167,7 +170,7 @@ const QuizRunner: React.FC = () => {
             setView('intro');
 
         } catch (err: any) {
-            setErrorMsg(err.message || '珥덇린??以??ㅻ쪟 諛쒖깮');
+            setErrorMsg(err.message || '초기화 중 오류가 발생했습니다.');
             setView('intro'); // Show error in intro View or generic error
         }
     };
@@ -300,7 +303,7 @@ const QuizRunner: React.FC = () => {
     };
 
     // Render Views
-    if (view === 'loading') return <div className="flex h-screen items-center justify-center font-bold text-gray-500">濡쒕뵫 以?..</div>;
+    if (view === 'loading') return <div className="flex h-screen items-center justify-center font-bold text-gray-500">로딩 중...</div>;
 
     if (view === 'intro') {
         const timeLimitSeconds = quizConfig?.timeLimit || 60;
@@ -315,21 +318,21 @@ const QuizRunner: React.FC = () => {
                     </div>
                     <h1 className="text-2xl font-bold text-gray-900 mb-2">{title}</h1>
                     <p className="text-gray-500 mb-6 font-medium bg-gray-50 inline-block px-4 py-1 rounded-full text-sm">
-                        {category === 'diagnostic' ? '吏꾨떒?됯?' : (category === 'formative' ? '?뺤꽦?됯?' : '?ㅼ쟾 紐⑥쓽怨좎궗')}
+                        {category === 'diagnostic' ? '진단평가' : (category === 'formative' ? '형성평가' : '학기 시험 대비')}
                     </p>
 
-                    <div className="space-y-4 mb-8 text-left bg-blue-50 p-5 rounded-xl border border-blue-100 text-sm">
+                    <div className="space-y-4 mb-8 text-left bg-blue-50 p-5 rounded-xl border border-blue-100 text-base">
                         <div className="flex justify-between border-b border-blue-200 pb-2">
-                            <span className="text-gray-600">?쒗븳 ?쒓컙</span>
-                            <span className="font-bold text-blue-800">{timeLimitMinutes}분</span>
+                            <span className="text-gray-600">제한 시간</span>
+                            <span className="font-bold text-blue-800 text-lg">{timeLimitMinutes}분</span>
                         </div>
                         <div className="flex justify-between border-b border-blue-200 pb-2">
                             <span className="text-gray-600">출제 문항 수</span>
-                            <span className="font-bold text-blue-800">{qCount}臾명빆</span>
+                            <span className="font-bold text-blue-800 text-lg">{qCount}문항</span>
                         </div>
                         <div className="flex justify-between">
-                            <span className="text-gray-600">?섏쓽 湲곕줉</span>
-                            <span className="font-bold text-gray-800">{historyCount}???묒떆</span>
+                            <span className="text-gray-600">응시 횟수</span>
+                            <span className="font-bold text-gray-800 text-lg">{historyCount}회</span>
                         </div>
                     </div>
 
@@ -337,7 +340,7 @@ const QuizRunner: React.FC = () => {
 
                     {!blockReason ? (
                         <button onClick={startQuiz} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-md transition transform active:scale-95 text-lg">
-                            ?됯? ?쒖옉?섍린
+                            평가 시작하기
                         </button>
                     ) : (
                         <div className="text-red-500 font-bold p-4 bg-red-50 rounded-xl border border-red-100">
@@ -364,7 +367,7 @@ const QuizRunner: React.FC = () => {
                     </div>
                     <div className="flex items-center gap-2">
                         <div className="bg-amber-50 border border-amber-200 px-3 py-1 rounded-full text-xs font-bold text-amber-700">
-                            ?뚰듃 {hintUsedCount}/{maxHintUses}
+                            힌트 {hintUsedCount}/{maxHintUses}
                         </div>
                         <div className="flex items-center gap-2 bg-white px-3 py-1 rounded-full shadow-sm border border-gray-200">
                         <i className="fas fa-stopwatch text-red-500"></i>
