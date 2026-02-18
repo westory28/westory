@@ -65,7 +65,7 @@ const ManageQuiz: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col">
-            <main className="flex-1 w-full max-w-7xl mx-auto px-4 lg:px-6 py-6 flex flex-col">
+            <main className="flex-1 w-full max-w-7xl mx-auto px-4 lg:px-6 py-6 flex flex-col min-h-0">
                 <div className="flex border-b border-gray-200 mb-4 bg-white rounded-t-lg px-2 shrink-0 overflow-x-auto">
                     <button
                         onClick={() => setActiveTab('manage')}
@@ -88,7 +88,7 @@ const ManageQuiz: React.FC = () => {
                 </div>
 
                 {activeTab === 'manage' && (
-                    <div className="flex-1 flex flex-col lg:flex-row gap-6 overflow-hidden pb-2 relative">
+                    <div className="flex-1 flex flex-col lg:flex-row gap-6 overflow-hidden pb-2 relative min-h-0">
                         {mobileTreeOpen && (
                             <button
                                 type="button"
@@ -115,7 +115,7 @@ const ManageQuiz: React.FC = () => {
                             <QuizUnitTree onSelect={handleNodeSelect} />
                         </div>
 
-                        <div className="w-full lg:w-2/3 flex flex-col h-full overflow-hidden">
+                        <div className="w-full lg:w-2/3 flex flex-col h-full min-h-0 overflow-hidden">
                             {selectedNode ? (
                                 <QuizEditor
                                     node={selectedNode}

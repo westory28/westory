@@ -398,7 +398,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
     const categoryLabel = category === 'diagnostic' ? '진단평가' : category === 'formative' ? '형성평가' : '학기 시험 대비';
 
     return (
-        <div className="flex flex-col h-full bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="flex flex-col h-full min-h-0 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <div className="p-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
                 <div>
                     <div className="text-xs text-gray-500 font-bold mb-1">{type === 'special' ? '학기 시험 대비' : `${parentTitle} > ${node.title}`}</div>
@@ -448,7 +448,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
                 </div>
             )}
 
-            <div className="flex-1 overflow-hidden p-6 bg-gray-50">
+            <div className="flex-1 min-h-0 overflow-hidden p-6 bg-gray-50">
                 <div className="h-full overflow-y-auto pr-1 space-y-4">
                     {loading ? (
                         <div className="text-center p-10 text-gray-400">문제를 불러오는 중...</div>
