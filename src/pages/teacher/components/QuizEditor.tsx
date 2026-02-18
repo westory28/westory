@@ -449,7 +449,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
             )}
 
             <div className="flex-1 min-h-0 overflow-hidden p-6 bg-gray-50">
-                <div className="h-full overflow-y-auto pr-1 space-y-4">
+                <div className="min-h-0 max-h-[calc(100vh-260px)] lg:max-h-[calc(100vh-230px)] overflow-y-auto pr-1 space-y-4">
                     {loading ? (
                         <div className="text-center p-10 text-gray-400">문제를 불러오는 중...</div>
                     ) : filteredQuestions.length === 0 ? (

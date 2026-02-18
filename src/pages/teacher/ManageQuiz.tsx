@@ -115,7 +115,7 @@ const ManageQuiz: React.FC = () => {
                             <QuizUnitTree onSelect={handleNodeSelect} />
                         </div>
 
-                        <div className="w-full lg:w-2/3 flex flex-col h-full min-h-0 overflow-hidden">
+                        <div className="w-full lg:w-2/3 flex flex-col h-full min-h-0 overflow-hidden lg:h-[calc(100vh-170px)]">
                             {selectedNode ? (
                                 <QuizEditor
                                     node={selectedNode}
