@@ -190,6 +190,17 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
         resetPreview();
     };
 
+    const handleArrowDownFocus = (e: React.KeyboardEvent<HTMLElement>) => {
+        if (e.key !== 'ArrowDown') return;
+        const current = e.currentTarget as HTMLElement;
+        const fields = Array.from(document.querySelectorAll<HTMLElement>('.quiz-compose-field'))
+            .filter((el) => el.offsetParent !== null && !el.hasAttribute('disabled'));
+        const currentIndex = fields.indexOf(current);
+        if (currentIndex < 0 || currentIndex >= fields.length - 1) return;
+        e.preventDefault();
+        fields[currentIndex + 1].focus();
+    };
+
     const openCreateComposer = () => {
         resetForm();
         setIsComposerOpen(true);
@@ -508,14 +519,14 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
 
                                 <div className="space-y-4">
                         <div className={`grid gap-3 ${type === 'normal' ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                            <select value={formType} onChange={(e) => handleTypeChange(e.target.value as QuestionType)} className="border p-2 rounded text-sm bg-gray-50">
+                            <select value={formType} onChange={(e) => handleTypeChange(e.target.value as QuestionType)} onKeyDown={handleArrowDownFocus} className="quiz-compose-field border p-2 rounded text-sm bg-gray-50">
                                 <option value="choice">객관식</option>
                                 <option value="ox">O/X</option>
                                 <option value="word">단답형</option>
                                 <option value="order">순서 나열형</option>
                             </select>
                             {type === 'normal' && (
-                                <select value={formSubUnit} onChange={(e) => setFormSubUnit(e.target.value)} className="border p-2 rounded text-sm bg-gray-50">
+                                <select value={formSubUnit} onChange={(e) => setFormSubUnit(e.target.value)} onKeyDown={handleArrowDownFocus} className="quiz-compose-field border p-2 rounded text-sm bg-gray-50">
                                     <option value="">소단원 전체</option>
                                     {normalSubUnits.map((sub) => <option key={sub.id} value={sub.id}>{sub.title}</option>)}
                                 </select>
@@ -524,22 +535,22 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
 
                         {type === 'special' && (
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-2 bg-blue-50 p-2 rounded border border-blue-100">
-                                <select value={epSource.big} onChange={(e) => setEpSource({ big: e.target.value, mid: '', small: '' })} className="border border-blue-200 rounded p-1.5 text-xs bg-white">
+                                <select value={epSource.big} onChange={(e) => setEpSource({ big: e.target.value, mid: '', small: '' })} onKeyDown={handleArrowDownFocus} className="quiz-compose-field border border-blue-200 rounded p-1.5 text-xs bg-white">
                                     <option value="">대단원 선택</option>
                                     {allBigUnits.map((big) => <option key={big.id} value={big.id}>{big.title}</option>)}
                                 </select>
-                                <select value={epSource.mid} onChange={(e) => setEpSource((prev) => ({ ...prev, mid: e.target.value, small: '' }))} className="border border-blue-200 rounded p-1.5 text-xs bg-white">
+                                <select value={epSource.mid} onChange={(e) => setEpSource((prev) => ({ ...prev, mid: e.target.value, small: '' }))} onKeyDown={handleArrowDownFocus} className="quiz-compose-field border border-blue-200 rounded p-1.5 text-xs bg-white">
                                     <option value="">중단원 선택</option>
                                     {sourceMidUnits.map((mid) => <option key={mid.id} value={mid.id}>{mid.title}</option>)}
                                 </select>
-                                <select value={epSource.small} onChange={(e) => setEpSource((prev) => ({ ...prev, small: e.target.value }))} className="border border-blue-200 rounded p-1.5 text-xs bg-white">
+                                <select value={epSource.small} onChange={(e) => setEpSource((prev) => ({ ...prev, small: e.target.value }))} onKeyDown={handleArrowDownFocus} className="quiz-compose-field border border-blue-200 rounded p-1.5 text-xs bg-white">
                                     <option value="">소단원 선택</option>
                                     {sourceSmallUnits.map((small) => <option key={small.id} value={small.id}>{small.title}</option>)}
                                 </select>
                             </div>
                         )}
 
-                        <input type="text" placeholder="문제 내용을 입력하세요" value={formText} onChange={(e) => setFormText(e.target.value)} className="w-full border p-2 rounded text-sm" />
+                        <input type="text" placeholder="문제 내용을 입력하세요" value={formText} onChange={(e) => setFormText(e.target.value)} onKeyDown={handleArrowDownFocus} className="quiz-compose-field w-full border p-2 rounded text-sm" />
 
                         <label className="inline-flex items-center gap-2 text-xs font-bold text-gray-500 cursor-pointer hover:text-blue-600 bg-gray-100 px-3 py-1 rounded transition w-fit">
                             <i className="fas fa-image"></i> 이미지 첨부
@@ -555,7 +566,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
                                 {choiceOptions.map((option, index) => (
                                     <div key={`choice-option-${index}`} className="flex items-center gap-2">
                                         <span className="w-7 h-7 rounded-full bg-gray-200 text-gray-700 text-xs font-bold flex items-center justify-center">{index + 1}</span>
-                                        <input type="text" value={option} onChange={(e) => setChoiceOptions((prev) => prev.map((opt, i) => (i === index ? e.target.value : opt)))} placeholder={`${index + 1}번 보기`} className="flex-1 border rounded p-2 text-sm bg-white" />
+                                        <input type="text" value={option} onChange={(e) => setChoiceOptions((prev) => prev.map((opt, i) => (i === index ? e.target.value : opt)))} onKeyDown={handleArrowDownFocus} placeholder={`${index + 1}번 보기`} className="quiz-compose-field flex-1 border rounded p-2 text-sm bg-white" />
                                         <button type="button" onClick={() => setChoiceAnswerIndex(index)} className={`text-xs px-2 py-1 rounded border ${choiceAnswerIndex === index ? 'border-blue-500 bg-blue-100 text-blue-700 font-bold' : 'border-gray-300 text-gray-500'}`}>정답</button>
                                         <button type="button" onClick={() => removeChoiceOption(index)} className="text-gray-400 hover:text-red-500 px-1"><i className="fas fa-times"></i></button>
                                     </div>
@@ -566,12 +577,12 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
                         {formType === 'ox' && (
                             <div className="grid grid-cols-2 gap-2">
                                 {(['O', 'X'] as const).map((value) => (
-                                    <button key={value} type="button" onClick={() => setOxAnswer(value)} className={`py-3 rounded-lg border-2 font-bold transition ${oxAnswer === value ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-500 hover:border-blue-300'}`}>{value}</button>
+                                    <button key={value} type="button" onClick={() => setOxAnswer(value)} onKeyDown={handleArrowDownFocus} className={`quiz-compose-field py-3 rounded-lg border-2 font-bold transition ${oxAnswer === value ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-500 hover:border-blue-300'}`}>{value}</button>
                                 ))}
                             </div>
                         )}
 
-                        {formType === 'word' && <input type="text" value={wordAnswer} onChange={(e) => setWordAnswer(e.target.value)} placeholder="단답형 정답 입력" className="w-full border rounded p-2 text-sm bg-white" />}
+                        {formType === 'word' && <input type="text" value={wordAnswer} onChange={(e) => setWordAnswer(e.target.value)} onKeyDown={handleArrowDownFocus} placeholder="단답형 정답 입력" className="quiz-compose-field w-full border rounded p-2 text-sm bg-white" />}
 
                         {formType === 'order' && (
                             <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 space-y-2">
@@ -582,7 +593,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
                                 {orderItems.map((item, index) => (
                                     <div key={`order-item-${index}`} className="flex items-center gap-2">
                                         <span className="w-7 h-7 rounded-full bg-gray-200 text-gray-700 text-xs font-bold flex items-center justify-center">{index + 1}</span>
-                                        <input type="text" value={item} onChange={(e) => setOrderItems((prev) => prev.map((v, i) => (i === index ? e.target.value : v)))} className="flex-1 border rounded p-2 text-sm bg-white" />
+                                        <input type="text" value={item} onChange={(e) => setOrderItems((prev) => prev.map((v, i) => (i === index ? e.target.value : v)))} onKeyDown={handleArrowDownFocus} className="quiz-compose-field flex-1 border rounded p-2 text-sm bg-white" />
                                         <button type="button" onClick={() => moveOrderItem(index, 'up')} className="text-gray-400 hover:text-blue-600 px-1"><i className="fas fa-arrow-up"></i></button>
                                         <button type="button" onClick={() => moveOrderItem(index, 'down')} className="text-gray-400 hover:text-blue-600 px-1"><i className="fas fa-arrow-down"></i></button>
                                     </div>
@@ -590,15 +601,15 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
                             </div>
                         )}
 
-                        <textarea placeholder="해설 (선택)" value={formExp} onChange={(e) => setFormExp(e.target.value)} className="w-full border p-2 rounded text-sm h-16 resize-none" />
+                        <textarea placeholder="해설 (선택)" value={formExp} onChange={(e) => setFormExp(e.target.value)} onKeyDown={handleArrowDownFocus} className="quiz-compose-field w-full border p-2 rounded text-sm h-16 resize-none" />
 
                         <div className="border border-gray-200 rounded-lg p-3 bg-amber-50">
                             <label className="inline-flex items-center gap-2 text-sm font-bold text-amber-800 cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={hintEnabled}
-                                    onChange={(e) => setHintEnabled(e.target.checked)}
-                                />
+                                    <input
+                                        type="checkbox"
+                                        checked={hintEnabled}
+                                        onChange={(e) => setHintEnabled(e.target.checked)}
+                                    />
                                 힌트 제공
                             </label>
                             {hintEnabled && (
@@ -606,7 +617,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
                                     placeholder="학생에게 보여줄 힌트를 입력하세요"
                                     value={hintText}
                                     onChange={(e) => setHintText(e.target.value)}
-                                    className="mt-2 w-full border p-2 rounded text-sm h-16 resize-none bg-white"
+                                    onKeyDown={handleArrowDownFocus}
+                                    className="quiz-compose-field mt-2 w-full border p-2 rounded text-sm h-16 resize-none bg-white"
                                 />
                             )}
                         </div>
