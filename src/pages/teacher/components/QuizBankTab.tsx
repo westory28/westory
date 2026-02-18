@@ -38,6 +38,14 @@ const EVAL_TYPE_MAP: Record<string, string> = {
     exam: 'exam_prep',
 };
 
+const QUESTION_TYPE_LABEL: Record<string, string> = {
+    choice: '객관식',
+    ox: 'O/X',
+    word: '단답형',
+    short: '단답형',
+    order: '순서 나열형',
+};
+
 const QuizBankTab: React.FC = () => {
     const { config } = useAuth();
     const [questions, setQuestions] = useState<Question[]>([]);
@@ -268,7 +276,7 @@ const QuizBankTab: React.FC = () => {
                                         {q.category === 'diagnostic' ? '진단' : q.category === 'formative' ? '형성' : '실전'}
                                     </span>
                                 </td>
-                                <td className="p-3 text-center text-xs font-bold text-gray-600">{q.type}</td>
+                                <td className="p-3 text-center text-xs font-bold text-gray-600">{QUESTION_TYPE_LABEL[q.type] || q.type}</td>
                                 <td className="p-3">
                                     <div className="flex items-start gap-2">
                                         {q.image && <i className="fas fa-image text-blue-500 mt-1"></i>}

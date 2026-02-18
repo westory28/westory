@@ -9,7 +9,7 @@ import { getSemesterCollectionPath, getSemesterDocPath } from '../../../lib/seme
 // Interfaces
 interface Question {
     id: number;
-    type: 'choice' | 'ox' | 'short' | 'word';
+    type: 'choice' | 'ox' | 'short' | 'word' | 'order';
     question: string;
     options?: string[]; // For choice
     answer: string | number;
@@ -29,6 +29,7 @@ interface QuizConfig {
 }
 
 const QuizRunner: React.FC = () => {
+    const ORDER_DELIMITER = '||';
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const { userData, config } = useAuth();
@@ -198,6 +199,21 @@ const QuizRunner: React.FC = () => {
     const handleAnswer = (val: string) => {
         const qId = selectedQuestions[currentIndex].id;
         setAnswers(prev => ({ ...prev, [qId]: val }));
+    };
+
+    const parseOrderAnswer = (value: string) => value.split(ORDER_DELIMITER).filter(Boolean);
+
+    const appendOrderSelection = (option: string) => {
+        const qId = selectedQuestions[currentIndex].id;
+        const current = parseOrderAnswer(answers[qId] || '');
+        if (current.includes(option)) return;
+        handleAnswer([...current, option].join(ORDER_DELIMITER));
+    };
+
+    const removeOrderSelection = (index: number) => {
+        const qId = selectedQuestions[currentIndex].id;
+        const current = parseOrderAnswer(answers[qId] || '');
+        handleAnswer(current.filter((_, i) => i !== index).join(ORDER_DELIMITER));
     };
 
     const nextQuestion = () => {
@@ -391,6 +407,40 @@ const QuizRunner: React.FC = () => {
                         )}
                     </div>
 
+                        {q.type === 'order' && (
+                            <div className="space-y-4">
+                                <div className="flex flex-wrap gap-2">
+                                    {(q.options || []).map((opt, i) => {
+                                        const selected = parseOrderAnswer(currentAns).includes(opt);
+                                        return (
+                                            <button
+                                                key={`${opt}-${i}`}
+                                                type="button"
+                                                onClick={() => appendOrderSelection(opt)}
+                                                className={`px-3 py-2 rounded-lg border-2 text-sm font-bold transition ${selected ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 hover:border-blue-300'}`}
+                                            >
+                                                {opt}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                <div className="rounded-xl border border-dashed border-blue-300 bg-blue-50 p-3 min-h-[84px]">
+                                    <div className="text-xs text-gray-500 mb-2">선택한 순서 (클릭하면 제거)</div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {parseOrderAnswer(currentAns).map((item, i) => (
+                                            <button
+                                                key={`${item}-${i}`}
+                                                type="button"
+                                                onClick={() => removeOrderSelection(i)}
+                                                className="px-2 py-1 rounded bg-blue-600 text-white text-xs font-bold"
+                                            >
+                                                {i + 1}. {item}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     <div className="mt-8 pt-4 border-t border-gray-100 flex justify-end">
                         <button
                             onClick={nextQuestion}
