@@ -30,15 +30,55 @@ const ScoreDashboard: React.FC = () => {
 
     // Filters
     const [semester, setSemester] = useState(config?.semester || '1');
-    const [grade, setGrade] = useState('1');
-    const [sortMode, setSortMode] = useState('latest');
+    const [grade, setGrade] = useState(userData?.grade || '1');
+    const [sortMode, setSortMode] = useState('importance');
 
     const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const didInitDefaultsRef = useRef(false);
+
+    const getDraftKey = (targetSemester: string) => {
+        const year = config?.year || '2025';
+        const uid = userData?.uid || 'anonymous';
+        return `scoreDraft:${uid}:${year}:${targetSemester}`;
+    };
+
+    const persistDraftScores = (targetSemester: string, scoresToDraft: { [key: string]: string }) => {
+        try {
+            localStorage.setItem(getDraftKey(targetSemester), JSON.stringify({
+                scores: scoresToDraft,
+                savedAt: Date.now()
+            }));
+        } catch (error) {
+            console.error('Failed to persist temporary scores:', error);
+        }
+    };
+
+    const loadDraftScores = (targetSemester: string): { [key: string]: string } => {
+        try {
+            const raw = localStorage.getItem(getDraftKey(targetSemester));
+            if (!raw) return {};
+            const parsed = JSON.parse(raw) as { scores?: { [key: string]: string } };
+            return parsed?.scores && typeof parsed.scores === 'object' ? parsed.scores : {};
+        } catch (error) {
+            console.error('Failed to load temporary scores:', error);
+            return {};
+        }
+    };
+
+    const clearDraftScores = (targetSemester: string) => {
+        try {
+            localStorage.removeItem(getDraftKey(targetSemester));
+        } catch (error) {
+            console.error('Failed to clear temporary scores:', error);
+        }
+    };
 
     useEffect(() => {
-        if (userData && config) {
-            setSemester(config.semester); // Sync with global config initially
-        }
+        if (!userData || !config || didInitDefaultsRef.current) return;
+        setSemester(config.semester || '1');
+        setGrade(userData.grade || '1');
+        setSortMode('importance');
+        didInitDefaultsRef.current = true;
     }, [userData, config]);
 
     useEffect(() => {
@@ -58,6 +98,25 @@ const ScoreDashboard: React.FC = () => {
         const timer = window.setTimeout(() => setLastSavedAt(null), 2000);
         return () => window.clearTimeout(timer);
     }, [lastSavedAt]);
+
+    useEffect(() => {
+        const handleBeforeUnload = () => {
+            persistDraftScores(semester, userScores);
+        };
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'hidden') {
+                persistDraftScores(semester, userScores);
+            }
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, [semester, userScores]);
 
     const fetchData = async (targetSemester: string = semester) => {
         setLoading(true);
@@ -81,11 +140,10 @@ const ScoreDashboard: React.FC = () => {
             if (userData) {
                 const scoreRef = doc(db, 'users', userData.uid, 'academic_records', scoreDocId);
                 const scoreSnap = await getDoc(scoreRef);
-                if (scoreSnap.exists()) {
-                    setUserScores(scoreSnap.data().scores || {});
-                } else {
-                    setUserScores({});
-                }
+                const remoteScores = scoreSnap.exists() ? (scoreSnap.data().scores || {}) : {};
+                const draftScores = loadDraftScores(targetSemester);
+                const mergedScores = { ...remoteScores, ...draftScores };
+                setUserScores(mergedScores);
 
                 const userRef = doc(db, 'users', userData.uid);
                 const userSnap = await getDoc(userRef);
@@ -117,6 +175,7 @@ const ScoreDashboard: React.FC = () => {
         const newScores = { ...userScores, [key]: finalVal };
         setUserScores(newScores);
         setSaveError(null);
+        persistDraftScores(semester, newScores);
 
         // Debounce Save
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -151,6 +210,7 @@ const ScoreDashboard: React.FC = () => {
             }, { merge: true });
             setLastSavedAt(Date.now());
             setSaveError(null);
+            clearDraftScores(targetSemester);
         } catch (e) {
             console.error("Save failed", e);
             setSaveError("저장에 실패했습니다. 잠시 후 다시 시도해 주세요.");
