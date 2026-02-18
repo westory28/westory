@@ -35,6 +35,13 @@ const ExamGradingPlan: React.FC = () => {
     const [subject, setSubject] = useState('');
     const [items, setItems] = useState<GradingItem[]>([{ type: '정기', name: '', maxScore: 0, ratio: 0 }]);
     const [sortMode, setSortMode] = useState('latest');
+    const koreanInputProps = {
+        lang: 'ko',
+        inputMode: 'text' as const,
+        autoCapitalize: 'off' as const,
+        autoCorrect: 'off' as const,
+        spellCheck: false
+    };
 
     useEffect(() => {
         loadPlans();
@@ -193,7 +200,8 @@ const ExamGradingPlan: React.FC = () => {
                                 type="text"
                                 value={subject}
                                 onChange={(e) => setSubject(e.target.value)}
-                                placeholder="예: 역사, 사회"
+                                placeholder="예: 국어, 역사, 사회"
+                                {...koreanInputProps}
                                 className="w-full border border-blue-200 rounded p-2 text-sm focus:ring-2 focus:ring-blue-400"
                             />
                         </div>
@@ -216,9 +224,10 @@ const ExamGradingPlan: React.FC = () => {
                                         </select>
                                         <input
                                             type="text"
-                                            placeholder="항목명"
+                                            placeholder="예: 서술형, 발표, 포트폴리오"
                                             value={item.name}
                                             onChange={(e) => handleItemChange(idx, 'name', e.target.value)}
+                                            {...koreanInputProps}
                                             className="border border-gray-300 rounded px-2 py-1.5 text-xs flex-1 min-w-0"
                                         />
                                         <input
