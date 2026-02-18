@@ -133,7 +133,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                         const label = getEventTypeLabel(arg.event.extendedProps?.eventType);
                         const timeCell = arg.el.querySelector('.fc-list-event-time');
                         if (timeCell) {
-                            timeCell.textContent = `${label} -`;
+                            timeCell.textContent = `${label} |`;
                         }
                     }}
                     height="100%"
