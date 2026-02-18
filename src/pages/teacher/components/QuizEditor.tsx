@@ -448,41 +448,43 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
                 </div>
             )}
 
-            <div className="flex-1 overflow-y-auto p-6 bg-gray-50 space-y-4">
-                {loading ? (
-                    <div className="text-center p-10 text-gray-400">문제를 불러오는 중...</div>
-                ) : filteredQuestions.length === 0 ? (
-                    <div className="text-center p-10 text-gray-400 border-2 border-dashed border-gray-200 rounded-lg">등록된 문제가 없습니다.</div>
-                ) : (
-                    filteredQuestions.map((q, idx) => (
-                        <div key={q.id} className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-                            <div className="flex justify-between items-start mb-2">
-                                <span className="bg-gray-100 text-gray-600 text-[10px] font-bold px-2 py-1 rounded">Q{idx + 1} | {TYPE_LABEL[q.type] || q.type}</span>
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => startEdit(q)}
-                                        className="text-gray-300 hover:text-blue-500"
-                                        title="문제 수정"
-                                    >
-                                        <i className="fas fa-pen"></i>
-                                    </button>
-                                    <button onClick={() => void handleDelete(q.id)} className="text-gray-300 hover:text-red-500" title="문제 삭제"><i className="fas fa-trash"></i></button>
+            <div className="flex-1 overflow-hidden p-6 bg-gray-50">
+                <div className="h-full overflow-y-auto pr-1 space-y-4">
+                    {loading ? (
+                        <div className="text-center p-10 text-gray-400">문제를 불러오는 중...</div>
+                    ) : filteredQuestions.length === 0 ? (
+                        <div className="text-center p-10 text-gray-400 border-2 border-dashed border-gray-200 rounded-lg">등록된 문제가 없습니다.</div>
+                    ) : (
+                        filteredQuestions.map((q, idx) => (
+                            <div key={q.id} className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                                <div className="flex justify-between items-start mb-2">
+                                    <span className="bg-gray-100 text-gray-600 text-[10px] font-bold px-2 py-1 rounded">Q{idx + 1} | {TYPE_LABEL[q.type] || q.type}</span>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => startEdit(q)}
+                                            className="text-gray-300 hover:text-blue-500"
+                                            title="문제 수정"
+                                        >
+                                            <i className="fas fa-pen"></i>
+                                        </button>
+                                        <button onClick={() => void handleDelete(q.id)} className="text-gray-300 hover:text-red-500" title="문제 삭제"><i className="fas fa-trash"></i></button>
+                                    </div>
                                 </div>
-                            </div>
-                            <p className="font-bold text-gray-800 mb-1 text-sm">{q.question}</p>
-                            <p className="text-xs text-gray-500">
-                                <span className="text-blue-600 font-bold mr-2">정답: {formatAnswer(q)}</span>
-                                {q.options && q.options.length > 0 ? `(${q.options.join(', ')})` : ''}
-                            </p>
-                            {!!(q.hintEnabled && q.hint) && (
-                                <p className="text-xs text-amber-600 font-bold mt-1">
-                                    <i className="fas fa-lightbulb mr-1"></i>힌트 제공
+                                <p className="font-bold text-gray-800 mb-1 text-sm">{q.question}</p>
+                                <p className="text-xs text-gray-500">
+                                    <span className="text-blue-600 font-bold mr-2">정답: {formatAnswer(q)}</span>
+                                    {q.options && q.options.length > 0 ? `(${q.options.join(', ')})` : ''}
                                 </p>
-                            )}
-                        </div>
-                    ))
-                )}
+                                {!!(q.hintEnabled && q.hint) && (
+                                    <p className="text-xs text-amber-600 font-bold mt-1">
+                                        <i className="fas fa-lightbulb mr-1"></i>힌트 제공
+                                    </p>
+                                )}
+                            </div>
+                        ))
+                    )}
+                </div>
 
                 <button
                     type="button"
