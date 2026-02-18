@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../lib/firebase';
-import { doc, getDoc, collection, getDocs, query, where, orderBy, limit, documentId } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, query, where, orderBy, limit, documentId, setDoc, serverTimestamp } from 'firebase/firestore';
 import {
     Chart as ChartJS,
     CategoryScale,
@@ -33,6 +33,7 @@ interface UserProfile {
     grade?: number;
     class?: number;
     number?: number;
+    profileIcon?: string;
 }
 
 interface QuizResult {
@@ -43,6 +44,10 @@ interface QuizResult {
 }
 
 const SUBJECT_PRIORITY = ['국어', '영어', '수학', '사회', '역사', '도덕', '과학', '기술', '가정', '기술가정', '기가', '정보', '음악', '미술', '체육'];
+const SAFE_STUDENT_ICONS = [
+    '🧑‍🎓', '👨‍🎓', '👩‍🎓', '🧑', '👦', '👧', '🧒', '🙋', '🙋‍♂️', '🙋‍♀️',
+    '🧠', '📚', '📝', '✍️', '🎯', '🔍', '💡', '🌱', '🌟', '🚀'
+];
 
 const MyPage = () => {
     const { user, userData } = useAuth();
@@ -55,6 +60,9 @@ const MyPage = () => {
     const [wrongAnswers, setWrongAnswers] = useState<any[]>([]);
     const [loadingWrong, setLoadingWrong] = useState(false);
     const [expandedQuestionId, setExpandedQuestionId] = useState<string | null>(null);
+    const [profileIcon, setProfileIcon] = useState('🧑‍🎓');
+    const [iconPickerOpen, setIconPickerOpen] = useState(false);
+    const [savingIcon, setSavingIcon] = useState(false);
 
     const [currentConfig, setCurrentConfig] = useState<{ year: string; semester: string } | null>(null);
 
@@ -79,7 +87,9 @@ const MyPage = () => {
             try {
                 const userDoc = await getDoc(doc(db, 'users', user.uid));
                 if (userDoc.exists()) {
-                    setProfile(userDoc.data() as UserProfile);
+                    const loaded = userDoc.data() as UserProfile;
+                    setProfile(loaded);
+                    setProfileIcon(loaded.profileIcon || '🧑‍🎓');
                 }
             } catch (error) {
                 console.error("Error loading profile:", error);
@@ -263,6 +273,37 @@ const MyPage = () => {
         setExpandedQuestionId(expandedQuestionId === index ? null : index);
     };
 
+    const getTitleBadges = () => {
+        const badges: string[] = [];
+        if (scoreCount >= 8) badges.push('수업 시간에 집중하는');
+        if (quizCount >= 8) badges.push('역사에 열정적인');
+        if (wrongAnswers.length > 0 && wrongAnswers.length <= 3) badges.push('실수를 성장으로 바꾸는');
+        if (wrongAnswers.length === 0 && quizCount >= 3) badges.push('꼼꼼하게 정답을 만드는');
+        if (badges.length === 0) badges.push('배움의 씨앗을 키우는');
+        return badges.slice(0, 2);
+    };
+
+    const titleBadges = getTitleBadges();
+
+    const handleProfileIconChange = async (nextIcon: string) => {
+        if (!user) return;
+        setSavingIcon(true);
+        try {
+            await setDoc(doc(db, 'users', user.uid), {
+                profileIcon: nextIcon,
+                updatedAt: serverTimestamp()
+            }, { merge: true });
+            setProfileIcon(nextIcon);
+            setProfile((prev) => (prev ? { ...prev, profileIcon: nextIcon } : prev));
+            setIconPickerOpen(false);
+        } catch (error) {
+            console.error('Failed to save profile icon:', error);
+            alert('아이콘 저장에 실패했습니다.');
+        } finally {
+            setSavingIcon(false);
+        }
+    };
+
     return (
         <div className="bg-gray-50 min-h-screen flex flex-col">
             <main className="flex-grow w-full max-w-6xl mx-auto px-4 py-8">
@@ -274,13 +315,25 @@ const MyPage = () => {
 
                         <div className="relative z-10">
                             <div className="w-24 h-24 bg-white/20 backdrop-blur rounded-full flex items-center justify-center text-4xl border-4 border-white/30 shadow-lg">
-                                👨‍🎓
+                                {profileIcon}
                             </div>
-                            <div className="absolute bottom-0 right-0 bg-yellow-400 text-yellow-900 text-xs font-bold px-2 py-1 rounded-full shadow-sm">
-                                LV.1
-                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIconPickerOpen(true)}
+                                className="absolute bottom-0 right-0 bg-white text-blue-600 text-xs font-bold w-7 h-7 rounded-full shadow-md border border-blue-100 hover:bg-blue-50 transition flex items-center justify-center"
+                                title="아이콘 수정"
+                            >
+                                <i className="fas fa-pen"></i>
+                            </button>
                         </div>
                         <div className="text-center md:text-left flex-1 z-10">
+                            <div className="mb-2 flex flex-wrap gap-2 justify-center md:justify-start">
+                                {titleBadges.map((badge) => (
+                                    <span key={badge} className="inline-flex items-center bg-white/20 text-blue-50 backdrop-blur rounded-full px-3 py-1 text-xs font-bold border border-white/30">
+                                        🏅 {badge}
+                                    </span>
+                                ))}
+                            </div>
                             <h1 className="text-3xl font-extrabold mb-1">{profile?.name || userData?.name || '학생'}</h1>
                             <p className="text-blue-100 font-medium mb-3">
                                 {profile ? `${profile.grade || '--'}학년 ${profile.class || '--'}반 ${profile.number || '--'}번` : '--학년 --반 --번'}
@@ -432,6 +485,34 @@ const MyPage = () => {
                     )}
                 </section>
             </main>
+
+            {iconPickerOpen && (
+                <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setIconPickerOpen(false)}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-bold text-gray-800">프로필 아이콘 선택</h3>
+                            <button onClick={() => setIconPickerOpen(false)} className="text-gray-400 hover:text-gray-600">
+                                <i className="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <p className="text-xs text-gray-500 mb-3">학생용 아이콘만 제공합니다. 마음에 드는 아이콘을 선택하세요.</p>
+                        <div className="grid grid-cols-5 gap-2">
+                            {SAFE_STUDENT_ICONS.map((icon) => (
+                                <button
+                                    key={icon}
+                                    type="button"
+                                    disabled={savingIcon}
+                                    onClick={() => void handleProfileIconChange(icon)}
+                                    className={`h-11 rounded-lg border text-2xl transition ${profileIcon === icon ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-gray-50'}`}
+                                    title={`아이콘 ${icon}`}
+                                >
+                                    {icon}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
