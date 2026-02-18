@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useMemo, useState } from 'react';
-import { collection, doc, getDoc, getDocs } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, serverTimestamp, setDoc } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../contexts/AuthContext';
 import { getSemesterCollectionPath, getSemesterDocPath } from '../../../lib/semesterScope';
@@ -23,12 +23,19 @@ interface Question {
     refBig?: string;
     refMid?: string;
     refSmall?: string;
+    options?: string[];
+    explanation?: string;
+    hintEnabled?: boolean;
+    hint?: string;
 }
 
 interface QuestionStat {
     attempts: number;
     correct: number;
 }
+
+type SortKey = 'none' | 'rate' | 'category' | 'type';
+type SortDirection = 'asc' | 'desc';
 
 interface BankFilterState {
     big: string;
@@ -65,10 +72,40 @@ const QuizBankTab: React.FC = () => {
         type: '',
         evalType: '',
     });
+    const [sortKey, setSortKey] = useState<SortKey>('none');
+    const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+    const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
+    const [savingEdit, setSavingEdit] = useState(false);
 
     const toRoman = (value: number) => {
         const romans = ['', 'Ⅰ', 'Ⅱ', 'Ⅲ', 'Ⅳ', 'Ⅴ', 'Ⅵ', 'Ⅶ', 'Ⅷ', 'Ⅸ', 'Ⅹ', 'Ⅺ', 'Ⅻ'];
         return romans[value] || String(value);
+    };
+
+    const [editCategory, setEditCategory] = useState('');
+    const [editType, setEditType] = useState('');
+    const [editQuestionText, setEditQuestionText] = useState('');
+    const [editAnswerText, setEditAnswerText] = useState('');
+    const [editExplanationText, setEditExplanationText] = useState('');
+    const [editOptionsText, setEditOptionsText] = useState('');
+
+    const toggleSort = (key: Exclude<SortKey, 'none'>) => {
+        if (sortKey !== key) {
+            setSortKey(key);
+            setSortDirection('desc');
+            return;
+        }
+        if (sortDirection === 'desc') {
+            setSortDirection('asc');
+            return;
+        }
+        setSortKey('none');
+        setSortDirection('desc');
+    };
+
+    const sortIndicator = (key: Exclude<SortKey, 'none'>) => {
+        if (sortKey !== key) return 'fa-sort text-gray-300';
+        return sortDirection === 'desc' ? 'fa-sort-down text-blue-600' : 'fa-sort-up text-blue-600';
     };
 
     useEffect(() => {
@@ -263,9 +300,30 @@ const QuizBankTab: React.FC = () => {
             return true;
         });
 
-        list.sort((a, b) => a.id - b.id);
+        list.sort((a, b) => {
+            if (sortKey === 'rate') {
+                const aRate = getRateInfo(a).rate;
+                const bRate = getRateInfo(b).rate;
+                if (aRate !== bRate) return sortDirection === 'asc' ? aRate - bRate : bRate - aRate;
+            }
+            if (sortKey === 'category') {
+                const aLabel = getCategoryLabel(a.category);
+                const bLabel = getCategoryLabel(b.category);
+                if (aLabel !== bLabel) {
+                    return sortDirection === 'asc' ? aLabel.localeCompare(bLabel) : bLabel.localeCompare(aLabel);
+                }
+            }
+            if (sortKey === 'type') {
+                const aLabel = QUESTION_TYPE_LABEL[a.type] || a.type;
+                const bLabel = QUESTION_TYPE_LABEL[b.type] || b.type;
+                if (aLabel !== bLabel) {
+                    return sortDirection === 'asc' ? aLabel.localeCompare(bLabel) : bLabel.localeCompare(aLabel);
+                }
+            }
+            return a.id - b.id;
+        });
         return list;
-    }, [filters, questions, treeData]);
+    }, [filters, questions, treeData, sortKey, sortDirection, questionStats]);
 
     const getRateInfo = (q: Question) => {
         const stat = questionStats[String(q.docId)] || questionStats[String(q.id)] || { attempts: 0, correct: 0 };
@@ -274,6 +332,13 @@ const QuizBankTab: React.FC = () => {
         }
         const rate = Math.round((stat.correct / stat.attempts) * 100);
         return { rate, attempts: stat.attempts, text: `${rate}% (${stat.correct}/${stat.attempts})` };
+    };
+
+    const getCategoryLabel = (category: string) => {
+        if (category === 'diagnostic') return '진단';
+        if (category === 'formative') return '형성';
+        if (category === 'exam_prep') return '시험 대비';
+        return '기타';
     };
 
     const handleBigChange = (value: string) => {
@@ -291,6 +356,70 @@ const QuizBankTab: React.FC = () => {
             mid: value,
             small: '',
         }));
+    };
+
+    const openEditModal = (question: Question) => {
+        setEditingQuestion(question);
+        setEditCategory(question.category || 'diagnostic');
+        setEditType(question.type || 'choice');
+        setEditQuestionText(question.question || '');
+        setEditAnswerText(String(question.answer || ''));
+        setEditExplanationText(question.explanation || '');
+        setEditOptionsText((question.options || []).join('\n'));
+    };
+
+    const closeEditModal = () => {
+        if (savingEdit) return;
+        setEditingQuestion(null);
+        setEditCategory('');
+        setEditType('');
+        setEditQuestionText('');
+        setEditAnswerText('');
+        setEditExplanationText('');
+        setEditOptionsText('');
+    };
+
+    const saveEditedQuestion = async () => {
+        if (!editingQuestion) return;
+        if (!editQuestionText.trim()) {
+            alert('문제 내용을 입력하세요.');
+            return;
+        }
+        if (!editAnswerText.trim()) {
+            alert('정답을 입력하세요.');
+            return;
+        }
+
+        const options = editOptionsText
+            .split('\n')
+            .map((line) => line.trim())
+            .filter(Boolean);
+
+        const payload: Question = {
+            ...editingQuestion,
+            category: editCategory || editingQuestion.category,
+            type: editType || editingQuestion.type,
+            question: editQuestionText.trim(),
+            answer: editAnswerText.trim(),
+            explanation: editExplanationText.trim(),
+            options,
+        };
+
+        setSavingEdit(true);
+        try {
+            await setDoc(
+                doc(db, getSemesterDocPath(config, 'quiz_questions', String(editingQuestion.docId))),
+                { ...payload, updatedAt: serverTimestamp() },
+                { merge: true },
+            );
+            setQuestions((prev) => prev.map((q) => (q.docId === editingQuestion.docId ? payload : q)));
+            closeEditModal();
+        } catch (error: any) {
+            console.error(error);
+            alert(`문제 수정에 실패했습니다${error?.code ? ` (${error.code})` : ''}.`);
+        } finally {
+            setSavingEdit(false);
+        }
     };
 
     return (
@@ -347,12 +476,27 @@ const QuizBankTab: React.FC = () => {
                 <table className="w-full text-sm text-left">
                     <thead className="bg-white font-bold text-gray-700 sticky top-0 shadow-sm z-10">
                         <tr>
-                            <th className="p-3 w-24 text-center">??</th>
-                            <th className="p-3 w-28 text-center">?? ??</th>
-                            <th className="p-3 w-24 text-center">?? ??</th>
-                            <th className="p-3">??</th>
-                            <th className="p-3 w-40">??</th>
-                            <th className="p-3 w-48">???</th>
+                            <th className="p-3 w-24 text-center">번호</th>
+                            <th className="p-3 w-28 text-center">
+                                <button type="button" onClick={() => toggleSort('category')} className="inline-flex items-center gap-1 hover:text-blue-600">
+                                    평가 유형
+                                    <i className={`fas ${sortIndicator('category')} text-xs`}></i>
+                                </button>
+                            </th>
+                            <th className="p-3 w-24 text-center">
+                                <button type="button" onClick={() => toggleSort('type')} className="inline-flex items-center gap-1 hover:text-blue-600">
+                                    문항 유형
+                                    <i className={`fas ${sortIndicator('type')} text-xs`}></i>
+                                </button>
+                            </th>
+                            <th className="p-3">문제</th>
+                            <th className="p-3 w-40">정답</th>
+                            <th className="p-3 w-48">
+                                <button type="button" onClick={() => toggleSort('rate')} className="inline-flex items-center gap-1 hover:text-blue-600">
+                                    정답률
+                                    <i className={`fas ${sortIndicator('rate')} text-xs`}></i>
+                                </button>
+                            </th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 bg-white">
@@ -369,7 +513,11 @@ const QuizBankTab: React.FC = () => {
                         )}
 
                         {!loading && filteredQuestions.map((q) => (
-                            <tr key={`${q.docId}-${q.question.slice(0, 10)}`} className="hover:bg-blue-50 transition">
+                            <tr
+                                key={`${q.docId}-${q.question.slice(0, 10)}`}
+                                className="hover:bg-blue-50 transition cursor-pointer"
+                                onClick={() => openEditModal(q)}
+                            >
                                 <td className="p-3 text-center text-gray-500 text-xs" title={`문항 ID: ${q.docId}`}>{questionDisplayCodes[q.docId] || '-'}</td>
                                 <td className="p-3 text-center">
                                     <span className={`px-2 py-1 rounded text-xs font-bold ${
@@ -401,6 +549,89 @@ const QuizBankTab: React.FC = () => {
                     </tbody>
                 </table>
             </div>
+
+            {editingQuestion && (
+                <div className="fixed inset-0 z-50">
+                    <button
+                        type="button"
+                        className="absolute inset-0 bg-black/45"
+                        onClick={closeEditModal}
+                        aria-label="문제 수정 팝업 닫기"
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center p-4">
+                        <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl border border-gray-200 p-5">
+                            <div className="flex items-start justify-between mb-4">
+                                <div>
+                                    <h3 className="font-bold text-gray-800 text-lg flex items-center">
+                                        <i className="fas fa-pen text-blue-500 mr-2"></i>
+                                        문제 수정
+                                    </h3>
+                                    <div className="mt-2 text-xs text-gray-500">
+                                        문항 ID: {editingQuestion.docId} / 표시 번호: {questionDisplayCodes[editingQuestion.docId] || '-'}
+                                    </div>
+                                </div>
+                                <button type="button" onClick={closeEditModal} className="text-gray-400 hover:text-gray-700">
+                                    <i className="fas fa-times text-lg"></i>
+                                </button>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <select value={editCategory} onChange={(e) => setEditCategory(e.target.value)} className="border p-2 rounded text-sm bg-gray-50">
+                                        <option value="diagnostic">진단평가</option>
+                                        <option value="formative">형성평가</option>
+                                        <option value="exam_prep">학기 시험 대비</option>
+                                    </select>
+                                    <select value={editType} onChange={(e) => setEditType(e.target.value)} className="border p-2 rounded text-sm bg-gray-50">
+                                        <option value="choice">객관식</option>
+                                        <option value="ox">O/X</option>
+                                        <option value="word">단답형</option>
+                                        <option value="order">순서 나열형</option>
+                                    </select>
+                                </div>
+
+                                <textarea
+                                    value={editQuestionText}
+                                    onChange={(e) => setEditQuestionText(e.target.value)}
+                                    placeholder="문제 내용"
+                                    className="w-full border p-2 rounded text-sm min-h-[90px]"
+                                />
+
+                                <input
+                                    type="text"
+                                    value={editAnswerText}
+                                    onChange={(e) => setEditAnswerText(e.target.value)}
+                                    placeholder="정답"
+                                    className="w-full border p-2 rounded text-sm"
+                                />
+
+                                <textarea
+                                    value={editOptionsText}
+                                    onChange={(e) => setEditOptionsText(e.target.value)}
+                                    placeholder="보기/순서 항목 (줄바꿈으로 구분, 선택 입력)"
+                                    className="w-full border p-2 rounded text-sm min-h-[90px]"
+                                />
+
+                                <textarea
+                                    value={editExplanationText}
+                                    onChange={(e) => setEditExplanationText(e.target.value)}
+                                    placeholder="해설 (선택)"
+                                    className="w-full border p-2 rounded text-sm min-h-[80px]"
+                                />
+
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button type="button" onClick={closeEditModal} className="bg-gray-100 text-gray-700 font-bold py-2 rounded hover:bg-gray-200 transition">
+                                        취소
+                                    </button>
+                                    <button type="button" onClick={() => void saveEditedQuestion()} disabled={savingEdit} className="bg-blue-600 text-white font-bold py-2 rounded hover:bg-blue-700 transition disabled:bg-blue-300">
+                                        {savingEdit ? '저장 중...' : '수정 저장'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
