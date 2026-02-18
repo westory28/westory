@@ -42,6 +42,8 @@ interface QuizResult {
     details?: any[];
 }
 
+const SUBJECT_PRIORITY = ['국어', '영어', '수학', '사회', '역사', '도덕', '과학', '기술', '가정', '기술가정', '기가', '정보', '음악', '미술', '체육'];
+
 const MyPage = () => {
     const { user, userData } = useAuth();
     const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -135,8 +137,16 @@ const MyPage = () => {
             }
         });
 
-        const labels = Object.keys(subjects);
-        const data = Object.values(subjects);
+        const sortedEntries = Object.entries(subjects).sort((a, b) => {
+            const getPriority = (subject: string) => {
+                const idx = SUBJECT_PRIORITY.findIndex((key) => subject.includes(key));
+                return idx === -1 ? 999 : idx;
+            };
+            return getPriority(a[0]) - getPriority(b[0]) || a[0].localeCompare(b[0]);
+        });
+
+        const labels = sortedEntries.map(([subject]) => subject);
+        const data = sortedEntries.map(([, score]) => score);
         setScoreCount(labels.length);
 
         if (data.length > 0) {
