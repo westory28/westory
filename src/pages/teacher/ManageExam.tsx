@@ -18,16 +18,14 @@ const ManageExam: React.FC = () => {
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col">
             <main className="w-full max-w-7xl mx-auto px-4 py-6 flex-1 flex flex-col">
-                <div className="flex justify-between items-end mb-4 flex-shrink-0">
-                    <div>
-                        <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
-                            📊 점수 및 평가 기준 관리
-                        </h1>
-                        <p className="text-sm text-gray-500 mt-1">성적 산출 기준을 설정하고, 정기 시험 정답을 관리하세요.</p>
-                    </div>
-                    <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
-                        {semesterBadgeText}
-                    </span>
+                <div className="mb-4 flex-shrink-0">
+                    <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-3 flex-wrap">
+                        📊 점수 및 평가 기준 관리
+                        <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
+                            {semesterBadgeText}
+                        </span>
+                    </h1>
+                    <p className="text-sm text-gray-500 mt-1">성적 산출 기준을 설정하고, 정기 시험 정답을 관리하세요.</p>
                 </div>
 
                 {/* Tabs */}

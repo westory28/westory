@@ -135,7 +135,7 @@ const ExamGradingPlan: React.FC = () => {
     const [grade, setGrade] = useState('3');
     const [subject, setSubject] = useState('');
     const [items, setItems] = useState<GradingItem[]>([{ type: '정기', name: '', maxScore: 0, ratio: 0 }]);
-    const [sortMode, setSortMode] = useState('latest');
+    const [sortMode, setSortMode] = useState('importance');
     const koreanInputProps = {
         lang: 'ko',
         inputMode: 'text' as const,
