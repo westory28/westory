@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useState } from 'react';
-import { collection, deleteDoc, doc, getDoc, getDocs, writeBatch } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import MoveClassModal from './components/MoveClassModal';
 import StudentEditModal from './components/StudentEditModal';
@@ -7,11 +7,13 @@ import StudentHistoryModal from './components/StudentHistoryModal';
 
 interface Student {
     id: string;
+    userId: string;
     grade: number;
     class: string;
     number: number;
     name: string;
     email: string;
+    isTeacherAccount: boolean;
 }
 
 interface SchoolClassOption {
@@ -20,6 +22,7 @@ interface SchoolClassOption {
 }
 
 const STUDENTS_PER_PAGE = 50;
+const ADMIN_EMAIL = 'westoria28@gmail.com';
 
 const parseGradeValue = (data: any) => {
     const raw = String(data?.grade ?? '').trim();
@@ -100,9 +103,21 @@ const StudentList: React.FC = () => {
             const list: Student[] = [];
             snap.forEach((d) => {
                 const data = d.data();
-                if (data.role !== 'teacher') {
+                const email = String(data.email || '').trim();
+                const isTeacherAccount = data.role === 'teacher' || email === ADMIN_EMAIL;
+                const hasStudentProfile =
+                    !!String(data.studentName || '').trim() ||
+                    !!String(data.studentGrade || '').trim() ||
+                    !!String(data.studentClass || '').trim() ||
+                    !!String(data.studentNumber || '').trim() ||
+                    !!String(data.grade || '').trim() ||
+                    !!String(data.class || '').trim() ||
+                    !!String(data.number || '').trim();
+                const includeAsStudent = data.role !== 'teacher' || (email === ADMIN_EMAIL && hasStudentProfile);
+                if (includeAsStudent) {
                     const resolvedName =
                         String(
+                            data.studentName ||
                             data.name ||
                             data.displayName ||
                             data.nickname ||
@@ -111,11 +126,13 @@ const StudentList: React.FC = () => {
                         ).trim();
                     list.push({
                         id: d.id,
-                        grade: parseGradeValue(data),
-                        class: parseClassValue(data),
-                        number: parseNumberValue(data),
+                        userId: d.id,
+                        grade: parseInt(String(data.studentGrade ?? ''), 10) || parseGradeValue(data),
+                        class: String(data.studentClass ?? '').trim() || parseClassValue(data),
+                        number: parseInt(String(data.studentNumber ?? ''), 10) || parseNumberValue(data),
                         name: resolvedName,
-                        email: data.email || '',
+                        email,
+                        isTeacherAccount,
                     });
                 }
             });
@@ -200,7 +217,23 @@ const StudentList: React.FC = () => {
     const handleDelete = async (id: string) => {
         if (!window.confirm('정말 삭제하시겠습니까? (복구 불가)')) return;
         try {
-            await deleteDoc(doc(db, 'users', id));
+            const target = students.find((s) => s.id === id);
+            if (!target) return;
+
+            if (target.isTeacherAccount) {
+                await updateDoc(doc(db, 'users', target.userId), {
+                    studentName: '',
+                    studentGrade: '',
+                    studentClass: '',
+                    studentNumber: '',
+                    grade: '',
+                    class: '',
+                    number: '',
+                    updatedAt: serverTimestamp(),
+                });
+            } else {
+                await deleteDoc(doc(db, 'users', target.userId));
+            }
             void fetchStudents();
         } catch (error) {
             console.error('Delete failed', error);
@@ -211,7 +244,24 @@ const StudentList: React.FC = () => {
         if (!window.confirm(`선택한 ${selectedIds.size}명을 정말 삭제하시겠습니까?`)) return;
         try {
             const batch = writeBatch(db);
-            selectedIds.forEach((id) => batch.delete(doc(db, 'users', id)));
+            selectedIds.forEach((id) => {
+                const target = students.find((s) => s.id === id);
+                if (!target) return;
+                if (target.isTeacherAccount) {
+                    batch.update(doc(db, 'users', target.userId), {
+                        studentName: '',
+                        studentGrade: '',
+                        studentClass: '',
+                        studentNumber: '',
+                        grade: '',
+                        class: '',
+                        number: '',
+                        updatedAt: serverTimestamp(),
+                    });
+                } else {
+                    batch.delete(doc(db, 'users', target.userId));
+                }
+            });
             await batch.commit();
             setSelectedIds(new Set());
             void fetchStudents();
@@ -227,7 +277,7 @@ const StudentList: React.FC = () => {
             selectedIds.forEach((id) => {
                 const student = students.find((x) => x.id === id);
                 if (student) {
-                    batch.update(doc(db, 'users', id), { grade: student.grade + 1 });
+                    batch.update(doc(db, 'users', student.userId), { grade: student.grade + 1 });
                 }
             });
             await batch.commit();
@@ -374,7 +424,7 @@ const StudentList: React.FC = () => {
                                                     <button
                                                         onClick={() => void handleDelete(student.id)}
                                                         className="bg-red-50 text-red-600 hover:bg-red-100 px-2.5 py-1.5 rounded text-xs font-bold transition flex items-center gap-1"
-                                                        title="삭제"
+                                                        title={student.isTeacherAccount ? '학생 정보만 삭제' : '삭제'}
                                                     >
                                                         <i className="fas fa-trash"></i>
                                                         <span className="hidden lg:inline">삭제</span>
