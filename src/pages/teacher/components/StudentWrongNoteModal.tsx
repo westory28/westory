@@ -174,8 +174,14 @@ const StudentWrongNoteModal: React.FC<StudentWrongNoteModalProps> = ({ isOpen, o
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[88vh] flex flex-col overflow-hidden">
+        <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+            onClick={onClose}
+        >
+            <div
+                className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[88vh] flex flex-col overflow-hidden"
+                onClick={(event) => event.stopPropagation()}
+            >
                 <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
                     <div>
                         <h3 className="text-lg font-bold text-gray-800">{studentName} 오답 노트</h3>

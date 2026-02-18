@@ -53,6 +53,8 @@ const QUESTION_TYPE_LABEL: Record<string, string> = {
     order: '순서 나열형',
 };
 
+const normalizeQuestionType = (type: string): QuestionType => (type === 'short' ? 'word' : ((type as QuestionType) || 'choice'));
+
 const QuizBankTab: React.FC = () => {
     const { config } = useAuth();
     const [questions, setQuestions] = useState<Question[]>([]);
@@ -480,7 +482,7 @@ const QuizBankTab: React.FC = () => {
     };
 
     const openEditModal = (question: Question) => {
-        const normalizedType: QuestionType = question.type === 'short' ? 'word' : ((question.type as QuestionType) || 'choice');
+        const normalizedType = normalizeQuestionType(question.type);
         setEditingQuestion(question);
         setEditCategory(question.category || 'diagnostic');
         setEditType(normalizedType);
@@ -538,8 +540,102 @@ const QuizBankTab: React.FC = () => {
         setEditOrderItems(orderOptions.length >= 2 ? orderOptions : ['', '']);
     };
 
-    const closeEditModal = () => {
+    const buildCurrentEditSnapshot = () => {
+        const choiceOptions = trimList(editChoiceOptions);
+        const orderOptions = trimList(editOrderItems);
+        let answer = '';
+        let options: string[] = [];
+
+        if (editType === 'choice') {
+            answer = editChoiceAnswerIndex !== null ? (editChoiceOptions[editChoiceAnswerIndex]?.trim() || '') : '';
+            options = choiceOptions;
+        } else if (editType === 'ox') {
+            answer = editOxAnswer;
+            options = ['O', 'X'];
+        } else if (editType === 'word') {
+            answer = editWordAnswer.trim();
+            options = [];
+        } else {
+            answer = orderOptions.join(ORDER_DELIMITER);
+            options = orderOptions;
+        }
+
+        return {
+            category: editCategory || 'diagnostic',
+            type: editType,
+            question: editQuestionText.trim(),
+            explanation: editExplanationText.trim(),
+            image: editImage || '',
+            options,
+            answer,
+            hintEnabled: editHintEnabled,
+            hint: editHintEnabled ? editHintText.trim() : '',
+        };
+    };
+
+    const buildOriginalEditSnapshot = (question: Question) => {
+        const normalizedType = normalizeQuestionType(question.type);
+        let options: string[] = [];
+        let answer = '';
+
+        if (normalizedType === 'choice') {
+            options = trimList(question.options || []);
+            answer = String(question.answer || '').trim();
+        } else if (normalizedType === 'ox') {
+            options = ['O', 'X'];
+            answer = question.answer === 'O' || question.answer === 'X' ? question.answer : '';
+        } else if (normalizedType === 'word') {
+            options = [];
+            answer = String(question.answer || '').trim();
+        } else {
+            options = trimList(
+                (question.options && question.options.length > 0)
+                    ? question.options
+                    : String(question.answer || '').split(ORDER_DELIMITER),
+            );
+            answer = options.join(ORDER_DELIMITER);
+        }
+
+        return {
+            category: question.category || 'diagnostic',
+            type: normalizedType,
+            question: (question.question || '').trim(),
+            explanation: (question.explanation || '').trim(),
+            image: question.image || '',
+            options,
+            answer,
+            hintEnabled: !!(question.hintEnabled && question.hint),
+            hint: question.hintEnabled && question.hint ? String(question.hint).trim() : '',
+        };
+    };
+
+    const hasUnsavedEditChanges = useMemo(() => {
+        if (!editingQuestion) return false;
+        const current = buildCurrentEditSnapshot();
+        const original = buildOriginalEditSnapshot(editingQuestion);
+        return JSON.stringify(current) !== JSON.stringify(original);
+    }, [
+        editingQuestion,
+        editCategory,
+        editType,
+        editQuestionText,
+        editExplanationText,
+        editImage,
+        editChoiceOptions,
+        editChoiceAnswerIndex,
+        editOxAnswer,
+        editWordAnswer,
+        editOrderItems,
+        editHintEnabled,
+        editHintText,
+    ]);
+
+    const closeEditModal = (force = false) => {
         if (savingEdit) return;
+        if (!force && hasUnsavedEditChanges) {
+            const confirmed = window.confirm('수정 중인 내용이 있습니다. 정말로 닫으시겠습니까?');
+            if (!confirmed) return;
+        }
         setEditingQuestion(null);
         setEditCategory('diagnostic');
         setEditType('choice');
@@ -638,7 +734,7 @@ const QuizBankTab: React.FC = () => {
                 { merge: true },
             );
             setQuestions((prev) => prev.map((q) => (q.docId === editingQuestion.docId ? payload : q)));
-            closeEditModal();
+            closeEditModal(true);
         } catch (error: any) {
             console.error(error);
             alert(`문제 수정에 실패했습니다${error?.code ? ` (${error.code})` : ''}.`);
@@ -772,7 +868,7 @@ const QuizBankTab: React.FC = () => {
                     <button
                         type="button"
                         className="absolute inset-0 bg-black/45"
-                        onClick={closeEditModal}
+                        onClick={() => closeEditModal()}
                         aria-label="문제 수정 팝업 닫기"
                     />
                     <div className="absolute inset-0 flex items-center justify-center p-4">
@@ -788,7 +884,7 @@ const QuizBankTab: React.FC = () => {
                                         <span className="px-2 py-1 rounded bg-blue-100 text-blue-700 font-bold">{getCategoryPillLabel(editCategory)}</span>
                                     </div>
                                 </div>
-                                <button type="button" onClick={closeEditModal} className="text-gray-400 hover:text-gray-700">
+                                <button type="button" onClick={() => closeEditModal()} className="text-gray-400 hover:text-gray-700">
                                     <i className="fas fa-times text-lg"></i>
                                 </button>
                             </div>
@@ -935,7 +1031,7 @@ const QuizBankTab: React.FC = () => {
                                     <button type="button" onClick={() => void saveEditedQuestion()} disabled={savingEdit} className="bg-blue-600 text-white font-bold py-2 rounded hover:bg-blue-700 transition disabled:bg-blue-300">
                                         {savingEdit ? '저장 중...' : '수정 저장'}
                                     </button>
-                                    <button type="button" onClick={closeEditModal} className="bg-gray-100 text-gray-700 font-bold py-2 rounded hover:bg-gray-200 transition">
+                                    <button type="button" onClick={() => closeEditModal()} className="bg-gray-100 text-gray-700 font-bold py-2 rounded hover:bg-gray-200 transition">
                                         취소
                                     </button>
                                 </div>
