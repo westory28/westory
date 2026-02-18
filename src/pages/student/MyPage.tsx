@@ -528,52 +528,73 @@ const MyPage: React.FC = () => {
     ];
 
     return (
-        <div className="bg-gray-50 min-h-screen">
-            <main className="w-full max-w-7xl mx-auto px-4 py-6">
-                <div className="flex flex-col lg:flex-row gap-6">
-                    <aside className="lg:w-80">
-                        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-3 space-y-3">
+        <div className="min-h-screen bg-gray-50 flex flex-col">
+            <main className="flex flex-col lg:flex-row flex-1 p-6 lg:p-10 gap-8 max-w-7xl mx-auto w-full">
+                <aside className="w-full lg:w-64 shrink-0">
+                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden sticky top-8">
+                        <div className="p-6 border-b border-gray-100">
+                            <h2 className="text-xl font-extrabold text-gray-800 flex items-center gap-2">
+                                <i className="fas fa-user-circle text-gray-400"></i>
+                                마이페이지
+                            </h2>
+                        </div>
+                        <nav className="flex flex-col">
                             {leftMenus.map((item) => (
                                 <button
                                     key={item.key}
                                     type="button"
                                     onClick={() => setMenu(item.key)}
-                                    className={`w-full rounded-xl border-2 px-4 h-20 transition text-left flex items-center ${
+                                    className={`p-4 text-left font-bold text-sm transition-colors flex items-center gap-3 ${
                                         menu === item.key
-                                            ? 'border-blue-500 bg-blue-50 text-blue-700'
-                                            : 'border-gray-200 bg-white text-gray-700 hover:border-blue-200 hover:bg-gray-50'
+                                            ? 'bg-blue-50 text-blue-600 border-l-4 border-blue-600'
+                                            : 'text-gray-600 hover:bg-gray-50 border-l-4 border-transparent'
                                     }`}
                                 >
-                                    <i className={`fas ${item.icon} text-lg mr-3`}></i>
-                                    <span className="font-bold text-base">{item.title}</span>
+                                    <div className="w-6 text-center">
+                                        <i className={`fas ${item.icon}`}></i>
+                                    </div>
+                                    {item.title}
                                 </button>
                             ))}
-                        </div>
-                    </aside>
+                        </nav>
+                    </div>
+                </aside>
 
-                    <section className="flex-1 bg-white border border-gray-200 rounded-2xl shadow-sm p-6">
+                <section className="flex-1">
+                    <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6 lg:p-8">
                         {menu === 'profile' && (
                             <div className="space-y-6">
                                 <h2 className="text-2xl font-bold text-gray-800">나의 기본 정보</h2>
-                                <div className="flex items-center gap-5">
-                                    <div className="w-24 h-24 rounded-full bg-blue-100 text-4xl flex items-center justify-center relative">
+                                <div className="rounded-2xl bg-gradient-to-br from-blue-600 via-blue-500 to-indigo-500 text-white p-6 md:p-7 shadow-lg">
+                                    <div className="flex items-center gap-5">
+                                    <div className="w-24 h-24 rounded-full bg-white/20 backdrop-blur-sm text-4xl flex items-center justify-center relative border border-white/40">
                                         {profileIcon}
                                         <button
                                             type="button"
                                             onClick={() => setIconModalOpen(true)}
-                                            className="absolute -bottom-1 -right-1 w-8 h-8 bg-white border border-gray-300 rounded-full text-xs"
+                                            className="absolute -bottom-1 -right-1 w-8 h-8 bg-white border border-blue-100 rounded-full text-xs text-blue-700 font-bold"
                                         >
                                             변경
                                         </button>
                                     </div>
                                     <div>
-                                        <div className="text-xl font-bold text-gray-800">{profile?.name || userData?.name || '학생'}</div>
-                                        <div className="text-gray-500">
-                                            {profile
-                                                ? `${profile.grade || '--'}학년 ${profile.class || '--'}반 ${profile.number || '--'}번`
-                                                : '--학년 --반 --번'}
+                                        <div className="text-2xl font-extrabold tracking-tight">{profile?.name || userData?.name || '학생'}</div>
+                                        <div className="mt-2 text-2xl md:text-3xl font-black tracking-tight">
+                                            {profile ? (
+                                                <>
+                                                    <span>{profile.grade || '--'}학년</span>
+                                                    <span className="mx-2 opacity-80">·</span>
+                                                    <span>{profile.class || '--'}반</span>
+                                                    <span className="mx-2 opacity-80">·</span>
+                                                    <span>{profile.number || '--'}번</span>
+                                                </>
+                                            ) : (
+                                                '--학년 · --반 · --번'
+                                            )}
                                         </div>
+                                        <div className="mt-2 text-sm text-blue-100">학년, 반, 번호 정보가 표시됩니다.</div>
                                     </div>
+                                </div>
                                 </div>
                             </div>
                         )}
@@ -776,8 +797,8 @@ const MyPage: React.FC = () => {
                                 </div>
                             </div>
                         )}
-                    </section>
-                </div>
+                    </div>
+                </section>
             </main>
 
             {iconModalOpen && (
