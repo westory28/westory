@@ -249,6 +249,11 @@ const QuizRunner: React.FC = () => {
         }
     };
 
+    const prevQuestion = () => {
+        if (currentIndex <= 0) return;
+        setCurrentIndex((prev) => prev - 1);
+    };
+
     const finishQuiz = async (isTimeout = false) => {
         if (timerRef.current) clearInterval(timerRef.current);
         if (isTimeout) alert('제한 시간이 종료되었습니다.');
@@ -493,7 +498,19 @@ const QuizRunner: React.FC = () => {
                             </div>
                         )}
                     </div>
-                    <div className="mt-8 pt-4 border-t border-gray-100 flex justify-end">
+                    <div className="mt-8 pt-4 border-t border-gray-100 flex items-center justify-between">
+                        <button
+                            onClick={prevQuestion}
+                            disabled={currentIndex === 0}
+                            className={`px-6 py-3 rounded-xl font-bold transition shadow-sm flex items-center ${
+                                currentIndex === 0
+                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                    : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                            }`}
+                        >
+                            <i className="fas fa-arrow-left mr-2"></i>
+                            이전 문제
+                        </button>
                         <button
                             onClick={nextQuestion}
                             className="bg-gray-800 text-white px-8 py-3 rounded-xl font-bold hover:bg-gray-900 transition shadow-lg flex items-center"
