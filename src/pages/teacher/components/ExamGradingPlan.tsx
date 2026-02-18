@@ -23,6 +23,107 @@ interface GradingPlan {
 
 const isRegularExamItem = (type: string) => type === '정기' || type === '정기시험';
 const isPerformanceItem = (type: string) => type === '수행' || type === '수행평가';
+const initialIndexByKey: Record<string, number> = { r: 0, R: 1, s: 2, e: 3, E: 4, f: 5, a: 6, q: 7, Q: 8, t: 9, T: 10, d: 11, w: 12, W: 13, c: 14, z: 15, x: 16, v: 17, g: 18 };
+const medialIndexByKey: Record<string, number> = { k: 0, o: 1, i: 2, O: 3, j: 4, p: 5, u: 6, P: 7, h: 8, y: 12, n: 13, b: 17, m: 18, l: 20 };
+const medialComboIndexByKeys: Record<string, number> = { hk: 9, ho: 10, hl: 11, nj: 14, np: 15, nl: 16, ml: 19 };
+const finalIndexByKey: Record<string, number> = { r: 1, R: 2, s: 4, e: 7, f: 8, a: 16, q: 17, t: 19, T: 20, d: 21, w: 22, c: 23, z: 24, x: 25, v: 26, g: 27 };
+const finalComboIndexByKeys: Record<string, number> = { rt: 3, sw: 5, sg: 6, fr: 9, fa: 10, fq: 11, ft: 12, fx: 13, fv: 14, fg: 15, qt: 18 };
+const jamoByKey: Record<string, string> = {
+    r: 'ㄱ', R: 'ㄲ', s: 'ㄴ', e: 'ㄷ', E: 'ㄸ', f: 'ㄹ', a: 'ㅁ', q: 'ㅂ', Q: 'ㅃ', t: 'ㅅ', T: 'ㅆ', d: 'ㅇ', w: 'ㅈ', W: 'ㅉ', c: 'ㅊ', z: 'ㅋ', x: 'ㅌ', v: 'ㅍ', g: 'ㅎ',
+    k: 'ㅏ', o: 'ㅐ', i: 'ㅑ', O: 'ㅒ', j: 'ㅓ', p: 'ㅔ', u: 'ㅕ', P: 'ㅖ', h: 'ㅗ', y: 'ㅛ', n: 'ㅜ', b: 'ㅠ', m: 'ㅡ', l: 'ㅣ'
+};
+const jamoByVowelComboKeys: Record<string, string> = { hk: 'ㅘ', ho: 'ㅙ', hl: 'ㅚ', nj: 'ㅝ', np: 'ㅞ', nl: 'ㅟ', ml: 'ㅢ' };
+
+const isConsonantKey = (key: string) => key in initialIndexByKey;
+const isVowelKey = (key: string) => key in medialIndexByKey;
+const composeHangul = (initial: number, medial: number, final: number) =>
+    String.fromCharCode(0xac00 + (initial * 21 + medial) * 28 + final);
+
+const convertKeyboardKoreanSegment = (segment: string) => {
+    let output = '';
+    let i = 0;
+
+    while (i < segment.length) {
+        const ch = segment[i];
+
+        if (isConsonantKey(ch) && i + 1 < segment.length && isVowelKey(segment[i + 1])) {
+            const initial = initialIndexByKey[ch];
+            i += 1;
+
+            const firstVowel = segment[i];
+            let medial = medialIndexByKey[firstVowel];
+            i += 1;
+
+            if (i < segment.length && isVowelKey(segment[i])) {
+                const comboMedial = medialComboIndexByKeys[`${firstVowel}${segment[i]}`];
+                if (comboMedial !== undefined) {
+                    medial = comboMedial;
+                    i += 1;
+                }
+            }
+
+            let final = 0;
+            if (i < segment.length && isConsonantKey(segment[i])) {
+                if (!(i + 1 < segment.length && isVowelKey(segment[i + 1]))) {
+                    const comboKey = i + 1 < segment.length ? `${segment[i]}${segment[i + 1]}` : '';
+                    const comboFinal = finalComboIndexByKeys[comboKey];
+
+                    if (comboFinal !== undefined && !(i + 2 < segment.length && isVowelKey(segment[i + 2]))) {
+                        final = comboFinal;
+                        i += 2;
+                    } else {
+                        final = finalIndexByKey[segment[i]] ?? 0;
+                        i += 1;
+                    }
+                }
+            }
+
+            output += composeHangul(initial, medial, final);
+            continue;
+        }
+
+        if (isVowelKey(ch)) {
+            const next = i + 1 < segment.length ? segment[i + 1] : '';
+            const combo = jamoByVowelComboKeys[`${ch}${next}`];
+            if (combo) {
+                output += combo;
+                i += 2;
+            } else {
+                output += jamoByKey[ch] ?? ch;
+                i += 1;
+            }
+            continue;
+        }
+
+        output += jamoByKey[ch] ?? ch;
+        i += 1;
+    }
+
+    return output;
+};
+
+const normalizeKoreanKeyboardInput = (value: string) => {
+    let output = '';
+    let buffer = '';
+
+    for (const char of value) {
+        if (/[A-Za-z]/.test(char)) {
+            buffer += char;
+            continue;
+        }
+        if (buffer) {
+            output += convertKeyboardKoreanSegment(buffer);
+            buffer = '';
+        }
+        output += char;
+    }
+
+    if (buffer) {
+        output += convertKeyboardKoreanSegment(buffer);
+    }
+
+    return output;
+};
 
 const ExamGradingPlan: React.FC = () => {
     const { userConfig } = useAuth();
@@ -80,6 +181,14 @@ const ExamGradingPlan: React.FC = () => {
         // @ts-ignore
         newItems[idx][field] = value;
         setItems(newItems);
+    };
+
+    const handleSubjectChange = (value: string) => {
+        setSubject(normalizeKoreanKeyboardInput(value));
+    };
+
+    const handleItemNameChange = (idx: number, value: string) => {
+        handleItemChange(idx, 'name', normalizeKoreanKeyboardInput(value));
     };
 
     const handleSave = async () => {
@@ -201,7 +310,7 @@ const ExamGradingPlan: React.FC = () => {
                             <input
                                 type="text"
                                 value={subject}
-                                onChange={(e) => setSubject(e.target.value)}
+                                onChange={(e) => handleSubjectChange(e.target.value)}
                                 placeholder="예: 국어, 역사, 사회"
                                 {...koreanInputProps}
                                 className="w-full border border-blue-200 rounded p-2 text-sm focus:ring-2 focus:ring-blue-400"
@@ -228,7 +337,7 @@ const ExamGradingPlan: React.FC = () => {
                                             type="text"
                                             placeholder="예: 서술형, 발표, 포트폴리오"
                                             value={item.name}
-                                            onChange={(e) => handleItemChange(idx, 'name', e.target.value)}
+                                            onChange={(e) => handleItemNameChange(idx, e.target.value)}
                                             {...koreanInputProps}
                                             className="border border-gray-300 rounded px-2 py-1.5 text-xs flex-1 min-w-0"
                                         />
