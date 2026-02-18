@@ -373,11 +373,11 @@ const ManageLesson: React.FC = () => {
                         {!selectedNodeId ? (
                             <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 bg-white z-10 rounded-xl p-6 text-center">
                                 <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4">
-                                    <i className="far fa-hand-point-left text-4xl lg:block hidden"></i>
+                                    <i className="fas fa-list text-4xl lg:block hidden text-blue-400"></i>
                                     <i className="fas fa-list text-3xl lg:hidden text-blue-400"></i>
                                 </div>
                                 <p className="text-lg font-bold text-gray-600">수업 자료를 선택해 주세요</p>
-                                <p className="text-sm mt-2 hidden lg:block">왼쪽 단원 목록에서 <strong>소단원</strong>을 선택하면 내용을 편집할 수 있습니다.</p>
+                                <p className="text-sm mt-2 hidden lg:block">단원 목록에서 <strong>소단원</strong>을 선택하면 내용을 편집할 수 있습니다.</p>
                                 <p className="text-sm mt-2 lg:hidden">오른쪽 하단 <strong>목록 버튼</strong>으로 단원을 선택해 주세요.</p>
                             </div>
                         ) : (
