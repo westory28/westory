@@ -3,49 +3,60 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     function isSignedIn() {
+      // 로그인된 사용자 여부
       return request.auth != null;
     }
 
     function isTeacher() {
+      // 교사 계정 여부(관리자 권한)
       return isSignedIn() && request.auth.token.email == "westoria28@gmail.com";
     }
 
-    // Users
+    // 사용자 기본 문서 권한
     match /users/{userId} {
+      // 본인/교사만 조회, 목록은 교사만
       allow get: if isSignedIn() && (request.auth.uid == userId || isTeacher());
       allow list: if isTeacher();
+      // 가입 초기 문서 생성 허용
       allow create: if isSignedIn();
+      // 본인 또는 교사만 수정/삭제
       allow update, delete: if isSignedIn() && (request.auth.uid == userId || isTeacher());
 
-      // Student personal academic records (sensitive)
+      // 학생 개인 성적 데이터(민감정보)
       match /academic_records/{recordId} {
+        // 본인/교사만 읽기 허용
         allow read: if isSignedIn() && (request.auth.uid == userId || isTeacher());
+        // 본인만 저장 가능 + 허용 필드/구조 제한
         allow create, update: if isSignedIn()
           && request.auth.uid == userId
           && request.resource.data.keys().hasOnly(['scores', 'updatedAt'])
           && request.resource.data.scores is map
           && request.resource.data.scores.keys().size() <= 500;
+        // 삭제는 본인/교사만 허용
         allow delete: if isSignedIn() && (request.auth.uid == userId || isTeacher());
       }
     }
 
-    // Site settings
+    // 사이트 설정 문서 권한
     match /site_settings/{docId} {
+      // 공개 설정 문서는 비로그인도 읽기, 그 외는 로그인 필요
       allow read: if docId in ['terms', 'privacy', 'school_config', 'interface_config'] || isSignedIn();
+      // 설정 변경은 교사만
       allow write: if isTeacher();
 
+      // 설정 하위 항목 권한
       match /items/{itemId} {
         allow read: if isSignedIn();
         allow write: if isTeacher();
       }
     }
 
-    // Metadata
+    // 메타데이터 권한(로그인 사용자)
     match /metadata/{docId} {
       allow read, write: if isSignedIn();
     }
 
-    // Legacy root collections (HTML-era compatibility)
+    // 레거시 루트 컬렉션 권한(하위 호환)
     match /curriculum/{docId} {
       allow read: if isSignedIn();
       allow write: if isTeacher();
@@ -77,8 +88,11 @@ service cloud.firestore {
     }
 
     match /quiz_results/{resultId} {
+      // 본인 결과 또는 교사만 조회
       allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isTeacher());
+      // 결과 생성은 로그인 사용자
       allow create: if isSignedIn();
+      // 수정/삭제는 교사만
       allow update, delete: if isTeacher();
     }
 
@@ -87,7 +101,7 @@ service cloud.firestore {
       allow write: if isTeacher();
     }
 
-    // Semester-scoped collections
+    // 학년도/학기 범위 컬렉션 권한
     match /years/{year}/semesters/{semester} {
       match /calendar/{docId} {
         allow read: if isSignedIn();
@@ -130,8 +144,11 @@ service cloud.firestore {
       }
 
       match /quiz_results/{resultId} {
+        // 본인 결과 또는 교사만 조회
         allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isTeacher());
+        // 결과 생성은 로그인 사용자
         allow create: if isSignedIn();
+        // 수정/삭제는 교사만
         allow update, delete: if isTeacher();
       }
 
