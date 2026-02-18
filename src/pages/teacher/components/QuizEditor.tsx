@@ -84,6 +84,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
     const [previewWordAnswer, setPreviewWordAnswer] = useState('');
     const [previewOrderPool, setPreviewOrderPool] = useState<string[]>([]);
     const [previewOrderAnswer, setPreviewOrderAnswer] = useState<string[]>([]);
+    const [editingQuestionId, setEditingQuestionId] = useState<number | null>(null);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -150,6 +151,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
     };
 
     const resetForm = () => {
+        setEditingQuestionId(null);
         setFormText('');
         setFormExp('');
         setFormImage(null);
@@ -179,6 +181,67 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
         setFormType(nextType);
         setPreviewOpen(false);
         resetPreview();
+    };
+
+    const startEdit = (question: Question) => {
+        setEditingQuestionId(question.id);
+        setFormType(question.type);
+        setFormText(question.question || '');
+        setFormExp(question.explanation || '');
+        setFormImage(question.image || null);
+        setPreviewOpen(false);
+        resetPreview();
+
+        if (type === 'normal') {
+            setFormSubUnit(question.subUnitId || '');
+        } else {
+            setEpSource({
+                big: question.refBig || '',
+                mid: question.refMid || '',
+                small: question.refSmall || '',
+            });
+        }
+
+        if (question.type === 'choice') {
+            const options = (question.options || []).filter(Boolean);
+            const normalizedOptions = options.length >= 2 ? options : ['', ''];
+            setChoiceOptions(normalizedOptions);
+            const answerIndex = normalizedOptions.findIndex((opt) => opt.trim() === String(question.answer).trim());
+            setChoiceAnswerIndex(answerIndex >= 0 ? answerIndex : null);
+            setOxAnswer('');
+            setWordAnswer('');
+            setOrderItems(['', '']);
+            return;
+        }
+
+        if (question.type === 'ox') {
+            setChoiceOptions(['', '']);
+            setChoiceAnswerIndex(null);
+            setOxAnswer(question.answer === 'O' || question.answer === 'X' ? question.answer : '');
+            setWordAnswer('');
+            setOrderItems(['', '']);
+            return;
+        }
+
+        if (question.type === 'word') {
+            setChoiceOptions(['', '']);
+            setChoiceAnswerIndex(null);
+            setOxAnswer('');
+            setWordAnswer(String(question.answer || ''));
+            setOrderItems(['', '']);
+            return;
+        }
+
+        const orderOptions = (question.options && question.options.length > 0)
+            ? question.options
+            : String(question.answer || '')
+                .split(ORDER_DELIMITER)
+                .filter(Boolean);
+        setChoiceOptions(['', '']);
+        setChoiceAnswerIndex(null);
+        setOxAnswer('');
+        setWordAnswer('');
+        setOrderItems(orderOptions.length >= 2 ? orderOptions : ['', '']);
     };
 
     const addChoiceOption = () => setChoiceOptions((prev) => [...prev, '']);
@@ -234,9 +297,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
     const handleAdd = async () => {
         const payload = buildQuestionPayload();
         if (!payload) return;
-        const newId = Date.now();
+        const targetId = editingQuestionId ?? Date.now();
         const newQuestion: Question = {
-            id: newId,
+            id: targetId,
             unitId: node.id,
             subUnitId: type === 'special' ? (epSource.small || epSource.mid || epSource.big || null) : (formSubUnit || null),
             category,
@@ -251,8 +314,20 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
             ...(type === 'special' && epSource.small ? { refSmall: epSource.small } : {}),
         };
         try {
-            await setDoc(doc(db, getSemesterDocPath(config, 'quiz_questions', String(newId))), { ...newQuestion, createdAt: serverTimestamp() });
-            setQuestions((prev) => [...prev, newQuestion]);
+            await setDoc(
+                doc(db, getSemesterDocPath(config, 'quiz_questions', String(targetId))),
+                {
+                    ...newQuestion,
+                    updatedAt: serverTimestamp(),
+                    ...(editingQuestionId ? {} : { createdAt: serverTimestamp() }),
+                },
+                { merge: true },
+            );
+            setQuestions((prev) => (
+                editingQuestionId
+                    ? prev.map((q) => (q.id === targetId ? newQuestion : q))
+                    : [...prev, newQuestion]
+            ));
             resetForm();
         } catch (error: any) {
             console.error('Add question failed', error);
@@ -341,7 +416,17 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
                         <div key={q.id} className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
                             <div className="flex justify-between items-start mb-2">
                                 <span className="bg-gray-100 text-gray-600 text-[10px] font-bold px-2 py-1 rounded">Q{idx + 1} | {TYPE_LABEL[q.type] || q.type}</span>
-                                <button onClick={() => void handleDelete(q.id)} className="text-gray-300 hover:text-red-500"><i className="fas fa-trash"></i></button>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => startEdit(q)}
+                                        className="text-gray-300 hover:text-blue-500"
+                                        title="문제 수정"
+                                    >
+                                        <i className="fas fa-pen"></i>
+                                    </button>
+                                    <button onClick={() => void handleDelete(q.id)} className="text-gray-300 hover:text-red-500" title="문제 삭제"><i className="fas fa-trash"></i></button>
+                                </div>
                             </div>
                             <p className="font-bold text-gray-800 mb-1 text-sm">{q.question}</p>
                             <p className="text-xs text-gray-500">
@@ -353,7 +438,10 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
                 )}
 
                 <div className="mt-8 bg-white p-5 rounded-xl border-2 border-dashed border-gray-300">
-                    <h3 className="font-bold text-gray-700 mb-4 flex items-center"><i className="fas fa-plus-circle text-blue-500 mr-2"></i>새 문제 추가</h3>
+                    <h3 className="font-bold text-gray-700 mb-4 flex items-center">
+                        <i className={`fas ${editingQuestionId ? 'fa-pen' : 'fa-plus-circle'} text-blue-500 mr-2`}></i>
+                        {editingQuestionId ? '문제 수정' : '새 문제 추가'}
+                    </h3>
                     <div className="space-y-4">
                         <div className={`grid gap-3 ${type === 'normal' ? 'grid-cols-2' : 'grid-cols-1'}`}>
                             <select value={formType} onChange={(e) => handleTypeChange(e.target.value as QuestionType)} className="border p-2 rounded text-sm bg-gray-50">
@@ -471,9 +559,18 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
                             </div>
                         )}
 
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className={`grid gap-2 ${editingQuestionId ? 'grid-cols-3' : 'grid-cols-2'}`}>
                             <button type="button" onClick={openPreview} className={`font-bold py-2 rounded transition border ${previewOpen ? 'bg-white text-blue-700 border-blue-500' : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400 hover:text-blue-700'}`}>{previewOpen ? '미리보기 닫기' : '미리보기'}</button>
-                            <button onClick={() => void handleAdd()} className="bg-blue-600 text-white font-bold py-2 rounded hover:bg-blue-700 transition">등록</button>
+                            <button onClick={() => void handleAdd()} className="bg-blue-600 text-white font-bold py-2 rounded hover:bg-blue-700 transition">{editingQuestionId ? '수정 저장' : '등록'}</button>
+                            {editingQuestionId && (
+                                <button
+                                    type="button"
+                                    onClick={resetForm}
+                                    className="bg-gray-100 text-gray-700 font-bold py-2 rounded hover:bg-gray-200 transition"
+                                >
+                                    취소
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
