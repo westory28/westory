@@ -216,14 +216,12 @@ const Header: React.FC = () => {
                         </Link>
                     )}
 
-                    {!isTeacherPortal && (
-                        <Link to="/student/mypage" className="text-gray-500 hover:text-blue-600 transition p-1" title="마이페이지">
-                            <i className="fas fa-user-circle text-lg"></i>
-                        </Link>
-                    )}
-
                     <Link to={profileTarget} className="user-greeting header-user-link inline-flex items-center hover:text-blue-600 transition cursor-pointer" title={isTeacherPortal ? '관리자 페이지' : '마이페이지'}>
-                        {!isTeacherPortal && <span className="mr-1.5">{studentProfileIcon}</span>}
+                        {!isTeacherPortal && (
+                            <span className="mr-1.5 inline-flex h-6 w-6 items-center justify-center rounded-full border border-gray-300 bg-white text-[14px] leading-none">
+                                {studentProfileIcon}
+                            </span>
+                        )}
                         {profileLabel}
                     </Link>
 
