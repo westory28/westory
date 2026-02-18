@@ -129,7 +129,7 @@ const ManageQuiz: React.FC = () => {
                                     }}
                                 />
                             ) : (
-                                <div className="h-full flex flex-col items-center justify-center text-gray-400 bg-white rounded-xl border border-gray-200">
+                                <div className="h-full min-h-[420px] py-16 flex flex-col items-center justify-center text-gray-400">
                                     <i className="fas fa-mouse-pointer text-4xl mb-4"></i>
                                     <p className="text-lg text-center">
                                         목록에서 <strong>학기 시험 대비</strong> 또는<br />
