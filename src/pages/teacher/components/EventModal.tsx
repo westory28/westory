@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { collection, deleteDoc, doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { useAuth } from '../../../contexts/AuthContext';
 import { db } from '../../../lib/firebase';
 import { CalendarEvent } from '../../../types';
@@ -12,6 +12,8 @@ interface EventModalProps {
     initialDate?: string;
 }
 
+type SchoolOption = { value: string; label: string };
+
 const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onSave, initialDate }) => {
     const { config } = useAuth();
     const [title, setTitle] = useState('');
@@ -23,7 +25,39 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
     const [targetType, setTargetType] = useState('common');
     const [targetGrade, setTargetGrade] = useState('1');
     const [targetClass, setTargetClass] = useState('1');
+    const [gradeOptions, setGradeOptions] = useState<SchoolOption[]>([
+        { value: '1', label: '1학년' },
+        { value: '2', label: '2학년' },
+        { value: '3', label: '3학년' },
+    ]);
+    const [classOptions, setClassOptions] = useState<SchoolOption[]>(
+        Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}반` }))
+    );
     const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        const loadSchoolConfig = async () => {
+            try {
+                const snap = await getDoc(doc(db, 'site_settings', 'school_config'));
+                if (!snap.exists()) return;
+                const data = snap.data() as {
+                    grades?: Array<{ value?: string; label?: string }>;
+                    classes?: Array<{ value?: string; label?: string }>;
+                };
+                const nextGrades = (data.grades || [])
+                    .map((g) => ({ value: String(g?.value ?? '').trim(), label: String(g?.label ?? '').trim() }))
+                    .filter((g) => g.value && g.label);
+                const nextClasses = (data.classes || [])
+                    .map((c) => ({ value: String(c?.value ?? '').trim(), label: String(c?.label ?? '').trim() }))
+                    .filter((c) => c.value && c.label);
+                if (nextGrades.length > 0) setGradeOptions(nextGrades);
+                if (nextClasses.length > 0) setClassOptions(nextClasses);
+            } catch (error) {
+                console.error('Failed to load school config:', error);
+            }
+        };
+        void loadSchoolConfig();
+    }, []);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -49,9 +83,9 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
         setDescription('');
         setEventType('exam');
         setTargetType('common');
-        setTargetGrade('1');
-        setTargetClass('1');
-    }, [isOpen, eventData, initialDate]);
+        setTargetGrade(gradeOptions[0]?.value || '1');
+        setTargetClass(classOptions[0]?.value || '1');
+    }, [isOpen, eventData, initialDate, gradeOptions, classOptions]);
 
     useEffect(() => {
         if (eventType !== 'exam' || endEnabled) return;
@@ -242,7 +276,9 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
                                 disabled={targetType !== 'class'}
                                 className="w-1/3 border border-gray-300 rounded-lg p-2.5 outline-none bg-gray-50 transition font-bold text-center disabled:opacity-50"
                             >
-                                {[1, 2, 3].map((g) => <option key={g} value={g}>{g}학년</option>)}
+                                {gradeOptions.map((gradeOpt) => (
+                                    <option key={gradeOpt.value} value={gradeOpt.value}>{gradeOpt.label}</option>
+                                ))}
                             </select>
                             <select
                                 value={targetClass}
@@ -250,7 +286,9 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
                                 disabled={targetType !== 'class'}
                                 className="w-2/3 border border-gray-300 rounded-lg p-2.5 outline-none bg-gray-50 transition font-bold disabled:opacity-50"
                             >
-                                {Array.from({ length: 12 }, (_, i) => i + 1).map((c) => <option key={c} value={c}>{c}반</option>)}
+                                {classOptions.map((classOpt) => (
+                                    <option key={classOpt.value} value={classOpt.value}>{classOpt.label}</option>
+                                ))}
                             </select>
                         </div>
                     </div>

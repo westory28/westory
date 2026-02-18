@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { collection, deleteDoc, doc, getDocs, writeBatch } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, writeBatch } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import MoveClassModal from './components/MoveClassModal';
 import StudentEditModal from './components/StudentEditModal';
@@ -14,6 +14,11 @@ interface Student {
     email: string;
 }
 
+interface SchoolClassOption {
+    value: string;
+    label: string;
+}
+
 const STUDENTS_PER_PAGE = 50;
 
 const StudentList: React.FC = () => {
@@ -25,6 +30,9 @@ const StudentList: React.FC = () => {
     const [gradeFilter, setGradeFilter] = useState('all');
     const [classFilter, setClassFilter] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
+    const [classOptions, setClassOptions] = useState<SchoolClassOption[]>(
+        Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}반` }))
+    );
 
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -35,6 +43,7 @@ const StudentList: React.FC = () => {
 
     useEffect(() => {
         void fetchStudents();
+        void loadSchoolConfig();
     }, []);
 
     useEffect(() => {
@@ -79,6 +88,26 @@ const StudentList: React.FC = () => {
             setLoading(false);
         }
     };
+
+    const loadSchoolConfig = async () => {
+        try {
+            const snap = await getDoc(doc(db, 'site_settings', 'school_config'));
+            if (!snap.exists()) return;
+            const data = snap.data() as { classes?: Array<{ value?: string; label?: string }> };
+            const loaded = (data.classes || [])
+                .map((item) => ({
+                    value: String(item?.value ?? '').trim(),
+                    label: String(item?.label ?? '').trim(),
+                }))
+                .filter((item) => item.value && item.label);
+            if (loaded.length > 0) setClassOptions(loaded);
+        } catch (error) {
+            console.error('Failed to load class options:', error);
+        }
+    };
+
+    const getClassLabel = (classValue: number) =>
+        classOptions.find((opt) => opt.value === String(classValue))?.label || `${classValue}반`;
 
     const applyFilters = () => {
         let result = students;
@@ -183,8 +212,8 @@ const StudentList: React.FC = () => {
                                 className="border border-gray-300 rounded-lg px-3 py-2 text-sm font-bold text-gray-700 focus:outline-none focus:border-blue-500"
                             >
                                 <option value="all">전체 반</option>
-                                {Array.from({ length: 12 }, (_, i) => (
-                                    <option key={i + 1} value={i + 1}>{i + 1}반</option>
+                                {classOptions.map((cls) => (
+                                    <option key={cls.value} value={cls.value}>{cls.label}</option>
                                 ))}
                             </select>
                             <button
@@ -250,7 +279,7 @@ const StudentList: React.FC = () => {
                                                 />
                                             </td>
                                             <td className="p-4 text-center text-gray-700 font-bold">{student.grade}</td>
-                                            <td className="p-4 text-center font-bold text-gray-600">{student.class}</td>
+                                            <td className="p-4 text-center font-bold text-gray-600">{getClassLabel(student.class)}</td>
                                             <td className="p-4 text-center font-bold text-gray-600">{student.number}</td>
                                             <td className="p-4 whitespace-nowrap">
                                                 <button

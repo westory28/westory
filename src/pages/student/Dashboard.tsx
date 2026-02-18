@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import { useAuth } from '../../contexts/AuthContext';
 import { CalendarEvent } from '../../types';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import NoticeBoard from './components/NoticeBoard';
 import CalendarSection from './components/CalendarSection';
@@ -20,6 +20,11 @@ const normalizeClassValue = (value: unknown): string => {
     return String(parsed);
 };
 
+const withSuffix = (label: string, suffix: string) => {
+    if (!label) return '';
+    return label.endsWith(suffix) ? label : `${label}${suffix}`;
+};
+
 const StudentDashboard: React.FC = () => {
     const { userData, config } = useAuth();
     const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -27,20 +32,54 @@ const StudentDashboard: React.FC = () => {
     const [dailyEvents, setDailyEvents] = useState<CalendarEvent[]>([]);
     const [welcomeText, setWelcomeText] = useState('학년/반 정보를 불러오는 중...');
     const [isSearchOpen, setIsSearchOpen] = useState(false);
+    const [gradeLabelMap, setGradeLabelMap] = useState<Record<string, string>>({});
+    const [classLabelMap, setClassLabelMap] = useState<Record<string, string>>({});
 
     const calendarRef = useRef<FullCalendar>(null);
+
+    useEffect(() => {
+        const loadSchoolConfig = async () => {
+            try {
+                const snap = await getDoc(doc(db, 'site_settings', 'school_config'));
+                if (!snap.exists()) return;
+                const data = snap.data() as {
+                    grades?: Array<{ value?: string; label?: string }>;
+                    classes?: Array<{ value?: string; label?: string }>;
+                };
+                const nextGradeMap: Record<string, string> = {};
+                const nextClassMap: Record<string, string> = {};
+                (data.grades || []).forEach((g) => {
+                    const value = String(g?.value ?? '').trim();
+                    const label = String(g?.label ?? '').trim();
+                    if (value && label) nextGradeMap[value] = label;
+                });
+                (data.classes || []).forEach((c) => {
+                    const value = String(c?.value ?? '').trim();
+                    const label = String(c?.label ?? '').trim();
+                    if (value && label) nextClassMap[value] = label;
+                });
+                setGradeLabelMap(nextGradeMap);
+                setClassLabelMap(nextClassMap);
+            } catch (error) {
+                console.error('Failed to load school labels:', error);
+            }
+        };
+        void loadSchoolConfig();
+    }, []);
 
     // Initial welcome text
     useEffect(() => {
         if (!userData) return;
-        const gradeLabel = normalizeClassValue(userData.grade);
-        const classLabel = normalizeClassValue(userData.class);
+        const gradeValue = normalizeClassValue(userData.grade);
+        const classValue = normalizeClassValue(userData.class);
+        const gradeLabel = gradeLabelMap[gradeValue] || gradeValue;
+        const classLabel = classLabelMap[classValue] || classValue;
         if (gradeLabel && classLabel) {
-            setWelcomeText(`${gradeLabel}학년 ${classLabel}반의 대시보드`);
+            setWelcomeText(`${withSuffix(gradeLabel, '학년')} ${withSuffix(classLabel, '반')}의 대시보드`);
         } else {
             setWelcomeText(`${(userData.name || '이름 미설정').trim()}님의 대시보드`);
         }
-    }, [userData]);
+    }, [userData, gradeLabelMap, classLabelMap]);
 
     // Fetch Events real-time
     useEffect(() => {

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
@@ -22,6 +22,7 @@ interface TeacherCalendarSectionProps {
 }
 
 type HolidayItem = { title: string; start: string; eventType?: 'holiday' };
+type SchoolOption = { value: string; label: string };
 
 const EVENT_COLOR_MAP: Record<string, string> = {
     exam: '#ef4444',
@@ -59,6 +60,14 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
     events, onDateClick, onDateDoubleClick, onEventClick, onAddEvent, onSearchClick, calendarRef, filterClass, onFilterChange, selectedDate,
 }) => {
     const { config } = useAuth();
+    const [gradeOptions, setGradeOptions] = useState<SchoolOption[]>([
+        { value: '1', label: '1학년' },
+        { value: '2', label: '2학년' },
+        { value: '3', label: '3학년' },
+    ]);
+    const [classOptions, setClassOptions] = useState<SchoolOption[]>(
+        Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}반` }))
+    );
 
     const fcEvents = events.map((e) => ({
         id: e.id,
@@ -81,6 +90,37 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
         });
         return set;
     }, [events]);
+
+    useEffect(() => {
+        const loadSchoolConfig = async () => {
+            try {
+                const snap = await getDoc(doc(db, 'site_settings', 'school_config'));
+                if (!snap.exists()) return;
+                const data = snap.data() as {
+                    grades?: Array<{ value?: string; label?: string }>;
+                    classes?: Array<{ value?: string; label?: string }>;
+                };
+                const nextGrades = (data.grades || [])
+                    .map((g) => ({ value: String(g?.value ?? '').trim(), label: String(g?.label ?? '').trim() }))
+                    .filter((g) => g.value && g.label);
+                const nextClasses = (data.classes || [])
+                    .map((c) => ({ value: String(c?.value ?? '').trim(), label: String(c?.label ?? '').trim() }))
+                    .filter((c) => c.value && c.label);
+                if (nextGrades.length > 0) setGradeOptions(nextGrades);
+                if (nextClasses.length > 0) setClassOptions(nextClasses);
+            } catch (error) {
+                console.error('Failed to load school config:', error);
+            }
+        };
+        void loadSchoolConfig();
+    }, []);
+
+    const classTargets = gradeOptions.flatMap((gradeOpt) =>
+        classOptions.map((classOpt) => ({
+            value: `${gradeOpt.value}-${classOpt.value}`,
+            label: `${gradeOpt.label} ${classOpt.label}`,
+        }))
+    );
 
     const toLocalYmd = (date: Date) => {
         const offset = date.getTimezoneOffset() * 60000;
@@ -154,9 +194,9 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                     >
                         <option value="all">전체</option>
                         <option value="common">공통</option>
-                        {Array.from({ length: 3 }, (_, g) => Array.from({ length: 12 }, (_, c) => (
-                            <option key={`${g + 1}-${c + 1}`} value={`${g + 1}-${c + 1}`}>{g + 1}-{c + 1}반</option>
-                        ))).flat()}
+                        {classTargets.map((target) => (
+                            <option key={target.value} value={target.value}>{target.label}</option>
+                        ))}
                     </select>
 
                     <div className="flex items-center gap-1 ml-auto md:ml-2">
