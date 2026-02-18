@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import { collection, doc, getDoc, getDocs } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -11,6 +11,7 @@ interface TreeUnit {
 }
 
 interface Question {
+    docId: string;
     id: number;
     category: string;
     unitId: string;
@@ -22,6 +23,11 @@ interface Question {
     refBig?: string;
     refMid?: string;
     refSmall?: string;
+}
+
+interface QuestionStat {
+    attempts: number;
+    correct: number;
 }
 
 interface BankFilterState {
@@ -49,6 +55,7 @@ const QUESTION_TYPE_LABEL: Record<string, string> = {
 const QuizBankTab: React.FC = () => {
     const { config } = useAuth();
     const [questions, setQuestions] = useState<Question[]>([]);
+    const [questionStats, setQuestionStats] = useState<Record<string, QuestionStat>>({});
     const [treeData, setTreeData] = useState<TreeUnit[]>([]);
     const [loading, setLoading] = useState(false);
     const [filters, setFilters] = useState<BankFilterState>({
@@ -59,16 +66,23 @@ const QuizBankTab: React.FC = () => {
         evalType: '',
     });
 
+    const toRoman = (value: number) => {
+        const romans = ['', 'Ⅰ', 'Ⅱ', 'Ⅲ', 'Ⅳ', 'Ⅴ', 'Ⅵ', 'Ⅶ', 'Ⅷ', 'Ⅸ', 'Ⅹ', 'Ⅺ', 'Ⅻ'];
+        return romans[value] || String(value);
+    };
+
     useEffect(() => {
         const loadAll = async () => {
             setLoading(true);
             try {
-                const [questionsResult, treeResult] = await Promise.all([
+                const [questionsResult, treeResult, statsResult] = await Promise.all([
                     loadQuestions(),
                     loadTreeData(),
+                    loadQuestionStats(),
                 ]);
                 setQuestions(questionsResult);
                 setTreeData(treeResult);
+                setQuestionStats(statsResult);
             } finally {
                 setLoading(false);
             }
@@ -87,8 +101,9 @@ const QuizBankTab: React.FC = () => {
             snap.forEach((d) => {
                 const parsed = parseInt(d.id, 10);
                 list.push({
+                    docId: d.id,
                     id: Number.isNaN(parsed) ? 0 : parsed,
-                    ...(d.data() as Omit<Question, 'id'>),
+                    ...(d.data() as Omit<Question, 'id' | 'docId'>),
                 });
             });
             return list;
@@ -111,6 +126,34 @@ const QuizBankTab: React.FC = () => {
         return [];
     };
 
+    const loadQuestionStats = async (): Promise<Record<string, QuestionStat>> => {
+        try {
+            let snap = await getDocs(collection(db, getSemesterCollectionPath(config, 'quiz_results')));
+            if (snap.empty) {
+                snap = await getDocs(collection(db, 'quiz_results'));
+            }
+
+            const stats: Record<string, QuestionStat> = {};
+            snap.forEach((d) => {
+                const details = (d.data() as any).details || [];
+                details.forEach((item: any) => {
+                    const qid = String(item.id);
+                    if (!stats[qid]) {
+                        stats[qid] = { attempts: 0, correct: 0 };
+                    }
+                    stats[qid].attempts += 1;
+                    if (item.correct) {
+                        stats[qid].correct += 1;
+                    }
+                });
+            });
+            return stats;
+        } catch (error) {
+            console.error(error);
+            return {};
+        }
+    };
+
     const selectedBig = useMemo(
         () => treeData.find((big) => big.id === filters.big),
         [filters.big, treeData],
@@ -124,6 +167,59 @@ const QuizBankTab: React.FC = () => {
     );
 
     const smallOptions = selectedMid?.children || [];
+
+    const treeIndexes = useMemo(() => {
+        const bigOrder: Record<string, number> = {};
+        const midOrder: Record<string, number> = {};
+        const midToBig: Record<string, string> = {};
+
+        treeData.forEach((big, bigIdx) => {
+            bigOrder[big.id] = bigIdx + 1;
+            (big.children || []).forEach((mid, midIdx) => {
+                midOrder[mid.id] = midIdx + 1;
+                midToBig[mid.id] = big.id;
+            });
+        });
+
+        return { bigOrder, midOrder, midToBig };
+    }, [treeData]);
+
+    const questionDisplayCodes = useMemo(() => {
+        const grouped: Record<string, Question[]> = {};
+
+        const resolveBigMid = (q: Question) => {
+            if (q.category === 'exam_prep') {
+                return { bigId: q.refBig || '', midId: q.refMid || '' };
+            }
+            const midId = q.unitId || '';
+            const bigId = treeIndexes.midToBig[midId] || q.refBig || '';
+            return { bigId, midId };
+        };
+
+        questions.forEach((q) => {
+            const { bigId, midId } = resolveBigMid(q);
+            const key = `${bigId || 'x'}__${midId || 'x'}`;
+            grouped[key] = grouped[key] || [];
+            grouped[key].push(q);
+        });
+
+        const codeMap: Record<string, string> = {};
+        Object.entries(grouped).forEach(([key, list]) => {
+            const [bigId, midId] = key.split('__');
+            const bigIndex = treeIndexes.bigOrder[bigId] || 0;
+            const midIndex = treeIndexes.midOrder[midId] || 0;
+
+            list
+                .sort((a, b) => a.id - b.id || String(a.docId).localeCompare(String(b.docId)))
+                .forEach((q, idx) => {
+                    const bigPart = bigIndex > 0 ? toRoman(bigIndex) : '?';
+                    const midPart = midIndex > 0 ? String(midIndex) : '?';
+                    codeMap[q.docId] = `${bigPart}-${midPart}-${idx + 1}`;
+                });
+        });
+
+        return codeMap;
+    }, [questions, treeIndexes]);
 
     const filteredQuestions = useMemo(() => {
         let list = [...questions];
@@ -171,6 +267,15 @@ const QuizBankTab: React.FC = () => {
         return list;
     }, [filters, questions, treeData]);
 
+    const getRateInfo = (q: Question) => {
+        const stat = questionStats[String(q.docId)] || questionStats[String(q.id)] || { attempts: 0, correct: 0 };
+        if (!stat.attempts) {
+            return { rate: 0, attempts: 0, text: '응시 없음' };
+        }
+        const rate = Math.round((stat.correct / stat.attempts) * 100);
+        return { rate, attempts: stat.attempts, text: `${rate}% (${stat.correct}/${stat.attempts})` };
+    };
+
     const handleBigChange = (value: string) => {
         setFilters((prev) => ({
             ...prev,
@@ -217,14 +322,14 @@ const QuizBankTab: React.FC = () => {
                     <option value="choice">객관식</option>
                     <option value="ox">O/X</option>
                     <option value="word">단답형</option>
-                    <option value="order">순서 배열</option>
+                    <option value="order">순서 나열형</option>
                 </select>
 
                 <select value={filters.evalType} onChange={(e) => setFilters((prev) => ({ ...prev, evalType: e.target.value }))} className="border rounded px-2 py-1 text-sm bg-white">
-                    <option value="">평가유형 전체</option>
+                    <option value="">평가 유형 전체</option>
                     <option value="diagnosis">진단평가</option>
                     <option value="formative">형성평가</option>
-                    <option value="exam">실전 모의고사</option>
+                    <option value="exam">학기 시험 대비</option>
                 </select>
 
                 <button
@@ -242,29 +347,30 @@ const QuizBankTab: React.FC = () => {
                 <table className="w-full text-sm text-left">
                     <thead className="bg-white font-bold text-gray-700 sticky top-0 shadow-sm z-10">
                         <tr>
-                            <th className="p-3 w-16 text-center">ID</th>
-                            <th className="p-3 w-28 text-center">평가유형</th>
-                            <th className="p-3 w-24 text-center">유형</th>
-                            <th className="p-3">문제</th>
-                            <th className="p-3 w-40">정답</th>
+                            <th className="p-3 w-24 text-center">??</th>
+                            <th className="p-3 w-28 text-center">?? ??</th>
+                            <th className="p-3 w-24 text-center">?? ??</th>
+                            <th className="p-3">??</th>
+                            <th className="p-3 w-40">??</th>
+                            <th className="p-3 w-48">???</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 bg-white">
                         {loading && (
                             <tr>
-                                <td colSpan={5} className="p-8 text-center text-gray-400">문제를 불러오는 중...</td>
+                                <td colSpan={6} className="p-8 text-center text-gray-400">문제를 불러오는 중...</td>
                             </tr>
                         )}
 
                         {!loading && filteredQuestions.length === 0 && (
                             <tr>
-                                <td colSpan={5} className="p-8 text-center text-gray-400">검색 결과가 없습니다.</td>
+                                <td colSpan={6} className="p-8 text-center text-gray-400">검색 결과가 없습니다.</td>
                             </tr>
                         )}
 
                         {!loading && filteredQuestions.map((q) => (
-                            <tr key={`${q.id}-${q.question.slice(0, 10)}`} className="hover:bg-blue-50 transition">
-                                <td className="p-3 text-center text-gray-500 text-xs">{q.id}</td>
+                            <tr key={`${q.docId}-${q.question.slice(0, 10)}`} className="hover:bg-blue-50 transition">
+                                <td className="p-3 text-center text-gray-500 text-xs" title={`문항 ID: ${q.docId}`}>{questionDisplayCodes[q.docId] || '-'}</td>
                                 <td className="p-3 text-center">
                                     <span className={`px-2 py-1 rounded text-xs font-bold ${
                                         q.category === 'diagnostic'
@@ -273,7 +379,7 @@ const QuizBankTab: React.FC = () => {
                                                 ? 'bg-yellow-100 text-yellow-700'
                                                 : 'bg-purple-100 text-purple-700'
                                     }`}>
-                                        {q.category === 'diagnostic' ? '진단' : q.category === 'formative' ? '형성' : '실전'}
+                                        {q.category === 'diagnostic' ? '진단' : q.category === 'formative' ? '형성' : '시험 대비'}
                                     </span>
                                 </td>
                                 <td className="p-3 text-center text-xs font-bold text-gray-600">{QUESTION_TYPE_LABEL[q.type] || q.type}</td>
@@ -284,6 +390,12 @@ const QuizBankTab: React.FC = () => {
                                     </div>
                                 </td>
                                 <td className="p-3 text-sm font-bold text-blue-600 truncate max-w-[140px]">{q.answer}</td>
+                                <td className="p-3">
+                                    <div className="text-xs font-bold text-gray-700 mb-1">{getRateInfo(q).text}</div>
+                                    <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                                        <div className="h-full bg-blue-500 rounded-full" style={{ width: `${getRateInfo(q).rate}%` }}></div>
+                                    </div>
+                                </td>
                             </tr>
                         ))}
                     </tbody>

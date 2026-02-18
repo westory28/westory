@@ -3,10 +3,12 @@ import { collection, getDocs, limit, orderBy, query } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../contexts/AuthContext';
 import { getSemesterCollectionPath } from '../../../lib/semesterScope';
+import StudentWrongNoteModal from './StudentWrongNoteModal';
 
 interface Log {
     id: string;
     timestamp: any;
+    uid?: string;
     gradeClass?: string;
     studentName: string;
     email?: string;
@@ -20,6 +22,7 @@ const QuizLogTab: React.FC = () => {
     const [logs, setLogs] = useState<Log[]>([]);
     const [loading, setLoading] = useState(false);
     const [classFilter, setClassFilter] = useState('');
+    const [wrongNoteTarget, setWrongNoteTarget] = useState<{ uid: string; name: string } | null>(null);
 
     useEffect(() => {
         fetchLogs();
@@ -49,6 +52,7 @@ const QuizLogTab: React.FC = () => {
                 list.push({
                     id: doc.id,
                     timestamp: d.timestamp,
+                    uid: d.uid || d.studentId || '',
                     gradeClass: d.gradeClass,
                     studentName: d.name || d.studentName || '학생',
                     email: d.email,
@@ -112,8 +116,19 @@ const QuizLogTab: React.FC = () => {
                                         <td className="p-4 font-bold text-gray-600">{log.classOnly}</td>
                                         <td className="p-4 font-bold text-gray-600">{log.studentNumber}번</td>
                                         <td className="p-4">
-                                            <div className="font-bold text-gray-800">{log.studentName}</div>
-                                            <div className="text-xs text-gray-400 truncate max-w-[200px]">{log.email || '-'}</div>
+                                            {log.uid ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setWrongNoteTarget({ uid: log.uid || '', name: log.studentName })}
+                                                    className="font-bold text-gray-800 hover:text-blue-600 transition"
+                                                    title="학생 오답 노트 보기"
+                                                >
+                                                    {log.studentName}
+                                                </button>
+                                            ) : (
+                                                <div className="font-bold text-gray-800">{log.studentName}</div>
+                                            )}
+                                            {log.email ? <div className="text-xs text-gray-400 truncate max-w-[200px]">{log.email}</div> : null}
                                         </td>
                                         <td className={`p-4 font-bold ${log.score >= 80 ? 'text-green-600' : 'text-red-600'}`}>
                                             {log.score}점
@@ -127,6 +142,12 @@ const QuizLogTab: React.FC = () => {
                     </tbody>
                 </table>
             </div>
+            <StudentWrongNoteModal
+                isOpen={!!wrongNoteTarget}
+                onClose={() => setWrongNoteTarget(null)}
+                studentId={wrongNoteTarget?.uid || ''}
+                studentName={wrongNoteTarget?.name || ''}
+            />
         </div>
     );
 };
