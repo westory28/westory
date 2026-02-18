@@ -32,6 +32,20 @@ const EVENT_COLOR_MAP: Record<string, string> = {
     formative: '#3b82f6',
 };
 
+const EVENT_LABEL_MAP: Record<string, string> = {
+    holiday: '공휴일',
+    exam: '정기시험',
+    performance: '수행평가',
+    event: '행사',
+    diagnosis: '진단평가',
+    formative: '형성평가',
+};
+
+const getEventTypeLabel = (eventType: unknown) => {
+    const key = String(eventType || '').trim();
+    return EVENT_LABEL_MAP[key] || '일정';
+};
+
 const DEFAULT_2026_HOLIDAYS: HolidayItem[] = [
     { title: '신정', start: '2026-01-01', eventType: 'holiday' },
     { title: '설날 연휴', start: '2026-02-16', eventType: 'holiday' },
@@ -217,6 +231,10 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                     initialView="dayGridMonth"
                     locale="ko"
                     headerToolbar={{ left: 'prev,next today', center: 'title', right: 'dayGridMonth,listMonth' }}
+                    buttonText={{
+                        dayGridMonth: '달력',
+                        listMonth: '목록',
+                    }}
                     events={fcEvents}
                     dateClick={(arg) => onDateClick(arg.dateStr)}
                     dayCellDidMount={(arg) => {
@@ -227,6 +245,14 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                         };
                     }}
                     eventClick={(arg) => onEventClick(arg.event.extendedProps as CalendarEvent)}
+                    eventDidMount={(arg) => {
+                        if (arg.view.type !== 'listMonth') return;
+                        const label = getEventTypeLabel(arg.event.extendedProps?.eventType);
+                        const timeCell = arg.el.querySelector('.fc-list-event-time');
+                        if (timeCell) {
+                            timeCell.textContent = `${label} -`;
+                        }
+                    }}
                     height="100%"
                     contentHeight="100%"
                     dayMaxEvents
