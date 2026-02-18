@@ -38,7 +38,7 @@ const QuizRunner: React.FC = () => {
     const { userData, config } = useAuth();
     const unitId = searchParams.get('unitId');
     const category = searchParams.get('category');
-    const title = searchParams.get('title') || '?됯?';
+    const title = searchParams.get('title') || '평가';
 
     // States for Flow
     const [view, setView] = useState<'loading' | 'intro' | 'quiz' | 'result'>('loading');
@@ -86,7 +86,7 @@ const QuizRunner: React.FC = () => {
             setQuizConfig(quizConfig);
 
             if (!quizConfig.active && unitId !== 'exam_prep') {
-                throw new Error("?꾩옱 鍮꾪솢?깊솕???됯??낅땲??");
+                throw new Error('현재 비활성화된 평가입니다.');
             }
 
             // 2. Fetch Questions
@@ -110,7 +110,7 @@ const QuizRunner: React.FC = () => {
             const fetchedQuestions: Question[] = [];
             qSnap.forEach(d => fetchedQuestions.push({ id: parseInt(d.id), ...d.data() } as Question));
 
-            if (fetchedQuestions.length === 0) throw new Error("?깅줉??臾몄젣媛 ?놁뒿?덈떎.");
+            if (fetchedQuestions.length === 0) throw new Error('등록된 문제가 없습니다.');
             setAllQuestions(fetchedQuestions);
 
             // 3. Check History (avoid composite index by sorting client-side)
@@ -231,7 +231,7 @@ const QuizRunner: React.FC = () => {
         const qId = question.id;
         if (revealedHints[qId]) return;
         if (hintUsedCount >= maxHintUses) {
-            alert(`?뚰듃????踰덉쓽 ?됯??먯꽌 理쒕? ${maxHintUses}?뚮쭔 ?ъ슜?????덉뒿?덈떎.`);
+            alert(`힌트는 한 번의 평가에서 최대 ${maxHintUses}회만 사용할 수 있습니다.`);
             return;
         }
         setRevealedHints((prev) => ({ ...prev, [qId]: true }));
@@ -240,7 +240,7 @@ const QuizRunner: React.FC = () => {
 
     const nextQuestion = () => {
         // Confirmation if empty?
-        // if (!answers[selectedQuestions[currentIndex].id] && !confirm("?뺣떟???낅젰?섏? ?딆븯?듬땲?? ?섏뼱媛?쒓쿋?듬땲源?")) return;
+        // if (!answers[selectedQuestions[currentIndex].id] && !confirm('정답을 입력하지 않았습니다. 다음으로 넘어가시겠습니까?')) return;
 
         if (currentIndex < selectedQuestions.length - 1) {
             setCurrentIndex(prev => prev + 1);
@@ -251,7 +251,7 @@ const QuizRunner: React.FC = () => {
 
     const finishQuiz = async (isTimeout = false) => {
         if (timerRef.current) clearInterval(timerRef.current);
-        if (isTimeout) alert("?쒗븳?쒓컙??醫낅즺?섏뿀?듬땲??");
+        if (isTimeout) alert('제한 시간이 종료되었습니다.');
 
         let correctCnt = 0;
         const resultDetails: any[] = [];
@@ -290,7 +290,7 @@ const QuizRunner: React.FC = () => {
                     category: category,
                     score: finalScore,
                     details: logDetails,
-                    status: isTimeout ? '?쒓컙珥덇낵' : '?꾨즺',
+                    status: isTimeout ? '시간 초과' : '완료',
                     timestamp: serverTimestamp(),
                     timeString: new Date().toLocaleString()
                 });
@@ -498,7 +498,7 @@ const QuizRunner: React.FC = () => {
                             onClick={nextQuestion}
                             className="bg-gray-800 text-white px-8 py-3 rounded-xl font-bold hover:bg-gray-900 transition shadow-lg flex items-center"
                         >
-                            {currentIndex === selectedQuestions.length - 1 ? '?쒖텧 ?섍린' : '?ㅼ쓬 臾몄젣'}
+                            {currentIndex === selectedQuestions.length - 1 ? '제출하기' : '다음 문제'}
                             {currentIndex === selectedQuestions.length - 1 ? <i className="fas fa-check ml-2"></i> : <i className="fas fa-arrow-right ml-2"></i>}
                         </button>
                     </div>
@@ -511,8 +511,8 @@ const QuizRunner: React.FC = () => {
         return (
             <div className="max-w-2xl mx-auto px-4 py-8 min-h-screen text-center animate-fadeIn">
                 <div className="bg-white p-8 rounded-2xl shadow-xl border-t-8 border-blue-500 mb-8">
-                    <h2 className="text-3xl font-black text-gray-800 mb-2">?됯? 醫낅즺</h2>
-                    <p className="text-gray-500 mb-8">?섍퀬?섏뀲?듬땲?? 寃곌낵瑜??뺤씤?섏꽭??</p>
+                    <h2 className="text-3xl font-black text-gray-800 mb-2">평가 종료</h2>
+                    <p className="text-gray-500 mb-8">수고하셨습니다. 결과를 확인하세요.</p>
 
                     <div className="relative w-48 h-48 mx-auto mb-6 flex items-center justify-center rounded-full border-8 border-blue-50">
                         {/* Simple Score Display instead of Chart.js for simplicity/speed in this component, or we can add Chart later */}
@@ -527,20 +527,20 @@ const QuizRunner: React.FC = () => {
                             onClick={() => document.getElementById('review-section')?.classList.toggle('hidden')}
                             className="bg-white border-2 border-gray-200 text-gray-700 font-bold py-3 rounded-xl hover:bg-gray-50 transition"
                         >
-                            ?ㅻ떟 ?명듃
+                            오답 노트
                         </button>
                         <button
                             onClick={() => navigate('/student/quiz')}
                             className="bg-gray-800 text-white font-bold py-3 rounded-xl hover:bg-gray-900 shadow-md transition"
                         >
-                            紐⑸줉?쇰줈
+                            목록으로
                         </button>
                     </div>
                 </div>
 
                 <div id="review-section" className="hidden text-left bg-white p-6 rounded-2xl shadow-lg border border-red-100 animate-slideDown">
                     <h3 className="font-bold text-lg text-red-500 mb-4 border-b pb-2">
-                        <i className="fas fa-check-circle mr-2"></i>梨꾩젏 寃곌낵 ?뺤씤
+                        <i className="fas fa-check-circle mr-2"></i>채점 결과 확인
                     </h3>
                     <div className="space-y-6">
                         {results.map((r, i) => (
@@ -553,7 +553,7 @@ const QuizRunner: React.FC = () => {
                                 </div>
                                 <div className="flex gap-4 text-sm ml-8 mb-2">
                                     <span className={`font-bold ${r.correct ? 'text-green-500' : 'text-red-500 line-through'}`}>
-                                        {r.u || '(誘몄엯??'}
+                                        {r.u || '(미입력)'}
                                     </span>
                                     {!r.correct && (
                                         <span className="text-blue-600 font-bold">
@@ -562,7 +562,7 @@ const QuizRunner: React.FC = () => {
                                     )}
                                 </div>
                                 <div className="ml-8 bg-gray-50 p-3 rounded text-xs text-gray-600">
-                                    {r.exp || '?댁꽕 ?놁쓬'}
+                                    {r.exp || '해설 없음'}
                                 </div>
                             </div>
                         ))}
