@@ -141,6 +141,21 @@ const formatResultDate = (result: QuizResultDoc) => {
     return result.timeString || '-';
 };
 
+const normalizeClassValue = (value: unknown): string => {
+    const normalized = String(value ?? '').trim();
+    if (!normalized) return '';
+    const digits = normalized.match(/\d+/)?.[0] || '';
+    if (!digits) return normalized;
+    const parsed = Number(digits);
+    if (!Number.isFinite(parsed) || parsed <= 0) return '';
+    return String(parsed);
+};
+
+const withSuffix = (label: string, suffix: string) => {
+    if (!label) return '';
+    return label.endsWith(suffix) ? label : `${label}${suffix}`;
+};
+
 const MyPage: React.FC = () => {
     const { user, userData, config } = useAuth();
 
@@ -165,6 +180,8 @@ const MyPage: React.FC = () => {
     const [wrongItems, setWrongItems] = useState<WrongNoteItem[]>([]);
     const [expandedWrongKey, setExpandedWrongKey] = useState<string | null>(null);
     const [loadingWrong, setLoadingWrong] = useState(false);
+    const [gradeLabelMap, setGradeLabelMap] = useState<Record<string, string>>({});
+    const [classLabelMap, setClassLabelMap] = useState<Record<string, string>>({});
 
     const [unitTitleMap, setUnitTitleMap] = useState<Record<string, string>>({ exam_prep: '학기 시험 대비' });
 
@@ -181,9 +198,10 @@ const MyPage: React.FC = () => {
     const loadProfileAndEmoji = async () => {
         if (!user) return;
 
-        const [userSnap, interfaceSnap] = await Promise.all([
+        const [userSnap, interfaceSnap, schoolSnap] = await Promise.all([
             getDoc(doc(db, 'users', user.uid)),
             getDoc(doc(db, 'site_settings', 'interface_config')),
+            getDoc(doc(db, 'site_settings', 'school_config')),
         ]);
 
         if (userSnap.exists()) {
@@ -201,6 +219,30 @@ const MyPage: React.FC = () => {
             setEmojiOptions(normalizeEmojiList(interfaceSnap.data().studentProfileEmojis));
         } else {
             setEmojiOptions(DEFAULT_EMOJIS);
+        }
+
+        if (schoolSnap.exists()) {
+            const data = schoolSnap.data() as {
+                grades?: Array<{ value?: string; label?: string }>;
+                classes?: Array<{ value?: string; label?: string }>;
+            };
+            const nextGradeMap: Record<string, string> = {};
+            const nextClassMap: Record<string, string> = {};
+            (data.grades || []).forEach((item) => {
+                const value = String(item?.value ?? '').trim();
+                const label = String(item?.label ?? '').trim();
+                if (value && label) nextGradeMap[value] = label;
+            });
+            (data.classes || []).forEach((item) => {
+                const value = String(item?.value ?? '').trim();
+                const label = String(item?.label ?? '').trim();
+                if (value && label) nextClassMap[value] = label;
+            });
+            setGradeLabelMap(nextGradeMap);
+            setClassLabelMap(nextClassMap);
+        } else {
+            setGradeLabelMap({});
+            setClassLabelMap({});
         }
     };
 
@@ -526,6 +568,11 @@ const MyPage: React.FC = () => {
         { key: 'score', title: '나의 성적표', icon: 'fa-chart-column' },
         { key: 'wrong_note', title: '오답 노트', icon: 'fa-book-open' },
     ];
+    const profileGradeValue = normalizeClassValue(profile?.grade ?? userData?.grade);
+    const profileClassValue = normalizeClassValue(profile?.class ?? userData?.class);
+    const profileNumberValue = String(profile?.number ?? userData?.number ?? '--').trim() || '--';
+    const profileGradeLabel = gradeLabelMap[profileGradeValue] || profileGradeValue || '--';
+    const profileClassLabel = classLabelMap[profileClassValue] || profileClassValue || '--';
 
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -578,20 +625,14 @@ const MyPage: React.FC = () => {
                                         </button>
                                     </div>
                                     <div>
-                                        <div className="text-2xl font-extrabold tracking-tight">{profile?.name || userData?.name || '학생'}</div>
-                                        <div className="mt-2 text-2xl md:text-3xl font-black tracking-tight">
-                                            {profile ? (
-                                                <>
-                                                    <span>{profile.grade || '--'}학년</span>
-                                                    <span className="mx-2 opacity-80">·</span>
-                                                    <span>{profile.class || '--'}반</span>
-                                                    <span className="mx-2 opacity-80">·</span>
-                                                    <span>{profile.number || '--'}번</span>
-                                                </>
-                                            ) : (
-                                                '--학년 · --반 · --번'
-                                            )}
-                                        </div>
+                                            <div className="text-2xl font-extrabold tracking-tight">{profile?.name || userData?.name || '학생'}</div>
+                                            <div className="mt-2 text-2xl md:text-3xl font-black tracking-tight">
+                                                <span>{withSuffix(profileGradeLabel, '학년')}</span>
+                                                <span className="mx-2 opacity-80">·</span>
+                                                <span>{withSuffix(profileClassLabel, '반')}</span>
+                                                <span className="mx-2 opacity-80">·</span>
+                                                <span>{profileNumberValue}번</span>
+                                            </div>
                                         <div className="mt-2 text-sm text-blue-100">학년, 반, 번호 정보가 표시됩니다.</div>
                                     </div>
                                 </div>
