@@ -2,10 +2,14 @@ import React, { useState } from 'react';
 import ExamGradingPlan from './components/ExamGradingPlan';
 import ExamOmrConfig from './components/ExamOmrConfig';
 import { useSearchParams } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 
 const ManageExam: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'preview' | 'omr'>('preview');
     const [searchParams] = useSearchParams();
+    const { userConfig } = useAuth();
+
+    const semesterBadgeText = `${userConfig?.year || '2025'}학년도 ${userConfig?.semester || '1'}학기`;
 
     React.useEffect(() => {
         setActiveTab(searchParams.get('tab') === 'omr' ? 'omr' : 'preview');
@@ -21,6 +25,9 @@ const ManageExam: React.FC = () => {
                         </h1>
                         <p className="text-sm text-gray-500 mt-1">성적 산출 기준을 설정하고, 정기 시험 정답을 관리하세요.</p>
                     </div>
+                    <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
+                        {semesterBadgeText}
+                    </span>
                 </div>
 
                 {/* Tabs */}

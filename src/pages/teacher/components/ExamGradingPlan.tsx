@@ -21,6 +21,9 @@ interface GradingPlan {
     createdAt?: any;
 }
 
+const isRegularExamItem = (type: string) => type === '정기' || type === '정기시험';
+const isPerformanceItem = (type: string) => type === '수행' || type === '수행평가';
+
 const ExamGradingPlan: React.FC = () => {
     const { userConfig } = useAuth();
     const [plans, setPlans] = useState<GradingPlan[]>([]);
@@ -288,14 +291,43 @@ const ExamGradingPlan: React.FC = () => {
                                             </span>
                                             <h4 className="font-bold text-xl text-gray-800">{p.subject}</h4>
                                         </div>
-                                        <div className="flex flex-wrap gap-2">
-                                            {p.items.map((i, idx) => (
-                                                <span key={idx} className="inline-flex items-center bg-gray-100 text-gray-600 text-xs px-3 py-1.5 rounded border border-gray-200">
-                                                    <span className="font-bold mr-1">{i.name}</span>
-                                                    <span className="text-gray-300 mx-1">|</span>
-                                                    <span className="text-blue-600 font-bold">{i.ratio}%</span>
+                                        <div className="space-y-2">
+                                            <div className="flex items-start gap-2">
+                                                <span className="mt-0.5 text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 rounded px-2 py-1 whitespace-nowrap">
+                                                    정기시험
                                                 </span>
-                                            ))}
+                                                <div className="flex flex-wrap gap-2">
+                                                    {p.items.filter((i) => isRegularExamItem(i.type)).length === 0 ? (
+                                                        <span className="text-xs text-gray-400 py-1">없음</span>
+                                                    ) : (
+                                                        p.items.filter((i) => isRegularExamItem(i.type)).map((i, idx) => (
+                                                            <span key={`regular-${idx}`} className="inline-flex items-center bg-gray-100 text-gray-600 text-xs px-3 py-1.5 rounded border border-gray-200">
+                                                                <span className="font-bold mr-1">{i.name}</span>
+                                                                <span className="text-gray-300 mx-1">|</span>
+                                                                <span className="text-blue-600 font-bold">{i.ratio}%</span>
+                                                            </span>
+                                                        ))
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div className="flex items-start gap-2">
+                                                <span className="mt-0.5 text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-100 rounded px-2 py-1 whitespace-nowrap">
+                                                    수행평가
+                                                </span>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {p.items.filter((i) => isPerformanceItem(i.type)).length === 0 ? (
+                                                        <span className="text-xs text-gray-400 py-1">없음</span>
+                                                    ) : (
+                                                        p.items.filter((i) => isPerformanceItem(i.type)).map((i, idx) => (
+                                                            <span key={`performance-${idx}`} className="inline-flex items-center bg-gray-100 text-gray-600 text-xs px-3 py-1.5 rounded border border-gray-200">
+                                                                <span className="font-bold mr-1">{i.name}</span>
+                                                                <span className="text-gray-300 mx-1">|</span>
+                                                                <span className="text-blue-600 font-bold">{i.ratio}%</span>
+                                                            </span>
+                                                        ))
+                                                    )}
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                     <div className="flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition duration-200 border-l pl-4 border-gray-100 ml-4">
