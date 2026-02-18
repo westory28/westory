@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { collection, deleteDoc, doc, getDoc, getDocs, writeBatch } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import MoveClassModal from './components/MoveClassModal';
@@ -8,7 +8,7 @@ import StudentHistoryModal from './components/StudentHistoryModal';
 interface Student {
     id: string;
     grade: number;
-    class: number;
+    class: string;
     number: number;
     name: string;
     email: string;
@@ -21,6 +21,39 @@ interface SchoolClassOption {
 
 const STUDENTS_PER_PAGE = 50;
 
+const parseGradeValue = (data: any) => {
+    const raw = String(data?.grade ?? '').trim();
+    const fromGrade = parseInt(raw, 10);
+    if (!Number.isNaN(fromGrade)) return fromGrade;
+    const fromGradeClass = String(data?.gradeClass ?? '').match(/(\d+)\s*학년/);
+    if (fromGradeClass?.[1]) return parseInt(fromGradeClass[1], 10);
+    return 0;
+};
+
+const parseClassValue = (data: any) => {
+    const raw = String(data?.class ?? '').trim();
+    if (raw) return raw;
+    const gradeClass = String(data?.gradeClass ?? '').trim();
+    if (!gradeClass) return '';
+    const parts = gradeClass.split(/\s+/).filter(Boolean);
+    return parts.find((part) => part.includes('반'))?.replace('반', '') || '';
+};
+
+const parseNumberValue = (data: any) => {
+    const raw = String(data?.number ?? '').trim();
+    const parsed = parseInt(raw, 10);
+    if (!Number.isNaN(parsed)) return parsed;
+    const fromGradeClass = String(data?.gradeClass ?? '').match(/(\d+)\s*번/);
+    if (fromGradeClass?.[1]) return parseInt(fromGradeClass[1], 10);
+    return 0;
+};
+
+const classSortValue = (classValue: string) => {
+    const parsed = parseInt(classValue, 10);
+    if (!Number.isNaN(parsed)) return { numeric: true, value: parsed };
+    return { numeric: false, value: classValue };
+};
+
 const StudentList: React.FC = () => {
     const [students, setStudents] = useState<Student[]>([]);
     const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
@@ -31,7 +64,7 @@ const StudentList: React.FC = () => {
     const [classFilter, setClassFilter] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
     const [classOptions, setClassOptions] = useState<SchoolClassOption[]>(
-        Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}반` }))
+        Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}반` })),
     );
 
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -70,16 +103,31 @@ const StudentList: React.FC = () => {
                 if (data.role !== 'teacher') {
                     list.push({
                         id: d.id,
-                        grade: parseInt(data.grade, 10) || 0,
-                        class: parseInt(data.class, 10) || 0,
-                        number: parseInt(data.number, 10) || 0,
+                        grade: parseGradeValue(data),
+                        class: parseClassValue(data),
+                        number: parseNumberValue(data),
                         name: data.name || '',
                         email: data.email || '',
                     });
                 }
             });
 
-            list.sort((a, b) => (a.grade - b.grade) || (a.class - b.class) || (a.number - b.number));
+            list.sort((a, b) => {
+                const gradeGap = a.grade - b.grade;
+                if (gradeGap !== 0) return gradeGap;
+
+                const aClass = classSortValue(a.class);
+                const bClass = classSortValue(b.class);
+                if (aClass.numeric && bClass.numeric) {
+                    const classGap = Number(aClass.value) - Number(bClass.value);
+                    if (classGap !== 0) return classGap;
+                } else {
+                    const classGap = String(a.class).localeCompare(String(b.class), 'ko');
+                    if (classGap !== 0) return classGap;
+                }
+
+                return a.number - b.number;
+            });
             setStudents(list);
             setFilteredStudents(list);
         } catch (error) {
@@ -106,8 +154,11 @@ const StudentList: React.FC = () => {
         }
     };
 
-    const getClassLabel = (classValue: number) =>
-        classOptions.find((opt) => opt.value === String(classValue))?.label || `${classValue}반`;
+    const getClassLabel = (classValue: string) => {
+        const normalized = String(classValue || '').trim();
+        if (!normalized) return '-';
+        return classOptions.find((opt) => opt.value === normalized)?.label || normalized;
+    };
 
     const applyFilters = () => {
         let result = students;
@@ -134,7 +185,7 @@ const StudentList: React.FC = () => {
     };
 
     const handleDelete = async (id: string) => {
-        if (!window.confirm('정말 삭제하시겠습니까? (복구 불가)')) return;
+        if (!window.confirm('?뺣쭚 ??젣?섏떆寃좎뒿?덇퉴? (蹂듦뎄 遺덇?)')) return;
         try {
             await deleteDoc(doc(db, 'users', id));
             void fetchStudents();
@@ -144,7 +195,7 @@ const StudentList: React.FC = () => {
     };
 
     const handleBulkDelete = async () => {
-        if (!window.confirm(`선택한 ${selectedIds.size}명을 정말 삭제하시겠습니까?`)) return;
+        if (!window.confirm(`?좏깮??${selectedIds.size}紐낆쓣 ?뺣쭚 ??젣?섏떆寃좎뒿?덇퉴?`)) return;
         try {
             const batch = writeBatch(db);
             selectedIds.forEach((id) => batch.delete(doc(db, 'users', id)));
@@ -157,7 +208,7 @@ const StudentList: React.FC = () => {
     };
 
     const handleBulkPromote = async () => {
-        if (!window.confirm(`선택한 ${selectedIds.size}명의 학년을 1 올리시겠습니까?`)) return;
+        if (!window.confirm(`?좏깮??${selectedIds.size}紐낆쓽 ?숇뀈??1 ?щ━?쒓쿋?듬땲源?`)) return;
         try {
             const batch = writeBatch(db);
             selectedIds.forEach((id) => {
@@ -189,8 +240,8 @@ const StudentList: React.FC = () => {
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden min-h-[600px] flex flex-col">
                     <div className="p-5 border-b bg-gray-50 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
                         <h2 className="text-lg font-bold text-gray-800 whitespace-nowrap">
-                            <i className="fas fa-users text-blue-500 mr-2"></i> 학생 명단
-                            <span className="text-sm font-normal text-gray-500 ml-2">({filteredStudents.length}명)</span>
+                            <i className="fas fa-users text-blue-500 mr-2"></i> ?숈깮 紐낅떒
+                            <span className="text-sm font-normal text-gray-500 ml-2">({filteredStudents.length}紐?</span>
                         </h2>
                     </div>
 
@@ -354,7 +405,7 @@ const StudentList: React.FC = () => {
                             </button>
                             <button onClick={() => setMoveClassModalOpen(true)} className="hover:bg-gray-100 px-3 py-2 rounded-lg text-green-600 transition flex items-center gap-1">
                                 <i className="fas fa-exchange-alt"></i>
-                                <span className="text-[11px] md:text-xs font-bold">반 교체</span>
+                                <span className="text-[11px] md:text-xs font-bold">반 이동</span>
                             </button>
                             <button onClick={() => void handleBulkDelete()} className="hover:bg-gray-100 px-3 py-2 rounded-lg text-red-600 transition flex items-center gap-1">
                                 <i className="fas fa-trash"></i>
@@ -371,7 +422,7 @@ const StudentList: React.FC = () => {
                 <StudentEditModal
                     isOpen={editModalOpen}
                     onClose={() => setEditModalOpen(false)}
-                    student={selectedStudent}
+                    student={selectedStudent ? { ...selectedStudent, class: parseInt(selectedStudent.class, 10) || 0 } : null}
                     onUpdate={fetchStudents}
                 />
 
@@ -397,3 +448,6 @@ const StudentList: React.FC = () => {
 };
 
 export default StudentList;
+
+
+
