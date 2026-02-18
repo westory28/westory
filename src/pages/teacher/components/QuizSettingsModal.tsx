@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { db } from '../../../lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -16,7 +16,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({ isOpen, onClose, 
     const [settings, setSettings] = useState({
         active: false,
         questionCount: 10,
-        timeLimit: 60,
+        timeLimitMinutes: 1,
         allowRetake: true,
         cooldown: 0,
         hintLimit: 2
@@ -44,14 +44,14 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({ isOpen, onClose, 
                     setSettings({
                         active: data[key].active ?? false,
                         questionCount: data[key].questionCount ?? 10,
-                        timeLimit: data[key].timeLimit ?? 60,
+                        timeLimitMinutes: Math.max(1, Math.round((data[key].timeLimit ?? 60) / 60)),
                         allowRetake: data[key].allowRetake ?? true,
                         cooldown: data[key].cooldown ?? 0,
                         hintLimit: data[key].hintLimit ?? 2
                     });
                 } else {
                     // Default
-                    setSettings({ active: false, questionCount: 10, timeLimit: 60, allowRetake: true, cooldown: 0, hintLimit: 2 });
+                    setSettings({ active: false, questionCount: 10, timeLimitMinutes: 1, allowRetake: true, cooldown: 0, hintLimit: 2 });
                 }
             }
         } catch (e) {
@@ -64,14 +64,19 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({ isOpen, onClose, 
     const handleSave = async () => {
         try {
             const key = `${nodeId}_${category}`;
+            const payload = {
+                ...settings,
+                timeLimit: Math.max(1, settings.timeLimitMinutes) * 60,
+            } as any;
+            delete payload.timeLimitMinutes;
             await setDoc(doc(db, getSemesterDocPath(config, 'assessment_config', 'settings')), {
-                [key]: settings
+                [key]: payload
             }, { merge: true });
-            alert("설정이 저장되었습니다.");
+            alert("?ㅼ젙????λ릺?덉뒿?덈떎.");
             onClose();
         } catch (e) {
             console.error(e);
-            alert("저장 실패");
+            alert("????ㅽ뙣");
         }
     };
 
@@ -81,15 +86,15 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({ isOpen, onClose, 
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
             <div className="bg-white rounded-xl shadow-2xl z-10 w-96 p-6 mx-4 animate-fadeScale">
                 <h3 className="font-bold text-lg text-gray-800 mb-4 border-b pb-2 flex items-center gap-2">
-                    <i className="fas fa-sliders-h text-blue-500"></i>평가 상세 설정
+                    <i className="fas fa-sliders-h text-blue-500"></i>?됯? ?곸꽭 ?ㅼ젙
                 </h3>
 
                 {loading ? (
-                    <div className="p-8 text-center text-gray-400">로딩 중...</div>
+                    <div className="p-8 text-center text-gray-400">濡쒕뵫 以?..</div>
                 ) : (
                     <div className="space-y-5">
                         <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
-                            <span className="text-sm font-bold text-gray-600">학생에게 공개</span>
+                            <span className="text-sm font-bold text-gray-600">?숈깮?먭쾶 怨듦컻</span>
                             <label className="relative inline-flex items-center cursor-pointer">
                                 <input
                                     type="checkbox"
@@ -115,17 +120,17 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({ isOpen, onClose, 
                         </div>
 
                         <div>
-                            <label className="block text-xs font-bold text-gray-500 mb-1">제한 시간 (초)</label>
+                            <label className="block text-xs font-bold text-gray-500 mb-1">제한 시간 (분)</label>
                             <input
                                 type="number"
-                                value={settings.timeLimit}
-                                onChange={(e) => setSettings({ ...settings, timeLimit: parseInt(e.target.value) || 60 })}
+                                value={settings.timeLimitMinutes}
+                                onChange={(e) => setSettings({ ...settings, timeLimitMinutes: Math.max(1, parseInt(e.target.value, 10) || 1) })}
                                 className="w-full border rounded p-2 text-center font-bold text-lg"
                             />
                         </div>
 
                         <div>
-                            <label className="block text-xs font-bold text-gray-500 mb-1">힌트 사용 가능 횟수</label>
+                            <label className="block text-xs font-bold text-gray-500 mb-1">?뚰듃 ?ъ슜 媛???잛닔</label>
                             <input
                                 type="number"
                                 min={0}
@@ -138,7 +143,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({ isOpen, onClose, 
 
                         <div>
                             <label className="flex items-center justify-between cursor-pointer p-3 bg-gray-50 rounded-lg border border-gray-200 mb-2">
-                                <span className="text-sm font-bold text-gray-600">재응시 허용</span>
+                                <span className="text-sm font-bold text-gray-600">?ъ쓳???덉슜</span>
                                 <input
                                     type="checkbox"
                                     checked={settings.allowRetake}
@@ -147,7 +152,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({ isOpen, onClose, 
                                 />
                             </label>
                             <div className={`transition-opacity ${settings.allowRetake ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
-                                <label className="block text-xs font-bold text-gray-500 mb-1">재응시 대기 시간 (분)</label>
+                                <label className="block text-xs font-bold text-gray-500 mb-1">?ъ쓳???湲??쒓컙 (遺?</label>
                                 <input
                                     type="number"
                                     value={settings.cooldown}
@@ -161,12 +166,12 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({ isOpen, onClose, 
                 )}
 
                 <div className="mt-8 flex justify-end gap-2">
-                    <button onClick={onClose} className="px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-100 font-bold transition">닫기</button>
+                    <button onClick={onClose} className="px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-100 font-bold transition">?リ린</button>
                     <button
                         onClick={handleSave}
                         className="flex-1 bg-blue-600 text-white px-4 py-3 rounded-lg font-bold hover:bg-blue-700 shadow-lg transition transform active:scale-95"
                     >
-                        설정 저장하기
+                        ?ㅼ젙 ??ν븯湲?
                     </button>
                 </div>
             </div>
@@ -175,3 +180,4 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({ isOpen, onClose, 
 };
 
 export default QuizSettingsModal;
+
