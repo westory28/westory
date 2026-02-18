@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { db } from '../../../lib/firebase';
 import { collection, deleteDoc, doc, getDocs, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -246,17 +246,18 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
             options: payload.options,
             explanation: formExp.trim(),
             image: formImage,
-            refBig: type === 'special' ? (epSource.big || undefined) : undefined,
-            refMid: type === 'special' ? (epSource.mid || undefined) : undefined,
-            refSmall: type === 'special' ? (epSource.small || undefined) : undefined,
+            ...(type === 'special' && epSource.big ? { refBig: epSource.big } : {}),
+            ...(type === 'special' && epSource.mid ? { refMid: epSource.mid } : {}),
+            ...(type === 'special' && epSource.small ? { refSmall: epSource.small } : {}),
         };
         try {
             await setDoc(doc(db, getSemesterDocPath(config, 'quiz_questions', String(newId))), { ...newQuestion, createdAt: serverTimestamp() });
             setQuestions((prev) => [...prev, newQuestion]);
             resetForm();
-        } catch (error) {
+        } catch (error: any) {
             console.error('Add question failed', error);
-            alert('문제 등록에 실패했습니다.');
+            const code = error?.code ? ` (${error.code})` : '';
+            alert(`문제 등록에 실패했습니다${code}.`);
         }
     };
 
