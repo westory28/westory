@@ -29,6 +29,7 @@ interface QuizConfig {
     cooldown?: number;
     questionCount?: number;
     hintLimit?: number;
+    randomOrder?: boolean;
 }
 
 const QuizRunner: React.FC = () => {
@@ -82,7 +83,7 @@ const QuizRunner: React.FC = () => {
             }
             const key = `${unitId}_${category}`;
             const settingsData = settingsDoc.exists() ? settingsDoc.data() : {};
-            const quizConfig: QuizConfig = settingsData[key] || { active: true, timeLimit: 60, allowRetake: true, cooldown: 0, questionCount: 10, hintLimit: 2 };
+            const quizConfig: QuizConfig = settingsData[key] || { active: true, timeLimit: 60, allowRetake: true, cooldown: 0, questionCount: 10, hintLimit: 2, randomOrder: true };
 
             setQuizConfig(quizConfig);
 
@@ -166,7 +167,7 @@ const QuizRunner: React.FC = () => {
             });
 
             // Smart Selection Logic (Simplified)
-            selectQuestions(fetchedQuestions, solvedIds, quizConfig.questionCount || 10);
+            selectQuestions(fetchedQuestions, solvedIds, quizConfig.questionCount || 10, quizConfig.randomOrder ?? true);
 
             setView('intro');
 
@@ -176,13 +177,16 @@ const QuizRunner: React.FC = () => {
         }
     };
 
-    const selectQuestions = (all: Question[], solvedIds: Set<number>, targetCount: number) => {
+    const selectQuestions = (all: Question[], solvedIds: Set<number>, targetCount: number, randomOrder: boolean) => {
         let pool = all.filter(q => !solvedIds.has(q.id));
         if (pool.length < targetCount) {
             pool = [...all]; // Fallback
         }
-        // Shuffle
-        const selected = pool.sort(() => 0.5 - Math.random()).slice(0, targetCount);
+        // 랜덤 출제 여부 설정에 따라 출제 순서를 분기한다.
+        const orderedPool = randomOrder
+            ? [...pool].sort(() => 0.5 - Math.random())
+            : [...pool].sort((a, b) => a.id - b.id);
+        const selected = orderedPool.slice(0, targetCount);
         setSelectedQuestions(selected);
 
         // 순서 나열형은 학생에게 보기 순서를 섞어서 보여주되,

@@ -16,6 +16,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({ isOpen, onClose, 
     const [settings, setSettings] = useState({
         active: false,
         questionCount: 10,
+        randomOrder: true,
         timeLimitMinutes: 1,
         allowRetake: true,
         cooldown: 0,
@@ -44,6 +45,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({ isOpen, onClose, 
                     setSettings({
                         active: data[key].active ?? false,
                         questionCount: data[key].questionCount ?? 10,
+                        randomOrder: data[key].randomOrder ?? true,
                         timeLimitMinutes: Math.max(1, Math.round((data[key].timeLimit ?? 60) / 60)),
                         allowRetake: data[key].allowRetake ?? true,
                         cooldown: data[key].cooldown ?? 0,
@@ -51,7 +53,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({ isOpen, onClose, 
                     });
                 } else {
                     // Default
-                    setSettings({ active: false, questionCount: 10, timeLimitMinutes: 1, allowRetake: true, cooldown: 0, hintLimit: 2 });
+                    setSettings({ active: false, questionCount: 10, randomOrder: true, timeLimitMinutes: 1, allowRetake: true, cooldown: 0, hintLimit: 2 });
                 }
             }
         } catch (e) {
@@ -116,6 +118,26 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({ isOpen, onClose, 
                                     className="flex-1 border rounded p-2 text-center font-bold text-blue-600 text-lg"
                                 />
                                 <span className="text-sm font-bold text-gray-600">개</span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 mb-1">문항 출제 순서</label>
+                            <div className="grid grid-cols-2 gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setSettings({ ...settings, randomOrder: true })}
+                                    className={`py-2 rounded border font-bold text-sm transition ${settings.randomOrder ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 text-gray-500 hover:border-blue-300'}`}
+                                >
+                                    랜덤 순서
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setSettings({ ...settings, randomOrder: false })}
+                                    className={`py-2 rounded border font-bold text-sm transition ${!settings.randomOrder ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 text-gray-500 hover:border-blue-300'}`}
+                                >
+                                    등록 순서
+                                </button>
                             </div>
                         </div>
 
