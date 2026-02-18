@@ -31,7 +31,7 @@ const ExamGradingPlan: React.FC = () => {
 
     // Form State
     const [editId, setEditId] = useState<string | null>(null);
-    const [grade, setGrade] = useState('2');
+    const [grade, setGrade] = useState('3');
     const [subject, setSubject] = useState('');
     const [items, setItems] = useState<GradingItem[]>([{ type: '정기', name: '', maxScore: 0, ratio: 0 }]);
     const [sortMode, setSortMode] = useState('latest');
@@ -125,7 +125,7 @@ const ExamGradingPlan: React.FC = () => {
 
     const resetForm = () => {
         setEditId(null);
-        setGrade('2');
+        setGrade('3');
         setSubject('');
         setItems([{ type: '정기', name: '', maxScore: 0, ratio: 0 }]);
     };
@@ -133,7 +133,7 @@ const ExamGradingPlan: React.FC = () => {
     const handleEdit = (p: GradingPlan) => {
         setEditId(p.id);
         setSubject(p.subject);
-        setGrade(p.targetGrade || '2');
+        setGrade(p.targetGrade || '3');
         setItems(p.items.map(i => ({ ...i })));
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
@@ -166,6 +166,8 @@ const ExamGradingPlan: React.FC = () => {
         }
         return sorted;
     };
+
+    const filteredPlans = getSortedPlans().filter((plan) => (plan.targetGrade || '3') === grade);
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full">
@@ -285,18 +287,18 @@ const ExamGradingPlan: React.FC = () => {
 
                 <div className="space-y-4 h-[calc(100vh-300px)] overflow-y-auto pr-2">
                     {loading ? <div className="text-center p-10 text-gray-400">데이터를 불러오는 중...</div> :
-                        plans.length === 0 ? (
+                        filteredPlans.length === 0 ? (
                             <div className="text-center py-20 text-gray-400 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
                                 등록된 평가 기준이 없습니다.
                             </div>
                         ) : (
-                            getSortedPlans().map(p => (
+                            filteredPlans.map(p => (
                                 <div key={p.id} className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md hover:border-blue-300 transition group relative overflow-hidden flex items-center justify-between">
                                     <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-500"></div>
                                     <div className="pl-4 flex-1">
                                         <div className="flex items-center gap-3 mb-3">
                                             <span className="text-xs font-bold text-white bg-blue-500 px-2.5 py-1 rounded shadow-sm">
-                                                {p.targetGrade || '2'}학년
+                                                {p.targetGrade || '3'}학년
                                             </span>
                                             <h4 className="font-bold text-xl text-gray-800">{p.subject}</h4>
                                         </div>
