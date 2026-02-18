@@ -18,7 +18,8 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({ isOpen, onClose, 
         questionCount: 10,
         timeLimit: 60,
         allowRetake: true,
-        cooldown: 0
+        cooldown: 0,
+        hintLimit: 2
     });
     const [loading, setLoading] = useState(false);
 
@@ -45,11 +46,12 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({ isOpen, onClose, 
                         questionCount: data[key].questionCount ?? 10,
                         timeLimit: data[key].timeLimit ?? 60,
                         allowRetake: data[key].allowRetake ?? true,
-                        cooldown: data[key].cooldown ?? 0
+                        cooldown: data[key].cooldown ?? 0,
+                        hintLimit: data[key].hintLimit ?? 2
                     });
                 } else {
                     // Default
-                    setSettings({ active: false, questionCount: 10, timeLimit: 60, allowRetake: true, cooldown: 0 });
+                    setSettings({ active: false, questionCount: 10, timeLimit: 60, allowRetake: true, cooldown: 0, hintLimit: 2 });
                 }
             }
         } catch (e) {
@@ -118,6 +120,18 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({ isOpen, onClose, 
                                 type="number"
                                 value={settings.timeLimit}
                                 onChange={(e) => setSettings({ ...settings, timeLimit: parseInt(e.target.value) || 60 })}
+                                className="w-full border rounded p-2 text-center font-bold text-lg"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 mb-1">힌트 사용 가능 횟수</label>
+                            <input
+                                type="number"
+                                min={0}
+                                max={20}
+                                value={settings.hintLimit}
+                                onChange={(e) => setSettings({ ...settings, hintLimit: Math.max(0, parseInt(e.target.value, 10) || 0) })}
                                 className="w-full border rounded p-2 text-center font-bold text-lg"
                             />
                         </div>

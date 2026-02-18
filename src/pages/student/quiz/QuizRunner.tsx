@@ -28,6 +28,7 @@ interface QuizConfig {
     allowRetake?: boolean;
     cooldown?: number;
     questionCount?: number;
+    hintLimit?: number;
 }
 
 const QuizRunner: React.FC = () => {
@@ -61,6 +62,7 @@ const QuizRunner: React.FC = () => {
     // Result States
     const [score, setScore] = useState(0);
     const [results, setResults] = useState<any[]>([]);
+    const maxHintUses = quizConfig?.hintLimit ?? 2;
 
     useEffect(() => {
         if (!unitId || !category || !userData) return;
@@ -79,7 +81,7 @@ const QuizRunner: React.FC = () => {
             }
             const key = `${unitId}_${category}`;
             const settingsData = settingsDoc.exists() ? settingsDoc.data() : {};
-            const quizConfig: QuizConfig = settingsData[key] || { active: true, timeLimit: 60, allowRetake: true, cooldown: 0, questionCount: 10 };
+            const quizConfig: QuizConfig = settingsData[key] || { active: true, timeLimit: 60, allowRetake: true, cooldown: 0, questionCount: 10, hintLimit: 2 };
 
             setQuizConfig(quizConfig);
 
@@ -225,8 +227,8 @@ const QuizRunner: React.FC = () => {
     const revealHint = (question: Question) => {
         const qId = question.id;
         if (revealedHints[qId]) return;
-        if (hintUsedCount >= 2) {
-            alert('힌트는 한 번의 평가에서 최대 2회만 사용할 수 있습니다.');
+        if (hintUsedCount >= maxHintUses) {
+            alert(`힌트는 한 번의 평가에서 최대 ${maxHintUses}회만 사용할 수 있습니다.`);
             return;
         }
         setRevealedHints((prev) => ({ ...prev, [qId]: true }));
@@ -361,7 +363,7 @@ const QuizRunner: React.FC = () => {
                     </div>
                     <div className="flex items-center gap-2">
                         <div className="bg-amber-50 border border-amber-200 px-3 py-1 rounded-full text-xs font-bold text-amber-700">
-                            힌트 {hintUsedCount}/2
+                            힌트 {hintUsedCount}/{maxHintUses}
                         </div>
                         <div className="flex items-center gap-2 bg-white px-3 py-1 rounded-full shadow-sm border border-gray-200">
                         <i className="fas fa-stopwatch text-red-500"></i>
@@ -395,11 +397,11 @@ const QuizRunner: React.FC = () => {
                             <button
                                 type="button"
                                 onClick={() => revealHint(q)}
-                                disabled={!!revealedHints[q.id] || hintUsedCount >= 2}
+                                disabled={!!revealedHints[q.id] || hintUsedCount >= maxHintUses}
                                 className={`px-3 py-2 rounded-lg text-sm font-bold transition ${
                                     revealedHints[q.id]
                                         ? 'bg-amber-100 text-amber-700'
-                                        : hintUsedCount >= 2
+                                        : hintUsedCount >= maxHintUses
                                             ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                                             : 'bg-amber-500 text-white hover:bg-amber-600'
                                 }`}
