@@ -23,6 +23,8 @@ interface Question {
     answer: string;
     explanation?: string;
     image?: string | null;
+    hintEnabled?: boolean;
+    hint?: string;
     refBig?: string;
     refMid?: string;
     refSmall?: string;
@@ -77,6 +79,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
     const [oxAnswer, setOxAnswer] = useState<'O' | 'X' | ''>('');
     const [wordAnswer, setWordAnswer] = useState('');
     const [orderItems, setOrderItems] = useState<string[]>(['', '']);
+    const [hintEnabled, setHintEnabled] = useState(false);
+    const [hintText, setHintText] = useState('');
 
     const [previewOpen, setPreviewOpen] = useState(false);
     const [previewChoiceAnswer, setPreviewChoiceAnswer] = useState('');
@@ -160,6 +164,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
         setOxAnswer('');
         setWordAnswer('');
         setOrderItems(['', '']);
+        setHintEnabled(false);
+        setHintText('');
         setPreviewOpen(false);
         resetPreview();
         if (type !== 'special') setFormSubUnit('');
@@ -191,6 +197,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
         setFormImage(question.image || null);
         setPreviewOpen(false);
         resetPreview();
+        setHintEnabled(!!(question.hintEnabled && question.hint));
+        setHintText(question.hint || '');
 
         if (type === 'normal') {
             setFormSubUnit(question.subUnitId || '');
@@ -273,6 +281,10 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
             alert('문제 내용을 입력하세요.');
             return null;
         }
+        if (hintEnabled && !hintText.trim()) {
+            alert('힌트 제공을 선택한 경우 힌트 내용을 입력하세요.');
+            return null;
+        }
         if (formType === 'choice') {
             const options = trimList(choiceOptions);
             if (options.length < 2) return alert('객관식 보기는 최소 2개 이상 필요합니다.'), null;
@@ -309,6 +321,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
             options: payload.options,
             explanation: formExp.trim(),
             image: formImage,
+            hintEnabled,
+            hint: hintEnabled ? hintText.trim() : '',
             ...(type === 'special' && epSource.big ? { refBig: epSource.big } : {}),
             ...(type === 'special' && epSource.mid ? { refMid: epSource.mid } : {}),
             ...(type === 'special' && epSource.small ? { refSmall: epSource.small } : {}),
@@ -433,6 +447,11 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
                                 <span className="text-blue-600 font-bold mr-2">정답: {formatAnswer(q)}</span>
                                 {q.options && q.options.length > 0 ? `(${q.options.join(', ')})` : ''}
                             </p>
+                            {!!(q.hintEnabled && q.hint) && (
+                                <p className="text-xs text-amber-600 font-bold mt-1">
+                                    <i className="fas fa-lightbulb mr-1"></i>힌트 제공
+                                </p>
+                            )}
                         </div>
                     ))
                 )}
@@ -527,6 +546,25 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
                         )}
 
                         <textarea placeholder="해설 (선택)" value={formExp} onChange={(e) => setFormExp(e.target.value)} className="w-full border p-2 rounded text-sm h-16 resize-none" />
+
+                        <div className="border border-gray-200 rounded-lg p-3 bg-amber-50">
+                            <label className="inline-flex items-center gap-2 text-sm font-bold text-amber-800 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={hintEnabled}
+                                    onChange={(e) => setHintEnabled(e.target.checked)}
+                                />
+                                힌트 제공
+                            </label>
+                            {hintEnabled && (
+                                <textarea
+                                    placeholder="학생에게 보여줄 힌트를 입력하세요"
+                                    value={hintText}
+                                    onChange={(e) => setHintText(e.target.value)}
+                                    className="mt-2 w-full border p-2 rounded text-sm h-16 resize-none bg-white"
+                                />
+                            )}
+                        </div>
 
                         {previewOpen && (
                             <div className="border border-blue-200 rounded-xl p-4 bg-blue-50 space-y-3">

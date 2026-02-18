@@ -15,6 +15,8 @@ interface Question {
     answer: string | number;
     explanation?: string;
     image?: string;
+    hintEnabled?: boolean;
+    hint?: string;
     refBig?: string;
     refMid?: string;
     category?: string;
@@ -52,6 +54,8 @@ const QuizRunner: React.FC = () => {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [answers, setAnswers] = useState<{ [key: number]: string }>({});
     const [timeLeft, setTimeLeft] = useState(0);
+    const [hintUsedCount, setHintUsedCount] = useState(0);
+    const [revealedHints, setRevealedHints] = useState<Record<number, boolean>>({});
     const timerRef = useRef<NodeJS.Timeout | null>(null);
 
     // Result States
@@ -180,6 +184,8 @@ const QuizRunner: React.FC = () => {
         setCurrentIndex(0);
         setAnswers({});
         setTimeLeft(quizConfig?.timeLimit || 60);
+        setHintUsedCount(0);
+        setRevealedHints({});
         setView('quiz');
 
         // Start Timer
@@ -214,6 +220,17 @@ const QuizRunner: React.FC = () => {
         const qId = selectedQuestions[currentIndex].id;
         const current = parseOrderAnswer(answers[qId] || '');
         handleAnswer(current.filter((_, i) => i !== index).join(ORDER_DELIMITER));
+    };
+
+    const revealHint = (question: Question) => {
+        const qId = question.id;
+        if (revealedHints[qId]) return;
+        if (hintUsedCount >= 2) {
+            alert('힌트는 한 번의 평가에서 최대 2회만 사용할 수 있습니다.');
+            return;
+        }
+        setRevealedHints((prev) => ({ ...prev, [qId]: true }));
+        setHintUsedCount((prev) => prev + 1);
     };
 
     const nextQuestion = () => {
@@ -342,11 +359,16 @@ const QuizRunner: React.FC = () => {
                     <div className="font-bold text-gray-500">
                         <span className="text-blue-600">{currentIndex + 1}</span> / {selectedQuestions.length}
                     </div>
-                    <div className="flex items-center gap-2 bg-white px-3 py-1 rounded-full shadow-sm border border-gray-200">
+                    <div className="flex items-center gap-2">
+                        <div className="bg-amber-50 border border-amber-200 px-3 py-1 rounded-full text-xs font-bold text-amber-700">
+                            힌트 {hintUsedCount}/2
+                        </div>
+                        <div className="flex items-center gap-2 bg-white px-3 py-1 rounded-full shadow-sm border border-gray-200">
                         <i className="fas fa-stopwatch text-red-500"></i>
                         <span className="font-mono font-bold text-lg text-gray-700 w-12 text-center">
                             {Math.floor(timeLeft / 60).toString().padStart(2, '0')}:{Math.floor(timeLeft % 60).toString().padStart(2, '0')}
                         </span>
+                    </div>
                     </div>
                 </div>
 
@@ -367,6 +389,30 @@ const QuizRunner: React.FC = () => {
                     <h2 className="text-xl md:text-2xl font-bold text-gray-800 mb-8 leading-snug break-keep">
                         {q.question}
                     </h2>
+
+                    {!!(q.hintEnabled && q.hint) && (
+                        <div className="mb-4">
+                            <button
+                                type="button"
+                                onClick={() => revealHint(q)}
+                                disabled={!!revealedHints[q.id] || hintUsedCount >= 2}
+                                className={`px-3 py-2 rounded-lg text-sm font-bold transition ${
+                                    revealedHints[q.id]
+                                        ? 'bg-amber-100 text-amber-700'
+                                        : hintUsedCount >= 2
+                                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                            : 'bg-amber-500 text-white hover:bg-amber-600'
+                                }`}
+                            >
+                                {revealedHints[q.id] ? '힌트 확인됨' : '힌트 보기'}
+                            </button>
+                            {revealedHints[q.id] && (
+                                <div className="mt-2 border border-amber-200 bg-amber-50 rounded-lg p-3 text-sm text-amber-900">
+                                    <i className="fas fa-lightbulb mr-2"></i>{q.hint}
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     <div className="space-y-3 flex-1">
                         {q.type === 'choice' && q.options?.map((opt, i) => (
