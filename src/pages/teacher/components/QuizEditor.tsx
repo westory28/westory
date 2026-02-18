@@ -89,6 +89,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
     const [previewOrderPool, setPreviewOrderPool] = useState<string[]>([]);
     const [previewOrderAnswer, setPreviewOrderAnswer] = useState<string[]>([]);
     const [editingQuestionId, setEditingQuestionId] = useState<number | null>(null);
+    const [isComposerOpen, setIsComposerOpen] = useState(false);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -189,8 +190,19 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
         resetPreview();
     };
 
+    const openCreateComposer = () => {
+        resetForm();
+        setIsComposerOpen(true);
+    };
+
+    const closeComposer = () => {
+        setIsComposerOpen(false);
+        resetForm();
+    };
+
     const startEdit = (question: Question) => {
         setEditingQuestionId(question.id);
+        setIsComposerOpen(true);
         setFormType(question.type);
         setFormText(question.question || '');
         setFormExp(question.explanation || '');
@@ -343,6 +355,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
                     : [...prev, newQuestion]
             ));
             resetForm();
+            setIsComposerOpen(false);
         } catch (error: any) {
             console.error('Add question failed', error);
             const code = error?.code ? ` (${error.code})` : '';
@@ -368,6 +381,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
         if (question.type === 'order') return question.answer.split(ORDER_DELIMITER).join(' -> ');
         return question.answer;
     };
+
+    const categoryLabel = category === 'diagnostic' ? '진단평가' : category === 'formative' ? '형성평가' : '학기 시험 대비';
 
     return (
         <div className="flex flex-col h-full bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -456,12 +471,42 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
                     ))
                 )}
 
-                <div className="mt-8 bg-white p-5 rounded-xl border-2 border-dashed border-gray-300">
-                    <h3 className="font-bold text-gray-700 mb-4 flex items-center">
-                        <i className={`fas ${editingQuestionId ? 'fa-pen' : 'fa-plus-circle'} text-blue-500 mr-2`}></i>
-                        {editingQuestionId ? '문제 수정' : '새 문제 추가'}
-                    </h3>
-                    <div className="space-y-4">
+                <button
+                    type="button"
+                    onClick={openCreateComposer}
+                    className="fixed right-6 bottom-6 z-40 bg-blue-600 text-white font-bold px-4 py-3 rounded-full shadow-xl hover:bg-blue-700 transition flex items-center gap-2"
+                >
+                    <i className="fas fa-plus"></i>
+                    <span>문제 등록</span>
+                </button>
+
+                {isComposerOpen && (
+                    <div className="fixed inset-0 z-50">
+                        <button
+                            type="button"
+                            className="absolute inset-0 bg-black/45"
+                            onClick={closeComposer}
+                            aria-label="문제 등록 팝업 닫기"
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center p-4">
+                            <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl border border-gray-200 p-5">
+                                <div className="flex items-start justify-between mb-4">
+                                    <div>
+                                        <h3 className="font-bold text-gray-800 text-lg flex items-center">
+                                            <i className={`fas ${editingQuestionId ? 'fa-pen' : 'fa-plus-circle'} text-blue-500 mr-2`}></i>
+                                            {editingQuestionId ? '문제 수정' : '새 문제 등록'}
+                                        </h3>
+                                        <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                                            <span className="px-2 py-1 rounded bg-gray-100 text-gray-700 font-bold">중단원: {node.title}</span>
+                                            <span className="px-2 py-1 rounded bg-blue-100 text-blue-700 font-bold">{categoryLabel}</span>
+                                        </div>
+                                    </div>
+                                    <button type="button" onClick={closeComposer} className="text-gray-400 hover:text-gray-700">
+                                        <i className="fas fa-times text-lg"></i>
+                                    </button>
+                                </div>
+
+                                <div className="space-y-4">
                         <div className={`grid gap-3 ${type === 'normal' ? 'grid-cols-2' : 'grid-cols-1'}`}>
                             <select value={formType} onChange={(e) => handleTypeChange(e.target.value as QuestionType)} className="border p-2 rounded text-sm bg-gray-50">
                                 <option value="choice">객관식</option>
@@ -603,15 +648,18 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
                             {editingQuestionId && (
                                 <button
                                     type="button"
-                                    onClick={resetForm}
+                                    onClick={closeComposer}
                                     className="bg-gray-100 text-gray-700 font-bold py-2 rounded hover:bg-gray-200 transition"
                                 >
                                     취소
                                 </button>
                             )}
                         </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                </div>
+                )}
             </div>
         </div>
     );
