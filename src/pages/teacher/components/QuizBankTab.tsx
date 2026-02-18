@@ -864,15 +864,13 @@ const QuizBankTab: React.FC = () => {
             </div>
 
             {editingQuestion && (
-                <div className="fixed inset-0 z-50">
-                    <button
-                        type="button"
-                        className="absolute inset-0 bg-black/45"
-                        onClick={() => closeEditModal()}
-                        aria-label="문제 수정 팝업 닫기"
-                    />
+                <div className="fixed inset-0 z-50" onClick={() => closeEditModal()}>
+                    <div className="absolute inset-0 bg-black/45" />
                     <div className="absolute inset-0 flex items-center justify-center p-4">
-                        <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl border border-gray-200 p-5">
+                        <div
+                            className="w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl border border-gray-200 p-5"
+                            onClick={(event) => event.stopPropagation()}
+                        >
                             <div className="flex items-start justify-between mb-4">
                                 <div>
                                     <h3 className="font-bold text-gray-800 text-lg flex items-center">
