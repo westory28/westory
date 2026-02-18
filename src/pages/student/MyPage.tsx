@@ -67,7 +67,7 @@ interface WrongItem {
 }
 
 const SUBJECT_PRIORITY = ['국어', '영어', '수학', '사회', '역사', '도덕', '과학', '기술', '가정', '기술가정', '체육', '미술', '음악', '정보'];
-const SAFE_STUDENT_ICONS = ['😀', '😎', '🧠', '📚', '✏️', '🧪', '🏫', '🌟', '🚀', '🐯', '🐻', '🦊', '🐼', '🐬', '🦉'];
+const DEFAULT_STUDENT_PROFILE_EMOJIS = ['😀', '😎', '🧠', '📚', '✏️', '🧪', '🏫', '🌟', '🚀', '🐯', '🐻', '🦊', '🐼', '🐬', '🦉'];
 
 const categoryLabel = (category?: string) => {
   if (category === 'diagnostic') return '진단평가';
@@ -91,11 +91,18 @@ const formatDate = (result: QuizResult) => {
 const chunk = (arr: string[], size: number) =>
   Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, i * size + size));
 
+const normalizeStudentProfileEmojis = (raw: unknown): string[] => {
+  if (!Array.isArray(raw)) return DEFAULT_STUDENT_PROFILE_EMOJIS;
+  const normalized = Array.from(new Set(raw.map((v) => String(v || '').trim()).filter(Boolean)));
+  return normalized.length > 0 ? normalized : DEFAULT_STUDENT_PROFILE_EMOJIS;
+};
+
 const MyPage: React.FC = () => {
   const { user, userData } = useAuth();
   const [config, setConfig] = useState<{ year: string; semester: string } | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [icon, setIcon] = useState('😀');
+  const [profileEmojiOptions, setProfileEmojiOptions] = useState<string[]>(DEFAULT_STUDENT_PROFILE_EMOJIS);
   const [iconModalOpen, setIconModalOpen] = useState(false);
   const [savingIcon, setSavingIcon] = useState(false);
   const [menu, setMenu] = useState<MenuKey>('profile');
@@ -117,6 +124,7 @@ const MyPage: React.FC = () => {
   useEffect(() => {
     if (!user || !config) return;
     void loadProfile();
+    void loadStudentProfileEmojiOptions();
     void loadUnitMap();
     void loadScoreChart();
     void loadQuizAndWrong();
@@ -134,6 +142,15 @@ const MyPage: React.FC = () => {
     const p = d.data() as UserProfile;
     setProfile(p);
     setIcon(p.profileIcon || '😀');
+  };
+
+  const loadStudentProfileEmojiOptions = async () => {
+    const d = await getDoc(doc(db, 'site_settings', 'interface_config'));
+    if (!d.exists()) {
+      setProfileEmojiOptions(DEFAULT_STUDENT_PROFILE_EMOJIS);
+      return;
+    }
+    setProfileEmojiOptions(normalizeStudentProfileEmojis(d.data().studentProfileEmojis));
   };
 
   const loadUnitMap = async () => {
@@ -403,7 +420,7 @@ const MyPage: React.FC = () => {
               <button onClick={() => setIconModalOpen(false)} className="text-gray-400 hover:text-gray-600"><i className="fas fa-times"></i></button>
             </div>
             <div className="grid grid-cols-5 gap-2">
-              {SAFE_STUDENT_ICONS.map((v) => (
+              {profileEmojiOptions.map((v) => (
                 <button key={v} type="button" disabled={savingIcon} onClick={() => void saveIcon(v)} className={`h-11 rounded border text-2xl ${icon === v ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-gray-50'}`}>
                   {v}
                 </button>
@@ -417,4 +434,3 @@ const MyPage: React.FC = () => {
 };
 
 export default MyPage;
-

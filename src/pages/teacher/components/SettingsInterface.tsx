@@ -14,6 +14,20 @@ const DEFAULT_INTERFACE_CONFIG = {
     footerText: '',
 };
 
+const DEFAULT_STUDENT_PROFILE_EMOJIS = ['😀', '😎', '🧠', '📚', '✏️', '🧪', '🏫', '🌟', '🚀', '🐯', '🐻', '🦊', '🐼', '🐬', '🦉'];
+
+const normalizeStudentProfileEmojis = (raw: unknown): string[] => {
+    if (!Array.isArray(raw)) return DEFAULT_STUDENT_PROFILE_EMOJIS;
+    const normalized = Array.from(
+        new Set(
+            raw
+                .map((item) => String(item || '').trim())
+                .filter(Boolean),
+        ),
+    );
+    return normalized.length > 0 ? normalized : DEFAULT_STUDENT_PROFILE_EMOJIS;
+};
+
 const DEFAULT_PARENT_ICON = 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253';
 const SITEMAP_HEADER_COLORS = [
     'bg-blue-700',
@@ -47,6 +61,7 @@ const SettingsInterface: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [savingInterface, setSavingInterface] = useState(false);
     const [savingMenu, setSavingMenu] = useState(false);
+    const [studentProfileEmojiText, setStudentProfileEmojiText] = useState(DEFAULT_STUDENT_PROFILE_EMOJIS.join(' '));
     const [parentDraft, setParentDraft] = useState<Record<PortalType, { name: string; url: string }>>({
         student: { name: '', url: '' },
         teacher: { name: '', url: '' },
@@ -74,6 +89,7 @@ const SettingsInterface: React.FC = () => {
                         ddayDate: data.ddayDate || '',
                         footerText: data.footerText || '',
                     });
+                    setStudentProfileEmojiText(normalizeStudentProfileEmojis(data.studentProfileEmojis).join(' '));
                 }
 
                 if (menuSnap.exists()) {
@@ -239,12 +255,21 @@ const SettingsInterface: React.FC = () => {
 
         setSavingInterface(true);
         try {
+            const studentProfileEmojis = Array.from(
+                new Set(
+                    studentProfileEmojiText
+                        .split(/\s+/)
+                        .map((v) => v.trim())
+                        .filter(Boolean),
+                ),
+            );
             await setDoc(doc(db, 'site_settings', 'interface_config'), {
                 ...config,
                 mainEmoji: config.mainEmoji.trim() || DEFAULT_INTERFACE_CONFIG.mainEmoji,
                 mainSubtitle: config.mainSubtitle.trim() || DEFAULT_INTERFACE_CONFIG.mainSubtitle,
                 ddayTitle: config.ddayTitle.trim(),
                 footerText: config.footerText.trim(),
+                studentProfileEmojis: studentProfileEmojis.length > 0 ? studentProfileEmojis : DEFAULT_STUDENT_PROFILE_EMOJIS,
                 updatedAt: serverTimestamp(),
             });
             alert('인터페이스 설정이 저장되었습니다.');
@@ -329,6 +354,17 @@ const SettingsInterface: React.FC = () => {
                                         placeholder="예: 우리가 써 내려가는 이야기"
                                         className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none"
                                     />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">학생 프로필 이모지 목록</label>
+                                    <input
+                                        type="text"
+                                        value={studentProfileEmojiText}
+                                        onChange={(e) => setStudentProfileEmojiText(e.target.value)}
+                                        placeholder="😀 😎 🧠 📚 ✏️"
+                                        className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none"
+                                    />
+                                    <p className="text-xs text-gray-400 mt-1">공백으로 구분해서 입력하세요. 학생 프로필에서 선택 가능한 목록입니다.</p>
                                 </div>
                             </div>
                         </div>
