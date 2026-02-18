@@ -299,6 +299,22 @@ const QuizBankTab: React.FC = () => {
         return map;
     }, [questions, treeIndexes]);
 
+    function getRateInfo(q: Question) {
+        const stat = questionStats[String(q.docId)] || questionStats[String(q.id)] || { attempts: 0, correct: 0 };
+        if (!stat.attempts) {
+            return { rate: 0, attempts: 0, text: '응시 없음' };
+        }
+        const rate = Math.round((stat.correct / stat.attempts) * 100);
+        return { rate, attempts: stat.attempts, text: `${rate}% (${stat.correct}/${stat.attempts})` };
+    }
+
+    function getCategoryLabel(category: string) {
+        if (category === 'diagnostic') return '진단';
+        if (category === 'formative') return '형성';
+        if (category === 'exam_prep') return '시험 대비';
+        return '기타';
+    }
+
     const filteredQuestions = useMemo(() => {
         let list = [...questions];
 
@@ -365,22 +381,6 @@ const QuizBankTab: React.FC = () => {
         });
         return list;
     }, [filters, questions, treeData, sortKey, sortDirection, questionStats, questionDisplayMeta]);
-
-    const getRateInfo = (q: Question) => {
-        const stat = questionStats[String(q.docId)] || questionStats[String(q.id)] || { attempts: 0, correct: 0 };
-        if (!stat.attempts) {
-            return { rate: 0, attempts: 0, text: '응시 없음' };
-        }
-        const rate = Math.round((stat.correct / stat.attempts) * 100);
-        return { rate, attempts: stat.attempts, text: `${rate}% (${stat.correct}/${stat.attempts})` };
-    };
-
-    const getCategoryLabel = (category: string) => {
-        if (category === 'diagnostic') return '진단';
-        if (category === 'formative') return '형성';
-        if (category === 'exam_prep') return '시험 대비';
-        return '기타';
-    };
 
     const getCategoryPillLabel = (category: string) => {
         if (category === 'diagnostic') return '진단평가';
