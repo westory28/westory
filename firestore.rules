@@ -16,6 +16,17 @@ service cloud.firestore {
       allow list: if isTeacher();
       allow create: if isSignedIn();
       allow update, delete: if isSignedIn() && (request.auth.uid == userId || isTeacher());
+
+      // Student personal academic records (sensitive)
+      match /academic_records/{recordId} {
+        allow read: if isSignedIn() && (request.auth.uid == userId || isTeacher());
+        allow create, update: if isSignedIn()
+          && request.auth.uid == userId
+          && request.resource.data.keys().hasOnly(['scores', 'updatedAt'])
+          && request.resource.data.scores is map
+          && request.resource.data.scores.keys().size() <= 500;
+        allow delete: if isSignedIn() && (request.auth.uid == userId || isTeacher());
+      }
     }
 
     // Site settings

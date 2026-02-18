@@ -22,8 +22,11 @@ const ScoreDashboard: React.FC = () => {
     const [plans, setPlans] = useState<GradingPlan[]>([]);
     const [userScores, setUserScores] = useState<{ [key: string]: string }>({});
     const [saving, setSaving] = useState(false);
-    const [showWarning, setShowWarning] = useState(true);
+    const [showWarning, setShowWarning] = useState(false);
     const [agree, setAgree] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
+    const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+    const [warningSaving, setWarningSaving] = useState(false);
 
     // Filters
     const [semester, setSemester] = useState(config?.semester || '1');
@@ -43,6 +46,18 @@ const ScoreDashboard: React.FC = () => {
             fetchData(semester);
         }
     }, [userData, config, semester]);
+
+    useEffect(() => {
+        return () => {
+            if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!lastSavedAt) return;
+        const timer = window.setTimeout(() => setLastSavedAt(null), 2000);
+        return () => window.clearTimeout(timer);
+    }, [lastSavedAt]);
 
     const fetchData = async (targetSemester: string = semester) => {
         setLoading(true);
@@ -71,6 +86,12 @@ const ScoreDashboard: React.FC = () => {
                 } else {
                     setUserScores({});
                 }
+
+                const userRef = doc(db, 'users', userData.uid);
+                const userSnap = await getDoc(userRef);
+                const warningAcknowledged = userSnap.exists() && userSnap.data().scoreWarningAcknowledged === true;
+                setShowWarning(!warningAcknowledged);
+                setAgree(warningAcknowledged);
             }
 
         } catch (error) {
@@ -95,27 +116,67 @@ const ScoreDashboard: React.FC = () => {
         const key = `${planId}_${idx}`;
         const newScores = { ...userScores, [key]: finalVal };
         setUserScores(newScores);
+        setSaveError(null);
 
         // Debounce Save
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
         setSaving(true);
+        const semesterForSave = semester;
         saveTimeoutRef.current = setTimeout(async () => {
-            await saveScores(newScores);
+            await saveScores(newScores, semesterForSave);
             setSaving(false);
         }, 1000);
     };
 
-    const saveScores = async (scoresToSave: any) => {
+    const sanitizeScores = (scoresToSave: { [key: string]: string }) => {
+        const sanitized: { [key: string]: string } = {};
+        Object.entries(scoresToSave || {}).forEach(([key, rawValue]) => {
+            if (!key || key.length > 120 || !/^.+_\d+$/.test(key)) return;
+            const numeric = Number(rawValue);
+            if (!Number.isFinite(numeric) || numeric < 0 || numeric > 1000) return;
+            sanitized[key] = String(numeric);
+        });
+        return sanitized;
+    };
+
+    const saveScores = async (scoresToSave: { [key: string]: string }, targetSemester: string = semester) => {
         if (!userData) return;
         const year = config?.year || '2025';
-        const scoreDocId = `${year}_${semester}`;
+        const scoreDocId = `${year}_${targetSemester}`;
+        const sanitizedScores = sanitizeScores(scoresToSave);
         try {
             await setDoc(doc(db, 'users', userData.uid, 'academic_records', scoreDocId), {
-                scores: scoresToSave,
+                scores: sanitizedScores,
                 updatedAt: serverTimestamp()
             }, { merge: true });
+            setLastSavedAt(Date.now());
+            setSaveError(null);
         } catch (e) {
             console.error("Save failed", e);
+            setSaveError("저장에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+        }
+    };
+
+    const handleManualSave = async () => {
+        setSaving(true);
+        await saveScores(userScores, semester);
+        setSaving(false);
+    };
+
+    const handleConfirmWarning = async () => {
+        if (!agree || !userData) return;
+        setWarningSaving(true);
+        try {
+            await setDoc(doc(db, 'users', userData.uid), {
+                scoreWarningAcknowledged: true,
+                scoreWarningAcknowledgedAt: serverTimestamp()
+            }, { merge: true });
+            setShowWarning(false);
+        } catch (e) {
+            console.error("Warning agreement save failed", e);
+            alert("동의 상태 저장에 실패했습니다. 다시 시도해 주세요.");
+        } finally {
+            setWarningSaving(false);
         }
     };
 
@@ -222,11 +283,11 @@ const ScoreDashboard: React.FC = () => {
                             <label className="text-sm font-bold text-gray-700 cursor-pointer">위 내용을 확인하였으며 동의합니다.</label>
                         </div>
                         <button
-                            onClick={() => setShowWarning(false)}
-                            disabled={!agree}
-                            className={`w-full py-3.5 rounded-xl font-bold text-lg transition ${agree ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-md' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+                            onClick={handleConfirmWarning}
+                            disabled={!agree || warningSaving}
+                            className={`w-full py-3.5 rounded-xl font-bold text-lg transition ${agree && !warningSaving ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-md' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
                         >
-                            확 인
+                            {warningSaving ? '저장 중...' : '확 인'}
                         </button>
                     </div>
                 </div>
@@ -280,7 +341,20 @@ const ScoreDashboard: React.FC = () => {
                         <option value="importance">중요도순 (국영수...)</option>
                     </select>
                 </div>
+                <button
+                    onClick={handleManualSave}
+                    disabled={saving || showWarning}
+                    className={`px-4 py-2 rounded text-sm font-bold transition ${saving || showWarning ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                >
+                    저장
+                </button>
             </div>
+
+            {saveError && (
+                <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {saveError}
+                </div>
+            )}
 
             {/* Content Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6">
@@ -330,6 +404,11 @@ const ScoreDashboard: React.FC = () => {
             {saving && (
                 <div className="fixed bottom-5 right-5 bg-gray-800 text-white px-5 py-2.5 rounded-full text-xs flex items-center gap-2 shadow-lg z-50 animate-fadeIn">
                     <i className="fas fa-sync fa-spin"></i> 저장 중...
+                </div>
+            )}
+            {!saving && lastSavedAt && !saveError && (
+                <div className="fixed bottom-5 right-5 bg-emerald-700 text-white px-5 py-2.5 rounded-full text-xs flex items-center gap-2 shadow-lg z-50 animate-fadeIn">
+                    <i className="fas fa-check"></i> 저장 완료
                 </div>
             )}
         </div>
