@@ -409,6 +409,14 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
                         </button>
                     </div>
                 </div>
+                <button
+                    type="button"
+                    onClick={openCreateComposer}
+                    className="bg-blue-600 text-white font-bold px-4 py-2.5 rounded-full shadow hover:bg-blue-700 transition flex items-center gap-2"
+                >
+                    <i className="fas fa-plus"></i>
+                    <span>문제 등록</span>
+                </button>
             </div>
 
             {type !== 'special' && (
@@ -485,16 +493,6 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
                                 </div>
                             ))
                         )}
-                    </div>
-                    <div className="pt-4 flex justify-end shrink-0">
-                        <button
-                            type="button"
-                            onClick={openCreateComposer}
-                            className="bg-blue-600 text-white font-bold px-4 py-3 rounded-full shadow-xl hover:bg-blue-700 transition flex items-center gap-2"
-                        >
-                            <i className="fas fa-plus"></i>
-                            <span>문제 등록</span>
-                        </button>
                     </div>
                 </div>
 
