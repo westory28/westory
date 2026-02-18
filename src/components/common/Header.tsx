@@ -218,7 +218,7 @@ const Header: React.FC = () => {
 
                     <Link to={profileTarget} className="user-greeting header-user-link inline-flex items-center hover:text-blue-600 transition cursor-pointer" title={isTeacherPortal ? '관리자 페이지' : '마이페이지'}>
                         {!isTeacherPortal && (
-                            <span className="mr-1.5 inline-flex h-6 w-6 items-center justify-center rounded-full border border-gray-300 bg-white text-[14px] leading-none">
+                            <span className="mr-1.5 inline-flex h-6 w-6 items-center justify-center rounded-full border border-gray-300 bg-gray-100 text-[14px] leading-none">
                                 {studentProfileIcon}
                             </span>
                         )}
