@@ -170,14 +170,14 @@ const Header: React.FC = () => {
                         <span className="logo-story">story</span>
                     </Link>
 
-                    <nav className="desktop-nav ml-4">
+                    <nav className={`desktop-nav ml-4 ${!isTeacherPortal ? 'student-desktop-nav' : ''}`}>
                         {menuItems.map((item, idx) => {
                             const hasChildren = !!item.children?.length;
                             const active = isActive(item.url) || !!item.children?.some((child) => isChildActive(child.url, item.children || []));
 
                             if (!hasChildren) {
                                 return (
-                                    <Link key={`${item.url}-${idx}`} to={item.url} className={`nav-link ${active ? 'active' : ''}`}>
+                                    <Link key={`${item.url}-${idx}`} to={item.url} className={`nav-link ${active ? 'active' : ''} ${!isTeacherPortal ? 'student-nav-link' : ''}`}>
                                         {item.name}
                                     </Link>
                                 );
@@ -185,7 +185,7 @@ const Header: React.FC = () => {
 
                             return (
                                 <div key={`${item.url}-${idx}`} className="relative group h-full flex items-center">
-                                    <Link to={item.url} className={`nav-link ${active ? 'active' : ''} flex items-center gap-1`}>
+                                    <Link to={item.url} className={`nav-link ${active ? 'active' : ''} ${!isTeacherPortal ? 'student-nav-link' : ''} flex items-center gap-1`}>
                                         {item.name}
                                         <i className="fas fa-chevron-down text-[10px] ml-1 opacity-50 group-hover:opacity-100 transition"></i>
                                     </Link>

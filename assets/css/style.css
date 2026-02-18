@@ -103,6 +103,14 @@ header {
     font-weight: 700;
 }
 
+/* 학생 포털 상위 메뉴 간격 보정(교사 헤더와 유사한 여백감) */
+@media (min-width: 1024px) {
+    .student-desktop-nav .student-nav-link {
+        margin: 0 1.15rem;
+        padding: 0 0.25rem;
+    }
+}
+
 /* Header Right Actions */
 .header-right {
     display: flex;
