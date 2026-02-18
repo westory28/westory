@@ -43,6 +43,7 @@ const Header: React.FC = () => {
     const home = `/${portal}/dashboard`;
     const profileTarget = isTeacherPortal ? '/teacher/settings' : '/student/mypage';
     const profileLabel = `${displayName} ${isTeacherPortal ? '교사' : '학생'}`;
+    const studentProfileIcon = userData?.profileIcon || '🧑‍🎓';
 
     const isActive = (url: string) => {
         const [targetPath, targetQuery] = url.split('?');
@@ -222,6 +223,7 @@ const Header: React.FC = () => {
                     )}
 
                     <Link to={profileTarget} className="user-greeting header-user-link inline-flex items-center hover:text-blue-600 transition cursor-pointer" title={isTeacherPortal ? '관리자 페이지' : '마이페이지'}>
+                        {!isTeacherPortal && <span className="mr-1.5">{studentProfileIcon}</span>}
                         {profileLabel}
                     </Link>
 
