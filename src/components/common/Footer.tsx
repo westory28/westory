@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -10,11 +10,44 @@ const POLICY_TITLE: Record<PolicyType, string> = {
     privacy: '개인정보 처리 방침',
 };
 
+const FALLBACK_FOOTER_TEXT = 'Copyright © Westory. All rights reserved.';
+
 const Footer: React.FC = () => {
-    const { interfaceConfig } = useAuth();
+    const { currentUser, interfaceConfig } = useAuth();
     const [openPolicy, setOpenPolicy] = useState<PolicyType | null>(null);
     const [loading, setLoading] = useState(false);
     const [policyHtml, setPolicyHtml] = useState('');
+    const [resolvedFooterText, setResolvedFooterText] = useState('');
+
+    useEffect(() => {
+        let active = true;
+
+        const loadFooterText = async () => {
+            try {
+                const snap = await getDoc(doc(db, 'site_settings', 'interface_config'));
+                const remoteText = snap.exists()
+                    ? String((snap.data() as { footerText?: string }).footerText || '').trim()
+                    : '';
+                if (active) {
+                    setResolvedFooterText(remoteText);
+                }
+            } catch (error) {
+                console.error('Footer interface config load error:', error);
+            }
+        };
+
+        if (currentUser) {
+            void loadFooterText();
+        } else {
+            setResolvedFooterText('');
+        }
+
+        return () => {
+            active = false;
+        };
+    }, [currentUser]);
+
+    const footerText = resolvedFooterText || String(interfaceConfig?.footerText || '').trim() || FALLBACK_FOOTER_TEXT;
 
     const openPolicyModal = async (type: PolicyType) => {
         setOpenPolicy(type);
@@ -49,8 +82,8 @@ const Footer: React.FC = () => {
                             개인정보 처리 방침
                         </button>
                     </div>
-                    <p className="text-stone-400 text-xs font-bold font-mono">
-                        {interfaceConfig?.footerText || 'Copyright © 덕신중학교 역사교사 방재석 All rights reserved.'}
+                    <p className="text-stone-400 text-xs font-bold">
+                        {footerText}
                     </p>
                 </div>
             </footer>
