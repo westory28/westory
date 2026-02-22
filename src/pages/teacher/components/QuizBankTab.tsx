@@ -19,7 +19,7 @@ interface Question {
     type: string;
     question: string;
     answer: string | number;
-    image?: string;
+    image?: string | null;
     refBig?: string;
     refMid?: string;
     refSmall?: string;
@@ -720,7 +720,9 @@ const QuizBankTab: React.FC = () => {
             question: editQuestionText.trim(),
             answer,
             explanation: editExplanationText.trim(),
-            image: editImage || undefined,
+            // Firestore rejects undefined values (invalid-argument),
+            // so we store null when the editor has no image.
+            image: editImage || null,
             options,
             hintEnabled: editHintEnabled,
             hint: editHintEnabled ? editHintText.trim() : '',
