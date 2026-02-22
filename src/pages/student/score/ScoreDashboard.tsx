@@ -74,17 +74,19 @@ const ScoreDashboard: React.FC = () => {
     };
 
     useEffect(() => {
-        if (!userData || !config || didInitDefaultsRef.current) return;
-        setSemester(config.semester || '1');
+        if (!userData || didInitDefaultsRef.current) return;
+        setSemester(config?.semester || '1');
         setGrade(userData.grade || '1');
         setSortMode('importance');
         didInitDefaultsRef.current = true;
     }, [userData, config]);
 
     useEffect(() => {
-        if (userData && config) {
+        if (userData) {
             fetchData(semester);
+            return;
         }
+        setLoading(false);
     }, [userData, config, semester]);
 
     useEffect(() => {

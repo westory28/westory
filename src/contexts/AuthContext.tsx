@@ -26,24 +26,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [interfaceConfig, setInterfaceConfig] = useState<InterfaceConfig | null>(null);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        const loadConfig = async () => {
-            try {
-                const configSnap = await getDoc(doc(db, 'site_settings', 'config'));
-                const interfaceSnap = await getDoc(doc(db, 'site_settings', 'interface_config'));
+    const loadConfig = async () => {
+        try {
+            const configSnap = await getDoc(doc(db, 'site_settings', 'config'));
+            const interfaceSnap = await getDoc(doc(db, 'site_settings', 'interface_config'));
 
-                if (configSnap.exists()) {
-                    setConfig(configSnap.data() as SystemConfig);
-                }
-                if (interfaceSnap.exists()) {
-                    setInterfaceConfig(interfaceSnap.data() as InterfaceConfig);
-                }
-            } catch (e) {
-                console.error("Failed to load configs", e);
+            if (configSnap.exists()) {
+                setConfig(configSnap.data() as SystemConfig);
             }
-        };
+            if (interfaceSnap.exists()) {
+                setInterfaceConfig(interfaceSnap.data() as InterfaceConfig);
+            }
+        } catch (e) {
+            console.error("Failed to load configs", e);
+        }
+    };
 
-        loadConfig();
+    useEffect(() => {
+        void loadConfig();
     }, []);
 
     useEffect(() => {
@@ -105,6 +105,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             unsubscribe();
         };
     }, []);
+
+    useEffect(() => {
+        if (!currentUser) return;
+        if (config && interfaceConfig) return;
+        void loadConfig();
+    }, [currentUser, config, interfaceConfig]);
 
     const logout = async () => {
         await signOut(auth);
