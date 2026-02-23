@@ -253,6 +253,15 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                             timeCell.textContent = `${label} |`;
                         }
                     }}
+                    eventContent={(arg) => {
+                        if (arg.view.type !== 'dayGridMonth') return undefined;
+                        if (arg.event.extendedProps?.eventType === 'holiday') return undefined;
+                        return (
+                            <div className="fc-segment-title" title={arg.event.title}>
+                                {arg.event.title}
+                            </div>
+                        );
+                    }}
                     height="100%"
                     contentHeight="100%"
                     dayMaxEvents
@@ -274,6 +283,7 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                 .fc-day-holiday a { color: #ef4444 !important; text-decoration: none; font-weight: 700 !important; }
                 .holiday-text-event { background-color: transparent !important; border: none !important; }
                 .holiday-text-event .fc-event-title { color: #ef4444 !important; font-weight: 800 !important; }
+                .fc-segment-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; padding: 0 2px; }
                 .fc-day-selected { background-color: #eff6ff !important; outline: 2px solid #3b82f6 !important; outline-offset: -2px !important; }
             `}</style>
         </div>

@@ -91,6 +91,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             .fc-day-holiday .fc-daygrid-day-number { color: #ef4444 !important; font-weight: 700 !important; }
             .fc-toolbar-title { font-size: 1.25em !important; font-weight: 700; color: #1f2937; }
             .fc-button { background-color: #2563eb !important; border-color: #2563eb !important; font-weight: 600 !important; }
+            .fc-segment-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; padding: 0 2px; }
         `;
         document.head.appendChild(style);
         return () => { document.head.removeChild(style); };
@@ -135,6 +136,15 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                         if (timeCell) {
                             timeCell.textContent = `${label} |`;
                         }
+                    }}
+                    eventContent={(arg) => {
+                        if (arg.view.type !== 'dayGridMonth') return undefined;
+                        if (arg.event.extendedProps?.eventType === 'holiday') return undefined;
+                        return (
+                            <div className="fc-segment-title" title={arg.event.title}>
+                                {arg.event.title}
+                            </div>
+                        );
                     }}
                     height="100%"
                     contentHeight="100%"

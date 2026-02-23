@@ -192,6 +192,15 @@ const Calendar = () => {
                             events={events}
                             dateClick={handleDateClick}
                             eventClick={handleEventClick}
+                            eventContent={(arg) => {
+                                if (arg.view.type !== 'dayGridMonth') return undefined;
+                                if (arg.event.extendedProps?.extendedProps?.eventType === 'holiday') return undefined;
+                                return (
+                                    <div className="fc-segment-title" title={arg.event.title}>
+                                        {arg.event.title}
+                                    </div>
+                                );
+                            }}
                             height="auto" // Allow it to grow
                             dayCellClassNames={(arg) => {
                                 const dateStr = toLocalYmd(arg.date);
@@ -257,6 +266,7 @@ const Calendar = () => {
                 .fc-day-selected { background-color: #eff6ff !important; outline: 2px solid #3b82f6 !important; outline-offset: -2px !important; }
                 .holiday-text-event { background-color: transparent !important; border: none !important; }
                 .holiday-text-event .fc-event-title { color: #ef4444; font-size: 0.75rem; font-weight: 800; }
+                .fc-segment-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; padding: 0 2px; }
             `}</style>
         </div>
     );
