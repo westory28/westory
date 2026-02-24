@@ -197,11 +197,19 @@ const getTypeLabel = (type: 'exam' | 'performance' | 'other') => {
     return '기타';
 };
 
-const getGradeBand = (ratio: number): 'A' | 'B' | 'C' | 'D' | 'E' => {
-    if (ratio >= 90) return 'A';
-    if (ratio >= 80) return 'B';
-    if (ratio >= 70) return 'C';
-    if (ratio >= 60) return 'D';
+const isThreeLevelSubject = (subject: string) => /(음악|미술|체육|music|art|pe|physical)/i.test(String(subject || ''));
+
+const getGradeBand = (score: number, subject: string): 'A' | 'B' | 'C' | 'D' | 'E' => {
+    if (isThreeLevelSubject(subject)) {
+        if (score >= 80) return 'A';
+        if (score >= 60) return 'B';
+        return 'C';
+    }
+
+    if (score >= 90) return 'A';
+    if (score >= 80) return 'B';
+    if (score >= 70) return 'C';
+    if (score >= 60) return 'D';
     return 'E';
 };
 
@@ -745,13 +753,15 @@ const MyPage: React.FC = () => {
                 itemTypes: rowsByItem.map((found) => found?.type || itemType),
                 backgroundColor: rowsByItem.map((found, rowIdx) => {
                     const subjectTotal = Number(scoreRows[rowIdx]?.total || 0);
-                    const band = getGradeBand(subjectTotal);
+                    const subjectName = String(scoreRows[rowIdx]?.subject || '');
+                    const band = getGradeBand(subjectTotal, subjectName);
                     const type = (found?.type || itemType) as 'exam' | 'performance' | 'other';
                     return getBandTypeColor(band, type);
                 }),
                 borderColor: rowsByItem.map((found, rowIdx) => {
                     const subjectTotal = Number(scoreRows[rowIdx]?.total || 0);
-                    const band = getGradeBand(subjectTotal);
+                    const subjectName = String(scoreRows[rowIdx]?.subject || '');
+                    const band = getGradeBand(subjectTotal, subjectName);
                     const type = (found?.type || itemType) as 'exam' | 'performance' | 'other';
                     return getBandTypeColor(band, type);
                 }),
@@ -900,7 +910,7 @@ const MyPage: React.FC = () => {
                                                         <span className="px-6 py-2 bg-blue-500">E</span>
                                                     </div>
                                                 </div>
-                                                <span className="text-[10px] text-gray-400">* 예시는 A/B/C 3단계 평가</span>
+                                                <span className="text-[10px] text-gray-400">* 음악, 미술, 체육은 A/B/C 3단계 평가</span>
                                             </div>
                                         </div>
                                     </div>
