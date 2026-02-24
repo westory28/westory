@@ -278,9 +278,9 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                         return (
                             <div
                                 className={`fc-segment-title ${isHoliday ? 'holiday-segment-title' : ''}`}
-                                title={isHoliday ? `공휴일 | ${safeTitle}` : safeTitle}
+                                title={safeTitle}
                             >
-                                {isHoliday ? `공휴일 | ${safeTitle}` : safeTitle}
+                                {safeTitle}
                             </div>
                         );
                     }}
@@ -303,11 +303,13 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                 .fc-day-sun a { color: #ef4444 !important; text-decoration: none; font-weight: 700 !important; }
                 .fc-day-sat a { color: #3b82f6 !important; text-decoration: none; font-weight: 700 !important; }
                 .fc-day-holiday a { color: #ef4444 !important; text-decoration: none; font-weight: 700 !important; }
-                .holiday-text-event { background-color: #ef4444 !important; border-color: #ef4444 !important; }
-                .holiday-text-event .fc-event-title { color: #ffffff !important; font-weight: 800 !important; }
-                .holiday-text-event .fc-list-event-title a { color: #ef4444 !important; font-weight: 800 !important; }
+                .fc-daygrid-event.holiday-text-event { background-color: #ef4444 !important; border-color: #ef4444 !important; }
+                .fc-daygrid-event.holiday-text-event .fc-event-title { color: #ffffff !important; font-weight: 800 !important; }
+                .fc-list-event.holiday-text-event { background-color: transparent !important; border: none !important; }
+                .fc-list-event.holiday-text-event .fc-list-event-title a { color: #ef4444 !important; font-weight: 800 !important; }
                 .fc-segment-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; padding: 0 2px; }
-                .holiday-segment-title { color: #ffffff !important; font-weight: 800 !important; }
+                .fc-daygrid-event .holiday-segment-title { color: #ffffff !important; font-weight: 800 !important; }
+                .fc-list-event .holiday-segment-title { color: #ef4444 !important; font-weight: 800 !important; }
                 .fc-day-selected { background-color: #eff6ff !important; outline: 2px solid #3b82f6 !important; outline-offset: -2px !important; }
             `}</style>
         </div>

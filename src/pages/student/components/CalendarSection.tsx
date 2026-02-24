@@ -90,8 +90,8 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
     useEffect(() => {
         const style = document.createElement('style');
         style.innerHTML = `
-            .holiday-text-event { background-color: #ef4444 !important; border-color: #ef4444 !important; }
-            .holiday-text-event .fc-event-title { color: #ffffff !important; font-size: 0.75rem; font-weight: 800; }
+            .fc-daygrid-event.holiday-text-event { background-color: #ef4444 !important; border-color: #ef4444 !important; }
+            .fc-daygrid-event.holiday-text-event .fc-event-title { color: #ffffff !important; font-size: 0.75rem; font-weight: 800; }
             .fc-day-selected { background-color: #eff6ff !important; outline: 2px solid #3b82f6 !important; outline-offset: -2px !important; }
             .fc-day-sun a { color: #ef4444 !important; text-decoration: none; font-weight: 700; }
             .fc-day-sat a { color: #3b82f6 !important; text-decoration: none; font-weight: 700; }
@@ -99,9 +99,11 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             .fc-day-holiday .fc-daygrid-day-number { color: #ef4444 !important; font-weight: 700 !important; }
             .fc-toolbar-title { font-size: 1.25em !important; font-weight: 700; color: #1f2937; }
             .fc-button { background-color: #2563eb !important; border-color: #2563eb !important; font-weight: 600 !important; }
-            .holiday-text-event .fc-list-event-title a { color: #ef4444 !important; font-weight: 800 !important; }
+            .fc-list-event.holiday-text-event { background-color: transparent !important; border: none !important; }
+            .fc-list-event.holiday-text-event .fc-list-event-title a { color: #ef4444 !important; font-weight: 800 !important; }
             .fc-segment-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; padding: 0 2px; }
-            .holiday-segment-title { color: #ffffff !important; font-weight: 800 !important; }
+            .fc-daygrid-event .holiday-segment-title { color: #ffffff !important; font-weight: 800 !important; }
+            .fc-list-event .holiday-segment-title { color: #ef4444 !important; font-weight: 800 !important; }
         `;
         document.head.appendChild(style);
         return () => { document.head.removeChild(style); };
@@ -164,9 +166,9 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                         return (
                             <div
                                 className={`fc-segment-title ${isHoliday ? 'holiday-segment-title' : ''}`}
-                                title={isHoliday ? `공휴일 | ${safeTitle}` : safeTitle}
+                                title={safeTitle}
                             >
-                                {isHoliday ? `공휴일 | ${safeTitle}` : safeTitle}
+                                {safeTitle}
                             </div>
                         );
                     }}
