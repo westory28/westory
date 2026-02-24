@@ -99,7 +99,9 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             .fc-day-holiday .fc-daygrid-day-number { color: #ef4444 !important; font-weight: 700 !important; }
             .fc-toolbar-title { font-size: 1.25em !important; font-weight: 700; color: #1f2937; }
             .fc-button { background-color: #2563eb !important; border-color: #2563eb !important; font-weight: 600 !important; }
+            .holiday-text-event .fc-list-event-title a { color: #ef4444 !important; font-weight: 800 !important; }
             .fc-segment-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; padding: 0 2px; }
+            .holiday-segment-title { color: #ef4444 !important; font-weight: 800 !important; }
         `;
         document.head.appendChild(style);
         return () => { document.head.removeChild(style); };
@@ -146,10 +148,25 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                         }
                     }}
                     eventContent={(arg) => {
+                        const isHoliday = arg.event.extendedProps?.eventType === 'holiday';
+                        const eventTitle = String(arg.event.title || '').trim();
+                        const safeTitle = eventTitle || (isHoliday ? '공휴일' : '일정');
+
+                        if (arg.view.type === 'listMonth') {
+                            return (
+                                <div className={`fc-segment-title ${isHoliday ? 'holiday-segment-title' : ''}`} title={safeTitle}>
+                                    {safeTitle}
+                                </div>
+                            );
+                        }
+
                         if (arg.view.type !== 'dayGridMonth') return undefined;
                         return (
-                            <div className="fc-segment-title" title={arg.event.title}>
-                                {arg.event.title}
+                            <div
+                                className={`fc-segment-title ${isHoliday ? 'holiday-segment-title' : ''}`}
+                                title={isHoliday ? `공휴일 | ${safeTitle}` : safeTitle}
+                            >
+                                {isHoliday ? `공휴일 | ${safeTitle}` : safeTitle}
                             </div>
                         );
                     }}
