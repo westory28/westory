@@ -191,18 +191,17 @@ const normalizePlanItemType = (rawType: unknown, fallbackName: string): 'exam' |
     return classifyBreakdownType(fallbackName);
 };
 
-const getABCDEColor = (ratio: number) => {
-    if (ratio >= 90) return '#10b981';
-    if (ratio >= 80) return '#3b82f6';
-    if (ratio >= 70) return '#f59e0b';
-    if (ratio >= 60) return '#f97316';
-    return '#ef4444';
-};
-
 const getTypeLabel = (type: 'exam' | 'performance' | 'other') => {
     if (type === 'exam') return '정기시험';
     if (type === 'performance') return '수행평가';
     return '기타';
+};
+
+const getStackColorByType = (type: 'exam' | 'performance' | 'other', index: number) => {
+    const tone = index % 2;
+    if (type === 'exam') return tone === 0 ? '#1d4ed8' : '#60a5fa';
+    if (type === 'performance') return tone === 0 ? '#047857' : '#6ee7b7';
+    return tone === 0 ? '#334155' : '#94a3b8';
 };
 
 const MyPage: React.FC = () => {
@@ -722,24 +721,19 @@ const MyPage: React.FC = () => {
             new Set(scoreRows.flatMap((row) => row.breakdown.map((item) => item.name))),
         );
 
-        const datasets = itemNames.map((itemName) => {
+        const datasets = itemNames.map((itemName, idx) => {
             const rowsByItem = scoreRows.map((row) => row.breakdown.find((item) => item.name === itemName) || null);
             const firstFound = rowsByItem.find(Boolean);
             const itemType = firstFound?.type || 'other';
+            const stackColor = getStackColorByType(itemType, idx);
             return {
                 label: itemName,
                 data: rowsByItem.map((found) => Number((found?.weighted || 0).toFixed(1))),
                 rawScores: rowsByItem.map((found) => Number((found?.score || 0).toFixed(1))),
                 maxScores: rowsByItem.map((found) => Number((found?.maxScore || 0).toFixed(1))),
                 itemTypes: rowsByItem.map((found) => found?.type || itemType),
-                backgroundColor: rowsByItem.map((found) => {
-                    const ratio = found && found.maxScore > 0 ? (found.score / found.maxScore) * 100 : 0;
-                    return getABCDEColor(ratio);
-                }),
-                borderColor: rowsByItem.map((found) => {
-                    const ratio = found && found.maxScore > 0 ? (found.score / found.maxScore) * 100 : 0;
-                    return getABCDEColor(ratio);
-                }),
+                backgroundColor: stackColor,
+                borderColor: stackColor,
                 borderWidth: 1,
                 borderRadius: 0,
                 stack: 'total',
@@ -873,7 +867,16 @@ const MyPage: React.FC = () => {
                                 <div className="rounded-2xl border border-gray-200 bg-white p-4">
                                     <div className="mb-3 flex items-center justify-between">
                                         <h3 className="font-bold text-gray-800">종합 성적 그래프 (정기시험/수행평가 반영)</h3>
-                                        <span className="text-xs text-gray-500">마우스를 올리면 영역별 점수가 표시됩니다.</span>
+                                        <div className="flex flex-col items-end gap-1">
+                                            <span className="text-xs text-gray-500">마우스를 올리면 영역별 점수가 표시됩니다.</span>
+                                            <div className="flex items-center gap-2 text-[11px] font-bold text-gray-600">
+                                                <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>A</span>
+                                                <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-sky-600"></span>B</span>
+                                                <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>C</span>
+                                                <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-slate-500"></span>D</span>
+                                                <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-gray-400"></span>E</span>
+                                            </div>
+                                        </div>
                                     </div>
                                     <div className="h-72">
                                         {subjectInsights.length > 0 ? (
