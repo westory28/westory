@@ -197,11 +197,23 @@ const getTypeLabel = (type: 'exam' | 'performance' | 'other') => {
     return '기타';
 };
 
-const getStackColorByType = (type: 'exam' | 'performance' | 'other', index: number) => {
-    const tone = index % 2;
-    if (type === 'exam') return tone === 0 ? '#1d4ed8' : '#60a5fa';
-    if (type === 'performance') return tone === 0 ? '#047857' : '#6ee7b7';
-    return tone === 0 ? '#334155' : '#94a3b8';
+const getGradeBand = (ratio: number): 'A' | 'B' | 'C' | 'D' | 'E' => {
+    if (ratio >= 90) return 'A';
+    if (ratio >= 80) return 'B';
+    if (ratio >= 70) return 'C';
+    if (ratio >= 60) return 'D';
+    return 'E';
+};
+
+const getBandTypeColor = (band: 'A' | 'B' | 'C' | 'D' | 'E', type: 'exam' | 'performance' | 'other') => {
+    const palette: Record<'A' | 'B' | 'C' | 'D' | 'E', { exam: string; performance: string; other: string }> = {
+        A: { exam: '#b91c1c', performance: '#fca5a5', other: '#ef4444' },
+        B: { exam: '#c2410c', performance: '#fdba74', other: '#f97316' },
+        C: { exam: '#a16207', performance: '#fde68a', other: '#eab308' },
+        D: { exam: '#166534', performance: '#86efac', other: '#22c55e' },
+        E: { exam: '#1d4ed8', performance: '#93c5fd', other: '#3b82f6' },
+    };
+    return palette[band][type];
 };
 
 const MyPage: React.FC = () => {
@@ -721,19 +733,28 @@ const MyPage: React.FC = () => {
             new Set(scoreRows.flatMap((row) => row.breakdown.map((item) => item.name))),
         );
 
-        const datasets = itemNames.map((itemName, idx) => {
+        const datasets = itemNames.map((itemName) => {
             const rowsByItem = scoreRows.map((row) => row.breakdown.find((item) => item.name === itemName) || null);
             const firstFound = rowsByItem.find(Boolean);
             const itemType = firstFound?.type || 'other';
-            const stackColor = getStackColorByType(itemType, idx);
             return {
                 label: itemName,
                 data: rowsByItem.map((found) => Number((found?.weighted || 0).toFixed(1))),
                 rawScores: rowsByItem.map((found) => Number((found?.score || 0).toFixed(1))),
                 maxScores: rowsByItem.map((found) => Number((found?.maxScore || 0).toFixed(1))),
                 itemTypes: rowsByItem.map((found) => found?.type || itemType),
-                backgroundColor: stackColor,
-                borderColor: stackColor,
+                backgroundColor: rowsByItem.map((found) => {
+                    const ratio = found && found.maxScore > 0 ? (found.score / found.maxScore) * 100 : 0;
+                    const band = getGradeBand(ratio);
+                    const type = (found?.type || itemType) as 'exam' | 'performance' | 'other';
+                    return getBandTypeColor(band, type);
+                }),
+                borderColor: rowsByItem.map((found) => {
+                    const ratio = found && found.maxScore > 0 ? (found.score / found.maxScore) * 100 : 0;
+                    const band = getGradeBand(ratio);
+                    const type = (found?.type || itemType) as 'exam' | 'performance' | 'other';
+                    return getBandTypeColor(band, type);
+                }),
                 borderWidth: 1,
                 borderRadius: 0,
                 stack: 'total',
@@ -870,11 +891,12 @@ const MyPage: React.FC = () => {
                                         <div className="flex flex-col items-end gap-1">
                                             <span className="text-xs text-gray-500">마우스를 올리면 영역별 점수가 표시됩니다.</span>
                                             <div className="flex items-center gap-2 text-[11px] font-bold text-gray-600">
-                                                <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>A</span>
-                                                <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-sky-600"></span>B</span>
-                                                <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>C</span>
-                                                <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-slate-500"></span>D</span>
-                                                <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-gray-400"></span>E</span>
+                                                <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-700"></span>A</span>
+                                                <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-orange-600"></span>B</span>
+                                                <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-yellow-600"></span>C</span>
+                                                <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-green-600"></span>D</span>
+                                                <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-blue-600"></span>E</span>
+                                                <span className="ml-1 text-[10px] text-gray-500">정기 진함 / 수행 연함</span>
                                             </div>
                                         </div>
                                     </div>
