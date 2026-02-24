@@ -43,6 +43,7 @@ interface UserProfileDoc {
 }
 
 interface GradingPlanItem {
+    type?: string;
     name?: string;
     maxScore: number;
     ratio: number;
@@ -181,6 +182,13 @@ const classifyBreakdownType = (name: string): 'exam' | 'performance' | 'other' =
     if (/정기|지필|중간|기말|시험|omr|서술|exam|midterm|final/.test(key)) return 'exam';
     if (/수행|과제|발표|실험|프로젝트|실습|performance|project|assignment/.test(key)) return 'performance';
     return 'other';
+};
+
+const normalizePlanItemType = (rawType: unknown, fallbackName: string): 'exam' | 'performance' | 'other' => {
+    const typeKey = String(rawType ?? '').toLowerCase();
+    if (/정기|regular|exam|midterm|final|omr/.test(typeKey)) return 'exam';
+    if (/수행|performance|project|assignment/.test(typeKey)) return 'performance';
+    return classifyBreakdownType(fallbackName);
 };
 
 const getABCDEColor = (ratio: number) => {
@@ -350,7 +358,7 @@ const MyPage: React.FC = () => {
                     ratio,
                     weighted: Number(weighted.toFixed(1)),
                     entered,
-                    type: classifyBreakdownType(String(item.name || '')),
+                    type: normalizePlanItemType(item.type, String(item.name || '')),
                 };
             });
 
@@ -884,6 +892,7 @@ const MyPage: React.FC = () => {
                                                         legend: { display: false },
                                                         tooltip: {
                                                             enabled: true,
+                                                            filter: (ctx: any) => Number(ctx?.parsed?.y || 0) > 0,
                                                             callbacks: {
                                                                 label: (ctx: any) => {
                                                                     const dataIndex = ctx.dataIndex || 0;
