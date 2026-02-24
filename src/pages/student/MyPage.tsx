@@ -197,23 +197,10 @@ const getTypeLabel = (type: 'exam' | 'performance' | 'other') => {
     return '기타';
 };
 
-const getGradeBand = (ratio: number): 'A' | 'B' | 'C' | 'D' | 'E' => {
-    if (ratio >= 90) return 'A';
-    if (ratio >= 80) return 'B';
-    if (ratio >= 70) return 'C';
-    if (ratio >= 60) return 'D';
-    return 'E';
-};
-
-const getBandTypeColor = (band: 'A' | 'B' | 'C' | 'D' | 'E', type: 'exam' | 'performance' | 'other') => {
-    const palette: Record<'A' | 'B' | 'C' | 'D' | 'E', { exam: string; performance: string; other: string }> = {
-        A: { exam: '#b91c1c', performance: '#fca5a5', other: '#ef4444' },
-        B: { exam: '#c2410c', performance: '#fdba74', other: '#f97316' },
-        C: { exam: '#a16207', performance: '#fde68a', other: '#eab308' },
-        D: { exam: '#166534', performance: '#86efac', other: '#22c55e' },
-        E: { exam: '#1d4ed8', performance: '#93c5fd', other: '#3b82f6' },
-    };
-    return palette[band][type];
+const getTypeFixedColor = (type: 'exam' | 'performance' | 'other') => {
+    if (type === 'exam') return '#b91c1c';
+    if (type === 'performance') return '#fca5a5';
+    return '#94a3b8';
 };
 
 const MyPage: React.FC = () => {
@@ -743,18 +730,8 @@ const MyPage: React.FC = () => {
                 rawScores: rowsByItem.map((found) => Number((found?.score || 0).toFixed(1))),
                 maxScores: rowsByItem.map((found) => Number((found?.maxScore || 0).toFixed(1))),
                 itemTypes: rowsByItem.map((found) => found?.type || itemType),
-                backgroundColor: rowsByItem.map((found) => {
-                    const ratio = found && found.maxScore > 0 ? (found.score / found.maxScore) * 100 : 0;
-                    const band = getGradeBand(ratio);
-                    const type = (found?.type || itemType) as 'exam' | 'performance' | 'other';
-                    return getBandTypeColor(band, type);
-                }),
-                borderColor: rowsByItem.map((found) => {
-                    const ratio = found && found.maxScore > 0 ? (found.score / found.maxScore) * 100 : 0;
-                    const band = getGradeBand(ratio);
-                    const type = (found?.type || itemType) as 'exam' | 'performance' | 'other';
-                    return getBandTypeColor(band, type);
-                }),
+                backgroundColor: getTypeFixedColor(itemType),
+                borderColor: getTypeFixedColor(itemType),
                 borderWidth: 1,
                 borderRadius: 0,
                 stack: 'total',
@@ -891,12 +868,8 @@ const MyPage: React.FC = () => {
                                         <div className="flex flex-col items-end gap-1">
                                             <span className="text-xs text-gray-500">마우스를 올리면 영역별 점수가 표시됩니다.</span>
                                             <div className="flex items-center gap-2 text-[11px] font-bold text-gray-600">
-                                                <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-700"></span>A</span>
-                                                <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-orange-600"></span>B</span>
-                                                <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-yellow-600"></span>C</span>
-                                                <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-green-600"></span>D</span>
-                                                <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-blue-600"></span>E</span>
-                                                <span className="ml-1 text-[10px] text-gray-500">정기 진함 / 수행 연함</span>
+                                                <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-700"></span>정기시험</span>
+                                                <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-300"></span>수행평가</span>
                                             </div>
                                         </div>
                                     </div>
