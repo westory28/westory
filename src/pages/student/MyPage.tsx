@@ -743,15 +743,15 @@ const MyPage: React.FC = () => {
                 rawScores: rowsByItem.map((found) => Number((found?.score || 0).toFixed(1))),
                 maxScores: rowsByItem.map((found) => Number((found?.maxScore || 0).toFixed(1))),
                 itemTypes: rowsByItem.map((found) => found?.type || itemType),
-                backgroundColor: rowsByItem.map((found) => {
-                    const ratio = found && found.maxScore > 0 ? (found.score / found.maxScore) * 100 : 0;
-                    const band = getGradeBand(ratio);
+                backgroundColor: rowsByItem.map((found, rowIdx) => {
+                    const subjectTotal = Number(scoreRows[rowIdx]?.total || 0);
+                    const band = getGradeBand(subjectTotal);
                     const type = (found?.type || itemType) as 'exam' | 'performance' | 'other';
                     return getBandTypeColor(band, type);
                 }),
-                borderColor: rowsByItem.map((found) => {
-                    const ratio = found && found.maxScore > 0 ? (found.score / found.maxScore) * 100 : 0;
-                    const band = getGradeBand(ratio);
+                borderColor: rowsByItem.map((found, rowIdx) => {
+                    const subjectTotal = Number(scoreRows[rowIdx]?.total || 0);
+                    const band = getGradeBand(subjectTotal);
                     const type = (found?.type || itemType) as 'exam' | 'performance' | 'other';
                     return getBandTypeColor(band, type);
                 }),
