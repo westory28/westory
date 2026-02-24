@@ -207,11 +207,11 @@ const getGradeBand = (ratio: number): 'A' | 'B' | 'C' | 'D' | 'E' => {
 
 const getBandTypeColor = (band: 'A' | 'B' | 'C' | 'D' | 'E', type: 'exam' | 'performance' | 'other') => {
     const palette: Record<'A' | 'B' | 'C' | 'D' | 'E', { exam: string; performance: string; other: string }> = {
-        A: { exam: '#b91c1c', performance: '#b91c1c', other: '#b91c1c' },
-        B: { exam: '#c2410c', performance: '#c2410c', other: '#c2410c' },
-        C: { exam: '#a16207', performance: '#a16207', other: '#a16207' },
-        D: { exam: '#166534', performance: '#166534', other: '#166534' },
-        E: { exam: '#6b7280', performance: '#6b7280', other: '#6b7280' },
+        A: { exam: '#b91c1c', performance: '#fca5a5', other: '#ef4444' },
+        B: { exam: '#c2410c', performance: '#fdba74', other: '#f97316' },
+        C: { exam: '#a16207', performance: '#fde68a', other: '#eab308' },
+        D: { exam: '#166534', performance: '#86efac', other: '#22c55e' },
+        E: { exam: '#1d4ed8', performance: '#93c5fd', other: '#3b82f6' },
     };
     return palette[band][type];
 };
@@ -892,19 +892,24 @@ const MyPage: React.FC = () => {
                                             <span className="text-xs text-gray-500">마우스를 올리면 영역별 점수가 표시됩니다.</span>
                                             <div className="flex items-center gap-2 text-[11px] font-bold text-gray-600">
                                                 <span className="inline-flex items-center gap-1">
-                                                    <span className="w-2.5 h-2.5 rounded-full bg-red-700"></span>A
+                                                    <span className="w-2.5 h-2.5 rounded-full bg-red-700"></span>
+                                                    <span className="w-2.5 h-2.5 rounded-full bg-red-300"></span>A
                                                 </span>
                                                 <span className="inline-flex items-center gap-1">
-                                                    <span className="w-2.5 h-2.5 rounded-full bg-orange-700"></span>B
+                                                    <span className="w-2.5 h-2.5 rounded-full bg-orange-700"></span>
+                                                    <span className="w-2.5 h-2.5 rounded-full bg-orange-300"></span>B
                                                 </span>
                                                 <span className="inline-flex items-center gap-1">
-                                                    <span className="w-2.5 h-2.5 rounded-full bg-yellow-700"></span>C
+                                                    <span className="w-2.5 h-2.5 rounded-full bg-yellow-700"></span>
+                                                    <span className="w-2.5 h-2.5 rounded-full bg-yellow-300"></span>C
                                                 </span>
                                                 <span className="inline-flex items-center gap-1">
-                                                    <span className="w-2.5 h-2.5 rounded-full bg-green-700"></span>D
+                                                    <span className="w-2.5 h-2.5 rounded-full bg-green-700"></span>
+                                                    <span className="w-2.5 h-2.5 rounded-full bg-green-300"></span>D
                                                 </span>
                                                 <span className="inline-flex items-center gap-1">
-                                                    <span className="w-2.5 h-2.5 rounded-full bg-gray-500"></span>E
+                                                    <span className="w-2.5 h-2.5 rounded-full bg-blue-700"></span>
+                                                    <span className="w-2.5 h-2.5 rounded-full bg-blue-300"></span>E
                                                 </span>
                                             </div>
                                         </div>
