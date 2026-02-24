@@ -207,11 +207,11 @@ const getGradeBand = (ratio: number): 'A' | 'B' | 'C' | 'D' | 'E' => {
 
 const getBandTypeColor = (band: 'A' | 'B' | 'C' | 'D' | 'E', type: 'exam' | 'performance' | 'other') => {
     const palette: Record<'A' | 'B' | 'C' | 'D' | 'E', { exam: string; performance: string; other: string }> = {
-        A: { exam: '#b91c1c', performance: '#fca5a5', other: '#ef4444' },
-        B: { exam: '#c2410c', performance: '#fdba74', other: '#f97316' },
-        C: { exam: '#a16207', performance: '#fde68a', other: '#eab308' },
-        D: { exam: '#166534', performance: '#86efac', other: '#22c55e' },
-        E: { exam: '#1d4ed8', performance: '#93c5fd', other: '#3b82f6' },
+        A: { exam: '#dc2626', performance: '#f87171', other: '#ef4444' },
+        B: { exam: '#ea580c', performance: '#fb923c', other: '#f97316' },
+        C: { exam: '#ca8a04', performance: '#facc15', other: '#eab308' },
+        D: { exam: '#16a34a', performance: '#4ade80', other: '#22c55e' },
+        E: { exam: '#2563eb', performance: '#60a5fa', other: '#3b82f6' },
     };
     return palette[band][type];
 };
