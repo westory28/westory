@@ -890,27 +890,17 @@ const MyPage: React.FC = () => {
                                         <h3 className="font-bold text-gray-800">종합 성적 그래프 (정기시험/수행평가 반영)</h3>
                                         <div className="flex flex-col items-end gap-1">
                                             <span className="text-xs text-gray-500">마우스를 올리면 영역별 점수가 표시됩니다.</span>
-                                            <div className="flex items-center gap-2 text-[11px] font-bold text-gray-600">
-                                                <span className="inline-flex items-center gap-1">
-                                                    <span className="w-2.5 h-2.5 rounded-full bg-red-700"></span>
-                                                    <span className="w-2.5 h-2.5 rounded-full bg-red-300"></span>A
-                                                </span>
-                                                <span className="inline-flex items-center gap-1">
-                                                    <span className="w-2.5 h-2.5 rounded-full bg-orange-700"></span>
-                                                    <span className="w-2.5 h-2.5 rounded-full bg-orange-300"></span>B
-                                                </span>
-                                                <span className="inline-flex items-center gap-1">
-                                                    <span className="w-2.5 h-2.5 rounded-full bg-yellow-700"></span>
-                                                    <span className="w-2.5 h-2.5 rounded-full bg-yellow-300"></span>C
-                                                </span>
-                                                <span className="inline-flex items-center gap-1">
-                                                    <span className="w-2.5 h-2.5 rounded-full bg-green-700"></span>
-                                                    <span className="w-2.5 h-2.5 rounded-full bg-green-300"></span>D
-                                                </span>
-                                                <span className="inline-flex items-center gap-1">
-                                                    <span className="w-2.5 h-2.5 rounded-full bg-blue-700"></span>
-                                                    <span className="w-2.5 h-2.5 rounded-full bg-blue-300"></span>E
-                                                </span>
+                                            <div className="flex flex-col items-end gap-1">
+                                                <div className="overflow-hidden rounded-lg shadow-sm border border-gray-200">
+                                                    <div className="flex text-[12px] font-black text-white leading-none">
+                                                        <span className="px-6 py-2 bg-red-500">A</span>
+                                                        <span className="px-6 py-2 bg-orange-500">B</span>
+                                                        <span className="px-6 py-2 bg-yellow-500">C</span>
+                                                        <span className="px-6 py-2 bg-green-500">D</span>
+                                                        <span className="px-6 py-2 bg-blue-500">E</span>
+                                                    </div>
+                                                </div>
+                                                <span className="text-[10px] text-gray-400">* 예시는 A/B/C 3단계 평가</span>
                                             </div>
                                         </div>
                                     </div>
