@@ -60,6 +60,8 @@ interface ScoreBreakdownItem {
     maxScore: number;
     ratio: number;
     weighted: number;
+    entered: boolean;
+    type: 'exam' | 'performance' | 'other';
 }
 
 interface ScoreRow {
@@ -80,6 +82,8 @@ interface SubjectScoreInsight {
     otherCurrent: number;
     examNeed: number;
     performanceNeed: number;
+    missingExamCount: number;
+    missingPerformanceCount: number;
     mood: 'good' | 'care';
 }
 
@@ -170,6 +174,13 @@ const normalizeClassValue = (value: unknown): string => {
 const withSuffix = (label: string, suffix: string) => {
     if (!label) return '';
     return label.endsWith(suffix) ? label : `${label}${suffix}`;
+};
+
+const classifyBreakdownType = (name: string): 'exam' | 'performance' | 'other' => {
+    const key = String(name || '').toLowerCase();
+    if (/정기|지필|중간|기말|시험|omr|서술|exam|midterm|final/.test(key)) return 'exam';
+    if (/수행|과제|발표|실험|프로젝트|실습|performance|project|assignment/.test(key)) return 'performance';
+    return 'other';
 };
 
 const MyPage: React.FC = () => {
@@ -310,7 +321,9 @@ const MyPage: React.FC = () => {
             const plan = { id: planDoc.id, ...(planDoc.data() as Omit<GradingPlanDoc, 'id'>) };
             const items = Array.isArray(plan.items) ? plan.items : [];
             const breakdown: ScoreBreakdownItem[] = items.map((item, idx) => {
-                const rawValue = Number(scoreMap[`${plan.id}_${idx}`] || 0);
+                const scoreKey = `${plan.id}_${idx}`;
+                const entered = Object.prototype.hasOwnProperty.call(scoreMap, scoreKey);
+                const rawValue = Number(entered ? scoreMap[scoreKey] : 0);
                 const score = Number.isFinite(rawValue) ? rawValue : 0;
                 const maxScore = Number(item.maxScore || 0);
                 const ratio = Number(item.ratio || 0);
@@ -322,6 +335,8 @@ const MyPage: React.FC = () => {
                     maxScore,
                     ratio,
                     weighted: Number(weighted.toFixed(1)),
+                    entered,
+                    type: classifyBreakdownType(String(item.name || '')),
                 };
             });
 
@@ -584,13 +599,6 @@ const MyPage: React.FC = () => {
         }));
     }, [wrongItems, trendPoints, unitTitleMap]);
 
-    const classifyBreakdownType = (name: string): 'exam' | 'performance' | 'other' => {
-        const key = String(name || '').toLowerCase();
-        if (/정기|지필|중간|기말|시험|omr|서술/.test(key)) return 'exam';
-        if (/수행|과제|발표|실험|프로젝트|실습/.test(key)) return 'performance';
-        return 'other';
-    };
-
     const subjectInsights = useMemo<SubjectScoreInsight[]>(() => {
         return scoreRows.map((row) => {
             const target = Number(subjectGoals[row.subject] ?? 85);
@@ -603,16 +611,20 @@ const MyPage: React.FC = () => {
             let examRemain = 0;
             let performanceRemain = 0;
             let otherRemain = 0;
+            let missingExamCount = 0;
+            let missingPerformanceCount = 0;
 
             row.breakdown.forEach((item) => {
-                const type = classifyBreakdownType(item.name);
+                const type = item.type;
                 const left = Math.max(0, Number(item.ratio || 0) - Number(item.weighted || 0));
                 if (type === 'exam') {
                     examCurrent += item.weighted;
                     examRemain += left;
+                    if (!item.entered) missingExamCount += 1;
                 } else if (type === 'performance') {
                     performanceCurrent += item.weighted;
                     performanceRemain += left;
+                    if (!item.entered) missingPerformanceCount += 1;
                 } else {
                     otherCurrent += item.weighted;
                     otherRemain += left;
@@ -637,6 +649,8 @@ const MyPage: React.FC = () => {
                 otherCurrent: Number(otherCurrent.toFixed(1)),
                 examNeed,
                 performanceNeed,
+                missingExamCount,
+                missingPerformanceCount,
                 mood,
             };
         });
@@ -657,38 +671,44 @@ const MyPage: React.FC = () => {
         [subjectInsights, selectedSubject],
     );
 
-    const totalStackChartData = useMemo(
-        () => ({
-            labels: subjectInsights.map((item) => item.subject),
-            datasets: [
-                {
-                    label: '정기시험 반영 점수',
-                    data: subjectInsights.map((item) => item.examCurrent),
-                    borderColor: '#ef4444',
-                    backgroundColor: 'rgba(239,68,68,0.18)',
-                    fill: true,
-                    tension: 0.25,
-                },
-                {
-                    label: '수행평가 반영 점수',
-                    data: subjectInsights.map((item) => item.performanceCurrent),
-                    borderColor: '#10b981',
-                    backgroundColor: 'rgba(16,185,129,0.2)',
-                    fill: true,
-                    tension: 0.25,
-                },
-                {
-                    label: '기타 반영 점수',
-                    data: subjectInsights.map((item) => item.otherCurrent),
-                    borderColor: '#3b82f6',
-                    backgroundColor: 'rgba(59,130,246,0.16)',
-                    fill: true,
-                    tension: 0.25,
-                },
-            ],
-        }),
-        [subjectInsights],
-    );
+    const totalStackChartData = useMemo(() => {
+        const labels = scoreRows.map((row) => row.subject);
+        const itemNames = Array.from(
+            new Set(scoreRows.flatMap((row) => row.breakdown.map((item) => item.name))),
+        );
+
+        const pickColor = (type: 'exam' | 'performance' | 'other', index: number) => {
+            if (type === 'exam') {
+                const shades = ['#f87171', '#ef4444', '#dc2626', '#fca5a5'];
+                return shades[index % shades.length];
+            }
+            if (type === 'performance') {
+                const shades = ['#fde68a', '#facc15', '#eab308', '#fef08a'];
+                return shades[index % shades.length];
+            }
+            const shades = ['#93c5fd', '#60a5fa', '#3b82f6', '#bfdbfe'];
+            return shades[index % shades.length];
+        };
+
+        const datasets = itemNames.map((itemName, idx) => {
+            const sample = scoreRows.flatMap((row) => row.breakdown).find((item) => item.name === itemName);
+            const itemType = sample?.type || 'other';
+            return {
+                label: itemName,
+                data: scoreRows.map((row) => {
+                    const found = row.breakdown.find((item) => item.name === itemName);
+                    return Number((found?.weighted || 0).toFixed(1));
+                }),
+                backgroundColor: pickColor(itemType, idx),
+                borderColor: pickColor(itemType, idx),
+                borderWidth: 1,
+                borderRadius: 0,
+                stack: 'total',
+            };
+        });
+
+        return { labels, datasets };
+    }, [scoreRows]);
 
     const gapBarData = useMemo(() => {
         if (!selectedInsight) return null;
@@ -793,7 +813,7 @@ const MyPage: React.FC = () => {
                                     </div>
                                     <div className="h-72">
                                         {subjectInsights.length > 0 ? (
-                                            <Line
+                                            <Bar
                                                 data={totalStackChartData}
                                                 options={{
                                                     responsive: true,
@@ -805,7 +825,12 @@ const MyPage: React.FC = () => {
                                                     },
                                                     plugins: {
                                                         legend: { position: 'bottom' as const },
-                                                        tooltip: { enabled: true },
+                                                        tooltip: {
+                                                            enabled: true,
+                                                            callbacks: {
+                                                                label: (ctx) => `${ctx.dataset.label}: ${Number(ctx.parsed.y || 0).toFixed(1)}점`,
+                                                            },
+                                                        },
                                                     },
                                                 }}
                                             />
@@ -878,9 +903,9 @@ const MyPage: React.FC = () => {
                                                     </button>
                                                 </div>
 
-                                                <div className="relative rounded-2xl border border-gray-200 p-4 bg-gray-50">
+                                                <div className="rounded-2xl border border-gray-200 p-4 bg-gray-50">
                                                     <div
-                                                        className={`absolute right-4 top-3 rotate-[-12deg] rounded-full px-4 py-1 text-xs font-black shadow ${
+                                                        className={`hidden w-fit ml-auto mb-2 rounded-full px-4 py-1 text-xs font-black shadow ${
                                                             selectedInsight.mood === 'good'
                                                                 ? 'bg-emerald-500 text-white'
                                                                 : 'bg-orange-500 text-white'
@@ -889,19 +914,30 @@ const MyPage: React.FC = () => {
                                                         {selectedInsight.mood === 'good' ? '목표 달성 유력' : '끝까지 힘내요'}
                                                     </div>
                                                     <div className="text-sm font-bold text-gray-700 mb-2">목표 점수 대비 현재 점수 차이 그래프</div>
-                                                    <div className="h-56">
-                                                        {gapBarData && (
-                                                            <Bar
-                                                                data={gapBarData}
-                                                                options={{
-                                                                    indexAxis: 'y' as const,
-                                                                    responsive: true,
-                                                                    maintainAspectRatio: false,
-                                                                    scales: { x: { beginAtZero: true, max: 100 } },
-                                                                    plugins: { legend: { display: false }, tooltip: { enabled: true } },
-                                                                }}
-                                                            />
-                                                        )}
+                                                    <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-start">
+                                                        <div className="h-56">
+                                                            {gapBarData && (
+                                                                <Bar
+                                                                    data={gapBarData}
+                                                                    options={{
+                                                                        indexAxis: 'y' as const,
+                                                                        responsive: true,
+                                                                        maintainAspectRatio: false,
+                                                                        scales: { x: { beginAtZero: true, max: 100 } },
+                                                                        plugins: { legend: { display: false }, tooltip: { enabled: true } },
+                                                                    }}
+                                                                />
+                                                            )}
+                                                        </div>
+                                                        <div
+                                                            className={`self-start rounded-xl px-4 py-2 text-sm font-extrabold shadow whitespace-nowrap ${
+                                                                selectedInsight.mood === 'good'
+                                                                    ? 'bg-emerald-500 text-white'
+                                                                    : 'bg-orange-500 text-white'
+                                                            }`}
+                                                        >
+                                                            {selectedInsight.mood === 'good' ? '목표 달성 유력' : '끝까지 힘내요'}
+                                                        </div>
                                                     </div>
                                                     <div className="mt-3 text-sm font-bold text-gray-700">
                                                         남은 평가에서 필요한 점수: 정기시험 {selectedInsight.examNeed}점 / 수행평가 {selectedInsight.performanceNeed}점
@@ -910,9 +946,9 @@ const MyPage: React.FC = () => {
                                                         남은 최대 반영점수 {selectedInsight.remainingPotential}점, 필요 달성률 {selectedInsight.requiredRate}%
                                                     </div>
                                                     <div className="mt-2 text-sm font-bold text-gray-700">
-                                                        {selectedInsight.mood === 'good'
-                                                            ? '응원 스탬프: 지금 페이스면 목표를 달성할 수 있어요!'
-                                                            : '응원 스탬프: 아직 기회가 충분해요. 끝까지 집중해요!'}
+                                                        {selectedInsight.missingExamCount + selectedInsight.missingPerformanceCount > 0
+                                                            ? `선생님의 조언: 미입력 항목이 있어요. 정기시험 ${selectedInsight.missingExamCount}개, 수행평가 ${selectedInsight.missingPerformanceCount}개를 먼저 채우세요.`
+                                                            : '선생님의 조언: 정기시험/수행평가 입력이 잘 되어 있어요. 지금 흐름을 유지해요.'}
                                                     </div>
                                                 </div>
                                             </div>
