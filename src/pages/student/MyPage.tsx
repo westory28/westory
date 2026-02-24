@@ -39,6 +39,7 @@ interface UserProfileDoc {
     number?: string;
     profileIcon?: string;
     myPageGoalScore?: string;
+    myPageSubjectGoals?: Record<string, number>;
 }
 
 interface GradingPlanItem {
@@ -65,6 +66,21 @@ interface ScoreRow {
     subject: string;
     total: number;
     breakdown: ScoreBreakdownItem[];
+}
+
+interface SubjectScoreInsight {
+    subject: string;
+    current: number;
+    target: number;
+    gap: number;
+    remainingPotential: number;
+    requiredRate: number;
+    examCurrent: number;
+    performanceCurrent: number;
+    otherCurrent: number;
+    examNeed: number;
+    performanceNeed: number;
+    mood: 'good' | 'care';
 }
 
 interface QuizResultDetail {
@@ -170,6 +186,8 @@ const MyPage: React.FC = () => {
     const [savingIcon, setSavingIcon] = useState(false);
 
     const [goalScore, setGoalScore] = useState('');
+    const [subjectGoals, setSubjectGoals] = useState<Record<string, number>>({});
+    const [selectedSubject, setSelectedSubject] = useState('');
     const [savingGoal, setSavingGoal] = useState(false);
 
     const [scoreRows, setScoreRows] = useState<ScoreRow[]>([]);
@@ -209,10 +227,12 @@ const MyPage: React.FC = () => {
             setProfile(data);
             setProfileIcon(data.profileIcon || '😀');
             setGoalScore(data.myPageGoalScore || '');
+            setSubjectGoals(data.myPageSubjectGoals || {});
         } else {
             setProfile(null);
             setProfileIcon('😀');
             setGoalScore('');
+            setSubjectGoals({});
         }
 
         if (interfaceSnap.exists()) {
@@ -483,6 +503,7 @@ const MyPage: React.FC = () => {
                 doc(db, 'users', user.uid),
                 {
                     myPageGoalScore: goalScore.trim(),
+                    myPageSubjectGoals: subjectGoals,
                     updatedAt: serverTimestamp(),
                 },
                 { merge: true },
@@ -563,6 +584,127 @@ const MyPage: React.FC = () => {
         }));
     }, [wrongItems, trendPoints, unitTitleMap]);
 
+    const classifyBreakdownType = (name: string): 'exam' | 'performance' | 'other' => {
+        const key = String(name || '').toLowerCase();
+        if (/정기|지필|중간|기말|시험|omr|서술/.test(key)) return 'exam';
+        if (/수행|과제|발표|실험|프로젝트|실습/.test(key)) return 'performance';
+        return 'other';
+    };
+
+    const subjectInsights = useMemo<SubjectScoreInsight[]>(() => {
+        return scoreRows.map((row) => {
+            const target = Number(subjectGoals[row.subject] ?? 85);
+            const current = Number(row.total || 0);
+            const gap = Math.max(0, target - current);
+
+            let examCurrent = 0;
+            let performanceCurrent = 0;
+            let otherCurrent = 0;
+            let examRemain = 0;
+            let performanceRemain = 0;
+            let otherRemain = 0;
+
+            row.breakdown.forEach((item) => {
+                const type = classifyBreakdownType(item.name);
+                const left = Math.max(0, Number(item.ratio || 0) - Number(item.weighted || 0));
+                if (type === 'exam') {
+                    examCurrent += item.weighted;
+                    examRemain += left;
+                } else if (type === 'performance') {
+                    performanceCurrent += item.weighted;
+                    performanceRemain += left;
+                } else {
+                    otherCurrent += item.weighted;
+                    otherRemain += left;
+                }
+            });
+
+            const remainingPotential = Number((examRemain + performanceRemain + otherRemain).toFixed(1));
+            const requiredRate = remainingPotential > 0 ? Math.min(100, Number(((gap / remainingPotential) * 100).toFixed(1))) : 100;
+            const examNeed = gap > 0 && remainingPotential > 0 ? Number(((gap * examRemain) / remainingPotential).toFixed(1)) : 0;
+            const performanceNeed = gap > 0 && remainingPotential > 0 ? Number(((gap * performanceRemain) / remainingPotential).toFixed(1)) : 0;
+            const mood: 'good' | 'care' = gap <= 0 || requiredRate <= 70 ? 'good' : 'care';
+
+            return {
+                subject: row.subject,
+                current: Number(current.toFixed(1)),
+                target: Number(target.toFixed(1)),
+                gap: Number(gap.toFixed(1)),
+                remainingPotential,
+                requiredRate,
+                examCurrent: Number(examCurrent.toFixed(1)),
+                performanceCurrent: Number(performanceCurrent.toFixed(1)),
+                otherCurrent: Number(otherCurrent.toFixed(1)),
+                examNeed,
+                performanceNeed,
+                mood,
+            };
+        });
+    }, [scoreRows, subjectGoals]);
+
+    useEffect(() => {
+        if (!subjectInsights.length) {
+            setSelectedSubject('');
+            return;
+        }
+        if (!selectedSubject || !subjectInsights.some((item) => item.subject === selectedSubject)) {
+            setSelectedSubject(subjectInsights[0].subject);
+        }
+    }, [subjectInsights, selectedSubject]);
+
+    const selectedInsight = useMemo(
+        () => subjectInsights.find((item) => item.subject === selectedSubject) || null,
+        [subjectInsights, selectedSubject],
+    );
+
+    const totalStackChartData = useMemo(
+        () => ({
+            labels: subjectInsights.map((item) => item.subject),
+            datasets: [
+                {
+                    label: '정기시험 반영 점수',
+                    data: subjectInsights.map((item) => item.examCurrent),
+                    borderColor: '#ef4444',
+                    backgroundColor: 'rgba(239,68,68,0.18)',
+                    fill: true,
+                    tension: 0.25,
+                },
+                {
+                    label: '수행평가 반영 점수',
+                    data: subjectInsights.map((item) => item.performanceCurrent),
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16,185,129,0.2)',
+                    fill: true,
+                    tension: 0.25,
+                },
+                {
+                    label: '기타 반영 점수',
+                    data: subjectInsights.map((item) => item.otherCurrent),
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59,130,246,0.16)',
+                    fill: true,
+                    tension: 0.25,
+                },
+            ],
+        }),
+        [subjectInsights],
+    );
+
+    const gapBarData = useMemo(() => {
+        if (!selectedInsight) return null;
+        return {
+            labels: ['현재 반영', '목표까지 필요', '남은 최대 반영'],
+            datasets: [
+                {
+                    label: selectedInsight.subject,
+                    data: [selectedInsight.current, selectedInsight.gap, selectedInsight.remainingPotential],
+                    backgroundColor: ['#3b82f6', '#f59e0b', '#10b981'],
+                    borderRadius: 8,
+                },
+            ],
+        };
+    }, [selectedInsight]);
+
     const leftMenus: Array<{ key: MainMenu; title: string; icon: string }> = [
         { key: 'profile', title: '나의 기본 정보', icon: 'fa-id-card' },
         { key: 'score', title: '나의 성적표', icon: 'fa-chart-column' },
@@ -641,6 +783,148 @@ const MyPage: React.FC = () => {
                         )}
 
                         {menu === 'score' && (
+                            <div className="space-y-6">
+                                <h2 className="text-2xl font-bold text-gray-800">나의 성적표</h2>
+
+                                <div className="rounded-2xl border border-gray-200 bg-white p-4">
+                                    <div className="mb-3 flex items-center justify-between">
+                                        <h3 className="font-bold text-gray-800">종합 성적 그래프 (정기시험/수행평가 반영)</h3>
+                                        <span className="text-xs text-gray-500">마우스를 올리면 영역별 점수가 표시됩니다.</span>
+                                    </div>
+                                    <div className="h-72">
+                                        {subjectInsights.length > 0 ? (
+                                            <Line
+                                                data={totalStackChartData}
+                                                options={{
+                                                    responsive: true,
+                                                    maintainAspectRatio: false,
+                                                    interaction: { mode: 'index', intersect: false },
+                                                    scales: {
+                                                        y: { beginAtZero: true, max: 100, stacked: true },
+                                                        x: { stacked: true },
+                                                    },
+                                                    plugins: {
+                                                        legend: { position: 'bottom' as const },
+                                                        tooltip: { enabled: true },
+                                                    },
+                                                }}
+                                            />
+                                        ) : (
+                                            <div className="text-gray-400 py-8 text-center">아직 성적 데이터가 없습니다.</div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 lg:grid-cols-[110px_1fr] gap-4 min-h-[560px]">
+                                    <div className="border border-gray-200 rounded-2xl bg-gray-50 p-2 overflow-auto">
+                                        <div className="flex lg:flex-col gap-2">
+                                            {subjectInsights.map((item) => (
+                                                <button
+                                                    key={item.subject}
+                                                    type="button"
+                                                    onClick={() => setSelectedSubject(item.subject)}
+                                                    className={`px-2 py-3 rounded-xl text-xs font-extrabold whitespace-nowrap transition ${
+                                                        selectedSubject === item.subject
+                                                            ? 'bg-blue-600 text-white shadow'
+                                                            : 'bg-white text-gray-700 border border-gray-200 hover:bg-blue-50'
+                                                    }`}
+                                                >
+                                                    {item.subject}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="border border-gray-200 rounded-2xl bg-white p-4">
+                                        {selectedInsight ? (
+                                            <div className="space-y-5">
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                                    <div className="rounded-xl bg-blue-50 border border-blue-100 p-3">
+                                                        <div className="text-xs font-bold text-blue-700">현재 점수</div>
+                                                        <div className="text-3xl font-black text-blue-700">{selectedInsight.current}점</div>
+                                                    </div>
+                                                    <div className="rounded-xl bg-violet-50 border border-violet-100 p-3">
+                                                        <div className="text-xs font-bold text-violet-700">목표 점수</div>
+                                                        <div className="text-3xl font-black text-violet-700">{selectedInsight.target}점</div>
+                                                    </div>
+                                                    <div className="rounded-xl bg-amber-50 border border-amber-100 p-3">
+                                                        <div className="text-xs font-bold text-amber-700">목표까지 차이</div>
+                                                        <div className="text-3xl font-black text-amber-700">{selectedInsight.gap}점</div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center gap-2">
+                                                    <label className="text-sm font-bold text-gray-700">과목 목표 점수</label>
+                                                    <input
+                                                        type="number"
+                                                        min={0}
+                                                        max={100}
+                                                        value={subjectGoals[selectedInsight.subject] ?? 85}
+                                                        onChange={(event) =>
+                                                            setSubjectGoals((prev) => ({
+                                                                ...prev,
+                                                                [selectedInsight.subject]: Number(event.target.value || 0),
+                                                            }))
+                                                        }
+                                                        className="w-24 border border-gray-300 rounded-lg px-2 py-1.5 text-sm font-bold"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => void saveGoal()}
+                                                        disabled={savingGoal}
+                                                        className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 disabled:bg-blue-300"
+                                                    >
+                                                        {savingGoal ? '저장 중...' : '저장'}
+                                                    </button>
+                                                </div>
+
+                                                <div className="relative rounded-2xl border border-gray-200 p-4 bg-gray-50">
+                                                    <div
+                                                        className={`absolute right-4 top-3 rotate-[-12deg] rounded-full px-4 py-1 text-xs font-black shadow ${
+                                                            selectedInsight.mood === 'good'
+                                                                ? 'bg-emerald-500 text-white'
+                                                                : 'bg-orange-500 text-white'
+                                                        }`}
+                                                    >
+                                                        {selectedInsight.mood === 'good' ? '목표 달성 유력' : '끝까지 힘내요'}
+                                                    </div>
+                                                    <div className="text-sm font-bold text-gray-700 mb-2">목표 점수 대비 현재 점수 차이 그래프</div>
+                                                    <div className="h-56">
+                                                        {gapBarData && (
+                                                            <Bar
+                                                                data={gapBarData}
+                                                                options={{
+                                                                    indexAxis: 'y' as const,
+                                                                    responsive: true,
+                                                                    maintainAspectRatio: false,
+                                                                    scales: { x: { beginAtZero: true, max: 100 } },
+                                                                    plugins: { legend: { display: false }, tooltip: { enabled: true } },
+                                                                }}
+                                                            />
+                                                        )}
+                                                    </div>
+                                                    <div className="mt-3 text-sm font-bold text-gray-700">
+                                                        남은 평가에서 필요한 점수: 정기시험 {selectedInsight.examNeed}점 / 수행평가 {selectedInsight.performanceNeed}점
+                                                    </div>
+                                                    <div className="text-xs text-gray-500 mt-1">
+                                                        남은 최대 반영점수 {selectedInsight.remainingPotential}점, 필요 달성률 {selectedInsight.requiredRate}%
+                                                    </div>
+                                                    <div className="mt-2 text-sm font-bold text-gray-700">
+                                                        {selectedInsight.mood === 'good'
+                                                            ? '응원 스탬프: 지금 페이스면 목표를 달성할 수 있어요!'
+                                                            : '응원 스탬프: 아직 기회가 충분해요. 끝까지 집중해요!'}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="text-gray-400 py-12 text-center">과목을 선택해 주세요.</div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {menu === 'score' && false && (
                             <div className="space-y-6">
                                 <h2 className="text-2xl font-bold text-gray-800">나의 성적표</h2>
                                 <div className="h-72">
