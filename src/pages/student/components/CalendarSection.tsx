@@ -28,6 +28,14 @@ const getEventTypeLabel = (eventType: unknown) => {
     return EVENT_LABEL_MAP[key] || '일정';
 };
 
+const toExclusiveEnd = (start?: string, end?: string) => {
+    if (!start || !end || end <= start) return undefined;
+    const endDate = new Date(`${end}T00:00:00`);
+    endDate.setDate(endDate.getDate() + 1);
+    const offset = endDate.getTimezoneOffset() * 60000;
+    return new Date(endDate.getTime() - offset).toISOString().split('T')[0];
+};
+
 interface CalendarSectionProps {
     events: CalendarEvent[];
     onDateClick: (dateStr: string) => void;
@@ -55,7 +63,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
         id: e.id,
         title: e.title,
         start: e.start,
-        end: e.end,
+        end: toExclusiveEnd(e.start, e.end),
         backgroundColor: e.eventType === 'holiday' ? 'transparent' : (EVENT_COLOR_MAP[e.eventType] || '#6b7280'),
         borderColor: e.eventType === 'holiday' ? 'transparent' : (EVENT_COLOR_MAP[e.eventType] || '#6b7280'),
         textColor: e.eventType === 'holiday' ? '#ef4444' : undefined,
@@ -139,7 +147,6 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                     }}
                     eventContent={(arg) => {
                         if (arg.view.type !== 'dayGridMonth') return undefined;
-                        if (arg.event.extendedProps?.eventType === 'holiday') return undefined;
                         return (
                             <div className="fc-segment-title" title={arg.event.title}>
                                 {arg.event.title}

@@ -54,6 +54,13 @@ const Calendar = () => {
         return new Date(date.getTime() - offset).toISOString().split('T')[0];
     };
 
+    const toExclusiveEnd = (start?: string, end?: string) => {
+        if (!start || !end || end <= start) return undefined;
+        const endDate = new Date(`${end}T00:00:00`);
+        endDate.setDate(endDate.getDate() + 1);
+        return toLocalYmd(endDate);
+    };
+
     const holidayDateSet = useMemo(() => {
         const set = new Set<string>();
         events.forEach((eventItem: any) => {
@@ -133,7 +140,7 @@ const Calendar = () => {
                             id: d.id,
                             title: d.title,
                             start: d.start,
-                            end: d.end || d.start,
+                            end: toExclusiveEnd(d.start, d.end),
                             backgroundColor: isHoliday ? 'transparent' : (colorMap[d.eventType] || '#6b7280'),
                             borderColor: isHoliday ? 'transparent' : (colorMap[d.eventType] || '#6b7280'),
                             textColor: isHoliday ? '#ef4444' : undefined,
@@ -194,7 +201,6 @@ const Calendar = () => {
                             eventClick={handleEventClick}
                             eventContent={(arg) => {
                                 if (arg.view.type !== 'dayGridMonth') return undefined;
-                                if (arg.event.extendedProps?.extendedProps?.eventType === 'holiday') return undefined;
                                 return (
                                     <div className="fc-segment-title" title={arg.event.title}>
                                         {arg.event.title}
