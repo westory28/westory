@@ -1,19 +1,47 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import ExamGradingPlan from './components/ExamGradingPlan';
 import ExamOmrConfig from './components/ExamOmrConfig';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
+import { cloneDefaultMenus, sanitizeMenuConfig } from '../../constants/menus';
 
 const ManageExam: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'preview' | 'omr'>('preview');
+    const [tabLabels, setTabLabels] = useState({
+        preview: '성적 산출 관리',
+        omr: '정기 시험 답안',
+    });
     const [searchParams] = useSearchParams();
     const { userConfig } = useAuth();
 
     const semesterBadgeText = `${userConfig?.year || '2025'}학년도 ${userConfig?.semester || '1'}학기`;
 
-    React.useEffect(() => {
+    useEffect(() => {
         setActiveTab(searchParams.get('tab') === 'omr' ? 'omr' : 'preview');
     }, [searchParams]);
+
+    useEffect(() => {
+        const resolveMenuLabels = async () => {
+            try {
+                const menuSnap = await getDoc(doc(db, 'site_settings', 'menu_config'));
+                const menuConfig = menuSnap.exists()
+                    ? sanitizeMenuConfig(menuSnap.data())
+                    : cloneDefaultMenus();
+                const teacherExamMenu = (menuConfig.teacher || []).find((menu) => menu.url === '/teacher/exam');
+                const children = teacherExamMenu?.children || [];
+                const previewLabel = children.find((child) => child.url === '/teacher/exam')?.name || '성적 산출 관리';
+                const omrLabel = children.find((child) => child.url === '/teacher/exam?tab=omr')?.name || '정기 시험 답안';
+                setTabLabels({ preview: previewLabel, omr: omrLabel });
+            } catch (error) {
+                console.error('Failed to load exam menu labels:', error);
+                setTabLabels({ preview: '성적 산출 관리', omr: '정기 시험 답안' });
+            }
+        };
+
+        void resolveMenuLabels();
+    }, []);
 
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -25,7 +53,7 @@ const ManageExam: React.FC = () => {
                             {semesterBadgeText}
                         </span>
                     </h1>
-                    <p className="text-sm text-gray-500 mt-1">성적 산출 기준을 설정하고, 정기 시험 정답을 관리하세요.</p>
+                    <p className="text-sm text-gray-500 mt-1">{tabLabels.preview} 기준을 설정하고, {tabLabels.omr}을 관리하세요.</p>
                 </div>
 
                 {/* Tabs */}
@@ -35,14 +63,14 @@ const ManageExam: React.FC = () => {
                         className={`flex-1 py-3 px-6 font-bold text-sm border-b-2 transition text-center ${activeTab === 'preview' ? 'border-blue-500 text-blue-600 bg-blue-50' : 'border-transparent text-gray-600 hover:bg-gray-50'
                             }`}
                     >
-                        1. 성적 산출 관리
+                        1. {tabLabels.preview}
                     </button>
                     <button
                         onClick={() => setActiveTab('omr')}
                         className={`flex-1 py-3 px-6 font-bold text-sm border-b-2 transition text-center ${activeTab === 'omr' ? 'border-blue-500 text-blue-600 bg-blue-50' : 'border-transparent text-gray-600 hover:bg-gray-50'
                             }`}
                     >
-                        2. 정기 시험 정답 (OMR)
+                        2. {tabLabels.omr}
                     </button>
                 </div>
 
