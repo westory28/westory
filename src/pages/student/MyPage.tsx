@@ -183,6 +183,20 @@ const classifyBreakdownType = (name: string): 'exam' | 'performance' | 'other' =
     return 'other';
 };
 
+const getABCDEColor = (ratio: number) => {
+    if (ratio >= 90) return '#10b981';
+    if (ratio >= 80) return '#3b82f6';
+    if (ratio >= 70) return '#f59e0b';
+    if (ratio >= 60) return '#f97316';
+    return '#ef4444';
+};
+
+const getTypeLabel = (type: 'exam' | 'performance' | 'other') => {
+    if (type === 'exam') return '정기시험';
+    if (type === 'performance') return '수행평가';
+    return '기타';
+};
+
 const MyPage: React.FC = () => {
     const { user, userData, config } = useAuth();
 
@@ -671,44 +685,86 @@ const MyPage: React.FC = () => {
         [subjectInsights, selectedSubject],
     );
 
+    const teacherAdviceText = useMemo(() => {
+        if (!selectedInsight) return '';
+        if (selectedInsight.gap <= 0) {
+            return '선생님의 조언: 목표를 이미 달성했습니다. 남은 평가에서도 현재 페이스를 유지하세요.';
+        }
+
+        const parts: string[] = [];
+        if (selectedInsight.missingExamCount > 0) {
+            const examPerItem = Math.ceil((selectedInsight.examNeed / selectedInsight.missingExamCount) * 10) / 10;
+            parts.push(`남은 정기시험 ${selectedInsight.missingExamCount}개에서 평균 ${examPerItem}점 이상 획득하도록 하세요.`);
+        }
+        if (selectedInsight.missingPerformanceCount > 0) {
+            const perfPerItem = Math.ceil((selectedInsight.performanceNeed / selectedInsight.missingPerformanceCount) * 10) / 10;
+            parts.push(`남은 수행평가 ${selectedInsight.missingPerformanceCount}개에서 평균 ${perfPerItem}점 이상 획득하도록 하세요.`);
+        }
+
+        if (!parts.length) {
+            return '선생님의 조언: 남은 입력 가능한 평가가 없어 목표 달성에 필요한 점수를 반영하기 어렵습니다. 목표 점수를 조정하거나 교사와 상담하세요.';
+        }
+
+        return `선생님의 조언: ${parts.join(' ')}`;
+    }, [selectedInsight]);
+
     const totalStackChartData = useMemo(() => {
         const labels = scoreRows.map((row) => row.subject);
         const itemNames = Array.from(
             new Set(scoreRows.flatMap((row) => row.breakdown.map((item) => item.name))),
         );
 
-        const pickColor = (type: 'exam' | 'performance' | 'other', index: number) => {
-            if (type === 'exam') {
-                const shades = ['#f87171', '#ef4444', '#dc2626', '#fca5a5'];
-                return shades[index % shades.length];
-            }
-            if (type === 'performance') {
-                const shades = ['#fde68a', '#facc15', '#eab308', '#fef08a'];
-                return shades[index % shades.length];
-            }
-            const shades = ['#93c5fd', '#60a5fa', '#3b82f6', '#bfdbfe'];
-            return shades[index % shades.length];
-        };
-
-        const datasets = itemNames.map((itemName, idx) => {
-            const sample = scoreRows.flatMap((row) => row.breakdown).find((item) => item.name === itemName);
-            const itemType = sample?.type || 'other';
+        const datasets = itemNames.map((itemName) => {
+            const rowsByItem = scoreRows.map((row) => row.breakdown.find((item) => item.name === itemName) || null);
+            const firstFound = rowsByItem.find(Boolean);
+            const itemType = firstFound?.type || 'other';
             return {
                 label: itemName,
-                data: scoreRows.map((row) => {
-                    const found = row.breakdown.find((item) => item.name === itemName);
-                    return Number((found?.weighted || 0).toFixed(1));
+                data: rowsByItem.map((found) => Number((found?.weighted || 0).toFixed(1))),
+                rawScores: rowsByItem.map((found) => Number((found?.score || 0).toFixed(1))),
+                maxScores: rowsByItem.map((found) => Number((found?.maxScore || 0).toFixed(1))),
+                itemTypes: rowsByItem.map((found) => found?.type || itemType),
+                backgroundColor: rowsByItem.map((found) => {
+                    const ratio = found && found.maxScore > 0 ? (found.score / found.maxScore) * 100 : 0;
+                    return getABCDEColor(ratio);
                 }),
-                backgroundColor: pickColor(itemType, idx),
-                borderColor: pickColor(itemType, idx),
+                borderColor: rowsByItem.map((found) => {
+                    const ratio = found && found.maxScore > 0 ? (found.score / found.maxScore) * 100 : 0;
+                    return getABCDEColor(ratio);
+                }),
                 borderWidth: 1,
                 borderRadius: 0,
                 stack: 'total',
-            };
+            } as any;
         });
 
         return { labels, datasets };
     }, [scoreRows]);
+
+    const stackHoverGuidePlugin = useMemo(
+        () => ({
+            id: 'stackHoverGuide',
+            afterDraw: (chart: any) => {
+                const active = chart?.tooltip?.getActiveElements?.() || [];
+                if (!active.length) return;
+                const y = active[0]?.element?.y;
+                if (typeof y !== 'number') return;
+
+                const { ctx, chartArea } = chart;
+                if (!ctx || !chartArea) return;
+                ctx.save();
+                ctx.beginPath();
+                ctx.moveTo(chartArea.left, y);
+                ctx.lineTo(chartArea.right, y);
+                ctx.lineWidth = 1;
+                ctx.strokeStyle = '#64748b';
+                ctx.setLineDash([5, 4]);
+                ctx.stroke();
+                ctx.restore();
+            },
+        }),
+        [],
+    );
 
     const gapBarData = useMemo(() => {
         if (!selectedInsight) return null;
@@ -815,6 +871,7 @@ const MyPage: React.FC = () => {
                                         {subjectInsights.length > 0 ? (
                                             <Bar
                                                 data={totalStackChartData}
+                                                plugins={[stackHoverGuidePlugin]}
                                                 options={{
                                                     responsive: true,
                                                     maintainAspectRatio: false,
@@ -824,11 +881,18 @@ const MyPage: React.FC = () => {
                                                         x: { stacked: true },
                                                     },
                                                     plugins: {
-                                                        legend: { position: 'bottom' as const },
+                                                        legend: { display: false },
                                                         tooltip: {
                                                             enabled: true,
                                                             callbacks: {
-                                                                label: (ctx) => `${ctx.dataset.label}: ${Number(ctx.parsed.y || 0).toFixed(1)}점`,
+                                                                label: (ctx: any) => {
+                                                                    const dataIndex = ctx.dataIndex || 0;
+                                                                    const ds = ctx.dataset || {};
+                                                                    const itemType = getTypeLabel((ds.itemTypes?.[dataIndex] || 'other') as any);
+                                                                    const raw = Number(ds.rawScores?.[dataIndex] || 0).toFixed(1);
+                                                                    const max = Number(ds.maxScores?.[dataIndex] || 0).toFixed(1);
+                                                                    return `[${itemType}] ${ctx.dataset.label}: ${raw} / ${max}점`;
+                                                                },
                                                             },
                                                         },
                                                     },
@@ -946,9 +1010,7 @@ const MyPage: React.FC = () => {
                                                         남은 최대 반영점수 {selectedInsight.remainingPotential}점, 필요 달성률 {selectedInsight.requiredRate}%
                                                     </div>
                                                     <div className="mt-2 text-sm font-bold text-gray-700">
-                                                        {selectedInsight.missingExamCount + selectedInsight.missingPerformanceCount > 0
-                                                            ? `선생님의 조언: 미입력 항목이 있어요. 정기시험 ${selectedInsight.missingExamCount}개, 수행평가 ${selectedInsight.missingPerformanceCount}개를 먼저 채우세요.`
-                                                            : '선생님의 조언: 정기시험/수행평가 입력이 잘 되어 있어요. 지금 흐름을 유지해요.'}
+                                                        {teacherAdviceText}
                                                     </div>
                                                 </div>
                                             </div>
