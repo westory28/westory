@@ -12,7 +12,7 @@ interface CalendarEvent {
     title: string;
     start: string;
     end?: string;
-    eventType: 'exam' | 'performance' | 'event' | 'diagnosis' | 'formative';
+    eventType: 'exam' | 'performance' | 'event' | 'diagnosis' | 'formative' | 'holiday';
     targetType: 'common' | 'class';
     targetClass?: string;
     description?: string;
@@ -59,6 +59,13 @@ const ManageSchedule = () => {
     const toLocalYmd = (date: Date) => {
         const offset = date.getTimezoneOffset() * 60000;
         return new Date(date.getTime() - offset).toISOString().split('T')[0];
+    };
+
+    const toExclusiveEnd = (start?: string, end?: string) => {
+        if (!start || !end || end <= start) return undefined;
+        const endDate = new Date(`${end}T00:00:00`);
+        endDate.setDate(endDate.getDate() + 1);
+        return toLocalYmd(endDate);
     };
 
     const holidayDateSet = useMemo(() => {
@@ -134,7 +141,7 @@ const ManageSchedule = () => {
                         id: id,
                         title: d.title,
                         start: d.start,
-                        end: d.end || d.start,
+                        end: toExclusiveEnd(d.start, d.end),
                         backgroundColor: colorMap[d.eventType] || '#6b7280',
                         borderColor: colorMap[d.eventType] || '#6b7280',
                         extendedProps: d
@@ -294,6 +301,18 @@ const ManageSchedule = () => {
                         events={events}
                         dateClick={handleDateClick}
                         eventClick={handleEventClick}
+                        eventContent={(arg) => {
+                            const isListMonth = arg.view.type === 'listMonth';
+                            const isDayGridMonth = arg.view.type === 'dayGridMonth';
+                            if (!isListMonth && !isDayGridMonth) return undefined;
+
+                            const isHoliday = arg.event.classNames.includes('holiday-text-event');
+                            return (
+                                <div className={`fc-segment-title ${isHoliday ? 'holiday-segment-title' : ''}`} title={arg.event.title}>
+                                    {arg.event.title}
+                                </div>
+                            );
+                        }}
                         height="100%"
                         dayCellClassNames={(arg) => {
                             const dateStr = toLocalYmd(arg.date);
@@ -482,6 +501,9 @@ const ManageSchedule = () => {
                 .fc-day-selected { background-color: #eff6ff !important; outline: 2px solid #3b82f6 !important; outline-offset: -2px !important; }
                 .holiday-text-event { background-color: transparent !important; border: none !important; }
                 .holiday-text-event .fc-event-title { color: #ef4444; font-size: 0.75rem; font-weight: 800; }
+                .holiday-text-event .fc-list-event-title a { color: #ef4444 !important; font-weight: 800 !important; }
+                .fc-segment-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; padding: 0 2px; }
+                .holiday-segment-title { color: #ef4444 !important; font-weight: 800 !important; }
             `}</style>
         </div>
     );
