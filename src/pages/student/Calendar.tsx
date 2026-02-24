@@ -141,9 +141,9 @@ const Calendar = () => {
                             title: d.title,
                             start: d.start,
                             end: toExclusiveEnd(d.start, d.end),
-                            backgroundColor: isHoliday ? 'transparent' : (colorMap[d.eventType] || '#6b7280'),
-                            borderColor: isHoliday ? 'transparent' : (colorMap[d.eventType] || '#6b7280'),
-                            textColor: isHoliday ? '#ef4444' : undefined,
+                            backgroundColor: isHoliday ? '#ef4444' : (colorMap[d.eventType] || '#6b7280'),
+                            borderColor: isHoliday ? '#ef4444' : (colorMap[d.eventType] || '#6b7280'),
+                            textColor: isHoliday ? '#ffffff' : undefined,
                             classNames: isHoliday ? ['holiday-text-event'] : [],
                             extendedProps: d // Store full data
                         });
@@ -270,8 +270,8 @@ const Calendar = () => {
                 .fc-day-holiday a { color: #ef4444 !important; text-decoration: none; font-weight: 700 !important; }
                 .fc-day-holiday .fc-daygrid-day-number { color: #ef4444 !important; font-weight: 700 !important; }
                 .fc-day-selected { background-color: #eff6ff !important; outline: 2px solid #3b82f6 !important; outline-offset: -2px !important; }
-                .holiday-text-event { background-color: transparent !important; border: none !important; }
-                .holiday-text-event .fc-event-title { color: #ef4444; font-size: 0.75rem; font-weight: 800; }
+                .holiday-text-event { background-color: #ef4444 !important; border-color: #ef4444 !important; }
+                .holiday-text-event .fc-event-title { color: #ffffff !important; font-size: 0.75rem; font-weight: 800; }
                 .fc-segment-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; padding: 0 2px; }
             `}</style>
         </div>

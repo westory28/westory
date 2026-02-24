@@ -64,9 +64,9 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
         title: e.title,
         start: e.start,
         end: toExclusiveEnd(e.start, e.end),
-        backgroundColor: e.eventType === 'holiday' ? 'transparent' : (EVENT_COLOR_MAP[e.eventType] || '#6b7280'),
-        borderColor: e.eventType === 'holiday' ? 'transparent' : (EVENT_COLOR_MAP[e.eventType] || '#6b7280'),
-        textColor: e.eventType === 'holiday' ? '#ef4444' : undefined,
+        backgroundColor: e.eventType === 'holiday' ? '#ef4444' : (EVENT_COLOR_MAP[e.eventType] || '#6b7280'),
+        borderColor: e.eventType === 'holiday' ? '#ef4444' : (EVENT_COLOR_MAP[e.eventType] || '#6b7280'),
+        textColor: e.eventType === 'holiday' ? '#ffffff' : undefined,
         classNames: e.eventType === 'holiday' ? ['holiday-text-event'] : [],
         extendedProps: { ...e }
     }));
@@ -90,8 +90,8 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
     useEffect(() => {
         const style = document.createElement('style');
         style.innerHTML = `
-            .holiday-text-event { background-color: transparent !important; border: none !important; }
-            .holiday-text-event .fc-event-title { color: #ef4444; font-size: 0.75rem; font-weight: 800; }
+            .holiday-text-event { background-color: #ef4444 !important; border-color: #ef4444 !important; }
+            .holiday-text-event .fc-event-title { color: #ffffff !important; font-size: 0.75rem; font-weight: 800; }
             .fc-day-selected { background-color: #eff6ff !important; outline: 2px solid #3b82f6 !important; outline-offset: -2px !important; }
             .fc-day-sun a { color: #ef4444 !important; text-decoration: none; font-weight: 700; }
             .fc-day-sat a { color: #3b82f6 !important; text-decoration: none; font-weight: 700; }
@@ -101,7 +101,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             .fc-button { background-color: #2563eb !important; border-color: #2563eb !important; font-weight: 600 !important; }
             .holiday-text-event .fc-list-event-title a { color: #ef4444 !important; font-weight: 800 !important; }
             .fc-segment-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; padding: 0 2px; }
-            .holiday-segment-title { color: #ef4444 !important; font-weight: 800 !important; }
+            .holiday-segment-title { color: #ffffff !important; font-weight: 800 !important; }
         `;
         document.head.appendChild(style);
         return () => { document.head.removeChild(style); };
