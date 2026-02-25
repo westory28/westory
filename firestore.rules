@@ -101,6 +101,22 @@ service cloud.firestore {
       allow write: if isTeacher();
     }
 
+    match /think_cloud_state/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isTeacher();
+    }
+
+    match /think_cloud_sessions/{sessionId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isTeacher();
+
+      match /responses/{responseId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+        allow update, delete: if isTeacher();
+      }
+    }
+
     // 학년도/학기 범위 컬렉션 권한
     match /years/{year}/semesters/{semester} {
       match /calendar/{docId} {
@@ -155,6 +171,22 @@ service cloud.firestore {
       match /quiz_submissions/{docId} {
         allow read: if isSignedIn();
         allow write: if isTeacher();
+      }
+
+      match /think_cloud_state/{docId} {
+        allow read: if isSignedIn();
+        allow write: if isTeacher();
+      }
+
+      match /think_cloud_sessions/{sessionId} {
+        allow read: if isSignedIn();
+        allow create, update, delete: if isTeacher();
+
+        match /responses/{responseId} {
+          allow read: if isSignedIn();
+          allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+          allow update, delete: if isTeacher();
+        }
       }
     }
   }
