@@ -1023,17 +1023,21 @@ const MyPage: React.FC = () => {
                                                 </div>
 
                                                 <div className="rounded-2xl border border-gray-200 p-4 bg-gray-50">
-                                                    <div
-                                                        className={`hidden w-fit ml-auto mb-2 rounded-full px-4 py-1 text-xs font-black shadow ${
-                                                            selectedInsight.mood === 'good'
-                                                                ? 'bg-emerald-500 text-white'
-                                                                : 'bg-orange-500 text-white'
-                                                        }`}
-                                                    >
-                                                        {selectedInsight.mood === 'good' ? '목표 달성 유력' : '끝까지 힘내요'}
+                                                    <div className="mb-2 flex items-center justify-between gap-3">
+                                                        <div className="text-sm font-bold text-gray-700">목표 달성까지 현재 점수 차이 그래프</div>
+                                                        <div
+                                                            className={`self-start rounded-xl px-4 py-2 text-sm font-extrabold shadow whitespace-nowrap ${
+                                                                selectedInsight.gap <= 0
+                                                                    ? 'bg-blue-600 text-white'
+                                                                    : selectedInsight.mood === 'good'
+                                                                      ? 'bg-emerald-500 text-white'
+                                                                      : 'bg-orange-500 text-white'
+                                                            }`}
+                                                        >
+                                                            {selectedInsight.gap <= 0 ? '목표 달성!' : selectedInsight.mood === 'good' ? '목표 달성 유력' : '끝까지 힘내요'}
+                                                        </div>
                                                     </div>
-                                                    <div className="text-sm font-bold text-gray-700 mb-2">목표 점수 대비 현재 점수 차이 그래프</div>
-                                                    <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-start">
+                                                    <div className="grid grid-cols-1 gap-3 items-start">
                                                         <div className="h-56">
                                                             {gapBarData && (
                                                                 <Bar
@@ -1047,15 +1051,6 @@ const MyPage: React.FC = () => {
                                                                     }}
                                                                 />
                                                             )}
-                                                        </div>
-                                                        <div
-                                                            className={`self-start rounded-xl px-4 py-2 text-sm font-extrabold shadow whitespace-nowrap ${
-                                                                selectedInsight.mood === 'good'
-                                                                    ? 'bg-emerald-500 text-white'
-                                                                    : 'bg-orange-500 text-white'
-                                                            }`}
-                                                        >
-                                                            {selectedInsight.mood === 'good' ? '목표 달성 유력' : '끝까지 힘내요'}
                                                         </div>
                                                     </div>
                                                     <div className="mt-3 text-sm font-bold text-gray-700">
