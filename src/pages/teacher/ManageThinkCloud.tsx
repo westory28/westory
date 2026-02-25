@@ -771,11 +771,12 @@ const ManageThinkCloud: React.FC = () => {
                             TV 출력용 모드입니다. 응답 {responses.length}개
                         </div>
                         <div className="flex-1 flex items-center justify-center">
-                            <WordCloudView
-                                entries={cloudEntries}
-                                showSubmitters={!!selectedSession && !selectedSession.options.anonymous}
-                                className="h-full w-full"
-                            />
+                            <div className="w-full max-w-[96vw]">
+                                <WordCloudView
+                                    entries={cloudEntries}
+                                    showSubmitters={!!selectedSession && !selectedSession.options.anonymous}
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>

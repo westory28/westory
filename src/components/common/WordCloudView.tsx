@@ -23,10 +23,10 @@ interface PositionedWord extends WordCloudEntry {
     tooltip: string;
 }
 
-const WIDTH = 920;
-const HEIGHT = 520;
-const RADIUS_X = 360;
-const RADIUS_Y = 220;
+const WIDTH = 1600;
+const HEIGHT = 900;
+const RADIUS_X = 630;
+const RADIUS_Y = 350;
 const CENTER_X = WIDTH / 2;
 const CENTER_Y = HEIGHT / 2;
 const MAX_WORDS = 80;
@@ -87,13 +87,14 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({ entries, className = '', 
 
         for (const item of source) {
             const ratio = maxCount === minCount ? 1 : (item.count - minCount) / (maxCount - minCount);
-            const baseSize = Math.round(14 + Math.pow(ratio, 0.68) * 70);
+            // Keep one-time submissions readable while preserving emphasis for repeated words.
+            const baseSize = Math.round(24 + Math.pow(ratio, 0.82) * 38);
 
             let fontSize = baseSize;
             let placedWord: PositionedWord | null = null;
 
             for (let shrink = 0; shrink < 4 && !placedWord; shrink += 1) {
-                const baseWidth = Math.max(fontSize * (item.text.length * 0.52 + 1.8), fontSize * 2.4);
+                const baseWidth = Math.max(fontSize * (item.text.length * 0.52 + 1.8), fontSize * 2.5);
                 const baseHeight = fontSize * 1.06;
                 const rotate: 0 | 90 = hashCode(item.text) % 5 === 0 ? 90 : 0;
                 const width = rotate === 90 ? baseHeight : baseWidth;
@@ -124,7 +125,7 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({ entries, className = '', 
                     break;
                 }
 
-                fontSize = Math.max(11, Math.floor(fontSize * 0.9));
+                fontSize = Math.max(15, Math.floor(fontSize * 0.9));
             }
 
             if (placedWord) placed.push(placedWord);
@@ -135,7 +136,7 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({ entries, className = '', 
 
     return (
         <div className={`w-full flex justify-center ${className}`}>
-            <div className="relative w-full max-w-[920px] aspect-[920/520] rounded-2xl bg-gradient-to-br from-blue-50 via-white to-cyan-50 border border-blue-100 overflow-hidden">
+            <div className="relative w-full max-w-[1600px] aspect-video rounded-2xl bg-gradient-to-br from-blue-50 via-white to-cyan-50 border border-blue-100 overflow-hidden">
                 <svg
                     className="absolute inset-0 w-full h-full"
                     viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
@@ -168,4 +169,3 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({ entries, className = '', 
 };
 
 export default WordCloudView;
-
