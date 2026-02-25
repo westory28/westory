@@ -58,24 +58,35 @@ const Header: React.FC = () => {
         return true;
     };
 
-    const isChildActive = (childUrl: string, siblings: Array<{ url: string }>) => {
-        const [childPath, childQuery] = childUrl.split('?');
-        if (!location.pathname.startsWith(childPath)) return false;
+    const getChildMatchScore = (url: string, siblings: Array<{ url: string }>) => {
+        const [path, query] = url.split('?');
+        const pathMatches = location.pathname === path || location.pathname.startsWith(`${path}/`);
+        if (!pathMatches) return -1;
 
-        if (childQuery) {
-            return isActive(childUrl);
+        const queryParams = new URLSearchParams(query || '');
+        const currentParams = new URLSearchParams(location.search);
+        for (const [key, value] of queryParams.entries()) {
+            if (currentParams.get(key) !== value) return -1;
         }
 
         const hasQuerySiblingOnSamePath = siblings.some((sibling) => {
             const [siblingPath, siblingQuery] = sibling.url.split('?');
-            return siblingPath === childPath && !!siblingQuery;
+            return siblingPath === path && !!siblingQuery;
         });
+        const noQueryPenalty = !query && hasQuerySiblingOnSamePath && location.search.length > 0 ? -500 : 0;
 
-        if (hasQuerySiblingOnSamePath) {
-            return location.search.length === 0;
-        }
+        return path.length * 10 + queryParams.size * 100 + noQueryPenalty;
+    };
 
-        return true;
+    const isChildActive = (childUrl: string, siblings: Array<{ url: string }>) => {
+        const targetScore = getChildMatchScore(childUrl, siblings);
+        if (targetScore < 0) return false;
+
+        const bestScore = siblings.reduce((max, sibling) => {
+            return Math.max(max, getChildMatchScore(sibling.url, siblings));
+        }, -1);
+
+        return targetScore === bestScore;
     };
 
     const performLogout = async (isTimeout: boolean) => {
