@@ -3,11 +3,13 @@ import React, { useMemo } from 'react';
 interface WordCloudEntry {
     text: string;
     count: number;
+    submitters?: string[];
 }
 
 interface WordCloudViewProps {
     entries: WordCloudEntry[];
     className?: string;
+    showSubmitters?: boolean;
 }
 
 interface PositionedWord extends WordCloudEntry {
@@ -17,7 +19,8 @@ interface PositionedWord extends WordCloudEntry {
     width: number;
     height: number;
     color: string;
-    rotate: number;
+    rotate: 0 | 90;
+    tooltip: string;
 }
 
 const WIDTH = 920;
@@ -56,10 +59,24 @@ const overlaps = (candidate: PositionedWord, placed: PositionedWord[]) =>
     placed.some((item) => {
         const xGap = Math.abs(candidate.x - item.x);
         const yGap = Math.abs(candidate.y - item.y);
-        return xGap < (candidate.width + item.width) / 2 + 6 && yGap < (candidate.height + item.height) / 2 + 4;
+        return xGap < (candidate.width + item.width) / 2 + 8 && yGap < (candidate.height + item.height) / 2 + 6;
     });
 
-const WordCloudView: React.FC<WordCloudViewProps> = ({ entries, className = '' }) => {
+const buildTooltip = (entry: WordCloudEntry, showSubmitters: boolean) => {
+    const base = `${entry.text}: ${entry.count}회`;
+    if (!showSubmitters) return base;
+
+    const names = Array.from(
+        new Set((entry.submitters || []).map((name) => String(name || '').trim()).filter(Boolean)),
+    );
+    if (names.length === 0) return base;
+
+    const preview = names.slice(0, 8).join(', ');
+    const suffix = names.length > 8 ? ` 외 ${names.length - 8}명` : '';
+    return `${base}\n제출자: ${preview}${suffix}`;
+};
+
+const WordCloudView: React.FC<WordCloudViewProps> = ({ entries, className = '', showSubmitters = false }) => {
     const positioned = useMemo(() => {
         if (entries.length === 0) return [] as PositionedWord[];
 
@@ -70,21 +87,24 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({ entries, className = '' }
 
         for (const item of source) {
             const ratio = maxCount === minCount ? 1 : (item.count - minCount) / (maxCount - minCount);
-            const baseSize = Math.round(15 + Math.pow(ratio, 0.65) * 68);
+            const baseSize = Math.round(14 + Math.pow(ratio, 0.68) * 70);
 
             let fontSize = baseSize;
             let placedWord: PositionedWord | null = null;
 
             for (let shrink = 0; shrink < 4 && !placedWord; shrink += 1) {
-                const width = Math.max(fontSize * (item.text.length * 0.52 + 1.7), fontSize * 2.2);
-                const height = fontSize * 1.08;
+                const baseWidth = Math.max(fontSize * (item.text.length * 0.52 + 1.8), fontSize * 2.4);
+                const baseHeight = fontSize * 1.06;
+                const rotate: 0 | 90 = hashCode(item.text) % 5 === 0 ? 90 : 0;
+                const width = rotate === 90 ? baseHeight : baseWidth;
+                const height = rotate === 90 ? baseWidth : baseHeight;
                 const angleSeed = hashCode(item.text) % 360;
 
-                for (let step = 0; step < 1200; step += 1) {
+                for (let step = 0; step < 1300; step += 1) {
                     const angle = ((angleSeed + step * 11) * Math.PI) / 180;
-                    const radius = 4 + step * 0.58;
+                    const radius = 5 + step * 0.57;
                     const x = CENTER_X + Math.cos(angle) * radius;
-                    const y = CENTER_Y + Math.sin(angle) * radius * 0.67;
+                    const y = CENTER_Y + Math.sin(angle) * radius * 0.68;
 
                     const candidate: PositionedWord = {
                         ...item,
@@ -94,7 +114,8 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({ entries, className = '' }
                         width,
                         height,
                         color: COLORS[hashCode(item.text) % COLORS.length],
-                        rotate: item.count <= minCount + 1 && hashCode(item.text) % 4 === 0 ? -18 : 0,
+                        rotate,
+                        tooltip: buildTooltip(item, showSubmitters),
                     };
 
                     if (!isInsideEllipse(x, y, width, height)) continue;
@@ -103,37 +124,44 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({ entries, className = '' }
                     break;
                 }
 
-                fontSize = Math.max(12, Math.floor(fontSize * 0.9));
+                fontSize = Math.max(11, Math.floor(fontSize * 0.9));
             }
 
             if (placedWord) placed.push(placedWord);
         }
 
         return placed;
-    }, [entries]);
+    }, [entries, showSubmitters]);
 
     return (
         <div className={`w-full flex justify-center ${className}`}>
             <div className="relative w-full max-w-[920px] aspect-[920/520] rounded-2xl bg-gradient-to-br from-blue-50 via-white to-cyan-50 border border-blue-100 overflow-hidden">
-                <div className="absolute inset-0 pointer-events-none">
-                    <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[82%] h-[82%] rounded-full bg-white/55"></div>
-                </div>
-                {positioned.map((item) => (
-                    <span
-                        key={item.text}
-                        className="absolute font-black leading-none whitespace-nowrap select-none"
-                        style={{
-                            left: `${(item.x / WIDTH) * 100}%`,
-                            top: `${(item.y / HEIGHT) * 100}%`,
-                            fontSize: `${item.fontSize}px`,
-                            color: item.color,
-                            transform: `translate(-50%, -50%) rotate(${item.rotate}deg)`,
-                        }}
-                        title={`${item.count}회`}
-                    >
-                        {item.text}
-                    </span>
-                ))}
+                <svg
+                    className="absolute inset-0 w-full h-full"
+                    viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+                    preserveAspectRatio="xMidYMid meet"
+                    role="img"
+                    aria-label="word cloud"
+                >
+                    <ellipse cx={CENTER_X} cy={CENTER_Y} rx={RADIUS_X} ry={RADIUS_Y} fill="rgba(255,255,255,0.65)" />
+                    {positioned.map((item) => (
+                        <text
+                            key={item.text}
+                            x={item.x}
+                            y={item.y}
+                            fontSize={item.fontSize}
+                            fill={item.color}
+                            fontWeight={900}
+                            textAnchor="middle"
+                            dominantBaseline="central"
+                            transform={`rotate(${item.rotate} ${item.x} ${item.y})`}
+                            style={{ userSelect: 'none' }}
+                        >
+                            <title>{item.tooltip}</title>
+                            {item.text}
+                        </text>
+                    ))}
+                </svg>
             </div>
         </div>
     );

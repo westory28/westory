@@ -123,14 +123,22 @@ const ThinkCloud: React.FC = () => {
     }, [config, selectedSessionId]);
 
     const cloudEntries = useMemo(() => {
-        const counts = new Map<string, number>();
+        const buckets = new Map<string, { count: number; submitters: Set<string> }>();
         for (const item of responses) {
             const key = item.textNormalized || '';
             if (!key) continue;
-            counts.set(key, (counts.get(key) || 0) + 1);
+            const current = buckets.get(key) || { count: 0, submitters: new Set<string>() };
+            current.count += 1;
+            const name = String(item.displayName || '').trim();
+            if (name) current.submitters.add(name);
+            buckets.set(key, current);
         }
-        return Array.from(counts.entries())
-            .map(([text, count]) => ({ text, count }))
+        return Array.from(buckets.entries())
+            .map(([text, info]) => ({
+                text,
+                count: info.count,
+                submitters: Array.from(info.submitters),
+            }))
             .sort((a, b) => b.count - a.count || a.text.localeCompare(b.text))
             .slice(0, 50);
     }, [responses]);
@@ -312,7 +320,7 @@ const ThinkCloud: React.FC = () => {
                                 {cloudEntries.length === 0 ? (
                                     <p className="text-sm text-gray-500 font-bold">아직 제출된 응답이 없습니다.</p>
                                 ) : (
-                                    <WordCloudView entries={cloudEntries} />
+                                    <WordCloudView entries={cloudEntries} showSubmitters={!options.anonymous} />
                                 )}
                             </section>
                         </>

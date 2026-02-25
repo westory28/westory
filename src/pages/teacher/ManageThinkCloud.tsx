@@ -122,14 +122,22 @@ const ManageThinkCloud: React.FC = () => {
     }, [config, selectedSessionId]);
 
     const cloudEntries = useMemo(() => {
-        const counts = new Map<string, number>();
+        const buckets = new Map<string, { count: number; submitters: Set<string> }>();
         for (const item of responses) {
             const key = item.textNormalized || '';
             if (!key) continue;
-            counts.set(key, (counts.get(key) || 0) + 1);
+            const current = buckets.get(key) || { count: 0, submitters: new Set<string>() };
+            current.count += 1;
+            const name = String(item.displayName || '').trim();
+            if (name) current.submitters.add(name);
+            buckets.set(key, current);
         }
-        return Array.from(counts.entries())
-            .map(([text, count]) => ({ text, count }))
+        return Array.from(buckets.entries())
+            .map(([text, info]) => ({
+                text,
+                count: info.count,
+                submitters: Array.from(info.submitters),
+            }))
             .sort((a, b) => b.count - a.count || a.text.localeCompare(b.text))
             .slice(0, 50);
     }, [responses]);
@@ -560,7 +568,7 @@ const ManageThinkCloud: React.FC = () => {
                         className="w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-2xl"
                         title="클릭해서 크게 보기"
                     >
-                        <WordCloudView entries={cloudEntries} />
+                        <WordCloudView entries={cloudEntries} showSubmitters={!selectedSession.options.anonymous} />
                     </button>
                 )}
 
@@ -674,7 +682,11 @@ const ManageThinkCloud: React.FC = () => {
                             TV 출력용 모드입니다. 응답 {responses.length}개
                         </div>
                         <div className="flex-1 flex items-center justify-center">
-                            <WordCloudView entries={cloudEntries} className="h-full w-full" />
+                            <WordCloudView
+                                entries={cloudEntries}
+                                showSubmitters={!!selectedSession && !selectedSession.options.anonymous}
+                                className="h-full w-full"
+                            />
                         </div>
                     </div>
                 </div>
