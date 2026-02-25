@@ -5,6 +5,8 @@ import {
     doc,
     getDoc,
     onSnapshot,
+    orderBy,
+    query,
     serverTimestamp,
     setDoc,
     updateDoc,
@@ -21,17 +23,26 @@ import {
     type ThinkCloudSession,
 } from '../../lib/thinkCloud';
 
+type SessionWithId = ThinkCloudSession & { id: string };
+
 const ManageThinkCloud: React.FC = () => {
     const { config, currentUser, userData } = useAuth();
     const [activeSessionId, setActiveSessionId] = useState('');
-    const [activeSession, setActiveSession] = useState<ThinkCloudSession | null>(null);
+    const [sessions, setSessions] = useState<SessionWithId[]>([]);
+    const [selectedSessionId, setSelectedSessionId] = useState('');
     const [responses, setResponses] = useState<Array<ThinkCloudResponse & { id: string }>>([]);
     const [loadingAction, setLoadingAction] = useState(false);
     const [message, setMessage] = useState('');
+    const [isCreateMode, setIsCreateMode] = useState(false);
 
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [options, setOptions] = useState<ThinkCloudOptions>(DEFAULT_THINK_CLOUD_OPTIONS);
+
+    const selectedSession = useMemo(
+        () => sessions.find((session) => session.id === selectedSessionId) || null,
+        [sessions, selectedSessionId],
+    );
 
     useEffect(() => {
         const stateRef = doc(db, buildThinkCloudStateDocPath(config));
@@ -46,41 +57,44 @@ const ManageThinkCloud: React.FC = () => {
     }, [config]);
 
     useEffect(() => {
-        if (!activeSessionId) {
-            setActiveSession(null);
+        const sessionsRef = collection(db, buildThinkCloudSessionCollectionPath(config));
+        const q = query(sessionsRef, orderBy('createdAt', 'desc'));
+        const unsubscribe = onSnapshot(q, (snap) => {
+            const loaded = snap.docs.map((item) => ({
+                id: item.id,
+                ...(item.data() as ThinkCloudSession),
+            }));
+            setSessions(loaded);
+            if (!selectedSessionId && loaded.length > 0) {
+                setSelectedSessionId(loaded[0].id);
+            }
+            if (selectedSessionId && !loaded.some((item) => item.id === selectedSessionId)) {
+                setSelectedSessionId(loaded.length > 0 ? loaded[0].id : '');
+            }
+        });
+        return () => unsubscribe();
+    }, [config, selectedSessionId]);
+
+    useEffect(() => {
+        if (!selectedSessionId) {
             setResponses([]);
             return;
         }
-
-        const sessionRef = doc(db, buildThinkCloudSessionCollectionPath(config), activeSessionId);
-        const unsubscribeSession = onSnapshot(sessionRef, (snap) => {
-            if (!snap.exists()) {
-                setActiveSession(null);
-                return;
-            }
-            setActiveSession(snap.data() as ThinkCloudSession);
-        });
-
-        const responsesRef = collection(db, buildThinkCloudResponsesCollectionPath(config, activeSessionId));
-        const unsubscribeResponses = onSnapshot(responsesRef, (snap) => {
+        const responsesRef = collection(db, buildThinkCloudResponsesCollectionPath(config, selectedSessionId));
+        const unsubscribe = onSnapshot(responsesRef, (snap) => {
             const loaded = snap.docs.map((item) => ({
                 id: item.id,
                 ...(item.data() as ThinkCloudResponse),
             }));
-            setResponses(
-                loaded.sort((a, b) => {
-                    const ta = Number((a.createdAt as { seconds?: number } | undefined)?.seconds || 0);
-                    const tb = Number((b.createdAt as { seconds?: number } | undefined)?.seconds || 0);
-                    return tb - ta;
-                }),
-            );
+            loaded.sort((a, b) => {
+                const ta = Number((a.createdAt as { seconds?: number } | undefined)?.seconds || 0);
+                const tb = Number((b.createdAt as { seconds?: number } | undefined)?.seconds || 0);
+                return tb - ta;
+            });
+            setResponses(loaded);
         });
-
-        return () => {
-            unsubscribeSession();
-            unsubscribeResponses();
-        };
-    }, [activeSessionId, config]);
+        return () => unsubscribe();
+    }, [config, selectedSessionId]);
 
     const cloudEntries = useMemo(() => {
         const counts = new Map<string, number>();
@@ -103,6 +117,25 @@ const ManageThinkCloud: React.FC = () => {
         return Math.round(14 + ratio * 28);
     };
 
+    const resetCreateForm = () => {
+        setTitle('');
+        setDescription('');
+        setOptions(DEFAULT_THINK_CLOUD_OPTIONS);
+    };
+
+    const selectSession = (id: string) => {
+        setIsCreateMode(false);
+        setSelectedSessionId(id);
+        setMessage('');
+    };
+
+    const openCreateMode = () => {
+        setIsCreateMode(true);
+        setSelectedSessionId('');
+        setMessage('');
+        resetCreateForm();
+    };
+
     const handleStartSession = async () => {
         const safeTitle = title.trim();
         if (!safeTitle) {
@@ -114,8 +147,7 @@ const ManageThinkCloud: React.FC = () => {
         setLoadingAction(true);
         setMessage('');
         try {
-            const statePath = buildThinkCloudStateDocPath(config);
-            const stateRef = doc(db, statePath);
+            const stateRef = doc(db, buildThinkCloudStateDocPath(config));
             const stateSnap = await getDoc(stateRef);
             const previousSessionId = stateSnap.exists() ? String(stateSnap.data().activeSessionId || '').trim() : '';
 
@@ -139,11 +171,13 @@ const ManageThinkCloud: React.FC = () => {
             };
 
             const added = await addDoc(collection(db, buildThinkCloudSessionCollectionPath(config)), payload);
-            await setDoc(doc(db, buildThinkCloudStateDocPath(config)), {
+            await setDoc(stateRef, {
                 activeSessionId: added.id,
                 updatedAt: serverTimestamp(),
             });
             setMessage('새 생각모아 세션을 시작했습니다.');
+            setIsCreateMode(false);
+            setSelectedSessionId(added.id);
         } catch (error) {
             console.error('Failed to start think cloud session:', error);
             setMessage('세션 시작에 실패했습니다.');
@@ -153,20 +187,23 @@ const ManageThinkCloud: React.FC = () => {
     };
 
     const handleCloseSession = async () => {
-        if (!activeSessionId) return;
+        if (!selectedSessionId) return;
         setLoadingAction(true);
         setMessage('');
         try {
-            const sessionRef = doc(db, buildThinkCloudSessionCollectionPath(config), activeSessionId);
+            const sessionRef = doc(db, buildThinkCloudSessionCollectionPath(config), selectedSessionId);
             await updateDoc(sessionRef, {
                 status: 'closed',
                 closedAt: serverTimestamp(),
             });
-            await setDoc(doc(db, buildThinkCloudStateDocPath(config)), {
-                activeSessionId: '',
-                updatedAt: serverTimestamp(),
-            });
-            setMessage('진행 중인 세션을 종료했습니다.');
+
+            if (selectedSessionId === activeSessionId) {
+                await setDoc(doc(db, buildThinkCloudStateDocPath(config)), {
+                    activeSessionId: '',
+                    updatedAt: serverTimestamp(),
+                });
+            }
+            setMessage('선택한 세션을 종료했습니다.');
         } catch (error) {
             console.error('Failed to close think cloud session:', error);
             setMessage('세션 종료에 실패했습니다.');
@@ -175,38 +212,37 @@ const ManageThinkCloud: React.FC = () => {
         }
     };
 
-    return (
-        <div className="w-full max-w-7xl mx-auto px-4 py-6 space-y-4">
-            <section className="bg-white border border-gray-200 rounded-2xl p-5">
-                <h1 className="text-2xl font-extrabold text-gray-900">생각모아 관리</h1>
-                <p className="mt-2 text-sm text-gray-600 font-bold">주제와 옵션을 설정하고 세션을 시작하면 학생 화면에 즉시 반영됩니다.</p>
-            </section>
+    const renderCreatePanel = () => (
+        <section className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+            <div className="border-b border-gray-100 pb-4 mb-6">
+                <h2 className="text-lg font-extrabold text-gray-900">새 생각모아 주제</h2>
+                <p className="text-sm text-gray-500 mt-1">주제와 옵션을 설정한 뒤 세션을 시작하세요.</p>
+            </div>
 
-            <section className="bg-white border border-gray-200 rounded-2xl p-5 space-y-4">
-                <h2 className="text-lg font-extrabold text-gray-900">새 세션 설정</h2>
-                <div className="space-y-3">
-                    <div>
-                        <label className="text-sm font-bold text-gray-700">주제</label>
-                        <input
-                            value={title}
-                            onChange={(e) => setTitle(e.target.value)}
-                            placeholder="예: 삼국 통일의 의의를 한 단어로 표현해 보세요"
-                            className="mt-1 w-full border border-gray-300 rounded-xl px-4 py-3 font-bold outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                    </div>
-                    <div>
-                        <label className="text-sm font-bold text-gray-700">설명</label>
-                        <textarea
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            rows={3}
-                            placeholder="학생에게 보여줄 안내 문구를 입력해 주세요."
-                            className="mt-1 w-full border border-gray-300 rounded-xl px-4 py-3 font-bold outline-none focus:ring-2 focus:ring-blue-500 resize-y"
-                        />
-                    </div>
+            <div className="space-y-6">
+                <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">주제</label>
+                    <input
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        placeholder="예: 조선 후기 사회 변화를 한 단어로 표현해 보세요"
+                        className="w-full border border-gray-300 rounded-lg p-3 bg-gray-50 focus:ring-2 focus:ring-blue-500 font-bold text-gray-800 outline-none"
+                    />
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <label className="flex items-center justify-between border border-gray-200 rounded-xl px-4 py-3">
+
+                <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">설명</label>
+                    <textarea
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        rows={3}
+                        placeholder="학생 안내 문구를 입력해 주세요."
+                        className="w-full border border-gray-300 rounded-lg p-3 bg-gray-50 focus:ring-2 focus:ring-blue-500 font-bold text-gray-800 outline-none resize-y"
+                    />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
                         <span className="font-bold text-gray-700">중복 제출 허용</span>
                         <input
                             type="checkbox"
@@ -215,7 +251,8 @@ const ManageThinkCloud: React.FC = () => {
                             className="w-5 h-5"
                         />
                     </label>
-                    <label className="flex items-center justify-between border border-gray-200 rounded-xl px-4 py-3">
+
+                    <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
                         <span className="font-bold text-gray-700">익명 표시</span>
                         <input
                             type="checkbox"
@@ -224,7 +261,8 @@ const ManageThinkCloud: React.FC = () => {
                             className="w-5 h-5"
                         />
                     </label>
-                    <label className="flex items-center justify-between border border-gray-200 rounded-xl px-4 py-3">
+
+                    <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
                         <span className="font-bold text-gray-700">금칙어 필터</span>
                         <input
                             type="checkbox"
@@ -233,18 +271,20 @@ const ManageThinkCloud: React.FC = () => {
                             className="w-5 h-5"
                         />
                     </label>
-                    <label className="flex items-center justify-between border border-gray-200 rounded-xl px-4 py-3">
+
+                    <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
                         <span className="font-bold text-gray-700">입력 형식</span>
                         <select
                             value={options.inputMode}
                             onChange={(e) => setOptions((prev) => ({ ...prev, inputMode: e.target.value as ThinkCloudOptions['inputMode'] }))}
-                            className="border border-gray-300 rounded-lg px-3 py-1.5 font-bold"
+                            className="border border-gray-300 rounded-lg px-3 py-1.5 font-bold bg-white"
                         >
                             <option value="word">단어 1개</option>
                             <option value="sentence">짧은 문장</option>
                         </select>
                     </label>
-                    <label className="flex items-center justify-between border border-gray-200 rounded-xl px-4 py-3 md:col-span-2">
+
+                    <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 md:col-span-2">
                         <span className="font-bold text-gray-700">최대 입력 길이</span>
                         <input
                             type="number"
@@ -256,42 +296,71 @@ const ManageThinkCloud: React.FC = () => {
                                 const next = Number.isFinite(parsed) ? Math.max(5, Math.min(100, parsed)) : 20;
                                 setOptions((prev) => ({ ...prev, maxLength: next }));
                             }}
-                            className="w-24 border border-gray-300 rounded-lg px-3 py-1.5 font-bold text-right"
+                            className="w-24 border border-gray-300 rounded-lg px-3 py-1.5 font-bold text-right bg-white"
                         />
                     </label>
                 </div>
-                <div className="flex flex-wrap gap-2">
+
+                <div className="text-right">
                     <button
                         onClick={() => void handleStartSession()}
                         disabled={loadingAction}
-                        className="px-5 py-3 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 disabled:opacity-60"
+                        className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition disabled:opacity-60"
                     >
-                        {loadingAction ? '처리 중...' : '새 세션 시작'}
-                    </button>
-                    <button
-                        onClick={() => void handleCloseSession()}
-                        disabled={loadingAction || !activeSessionId}
-                        className="px-5 py-3 rounded-xl bg-gray-700 text-white font-bold hover:bg-gray-800 disabled:opacity-50"
-                    >
-                        진행 세션 종료
+                        {loadingAction ? '처리 중...' : '세션 시작'}
                     </button>
                 </div>
-                {message && <p className="text-sm font-bold text-blue-700">{message}</p>}
-            </section>
+            </div>
+        </section>
+    );
 
-            <section className="bg-white border border-gray-200 rounded-2xl p-5">
-                <h2 className="text-lg font-extrabold text-gray-900">진행 중 세션</h2>
-                {!activeSession && <p className="mt-2 text-sm font-bold text-gray-500">현재 활성 세션이 없습니다.</p>}
-                {activeSession && (
-                    <div className="mt-2 space-y-1">
-                        <p className="text-base font-black text-gray-900">{activeSession.title}</p>
-                        {activeSession.description && <p className="text-sm text-gray-600 font-bold">{activeSession.description}</p>}
-                        <p className="text-xs text-gray-500 font-bold">응답 {responses.length}개</p>
+    const renderDetailPanel = () => {
+        if (!selectedSession) {
+            return (
+                <section className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+                    <p className="text-gray-500 font-bold">좌측에서 주제를 선택하거나 새 주제를 추가해 주세요.</p>
+                </section>
+            );
+        }
+
+        const isActive = selectedSession.id === activeSessionId && selectedSession.status === 'active';
+
+        return (
+            <section className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+                <div className="border-b border-gray-100 pb-4 mb-6 flex items-start justify-between gap-3">
+                    <div>
+                        <h2 className="text-lg font-extrabold text-gray-900">{selectedSession.title}</h2>
+                        <p className="text-sm text-gray-500 mt-1">{selectedSession.description || '설명 없음'}</p>
                     </div>
-                )}
+                    <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-gray-50 text-gray-600 border-gray-200'}`}>
+                        {isActive ? '진행 중' : '종료됨'}
+                    </span>
+                </div>
 
-                {cloudEntries.length > 0 && (
-                    <div className="mt-4 min-h-[220px] rounded-xl bg-gradient-to-br from-amber-50 via-white to-blue-50 border border-amber-100 p-4 flex flex-wrap content-start gap-3">
+                <div className="flex flex-wrap gap-2 mb-4 text-xs font-bold">
+                    <span className="px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                        {selectedSession.options.inputMode === 'word' ? '단어 1개 입력' : '짧은 문장 입력'}
+                    </span>
+                    <span className="px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                        최대 {selectedSession.options.maxLength}자
+                    </span>
+                    <span className="px-2 py-1 rounded-full bg-gray-50 text-gray-700 border border-gray-200">
+                        {selectedSession.options.allowDuplicatePerUser ? '중복 제출 허용' : '중복 제출 제한'}
+                    </span>
+                    <span className="px-2 py-1 rounded-full bg-gray-50 text-gray-700 border border-gray-200">
+                        {selectedSession.options.anonymous ? '익명 표시' : '이름 표시'}
+                    </span>
+                </div>
+
+                <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-bold text-gray-800">실시간 집계</h3>
+                    <span className="text-sm font-bold text-gray-500">응답 {responses.length}개</span>
+                </div>
+
+                {cloudEntries.length === 0 ? (
+                    <p className="text-sm text-gray-500 font-bold">아직 제출된 응답이 없습니다.</p>
+                ) : (
+                    <div className="min-h-[220px] rounded-xl bg-gradient-to-br from-amber-50 via-white to-blue-50 border border-amber-100 p-4 flex flex-wrap content-start gap-3">
                         {cloudEntries.map((item) => (
                             <span
                                 key={item.text}
@@ -304,9 +373,70 @@ const ManageThinkCloud: React.FC = () => {
                         ))}
                     </div>
                 )}
+
+                <div className="mt-6 text-right">
+                    <button
+                        onClick={() => void handleCloseSession()}
+                        disabled={!isActive || loadingAction}
+                        className="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2.5 px-5 rounded-lg disabled:opacity-50"
+                    >
+                        {loadingAction ? '처리 중...' : '이 세션 종료'}
+                    </button>
+                </div>
             </section>
+        );
+    };
+
+    return (
+        <div className="min-h-screen bg-gray-50 flex flex-col">
+            <main className="flex flex-col lg:flex-row flex-1 p-6 lg:p-8 gap-6 max-w-7xl mx-auto w-full">
+                <aside className="w-full lg:w-72 shrink-0">
+                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                        <div className="p-5 border-b border-gray-100">
+                            <h1 className="text-xl font-extrabold text-gray-800 flex items-center gap-2">
+                                <i className="fas fa-cloud text-blue-500"></i> 생각모아
+                            </h1>
+                            <button
+                                onClick={openCreateMode}
+                                className="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg"
+                            >
+                                + 새 주제
+                            </button>
+                        </div>
+
+                        <nav className="max-h-[60vh] overflow-y-auto">
+                            {sessions.length === 0 && (
+                                <p className="p-4 text-sm font-bold text-gray-500">저장된 주제가 없습니다.</p>
+                            )}
+                            {sessions.map((session) => {
+                                const isSelected = !isCreateMode && selectedSessionId === session.id;
+                                const isActive = session.id === activeSessionId && session.status === 'active';
+                                return (
+                                    <button
+                                        key={session.id}
+                                        onClick={() => selectSession(session.id)}
+                                        className={`w-full px-4 py-3 text-left border-l-4 transition ${isSelected ? 'bg-blue-50 text-blue-700 border-blue-600' : 'text-gray-700 border-transparent hover:bg-gray-50'}`}
+                                    >
+                                        <div className="flex items-center justify-between gap-2">
+                                            <p className="font-bold truncate">{session.title}</p>
+                                            {isActive && <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold">LIVE</span>}
+                                        </div>
+                                        <p className="text-xs text-gray-500 mt-1 truncate">{session.description || '설명 없음'}</p>
+                                    </button>
+                                );
+                            })}
+                        </nav>
+                    </div>
+                </aside>
+
+                <div className="flex-1">
+                    {isCreateMode ? renderCreatePanel() : renderDetailPanel()}
+                    {message && <p className="mt-3 text-sm font-bold text-blue-700">{message}</p>}
+                </div>
+            </main>
         </div>
     );
 };
 
 export default ManageThinkCloud;
+
