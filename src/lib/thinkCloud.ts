@@ -17,6 +17,8 @@ export interface ThinkCloudSession {
     description: string;
     targetGrade: string;
     targetClass: string;
+    targetGradeLabel?: string;
+    targetClassLabel?: string;
     status: ThinkCloudSessionStatus;
     options: ThinkCloudOptions;
     createdBy: string;
@@ -98,4 +100,20 @@ export const normalizeSchoolField = (value: unknown): string => {
     const parsed = Number(digits);
     if (!Number.isFinite(parsed) || parsed <= 0) return '';
     return String(parsed);
+};
+
+export const formatGradeLabel = (value: string, label?: string) => {
+    const safeLabel = String(label || '').trim();
+    if (safeLabel) return safeLabel;
+    const safe = String(value || '').trim();
+    if (!safe) return '';
+    return /^\d+$/.test(safe) ? `${safe}학년` : safe;
+};
+
+export const formatClassLabel = (value: string, label?: string) => {
+    const safeLabel = String(label || '').trim();
+    if (safeLabel) return safeLabel;
+    const safe = String(value || '').trim();
+    if (!safe) return '';
+    return /^\d+$/.test(safe) ? `${safe}반` : safe;
 };

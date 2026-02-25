@@ -5,7 +5,6 @@ import {
     doc,
     getDoc,
     onSnapshot,
-    orderBy,
     query,
     serverTimestamp,
     setDoc,
@@ -18,6 +17,8 @@ import {
     buildThinkCloudSessionCollectionPath,
     buildThinkCloudStateDocPath,
     createResponseDedupeId,
+    formatClassLabel,
+    formatGradeLabel,
     getInputValidationError,
     normalizeSchoolField,
     normalizeResponseText,
@@ -73,13 +74,17 @@ const ThinkCloud: React.FC = () => {
             sessionsRef,
             where('targetGrade', '==', studentGrade),
             where('targetClass', '==', studentClass),
-            orderBy('createdAt', 'desc'),
         );
         const unsubscribe = onSnapshot(q, (snap) => {
             const loaded = snap.docs.map((item) => ({
                 id: item.id,
                 ...(item.data() as ThinkCloudSession),
             }));
+            loaded.sort((a, b) => {
+                const ta = Number((a.createdAt as { seconds?: number } | undefined)?.seconds || 0);
+                const tb = Number((b.createdAt as { seconds?: number } | undefined)?.seconds || 0);
+                return tb - ta;
+            });
             setSessions(loaded);
             if (!selectedSessionId && loaded.length > 0) {
                 const defaultId = loaded.find((item) => item.id === activeSessionId)?.id || loaded[0].id;
@@ -260,7 +265,7 @@ const ThinkCloud: React.FC = () => {
 
                         <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold">
                                     <span className="px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-                                        대상 {selectedSession.targetGrade}학년 {selectedSession.targetClass}반
+                                        대상 {formatGradeLabel(selectedSession.targetGrade, selectedSession.targetGradeLabel)} {formatClassLabel(selectedSession.targetClass, selectedSession.targetClassLabel)}
                                     </span>
                                     <span className="px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
                                         {options.inputMode === 'word' ? '단어 1개 입력' : '짧은 문장 입력'}

@@ -5,8 +5,6 @@ import {
     doc,
     getDoc,
     onSnapshot,
-    orderBy,
-    query,
     serverTimestamp,
     setDoc,
     updateDoc,
@@ -18,6 +16,8 @@ import {
     buildThinkCloudSessionCollectionPath,
     buildThinkCloudStateDocPath,
     DEFAULT_THINK_CLOUD_OPTIONS,
+    formatClassLabel,
+    formatGradeLabel,
     type ThinkCloudOptions,
     type ThinkCloudResponse,
     type ThinkCloudSession,
@@ -74,12 +74,16 @@ const ManageThinkCloud: React.FC = () => {
 
     useEffect(() => {
         const sessionsRef = collection(db, buildThinkCloudSessionCollectionPath(config));
-        const q = query(sessionsRef, orderBy('createdAt', 'desc'));
-        const unsubscribe = onSnapshot(q, (snap) => {
+        const unsubscribe = onSnapshot(sessionsRef, (snap) => {
             const loaded = snap.docs.map((item) => ({
                 id: item.id,
                 ...(item.data() as ThinkCloudSession),
             }));
+            loaded.sort((a, b) => {
+                const ta = Number((a.createdAt as { seconds?: number } | undefined)?.seconds || 0);
+                const tb = Number((b.createdAt as { seconds?: number } | undefined)?.seconds || 0);
+                return tb - ta;
+            });
             setSessions(loaded);
             if (!selectedSessionId && loaded.length > 0) {
                 setSelectedSessionId(loaded[0].id);
@@ -235,6 +239,8 @@ const ManageThinkCloud: React.FC = () => {
                 description: description.trim(),
                 targetGrade,
                 targetClass,
+                targetGradeLabel: gradeOptions.find((item) => item.value === targetGrade)?.label || '',
+                targetClassLabel: classOptions.find((item) => item.value === targetClass)?.label || '',
                 status: 'active',
                 options,
                 createdBy: currentUser.uid,
@@ -438,7 +444,7 @@ const ManageThinkCloud: React.FC = () => {
 
                 <div className="flex flex-wrap gap-2 mb-4 text-xs font-bold">
                     <span className="px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-                        대상 {selectedSession.targetGrade}학년 {selectedSession.targetClass}반
+                        대상 {formatGradeLabel(selectedSession.targetGrade, selectedSession.targetGradeLabel)} {formatClassLabel(selectedSession.targetClass, selectedSession.targetClassLabel)}
                     </span>
                     <span className="px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
                         {selectedSession.options.inputMode === 'word' ? '단어 1개 입력' : '짧은 문장 입력'}
@@ -524,7 +530,7 @@ const ManageThinkCloud: React.FC = () => {
                                             {isActive && <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold">LIVE</span>}
                                         </div>
                                         <p className="text-xs text-gray-500 mt-1 truncate">
-                                            {session.targetGrade}학년 {session.targetClass}반 · {session.description || '설명 없음'}
+                                            {formatGradeLabel(session.targetGrade, session.targetGradeLabel)} {formatClassLabel(session.targetClass, session.targetClassLabel)} · {session.description || '설명 없음'}
                                         </p>
                                     </button>
                                 );
