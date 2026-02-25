@@ -720,12 +720,10 @@ const MyPage: React.FC = () => {
 
         const parts: string[] = [];
         if (selectedInsight.missingExamCount > 0) {
-            const examPerItem = Math.ceil((selectedInsight.examNeed / selectedInsight.missingExamCount) * 10) / 10;
-            parts.push(`남은 정기시험 ${selectedInsight.missingExamCount}개에서 평균 ${examPerItem}점 이상 획득하도록 하세요.`);
+            parts.push(`남은 정기시험 ${selectedInsight.missingExamCount}개에서 총 ${selectedInsight.examNeed}점 이상 획득하도록 하세요.`);
         }
         if (selectedInsight.missingPerformanceCount > 0) {
-            const perfPerItem = Math.ceil((selectedInsight.performanceNeed / selectedInsight.missingPerformanceCount) * 10) / 10;
-            parts.push(`남은 수행평가 ${selectedInsight.missingPerformanceCount}개에서 평균 ${perfPerItem}점 이상 획득하도록 하세요.`);
+            parts.push(`남은 수행평가 ${selectedInsight.missingPerformanceCount}개에서 총 ${selectedInsight.performanceNeed}점 이상 획득하도록 하세요.`);
         }
 
         if (!parts.length) {
