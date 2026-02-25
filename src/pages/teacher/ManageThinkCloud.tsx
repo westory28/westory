@@ -7,9 +7,11 @@ import {
     getDoc,
     getDocs,
     onSnapshot,
+    query,
     serverTimestamp,
     setDoc,
     updateDoc,
+    where,
     writeBatch,
 } from 'firebase/firestore';
 import { useAuth } from '../../contexts/AuthContext';
@@ -29,6 +31,11 @@ import {
 
 type SessionWithId = ThinkCloudSession & { id: string };
 type SchoolOption = { value: string; label: string };
+type StudentRosterItem = {
+    uid: string;
+    name: string;
+    number: string;
+};
 
 const defaultGradeOptions: SchoolOption[] = [
     { value: '1', label: '1학년' },
@@ -51,6 +58,7 @@ const ManageThinkCloud: React.FC = () => {
     const [message, setMessage] = useState('');
     const [isCreateMode, setIsCreateMode] = useState(false);
     const [cloudModalOpen, setCloudModalOpen] = useState(false);
+    const [classStudents, setClassStudents] = useState<StudentRosterItem[]>([]);
     const [gradeOptions, setGradeOptions] = useState<SchoolOption[]>(defaultGradeOptions);
     const [classOptions, setClassOptions] = useState<SchoolOption[]>(defaultClassOptions);
     const [targetGrade, setTargetGrade] = useState(defaultGradeOptions[0].value);
@@ -121,6 +129,51 @@ const ManageThinkCloud: React.FC = () => {
         return () => unsubscribe();
     }, [config, selectedSessionId]);
 
+    useEffect(() => {
+        if (!selectedSession || !selectedSession.targetGrade || !selectedSession.targetClass) {
+            setClassStudents([]);
+            return;
+        }
+
+        const q = query(
+            collection(db, 'users'),
+            where('grade', '==', selectedSession.targetGrade),
+            where('class', '==', selectedSession.targetClass),
+        );
+        const unsubscribe = onSnapshot(q, (snap) => {
+            const loaded: StudentRosterItem[] = [];
+            snap.forEach((item) => {
+                const data = item.data() as {
+                    role?: string;
+                    name?: string;
+                    number?: string;
+                    uid?: string;
+                };
+                if (data.role === 'teacher') return;
+                const uid = String(data.uid || item.id).trim();
+                if (!uid) return;
+                loaded.push({
+                    uid,
+                    name: String(data.name || '').trim() || '이름없음',
+                    number: String(data.number || '').trim(),
+                });
+            });
+            loaded.sort((a, b) => {
+                const an = Number.parseInt(a.number, 10);
+                const bn = Number.parseInt(b.number, 10);
+                const aValid = Number.isFinite(an) && an > 0;
+                const bValid = Number.isFinite(bn) && bn > 0;
+                if (aValid && bValid) return an - bn;
+                if (aValid) return -1;
+                if (bValid) return 1;
+                return a.name.localeCompare(b.name);
+            });
+            setClassStudents(loaded);
+        });
+
+        return () => unsubscribe();
+    }, [selectedSession]);
+
     const cloudEntries = useMemo(() => {
         const buckets = new Map<string, { count: number; submitters: Set<string> }>();
         for (const item of responses) {
@@ -141,6 +194,15 @@ const ManageThinkCloud: React.FC = () => {
             .sort((a, b) => b.count - a.count || a.text.localeCompare(b.text))
             .slice(0, 50);
     }, [responses]);
+
+    const pendingStudents = useMemo(() => {
+        const submitted = new Set(
+            responses
+                .map((item) => String(item.uid || '').trim())
+                .filter((uid) => uid.length > 0),
+        );
+        return classStudents.filter((student) => !submitted.has(student.uid));
+    }, [classStudents, responses]);
 
     const resetCreateForm = () => {
         setTitle('');
@@ -601,6 +663,33 @@ const ManageThinkCloud: React.FC = () => {
                     >
                         {loadingAction ? '처리 중...' : '주제 삭제'}
                     </button>
+                </div>
+
+                <div className="mt-5 border-t border-gray-100 pt-4">
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                        <h4 className="text-sm font-extrabold text-gray-800">미제출 학생</h4>
+                        <span className="text-xs font-bold text-gray-500">
+                            {pendingStudents.length}명
+                        </span>
+                    </div>
+                    {pendingStudents.length === 0 ? (
+                        <p className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 inline-block">
+                            현재 학급 학생이 모두 제출했습니다.
+                        </p>
+                    ) : (
+                        <div className="flex flex-wrap gap-2">
+                            {pendingStudents.map((student) => (
+                                <span
+                                    key={student.uid}
+                                    className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 border border-rose-200 text-rose-700 px-3 py-1 text-xs font-bold"
+                                    title={`${student.name}${student.number ? ` (${student.number}번)` : ''}`}
+                                >
+                                    <i className="fas fa-user-clock text-[10px]"></i>
+                                    {student.number ? `${student.number}번 ` : ''}{student.name}
+                                </span>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </section>
         );
