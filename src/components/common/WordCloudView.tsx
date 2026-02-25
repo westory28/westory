@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 
 interface WordCloudEntry {
     text: string;
@@ -77,6 +77,10 @@ const buildTooltip = (entry: WordCloudEntry, showSubmitters: boolean) => {
 };
 
 const WordCloudView: React.FC<WordCloudViewProps> = ({ entries, className = '', showSubmitters = false }) => {
+    const containerRef = useRef<HTMLDivElement | null>(null);
+    const [hoveredText, setHoveredText] = useState<string>('');
+    const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
     const positioned = useMemo(() => {
         if (entries.length === 0) return [] as PositionedWord[];
 
@@ -134,9 +138,30 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({ entries, className = '', 
         return placed;
     }, [entries, showSubmitters]);
 
+    const hoveredWord = hoveredText
+        ? positioned.find((item) => item.text === hoveredText) || null
+        : null;
+    const containerWidth = containerRef.current?.clientWidth || 0;
+    const containerHeight = containerRef.current?.clientHeight || 0;
+    const tooltipLeft = Math.max(8, Math.min(Math.max(8, containerWidth - 336), tooltipPos.x + 16));
+    const tooltipTop = Math.max(8, Math.min(Math.max(8, containerHeight - 220), tooltipPos.y + 16));
+
+    const updateTooltipPosition = (clientX: number, clientY: number) => {
+        const container = containerRef.current;
+        if (!container) return;
+        const rect = container.getBoundingClientRect();
+        setTooltipPos({
+            x: Math.max(8, Math.min(rect.width - 8, clientX - rect.left)),
+            y: Math.max(8, Math.min(rect.height - 8, clientY - rect.top)),
+        });
+    };
+
     return (
         <div className={`w-full flex justify-center ${className}`}>
-            <div className="relative w-full max-w-[1600px] aspect-video rounded-2xl bg-gradient-to-br from-blue-50 via-white to-cyan-50 border border-blue-100 overflow-hidden">
+            <div
+                ref={containerRef}
+                className="relative w-full max-w-[1600px] aspect-video rounded-2xl bg-gradient-to-br from-blue-50 via-white to-cyan-50 border border-blue-100 overflow-hidden"
+            >
                 <svg
                     className="absolute inset-0 w-full h-full"
                     viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
@@ -157,12 +182,58 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({ entries, className = '', 
                             dominantBaseline="central"
                             transform={`rotate(${item.rotate} ${item.x} ${item.y})`}
                             style={{ userSelect: 'none' }}
+                            onMouseEnter={(event) => {
+                                setHoveredText(item.text);
+                                updateTooltipPosition(event.clientX, event.clientY);
+                            }}
+                            onMouseMove={(event) => {
+                                updateTooltipPosition(event.clientX, event.clientY);
+                            }}
+                            onMouseLeave={() => {
+                                setHoveredText('');
+                            }}
                         >
                             <title>{item.tooltip}</title>
+                            {hoveredText === item.text ? (
+                                <tspan
+                                    fill="none"
+                                    stroke="#111827"
+                                    strokeWidth={Math.max(1.3, item.fontSize * 0.065)}
+                                    paintOrder="stroke"
+                                >
+                                    {item.text}
+                                </tspan>
+                            ) : null}
                             {item.text}
                         </text>
                     ))}
                 </svg>
+
+                {showSubmitters && hoveredWord && (
+                    <div
+                        className="absolute z-20 min-w-[190px] max-w-[320px] rounded-xl border border-gray-300 bg-white/95 backdrop-blur-sm shadow-xl p-3 pointer-events-none"
+                        style={{
+                            left: `${tooltipLeft}px`,
+                            top: `${tooltipTop}px`,
+                            transform: 'translate(0, 0)',
+                        }}
+                    >
+                        <div className="text-xs font-extrabold text-gray-700 mb-1">
+                            {hoveredWord.text} ({hoveredWord.count}회)
+                        </div>
+                        <div className="text-[11px] font-bold text-gray-500 mb-1">제출자</div>
+                        <div className="flex flex-wrap gap-1.5">
+                            {(hoveredWord.submitters || []).map((name) => (
+                                <span
+                                    key={`${hoveredWord.text}-${name}`}
+                                    className="px-2 py-0.5 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-[11px] font-bold"
+                                >
+                                    {name}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
