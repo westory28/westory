@@ -1024,7 +1024,7 @@ const MyPage: React.FC = () => {
 
                                                 <div className="rounded-2xl border border-gray-200 p-4 bg-gray-50">
                                                     <div className="mb-2 flex items-center justify-between gap-3">
-                                                        <div className="text-sm font-bold text-gray-700">목표 달성까지 현재 점수 차이 그래프</div>
+                                                        <div className="text-sm font-bold text-gray-700">목표 달성 현황</div>
                                                         <div
                                                             className={`self-start rounded-xl px-4 py-2 text-sm font-extrabold shadow whitespace-nowrap ${
                                                                 selectedInsight.gap <= 0
