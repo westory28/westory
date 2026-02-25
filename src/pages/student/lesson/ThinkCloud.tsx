@@ -12,6 +12,7 @@ import {
 } from 'firebase/firestore';
 import { useAuth } from '../../../contexts/AuthContext';
 import { db } from '../../../lib/firebase';
+import WordCloudView from '../../../components/common/WordCloudView';
 import {
     buildThinkCloudResponsesCollectionPath,
     buildThinkCloudSessionCollectionPath,
@@ -197,14 +198,6 @@ const ThinkCloud: React.FC = () => {
         }
     };
 
-    const minCount = cloudEntries.length > 0 ? Math.min(...cloudEntries.map((item) => item.count)) : 1;
-    const maxCount = cloudEntries.length > 0 ? Math.max(...cloudEntries.map((item) => item.count)) : 1;
-    const getFontSize = (count: number) => {
-        if (maxCount === minCount) return 24;
-        const ratio = (count - minCount) / (maxCount - minCount);
-        return Math.round(15 + ratio * 28);
-    };
-
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col">
             <main className="flex flex-col lg:flex-row flex-1 p-6 lg:p-8 gap-6 max-w-7xl mx-auto w-full">
@@ -319,18 +312,7 @@ const ThinkCloud: React.FC = () => {
                                 {cloudEntries.length === 0 ? (
                                     <p className="text-sm text-gray-500 font-bold">아직 제출된 응답이 없습니다.</p>
                                 ) : (
-                                    <div className="min-h-[220px] rounded-xl bg-gradient-to-br from-blue-50 via-white to-cyan-50 border border-blue-100 p-4 flex flex-wrap content-start gap-3">
-                                        {cloudEntries.map((item) => (
-                                            <span
-                                                key={item.text}
-                                                className="font-black text-blue-700 leading-none"
-                                                style={{ fontSize: `${getFontSize(item.count)}px` }}
-                                                title={`${item.count}회`}
-                                            >
-                                                {item.text}
-                                            </span>
-                                        ))}
-                                    </div>
+                                    <WordCloudView entries={cloudEntries} />
                                 )}
                             </section>
                         </>

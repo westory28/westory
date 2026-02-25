@@ -14,6 +14,7 @@ import {
 } from 'firebase/firestore';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../lib/firebase';
+import WordCloudView from '../../components/common/WordCloudView';
 import {
     buildThinkCloudResponsesCollectionPath,
     buildThinkCloudSessionCollectionPath,
@@ -131,14 +132,6 @@ const ManageThinkCloud: React.FC = () => {
             .sort((a, b) => b.count - a.count || a.text.localeCompare(b.text))
             .slice(0, 50);
     }, [responses]);
-
-    const minCount = cloudEntries.length > 0 ? Math.min(...cloudEntries.map((item) => item.count)) : 1;
-    const maxCount = cloudEntries.length > 0 ? Math.max(...cloudEntries.map((item) => item.count)) : 1;
-    const getFontSize = (count: number) => {
-        if (maxCount === minCount) return 22;
-        const ratio = (count - minCount) / (maxCount - minCount);
-        return Math.round(14 + ratio * 28);
-    };
 
     const resetCreateForm = () => {
         setTitle('');
@@ -560,18 +553,7 @@ const ManageThinkCloud: React.FC = () => {
                 {cloudEntries.length === 0 ? (
                     <p className="text-sm text-gray-500 font-bold">아직 제출된 응답이 없습니다.</p>
                 ) : (
-                    <div className="min-h-[220px] rounded-xl bg-gradient-to-br from-amber-50 via-white to-blue-50 border border-amber-100 p-4 flex flex-wrap content-start gap-3">
-                        {cloudEntries.map((item) => (
-                            <span
-                                key={item.text}
-                                className="font-black text-amber-700 leading-none"
-                                style={{ fontSize: `${getFontSize(item.count)}px` }}
-                                title={`${item.count}회`}
-                            >
-                                {item.text}
-                            </span>
-                        ))}
-                    </div>
+                    <WordCloudView entries={cloudEntries} />
                 )}
 
                 <div className="mt-6 flex flex-wrap justify-end gap-2">
