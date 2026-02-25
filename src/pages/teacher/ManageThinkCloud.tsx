@@ -50,6 +50,7 @@ const ManageThinkCloud: React.FC = () => {
     const [loadingAction, setLoadingAction] = useState(false);
     const [message, setMessage] = useState('');
     const [isCreateMode, setIsCreateMode] = useState(false);
+    const [cloudModalOpen, setCloudModalOpen] = useState(false);
     const [gradeOptions, setGradeOptions] = useState<SchoolOption[]>(defaultGradeOptions);
     const [classOptions, setClassOptions] = useState<SchoolOption[]>(defaultClassOptions);
     const [targetGrade, setTargetGrade] = useState(defaultGradeOptions[0].value);
@@ -553,7 +554,14 @@ const ManageThinkCloud: React.FC = () => {
                 {cloudEntries.length === 0 ? (
                     <p className="text-sm text-gray-500 font-bold">아직 제출된 응답이 없습니다.</p>
                 ) : (
-                    <WordCloudView entries={cloudEntries} />
+                    <button
+                        type="button"
+                        onClick={() => setCloudModalOpen(true)}
+                        className="w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-2xl"
+                        title="클릭해서 크게 보기"
+                    >
+                        <WordCloudView entries={cloudEntries} />
+                    </button>
                 )}
 
                 <div className="mt-6 flex flex-wrap justify-end gap-2">
@@ -639,6 +647,38 @@ const ManageThinkCloud: React.FC = () => {
                     {message && <p className="mt-3 text-sm font-bold text-blue-700">{message}</p>}
                 </div>
             </main>
+
+            {cloudModalOpen && (
+                <div
+                    className="fixed inset-0 z-[70] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
+                    onClick={() => setCloudModalOpen(false)}
+                >
+                    <div
+                        className="w-full max-w-[96vw] h-[92vh] bg-white rounded-2xl shadow-2xl border border-gray-200 p-4 md:p-6 flex flex-col"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-lg md:text-xl font-extrabold text-gray-900">
+                                생각모아 워드클라우드 대형 보기
+                            </h3>
+                            <button
+                                type="button"
+                                onClick={() => setCloudModalOpen(false)}
+                                className="w-10 h-10 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                                aria-label="닫기"
+                            >
+                                <i className="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div className="text-sm font-bold text-gray-600 mb-3">
+                            TV 출력용 모드입니다. 응답 {responses.length}개
+                        </div>
+                        <div className="flex-1 flex items-center justify-center">
+                            <WordCloudView entries={cloudEntries} className="h-full w-full" />
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
