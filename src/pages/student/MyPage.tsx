@@ -200,16 +200,18 @@ const getTypeLabel = (type: 'exam' | 'performance' | 'other') => {
 const isThreeLevelSubject = (subject: string) => /(음악|미술|체육|music|art|pe|physical)/i.test(String(subject || ''));
 
 const getGradeBand = (score: number, subject: string): 'A' | 'B' | 'C' | 'D' | 'E' => {
+    const roundedScore = Math.round(score);
+
     if (isThreeLevelSubject(subject)) {
-        if (score >= 80) return 'A';
-        if (score >= 60) return 'B';
+        if (roundedScore >= 80) return 'A';
+        if (roundedScore >= 60) return 'B';
         return 'C';
     }
 
-    if (score >= 90) return 'A';
-    if (score >= 80) return 'B';
-    if (score >= 70) return 'C';
-    if (score >= 60) return 'D';
+    if (roundedScore >= 90) return 'A';
+    if (roundedScore >= 80) return 'B';
+    if (roundedScore >= 70) return 'C';
+    if (roundedScore >= 60) return 'D';
     return 'E';
 };
 
@@ -900,6 +902,13 @@ const MyPage: React.FC = () => {
                                             <span className="text-xs text-gray-500">마우스를 올리면 영역별 점수가 표시됩니다.</span>
                                             <div className="flex flex-col items-end gap-1">
                                                 <div className="overflow-hidden rounded-lg shadow-sm border border-gray-200">
+                                                    <div className="flex text-[10px] font-bold text-gray-600 bg-gray-50 border-b border-gray-200 leading-none">
+                                                        <span className="px-3 py-1.5">100~90</span>
+                                                        <span className="px-3 py-1.5">89~80</span>
+                                                        <span className="px-3 py-1.5">79~70</span>
+                                                        <span className="px-3 py-1.5">69~60</span>
+                                                        <span className="px-3 py-1.5">59~0</span>
+                                                    </div>
                                                     <div className="flex text-[12px] font-black text-white leading-none">
                                                         <span className="px-6 py-2 bg-red-500">A</span>
                                                         <span className="px-6 py-2 bg-orange-500">B</span>
