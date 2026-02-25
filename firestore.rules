@@ -12,6 +12,26 @@ service cloud.firestore {
       return isSignedIn() && request.auth.token.email == "westoria28@gmail.com";
     }
 
+    function hasUserProfile() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function userGrade() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade;
+    }
+
+    function userClass() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.class;
+    }
+
+    function canAccessThinkCloudTarget(targetGrade, targetClass) {
+      return isTeacher()
+        || (isSignedIn()
+          && hasUserProfile()
+          && targetGrade == userGrade()
+          && targetClass == userClass());
+    }
+
     // 사용자 기본 문서 권한
     match /users/{userId} {
       // 본인/교사만 조회, 목록은 교사만
@@ -107,12 +127,21 @@ service cloud.firestore {
     }
 
     match /think_cloud_sessions/{sessionId} {
-      allow read: if isSignedIn();
+      allow read: if canAccessThinkCloudTarget(resource.data.targetGrade, resource.data.targetClass);
       allow create, update, delete: if isTeacher();
 
       match /responses/{responseId} {
-        allow read: if isSignedIn();
-        allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+        allow read: if canAccessThinkCloudTarget(
+          get(/databases/$(database)/documents/think_cloud_sessions/$(sessionId)).data.targetGrade,
+          get(/databases/$(database)/documents/think_cloud_sessions/$(sessionId)).data.targetClass
+        );
+        allow create: if isSignedIn()
+          && request.resource.data.uid == request.auth.uid
+          && canAccessThinkCloudTarget(
+            get(/databases/$(database)/documents/think_cloud_sessions/$(sessionId)).data.targetGrade,
+            get(/databases/$(database)/documents/think_cloud_sessions/$(sessionId)).data.targetClass
+          )
+          && get(/databases/$(database)/documents/think_cloud_sessions/$(sessionId)).data.status == 'active';
         allow update, delete: if isTeacher();
       }
     }
@@ -179,12 +208,21 @@ service cloud.firestore {
       }
 
       match /think_cloud_sessions/{sessionId} {
-        allow read: if isSignedIn();
+        allow read: if canAccessThinkCloudTarget(resource.data.targetGrade, resource.data.targetClass);
         allow create, update, delete: if isTeacher();
 
         match /responses/{responseId} {
-          allow read: if isSignedIn();
-          allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+          allow read: if canAccessThinkCloudTarget(
+            get(/databases/$(database)/documents/years/$(year)/semesters/$(semester)/think_cloud_sessions/$(sessionId)).data.targetGrade,
+            get(/databases/$(database)/documents/years/$(year)/semesters/$(semester)/think_cloud_sessions/$(sessionId)).data.targetClass
+          );
+          allow create: if isSignedIn()
+            && request.resource.data.uid == request.auth.uid
+            && canAccessThinkCloudTarget(
+              get(/databases/$(database)/documents/years/$(year)/semesters/$(semester)/think_cloud_sessions/$(sessionId)).data.targetGrade,
+              get(/databases/$(database)/documents/years/$(year)/semesters/$(semester)/think_cloud_sessions/$(sessionId)).data.targetClass
+            )
+            && get(/databases/$(database)/documents/years/$(year)/semesters/$(semester)/think_cloud_sessions/$(sessionId)).data.status == 'active';
           allow update, delete: if isTeacher();
         }
       }

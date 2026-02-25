@@ -15,6 +15,8 @@ export interface ThinkCloudOptions {
 export interface ThinkCloudSession {
     title: string;
     description: string;
+    targetGrade: string;
+    targetClass: string;
     status: ThinkCloudSessionStatus;
     options: ThinkCloudOptions;
     createdBy: string;
@@ -88,3 +90,12 @@ export const createResponseDedupeId = (uid: string, normalizedText: string) => {
     return `${uid}_${hex}`;
 };
 
+export const normalizeSchoolField = (value: unknown): string => {
+    const raw = String(value ?? '').trim();
+    if (!raw) return '';
+    const digits = raw.match(/\d+/)?.[0] || '';
+    if (!digits) return raw;
+    const parsed = Number(digits);
+    if (!Number.isFinite(parsed) || parsed <= 0) return '';
+    return String(parsed);
+};

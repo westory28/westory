@@ -24,6 +24,18 @@ import {
 } from '../../lib/thinkCloud';
 
 type SessionWithId = ThinkCloudSession & { id: string };
+type SchoolOption = { value: string; label: string };
+
+const defaultGradeOptions: SchoolOption[] = [
+    { value: '1', label: '1학년' },
+    { value: '2', label: '2학년' },
+    { value: '3', label: '3학년' },
+];
+
+const defaultClassOptions: SchoolOption[] = Array.from({ length: 12 }, (_, i) => ({
+    value: String(i + 1),
+    label: `${i + 1}반`,
+}));
 
 const ManageThinkCloud: React.FC = () => {
     const { config, currentUser, userData } = useAuth();
@@ -34,6 +46,10 @@ const ManageThinkCloud: React.FC = () => {
     const [loadingAction, setLoadingAction] = useState(false);
     const [message, setMessage] = useState('');
     const [isCreateMode, setIsCreateMode] = useState(false);
+    const [gradeOptions, setGradeOptions] = useState<SchoolOption[]>(defaultGradeOptions);
+    const [classOptions, setClassOptions] = useState<SchoolOption[]>(defaultClassOptions);
+    const [targetGrade, setTargetGrade] = useState(defaultGradeOptions[0].value);
+    const [targetClass, setTargetClass] = useState(defaultClassOptions[0].value);
 
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
@@ -121,7 +137,58 @@ const ManageThinkCloud: React.FC = () => {
         setTitle('');
         setDescription('');
         setOptions(DEFAULT_THINK_CLOUD_OPTIONS);
+        setTargetGrade(gradeOptions[0]?.value || '1');
+        setTargetClass(classOptions[0]?.value || '1');
     };
+
+    useEffect(() => {
+        const loadSchoolConfig = async () => {
+            try {
+                const schoolSnap = await getDoc(doc(db, 'site_settings', 'school_config'));
+                if (!schoolSnap.exists()) return;
+                const data = schoolSnap.data() as {
+                    grades?: Array<{ value?: string; label?: string }>;
+                    classes?: Array<{ value?: string; label?: string }>;
+                };
+
+                if (Array.isArray(data.grades) && data.grades.length > 0) {
+                    const nextGrades = data.grades
+                        .map((item) => ({
+                            value: String(item.value || '').trim(),
+                            label: String(item.label || '').trim(),
+                        }))
+                        .filter((item) => item.value && item.label);
+                    if (nextGrades.length > 0) setGradeOptions(nextGrades);
+                }
+
+                if (Array.isArray(data.classes) && data.classes.length > 0) {
+                    const nextClasses = data.classes
+                        .map((item) => ({
+                            value: String(item.value || '').trim(),
+                            label: String(item.label || '').trim(),
+                        }))
+                        .filter((item) => item.value && item.label);
+                    if (nextClasses.length > 0) setClassOptions(nextClasses);
+                }
+            } catch (error) {
+                console.warn('Failed to load school options for think cloud:', error);
+            }
+        };
+
+        void loadSchoolConfig();
+    }, []);
+
+    useEffect(() => {
+        if (!gradeOptions.some((item) => item.value === targetGrade)) {
+            setTargetGrade(gradeOptions[0]?.value || '1');
+        }
+    }, [gradeOptions, targetGrade]);
+
+    useEffect(() => {
+        if (!classOptions.some((item) => item.value === targetClass)) {
+            setTargetClass(classOptions[0]?.value || '1');
+        }
+    }, [classOptions, targetClass]);
 
     const selectSession = (id: string) => {
         setIsCreateMode(false);
@@ -140,6 +207,10 @@ const ManageThinkCloud: React.FC = () => {
         const safeTitle = title.trim();
         if (!safeTitle) {
             setMessage('주제를 입력해 주세요.');
+            return;
+        }
+        if (!targetGrade || !targetClass) {
+            setMessage('학년과 반을 선택해 주세요.');
             return;
         }
         if (!currentUser) return;
@@ -162,6 +233,8 @@ const ManageThinkCloud: React.FC = () => {
             const payload: ThinkCloudSession = {
                 title: safeTitle,
                 description: description.trim(),
+                targetGrade,
+                targetClass,
                 status: 'active',
                 options,
                 createdBy: currentUser.uid,
@@ -219,7 +292,7 @@ const ManageThinkCloud: React.FC = () => {
                 <p className="text-sm text-gray-500 mt-1">주제와 옵션을 설정한 뒤 세션을 시작하세요.</p>
             </div>
 
-            <div className="space-y-6">
+                <div className="space-y-6">
                 <div>
                     <label className="block text-sm font-bold text-gray-700 mb-2">주제</label>
                     <input
@@ -242,6 +315,32 @@ const ManageThinkCloud: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                        <span className="font-bold text-gray-700">학년</span>
+                        <select
+                            value={targetGrade}
+                            onChange={(e) => setTargetGrade(e.target.value)}
+                            className="border border-gray-300 rounded-lg px-3 py-1.5 font-bold bg-white"
+                        >
+                            {gradeOptions.map((grade) => (
+                                <option key={grade.value} value={grade.value}>{grade.label}</option>
+                            ))}
+                        </select>
+                    </label>
+
+                    <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                        <span className="font-bold text-gray-700">반</span>
+                        <select
+                            value={targetClass}
+                            onChange={(e) => setTargetClass(e.target.value)}
+                            className="border border-gray-300 rounded-lg px-3 py-1.5 font-bold bg-white"
+                        >
+                            {classOptions.map((cls) => (
+                                <option key={cls.value} value={cls.value}>{cls.label}</option>
+                            ))}
+                        </select>
+                    </label>
+
                     <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
                         <span className="font-bold text-gray-700">중복 제출 허용</span>
                         <input
@@ -338,6 +437,9 @@ const ManageThinkCloud: React.FC = () => {
                 </div>
 
                 <div className="flex flex-wrap gap-2 mb-4 text-xs font-bold">
+                    <span className="px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                        대상 {selectedSession.targetGrade}학년 {selectedSession.targetClass}반
+                    </span>
                     <span className="px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
                         {selectedSession.options.inputMode === 'word' ? '단어 1개 입력' : '짧은 문장 입력'}
                     </span>
@@ -421,7 +523,9 @@ const ManageThinkCloud: React.FC = () => {
                                             <p className="font-bold truncate">{session.title}</p>
                                             {isActive && <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold">LIVE</span>}
                                         </div>
-                                        <p className="text-xs text-gray-500 mt-1 truncate">{session.description || '설명 없음'}</p>
+                                        <p className="text-xs text-gray-500 mt-1 truncate">
+                                            {session.targetGrade}학년 {session.targetClass}반 · {session.description || '설명 없음'}
+                                        </p>
                                     </button>
                                 );
                             })}
@@ -439,4 +543,3 @@ const ManageThinkCloud: React.FC = () => {
 };
 
 export default ManageThinkCloud;
-

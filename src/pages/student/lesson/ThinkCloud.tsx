@@ -9,6 +9,7 @@ import {
     query,
     serverTimestamp,
     setDoc,
+    where,
 } from 'firebase/firestore';
 import { useAuth } from '../../../contexts/AuthContext';
 import { db } from '../../../lib/firebase';
@@ -18,6 +19,7 @@ import {
     buildThinkCloudStateDocPath,
     createResponseDedupeId,
     getInputValidationError,
+    normalizeSchoolField,
     normalizeResponseText,
     type ThinkCloudOptions,
     type ThinkCloudResponse,
@@ -46,6 +48,8 @@ const ThinkCloud: React.FC = () => {
 
     const isActiveSession = !!selectedSession && selectedSession.id === activeSessionId && selectedSession.status === 'active';
     const options: ThinkCloudOptions = selectedSession?.options || DEFAULT_THINK_CLOUD_OPTIONS;
+    const studentGrade = normalizeSchoolField(userData?.grade);
+    const studentClass = normalizeSchoolField(userData?.class);
 
     useEffect(() => {
         const stateRef = doc(db, buildThinkCloudStateDocPath(config));
@@ -60,8 +64,17 @@ const ThinkCloud: React.FC = () => {
     }, [config]);
 
     useEffect(() => {
+        if (!studentGrade || !studentClass) {
+            setSessions([]);
+            return;
+        }
         const sessionsRef = collection(db, buildThinkCloudSessionCollectionPath(config));
-        const q = query(sessionsRef, orderBy('createdAt', 'desc'));
+        const q = query(
+            sessionsRef,
+            where('targetGrade', '==', studentGrade),
+            where('targetClass', '==', studentClass),
+            orderBy('createdAt', 'desc'),
+        );
         const unsubscribe = onSnapshot(q, (snap) => {
             const loaded = snap.docs.map((item) => ({
                 id: item.id,
@@ -77,7 +90,7 @@ const ThinkCloud: React.FC = () => {
             }
         });
         return () => unsubscribe();
-    }, [activeSessionId, config, selectedSessionId]);
+    }, [activeSessionId, config, selectedSessionId, studentClass, studentGrade]);
 
     useEffect(() => {
         if (!selectedSessionId) {
@@ -245,7 +258,10 @@ const ThinkCloud: React.FC = () => {
                                     </span>
                                 </div>
 
-                                <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold">
+                        <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold">
+                                    <span className="px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                        대상 {selectedSession.targetGrade}학년 {selectedSession.targetClass}반
+                                    </span>
                                     <span className="px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
                                         {options.inputMode === 'word' ? '단어 1개 입력' : '짧은 문장 입력'}
                                     </span>
@@ -320,4 +336,3 @@ const ThinkCloud: React.FC = () => {
 };
 
 export default ThinkCloud;
-
