@@ -124,9 +124,9 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
     if (!unitId) {
         return (
             <div className="flex flex-col items-center justify-center h-full text-center py-32 animate-fadeIn">
-                <div className="text-6xl mb-4">👈</div>
+                <div className="text-6xl mb-4">📋</div>
                 <h2 className="text-xl font-bold text-gray-700">학습할 단원을 선택하세요</h2>
-                <p className="text-gray-500 mt-2">오른쪽 목록에서 수업 자료를 클릭하면 내용이 표시됩니다.</p>
+                <p className="text-gray-500 mt-2">수업 목차의 단원에서 수업 자료를 클릭하면 내용이 표시됩니다.</p>
             </div>
         );
     }
