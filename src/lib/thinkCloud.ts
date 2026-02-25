@@ -2,7 +2,7 @@ import type { SystemConfig } from '../types';
 import { getSemesterCollectionPath, getSemesterDocPath } from './semesterScope';
 
 export type ThinkCloudInputMode = 'word' | 'sentence';
-export type ThinkCloudSessionStatus = 'draft' | 'active' | 'closed';
+export type ThinkCloudSessionStatus = 'draft' | 'active' | 'paused' | 'closed';
 
 export interface ThinkCloudOptions {
     allowDuplicatePerUser: boolean;

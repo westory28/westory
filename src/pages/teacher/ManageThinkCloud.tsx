@@ -2,12 +2,15 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
     addDoc,
     collection,
+    deleteDoc,
     doc,
     getDoc,
+    getDocs,
     onSnapshot,
     serverTimestamp,
     setDoc,
     updateDoc,
+    writeBatch,
 } from 'firebase/firestore';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../lib/firebase';
@@ -291,6 +294,94 @@ const ManageThinkCloud: React.FC = () => {
         }
     };
 
+    const handlePauseSession = async () => {
+        if (!selectedSessionId) return;
+        setLoadingAction(true);
+        setMessage('');
+        try {
+            const sessionRef = doc(db, buildThinkCloudSessionCollectionPath(config), selectedSessionId);
+            await updateDoc(sessionRef, { status: 'paused' });
+            if (selectedSessionId === activeSessionId) {
+                await setDoc(doc(db, buildThinkCloudStateDocPath(config)), {
+                    activeSessionId: '',
+                    updatedAt: serverTimestamp(),
+                });
+            }
+            setMessage('선택한 세션을 일시 정지했습니다.');
+        } catch (error) {
+            console.error('Failed to pause think cloud session:', error);
+            setMessage('일시 정지에 실패했습니다.');
+        } finally {
+            setLoadingAction(false);
+        }
+    };
+
+    const handleResumeSession = async () => {
+        if (!selectedSessionId) return;
+        setLoadingAction(true);
+        setMessage('');
+        try {
+            if (activeSessionId && activeSessionId !== selectedSessionId) {
+                const previousRef = doc(db, buildThinkCloudSessionCollectionPath(config), activeSessionId);
+                await updateDoc(previousRef, { status: 'paused' });
+            }
+
+            const sessionRef = doc(db, buildThinkCloudSessionCollectionPath(config), selectedSessionId);
+            await updateDoc(sessionRef, {
+                status: 'active',
+                activatedAt: serverTimestamp(),
+            });
+            await setDoc(doc(db, buildThinkCloudStateDocPath(config)), {
+                activeSessionId: selectedSessionId,
+                updatedAt: serverTimestamp(),
+            });
+            setMessage('선택한 세션을 재개했습니다.');
+        } catch (error) {
+            console.error('Failed to resume think cloud session:', error);
+            setMessage('재개에 실패했습니다.');
+        } finally {
+            setLoadingAction(false);
+        }
+    };
+
+    const handleDeleteSession = async () => {
+        if (!selectedSessionId) return;
+        const confirmed = window.confirm('선택한 주제를 삭제할까요? 해당 주제의 응답도 함께 삭제됩니다.');
+        if (!confirmed) return;
+
+        setLoadingAction(true);
+        setMessage('');
+        try {
+            const responsesRef = collection(db, buildThinkCloudResponsesCollectionPath(config, selectedSessionId));
+            const responsesSnap = await getDocs(responsesRef);
+            if (!responsesSnap.empty) {
+                const batch = writeBatch(db);
+                responsesSnap.docs.forEach((item) => {
+                    batch.delete(item.ref);
+                });
+                await batch.commit();
+            }
+
+            const sessionRef = doc(db, buildThinkCloudSessionCollectionPath(config), selectedSessionId);
+            await deleteDoc(sessionRef);
+
+            if (selectedSessionId === activeSessionId) {
+                await setDoc(doc(db, buildThinkCloudStateDocPath(config)), {
+                    activeSessionId: '',
+                    updatedAt: serverTimestamp(),
+                });
+            }
+
+            setSelectedSessionId('');
+            setMessage('선택한 주제를 삭제했습니다.');
+        } catch (error) {
+            console.error('Failed to delete think cloud session:', error);
+            setMessage('삭제에 실패했습니다.');
+        } finally {
+            setLoadingAction(false);
+        }
+    };
+
     const renderCreatePanel = () => (
         <section className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
             <div className="border-b border-gray-100 pb-4 mb-6">
@@ -429,6 +520,7 @@ const ManageThinkCloud: React.FC = () => {
         }
 
         const isActive = selectedSession.id === activeSessionId && selectedSession.status === 'active';
+        const isPaused = selectedSession.status === 'paused';
 
         return (
             <section className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
@@ -437,8 +529,8 @@ const ManageThinkCloud: React.FC = () => {
                         <h2 className="text-lg font-extrabold text-gray-900">{selectedSession.title}</h2>
                         <p className="text-sm text-gray-500 mt-1">{selectedSession.description || '설명 없음'}</p>
                     </div>
-                    <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-gray-50 text-gray-600 border-gray-200'}`}>
-                        {isActive ? '진행 중' : '종료됨'}
+                    <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : isPaused ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-gray-50 text-gray-600 border-gray-200'}`}>
+                        {isActive ? '진행 중' : isPaused ? '일시 정지' : '종료됨'}
                     </span>
                 </div>
 
@@ -482,13 +574,34 @@ const ManageThinkCloud: React.FC = () => {
                     </div>
                 )}
 
-                <div className="mt-6 text-right">
+                <div className="mt-6 flex flex-wrap justify-end gap-2">
+                    <button
+                        onClick={() => void handlePauseSession()}
+                        disabled={!isActive || loadingAction}
+                        className="bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 px-5 rounded-lg disabled:opacity-50"
+                    >
+                        {loadingAction ? '처리 중...' : '일시 정지'}
+                    </button>
+                    <button
+                        onClick={() => void handleResumeSession()}
+                        disabled={isActive || selectedSession.status === 'closed' || loadingAction}
+                        className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-5 rounded-lg disabled:opacity-50"
+                    >
+                        {loadingAction ? '처리 중...' : '재개'}
+                    </button>
                     <button
                         onClick={() => void handleCloseSession()}
                         disabled={!isActive || loadingAction}
                         className="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2.5 px-5 rounded-lg disabled:opacity-50"
                     >
                         {loadingAction ? '처리 중...' : '이 세션 종료'}
+                    </button>
+                    <button
+                        onClick={() => void handleDeleteSession()}
+                        disabled={loadingAction}
+                        className="bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 px-5 rounded-lg disabled:opacity-50"
+                    >
+                        {loadingAction ? '처리 중...' : '주제 삭제'}
                     </button>
                 </div>
             </section>

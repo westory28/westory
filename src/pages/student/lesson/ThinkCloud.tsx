@@ -48,6 +48,7 @@ const ThinkCloud: React.FC = () => {
     );
 
     const isActiveSession = !!selectedSession && selectedSession.id === activeSessionId && selectedSession.status === 'active';
+    const isPausedSession = !!selectedSession && selectedSession.status === 'paused';
     const options: ThinkCloudOptions = selectedSession?.options || DEFAULT_THINK_CLOUD_OPTIONS;
     const studentGrade = normalizeSchoolField(userData?.grade);
     const studentClass = normalizeSchoolField(userData?.class);
@@ -259,7 +260,7 @@ const ThinkCloud: React.FC = () => {
                                         {selectedSession.description && <p className="text-sm text-gray-600 mt-2">{selectedSession.description}</p>}
                                     </div>
                                     <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${isActiveSession ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-gray-50 text-gray-600 border-gray-200'}`}>
-                                        {isActiveSession ? '진행 중' : '종료됨'}
+                                        {isActiveSession ? '진행 중' : isPausedSession ? '일시 정지' : '종료됨'}
                                     </span>
                                 </div>
 
@@ -304,7 +305,7 @@ const ThinkCloud: React.FC = () => {
                                     </button>
                                 </div>
                                 {!isActiveSession && (
-                                    <p className="mt-2 text-sm font-bold text-gray-500">종료된 주제입니다. 제출은 진행 중인 주제에서만 가능합니다.</p>
+                                    <p className="mt-2 text-sm font-bold text-gray-500">{isPausedSession ? '일시 정지된 주제입니다. 재개되면 제출할 수 있습니다.' : '종료된 주제입니다. 제출은 진행 중인 주제에서만 가능합니다.'}</p>
                                 )}
                                 {submitError && <p className="mt-2 text-sm font-bold text-red-600">{submitError}</p>}
                             </section>
