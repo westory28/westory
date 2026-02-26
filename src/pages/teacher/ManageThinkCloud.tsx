@@ -704,12 +704,6 @@ const ManageThinkCloud: React.FC = () => {
                             <h1 className="text-xl font-extrabold text-gray-800 flex items-center gap-2">
                                 <i className="fas fa-cloud text-blue-500"></i> 생각모아
                             </h1>
-                            <button
-                                onClick={openCreateMode}
-                                className="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg"
-                            >
-                                + 새 주제
-                            </button>
                         </div>
 
                         <nav className="max-h-[60vh] overflow-y-auto">
@@ -740,6 +734,14 @@ const ManageThinkCloud: React.FC = () => {
                 </aside>
 
                 <div className="flex-1">
+                    <div className="mb-4 flex justify-end">
+                        <button
+                            onClick={openCreateMode}
+                            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-5 rounded-lg shadow-sm"
+                        >
+                            + 새 주제
+                        </button>
+                    </div>
                     {isCreateMode ? renderCreatePanel() : renderDetailPanel()}
                     {message && <p className="mt-3 text-sm font-bold text-blue-700">{message}</p>}
                 </div>
