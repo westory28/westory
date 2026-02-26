@@ -734,7 +734,7 @@ const ManageThinkCloud: React.FC = () => {
                 </aside>
 
                 <div className="flex-1">
-                    <div className="mb-4 flex justify-end">
+                    <div className="mb-4 justify-end hidden lg:flex">
                         <button
                             onClick={openCreateMode}
                             className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-5 rounded-lg shadow-sm"
@@ -746,6 +746,15 @@ const ManageThinkCloud: React.FC = () => {
                     {message && <p className="mt-3 text-sm font-bold text-blue-700">{message}</p>}
                 </div>
             </main>
+
+            <button
+                onClick={openCreateMode}
+                className="lg:hidden fixed bottom-6 right-6 z-[60] w-14 h-14 rounded-full bg-blue-600 text-white shadow-xl hover:bg-blue-700"
+                aria-label="새 주제 추가"
+                title="새 주제"
+            >
+                <i className="fas fa-plus text-lg"></i>
+            </button>
 
             {cloudModalOpen && (
                 <div
