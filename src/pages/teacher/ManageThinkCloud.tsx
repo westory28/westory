@@ -762,7 +762,7 @@ const ManageThinkCloud: React.FC = () => {
                     onClick={() => setCloudModalOpen(false)}
                 >
                     <div
-                        className="w-full max-w-[96vw] h-[92vh] bg-white rounded-2xl shadow-2xl border border-gray-200 p-4 md:p-6 flex flex-col"
+                        className="w-full max-w-[96vw] h-[92vh] bg-white rounded-2xl shadow-2xl border border-gray-200 p-4 md:p-6 flex flex-col overflow-hidden"
                         onClick={(e) => e.stopPropagation()}
                     >
                         <div className="flex items-center justify-between mb-3">
@@ -782,7 +782,10 @@ const ManageThinkCloud: React.FC = () => {
                             TV 출력용 모드입니다. 응답 {responses.length}개
                         </div>
                         <div className="flex-1 flex items-center justify-center">
-                            <div className="w-full max-w-[96vw]">
+                            <div
+                                className="w-full"
+                                style={{ width: 'min(100%, calc((92vh - 180px) * 16 / 9))' }}
+                            >
                                 <WordCloudView
                                     entries={cloudEntries}
                                     showSubmitters={!!selectedSession && !selectedSession.options.anonymous}
