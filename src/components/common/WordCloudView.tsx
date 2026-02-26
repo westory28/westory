@@ -91,8 +91,8 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({ entries, className = '', 
 
         for (const item of source) {
             const ratio = maxCount === minCount ? 1 : (item.count - minCount) / (maxCount - minCount);
-            // Keep one-time submissions readable while preserving emphasis for repeated words.
-            const baseSize = Math.round(24 + Math.pow(ratio, 0.82) * 38);
+            // Keep one-time submissions clearly visible and scale up repeated words.
+            const baseSize = Math.round(34 + Math.pow(ratio, 0.84) * 48);
 
             let fontSize = baseSize;
             let placedWord: PositionedWord | null = null;
@@ -129,7 +129,7 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({ entries, className = '', 
                     break;
                 }
 
-                fontSize = Math.max(15, Math.floor(fontSize * 0.9));
+                fontSize = Math.max(22, Math.floor(fontSize * 0.92));
             }
 
             if (placedWord) placed.push(placedWord);

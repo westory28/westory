@@ -3,30 +3,28 @@ import {
     addDoc,
     collection,
     doc,
-    getDoc,
     onSnapshot,
     query,
     serverTimestamp,
-    setDoc,
     where,
 } from 'firebase/firestore';
 import { useAuth } from '../../../contexts/AuthContext';
-import { db } from '../../../lib/firebase';
 import WordCloudView from '../../../components/common/WordCloudView';
+import { db } from '../../../lib/firebase';
 import {
     buildThinkCloudResponsesCollectionPath,
     buildThinkCloudSessionCollectionPath,
     buildThinkCloudStateDocPath,
-    createResponseDedupeId,
+    DEFAULT_THINK_CLOUD_OPTIONS,
     formatClassLabel,
     formatGradeLabel,
     getInputValidationError,
-    normalizeSchoolField,
     normalizeResponseText,
+    normalizeSchoolField,
+    normalizeThinkCloudOptions,
     type ThinkCloudOptions,
     type ThinkCloudResponse,
     type ThinkCloudSession,
-    DEFAULT_THINK_CLOUD_OPTIONS,
 } from '../../../lib/thinkCloud';
 
 type SessionWithId = ThinkCloudSession & { id: string };
@@ -71,17 +69,23 @@ const ThinkCloud: React.FC = () => {
             setSessions([]);
             return;
         }
+
         const sessionsRef = collection(db, buildThinkCloudSessionCollectionPath(config));
         const q = query(
             sessionsRef,
             where('targetGrade', '==', studentGrade),
             where('targetClass', '==', studentClass),
         );
+
         const unsubscribe = onSnapshot(q, (snap) => {
-            const loaded = snap.docs.map((item) => ({
-                id: item.id,
-                ...(item.data() as ThinkCloudSession),
-            }));
+            const loaded = snap.docs.map((item) => {
+                const raw = item.data() as ThinkCloudSession;
+                return {
+                    ...raw,
+                    id: item.id,
+                    options: normalizeThinkCloudOptions(raw.options),
+                };
+            });
             loaded.sort((a, b) => {
                 const ta = Number((a.createdAt as { seconds?: number } | undefined)?.seconds || 0);
                 const tb = Number((b.createdAt as { seconds?: number } | undefined)?.seconds || 0);
@@ -96,6 +100,7 @@ const ThinkCloud: React.FC = () => {
                 setSelectedSessionId(loaded.length > 0 ? loaded[0].id : '');
             }
         });
+
         return () => unsubscribe();
     }, [activeSessionId, config, selectedSessionId, studentClass, studentGrade]);
 
@@ -175,6 +180,29 @@ const ThinkCloud: React.FC = () => {
         setSubmitError('');
         try {
             const responsesPath = buildThinkCloudResponsesCollectionPath(config, selectedSessionId);
+
+            if (!options.allowDuplicateByStudent) {
+                const hasSubmittedByCurrentUser = responses.some(
+                    (item) => String(item.uid || '').trim() === currentUser.uid,
+                );
+                if (hasSubmittedByCurrentUser) {
+                    setSubmitError('이미 제출한 학생은 다시 제출할 수 없습니다.');
+                    setSubmitLoading(false);
+                    return;
+                }
+            }
+
+            if (!options.allowDuplicateWord) {
+                const hasSameWord = responses.some(
+                    (item) => String(item.textNormalized || '').trim() === normalizedText,
+                );
+                if (hasSameWord) {
+                    setSubmitError('이미 제출된 단어/문장입니다.');
+                    setSubmitLoading(false);
+                    return;
+                }
+            }
+
             const payload: ThinkCloudResponse = {
                 uid: currentUser.uid,
                 displayName: (userData?.name || '학생').trim() || '학생',
@@ -183,20 +211,7 @@ const ThinkCloud: React.FC = () => {
                 createdAt: serverTimestamp(),
             };
 
-            if (options.allowDuplicatePerUser) {
-                await addDoc(collection(db, responsesPath), payload);
-            } else {
-                const dedupeId = createResponseDedupeId(currentUser.uid, normalizedText);
-                const responseRef = doc(db, responsesPath, dedupeId);
-                const existing = await getDoc(responseRef);
-                if (existing.exists()) {
-                    setSubmitError('이미 제출한 단어/의견입니다.');
-                    setSubmitLoading(false);
-                    return;
-                }
-                await setDoc(responseRef, payload);
-            }
-
+            await addDoc(collection(db, responsesPath), payload);
             setDraftInput('');
         } catch (error) {
             console.error('Failed to submit think cloud response:', error);
@@ -265,7 +280,7 @@ const ThinkCloud: React.FC = () => {
                                     </span>
                                 </div>
 
-                        <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold">
+                                <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold">
                                     <span className="px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
                                         대상 {formatGradeLabel(selectedSession.targetGrade, selectedSession.targetGradeLabel)} {formatClassLabel(selectedSession.targetClass, selectedSession.targetClassLabel)}
                                     </span>
@@ -276,7 +291,10 @@ const ThinkCloud: React.FC = () => {
                                         최대 {options.maxLength}자
                                     </span>
                                     <span className="px-2 py-1 rounded-full bg-gray-50 text-gray-700 border border-gray-200">
-                                        {options.allowDuplicatePerUser ? '중복 제출 허용' : '중복 제출 제한'}
+                                        {options.allowDuplicateWord ? '중복 단어 제출 허용' : '중복 단어 제출 제한'}
+                                    </span>
+                                    <span className="px-2 py-1 rounded-full bg-gray-50 text-gray-700 border border-gray-200">
+                                        {options.allowDuplicateByStudent ? '동일 학생 중복 제출 허용' : '동일 학생 중복 제출 제한'}
                                     </span>
                                 </div>
                             </section>
@@ -288,7 +306,7 @@ const ThinkCloud: React.FC = () => {
                                         onChange={(e) => setDraftInput(e.target.value)}
                                         maxLength={Math.max(1, options.maxLength)}
                                         disabled={!isActiveSession}
-                                        placeholder={options.inputMode === 'word' ? '단어를 입력해 주세요' : '짧은 문장으로 입력해 주세요'}
+                                        placeholder={options.inputMode === 'word' ? '단어를 입력해 주세요' : '짧은 문장을 입력해 주세요'}
                                         className="flex-1 border border-gray-300 rounded-xl px-4 py-3 font-bold outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
                                         onKeyDown={(e) => {
                                             if (e.key === 'Enter') {
@@ -306,7 +324,9 @@ const ThinkCloud: React.FC = () => {
                                     </button>
                                 </div>
                                 {!isActiveSession && (
-                                    <p className="mt-2 text-sm font-bold text-gray-500">{isPausedSession ? '일시 정지된 주제입니다. 재개되면 제출할 수 있습니다.' : '종료된 주제입니다. 제출은 진행 중인 주제에서만 가능합니다.'}</p>
+                                    <p className="mt-2 text-sm font-bold text-gray-500">
+                                        {isPausedSession ? '일시 정지된 주제입니다. 재개되면 제출할 수 있습니다.' : '종료된 주제입니다. 제출은 진행 중인 주제에서만 가능합니다.'}
+                                    </p>
                                 )}
                                 {submitError && <p className="mt-2 text-sm font-bold text-red-600">{submitError}</p>}
                             </section>

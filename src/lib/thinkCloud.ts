@@ -5,7 +5,8 @@ export type ThinkCloudInputMode = 'word' | 'sentence';
 export type ThinkCloudSessionStatus = 'draft' | 'active' | 'paused' | 'closed';
 
 export interface ThinkCloudOptions {
-    allowDuplicatePerUser: boolean;
+    allowDuplicateWord: boolean;
+    allowDuplicateByStudent: boolean;
     inputMode: ThinkCloudInputMode;
     anonymous: boolean;
     maxLength: number;
@@ -41,11 +42,33 @@ export const THINK_CLOUD_SESSION_COLLECTION = 'think_cloud_sessions';
 export const THINK_CLOUD_STATE_COLLECTION = 'think_cloud_state';
 
 export const DEFAULT_THINK_CLOUD_OPTIONS: ThinkCloudOptions = {
-    allowDuplicatePerUser: false,
+    allowDuplicateWord: true,
+    allowDuplicateByStudent: false,
     inputMode: 'word',
     anonymous: true,
     maxLength: 20,
     profanityFilter: true,
+};
+
+export const normalizeThinkCloudOptions = (raw: unknown): ThinkCloudOptions => {
+    const source = (raw && typeof raw === 'object') ? (raw as Record<string, unknown>) : {};
+    const legacyAllowDuplicatePerUser = source.allowDuplicatePerUser === true;
+    return {
+        allowDuplicateWord: typeof source.allowDuplicateWord === 'boolean'
+            ? source.allowDuplicateWord
+            : true,
+        allowDuplicateByStudent: typeof source.allowDuplicateByStudent === 'boolean'
+            ? source.allowDuplicateByStudent
+            : legacyAllowDuplicatePerUser,
+        inputMode: source.inputMode === 'sentence' ? 'sentence' : 'word',
+        anonymous: typeof source.anonymous === 'boolean' ? source.anonymous : true,
+        maxLength: (() => {
+            const value = Number(source.maxLength);
+            if (!Number.isFinite(value)) return 20;
+            return Math.max(5, Math.min(100, Math.floor(value)));
+        })(),
+        profanityFilter: typeof source.profanityFilter === 'boolean' ? source.profanityFilter : true,
+    };
 };
 
 const toSafeSpace = (value: string) => value.replace(/\s+/g, ' ').trim();

@@ -24,6 +24,7 @@ import {
     DEFAULT_THINK_CLOUD_OPTIONS,
     formatClassLabel,
     formatGradeLabel,
+    normalizeThinkCloudOptions,
     type ThinkCloudOptions,
     type ThinkCloudResponse,
     type ThinkCloudSession,
@@ -88,10 +89,14 @@ const ManageThinkCloud: React.FC = () => {
     useEffect(() => {
         const sessionsRef = collection(db, buildThinkCloudSessionCollectionPath(config));
         const unsubscribe = onSnapshot(sessionsRef, (snap) => {
-            const loaded = snap.docs.map((item) => ({
-                id: item.id,
-                ...(item.data() as ThinkCloudSession),
-            }));
+            const loaded = snap.docs.map((item) => {
+                const raw = item.data() as ThinkCloudSession;
+                return {
+                    ...raw,
+                    id: item.id,
+                    options: normalizeThinkCloudOptions(raw.options),
+                };
+            });
             loaded.sort((a, b) => {
                 const ta = Number((a.createdAt as { seconds?: number } | undefined)?.seconds || 0);
                 const tb = Number((b.createdAt as { seconds?: number } | undefined)?.seconds || 0);
@@ -503,11 +508,21 @@ const ManageThinkCloud: React.FC = () => {
                     </label>
 
                     <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                        <span className="font-bold text-gray-700">중복 제출 허용</span>
+                        <span className="font-bold text-gray-700">중복 단어 제출 허용</span>
                         <input
                             type="checkbox"
-                            checked={options.allowDuplicatePerUser}
-                            onChange={(e) => setOptions((prev) => ({ ...prev, allowDuplicatePerUser: e.target.checked }))}
+                            checked={options.allowDuplicateWord}
+                            onChange={(e) => setOptions((prev) => ({ ...prev, allowDuplicateWord: e.target.checked }))}
+                            className="w-5 h-5"
+                        />
+                    </label>
+
+                    <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                        <span className="font-bold text-gray-700">동일 학생 중복 제출 허용</span>
+                        <input
+                            type="checkbox"
+                            checked={options.allowDuplicateByStudent}
+                            onChange={(e) => setOptions((prev) => ({ ...prev, allowDuplicateByStudent: e.target.checked }))}
                             className="w-5 h-5"
                         />
                     </label>
@@ -609,7 +624,10 @@ const ManageThinkCloud: React.FC = () => {
                         최대 {selectedSession.options.maxLength}자
                     </span>
                     <span className="px-2 py-1 rounded-full bg-gray-50 text-gray-700 border border-gray-200">
-                        {selectedSession.options.allowDuplicatePerUser ? '중복 제출 허용' : '중복 제출 제한'}
+                        {selectedSession.options.allowDuplicateWord ? '중복 단어 제출 허용' : '중복 단어 제출 제한'}
+                    </span>
+                    <span className="px-2 py-1 rounded-full bg-gray-50 text-gray-700 border border-gray-200">
+                        {selectedSession.options.allowDuplicateByStudent ? '동일 학생 중복 제출 허용' : '동일 학생 중복 제출 제한'}
                     </span>
                     <span className="px-2 py-1 rounded-full bg-gray-50 text-gray-700 border border-gray-200">
                         {selectedSession.options.anonymous ? '익명 표시' : '이름 표시'}
