@@ -426,7 +426,8 @@ const Login: React.FC = () => {
             const userRef = doc(db, 'users', currentUser.uid);
             const userSnap = await getDoc(userRef);
             const existing = userSnap.exists() ? (userSnap.data() as Partial<UserData>) : null;
-            const setup = await completeStudentOnboarding(currentUser, existing, null);
+            const rosterProfile = await pickStudentRosterProfile(currentUser.email || '');
+            const setup = await completeStudentOnboarding(currentUser, existing, rosterProfile);
             if (!setup) {
                 clearRoleCache();
                 await signOut(auth);
@@ -491,7 +492,7 @@ const Login: React.FC = () => {
             const existing = userSnap.exists() ? (userSnap.data() as Partial<UserData>) : null;
             const nextRole: UserData['role'] = mode === 'teacher' ? 'teacher' : 'student';
 
-            const rosterProfile = nextRole === 'student' && isTeacherEmail
+            const rosterProfile = nextRole === 'student'
                 ? await pickStudentRosterProfile(user.email || '')
                 : null;
 
