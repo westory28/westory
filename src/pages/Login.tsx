@@ -677,7 +677,7 @@ const Login: React.FC = () => {
                                     <i className="fas fa-spinner fa-spin mr-2"></i>불러오는 중...
                                 </p>
                             ) : (
-                                <div dangerouslySetInnerHTML={{ __html: policyHtml }} />
+                                <div className="policy-rich-text" dangerouslySetInnerHTML={{ __html: policyHtml }} />
                             )}
                         </div>
                     </div>
@@ -824,7 +824,7 @@ const Login: React.FC = () => {
                                                     onScroll={(e) => handleConsentScroll(item.id, e)}
                                                     className="bg-white p-4 md:p-5 rounded-lg text-[15px] md:text-base text-gray-700 border border-gray-200 max-h-56 md:max-h-64 overflow-y-auto mb-3 leading-7"
                                                 >
-                                                    <div dangerouslySetInnerHTML={{ __html: item.text || '' }} />
+                                                    <div className="policy-rich-text" dangerouslySetInnerHTML={{ __html: item.text || '' }} />
                                                 </div>
                                                 <div className="flex items-center justify-between gap-3 mb-1">
                                                     <span className={`text-xs md:text-sm font-semibold ${consentReadReady[item.id] ? 'text-emerald-700' : 'text-amber-700'}`}>
@@ -871,6 +871,39 @@ const Login: React.FC = () => {
                     </div>
                 </div>
             )}
+            <style>{`
+                .policy-rich-text {
+                    color: #374151;
+                    line-height: 1.8;
+                }
+                .policy-rich-text p {
+                    margin: 0.35rem 0;
+                    white-space: pre-wrap;
+                }
+                .policy-rich-text ul {
+                    list-style: disc;
+                    padding-left: 1.4rem;
+                    margin: 0.45rem 0;
+                }
+                .policy-rich-text ol {
+                    list-style: decimal;
+                    padding-left: 1.4rem;
+                    margin: 0.45rem 0;
+                }
+                .policy-rich-text li {
+                    margin: 0.25rem 0;
+                    white-space: pre-wrap;
+                }
+                .policy-rich-text li[data-list='bullet'] {
+                    list-style-type: disc;
+                }
+                .policy-rich-text li[data-list='ordered'] {
+                    list-style-type: decimal;
+                }
+                .policy-rich-text .ql-indent-1 { padding-left: 2em; }
+                .policy-rich-text .ql-indent-2 { padding-left: 4em; }
+                .policy-rich-text .ql-indent-3 { padding-left: 6em; }
+            `}</style>
         </div>
     );
 };

@@ -103,12 +103,45 @@ const Footer: React.FC = () => {
                                     <i className="fas fa-spinner fa-spin mr-2"></i>불러오는 중...
                                 </p>
                             ) : (
-                                <div dangerouslySetInnerHTML={{ __html: policyHtml }} />
+                                <div className="policy-rich-text" dangerouslySetInnerHTML={{ __html: policyHtml }} />
                             )}
                         </div>
                     </div>
                 </div>
             )}
+            <style>{`
+                .policy-rich-text {
+                    color: #374151;
+                    line-height: 1.8;
+                }
+                .policy-rich-text p {
+                    margin: 0.35rem 0;
+                    white-space: pre-wrap;
+                }
+                .policy-rich-text ul {
+                    list-style: disc;
+                    padding-left: 1.4rem;
+                    margin: 0.45rem 0;
+                }
+                .policy-rich-text ol {
+                    list-style: decimal;
+                    padding-left: 1.4rem;
+                    margin: 0.45rem 0;
+                }
+                .policy-rich-text li {
+                    margin: 0.25rem 0;
+                    white-space: pre-wrap;
+                }
+                .policy-rich-text li[data-list='bullet'] {
+                    list-style-type: disc;
+                }
+                .policy-rich-text li[data-list='ordered'] {
+                    list-style-type: decimal;
+                }
+                .policy-rich-text .ql-indent-1 { padding-left: 2em; }
+                .policy-rich-text .ql-indent-2 { padding-left: 4em; }
+                .policy-rich-text .ql-indent-3 { padding-left: 6em; }
+            `}</style>
         </>
     );
 };
