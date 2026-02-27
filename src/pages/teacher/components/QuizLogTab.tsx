@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useState } from 'react';
-import { collection, getDocs, limit, orderBy, query } from 'firebase/firestore';
+import { collection, documentId, getDocs, limit, orderBy, query, where } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../contexts/AuthContext';
 import { getSemesterCollectionPath } from '../../../lib/semesterScope';
@@ -16,6 +16,35 @@ interface Log {
     classOnly: string;
     studentNumber: string;
 }
+
+interface UserProfile {
+    name?: string;
+    class?: string;
+    number?: string;
+    email?: string;
+}
+
+const chunkArray = <T,>(arr: T[], size: number): T[][] => {
+    const chunks: T[][] = [];
+    for (let i = 0; i < arr.length; i += size) {
+        chunks.push(arr.slice(i, i + size));
+    }
+    return chunks;
+};
+
+const normalizeClass = (value: unknown): string => {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    const digits = raw.match(/\d+/)?.[0];
+    return digits || raw.replace('반', '').trim();
+};
+
+const normalizeNumber = (value: unknown): string => {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    const digits = raw.match(/\d+/)?.[0];
+    return digits || raw.replace('번', '').trim();
+};
 
 const QuizLogTab: React.FC = () => {
     const { config } = useAuth();
@@ -42,14 +71,14 @@ const QuizLogTab: React.FC = () => {
                 snap = await getDocs(query(collection(db, 'quiz_submissions'), orderBy('timestamp', 'desc'), limit(100)));
             }
 
-            const list: Log[] = [];
+            const rawList: Log[] = [];
             snap.forEach((doc) => {
                 const d = doc.data() as any;
 
                 const classOnly = d.class || (d.gradeClass ? d.gradeClass.split(' ')[1] : '-');
                 const studentNumber = d.number || (d.gradeClass ? d.gradeClass.split(' ')[2]?.replace('번', '') : '-');
 
-                list.push({
+                rawList.push({
                     id: doc.id,
                     timestamp: d.timestamp,
                     uid: d.uid || d.studentId || '',
@@ -60,6 +89,59 @@ const QuizLogTab: React.FC = () => {
                     classOnly: String(classOnly || '-'),
                     studentNumber: String(studentNumber || '-'),
                 });
+            });
+
+            const userByUid = new Map<string, UserProfile>();
+            const uidCandidates = Array.from(new Set(rawList.map((item) => String(item.uid || '').trim()).filter(Boolean)));
+            const emailCandidates = Array.from(new Set(rawList.map((item) => String(item.email || '').trim()).filter(Boolean)));
+
+            if (uidCandidates.length > 0) {
+                for (const chunk of chunkArray(uidCandidates, 10)) {
+                    const userSnap = await getDocs(query(collection(db, 'users'), where(documentId(), 'in', chunk)));
+                    userSnap.forEach((userDoc) => {
+                        const u = userDoc.data() as any;
+                        userByUid.set(userDoc.id, {
+                            name: String(u.name || '').trim(),
+                            class: normalizeClass(u.class),
+                            number: normalizeNumber(u.number),
+                            email: String(u.email || '').trim(),
+                        });
+                    });
+                }
+            }
+
+            if (emailCandidates.length > 0) {
+                for (const chunk of chunkArray(emailCandidates, 10)) {
+                    const userSnap = await getDocs(query(collection(db, 'users'), where('email', 'in', chunk)));
+                    userSnap.forEach((userDoc) => {
+                        if (userByUid.has(userDoc.id)) return;
+                        const u = userDoc.data() as any;
+                        userByUid.set(userDoc.id, {
+                            name: String(u.name || '').trim(),
+                            class: normalizeClass(u.class),
+                            number: normalizeNumber(u.number),
+                            email: String(u.email || '').trim(),
+                        });
+                    });
+                }
+            }
+
+            const profileByEmail = new Map<string, UserProfile>();
+            userByUid.forEach((profile) => {
+                const email = String(profile.email || '').trim();
+                if (email && !profileByEmail.has(email)) profileByEmail.set(email, profile);
+            });
+
+            const list = rawList.map((item) => {
+                const uidProfile = item.uid ? userByUid.get(item.uid) : undefined;
+                const emailProfile = item.email ? profileByEmail.get(item.email) : undefined;
+                const profile = uidProfile || emailProfile;
+                return {
+                    ...item,
+                    classOnly: normalizeClass(item.classOnly) || profile?.class || '-',
+                    studentNumber: normalizeNumber(item.studentNumber) || profile?.number || '-',
+                    studentName: item.studentName === '학생' ? (profile?.name || item.studentName) : item.studentName,
+                };
             });
 
             setLogs(list);
@@ -114,7 +196,7 @@ const QuizLogTab: React.FC = () => {
                                             {log.timestamp?.seconds ? new Date(log.timestamp.seconds * 1000).toLocaleString() : '-'}
                                         </td>
                                         <td className="p-4 font-bold text-gray-600">{log.classOnly}</td>
-                                        <td className="p-4 font-bold text-gray-600">{log.studentNumber}번</td>
+                                        <td className="p-4 font-bold text-gray-600">{log.studentNumber === '-' ? '-' : `${log.studentNumber}번`}</td>
                                         <td className="p-4">
                                             {log.uid ? (
                                                 <button
