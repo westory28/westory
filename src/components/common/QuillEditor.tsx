@@ -39,6 +39,47 @@ const QuillEditor: React.FC<QuillEditorProps> = ({
     const placeholderRef = useRef(placeholder || '');
     const [ready, setReady] = useState(false);
 
+    const applyOrderedListStart = () => {
+        const quill = quillRef.current;
+        if (!quill) return;
+
+        const range = quill.getSelection(true);
+        if (!range) {
+            alert('번호를 시작할 줄에 커서를 먼저 두세요.');
+            return;
+        }
+
+        const [line] = quill.getLine(range.index);
+        const lineNode = (line?.domNode || null) as HTMLElement | null;
+        const itemNode = lineNode?.closest('li[data-list="ordered"]') as HTMLElement | null;
+        if (!itemNode) {
+            alert('번호 목록 항목에서만 사용할 수 있습니다.');
+            return;
+        }
+
+        const raw = window.prompt('이 항목의 시작 번호를 입력하세요 (1 이상)', itemNode.dataset.start || '1');
+        if (raw === null) return;
+        const start = Number(raw);
+        if (!Number.isFinite(start) || start < 1) {
+            alert('1 이상의 숫자를 입력하세요.');
+            return;
+        }
+
+        const className = itemNode.className || '';
+        const indentMatch = className.match(/ql-indent-(\d+)/);
+        const indentLevel = indentMatch ? Number(indentMatch[1]) : 0;
+        const safeLevel = Number.isFinite(indentLevel) && indentLevel >= 0 ? Math.min(indentLevel, 9) : 0;
+
+        const counterPairs: string[] = [`list-${safeLevel} ${Math.floor(start) - 1}`];
+        for (let i = safeLevel + 1; i <= 9; i += 1) {
+            counterPairs.push(`list-${i} 0`);
+        }
+
+        itemNode.dataset.start = String(Math.floor(start));
+        itemNode.style.setProperty('counter-reset', counterPairs.join(' '));
+        onChangeRef.current(quill.root.innerHTML);
+    };
+
     useEffect(() => {
         onChangeRef.current = onChange;
     }, [onChange]);
@@ -143,6 +184,16 @@ const QuillEditor: React.FC<QuillEditorProps> = ({
     return (
         <div className="westory-quill bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div ref={hostRef} style={{ minHeight }} />
+            <div className="border-t border-gray-100 bg-gray-50 px-3 py-2 flex justify-end">
+                <button
+                    type="button"
+                    onClick={applyOrderedListStart}
+                    className="text-xs font-bold text-gray-600 hover:text-blue-700 bg-white border border-gray-300 hover:border-blue-400 rounded px-2 py-1 transition"
+                    title="커서를 둔 번호 항목의 시작 번호를 지정합니다."
+                >
+                    번호 시작값
+                </button>
+            </div>
             <style>{`
                 .westory-quill .ql-editor {
                     counter-reset: list-0 list-1 list-2 list-3 list-4 list-5 list-6 list-7 list-8 list-9;
