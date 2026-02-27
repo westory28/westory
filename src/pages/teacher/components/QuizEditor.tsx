@@ -134,6 +134,26 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
         () => treeData.find((big) => big.title === parentTitle)?.children?.find((mid) => mid.id === node.id)?.children || [],
         [treeData, parentTitle, node.id],
     );
+    const findNodeTitle = (targetId?: string | null) => {
+        if (!targetId) return '';
+        for (const big of treeData) {
+            if (big.id === targetId) return big.title;
+            for (const mid of big.children || []) {
+                if (mid.id === targetId) return mid.title;
+                for (const small of mid.children || []) {
+                    if (small.id === targetId) return small.title;
+                }
+            }
+        }
+        return '';
+    };
+    const getQuestionSubUnitLabel = (question: Question) => {
+        if (type === 'special') {
+            const sourceId = question.refSmall || question.refMid || question.refBig || question.subUnitId || '';
+            return findNodeTitle(sourceId) || '소단원 전체';
+        }
+        return findNodeTitle(question.subUnitId || '') || '소단원 전체';
+    };
 
     const filteredQuestions = useMemo(() => {
         const list = questions.filter((q) => {
@@ -467,7 +487,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
                             filteredQuestions.map((q, idx) => (
                                 <div key={q.id} className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
                                     <div className="flex justify-between items-start mb-2">
-                                        <span className="bg-gray-100 text-gray-600 text-[10px] font-bold px-2 py-1 rounded">Q{idx + 1} | {TYPE_LABEL[q.type] || q.type}</span>
+                                        <span className="bg-gray-100 text-gray-600 text-[10px] font-bold px-2 py-1 rounded">
+                                            Q{idx + 1} | {TYPE_LABEL[q.type] || q.type} | {getQuestionSubUnitLabel(q)}
+                                        </span>
                                         <div className="flex items-center gap-2">
                                             <button
                                                 type="button"
@@ -481,6 +503,11 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
                                         </div>
                                     </div>
                                     <p className="font-bold text-gray-800 mb-1 text-sm">{q.question}</p>
+                                    {q.image && (
+                                        <div className="mb-2">
+                                            <img src={q.image} alt="문항 첨부 이미지" className="max-h-44 rounded border border-gray-200" />
+                                        </div>
+                                    )}
                                     <p className="text-xs text-gray-500">
                                         <span className="text-blue-600 font-bold mr-2">정답: {formatAnswer(q)}</span>
                                         {q.options && q.options.length > 0 ? `(${q.options.join(', ')})` : ''}
@@ -561,6 +588,14 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
                             <i className="fas fa-image"></i> 이미지 첨부
                             <input type="file" className="hidden" accept="image/*" ref={fileInputRef} onChange={handleImageSelect} />
                         </label>
+                        {formImage && (
+                            <div className="relative border rounded p-2 bg-gray-50">
+                                <img src={formImage} alt="문항 첨부 이미지" className="max-h-44 mx-auto rounded" />
+                                <button type="button" onClick={() => setFormImage(null)} className="absolute top-2 right-2 text-xs px-2 py-1 rounded bg-white border text-gray-500 hover:text-red-500">
+                                    제거
+                                </button>
+                            </div>
+                        )}
 
                         {formType === 'choice' && (
                             <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 space-y-2">
@@ -633,6 +668,11 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
                                 <div className="text-sm font-bold text-blue-800">학생 화면 미리보기</div>
                                 <div className="bg-white rounded-lg border border-blue-100 p-4">
                                     <h4 className="font-bold text-gray-800 mb-4">{formText || '문제 문구를 입력하면 여기 표시됩니다.'}</h4>
+                                    {formImage && (
+                                        <div className="mb-4">
+                                            <img src={formImage} alt="문항 첨부 이미지 미리보기" className="max-h-48 mx-auto rounded-lg border border-gray-100" />
+                                        </div>
+                                    )}
                                     {formType === 'choice' && trimList(choiceOptions).map((opt, index) => (
                                         <button key={`preview-choice-${index}`} type="button" onClick={() => setPreviewChoiceAnswer(opt)} className={`w-full border-2 rounded-lg p-3 text-left transition flex items-center gap-2 mb-2 ${previewChoiceAnswer === opt ? 'border-blue-500 bg-blue-50 text-blue-800 font-bold' : 'border-gray-200 hover:border-blue-300'}`}>
                                             <span className={`w-6 h-6 rounded-full text-xs flex items-center justify-center ${previewChoiceAnswer === opt ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500'}`}>{index + 1}</span>
