@@ -361,10 +361,22 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
                     margin-bottom: 1em;
                     white-space: pre-wrap;
                 }
-                .note-content p.lesson-level-1 { padding-left: 0.25rem; }
-                .note-content p.lesson-level-2 { padding-left: 1.6rem; }
-                .note-content p.lesson-level-3 { padding-left: 3.2rem; }
-                .note-content p.lesson-level-4 { padding-left: 4.6rem; }
+                .note-content p.lesson-level-1 {
+                    padding-left: 0.75rem;
+                    text-indent: -0.75rem;
+                }
+                .note-content p.lesson-level-2 {
+                    padding-left: 2rem;
+                    text-indent: -1.2rem;
+                }
+                .note-content p.lesson-level-3 {
+                    padding-left: 3.4rem;
+                    text-indent: -1.2rem;
+                }
+                .note-content p.lesson-level-4 {
+                    padding-left: 4.8rem;
+                    text-indent: -1.2rem;
+                }
                 .note-content img { max-width: 100%; border-radius: 8px; margin: 10px 0; }
             `}</style>
         </div>

@@ -285,12 +285,18 @@ const ManageLesson: React.FC = () => {
             const scopedRef = collection(db, getSemesterCollectionPath(config, 'lessons'));
             const scopedQuery = query(scopedRef, where('unitId', '==', selectedNodeId), limit(1));
             const scopedSnap = await getDocs(scopedQuery);
+            const normalizedContentHtml = lessonContent.replace(/(^|>)([ \t]+)(?=\S)/gm, (_match, prefix: string, spaces: string) => {
+                const preserved = spaces
+                    .replace(/\t/g, '    ')
+                    .replace(/ /g, '&nbsp;');
+                return `${prefix}${preserved}`;
+            });
 
             const payload = {
                 unitId: selectedNodeId,
                 title: lessonTitle,
                 videoUrl: lessonVideo,
-                contentHtml: lessonContent,
+                contentHtml: normalizedContentHtml,
                 updatedAt: serverTimestamp(),
             };
 
