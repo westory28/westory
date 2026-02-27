@@ -314,25 +314,10 @@ const ManageLesson: React.FC = () => {
     };
 
     const renderPreviewContent = (html: string) => {
-        const parts = html.split(/(\[.*?\])/g);
-        return parts.map((part, i) => {
-            if (part.startsWith('[') && part.endsWith(']')) {
-                const answer = part.slice(1, -1).trim();
-                const inputWidth = Math.min(220, Math.max(76, answer.length * 14 + 24));
-                return (
-                    <span key={i} className="inline-flex items-center align-baseline whitespace-nowrap mx-1">
-                        <input
-                            type="text"
-                            readOnly
-                            value=""
-                            placeholder="빈칸"
-                            style={{ width: `${inputWidth}px` }}
-                            className="lesson-preview-cloze"
-                        />
-                    </span>
-                );
-            }
-            return <span key={i} dangerouslySetInnerHTML={{ __html: part }}></span>;
+        return html.replace(/\[(.*?)\]/g, (_match, p1) => {
+            const answer = String(p1 || '').trim();
+            const inputWidth = Math.min(180, Math.max(52, answer.length * 12 + 20));
+            return `<span class="lesson-preview-cloze-wrap"><input type="text" readonly value="" placeholder="빈칸" style="width:${inputWidth}px;" class="lesson-preview-cloze" /></span>`;
         });
     };
 
@@ -508,10 +493,21 @@ const ManageLesson: React.FC = () => {
                                     </div>
                                 )}
 
-                                <div className="prose max-w-none text-gray-800 leading-loose lesson-preview-content">
-                                    {renderPreviewContent(lessonContent)}
-                                </div>
+                                <div
+                                    className="prose max-w-none text-gray-800 leading-loose lesson-preview-content"
+                                    dangerouslySetInnerHTML={{ __html: renderPreviewContent(lessonContent) }}
+                                />
                                 <style>{`
+                                    .lesson-preview-content p {
+                                        white-space: pre-wrap;
+                                    }
+                                    .lesson-preview-cloze-wrap {
+                                        display: inline-flex;
+                                        align-items: baseline;
+                                        vertical-align: baseline;
+                                        white-space: nowrap;
+                                        margin: 0 0.2rem;
+                                    }
                                     .lesson-preview-cloze {
                                         border: none;
                                         border-bottom: 2px solid #374151;
@@ -523,6 +519,7 @@ const ManageLesson: React.FC = () => {
                                         margin: 0;
                                         line-height: 1.2;
                                         vertical-align: baseline;
+                                        display: inline-block;
                                     }
                                     .lesson-preview-cloze:focus {
                                         outline: none;
