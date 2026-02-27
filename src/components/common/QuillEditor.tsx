@@ -141,8 +141,38 @@ const QuillEditor: React.FC<QuillEditorProps> = ({
     }
 
     return (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="westory-quill bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div ref={hostRef} style={{ minHeight }} />
+            <style>{`
+                .westory-quill .ql-editor {
+                    counter-reset: list-0 list-1 list-2 list-3 list-4 list-5 list-6 list-7 list-8 list-9;
+                }
+                .westory-quill .ql-editor li[data-list='bullet'] > .ql-ui:before {
+                    content: '\\2022';
+                }
+                .westory-quill .ql-editor li[data-list='ordered'] {
+                    counter-increment: list-0;
+                    counter-reset: list-1 list-2 list-3 list-4 list-5 list-6 list-7 list-8 list-9;
+                }
+                .westory-quill .ql-editor li[data-list='ordered'] > .ql-ui:before {
+                    content: counter(list-0, decimal) '. ';
+                    font-variant-numeric: tabular-nums;
+                }
+                .westory-quill .ql-editor li.ql-indent-1[data-list='ordered'] {
+                    counter-increment: list-1;
+                    counter-reset: list-2 list-3 list-4 list-5 list-6 list-7 list-8 list-9;
+                }
+                .westory-quill .ql-editor li.ql-indent-1[data-list='ordered'] > .ql-ui:before {
+                    content: counter(list-1, lower-alpha) '. ';
+                }
+                .westory-quill .ql-editor li.ql-indent-2[data-list='ordered'] {
+                    counter-increment: list-2;
+                    counter-reset: list-3 list-4 list-5 list-6 list-7 list-8 list-9;
+                }
+                .westory-quill .ql-editor li.ql-indent-2[data-list='ordered'] > .ql-ui:before {
+                    content: counter(list-2, lower-roman) '. ';
+                }
+            `}</style>
         </div>
     );
 };
