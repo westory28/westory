@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../lib/firebase';
 import {
@@ -311,15 +311,19 @@ const ManageLesson: React.FC = () => {
         const parts = html.split(/(\[.*?\])/g);
         return parts.map((part, i) => {
             if (part.startsWith('[') && part.endsWith(']')) {
-                const answer = part.slice(1, -1);
+                const answer = part.slice(1, -1).trim();
+                const inputWidth = Math.min(220, Math.max(76, answer.length * 14 + 24));
                 return (
-                    <input
-                        key={i}
-                        type="text"
-                        readOnly
-                        value={`(정답: ${answer})`}
-                        className="border-b-2 border-blue-500 text-blue-600 font-bold text-center px-2 py-0.5 mx-1 w-36 bg-transparent"
-                    />
+                    <span key={i} className="inline-flex items-center align-baseline whitespace-nowrap mx-1">
+                        <input
+                            type="text"
+                            readOnly
+                            value=""
+                            placeholder="빈칸"
+                            style={{ width: `${inputWidth}px` }}
+                            className="lesson-preview-cloze"
+                        />
+                    </span>
                 );
             }
             return <span key={i} dangerouslySetInnerHTML={{ __html: part }}></span>;
@@ -498,9 +502,30 @@ const ManageLesson: React.FC = () => {
                                     </div>
                                 )}
 
-                                <div className="prose max-w-none text-gray-800 leading-loose">
+                                <div className="prose max-w-none text-gray-800 leading-loose lesson-preview-content">
                                     {renderPreviewContent(lessonContent)}
                                 </div>
+                                <style>{`
+                                    .lesson-preview-cloze {
+                                        border: none;
+                                        border-bottom: 2px solid #374151;
+                                        text-align: center;
+                                        font-weight: 700;
+                                        color: #2563eb;
+                                        background: transparent;
+                                        padding: 0 4px;
+                                        margin: 0;
+                                        line-height: 1.2;
+                                        vertical-align: baseline;
+                                    }
+                                    .lesson-preview-cloze:focus {
+                                        outline: none;
+                                    }
+                                    .lesson-preview-cloze::placeholder {
+                                        color: #9ca3af;
+                                        font-weight: 700;
+                                    }
+                                `}</style>
                             </div>
                         </div>
                     </div>
@@ -511,3 +536,4 @@ const ManageLesson: React.FC = () => {
 };
 
 export default ManageLesson;
+
