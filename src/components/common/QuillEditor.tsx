@@ -96,6 +96,8 @@ const QuillEditor: React.FC<QuillEditorProps> = ({
         if (!hostRef.current) return;
         let canceled = false;
         let changeHandler: (() => void) | null = null;
+        let startButton: HTMLButtonElement | null = null;
+        let startClickHandler: ((event: MouseEvent) => void) | null = null;
 
         const waitForQuill = () =>
             new Promise<void>((resolve, reject) => {
@@ -140,6 +142,26 @@ const QuillEditor: React.FC<QuillEditorProps> = ({
                     onChangeRef.current(quillRef.current.root.innerHTML);
                 };
                 quill.on('text-change', changeHandler);
+
+                const toolbarEl = hostRef.current.querySelector('.ql-toolbar') as HTMLElement | null;
+                if (toolbarEl) {
+                    const group = document.createElement('span');
+                    group.className = 'ql-formats';
+
+                    startButton = document.createElement('button');
+                    startButton.type = 'button';
+                    startButton.className = 'ql-start-number';
+                    startButton.title = '번호 목록 시작값 설정';
+                    startButton.textContent = '번호 시작값';
+                    startClickHandler = (event: MouseEvent) => {
+                        event.preventDefault();
+                        applyOrderedListStart();
+                    };
+                    startButton.addEventListener('click', startClickHandler);
+                    group.appendChild(startButton);
+                    toolbarEl.appendChild(group);
+                }
+
                 setReady(true);
             })
             .catch((error) => {
@@ -151,6 +173,9 @@ const QuillEditor: React.FC<QuillEditorProps> = ({
             canceled = true;
             if (quillRef.current && changeHandler) {
                 quillRef.current.off('text-change', changeHandler);
+            }
+            if (startButton && startClickHandler) {
+                startButton.removeEventListener('click', startClickHandler);
             }
             quillRef.current = null;
             if (hostRef.current) {
@@ -184,17 +209,19 @@ const QuillEditor: React.FC<QuillEditorProps> = ({
     return (
         <div className="westory-quill bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div ref={hostRef} style={{ minHeight }} />
-            <div className="border-t border-gray-100 bg-gray-50 px-3 py-2 flex justify-end">
-                <button
-                    type="button"
-                    onClick={applyOrderedListStart}
-                    className="text-xs font-bold text-gray-600 hover:text-blue-700 bg-white border border-gray-300 hover:border-blue-400 rounded px-2 py-1 transition"
-                    title="커서를 둔 번호 항목의 시작 번호를 지정합니다."
-                >
-                    번호 시작값
-                </button>
-            </div>
             <style>{`
+                .westory-quill .ql-toolbar .ql-start-number {
+                    width: auto;
+                    min-width: 76px;
+                    padding: 0 8px;
+                    font-size: 12px;
+                    font-weight: 700;
+                    color: #4b5563;
+                    line-height: 24px;
+                }
+                .westory-quill .ql-toolbar .ql-start-number:hover {
+                    color: #1d4ed8;
+                }
                 .westory-quill .ql-editor {
                     counter-reset: list-0 list-1 list-2 list-3 list-4 list-5 list-6 list-7 list-8 list-9;
                 }
