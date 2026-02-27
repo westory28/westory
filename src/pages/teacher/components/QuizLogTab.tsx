@@ -46,6 +46,8 @@ const normalizeNumber = (value: unknown): string => {
     return digits || raw.replace('번', '').trim();
 };
 
+const toText = (value: unknown): string => String(value ?? '').trim();
+
 const QuizLogTab: React.FC = () => {
     const { config } = useAuth();
     const [logs, setLogs] = useState<Log[]>([]);
@@ -75,19 +77,62 @@ const QuizLogTab: React.FC = () => {
             snap.forEach((doc) => {
                 const d = doc.data() as any;
 
-                const classOnly = d.class || (d.gradeClass ? d.gradeClass.split(' ')[1] : '-');
-                const studentNumber = d.number || (d.gradeClass ? d.gradeClass.split(' ')[2]?.replace('번', '') : '-');
+                const gradeClassRaw = toText(
+                    d.gradeClass ||
+                    d.classInfo ||
+                    d.student?.gradeClass ||
+                    d.user?.gradeClass,
+                );
+                const classOnly = toText(
+                    d.class ||
+                    d.classOnly ||
+                    d.className ||
+                    d.studentClass ||
+                    d.student?.class ||
+                    d.user?.class ||
+                    (gradeClassRaw ? gradeClassRaw.split(' ')[1] : ''),
+                ) || '-';
+                const studentNumber = toText(
+                    d.number ||
+                    d.studentNumber ||
+                    d.studentNo ||
+                    d.no ||
+                    d.student?.number ||
+                    d.user?.number ||
+                    (gradeClassRaw ? gradeClassRaw.split(' ')[2]?.replace('번', '') : ''),
+                ) || '-';
+                const uid = toText(
+                    d.uid ||
+                    d.studentId ||
+                    d.userId ||
+                    d.student?.uid ||
+                    d.user?.uid,
+                );
+                const email = toText(
+                    d.email ||
+                    d.studentEmail ||
+                    d.userEmail ||
+                    d.student?.email ||
+                    d.user?.email,
+                );
+                const studentName = toText(
+                    d.name ||
+                    d.studentName ||
+                    d.userName ||
+                    d.student?.name ||
+                    d.user?.name,
+                ) || '학생';
 
                 rawList.push({
                     id: doc.id,
                     timestamp: d.timestamp,
-                    uid: d.uid || d.studentId || '',
-                    gradeClass: d.gradeClass,
-                    studentName: d.name || d.studentName || '학생',
-                    email: d.email,
+                    uid,
+                    gradeClass: gradeClassRaw,
+                    studentName,
+                    email,
                     score: Number(d.score || 0),
-                    classOnly: String(classOnly || '-'),
-                    studentNumber: String(studentNumber || '-'),
+                    classOnly: String(classOnly),
+                    studentNumber: String(studentNumber),
                 });
             });
 

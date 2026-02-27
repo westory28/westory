@@ -306,8 +306,10 @@ const QuizRunner: React.FC = () => {
                 await addDoc(collection(db, getSemesterCollectionPath(config, 'quiz_results')), {
                     uid: userData.uid,
                     name: userData.name || 'Student',
+                    email: userData.email || '',
                     class: userData.class || 0,
                     number: userData.number || 0,
+                    gradeClass: `${userData.grade || ''}학년 ${userData.class || ''}반 ${userData.number || ''}번`,
                     unitId: unitId,
                     category: category,
                     score: finalScore,
