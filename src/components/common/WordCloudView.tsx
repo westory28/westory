@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+﻿import React, { useMemo, useRef, useState } from 'react';
 
 interface WordCloudEntry {
     text: string;
@@ -178,6 +178,10 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({ entries, className = '', 
                             y={item.y}
                             fontSize={item.fontSize}
                             fill={item.color}
+                            stroke={hoveredText === item.text ? '#111827' : 'none'}
+                            strokeWidth={hoveredText === item.text ? Math.max(1.4, item.fontSize * 0.06) : 0}
+                            paintOrder="stroke fill"
+                            strokeLinejoin="round"
                             fontWeight={900}
                             textAnchor="middle"
                             dominantBaseline="central"
@@ -195,16 +199,6 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({ entries, className = '', 
                             }}
                         >
                             <title>{item.tooltip}</title>
-                            {hoveredText === item.text ? (
-                                <tspan
-                                    fill="none"
-                                    stroke="#111827"
-                                    strokeWidth={Math.max(1.3, item.fontSize * 0.065)}
-                                    paintOrder="stroke"
-                                >
-                                    {item.text}
-                                </tspan>
-                            ) : null}
                             {item.text}
                         </text>
                     ))}
@@ -212,25 +206,34 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({ entries, className = '', 
 
                 {showSubmitters && hoveredWord && (
                     <div
-                        className="absolute z-20 min-w-[190px] max-w-[320px] rounded-xl border border-gray-300 bg-white/95 backdrop-blur-sm shadow-xl p-3 pointer-events-none"
+                        className="absolute z-20 min-w-[220px] max-w-[360px] rounded-md bg-black/75 text-white shadow-2xl p-2.5 pl-3 border-l-4 border-orange-400 pointer-events-none"
                         style={{
                             left: `${tooltipLeft}px`,
                             top: `${tooltipTop}px`,
                             transform: 'translate(0, 0)',
                         }}
                     >
-                        <div className="text-xs font-extrabold text-gray-700 mb-1">
-                            {hoveredWord.text} ({hoveredWord.count}회)
+                        <div
+                            className="absolute -left-2 top-4 w-0 h-0"
+                            style={{
+                                borderTop: '8px solid transparent',
+                                borderBottom: '8px solid transparent',
+                                borderRight: '8px solid rgba(0, 0, 0, 0.75)',
+                            }}
+                        />
+                        <div className="text-base font-bold leading-none mb-1.5">
+                            {hoveredWord.text} ({hoveredWord.count})
                         </div>
-                        <div className="text-[11px] font-bold text-gray-500 mb-1">제출자</div>
-                        <div className="flex flex-wrap gap-1.5">
+                        <div className="text-[11px] font-bold text-orange-200 mb-1">Submitters</div>
+                        <div className="space-y-1">
                             {(hoveredWord.submitters || []).map((name) => (
-                                <span
+                                <div
                                     key={`${hoveredWord.text}-${name}`}
-                                    className="px-2 py-0.5 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-[11px] font-bold"
+                                    className="flex items-center gap-1.5 text-[12px] leading-tight font-semibold"
                                 >
-                                    {name}
-                                </span>
+                                    <span className="inline-block w-2 h-2 border border-orange-300 bg-transparent" />
+                                    <span>{name}</span>
+                                </div>
                             ))}
                         </div>
                     </div>
@@ -241,3 +244,4 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({ entries, className = '', 
 };
 
 export default WordCloudView;
+
