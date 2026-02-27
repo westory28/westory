@@ -143,6 +143,8 @@ const Login: React.FC = () => {
     const [consentModalOpen, setConsentModalOpen] = useState(false);
     const [consentItems, setConsentItems] = useState<ConsentItem[]>([]);
     const [consentChecked, setConsentChecked] = useState<Record<string, boolean>>({});
+    const [consentExpandedId, setConsentExpandedId] = useState<string | null>(null);
+    const [consentReadReady, setConsentReadReady] = useState<Record<string, boolean>>({});
     const consentResolverRef = useRef<((value: string[] | null) => void) | null>(null);
 
     const preferredRole = getSavedRole();
@@ -275,12 +277,17 @@ const Login: React.FC = () => {
         }
 
         const checkedMap: Record<string, boolean> = {};
+        const readMap: Record<string, boolean> = {};
         items.forEach((item) => {
             checkedMap[item.id] = preChecked.includes(item.id);
+            readMap[item.id] = preChecked.includes(item.id);
         });
 
         setConsentItems(items);
         setConsentChecked(checkedMap);
+        setConsentReadReady(readMap);
+        const firstPending = items.find((item) => !checkedMap[item.id]);
+        setConsentExpandedId(firstPending ? firstPending.id : items[0]?.id || null);
         setConsentModalOpen(true);
 
         return new Promise((resolve) => {
@@ -290,6 +297,8 @@ const Login: React.FC = () => {
 
     const closeConsentModal = (result: string[] | null) => {
         setConsentModalOpen(false);
+        setConsentExpandedId(null);
+        setConsentReadReady({});
         const resolver = consentResolverRef.current;
         consentResolverRef.current = null;
         resolver?.(result);
@@ -298,6 +307,7 @@ const Login: React.FC = () => {
     const consentReady = consentItems
         .filter((item) => item.required)
         .every((item) => consentChecked[item.id]);
+    const currentConsentStepIndex = Math.max(0, consentItems.findIndex((item) => !consentChecked[item.id]));
 
     const handleConsentConfirm = () => {
         if (!consentReady) {
@@ -310,6 +320,26 @@ const Login: React.FC = () => {
 
     const handleConsentCancel = () => {
         closeConsentModal(null);
+    };
+
+    const handleConsentScroll = (id: string, event: React.UIEvent<HTMLDivElement>) => {
+        if (consentReadReady[id]) return;
+        const el = event.currentTarget;
+        const reachedBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 8;
+        if (reachedBottom) {
+            setConsentReadReady((prev) => ({ ...prev, [id]: true }));
+        }
+    };
+
+    const handleConsentAgreeItem = (item: ConsentItem, index: number) => {
+        if (!consentReadReady[item.id]) {
+            alert('약관 내용을 끝까지 읽어주세요.');
+            return;
+        }
+
+        setConsentChecked((prev) => ({ ...prev, [item.id]: true }));
+        const nextItem = consentItems.slice(index + 1).find((x) => !consentChecked[x.id]);
+        setConsentExpandedId(nextItem ? nextItem.id : null);
     };
 
     const completeStudentOnboarding = async (
@@ -735,45 +765,81 @@ const Login: React.FC = () => {
             )}
             {consentModalOpen && (
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={handleConsentCancel}>
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg md:max-w-3xl p-6 md:p-8 mx-4 max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg md:max-w-4xl p-6 md:p-8 mx-4 max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
                         <div className="text-center mb-5 shrink-0">
                             <div className="bg-blue-100 w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3 text-2xl">{'\u{1F6E1}\uFE0F'}</div>
-                            <h2 className="text-xl md:text-2xl font-bold text-gray-900">개인정보 활용 동의</h2>
-                            <p className="text-gray-500 text-sm mt-2">서비스 이용을 위해 최초 1회 동의가 필요합니다.</p>
+                            <h2 className="text-2xl md:text-3xl font-bold text-gray-900">개인정보 활용 동의</h2>
+                            <p className="text-gray-600 text-base mt-2 font-medium">서비스 이용을 위해 최초 1회 동의가 필요합니다.</p>
                         </div>
 
-                        <div className="bg-gray-50 p-4 rounded-lg text-sm text-gray-600 overflow-y-auto mb-5 border border-gray-200 leading-relaxed flex-1 min-h-0 space-y-4">
+                        <div className="bg-gray-50 p-4 md:p-5 rounded-lg text-base text-gray-700 overflow-y-auto mb-5 border border-gray-200 leading-relaxed flex-1 min-h-0 space-y-4">
                             {consentItems.length === 0 && (
                                 <p className="text-center text-gray-400 py-6">등록된 동의 항목이 없습니다.</p>
                             )}
 
-                            {consentItems.map((item, idx) => (
-                                <div key={item.id} className={idx > 0 ? 'border-t border-gray-200 pt-4' : ''}>
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <span className="bg-purple-100 text-purple-600 font-bold text-xs px-2 py-0.5 rounded-full">{idx + 1}</span>
-                                        <span className="font-bold text-gray-800 text-sm">{item.title || '동의 항목'}</span>
-                                        {item.required ? (
-                                            <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-semibold">필수</span>
-                                        ) : (
-                                            <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full font-semibold">선택</span>
+                            {consentItems.map((item, idx) => {
+                                const isExpanded = consentExpandedId === item.id;
+                                const isChecked = !!consentChecked[item.id];
+                                const locked = idx > currentConsentStepIndex && !isChecked;
+                                return (
+                                    <div key={item.id} className={idx > 0 ? 'border-t border-gray-200 pt-4' : ''}>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (locked) return;
+                                                setConsentExpandedId((prev) => (prev === item.id ? null : item.id));
+                                            }}
+                                            className="w-full text-left"
+                                        >
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <span className="bg-purple-100 text-purple-700 font-extrabold text-sm px-2.5 py-1 rounded-full">{idx + 1}</span>
+                                                <span className="font-bold text-gray-900 text-lg">{item.title || '동의 항목'}</span>
+                                                {item.required ? (
+                                                    <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-semibold">필수</span>
+                                                ) : (
+                                                    <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-semibold">선택</span>
+                                                )}
+                                                {isChecked && (
+                                                    <span className="ml-auto text-xs md:text-sm font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                                                        동의 완료
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </button>
+
+                                        {isExpanded && (
+                                            <>
+                                                <div
+                                                    onScroll={(e) => handleConsentScroll(item.id, e)}
+                                                    className="bg-white p-4 md:p-5 rounded-lg text-[15px] md:text-base text-gray-700 border border-gray-200 max-h-56 md:max-h-64 overflow-y-auto mb-3 leading-7"
+                                                >
+                                                    <div dangerouslySetInnerHTML={{ __html: item.text || '' }} />
+                                                </div>
+                                                <div className="flex items-center justify-between gap-3 mb-1">
+                                                    <span className={`text-xs md:text-sm font-semibold ${consentReadReady[item.id] ? 'text-emerald-700' : 'text-amber-700'}`}>
+                                                        {consentReadReady[item.id] ? '읽기 확인됨' : '끝까지 스크롤하면 동의 버튼이 활성화됩니다.'}
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleConsentAgreeItem(item, idx)}
+                                                        disabled={isChecked || !consentReadReady[item.id]}
+                                                        className="shrink-0 px-4 md:px-5 py-2 rounded-lg text-sm md:text-base font-bold bg-blue-600 text-white disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-blue-700 transition"
+                                                    >
+                                                        {isChecked ? '동의 완료' : `${item.required ? '필수' : '선택'} 동의`}
+                                                    </button>
+                                                </div>
+                                            </>
+                                        )}
+
+                                        {!isExpanded && !isChecked && locked && (
+                                            <p className="text-xs md:text-sm text-gray-400 mt-1">이전 항목 동의 후 열 수 있습니다.</p>
+                                        )}
+                                        {!isExpanded && !isChecked && !locked && (
+                                            <p className="text-xs md:text-sm text-gray-500 mt-1">클릭하여 내용을 확인하고 동의하세요.</p>
                                         )}
                                     </div>
-                                    <div className="bg-white p-3 rounded-lg text-sm text-gray-600 border border-gray-100 max-h-44 overflow-y-auto mb-2">
-                                        <div dangerouslySetInnerHTML={{ __html: item.text || '' }} />
-                                    </div>
-                                    <label className="flex items-center gap-2 cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={!!consentChecked[item.id]}
-                                            onChange={(e) => setConsentChecked((prev) => ({ ...prev, [item.id]: e.target.checked }))}
-                                            className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
-                                        />
-                                        <span className={`text-sm font-semibold ${item.required ? 'text-gray-700' : 'text-gray-500'}`}>
-                                            {item.title || '위 내용'}에 동의합니다 {item.required ? '(필수)' : '(선택)'}
-                                        </span>
-                                    </label>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
 
                         <div className="shrink-0 flex items-center justify-end gap-2">
