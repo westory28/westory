@@ -91,8 +91,8 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({ entries, className = '', 
 
         for (const item of source) {
             const ratio = maxCount === minCount ? 1 : (item.count - minCount) / (maxCount - minCount);
-            // Keep one-time submissions clearly visible and scale up repeated words.
-            const baseSize = Math.round(34 + Math.pow(ratio, 0.84) * 48);
+            // Start larger overall so early clouds remain readable.
+            const baseSize = Math.round(42 + Math.pow(ratio, 0.84) * 56);
 
             let fontSize = baseSize;
             let placedWord: PositionedWord | null = null;
@@ -100,7 +100,8 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({ entries, className = '', 
             for (let shrink = 0; shrink < 4 && !placedWord; shrink += 1) {
                 const baseWidth = Math.max(fontSize * (item.text.length * 0.52 + 1.8), fontSize * 2.5);
                 const baseHeight = fontSize * 1.06;
-                const rotate: 0 | 90 = hashCode(item.text) % 5 === 0 ? 90 : 0;
+                // Favor horizontal layout; keep vertical words as sparse accents.
+                const rotate: 0 | 90 = hashCode(item.text) % 10 === 0 ? 90 : 0;
                 const width = rotate === 90 ? baseHeight : baseWidth;
                 const height = rotate === 90 ? baseWidth : baseHeight;
                 const angleSeed = hashCode(item.text) % 360;
@@ -129,7 +130,7 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({ entries, className = '', 
                     break;
                 }
 
-                fontSize = Math.max(22, Math.floor(fontSize * 0.92));
+                fontSize = Math.max(26, Math.floor(fontSize * 0.92));
             }
 
             if (placedWord) placed.push(placedWord);
