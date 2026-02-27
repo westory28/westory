@@ -331,6 +331,16 @@ const Login: React.FC = () => {
         }
     };
 
+    useEffect(() => {
+        if (!consentModalOpen || !consentExpandedId || consentReadReady[consentExpandedId]) return;
+        const el = document.getElementById(`consent-scroll-${consentExpandedId}`) as HTMLDivElement | null;
+        if (!el) return;
+        // If content is shorter than the viewport, treat it as fully read.
+        if (el.scrollHeight <= el.clientHeight + 2) {
+            setConsentReadReady((prev) => ({ ...prev, [consentExpandedId]: true }));
+        }
+    }, [consentModalOpen, consentExpandedId, consentReadReady]);
+
     const handleConsentAgreeItem = (item: ConsentItem, index: number) => {
         if (!consentReadReady[item.id]) {
             alert('약관 내용을 끝까지 읽어주세요.');
@@ -810,6 +820,7 @@ const Login: React.FC = () => {
                                         {isExpanded && (
                                             <>
                                                 <div
+                                                    id={`consent-scroll-${item.id}`}
                                                     onScroll={(e) => handleConsentScroll(item.id, e)}
                                                     className="bg-white p-4 md:p-5 rounded-lg text-[15px] md:text-base text-gray-700 border border-gray-200 max-h-56 md:max-h-64 overflow-y-auto mb-3 leading-7"
                                                 >
