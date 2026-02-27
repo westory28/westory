@@ -236,9 +236,14 @@ const Header: React.FC = () => {
                         {profileLabel}
                     </Link>
 
-                    <span className={`lg:hidden inline-flex items-center justify-center font-mono font-bold text-xs min-w-[46px] px-2 py-1 rounded-md border border-stone-300 bg-stone-100 ${remainingSeconds < 300 ? 'text-red-500 border-red-300 bg-red-50' : 'text-stone-600'}`}>
+                    <button
+                        type="button"
+                        onClick={extendSession}
+                        title="시간 연장"
+                        className={`lg:hidden inline-flex items-center justify-center font-mono font-bold text-xs min-w-[46px] px-2 py-1 rounded-md border border-stone-300 bg-stone-100 transition ${remainingSeconds < 300 ? 'text-red-500 border-red-300 bg-red-50' : 'text-stone-600'} hover:text-blue-600`}
+                    >
                         {formatCountdown(remainingSeconds)}
-                    </span>
+                    </button>
 
                     <div className="hidden lg:flex items-center gap-1 md:gap-2 px-3 py-1 bg-stone-100 rounded-full border border-stone-200">
                         <i className="fas fa-stopwatch text-stone-400 text-xs"></i>

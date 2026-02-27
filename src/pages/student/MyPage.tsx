@@ -896,9 +896,9 @@ const MyPage: React.FC = () => {
                                 <h2 className="text-2xl font-bold text-gray-800">나의 성적표</h2>
 
                                 <div className="rounded-2xl border border-gray-200 bg-white p-4">
-                                    <div className="mb-3 flex items-center justify-between">
-                                        <h3 className="font-bold text-gray-800">종합 성적 그래프 (정기시험/수행평가 반영)</h3>
-                                        <div className="flex flex-col items-end gap-1">
+                                    <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                                        <h3 className="font-bold text-gray-800 whitespace-normal break-keep">종합 성적 그래프 (정기시험/수행평가 반영)</h3>
+                                        <div className="flex flex-col items-start gap-1 md:items-end">
                                             <span className="text-xs text-gray-500">마우스를 올리면 영역별 점수가 표시됩니다.</span>
                                             <div className="flex flex-col items-end gap-1">
                                                 <div className="overflow-hidden rounded-lg shadow-sm border border-gray-200">
