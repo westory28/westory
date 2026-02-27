@@ -126,6 +126,14 @@ service cloud.firestore {
       allow write: if isTeacher();
     }
 
+    match /lesson_progress/{userId} {
+      allow read, write: if isSignedIn() && (request.auth.uid == userId || isTeacher());
+
+      match /units/{unitId} {
+        allow read, write: if isSignedIn() && (request.auth.uid == userId || isTeacher());
+      }
+    }
+
     match /think_cloud_sessions/{sessionId} {
       allow read: if canAccessThinkCloudTarget(resource.data.targetGrade, resource.data.targetClass);
       allow create, update, delete: if isTeacher();
@@ -205,6 +213,14 @@ service cloud.firestore {
       match /think_cloud_state/{docId} {
         allow read: if isSignedIn();
         allow write: if isTeacher();
+      }
+
+      match /lesson_progress/{userId} {
+        allow read, write: if isSignedIn() && (request.auth.uid == userId || isTeacher());
+
+        match /units/{unitId} {
+          allow read, write: if isSignedIn() && (request.auth.uid == userId || isTeacher());
+        }
       }
 
       match /think_cloud_sessions/{sessionId} {
