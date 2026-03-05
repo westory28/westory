@@ -1,5 +1,13 @@
 ﻿import React, { useEffect, useRef, useState } from 'react';
-import { GoogleAuthProvider, User, signInWithPopup, signOut } from 'firebase/auth';
+import {
+    AuthError,
+    getRedirectResult,
+    GoogleAuthProvider,
+    signInWithPopup,
+    signInWithRedirect,
+    signOut,
+    User,
+} from 'firebase/auth';
 import {
     collection,
     doc,
@@ -19,6 +27,8 @@ import type { UserData } from '../types';
 
 const TEACHER_EMAIL = 'westoria28@gmail.com';
 const ROLE_SESSION_KEY = 'westoryPortalRole';
+const PENDING_LOGIN_MODE_KEY = 'westoryPendingLoginMode';
+type LoginMode = 'student' | 'teacher';
 
 interface SchoolOption {
     value: string;
@@ -116,6 +126,32 @@ const pickStudentRosterProfile = async (email: string): Promise<Partial<UserData
     }
 };
 
+const isLikelyInAppBrowser = (): boolean => {
+    if (typeof navigator === 'undefined') return false;
+    const ua = navigator.userAgent || '';
+    return /(KAKAOTALK|FBAN|FBAV|Instagram|Line|NAVER|DaumApps|; wv\)|WebView)/i.test(ua);
+};
+
+const isIOSDevice = (): boolean => {
+    if (typeof navigator === 'undefined') return false;
+    const ua = navigator.userAgent || '';
+    return /iPhone|iPad|iPod/i.test(ua);
+};
+
+const shouldPreferRedirectLogin = (): boolean => {
+    return isLikelyInAppBrowser() || isIOSDevice();
+};
+
+const isPopupFallbackError = (error: unknown): boolean => {
+    const code = (error as Partial<AuthError>)?.code || '';
+    return [
+        'auth/popup-blocked',
+        'auth/popup-closed-by-user',
+        'auth/cancelled-popup-request',
+        'auth/operation-not-supported-in-this-environment',
+    ].includes(code);
+};
+
 const Login: React.FC = () => {
     const { currentUser, userData, interfaceConfig, loading } = useAuth();
     const navigate = useNavigate();
@@ -146,6 +182,7 @@ const Login: React.FC = () => {
     const [consentExpandedId, setConsentExpandedId] = useState<string | null>(null);
     const [consentReadReady, setConsentReadReady] = useState<Record<string, boolean>>({});
     const consentResolverRef = useRef<((value: string[] | null) => void) | null>(null);
+    const redirectHandledRef = useRef(false);
 
     const preferredRole = getSavedRole();
     const isTeacherUser = (preferredRole || userData?.role) === 'teacher';
@@ -153,6 +190,21 @@ const Login: React.FC = () => {
     const clearRoleCache = () => {
         sessionStorage.removeItem(ROLE_SESSION_KEY);
         localStorage.removeItem(ROLE_SESSION_KEY);
+    };
+
+    const setPendingLoginMode = (mode: LoginMode) => {
+        sessionStorage.setItem(PENDING_LOGIN_MODE_KEY, mode);
+        localStorage.setItem(PENDING_LOGIN_MODE_KEY, mode);
+    };
+
+    const getPendingLoginMode = (): LoginMode | null => {
+        const saved = sessionStorage.getItem(PENDING_LOGIN_MODE_KEY) || localStorage.getItem(PENDING_LOGIN_MODE_KEY);
+        return saved === 'teacher' || saved === 'student' ? saved : null;
+    };
+
+    const clearPendingLoginMode = () => {
+        sessionStorage.removeItem(PENDING_LOGIN_MODE_KEY);
+        localStorage.removeItem(PENDING_LOGIN_MODE_KEY);
     };
 
     useEffect(() => {
@@ -412,6 +464,117 @@ const Login: React.FC = () => {
         };
     };
 
+    const finishLoginForRole = async (user: User, mode: LoginMode) => {
+        const isTeacherEmail = user.email === TEACHER_EMAIL;
+        if (mode === 'teacher' && !isTeacherEmail) {
+            alert('관리자 로그인은 관리자 계정으로만 가능합니다.');
+            clearPendingLoginMode();
+            clearRoleCache();
+            await signOut(auth);
+            return;
+        }
+
+        const userRef = doc(db, 'users', user.uid);
+        const userSnap = await getDoc(userRef);
+        const existing = userSnap.exists() ? (userSnap.data() as Partial<UserData>) : null;
+        const nextRole: UserData['role'] = mode === 'teacher' ? 'teacher' : 'student';
+
+        const rosterProfile = nextRole === 'student'
+            ? await pickStudentRosterProfile(user.email || '')
+            : null;
+
+        let resolvedName = (existing?.name || '').trim() || (rosterProfile?.name || '').trim();
+        let onboardingResult: StudentOnboardingResult | null = null;
+
+        if (nextRole === 'student') {
+            onboardingResult = await completeStudentOnboarding(user, existing, rosterProfile);
+            if (!onboardingResult) {
+                clearPendingLoginMode();
+                clearRoleCache();
+                await signOut(auth);
+                return;
+            }
+            resolvedName = onboardingResult.name;
+        } else if (!resolvedName) {
+            resolvedName = (user.displayName || '교사').trim() || '교사';
+        }
+
+        const basePayload: Record<string, unknown> = {
+            uid: user.uid,
+            email: user.email || '',
+            photoURL: user.photoURL || '',
+            role: nextRole,
+            lastLogin: serverTimestamp(),
+        };
+
+        if (resolvedName) {
+            basePayload.name = resolvedName;
+        }
+
+        if (nextRole === 'student') {
+            if (!onboardingResult) {
+                clearPendingLoginMode();
+                clearRoleCache();
+                await signOut(auth);
+                return;
+            }
+            basePayload.customNameConfirmed = true;
+            basePayload.grade = onboardingResult.grade;
+            basePayload.class = onboardingResult.classValue;
+            basePayload.number = onboardingResult.number;
+            basePayload.privacyAgreed = onboardingResult.privacyAgreed;
+            basePayload.consentAgreedItems = onboardingResult.consentAgreedItems;
+            if (onboardingResult.newlyAgreedPrivacy) {
+                basePayload.privacyAgreedAt = serverTimestamp();
+            }
+        }
+
+        if (!userSnap.exists()) {
+            await setDoc(userRef, {
+                ...basePayload,
+                grade: nextRole === 'student' && onboardingResult ? onboardingResult.grade : '',
+                class: nextRole === 'student' && onboardingResult ? onboardingResult.classValue : '',
+                number: nextRole === 'student' && onboardingResult ? onboardingResult.number : '',
+                createdAt: serverTimestamp(),
+            }, { merge: true });
+        } else {
+            await setDoc(userRef, basePayload, { merge: true });
+        }
+
+        sessionStorage.setItem(ROLE_SESSION_KEY, nextRole);
+        localStorage.setItem(ROLE_SESSION_KEY, nextRole);
+        clearPendingLoginMode();
+        navigate(nextRole === 'teacher' ? '/teacher/dashboard' : '/student/dashboard');
+    };
+
+    useEffect(() => {
+        if (redirectHandledRef.current) return;
+        redirectHandledRef.current = true;
+
+        const mode = getPendingLoginMode();
+        if (!mode) return;
+
+        const resolveRedirect = async () => {
+            setAuthBusy(true);
+            try {
+                const result = await getRedirectResult(auth);
+                if (!result?.user) {
+                    clearPendingLoginMode();
+                    return;
+                }
+                await finishLoginForRole(result.user, mode);
+            } catch (error) {
+                console.error('Redirect login failed', error);
+                clearPendingLoginMode();
+                alert('리다이렉트 로그인 처리 중 오류가 발생했습니다. 다시 시도해주세요.');
+            } finally {
+                setAuthBusy(false);
+            }
+        };
+
+        void resolveRedirect();
+    }, []);
+
     const goToDashboard = async () => {
         if (!currentUser) return;
         if (isTeacherUser) {
@@ -469,94 +632,33 @@ const Login: React.FC = () => {
         }
     };
 
-    const handleLogin = async (mode: 'student' | 'teacher') => {
+    const handleLogin = async (mode: LoginMode) => {
         if (authBusy) return;
         const provider = new GoogleAuthProvider();
         provider.setCustomParameters({ prompt: 'select_account' });
+        setPendingLoginMode(mode);
         setAuthBusy(true);
 
         try {
-            const result = await signInWithPopup(auth, provider);
-            const user = result.user;
-            const isTeacherEmail = user.email === TEACHER_EMAIL;
-
-            if (mode === 'teacher' && !isTeacherEmail) {
-                alert('관리자 로그인은 관리자 계정으로만 가능합니다.');
-                clearRoleCache();
-                await signOut(auth);
+            if (shouldPreferRedirectLogin()) {
+                await signInWithRedirect(auth, provider);
                 return;
             }
 
-            const userRef = doc(db, 'users', user.uid);
-            const userSnap = await getDoc(userRef);
-            const existing = userSnap.exists() ? (userSnap.data() as Partial<UserData>) : null;
-            const nextRole: UserData['role'] = mode === 'teacher' ? 'teacher' : 'student';
-
-            const rosterProfile = nextRole === 'student'
-                ? await pickStudentRosterProfile(user.email || '')
-                : null;
-
-            let resolvedName = (existing?.name || '').trim() || (rosterProfile?.name || '').trim();
-            let onboardingResult: StudentOnboardingResult | null = null;
-
-            if (nextRole === 'student') {
-                onboardingResult = await completeStudentOnboarding(user, existing, rosterProfile);
-                if (!onboardingResult) {
-                    clearRoleCache();
-                    await signOut(auth);
-                    return;
-                }
-                resolvedName = onboardingResult.name;
-            } else if (!resolvedName) {
-                resolvedName = (user.displayName || '교사').trim() || '교사';
-            }
-
-            const basePayload: Record<string, unknown> = {
-                uid: user.uid,
-                email: user.email || '',
-                photoURL: user.photoURL || '',
-                role: nextRole,
-                lastLogin: serverTimestamp(),
-            };
-
-            if (resolvedName) {
-                basePayload.name = resolvedName;
-            }
-
-            if (nextRole === 'student') {
-                if (!onboardingResult) {
-                    clearRoleCache();
-                    await signOut(auth);
-                    return;
-                }
-                basePayload.customNameConfirmed = true;
-                basePayload.grade = onboardingResult.grade;
-                basePayload.class = onboardingResult.classValue;
-                basePayload.number = onboardingResult.number;
-                basePayload.privacyAgreed = onboardingResult.privacyAgreed;
-                basePayload.consentAgreedItems = onboardingResult.consentAgreedItems;
-                if (onboardingResult.newlyAgreedPrivacy) {
-                    basePayload.privacyAgreedAt = serverTimestamp();
-                }
-            }
-
-            if (!userSnap.exists()) {
-                await setDoc(userRef, {
-                    ...basePayload,
-                    grade: nextRole === 'student' && onboardingResult ? onboardingResult.grade : '',
-                    class: nextRole === 'student' && onboardingResult ? onboardingResult.classValue : '',
-                    number: nextRole === 'student' && onboardingResult ? onboardingResult.number : '',
-                    createdAt: serverTimestamp(),
-                }, { merge: true });
-            } else {
-                await setDoc(userRef, basePayload, { merge: true });
-            }
-
-            sessionStorage.setItem(ROLE_SESSION_KEY, nextRole);
-            localStorage.setItem(ROLE_SESSION_KEY, nextRole);
-            navigate(nextRole === 'teacher' ? '/teacher/dashboard' : '/student/dashboard');
+            const result = await signInWithPopup(auth, provider);
+            await finishLoginForRole(result.user, mode);
         } catch (error) {
+            if (isPopupFallbackError(error)) {
+                try {
+                    await signInWithRedirect(auth, provider);
+                    return;
+                } catch (redirectError) {
+                    console.error('Redirect fallback login failed', redirectError);
+                }
+            }
+
             console.error('Login failed', error);
+            clearPendingLoginMode();
             alert('로그인에 실패했습니다.');
         } finally {
             setAuthBusy(false);

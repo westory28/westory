@@ -1,5 +1,11 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import {
+    browserLocalPersistence,
+    getAuth,
+    indexedDBLocalPersistence,
+    inMemoryPersistence,
+    setPersistence,
+} from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getAnalytics } from 'firebase/analytics';
 
@@ -17,6 +23,22 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 let analytics = null;
+
+if (typeof window !== 'undefined') {
+    // Some mobile browsers/in-app browsers may not allow IndexedDB persistence.
+    // Gracefully fallback to localStorage or memory to avoid auth stalls.
+    void (async () => {
+        try {
+            await setPersistence(auth, indexedDBLocalPersistence);
+        } catch {
+            try {
+                await setPersistence(auth, browserLocalPersistence);
+            } catch {
+                await setPersistence(auth, inMemoryPersistence);
+            }
+        }
+    })();
+}
 
 try {
     const isBrowser = typeof window !== 'undefined';
