@@ -1,6 +1,7 @@
 export interface MenuChild {
     name: string;
     url: string;
+    hidden?: boolean;
 }
 
 export interface MenuItem {
@@ -87,6 +88,7 @@ const sanitizeChildren = (children: unknown): MenuChild[] => {
         .map((child) => ({
             name: toSafeText((child as MenuChild)?.name),
             url: toSafeText((child as MenuChild)?.url),
+            hidden: (child as MenuChild)?.hidden === true,
         }))
         .filter((child) => child.name && child.url);
 };

@@ -40,6 +40,10 @@ const Header: React.FC = () => {
 
     const isTeacherPortal = portal === 'teacher';
     const menuItems = menuConfig[portal] || MENUS[portal] || [];
+    const getVisibleChildren = (item: { children?: Array<{ hidden?: boolean; url: string; name: string }> }) => {
+        if (!item.children?.length) return [];
+        return isTeacherPortal ? item.children : item.children.filter((child) => child.hidden !== true);
+    };
     const home = `/${portal}/dashboard`;
     const profileTarget = isTeacherPortal ? '/teacher/settings' : '/student/mypage';
     const profileLabel = `${displayName} ${isTeacherPortal ? '교사' : '학생'}`;
@@ -184,8 +188,9 @@ const Header: React.FC = () => {
 
                     <nav className={`desktop-nav ml-4 ${!isTeacherPortal ? 'student-desktop-nav' : ''}`}>
                         {menuItems.map((item, idx) => {
-                            const hasChildren = !!item.children?.length;
-                            const active = isActive(item.url) || !!item.children?.some((child) => isChildActive(child.url, item.children || []));
+                            const visibleChildren = getVisibleChildren(item);
+                            const hasChildren = visibleChildren.length > 0;
+                            const active = isActive(item.url) || visibleChildren.some((child) => isChildActive(child.url, visibleChildren));
 
                             if (!hasChildren) {
                                 return (
@@ -203,11 +208,11 @@ const Header: React.FC = () => {
                                     </Link>
                                     <div className="absolute top-[calc(100%-8px)] left-0 w-[10.5rem] pt-0 invisible opacity-0 group-hover:visible group-hover:opacity-100 transition duration-150 transform translate-y-0 z-[100]">
                                         <div className="bg-white border border-gray-200 shadow-xl rounded-xl overflow-hidden">
-                                            {item.children?.map((child, childIdx) => (
+                                            {visibleChildren.map((child, childIdx) => (
                                                 <Link
                                                     key={`${child.url}-${childIdx}`}
                                                     to={child.url}
-                                                    className={`block px-2.5 py-3 text-[13px] border-b border-gray-50 last:border-0 whitespace-nowrap font-bold ${isChildActive(child.url, item.children || []) ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'}`}
+                                                    className={`block px-2.5 py-3 text-[13px] border-b border-gray-50 last:border-0 whitespace-nowrap font-bold ${isChildActive(child.url, visibleChildren) ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'}`}
                                                 >
                                                     {child.name}
                                                 </Link>
@@ -279,22 +284,24 @@ const Header: React.FC = () => {
             )}
 
             <div id="mobile-menu" className={mobileMenuOpen ? 'open' : ''}>
-                {menuItems.map((item, idx) => (
+                {menuItems.map((item, idx) => {
+                    const visibleChildren = getVisibleChildren(item);
+                    return (
                     <div key={`${item.url}-mobile-${idx}`}>
                         <Link
                             to={item.url}
-                            className={`mobile-link ${isActive(item.url) || !!item.children?.some((child) => isChildActive(child.url, item.children || [])) ? 'active' : ''}`}
+                            className={`mobile-link ${isActive(item.url) || visibleChildren.some((child) => isChildActive(child.url, visibleChildren)) ? 'active' : ''}`}
                             onClick={() => setMobileMenuOpen(false)}
                         >
                             {item.name}
                         </Link>
-                        {!!item.children?.length && (
+                        {visibleChildren.length > 0 && (
                             <div className="bg-gray-50 border-b border-gray-100 pb-1">
-                                {item.children.map((child, childIdx) => (
+                                {visibleChildren.map((child, childIdx) => (
                                     <Link
                                         key={`${child.url}-mobile-child-${childIdx}`}
                                         to={child.url}
-                                        className={`block pl-12 pr-4 py-1.5 text-sm rounded-r-full mr-2 font-bold ${isChildActive(child.url, item.children || []) ? 'text-blue-600 bg-blue-50' : 'text-gray-500 hover:text-blue-600 hover:bg-gray-100'}`}
+                                        className={`block pl-12 pr-4 py-1.5 text-sm rounded-r-full mr-2 font-bold ${isChildActive(child.url, visibleChildren) ? 'text-blue-600 bg-blue-50' : 'text-gray-500 hover:text-blue-600 hover:bg-gray-100'}`}
                                         onClick={() => setMobileMenuOpen(false)}
                                     >
                                         <i className="fas fa-angle-right mr-2 text-xs opacity-50"></i>
@@ -304,7 +311,7 @@ const Header: React.FC = () => {
                             </div>
                         )}
                     </div>
-                ))}
+                )})}
             </div>
         </header>
     );

@@ -173,6 +173,20 @@ const SettingsInterface: React.FC = () => {
         );
     };
 
+    const toggleChildHidden = (portal: PortalType, parentIndex: number, childIndex: number) => {
+        updatePortalMenus(portal, (menus) =>
+            menus.map((item, idx) => {
+                if (idx !== parentIndex || !item.children) return item;
+                return {
+                    ...item,
+                    children: item.children.map((child, cIdx) =>
+                        cIdx === childIndex ? { ...child, hidden: !child.hidden } : child,
+                    ),
+                };
+            }),
+        );
+    };
+
     const updateParentDraft = (portal: PortalType, field: 'name' | 'url', value: string) => {
         setParentDraft((prev) => ({
             ...prev,
@@ -236,7 +250,7 @@ const SettingsInterface: React.FC = () => {
                 if (idx !== parentIndex) return item;
                 return {
                     ...item,
-                    children: [...(item.children || []), { name, url }],
+                    children: [...(item.children || []), { name, url, hidden: false }],
                 };
             }),
         );
@@ -497,8 +511,16 @@ const SettingsInterface: React.FC = () => {
                                                     {item.children && item.children.length > 0 ? (
                                                         <ul className="space-y-1.5">
                                                             {item.children.map((child, childIdx) => (
-                                                                <li key={`preview-child-${child.url}-${childIdx}`} className="text-sm text-gray-700 border-b border-dashed border-gray-200 pb-1">
+                                                                <li
+                                                                    key={`preview-child-${child.url}-${childIdx}`}
+                                                                    className={`text-sm border-b border-dashed border-gray-200 pb-1 ${child.hidden ? 'text-gray-400 line-through' : 'text-gray-700'}`}
+                                                                >
                                                                     • {child.name}
+                                                                    {child.hidden && (
+                                                                        <span className="ml-2 inline-flex items-center rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-semibold text-gray-600">
+                                                                            숨김
+                                                                        </span>
+                                                                    )}
                                                                 </li>
                                                             ))}
                                                         </ul>
@@ -630,6 +652,15 @@ const SettingsInterface: React.FC = () => {
                                                         >
                                                             아래로
                                                         </button>
+                                                        {activePortal === 'student' && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => toggleChildHidden(activePortal, parentIndex, childIndex)}
+                                                                className={`px-2 py-1 text-[11px] rounded border ${child.hidden ? 'border-emerald-300 text-emerald-700 bg-emerald-50' : 'border-amber-300 text-amber-700 bg-amber-50'}`}
+                                                            >
+                                                                {child.hidden ? '숨김 해제' : '숨기기'}
+                                                            </button>
+                                                        )}
                                                         <button
                                                             type="button"
                                                             onClick={() => deleteChild(activePortal, parentIndex, childIndex)}
@@ -645,6 +676,9 @@ const SettingsInterface: React.FC = () => {
                                                         className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                                                     />
                                                     <p className="text-[11px] text-gray-500 mt-2 break-all">URL: {child.url}</p>
+                                                    {activePortal === 'student' && child.hidden && (
+                                                        <p className="text-[11px] text-amber-700 mt-1">학생 대시보드에서 숨김 처리됨</p>
+                                                    )}
                                                 </div>
                                             ))
                                         ) : (
