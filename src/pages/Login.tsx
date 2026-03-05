@@ -71,6 +71,10 @@ const defaultClassOptions: SchoolOption[] = Array.from({ length: 12 }, (_, i) =>
     value: String(i + 1),
     label: `${i + 1}반`,
 }));
+const defaultNumberOptions: SchoolOption[] = Array.from({ length: 40 }, (_, i) => ({
+    value: String(i + 1),
+    label: `${i + 1}번`,
+}));
 
 const getSavedRole = (): UserData['role'] | null => {
     const saved = sessionStorage.getItem(ROLE_SESSION_KEY) || localStorage.getItem(ROLE_SESSION_KEY);
@@ -85,6 +89,19 @@ const normalizeSchoolField = (value: unknown): string => {
     const parsed = Number(digits);
     if (!Number.isFinite(parsed) || parsed <= 0) return '';
     return String(parsed);
+};
+
+const normalizeStudentName = (value: unknown): string => {
+    return String(value ?? '').replace(/[^가-힣]/g, '').slice(0, 4);
+};
+
+const isValidStudentName = (value: string): boolean => {
+    return /^[가-힣]{2,4}$/.test(value);
+};
+
+const isValidStudentNumber = (value: string): boolean => {
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && parsed >= 1 && parsed <= defaultNumberOptions.length;
 };
 
 const pickStudentRosterProfile = async (email: string): Promise<Partial<UserData> | null> => {
@@ -263,7 +280,12 @@ const Login: React.FC = () => {
     }, []);
 
     const openProfileModal = (initial: StudentProfileForm): Promise<StudentProfileForm | null> => {
-        setProfileForm(initial);
+        const normalizedNumber = normalizeSchoolField(initial.number);
+        setProfileForm({
+            ...initial,
+            name: normalizeStudentName(initial.name),
+            number: isValidStudentNumber(normalizedNumber) ? normalizedNumber : '',
+        });
         setProfileModalOpen(true);
         return new Promise((resolve) => {
             profileResolverRef.current = resolve;
@@ -278,13 +300,21 @@ const Login: React.FC = () => {
     };
 
     const handleProfileSubmit = () => {
-        const name = profileForm.name.trim().slice(0, 20);
+        const name = normalizeStudentName(profileForm.name);
         const grade = normalizeSchoolField(profileForm.grade);
         const classValue = normalizeSchoolField(profileForm.className);
         const number = normalizeSchoolField(profileForm.number);
 
         if (!name || !grade || !classValue || !number) {
             alert('이름, 학년, 반, 번호를 모두 입력해주세요.');
+            return;
+        }
+        if (!isValidStudentName(name)) {
+            alert('이름은 한글 2~4글자만 입력 가능합니다.');
+            return;
+        }
+        if (!isValidStudentNumber(number)) {
+            alert('번호는 드롭다운에서 선택해주세요.');
             return;
         }
 
@@ -428,7 +458,7 @@ const Login: React.FC = () => {
 
             if (!profile) return null;
 
-            resolvedName = profile.name.trim().slice(0, 20);
+            resolvedName = normalizeStudentName(profile.name);
             gradeValue = normalizeSchoolField(profile.grade);
             classValue = normalizeSchoolField(profile.className);
             numberValue = normalizeSchoolField(profile.number);
@@ -436,6 +466,14 @@ const Login: React.FC = () => {
 
         if (!resolvedName || !gradeValue || !classValue || !numberValue) {
             alert('학생 정보 입력이 완료되지 않았습니다.');
+            return null;
+        }
+        if (!isValidStudentName(resolvedName)) {
+            alert('이름은 한글 2~4글자만 입력 가능합니다.');
+            return null;
+        }
+        if (!isValidStudentNumber(numberValue)) {
+            alert('번호는 드롭다운에서 선택해주세요.');
             return null;
         }
 
@@ -788,7 +826,7 @@ const Login: React.FC = () => {
             )}
 
             {profileModalOpen && (
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={handleProfileCancel}>
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm">
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 md:p-8 mx-4" onClick={(e) => e.stopPropagation()}>
                         <div className="text-center mb-5">
                             <h2 className="text-2xl font-bold text-gray-800">{'\u{1F44B} 반가워요!'}</h2>
@@ -834,15 +872,16 @@ const Login: React.FC = () => {
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 mb-1">번호</label>
-                                    <input
-                                        type="number"
+                                    <select
                                         value={profileForm.number}
-                                        min={1}
-                                        max={99}
                                         onChange={(e) => setProfileForm((prev) => ({ ...prev, number: e.target.value }))}
-                                        placeholder="예: 15"
-                                        className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                                    />
+                                        className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                                    >
+                                        <option value="">선택</option>
+                                        {defaultNumberOptions.map((studentNumber) => (
+                                            <option key={studentNumber.value} value={studentNumber.value}>{studentNumber.label}</option>
+                                        ))}
+                                    </select>
                                 </div>
                             </div>
 
@@ -851,11 +890,12 @@ const Login: React.FC = () => {
                                 <input
                                     type="text"
                                     value={profileForm.name}
-                                    maxLength={20}
-                                    onChange={(e) => setProfileForm((prev) => ({ ...prev, name: e.target.value }))}
-                                    placeholder="본명 (예: 김철수)"
+                                    maxLength={4}
+                                    onChange={(e) => setProfileForm((prev) => ({ ...prev, name: normalizeStudentName(e.target.value) }))}
+                                    placeholder="한글 2~4글자"
                                     className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                                 />
+                                <p className="mt-1 text-xs text-gray-500">숫자/영문/특수문자는 입력할 수 없습니다.</p>
                             </div>
                         </div>
 
