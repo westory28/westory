@@ -22,6 +22,7 @@ import {
 } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../lib/firebase';
+import { readStorage, removeStorage, writeStorage } from '../lib/safeStorage';
 import { useAuth } from '../contexts/AuthContext';
 import type { UserData } from '../types';
 
@@ -77,7 +78,7 @@ const defaultNumberOptions: SchoolOption[] = Array.from({ length: 40 }, (_, i) =
 }));
 
 const getSavedRole = (): UserData['role'] | null => {
-    const saved = sessionStorage.getItem(ROLE_SESSION_KEY) || localStorage.getItem(ROLE_SESSION_KEY);
+    const saved = readStorage(ROLE_SESSION_KEY);
     return saved === 'teacher' || saved === 'student' ? saved : null;
 };
 
@@ -205,23 +206,24 @@ const Login: React.FC = () => {
     const isTeacherUser = (preferredRole || userData?.role) === 'teacher';
 
     const clearRoleCache = () => {
-        sessionStorage.removeItem(ROLE_SESSION_KEY);
-        localStorage.removeItem(ROLE_SESSION_KEY);
+        removeStorage(ROLE_SESSION_KEY);
+    };
+
+    const saveRoleCache = (role: UserData['role']) => {
+        writeStorage(ROLE_SESSION_KEY, role);
     };
 
     const setPendingLoginMode = (mode: LoginMode) => {
-        sessionStorage.setItem(PENDING_LOGIN_MODE_KEY, mode);
-        localStorage.setItem(PENDING_LOGIN_MODE_KEY, mode);
+        writeStorage(PENDING_LOGIN_MODE_KEY, mode);
     };
 
     const getPendingLoginMode = (): LoginMode | null => {
-        const saved = sessionStorage.getItem(PENDING_LOGIN_MODE_KEY) || localStorage.getItem(PENDING_LOGIN_MODE_KEY);
+        const saved = readStorage(PENDING_LOGIN_MODE_KEY);
         return saved === 'teacher' || saved === 'student' ? saved : null;
     };
 
     const clearPendingLoginMode = () => {
-        sessionStorage.removeItem(PENDING_LOGIN_MODE_KEY);
-        localStorage.removeItem(PENDING_LOGIN_MODE_KEY);
+        removeStorage(PENDING_LOGIN_MODE_KEY);
     };
 
     useEffect(() => {
@@ -579,8 +581,7 @@ const Login: React.FC = () => {
             await setDoc(userRef, basePayload, { merge: true });
         }
 
-        sessionStorage.setItem(ROLE_SESSION_KEY, nextRole);
-        localStorage.setItem(ROLE_SESSION_KEY, nextRole);
+        saveRoleCache(nextRole);
         clearPendingLoginMode();
         navigate(nextRole === 'teacher' ? '/teacher/dashboard' : '/student/dashboard');
     };
@@ -659,8 +660,7 @@ const Login: React.FC = () => {
             }
 
             await setDoc(userRef, updatePayload, { merge: true });
-            sessionStorage.setItem(ROLE_SESSION_KEY, 'student');
-            localStorage.setItem(ROLE_SESSION_KEY, 'student');
+            saveRoleCache('student');
             navigate('/student/dashboard');
         } catch (error) {
             console.error('Failed to continue student onboarding', error);

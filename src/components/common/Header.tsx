@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { doc, getDoc } from 'firebase/firestore';
 import { MENUS, cloneDefaultMenus, sanitizeMenuConfig, type MenuConfig } from '../../constants/menus';
 import { db } from '../../lib/firebase';
+import { readLocalOnly, readStorage, removeStorage, writeLocalOnly } from '../../lib/safeStorage';
 
 const SESSION_DURATION_SECONDS = 60 * 60;
 const SESSION_EXPIRY_KEY = 'sessionExpiry';
@@ -27,7 +28,7 @@ const Header: React.FC = () => {
     const timeoutHandledRef = useRef(false);
 
     const isReady = !!currentUser;
-    const savedRole = sessionStorage.getItem(ROLE_SESSION_KEY) || localStorage.getItem(ROLE_SESSION_KEY);
+    const savedRole = readStorage(ROLE_SESSION_KEY);
     const sessionRole = savedRole === 'teacher' || savedRole === 'student' ? savedRole : null;
     const isTeacherUser = (sessionRole || userData?.role) === 'teacher';
     const displayName = (userData?.name || '').trim() || '이름 미설정';
@@ -95,9 +96,8 @@ const Header: React.FC = () => {
 
     const performLogout = async (isTimeout: boolean) => {
         try {
-            localStorage.removeItem(SESSION_EXPIRY_KEY);
-            sessionStorage.removeItem(ROLE_SESSION_KEY);
-            localStorage.removeItem(ROLE_SESSION_KEY);
+            removeStorage(SESSION_EXPIRY_KEY);
+            removeStorage(ROLE_SESSION_KEY);
             if (isTimeout) {
                 alert('세션이 만료되어 자동 로그아웃됩니다.');
             }
@@ -114,7 +114,7 @@ const Header: React.FC = () => {
 
     const extendSession = () => {
         const expiry = Date.now() + SESSION_DURATION_SECONDS * 1000;
-        localStorage.setItem(SESSION_EXPIRY_KEY, String(expiry));
+        writeLocalOnly(SESSION_EXPIRY_KEY, String(expiry));
         setSessionExpiry(expiry);
         setRemainingSeconds(SESSION_DURATION_SECONDS);
         timeoutHandledRef.current = false;
@@ -146,11 +146,11 @@ const Header: React.FC = () => {
         if (!currentUser) return;
         timeoutHandledRef.current = false;
         const now = Date.now();
-        const saved = Number(localStorage.getItem(SESSION_EXPIRY_KEY));
+        const saved = Number(readLocalOnly(SESSION_EXPIRY_KEY));
         const nextExpiry = Number.isFinite(saved) && saved > now
             ? saved
             : now + SESSION_DURATION_SECONDS * 1000;
-        localStorage.setItem(SESSION_EXPIRY_KEY, String(nextExpiry));
+        writeLocalOnly(SESSION_EXPIRY_KEY, String(nextExpiry));
         setSessionExpiry(nextExpiry);
     }, [currentUser]);
 
