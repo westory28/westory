@@ -597,18 +597,17 @@ const Login: React.FC = () => {
         if (redirectHandledRef.current) return;
         redirectHandledRef.current = true;
 
-        const mode = getPendingLoginMode();
-        if (!mode) return;
-
         const resolveRedirect = async () => {
             setAuthBusy(true);
             try {
                 const result = await getRedirectResult(auth);
-                if (!result?.user) {
-                    clearPendingLoginMode();
-                    return;
-                }
-                await finishLoginForRole(result.user, mode);
+                if (!result?.user) return;
+
+                const savedMode = getPendingLoginMode();
+                const resolvedMode: LoginMode = savedMode
+                    || (result.user.email === TEACHER_EMAIL ? 'teacher' : 'student');
+
+                await finishLoginForRole(result.user, resolvedMode);
             } catch (error) {
                 console.error('Redirect login failed', error);
                 clearPendingLoginMode();
