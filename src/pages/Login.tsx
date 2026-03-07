@@ -92,8 +92,15 @@ const normalizeSchoolField = (value: unknown): string => {
     return String(parsed);
 };
 
+const sanitizeStudentNameInput = (value: unknown): string => {
+    return String(value ?? '').replace(/[^\u1100-\u11FF\u3130-\u318F가-힣]/g, '').slice(0, 4);
+};
+
 const normalizeStudentName = (value: unknown): string => {
-    return String(value ?? '').replace(/[^가-힣]/g, '').slice(0, 4);
+    return String(value ?? '')
+        .replace(/[^\u1100-\u11FF\u3130-\u318F가-힣]/g, '')
+        .replace(/[\u1100-\u11FF\u3130-\u318F]/g, '')
+        .slice(0, 4);
 };
 
 const isValidStudentName = (value: string): boolean => {
@@ -891,7 +898,7 @@ const Login: React.FC = () => {
                                     type="text"
                                     value={profileForm.name}
                                     maxLength={4}
-                                    onChange={(e) => setProfileForm((prev) => ({ ...prev, name: normalizeStudentName(e.target.value) }))}
+                                    onChange={(e) => setProfileForm((prev) => ({ ...prev, name: sanitizeStudentNameInput(e.target.value) }))}
                                     placeholder="한글 2~4글자"
                                     className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                                 />
