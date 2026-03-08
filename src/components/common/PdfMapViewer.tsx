@@ -113,6 +113,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
     const [previewScale, setPreviewScale] = useState(1);
 
     const previewSurfaceRef = useRef<HTMLDivElement | null>(null);
+    const inlineShortcutRef = useRef<HTMLDivElement | null>(null);
     const modalSurfaceRef = useRef<HTMLDivElement | null>(null);
     const modalRegionHighlightRef = useRef<HTMLDivElement | null>(null);
     const pinchStateRef = useRef<{ distance: number; zoom: number } | null>(null);
@@ -321,6 +322,11 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
     }, [currentPage, selectedTag, title]);
 
     useEffect(() => {
+        if (!selectedTag || !inlineShortcutRef.current) return;
+        inlineShortcutRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, [selectedTag]);
+
+    useEffect(() => {
         if (!selectedRegion) return;
         if (!visibleRegionHits.find((region) => createRegionKey(region) === createRegionKey(selectedRegion))) {
             setSelectedRegion(null);
@@ -447,7 +453,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                             <button
                                 key={tag}
                                 type="button"
-                                onClick={() => setSelectedTag(tag)}
+                                onClick={() => setSelectedTag((prev) => (prev === tag ? '' : tag))}
                                 className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold transition ${selectedTag === tag ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
                             >
                                 <span>{tag}</span>
@@ -634,6 +640,11 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                     </div>
                 </div>
                 {visibleRegionHits.length > 0 && <div className="mb-4">{renderTagFilters()}</div>}
+                {selectedTag && (
+                    <div ref={inlineShortcutRef} className="mb-4 rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
+                        {renderShortcutList('rounded-xl px-3 py-2 text-left text-xs font-bold transition')}
+                    </div>
+                )}
                 {renderPageSurface(true)}
                 <p className="mt-3 text-xs leading-6 text-gray-500">PDF 지도를 클릭하면 확대 모달이 열립니다. 모달에서는 휠로 확대하고 드래그로 이동할 수 있습니다.</p>
                 <p className="mt-2 text-xs leading-6 text-gray-500">태그는 시대별, 지도 관련, 사용자 태그 목차로 정리됩니다.</p>

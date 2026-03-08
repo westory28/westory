@@ -474,23 +474,29 @@ const ManageMaps: React.FC = () => {
     };
 
     const handleMoveItem = async (itemId: string, direction: 'up' | 'down') => {
-        const currentIndex = items.findIndex((item) => item.id === itemId);
-        if (currentIndex < 0) return;
+        const currentGroups = groupMapResourcesForDisplay(items);
+        const currentGroupIndex = currentGroups.findIndex((group) =>
+            group.key === itemId.replace(/^map-group:/u, '')
+            || group.items.some((item) => item.id === itemId),
+        );
+        if (currentGroupIndex < 0) return;
 
-        const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-        if (targetIndex < 0 || targetIndex >= items.length) return;
+        const targetGroupIndex = direction === 'up' ? currentGroupIndex - 1 : currentGroupIndex + 1;
+        if (targetGroupIndex < 0 || targetGroupIndex >= currentGroups.length) return;
 
-        const nextItems = [...items];
-        const [movedItem] = nextItems.splice(currentIndex, 1);
-        nextItems.splice(targetIndex, 0, movedItem);
+        const nextGroups = [...currentGroups];
+        const [movedGroup] = nextGroups.splice(currentGroupIndex, 1);
+        nextGroups.splice(targetGroupIndex, 0, movedGroup);
 
-        const orderedItems = nextItems.map((item, index) => ({
-            ...item,
-            sortOrder: index,
-        }));
+        const orderedItems = nextGroups
+            .flatMap((group) => group.items)
+            .map((item, index) => ({
+                ...item,
+                sortOrder: index,
+            }));
 
         setItems(orderedItems);
-        setSelectedId(itemId);
+        setSelectedId(movedGroup.items[0]?.id || selectedId);
 
         try {
             await persistOrderedItems(orderedItems);
@@ -952,14 +958,12 @@ const ManageMaps: React.FC = () => {
         || currentDisplayItems[0]
         || selectedPreview;
     const sidebarItems = useMemo<MapResource[]>(() => (
-        isReorderMode
-            ? items
-            : displayGroups.map((group) => ({
-                ...group.representative,
-                id: `map-group:${group.key}`,
-                title: group.title,
-            }))
-    ), [displayGroups, isReorderMode, items]);
+        displayGroups.map((group) => ({
+            ...group.representative,
+            id: `map-group:${group.key}`,
+            title: group.title,
+        }))
+    ), [displayGroups]);
     const previewExternalUrl = currentPreviewItem?.type === 'google'
         ? (currentPreviewItem.externalUrl || getGoogleMapsExternalUrl(currentPreviewItem.googleQuery || ''))
         : (currentPreviewItem?.externalUrl || currentPreviewItem?.fileUrl || '');
@@ -1001,13 +1005,8 @@ const ManageMaps: React.FC = () => {
                 <MapSidebar
                     heading="지도"
                     items={sidebarItems}
-                    selectedId={isReorderMode ? selectedId : `map-group:${currentDisplayGroup?.key || ''}`}
+                    selectedId={`map-group:${currentDisplayGroup?.key || ''}`}
                     onSelect={(id) => {
-                        if (isReorderMode) {
-                            setSelectedId(id);
-                            return;
-                        }
-
                         const nextGroupKey = id.replace(/^map-group:/u, '');
                         const nextGroup = displayGroupMap.get(nextGroupKey);
                         setSelectedId(nextGroup?.items[0]?.id || '');
@@ -1043,7 +1042,7 @@ const ManageMaps: React.FC = () => {
                                 <button
                                     type="button"
                                     onClick={() => void handleMoveItem(item.id, 'up')}
-                                    disabled={items[0]?.id === item.id}
+                                    disabled={displayGroups[0]?.key === item.id.replace(/^map-group:/u, '')}
                                     className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-gray-200 text-gray-500 hover:bg-white disabled:opacity-30"
                                     aria-label={`${item.title} 위로 이동`}
                                     title="위로 이동"
@@ -1053,7 +1052,7 @@ const ManageMaps: React.FC = () => {
                                 <button
                                     type="button"
                                     onClick={() => void handleMoveItem(item.id, 'down')}
-                                    disabled={items[items.length - 1]?.id === item.id}
+                                    disabled={displayGroups[displayGroups.length - 1]?.key === item.id.replace(/^map-group:/u, '')}
                                     className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-gray-200 text-gray-500 hover:bg-white disabled:opacity-30"
                                     aria-label={`${item.title} 아래로 이동`}
                                     title="아래로 이동"
