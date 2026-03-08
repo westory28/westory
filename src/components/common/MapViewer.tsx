@@ -63,6 +63,27 @@ const MapViewer: React.FC<MapViewerProps> = ({
         setIsModalOpen(true);
     };
 
+    const renderGoogleSearchInput = (id: string) => (
+        item.type === 'google' && onGoogleSearchQueryChange && (
+            <div className="w-full">
+                <label className="sr-only" htmlFor={id}>Google 지도 검색</label>
+                <div className="flex items-center gap-2">
+                    <input
+                        id={id}
+                        type="text"
+                        value={googleSearchQuery ?? ''}
+                        onChange={(e) => onGoogleSearchQueryChange(e.target.value)}
+                        placeholder="Google 지도 검색"
+                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                    />
+                    <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500">
+                        <i className="fas fa-search"></i>
+                    </span>
+                </div>
+            </div>
+        )
+    );
+
     const renderPrimarySurface = () => (
         <>
             {item.type === 'image' && item.imageUrl && (
@@ -136,26 +157,7 @@ const MapViewer: React.FC<MapViewerProps> = ({
                         </div>
 
                         <div className="flex w-full flex-col items-end gap-3 lg:w-auto lg:min-w-[20rem]">
-                            {item.type === 'google' && onGoogleSearchQueryChange && (
-                                <div className="w-full">
-                                    <label className="sr-only" htmlFor="map-google-search">
-                                        Google 지도 검색
-                                    </label>
-                                    <div className="flex items-center gap-2">
-                                        <input
-                                            id="map-google-search"
-                                            type="text"
-                                            value={googleSearchQuery ?? ''}
-                                            onChange={(e) => onGoogleSearchQueryChange(e.target.value)}
-                                            placeholder="Google 지도 검색"
-                                            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                                        />
-                                        <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500">
-                                            <i className="fas fa-search"></i>
-                                        </span>
-                                    </div>
-                                </div>
-                            )}
+                            {renderGoogleSearchInput('map-google-search')}
 
                             {externalUrl && (
                                 <a
@@ -206,18 +208,25 @@ const MapViewer: React.FC<MapViewerProps> = ({
                         className="flex h-[84vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"
                         onClick={(event) => event.stopPropagation()}
                     >
-                        <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+                        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-5 py-4">
                             <div>
                                 <div className="text-lg font-extrabold text-gray-900">{item.title}</div>
-                                <div className="text-xs text-gray-500">밖을 클릭하거나 `Esc`를 누르면 닫힙니다.</div>
+                                <div className="text-xs text-gray-500">바깥쪽 클릭 또는 `Esc`로 닫습니다.</div>
                             </div>
-                            <button
-                                type="button"
-                                onClick={() => setIsModalOpen(false)}
-                                className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
-                            >
-                                닫기
-                            </button>
+                            <div className="flex w-full items-center justify-end gap-2 lg:w-auto">
+                                {item.type === 'google' && onGoogleSearchQueryChange && (
+                                    <div className="flex min-w-[18rem] max-w-[28rem] flex-1 items-center gap-2 lg:flex-none">
+                                        {renderGoogleSearchInput('map-google-search-modal')}
+                                    </div>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => setIsModalOpen(false)}
+                                    className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
+                                >
+                                    닫기
+                                </button>
+                            </div>
                         </div>
                         <div className="min-h-0 flex-1 overflow-auto bg-slate-100 p-4">
                             <div className="flex min-h-full items-center justify-center">
@@ -254,7 +263,7 @@ const MapViewer: React.FC<MapViewerProps> = ({
                             </div>
                             {(item.type === 'google' || item.type === 'iframe') && (
                                 <div className="mt-3 text-center text-xs text-gray-500">
-                                    모달 안에서 휠, 핀치, 드래그는 지도 원본 인터랙션으로 동작합니다.
+                                    모달 안에서는 휠, 핀치, 드래그가 지도 원본 인터랙션으로 동작합니다.
                                 </div>
                             )}
                         </div>
