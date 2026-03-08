@@ -17,6 +17,13 @@ const formatCountdown = (seconds: number) => {
     return `${String(minutes).padStart(2, '0')}:${String(remain).padStart(2, '0')}`;
 };
 
+const resolveMenuTarget = (url: string, portal: 'student' | 'teacher') => {
+    const normalized = (url || '').trim();
+    if (!normalized) return normalized;
+    const canonicalRoot = portal === 'teacher' ? '/teacher/quiz' : '/student/quiz';
+    return /(^|\/)quiz\/history2(\/|$)|(^|\/)history2(\/|$)/.test(normalized) ? canonicalRoot : normalized;
+};
+
 const Header: React.FC = () => {
     const { currentUser, userData, logout } = useAuth();
     const location = useLocation();
@@ -49,9 +56,10 @@ const Header: React.FC = () => {
     const profileTarget = isTeacherPortal ? '/teacher/settings' : '/student/mypage';
     const profileLabel = `${displayName} ${isTeacherPortal ? '교사' : '학생'}`;
     const studentProfileIcon = userData?.profileIcon || '🧑‍🎓';
+    const resolveTarget = (url: string) => resolveMenuTarget(url, portal);
 
     const isActive = (url: string) => {
-        const [targetPath, targetQuery] = url.split('?');
+        const [targetPath, targetQuery] = resolveTarget(url).split('?');
         if (!location.pathname.startsWith(targetPath)) return false;
         if (!targetQuery) return true;
 
@@ -64,7 +72,7 @@ const Header: React.FC = () => {
     };
 
     const getChildMatchScore = (url: string, siblings: Array<{ url: string }>) => {
-        const [path, query] = url.split('?');
+        const [path, query] = resolveTarget(url).split('?');
         const pathMatches = location.pathname === path || location.pathname.startsWith(`${path}/`);
         if (!pathMatches) return -1;
 
@@ -75,7 +83,7 @@ const Header: React.FC = () => {
         }
 
         const hasQuerySiblingOnSamePath = siblings.some((sibling) => {
-            const [siblingPath, siblingQuery] = sibling.url.split('?');
+            const [siblingPath, siblingQuery] = resolveTarget(sibling.url).split('?');
             return siblingPath === path && !!siblingQuery;
         });
         const noQueryPenalty = !query && hasQuerySiblingOnSamePath && location.search.length > 0 ? -500 : 0;
@@ -207,31 +215,35 @@ const Header: React.FC = () => {
                             const active = isActive(item.url) || visibleChildren.some((child) => isChildActive(child.url, visibleChildren));
 
                             if (!hasChildren) {
+                                const itemTarget = resolveTarget(item.url);
                                 return (
-                                    <Link key={`${item.url}-${idx}`} to={item.url} data-session-ignore="true" className={`nav-link ${active ? 'active' : ''} ${!isTeacherPortal ? 'student-nav-link' : ''}`}>
+                                    <Link key={`${item.url}-${idx}`} to={itemTarget} data-session-ignore="true" className={`nav-link ${active ? 'active' : ''} ${!isTeacherPortal ? 'student-nav-link' : ''}`}>
                                         {item.name}
                                     </Link>
                                 );
                             }
 
+                            const itemTarget = resolveTarget(item.url);
                             return (
                                 <div key={`${item.url}-${idx}`} className="relative group h-full flex items-center">
-                                    <Link to={item.url} data-session-ignore="true" className={`nav-link ${active ? 'active' : ''} ${!isTeacherPortal ? 'student-nav-link' : ''} flex items-center gap-1`}>
+                                    <Link to={itemTarget} data-session-ignore="true" className={`nav-link ${active ? 'active' : ''} ${!isTeacherPortal ? 'student-nav-link' : ''} flex items-center gap-1`}>
                                         {item.name}
                                         <i className="fas fa-chevron-down text-[10px] ml-1 opacity-50 group-hover:opacity-100 transition"></i>
                                     </Link>
                                     <div className="absolute top-[calc(100%-8px)] left-0 w-[10.5rem] pt-0 invisible opacity-0 group-hover:visible group-hover:opacity-100 transition duration-150 transform translate-y-0 z-[100]">
                                         <div className="bg-white border border-gray-200 shadow-xl rounded-xl overflow-hidden">
-                                            {visibleChildren.map((child, childIdx) => (
+                                            {visibleChildren.map((child, childIdx) => {
+                                                const childTarget = resolveTarget(child.url);
+                                                return (
                                                 <Link
                                                     key={`${child.url}-${childIdx}`}
-                                                    to={child.url}
+                                                    to={childTarget}
                                                     data-session-ignore="true"
                                                     className={`block px-2.5 py-3 text-[13px] border-b border-gray-50 last:border-0 whitespace-nowrap font-bold ${isChildActive(child.url, visibleChildren) ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'}`}
                                                 >
                                                     {child.name}
                                                 </Link>
-                                            ))}
+                                            )})}
                                         </div>
                                     </div>
                                 </div>
@@ -303,10 +315,11 @@ const Header: React.FC = () => {
             <div id="mobile-menu" className={mobileMenuOpen ? 'open' : ''}>
                 {menuItems.map((item, idx) => {
                     const visibleChildren = getVisibleChildren(item);
+                    const itemTarget = resolveTarget(item.url);
                     return (
                     <div key={`${item.url}-mobile-${idx}`}>
                         <Link
-                            to={item.url}
+                            to={itemTarget}
                             data-session-ignore="true"
                             className={`mobile-link ${isActive(item.url) || visibleChildren.some((child) => isChildActive(child.url, visibleChildren)) ? 'active' : ''}`}
                             onClick={() => setMobileMenuOpen(false)}
@@ -315,10 +328,12 @@ const Header: React.FC = () => {
                         </Link>
                         {visibleChildren.length > 0 && (
                             <div className="bg-gray-50 border-b border-gray-100 pb-1">
-                                {visibleChildren.map((child, childIdx) => (
+                                {visibleChildren.map((child, childIdx) => {
+                                    const childTarget = resolveTarget(child.url);
+                                    return (
                                     <Link
                                         key={`${child.url}-mobile-child-${childIdx}`}
-                                        to={child.url}
+                                        to={childTarget}
                                         data-session-ignore="true"
                                         className={`block pl-12 pr-4 py-1.5 text-sm rounded-r-full mr-2 font-bold ${isChildActive(child.url, visibleChildren) ? 'text-blue-600 bg-blue-50' : 'text-gray-500 hover:text-blue-600 hover:bg-gray-100'}`}
                                         onClick={() => setMobileMenuOpen(false)}
@@ -326,7 +341,7 @@ const Header: React.FC = () => {
                                         <i className="fas fa-angle-right mr-2 text-xs opacity-50"></i>
                                         {child.name}
                                     </Link>
-                                ))}
+                                )})}
                             </div>
                         )}
                     </div>
