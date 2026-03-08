@@ -7,12 +7,14 @@ interface MapViewerProps {
     item: MapResource | null;
     googleSearchQuery?: string;
     onGoogleSearchQueryChange?: (value: string) => void;
+    showShell?: boolean;
 }
 
 const MapViewer: React.FC<MapViewerProps> = ({
     item,
     googleSearchQuery,
     onGoogleSearchQueryChange,
+    showShell = true,
 }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -66,14 +68,14 @@ const MapViewer: React.FC<MapViewerProps> = ({
     const renderGoogleSearchInput = (id: string) => (
         item.type === 'google' && onGoogleSearchQueryChange && (
             <div className="w-full">
-                <label className="sr-only" htmlFor={id}>Google 지도 검색</label>
+                <label className="sr-only" htmlFor={id}>구글 지도 검색</label>
                 <div className="flex items-center gap-2">
                     <input
                         id={id}
                         type="text"
                         value={googleSearchQuery ?? ''}
                         onChange={(e) => onGoogleSearchQueryChange(e.target.value)}
-                        placeholder="Google 지도 검색"
+                        placeholder="구글 지도 검색"
                         className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
                     />
                     <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500">
@@ -102,7 +104,7 @@ const MapViewer: React.FC<MapViewerProps> = ({
                     onClick={openModal}
                     className="block w-full overflow-hidden rounded-2xl border border-gray-200 bg-white text-left"
                 >
-                    <div className="relative aspect-[16/10] pointer-events-none">
+                    <div className="pointer-events-none relative aspect-[16/10]">
                         <iframe
                             src={item.embedUrl}
                             className="absolute inset-0 h-full w-full"
@@ -120,7 +122,7 @@ const MapViewer: React.FC<MapViewerProps> = ({
                     onClick={openModal}
                     className="block w-full overflow-hidden rounded-2xl border border-gray-200 bg-white text-left"
                 >
-                    <div className="relative aspect-[16/10] pointer-events-none">
+                    <div className="pointer-events-none relative aspect-[16/10]">
                         <iframe
                             src={googleEmbedUrl}
                             className="absolute inset-0 h-full w-full"
@@ -144,9 +146,9 @@ const MapViewer: React.FC<MapViewerProps> = ({
         </>
     );
 
-    return (
-        <div className="space-y-5">
-            <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+    const content = (
+        <>
+            {showShell && (
                 <div className="border-b border-gray-100 p-6">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
@@ -179,25 +181,41 @@ const MapViewer: React.FC<MapViewerProps> = ({
                         </p>
                     )}
                 </div>
+            )}
 
-                <div className="bg-gray-50 p-4 md:p-6">
-                    {renderPrimarySurface()}
+            <div className={showShell ? 'bg-gray-50 p-4 md:p-6' : 'space-y-4'}>
+                {!showShell && item.type === 'google' && onGoogleSearchQueryChange && (
+                    <div className="flex justify-end">{renderGoogleSearchInput('map-google-search-inline')}</div>
+                )}
 
-                    {showEmptyState && (
-                        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-10 text-center text-amber-900">
-                            <div className="mb-3 text-4xl">지도</div>
-                            <h2 className="text-lg font-bold">지도를 표시할 준비가 아직 끝나지 않았습니다.</h2>
-                            <p className="mt-2 text-sm leading-6">
-                                {item.type === 'google'
-                                    ? 'Google 지도는 API 설정과 검색어가 모두 있어야 iframe으로 표시됩니다.'
-                                    : item.type === 'pdf'
-                                        ? 'PDF 파일을 업로드하면 확대, 축소, 지역 이름 추출 기능을 사용할 수 있습니다.'
-                                        : '지도 URL 또는 파일을 저장하면 학생 화면에 바로 표시됩니다.'}
-                            </p>
+                {renderPrimarySurface()}
+
+                {showEmptyState && (
+                    <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-10 text-center text-amber-900">
+                        <div className="mb-3 text-4xl">
+                            <i className="fas fa-map-marked-alt"></i>
                         </div>
-                    )}
-                </div>
+                        <h2 className="text-lg font-bold">지도를 표시할 준비가 아직 끝나지 않았습니다.</h2>
+                        <p className="mt-2 text-sm leading-6">
+                            {item.type === 'google'
+                                ? '구글 지도는 검색어를 입력하면 바로 표시됩니다.'
+                                : item.type === 'pdf'
+                                    ? 'PDF 파일을 업로드하면 확대, 축소, 태그, 지역 이동 기능을 사용할 수 있습니다.'
+                                    : '지도 정보를 입력하면 화면에 바로 표시됩니다.'}
+                        </p>
+                    </div>
+                )}
             </div>
+        </>
+    );
+
+    return (
+        <div className="space-y-5">
+            {showShell ? (
+                <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+                    {content}
+                </div>
+            ) : content}
 
             {isModalOpen && (item.type === 'image' || item.type === 'iframe' || item.type === 'google') && (
                 <div
@@ -211,7 +229,7 @@ const MapViewer: React.FC<MapViewerProps> = ({
                         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-5 py-4">
                             <div>
                                 <div className="text-lg font-extrabold text-gray-900">{item.title}</div>
-                                <div className="text-xs text-gray-500">바깥쪽 클릭 또는 `Esc`로 닫습니다.</div>
+                                <div className="text-xs text-gray-500">바깥 클릭 또는 `Esc`로 닫습니다.</div>
                             </div>
                             <div className="flex w-full items-center justify-end gap-2 lg:w-auto">
                                 {item.type === 'google' && onGoogleSearchQueryChange && (
@@ -263,7 +281,7 @@ const MapViewer: React.FC<MapViewerProps> = ({
                             </div>
                             {(item.type === 'google' || item.type === 'iframe') && (
                                 <div className="mt-3 text-center text-xs text-gray-500">
-                                    모달 안에서는 휠, 핀치, 드래그가 지도 원본 인터랙션으로 동작합니다.
+                                    모달 안에서는 원본 인터랙션이 그대로 동작합니다.
                                 </div>
                             )}
                         </div>
