@@ -43,6 +43,7 @@ interface TagSection {
 const PREVIEW_PADDING = 24;
 const BUILT_IN_TAG_ORDER = [...DEFAULT_PDF_REGION_TAGS, ...DEFAULT_PDF_ERA_TAGS];
 const SHORTCUT_LIMIT = 6;
+const TAG_ROW_LIMIT = 5;
 const TAG_SECTION_ORDER = ['시대별', '지도 관련', '사용자 태그'] as const;
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -103,6 +104,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
     const [selectedRegion, setSelectedRegion] = useState<RegionHit | null>(null);
     const [selectedTag, setSelectedTag] = useState('');
     const [showAllShortcuts, setShowAllShortcuts] = useState(false);
+    const [expandedTagSections, setExpandedTagSections] = useState<Record<string, boolean>>({});
     const [pdfSourceUrl, setPdfSourceUrl] = useState('');
     const [loadingPdf, setLoadingPdf] = useState(true);
     const [loadError, setLoadError] = useState('');
@@ -311,6 +313,10 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
     }, [availableTags, selectedTag]);
 
     useEffect(() => {
+        setExpandedTagSections({});
+    }, [title]);
+
+    useEffect(() => {
         setShowAllShortcuts(false);
     }, [currentPage, selectedTag, title]);
 
@@ -432,10 +438,12 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                 전체
             </button>
             {tagSections.map((section) => (
-                <div key={section.heading} className="space-y-2 rounded-2xl border border-gray-200 bg-white/80 p-3">
-                    <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-gray-400">{section.heading}</div>
-                    <div className="flex flex-wrap gap-2">
-                        {section.tags.map((tag) => (
+                <div key={section.heading} className="rounded-2xl border border-gray-200 bg-white/80 px-3 py-2">
+                    <div className="flex items-start gap-3 text-sm">
+                        <div className="shrink-0 pt-1 text-xs font-bold text-gray-400">{section.heading}</div>
+                        <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                                {(expandedTagSections[section.heading] ? section.tags : section.tags.slice(0, TAG_ROW_LIMIT)).map((tag) => (
                             <button
                                 key={tag}
                                 type="button"
@@ -447,7 +455,23 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                                     {visibleRegionHits.filter((region) => (region.tags || []).includes(tag)).length}
                                 </span>
                             </button>
-                        ))}
+                                ))}
+                                {section.tags.length > TAG_ROW_LIMIT && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setExpandedTagSections((prev) => ({
+                                            ...prev,
+                                            [section.heading]: !prev[section.heading],
+                                        }))}
+                                        className="inline-flex items-center rounded-full px-2 py-1 text-xs font-bold text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                                        aria-label={`${section.heading} 태그 ${expandedTagSections[section.heading] ? '접기' : '펼치기'}`}
+                                        title={expandedTagSections[section.heading] ? '접기' : '펼치기'}
+                                    >
+                                        ...
+                                    </button>
+                                )}
+                            </div>
+                        </div>
                     </div>
                 </div>
             ))}
