@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { collection, deleteDoc, doc, getDocs, orderBy, query, serverTimestamp, setDoc } from 'firebase/firestore';
-import { getBlob, getBytes, getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import MapSidebar from '../../components/common/MapSidebar';
 import MapViewer from '../../components/common/MapViewer';
 import { useAuth } from '../../contexts/AuthContext';
@@ -298,36 +298,26 @@ const ManageMaps: React.FC = () => {
     };
 
     const loadStoredPdfSourceFile = async (resourceId: string) => {
-        const candidateRefs = [
-            draft.storagePath ? ref(storage, draft.storagePath) : null,
-            draft.fileUrl ? ref(storage, draft.fileUrl) : null,
-        ].filter(Boolean) as ReturnType<typeof ref>[];
+        const candidateUrls = [draft.fileUrl || ''];
 
-        let lastError: unknown = null;
-
-        for (const fileRef of candidateRefs) {
+        if (draft.storagePath) {
             try {
-                const blob = await withTimeout(getBlob(fileRef), 45000, 'storage-pdf-blob');
-                return blobToPdfFile(blob, resourceId, draft.fileName, draft.mimeType);
-            } catch (blobError) {
-                lastError = blobError;
-                try {
-                    const bytes = await withTimeout(getBytes(fileRef, 40 * 1024 * 1024), 45000, 'storage-pdf-bytes');
-                    return blobToPdfFile(
-                        new Blob([bytes], { type: draft.mimeType || 'application/pdf' }),
-                        resourceId,
-                        draft.fileName,
-                        draft.mimeType,
-                    );
-                } catch (bytesError) {
-                    lastError = bytesError;
-                }
+                const storageUrl = await withTimeout(
+                    getDownloadURL(ref(storage, draft.storagePath)),
+                    30000,
+                    'storage-pdf-download-url',
+                );
+                candidateUrls.unshift(storageUrl);
+            } catch (storageUrlError) {
+                console.warn('Failed to resolve storage download URL for PDF reprocess:', storageUrlError);
             }
         }
 
-        if (draft.fileUrl) {
+        let lastError: unknown = null;
+
+        for (const candidateUrl of candidateUrls.map((value) => value.trim()).filter(Boolean)) {
             try {
-                const response = await withTimeout(fetch(draft.fileUrl, { mode: 'cors' }), 45000, 'pdf-reprocess-fetch');
+                const response = await withTimeout(fetch(candidateUrl, { mode: 'cors' }), 45000, 'pdf-reprocess-fetch');
                 if (!response.ok) {
                     throw new Error(`pdf-reprocess-fetch-failed:${response.status}`);
                 }
