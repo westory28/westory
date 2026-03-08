@@ -6,7 +6,7 @@ import QuizBankTab from './components/QuizBankTab';
 import QuizSettingsModal from './components/QuizSettingsModal';
 import { db } from '../../lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { getSemesterDocPath } from '../../lib/semesterScope';
 
@@ -18,6 +18,7 @@ interface TreeUnit {
 
 const ManageQuiz: React.FC = () => {
     const { config } = useAuth();
+    const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const [activeTab, setActiveTab] = useState<'manage' | 'log' | 'bank'>('manage');
     const [selectedNode, setSelectedNode] = useState<{ id: string; title: string } | null>(null);
@@ -84,6 +85,13 @@ const ManageQuiz: React.FC = () => {
                         className={`py-3 px-6 font-bold text-sm border-b-2 transition ${activeTab === 'bank' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-600 hover:bg-gray-50'}`}
                     >
                         문제 은행
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => navigate('/teacher/quiz/history-classroom')}
+                        className="py-3 px-6 font-bold text-sm border-b-2 border-transparent text-gray-600 transition hover:bg-gray-50"
+                    >
+                        역사교실
                     </button>
                 </div>
 
