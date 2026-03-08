@@ -26,6 +26,7 @@ interface RegionHit {
     top: number;
     width: number;
     height: number;
+    shortcutEnabled?: boolean;
 }
 
 const BASE_MODAL_RATIO = 0.92;
@@ -94,6 +95,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
             ...item,
             label: sanitizeRegionLabel(item.label),
         })).filter((item) => {
+            if (item.shortcutEnabled === false) return false;
             if (!item.label || item.label.length < 2 || item.label.length > 12) return false;
             if (/[(){}\[\]<>]/u.test(item.label)) return false;
             if (/설명|유역|기후|분포|국경|수도|왕조|제국/u.test(item.label)) return false;
@@ -265,6 +267,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
             ).map((region) => ({
                 ...region,
                 page: pageNumber,
+                shortcutEnabled: true,
             }));
             nextHits.push(...pageHits);
         }
@@ -648,7 +651,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                                             onMouseUp={handleDragEnd}
                                             onMouseLeave={handleDragEnd}
                                         >
-                                            <div className="flex min-h-full items-start justify-center">
+                                            <div className="flex min-h-full min-w-max items-start justify-start">
                                                 {renderPageSurface(false)}
                                             </div>
                                         </div>

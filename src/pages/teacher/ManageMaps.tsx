@@ -219,6 +219,17 @@ const ManageMaps: React.FC = () => {
         }));
     };
 
+    const handlePdfRegionShortcutToggle = (index: number, checked: boolean) => {
+        setDraft((prev) => ({
+            ...prev,
+            pdfRegions: (prev.pdfRegions || []).map((region, regionIndex) => (
+                regionIndex === index
+                    ? { ...region, shortcutEnabled: checked }
+                    : region
+            )),
+        }));
+    };
+
     const handleCreateNew = () => {
         setSelectedId('');
         resetFileInput();
@@ -854,7 +865,7 @@ const ManageMaps: React.FC = () => {
                                 <div className="mb-2 flex items-center justify-between gap-3">
                                     <div>
                                         <h3 className="text-sm font-bold text-gray-900">지역 바로가기 명칭 수정</h3>
-                                        <p className="mt-1 text-xs text-gray-500">저장하면 PDF 지역 바로가기 이름이 이 값으로 표시됩니다.</p>
+                                        <p className="mt-1 text-xs text-gray-500">이름 수정과 바로가기 포함 여부를 함께 정할 수 있습니다.</p>
                                     </div>
                                     <div className="text-xs font-medium text-gray-400">
                                         {(draft.pdfRegions || []).length}개
@@ -862,7 +873,7 @@ const ManageMaps: React.FC = () => {
                                 </div>
                                 <div className="max-h-72 space-y-2 overflow-y-auto rounded-2xl border border-gray-200 bg-gray-50 p-3">
                                     {(draft.pdfRegions || []).map((region, index) => (
-                                        <div key={`${region.page}-${region.left}-${region.top}-${index}`} className="grid gap-2 rounded-xl bg-white p-3 md:grid-cols-[5rem_minmax(0,1fr)] md:items-center">
+                                        <div key={`${region.page}-${region.left}-${region.top}-${index}`} className="grid gap-3 rounded-xl bg-white p-3 md:grid-cols-[5rem_minmax(0,1fr)_auto] md:items-center">
                                             <div className="text-xs font-bold text-gray-500">p.{region.page}</div>
                                             <input
                                                 type="text"
@@ -871,6 +882,15 @@ const ManageMaps: React.FC = () => {
                                                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                                                 placeholder="지역명 입력"
                                             />
+                                            <label className="inline-flex items-center gap-2 text-xs font-bold text-gray-600">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={region.shortcutEnabled !== false}
+                                                    onChange={(e) => handlePdfRegionShortcutToggle(index, e.target.checked)}
+                                                    className="h-4 w-4 rounded border-gray-300"
+                                                />
+                                                바로가기
+                                            </label>
                                         </div>
                                     ))}
                                 </div>

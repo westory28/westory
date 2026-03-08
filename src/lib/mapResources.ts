@@ -14,6 +14,7 @@ export interface PdfMapRegion {
     top: number;
     width: number;
     height: number;
+    shortcutEnabled?: boolean;
 }
 
 export interface MapResource {
@@ -100,8 +101,9 @@ export const normalizeMapResource = (id: string, raw: Partial<MapResource>): Map
                 top: Number(region?.top) || 0,
                 width: Number(region?.width) || 0,
                 height: Number(region?.height) || 0,
+                shortcutEnabled: region?.shortcutEnabled !== false,
             }))
-            .filter((region) => region.label)
+        .filter((region) => region.label)
         : [],
     sortOrder: Number.isFinite(Number(raw.sortOrder)) ? Number(raw.sortOrder) : 999,
 });
