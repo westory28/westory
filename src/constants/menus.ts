@@ -88,20 +88,50 @@ const deepCloneMenus = (menus: MenuConfig): MenuConfig =>
 
 const toSafeText = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 
-const REMOVED_MENU_URLS = new Set([
+const LEGACY_MENU_URL_PREFIXES = [
     '/student/quiz/history2',
     '/teacher/quiz/history2',
-]);
+];
+
+const normalizeMenuUrl = (value: unknown) => {
+    let raw = toSafeText(value);
+    if (!raw) return '';
+
+    const hashIndex = raw.indexOf('#');
+    if (hashIndex >= 0) {
+        const hashPath = raw.slice(hashIndex + 1).trim();
+        raw = hashPath.startsWith('/') ? hashPath : raw.slice(0, hashIndex).trim();
+    }
+
+    if (raw.startsWith('#/')) {
+        raw = raw.slice(1);
+    }
+
+    if (!raw.startsWith('/') && !/^[a-z]+:/i.test(raw)) {
+        raw = `/${raw.replace(/^\/+/, '')}`;
+    }
+
+    const [pathPart, queryPart = ''] = raw.split('?');
+    const normalizedPath = pathPart.replace(/\/{2,}/g, '/').replace(/\/+$/, '') || '/';
+    return queryPart ? `${normalizedPath}?${queryPart}` : normalizedPath;
+};
+
+const isLegacyRemovedUrl = (value: unknown) => {
+    const normalized = normalizeMenuUrl(value);
+    if (!normalized) return false;
+    const [pathOnly] = normalized.split('?');
+    return LEGACY_MENU_URL_PREFIXES.some((prefix) => pathOnly === prefix || pathOnly.startsWith(`${prefix}/`));
+};
 
 const sanitizeChildren = (children: unknown): MenuChild[] => {
     if (!Array.isArray(children)) return [];
     return children
         .map((child) => ({
             name: toSafeText((child as MenuChild)?.name),
-            url: toSafeText((child as MenuChild)?.url),
+            url: normalizeMenuUrl((child as MenuChild)?.url),
             hidden: (child as MenuChild)?.hidden === true,
         }))
-        .filter((child) => child.name && child.url && !REMOVED_MENU_URLS.has(child.url));
+        .filter((child) => child.name && child.url && !isLegacyRemovedUrl(child.url));
 };
 
 const mergeFallbackChildren = (items: MenuItem[], fallbackItems: MenuItem[]): MenuItem[] => {
@@ -141,11 +171,11 @@ export const sanitizeMenuConfig = (raw: unknown): MenuConfig => {
         const sanitized = source
             .map((item) => ({
                 name: toSafeText((item as MenuItem)?.name),
-                url: toSafeText((item as MenuItem)?.url),
+                url: normalizeMenuUrl((item as MenuItem)?.url),
                 icon: toSafeText((item as MenuItem)?.icon),
                 children: sanitizeChildren((item as MenuItem)?.children),
             }))
-            .filter((item) => item.name && item.url && !REMOVED_MENU_URLS.has(item.url))
+            .filter((item) => item.name && item.url && !isLegacyRemovedUrl(item.url))
             .map((item) => ({
                 ...item,
                 icon: item.icon || fallback[portal].find((x) => x.url === item.url)?.icon || '',
