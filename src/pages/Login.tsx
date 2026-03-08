@@ -21,7 +21,7 @@ import {
     where,
 } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
-import { auth, db } from '../lib/firebase';
+import { auth, authPersistenceReady, db } from '../lib/firebase';
 import { readStorage, removeStorage, writeStorage } from '../lib/safeStorage';
 import { useAuth } from '../contexts/AuthContext';
 import type { UserData } from '../types';
@@ -614,6 +614,7 @@ const Login: React.FC = () => {
         const resolveRedirect = async () => {
             setAuthBusy(true);
             try {
+                await authPersistenceReady;
                 const result = await getRedirectResult(auth);
                 const redirectedUser = result?.user || auth.currentUser;
                 if (!redirectedUser) return;
@@ -739,6 +740,7 @@ const Login: React.FC = () => {
         setAuthBusy(true);
 
         try {
+            await authPersistenceReady;
             if (shouldPreferRedirectLogin()) {
                 await signInWithRedirect(auth, provider);
                 return;

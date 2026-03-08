@@ -26,21 +26,24 @@ const db = getFirestore(app);
 const storage = getStorage(app, `gs://${firebaseConfig.storageBucket}`);
 let analytics = null;
 
-if (typeof window !== 'undefined') {
-    // Some mobile browsers/in-app browsers may not allow IndexedDB persistence.
-    // Gracefully fallback to localStorage or memory to avoid auth stalls.
-    void (async () => {
+const authPersistenceReady = typeof window === 'undefined'
+    ? Promise.resolve()
+    : (async () => {
+        // Some mobile browsers may delay or reject IndexedDB-backed persistence
+        // during redirect recovery. Ensure one persistence is fully settled
+        // before auth listeners and redirect handling begin.
         try {
             await setPersistence(auth, indexedDBLocalPersistence);
+            return;
         } catch {
             try {
                 await setPersistence(auth, browserLocalPersistence);
+                return;
             } catch {
                 await setPersistence(auth, inMemoryPersistence);
             }
         }
     })();
-}
 
 try {
     const isBrowser = typeof window !== 'undefined';
@@ -51,4 +54,4 @@ try {
     console.warn("Analytics not supported:", e);
 }
 
-export { app, auth, db, storage, analytics };
+export { app, auth, db, storage, analytics, authPersistenceReady };

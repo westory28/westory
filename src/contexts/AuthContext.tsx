@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
-import { auth, db } from '../lib/firebase';
+import { auth, authPersistenceReady, db } from '../lib/firebase';
 import { SystemConfig, InterfaceConfig, UserData } from '../types';
 
 interface AuthContextType {
@@ -52,72 +52,79 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const loadingGuard = window.setTimeout(() => {
             setLoading(false);
         }, 5000);
+        let active = true;
 
-        try {
-            unsubscribe = onAuthStateChanged(auth, (user) => {
-                setCurrentUser(user);
-                if (unsubscribeUserDoc) {
-                    unsubscribeUserDoc();
-                    unsubscribeUserDoc = null;
-                }
-                if (user) {
-                    const userRef = doc(db, 'users', user.uid);
-                    unsubscribeUserDoc = onSnapshot(
-                        userRef,
-                        async (userSnap) => {
-                            try {
-                                const normalizedRole: UserData['role'] = 'student';
-                                if (userSnap.exists()) {
-                                    const raw = userSnap.data() as UserData;
-                                    setUserData({
-                                        ...raw,
-                                        uid: user.uid,
-                                        role: raw.role === 'teacher' ? 'teacher' : normalizedRole,
-                                    });
-                                } else {
-                                    const bootstrapUser: UserData = {
-                                        uid: user.uid,
-                                        email: user.email || '',
-                                        name: '',
-                                        customNameConfirmed: false,
-                                        role: normalizedRole,
-                                        grade: '',
-                                        class: '',
-                                        number: '',
-                                    };
-                                    await setDoc(userRef, {
-                                        ...bootstrapUser,
-                                        createdAt: serverTimestamp(),
-                                        lastLogin: serverTimestamp(),
-                                    }, { merge: true });
-                                    setUserData(bootstrapUser);
+        void (async () => {
+            try {
+                await authPersistenceReady;
+                if (!active) return;
+
+                unsubscribe = onAuthStateChanged(auth, (user) => {
+                    setCurrentUser(user);
+                    if (unsubscribeUserDoc) {
+                        unsubscribeUserDoc();
+                        unsubscribeUserDoc = null;
+                    }
+                    if (user) {
+                        const userRef = doc(db, 'users', user.uid);
+                        unsubscribeUserDoc = onSnapshot(
+                            userRef,
+                            async (userSnap) => {
+                                try {
+                                    const normalizedRole: UserData['role'] = 'student';
+                                    if (userSnap.exists()) {
+                                        const raw = userSnap.data() as UserData;
+                                        setUserData({
+                                            ...raw,
+                                            uid: user.uid,
+                                            role: raw.role === 'teacher' ? 'teacher' : normalizedRole,
+                                        });
+                                    } else {
+                                        const bootstrapUser: UserData = {
+                                            uid: user.uid,
+                                            email: user.email || '',
+                                            name: '',
+                                            customNameConfirmed: false,
+                                            role: normalizedRole,
+                                            grade: '',
+                                            class: '',
+                                            number: '',
+                                        };
+                                        await setDoc(userRef, {
+                                            ...bootstrapUser,
+                                            createdAt: serverTimestamp(),
+                                            lastLogin: serverTimestamp(),
+                                        }, { merge: true });
+                                        setUserData(bootstrapUser);
+                                    }
+                                } catch (e) {
+                                    console.error("Failed to sync user data", e);
+                                } finally {
+                                    setLoading(false);
+                                    window.clearTimeout(loadingGuard);
                                 }
-                            } catch (e) {
-                                console.error("Failed to sync user data", e);
-                            } finally {
+                            },
+                            (e) => {
+                                console.error("Failed to subscribe user data", e);
                                 setLoading(false);
                                 window.clearTimeout(loadingGuard);
                             }
-                        },
-                        (e) => {
-                            console.error("Failed to subscribe user data", e);
-                            setLoading(false);
-                            window.clearTimeout(loadingGuard);
-                        }
-                    );
-                } else {
-                    setUserData(null);
-                    setLoading(false);
-                    window.clearTimeout(loadingGuard);
-                }
-            });
-        } catch (e) {
-            console.error("Failed to initialize auth listener", e);
-            setLoading(false);
-            window.clearTimeout(loadingGuard);
-        }
+                        );
+                    } else {
+                        setUserData(null);
+                        setLoading(false);
+                        window.clearTimeout(loadingGuard);
+                    }
+                });
+            } catch (e) {
+                console.error("Failed to initialize auth listener", e);
+                setLoading(false);
+                window.clearTimeout(loadingGuard);
+            }
+        })();
 
         return () => {
+            active = false;
             window.clearTimeout(loadingGuard);
             if (unsubscribeUserDoc) {
                 unsubscribeUserDoc();
