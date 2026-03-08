@@ -130,7 +130,7 @@ const MapViewer: React.FC<MapViewerProps> = ({
                     )}
 
                     {item.type === 'pdf' && item.fileUrl && (
-                        <PdfMapViewer fileUrl={item.fileUrl} title={item.title} />
+                        <PdfMapViewer fileUrl={item.fileUrl} storagePath={item.storagePath} title={item.title} />
                     )}
 
                     {showEmptyState && (

@@ -8,6 +8,7 @@ export interface MapResource {
     type: MapResourceType;
     imageUrl?: string;
     fileUrl?: string;
+    storagePath?: string;
     fileName?: string;
     mimeType?: string;
     embedUrl?: string;
@@ -31,6 +32,20 @@ export const DEFAULT_GOOGLE_MAP_RESOURCE: MapResource = {
 
 const GOOGLE_MAPS_EMBED_KEY = (import.meta.env.VITE_GOOGLE_MAPS_EMBED_API_KEY || '').trim();
 
+const deriveStoragePathFromUrl = (fileUrl?: string) => {
+    const raw = String(fileUrl || '').trim();
+    if (!raw) return '';
+
+    try {
+        const url = new URL(raw);
+        const objectPath = url.pathname.match(/\/o\/(.+)$/)?.[1];
+        if (!objectPath) return '';
+        return decodeURIComponent(objectPath);
+    } catch {
+        return '';
+    }
+};
+
 export const normalizeMapResource = (id: string, raw: Partial<MapResource>): MapResource => ({
     id,
     title: String(raw.title || '').trim() || '지도 자료',
@@ -41,6 +56,7 @@ export const normalizeMapResource = (id: string, raw: Partial<MapResource>): Map
         : 'image',
     imageUrl: String(raw.imageUrl || '').trim(),
     fileUrl: String(raw.fileUrl || '').trim(),
+    storagePath: String(raw.storagePath || '').trim() || deriveStoragePathFromUrl(raw.fileUrl),
     fileName: String(raw.fileName || '').trim(),
     mimeType: String(raw.mimeType || '').trim(),
     embedUrl: String(raw.embedUrl || '').trim(),

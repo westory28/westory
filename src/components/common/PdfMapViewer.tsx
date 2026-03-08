@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import type { PDFDocumentProxy, TextItem } from 'pdfjs-dist/types/src/display/api';
+import { getBlob, ref } from 'firebase/storage';
+import { storage } from '../../lib/firebase';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
     'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -9,6 +11,7 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 
 interface PdfMapViewerProps {
     fileUrl: string;
+    storagePath?: string;
     title: string;
 }
 
@@ -32,7 +35,7 @@ const isLikelyRegionLabel = (value: string) => {
     return true;
 };
 
-const PdfMapViewer: React.FC<PdfMapViewerProps> = ({ fileUrl, title }) => {
+const PdfMapViewer: React.FC<PdfMapViewerProps> = ({ fileUrl, storagePath, title }) => {
     const [numPages, setNumPages] = useState(0);
     const [currentPage, setCurrentPage] = useState(1);
     const [zoom, setZoom] = useState(1.2);
@@ -57,12 +60,18 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({ fileUrl, title }) => {
             setSelectedRegion(null);
 
             try {
-                const response = await fetch(fileUrl);
-                if (!response.ok) {
-                    throw new Error(`pdf-fetch-failed:${response.status}`);
+                let blob: Blob;
+
+                if (storagePath) {
+                    blob = await getBlob(ref(storage, storagePath));
+                } else {
+                    const response = await fetch(fileUrl);
+                    if (!response.ok) {
+                        throw new Error(`pdf-fetch-failed:${response.status}`);
+                    }
+                    blob = await response.blob();
                 }
 
-                const blob = await response.blob();
                 if (blob.type && !blob.type.includes('pdf')) {
                     throw new Error(`pdf-invalid-mime:${blob.type}`);
                 }
@@ -89,7 +98,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({ fileUrl, title }) => {
                 URL.revokeObjectURL(revokedUrl);
             }
         };
-    }, [fileUrl]);
+    }, [fileUrl, storagePath]);
 
     const visibleRegionHits = useMemo(() => {
         const seen = new Set<string>();

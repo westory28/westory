@@ -29,6 +29,7 @@ const createDraft = (): StoredMapResource => ({
     type: 'image',
     imageUrl: '',
     fileUrl: '',
+    storagePath: '',
     fileName: '',
     mimeType: '',
     embedUrl: '',
@@ -183,6 +184,7 @@ const ManageMaps: React.FC = () => {
             return {
                 fileUrl: draft.fileUrl || '',
                 imageUrl: draft.imageUrl || '',
+                storagePath: draft.storagePath || '',
                 fileName: draft.fileName || '',
                 mimeType: draft.mimeType || '',
             };
@@ -206,6 +208,7 @@ const ManageMaps: React.FC = () => {
         return {
             fileUrl,
             imageUrl: draft.type === 'image' ? fileUrl : '',
+            storagePath: objectRef.fullPath,
             fileName: selectedFile.name,
             mimeType: selectedFile.type || '',
         };
@@ -219,6 +222,7 @@ const ManageMaps: React.FC = () => {
             type: nextType,
             imageUrl: nextType === 'image' ? prev.imageUrl : '',
             fileUrl: nextType === 'image' || nextType === 'pdf' ? prev.fileUrl : '',
+            storagePath: nextType === 'image' || nextType === 'pdf' ? prev.storagePath : '',
             fileName: nextType === 'image' || nextType === 'pdf' ? prev.fileName : '',
             mimeType: nextType === 'image' || nextType === 'pdf' ? prev.mimeType : '',
             embedUrl: nextType === 'iframe' ? prev.embedUrl : '',
@@ -264,6 +268,9 @@ const ManageMaps: React.FC = () => {
                     : '',
                 fileUrl: payloadBase.type === 'image' || payloadBase.type === 'pdf'
                     ? (fileInfo.fileUrl || payloadBase.fileUrl)
+                    : '',
+                storagePath: payloadBase.type === 'image' || payloadBase.type === 'pdf'
+                    ? (fileInfo.storagePath || payloadBase.storagePath)
                     : '',
                 fileName: payloadBase.type === 'image' || payloadBase.type === 'pdf'
                     ? (fileInfo.fileName || payloadBase.fileName)
