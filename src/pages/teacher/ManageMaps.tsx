@@ -3,6 +3,7 @@ import { collection, deleteDoc, doc, getDocs, orderBy, query, serverTimestamp, s
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import MapSidebar from '../../components/common/MapSidebar';
 import MapViewer from '../../components/common/MapViewer';
+import PdfMapViewer from '../../components/common/PdfMapViewer';
 import { useAuth } from '../../contexts/AuthContext';
 import { db, storage } from '../../lib/firebase';
 import {
@@ -134,6 +135,7 @@ const ManageMaps: React.FC = () => {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isReorderMode, setIsReorderMode] = useState(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [selectedFilePreviewUrl, setSelectedFilePreviewUrl] = useState('');
     const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     const collectionPath = useMemo(() => getSemesterCollectionPath(config, 'map_resources'), [config]);
@@ -200,6 +202,17 @@ const ManageMaps: React.FC = () => {
         setDraft(next);
         resetFileInput();
     }, [items, selectedId]);
+
+    useEffect(() => {
+        if (!selectedFile) {
+            setSelectedFilePreviewUrl('');
+            return;
+        }
+
+        const previewUrl = URL.createObjectURL(selectedFile);
+        setSelectedFilePreviewUrl(previewUrl);
+        return () => URL.revokeObjectURL(previewUrl);
+    }, [selectedFile]);
 
     const handleDraftChange = (field: keyof MapResource, value: string | number) => {
         setDraft((prev) => ({
@@ -614,6 +627,17 @@ const ManageMaps: React.FC = () => {
 
     const selectedPreview = draft.id ? draft : null;
     const acceptsFile = draft.type === 'image' || draft.type === 'pdf';
+    const pdfSettingsTabs = useMemo(
+        () => items.filter((item) => item.type === 'pdf'),
+        [items],
+    );
+    const activePdfShortcutCount = useMemo(
+        () => (draft.pdfRegions || []).filter((region) => region.shortcutEnabled !== false).length,
+        [draft.pdfRegions],
+    );
+    const settingsPdfPreviewUrl = draft.type === 'pdf'
+        ? (selectedFilePreviewUrl || draft.fileUrl || '')
+        : '';
 
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -716,8 +740,8 @@ const ManageMaps: React.FC = () => {
 
             {isSettingsOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-                    <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl md:p-8">
-                        <div className="mb-6 flex items-center justify-between gap-3">
+                    <div className="max-h-[92vh] w-full max-w-7xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+                        <div className="flex items-center justify-between gap-3 p-6 md:p-8">
                             <div>
                                 <h2 className="text-xl font-extrabold text-gray-900">지도 설정</h2>
                                 <p className="mt-1 text-sm text-gray-500">
@@ -733,6 +757,30 @@ const ManageMaps: React.FC = () => {
                                 <i className="fas fa-times"></i>
                             </button>
                         </div>
+
+                        {pdfSettingsTabs.length > 1 && (
+                            <div className="overflow-x-auto border-y border-gray-100 px-6 md:px-8">
+                                <div className="flex min-w-max">
+                                    {pdfSettingsTabs.map((item) => (
+                                        <button
+                                            key={item.id}
+                                            type="button"
+                                            onClick={() => handleOpenSettings(item.id)}
+                                            className={`border-b-2 px-4 py-3 text-sm font-bold transition ${
+                                                draft.id === item.id
+                                                    ? 'border-blue-600 text-blue-600'
+                                                    : 'border-transparent text-gray-500 hover:text-gray-800'
+                                            }`}
+                                        >
+                                            {item.title}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="grid gap-6 overflow-y-auto p-6 md:p-8 lg:grid-cols-[minmax(0,30rem)_minmax(0,1fr)]">
+                            <div className="min-w-0">
 
                         <div className="grid gap-4 md:grid-cols-2">
                             <div>
@@ -897,7 +945,71 @@ const ManageMaps: React.FC = () => {
                             </div>
                         )}
 
-                        <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
+                            </div>
+
+                            <div className="min-w-0 space-y-4">
+                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                    <div>
+                                        <div className="text-xs font-bold uppercase tracking-[0.2em] text-gray-400">Preview</div>
+                                        <h3 className="mt-2 text-lg font-extrabold text-gray-900">
+                                            {draft.type === 'pdf' ? 'PDF 상세 보기' : '자료 미리보기'}
+                                        </h3>
+                                        <p className="mt-1 text-sm text-gray-500">
+                                            {draft.type === 'pdf'
+                                                ? '업로드한 PDF 파일과 추출 상태를 우측에서 바로 확인합니다.'
+                                                : '저장 전 현재 설정 기준으로 표시 형태를 확인합니다.'}
+                                        </p>
+                                    </div>
+                                    {draft.type === 'pdf' && (
+                                        <div className="grid grid-cols-3 gap-2 text-center text-xs font-bold text-gray-600">
+                                            <div className="rounded-xl border border-gray-200 bg-white px-3 py-2">
+                                                <div className="text-[11px] text-gray-400">파일</div>
+                                                <div className="mt-1">{selectedFile ? '신규' : '저장됨'}</div>
+                                            </div>
+                                            <div className="rounded-xl border border-gray-200 bg-white px-3 py-2">
+                                                <div className="text-[11px] text-gray-400">페이지</div>
+                                                <div className="mt-1">{draft.pdfPageImages?.length || 0}</div>
+                                            </div>
+                                            <div className="rounded-xl border border-gray-200 bg-white px-3 py-2">
+                                                <div className="text-[11px] text-gray-400">바로가기</div>
+                                                <div className="mt-1">{activePdfShortcutCount}</div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {draft.type === 'pdf' ? (
+                                    settingsPdfPreviewUrl ? (
+                                        <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
+                                            <PdfMapViewer
+                                                fileUrl={settingsPdfPreviewUrl}
+                                                storagePath={selectedFile ? undefined : draft.storagePath}
+                                                title={draft.title || selectedFile?.name || 'PDF 지도'}
+                                                pageImages={selectedFile ? [] : (draft.pdfPageImages || [])}
+                                                regions={draft.pdfRegions || []}
+                                            />
+                                        </div>
+                                    ) : (
+                                        <div className="rounded-3xl border border-dashed border-gray-300 bg-white px-6 py-16 text-center text-sm text-gray-500">
+                                            PDF 파일을 선택하면 이 영역에 상세 미리보기가 표시됩니다.
+                                        </div>
+                                    )
+                                ) : (
+                                    <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
+                                        <MapViewer
+                                            item={draft}
+                                            googleSearchQuery={draft.type === 'google' ? (draft.googleQuery || '') : undefined}
+                                            onGoogleSearchQueryChange={draft.type === 'google'
+                                                ? (value) => handleDraftChange('googleQuery', value)
+                                                : undefined}
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="border-t border-gray-100 px-6 py-6 md:px-8">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
                             <div className="flex flex-wrap gap-2">
                                 {draft.id && draft.type === 'pdf' && draft.fileUrl && (
                                     <button
@@ -936,6 +1048,7 @@ const ManageMaps: React.FC = () => {
                                     {saving ? '저장 중...' : '저장'}
                                 </button>
                             </div>
+                        </div>
                         </div>
                     </div>
                 </div>
