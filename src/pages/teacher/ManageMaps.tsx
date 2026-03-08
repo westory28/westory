@@ -1306,7 +1306,7 @@ const ManageMaps: React.FC = () => {
                                                     onClick={() => handlePdfRegionAddCustomTag(index)}
                                                     className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
                                                 >
-                                                    ?? ??
+                                                    태그 추가
                                                 </button>
                                             </div>
                                         </div>
