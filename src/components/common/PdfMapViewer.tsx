@@ -77,6 +77,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
     const pageWrapRef = useRef<HTMLDivElement | null>(null);
     const previewSurfaceRef = useRef<HTMLDivElement | null>(null);
     const modalSurfaceRef = useRef<HTMLDivElement | null>(null);
+    const modalRegionHighlightRef = useRef<HTMLDivElement | null>(null);
     const pinchStateRef = useRef<{ distance: number; zoom: number } | null>(null);
     const dragStateRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
     const usingPreprocessedPages = pageImages.length > 0;
@@ -226,10 +227,19 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
 
         const frameId = window.requestAnimationFrame(() => {
             const surface = modalSurfaceRef.current;
-            if (!surface) return;
+            const highlight = modalRegionHighlightRef.current;
+            if (!surface || !highlight) return;
 
-            const targetLeft = Math.max(0, selectedRegion.left * zoom - (surface.clientWidth / 2) + (selectedRegion.width * zoom / 2));
-            const targetTop = Math.max(0, selectedRegion.top * zoom - (surface.clientHeight / 2) + (selectedRegion.height * zoom / 2));
+            const surfaceRect = surface.getBoundingClientRect();
+            const highlightRect = highlight.getBoundingClientRect();
+            const targetLeft = Math.max(
+                0,
+                surface.scrollLeft + (highlightRect.left - surfaceRect.left) - ((surface.clientWidth - highlightRect.width) / 2),
+            );
+            const targetTop = Math.max(
+                0,
+                surface.scrollTop + (highlightRect.top - surfaceRect.top) - ((surface.clientHeight - highlightRect.height) / 2),
+            );
 
             surface.scrollTo({
                 left: targetLeft,
@@ -391,6 +401,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                     />
                     {selectedRegion && selectedRegion.page === currentPage && (
                         <div
+                            ref={interactive ? undefined : modalRegionHighlightRef}
                             className="pointer-events-none absolute rounded border-4 border-red-500 bg-red-200/30"
                             style={{
                                 left: `${selectedRegion.left * surfaceScale - 16}px`,
@@ -420,6 +431,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                         />
                         {selectedRegion && selectedRegion.page === currentPage && (
                             <div
+                                ref={interactive ? undefined : modalRegionHighlightRef}
                                 className="pointer-events-none absolute rounded border-4 border-red-500 bg-red-200/30"
                                 style={{
                                     left: `${selectedRegion.left * zoom - 16}px`,
