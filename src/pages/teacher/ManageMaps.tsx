@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { collection, deleteDoc, doc, getDocs, orderBy, query, serverTimestamp, setDoc } from 'firebase/firestore';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { getBlob, getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import MapSidebar from '../../components/common/MapSidebar';
 import MapViewer from '../../components/common/MapViewer';
 import { useAuth } from '../../contexts/AuthContext';
@@ -222,6 +222,69 @@ const ManageMaps: React.FC = () => {
         );
     };
 
+    const uploadProcessedPdfPages = async (
+        resourceId: string,
+        processed: Awaited<ReturnType<typeof processPdfMapFile>>,
+    ) => {
+        const uploadedPages = [];
+
+        for (const page of processed.pageImages) {
+            const pageRef = ref(storage, `map-resources/${resourceId}/page-${page.page}.png`);
+            await withTimeout(
+                uploadBytes(pageRef, page.blob, {
+                    contentType: 'image/png',
+                }),
+                20000,
+                `storage-upload-page-${page.page}`,
+            );
+            const pageUrl = await withTimeout(getDownloadURL(pageRef), 10000, `storage-page-url-${page.page}`);
+            uploadedPages.push({
+                page: page.page,
+                imageUrl: pageUrl,
+                width: page.width,
+                height: page.height,
+            });
+        }
+
+        return uploadedPages;
+    };
+
+    const persistMapPayload = async (payload: MapResource, preferredScope: StorageScope) => {
+        const fallbackScope: StorageScope = preferredScope === 'semester' ? 'legacy' : 'semester';
+        let resolvedScope = preferredScope;
+
+        try {
+            await persistToScope(preferredScope, payload);
+        } catch (primaryError) {
+            console.error(`Failed to save map resource to ${preferredScope}:`, primaryError);
+            await persistToScope(fallbackScope, payload);
+            resolvedScope = fallbackScope;
+        }
+
+        const merged = mergeMapResources([
+            ...items.filter((item) => item.id !== payload.id),
+            { ...payload, storageScope: resolvedScope },
+        ]).map((item) => {
+            const existing = items.find((resource) => resource.id === item.id);
+            if (item.id === payload.id) {
+                return { ...item, storageScope: resolvedScope };
+            }
+            return { ...item, storageScope: existing?.storageScope || resolvedScope };
+        });
+
+        setItems(merged);
+        setSelectedId(payload.id);
+        setDraft({ ...payload, storageScope: resolvedScope });
+        resetFileInput();
+        setIsSettingsOpen(false);
+
+        if (resolvedScope === preferredScope) {
+            alert('지도 자료를 저장했습니다.');
+        } else {
+            alert('지도 자료를 저장했습니다. 학기 범위 경로 대신 기본 컬렉션에 저장되었습니다.');
+        }
+    };
+
     const uploadSelectedFile = async (resourceId: string) => {
         if (!selectedFile) {
             return {
@@ -252,25 +315,7 @@ const ManageMaps: React.FC = () => {
 
         if (draft.type === 'pdf') {
             const processed = await processPdfMapFile(selectedFile);
-            const uploadedPages = [];
-
-            for (const page of processed.pageImages) {
-                const pageRef = ref(storage, `map-resources/${resourceId}/page-${page.page}.png`);
-                await withTimeout(
-                    uploadBytes(pageRef, page.blob, {
-                        contentType: 'image/png',
-                    }),
-                    20000,
-                    `storage-upload-page-${page.page}`,
-                );
-                const pageUrl = await withTimeout(getDownloadURL(pageRef), 10000, `storage-page-url-${page.page}`);
-                uploadedPages.push({
-                    page: page.page,
-                    imageUrl: pageUrl,
-                    width: page.width,
-                    height: page.height,
-                });
-            }
+            const uploadedPages = await uploadProcessedPdfPages(resourceId, processed);
 
             return {
                 fileUrl,
@@ -370,6 +415,9 @@ const ManageMaps: React.FC = () => {
                     : [],
             };
 
+            await persistMapPayload(payload, draft.storageScope || 'semester');
+            return;
+
             const preferredScope: StorageScope = draft.storageScope || 'semester';
             const fallbackScope: StorageScope = preferredScope === 'semester' ? 'legacy' : 'semester';
             let resolvedScope = preferredScope;
@@ -411,6 +459,56 @@ const ManageMaps: React.FC = () => {
                 ? '\nFirebase Storage 버킷 또는 Storage 규칙이 아직 준비되지 않았을 가능성이 큽니다.'
                 : '';
             alert(`지도 자료 저장에 실패했습니다.\n${message}${storageHint}`);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleReprocessPdf = async () => {
+        if (draft.type !== 'pdf' || !draft.id) return;
+
+        setSaving(true);
+
+        try {
+            let blob: Blob | null = null;
+
+            if (draft.storagePath) {
+                try {
+                    blob = await withTimeout(getBlob(ref(storage, draft.storagePath)), 20000, 'storage-pdf-blob');
+                } catch (storageError) {
+                    console.warn('Failed to load stored PDF blob, trying direct URL fallback:', storageError);
+                }
+            }
+
+            if (!blob && draft.fileUrl) {
+                const response = await withTimeout(fetch(draft.fileUrl, { mode: 'cors' }), 20000, 'pdf-reprocess-fetch');
+                if (!response.ok) {
+                    throw new Error(`pdf-reprocess-fetch-failed:${response.status}`);
+                }
+                blob = await withTimeout(response.blob(), 15000, 'pdf-reprocess-blob');
+            }
+
+            if (!blob) {
+                throw new Error('pdf-reprocess-source-missing');
+            }
+
+            const sourceFile = new File(
+                [blob],
+                draft.fileName || `${draft.id}.pdf`,
+                { type: blob.type || draft.mimeType || 'application/pdf' },
+            );
+            const processed = await processPdfMapFile(sourceFile);
+            const uploadedPages = await uploadProcessedPdfPages(draft.id, processed);
+            const payload: MapResource = {
+                ...normalizeMapResource(draft.id, draft),
+                pdfPageImages: uploadedPages,
+                pdfRegions: processed.regions,
+            };
+
+            await persistMapPayload(payload, draft.storageScope || 'semester');
+        } catch (error) {
+            console.error('Failed to reprocess PDF map:', error);
+            alert(`PDF 재처리에 실패했습니다.\n${normalizeErrorMessage(error)}`);
         } finally {
             setSaving(false);
         }
@@ -703,7 +801,17 @@ const ManageMaps: React.FC = () => {
                         )}
 
                         <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
-                            <div>
+                            <div className="flex flex-wrap gap-2">
+                                {draft.id && draft.type === 'pdf' && draft.fileUrl && (
+                                    <button
+                                        type="button"
+                                        onClick={() => void handleReprocessPdf()}
+                                        disabled={saving}
+                                        className="rounded-lg border border-amber-200 px-4 py-2 text-sm font-bold text-amber-700 hover:bg-amber-50 disabled:opacity-60"
+                                    >
+                                        PDF 재처리
+                                    </button>
+                                )}
                                 {draft.id && (
                                     <button
                                         type="button"
