@@ -5,6 +5,7 @@ import MapViewer from '../../../components/common/MapViewer';
 import { useAuth } from '../../../contexts/AuthContext';
 import { db } from '../../../lib/firebase';
 import {
+    groupMapResourcesForDisplay,
     getGoogleMapsExternalUrl,
     mergeMapResources,
     normalizeMapResource,
@@ -15,10 +16,16 @@ import { getSemesterCollectionPath } from '../../../lib/semesterScope';
 const StudentMaps: React.FC = () => {
     const { config } = useAuth();
     const [items, setItems] = useState<MapResource[]>([]);
-    const [selectedTabGroup, setSelectedTabGroup] = useState('');
+    const [selectedGroupKey, setSelectedGroupKey] = useState('');
     const [selectedId, setSelectedId] = useState('');
     const [loading, setLoading] = useState(true);
     const [googleSearchQuery, setGoogleSearchQuery] = useState('');
+
+    const displayGroups = useMemo(() => groupMapResourcesForDisplay(items), [items]);
+    const groupMap = useMemo(
+        () => new Map(displayGroups.map((group) => [group.key, group])),
+        [displayGroups],
+    );
 
     useEffect(() => {
         const loadMaps = async () => {
@@ -37,18 +44,18 @@ const StudentMaps: React.FC = () => {
 
                 const resources = snap.docs.map((docSnap) => normalizeMapResource(docSnap.id, docSnap.data()));
                 const merged = mergeMapResources(resources);
-                const first = merged[0] || null;
+                const firstGroup = groupMapResourcesForDisplay(merged)[0] || null;
 
                 setItems(merged);
-                setSelectedTabGroup((prev) => prev || first?.tabGroup || first?.category || '');
-                setSelectedId((prev) => prev || first?.id || '');
+                setSelectedGroupKey((prev) => prev || firstGroup?.key || '');
+                setSelectedId((prev) => prev || firstGroup?.items[0]?.id || '');
             } catch (error) {
                 console.error('Failed to load map resources:', error);
                 const fallback = mergeMapResources([]);
-                const first = fallback[0] || null;
+                const firstGroup = groupMapResourcesForDisplay(fallback)[0] || null;
                 setItems(fallback);
-                setSelectedTabGroup((prev) => prev || first?.tabGroup || first?.category || '');
-                setSelectedId((prev) => prev || first?.id || '');
+                setSelectedGroupKey((prev) => prev || firstGroup?.key || '');
+                setSelectedId((prev) => prev || firstGroup?.items[0]?.id || '');
             } finally {
                 setLoading(false);
             }
@@ -57,39 +64,26 @@ const StudentMaps: React.FC = () => {
         void loadMaps();
     }, [config]);
 
-    const groupedItems = useMemo(() => {
-        const groups = new Map<string, MapResource[]>();
-        items.forEach((item) => {
-            const key = item.tabGroup || item.category || '기타 지도';
-            const current = groups.get(key) || [];
-            current.push(item);
-            groups.set(key, current);
-        });
-        return groups;
-    }, [items]);
-
-    const tabGroupSidebarItems = useMemo<MapResource[]>(() => (
-        Array.from(groupedItems.entries()).map(([tabGroup, group]) => ({
-            ...group[0],
-            id: `tab-group:${tabGroup}`,
-            title: tabGroup,
-            category: group[0]?.category || '',
-            tabGroup,
+    const sidebarItems = useMemo<MapResource[]>(() => (
+        displayGroups.map((group) => ({
+            ...group.representative,
+            id: `map-group:${group.key}`,
+            title: group.title,
         }))
-    ), [groupedItems]);
+    ), [displayGroups]);
 
-    const currentTabGroup = selectedTabGroup || tabGroupSidebarItems[0]?.tabGroup || '';
-    const currentTabItems = groupedItems.get(currentTabGroup) || [];
+    const currentGroup = groupMap.get(selectedGroupKey) || displayGroups[0] || null;
+    const currentTabItems = currentGroup?.items || [];
     const selectedItem = currentTabItems.find((item) => item.id === selectedId) || currentTabItems[0] || items[0] || null;
 
     useEffect(() => {
-        if (!tabGroupSidebarItems.length) return;
-        if (!currentTabGroup || !groupedItems.has(currentTabGroup)) {
-            const nextGroup = tabGroupSidebarItems[0].tabGroup || '';
-            setSelectedTabGroup(nextGroup);
-            setSelectedId(groupedItems.get(nextGroup)?.[0]?.id || '');
+        if (!displayGroups.length) return;
+        if (!currentGroup) {
+            const nextGroup = displayGroups[0];
+            setSelectedGroupKey(nextGroup.key);
+            setSelectedId(nextGroup.items[0]?.id || '');
         }
-    }, [currentTabGroup, groupedItems, tabGroupSidebarItems]);
+    }, [currentGroup, displayGroups]);
 
     useEffect(() => {
         if (!currentTabItems.length) return;
@@ -115,12 +109,13 @@ const StudentMaps: React.FC = () => {
             <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 p-6 lg:flex-row lg:p-10">
                 <MapSidebar
                     heading="지도"
-                    items={tabGroupSidebarItems}
-                    selectedId={`tab-group:${currentTabGroup}`}
-                    onSelect={(tabGroupId) => {
-                        const nextGroup = tabGroupId.replace(/^tab-group:/u, '');
-                        setSelectedTabGroup(nextGroup);
-                        setSelectedId(groupedItems.get(nextGroup)?.[0]?.id || '');
+                    items={sidebarItems}
+                    selectedId={`map-group:${currentGroup?.key || ''}`}
+                    onSelect={(groupId) => {
+                        const nextGroupKey = groupId.replace(/^map-group:/u, '');
+                        const nextGroup = groupMap.get(nextGroupKey);
+                        setSelectedGroupKey(nextGroupKey);
+                        setSelectedId(nextGroup?.items[0]?.id || '');
                     }}
                 />
 
@@ -138,7 +133,9 @@ const StudentMaps: React.FC = () => {
                                         <div className="mb-3 inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
                                             {selectedItem.category}
                                         </div>
-                                        <h1 className="text-2xl font-extrabold text-gray-900">{currentTabGroup}</h1>
+                                        <h1 className="text-2xl font-extrabold text-gray-900">
+                                            {currentGroup?.title || selectedItem.title}
+                                        </h1>
                                     </div>
                                     {externalUrl && (
                                         <a

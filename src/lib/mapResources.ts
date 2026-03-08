@@ -38,6 +38,13 @@ export interface MapResource {
     sortOrder: number;
 }
 
+export interface MapResourceDisplayGroup<T extends MapResource = MapResource> {
+    key: string;
+    title: string;
+    representative: T;
+    items: T[];
+}
+
 export const GOOGLE_MAP_RESOURCE_ID = 'google-maps';
 
 export const DEFAULT_PDF_REGION_TAGS = [
@@ -155,6 +162,56 @@ export const mergeMapResources = (resources: MapResource[]) => {
         if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
         return a.title.localeCompare(b.title, 'ko');
     });
+};
+
+const getMapResourceGroupSeed = (item: MapResource) => {
+    if (item.type === 'google') return `google:${item.id}`;
+
+    const normalizedTitle = String(item.title || '').trim();
+    if (!normalizedTitle) return item.id;
+
+    const firstToken = normalizedTitle.split(/\s+/u)[0];
+    return firstToken || normalizedTitle;
+};
+
+const sortMapResources = <T extends MapResource>(items: T[]) => (
+    [...items].sort((a, b) => {
+        if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+        return a.title.localeCompare(b.title, 'ko');
+    })
+);
+
+export const groupMapResourcesForDisplay = <T extends MapResource>(resources: T[]): MapResourceDisplayGroup<T>[] => {
+    const buckets = new Map<string, T[]>();
+
+    sortMapResources(resources).forEach((item) => {
+        const key = getMapResourceGroupSeed(item);
+        const current = buckets.get(key) || [];
+        current.push(item);
+        buckets.set(key, current);
+    });
+
+    return Array.from(buckets.entries())
+        .map(([key, items]) => {
+            const representative = [...items].sort((a, b) => {
+                if (a.title.length !== b.title.length) return a.title.length - b.title.length;
+                if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+                return a.title.localeCompare(b.title, 'ko');
+            })[0];
+
+            return {
+                key,
+                title: representative?.title || items[0]?.title || '지도 자료',
+                representative: representative || items[0],
+                items,
+            };
+        })
+        .sort((a, b) => {
+            if (a.representative.sortOrder !== b.representative.sortOrder) {
+                return a.representative.sortOrder - b.representative.sortOrder;
+            }
+            return a.title.localeCompare(b.title, 'ko');
+        });
 };
 
 export const getGoogleMapsEmbedUrl = (query?: string) => {

@@ -11,6 +11,8 @@ import {
     DEFAULT_PDF_ERA_TAGS,
     DEFAULT_PDF_REGION_TAGS,
     GOOGLE_MAP_RESOURCE_ID,
+    getGoogleMapsExternalUrl,
+    groupMapResourcesForDisplay,
     mergeMapResources,
     normalizeMapResource,
     type MapResource,
@@ -886,6 +888,30 @@ const ManageMaps: React.FC = () => {
     };
 
     const selectedPreview = draft.id ? draft : null;
+    const displayGroups = useMemo(() => groupMapResourcesForDisplay(items), [items]);
+    const displayGroupMap = useMemo(
+        () => new Map(displayGroups.map((group) => [group.key, group])),
+        [displayGroups],
+    );
+    const currentDisplayGroup = displayGroups.find((group) => group.items.some((item) => item.id === selectedId))
+        || displayGroups[0]
+        || null;
+    const currentDisplayItems = currentDisplayGroup?.items || [];
+    const currentPreviewItem = currentDisplayItems.find((item) => item.id === selectedId)
+        || currentDisplayItems[0]
+        || selectedPreview;
+    const sidebarItems = useMemo<MapResource[]>(() => (
+        isReorderMode
+            ? items
+            : displayGroups.map((group) => ({
+                ...group.representative,
+                id: `map-group:${group.key}`,
+                title: group.title,
+            }))
+    ), [displayGroups, isReorderMode, items]);
+    const previewExternalUrl = currentPreviewItem?.type === 'google'
+        ? (currentPreviewItem.externalUrl || getGoogleMapsExternalUrl(currentPreviewItem.googleQuery || ''))
+        : (currentPreviewItem?.externalUrl || currentPreviewItem?.fileUrl || '');
     const acceptsFile = draft.type === 'pdf';
     const currentSettingsTabGroup = (draft.tabGroup || draft.category || '').trim();
     const settingsTabs = useMemo(
@@ -923,9 +949,18 @@ const ManageMaps: React.FC = () => {
             <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 p-6 lg:flex-row lg:p-10">
                 <MapSidebar
                     heading="지도"
-                    items={items}
-                    selectedId={selectedId}
-                    onSelect={setSelectedId}
+                    items={sidebarItems}
+                    selectedId={isReorderMode ? selectedId : `map-group:${currentDisplayGroup?.key || ''}`}
+                    onSelect={(id) => {
+                        if (isReorderMode) {
+                            setSelectedId(id);
+                            return;
+                        }
+
+                        const nextGroupKey = id.replace(/^map-group:/u, '');
+                        const nextGroup = displayGroupMap.get(nextGroupKey);
+                        setSelectedId(nextGroup?.items[0]?.id || '');
+                    }}
                     action={(
                         <button
                             type="button"
@@ -976,14 +1011,27 @@ const ManageMaps: React.FC = () => {
                                 </button>
                             </div>
                         ) : (
-                            <button
-                                type="button"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleOpenSettings(item.id);
-                                }}
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-gray-400 transition hover:border-gray-200 hover:bg-white hover:text-gray-700"
-                                aria-label={`${item.title} 설정 열기`}
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (isReorderMode) {
+                                            handleOpenSettings(item.id);
+                                            return;
+                                        }
+
+                                        const groupKey = item.id.replace(/^map-group:/u, '');
+                                        const targetGroup = displayGroupMap.get(groupKey);
+                                        const targetId = currentDisplayGroup?.key === groupKey
+                                            ? (currentPreviewItem?.id || targetGroup?.representative.id || '')
+                                            : (targetGroup?.representative.id || '');
+
+                                        if (targetId) {
+                                            handleOpenSettings(targetId);
+                                        }
+                                    }}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-gray-400 transition hover:border-gray-200 hover:bg-white hover:text-gray-700"
+                                    aria-label={`${item.title} 설정 열기`}
                                 title="설정"
                             >
                                 <i className="fas fa-cog text-sm"></i>
@@ -999,14 +1047,70 @@ const ManageMaps: React.FC = () => {
                             <i className="fas fa-spinner fa-spin text-2xl"></i>
                             <p className="mt-3">지도 자료를 불러오는 중입니다.</p>
                         </div>
+                    ) : currentPreviewItem ? (
+                        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+                            <div className="border-b border-gray-100 p-8 pb-4">
+                                <div className="flex flex-wrap items-start justify-between gap-4">
+                                    <div>
+                                        <div className="mb-3 inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
+                                            {currentPreviewItem.category}
+                                        </div>
+                                        <h1 className="text-2xl font-extrabold text-gray-900">
+                                            {currentDisplayGroup?.title || currentPreviewItem.title}
+                                        </h1>
+                                    </div>
+                                    {previewExternalUrl && (
+                                        <a
+                                            href={previewExternalUrl}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50"
+                                        >
+                                            <i className="fas fa-up-right-from-square"></i>
+                                            새 창에서 열기
+                                        </a>
+                                    )}
+                                </div>
+                            </div>
+
+                            {currentDisplayItems.length > 1 && (
+                                <div className="border-b border-gray-100 px-6">
+                                    <div className="flex overflow-x-auto">
+                                        {currentDisplayItems.map((item) => (
+                                            <button
+                                                key={item.id}
+                                                type="button"
+                                                onClick={() => setSelectedId(item.id)}
+                                                className={`shrink-0 border-b-2 px-4 py-4 text-sm font-bold transition ${
+                                                    currentPreviewItem.id === item.id
+                                                        ? 'border-blue-600 text-blue-600'
+                                                        : 'border-transparent text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                                }`}
+                                            >
+                                                {item.title}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="bg-gray-50 p-4 md:p-6">
+                                <MapViewer
+                                    item={currentPreviewItem}
+                                    googleSearchQuery={currentPreviewItem.type === 'google'
+                                        ? (currentPreviewItem.googleQuery || '')
+                                        : undefined}
+                                    onGoogleSearchQueryChange={currentPreviewItem.type === 'google'
+                                        ? (value) => handleDraftChange('googleQuery', value)
+                                        : undefined}
+                                    showShell={false}
+                                />
+                            </div>
+                        </div>
                     ) : (
-                        <MapViewer
-                            item={selectedPreview}
-                            googleSearchQuery={draft.type === 'google' ? (draft.googleQuery || '') : undefined}
-                            onGoogleSearchQueryChange={draft.type === 'google'
-                                ? (value) => handleDraftChange('googleQuery', value)
-                                : undefined}
-                        />
+                        <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center text-gray-500 shadow-sm">
+                            지도를 선택해 주세요.
+                        </div>
                     )}
                 </section>
             </main>
