@@ -102,6 +102,11 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
         }).slice(0, 24);
     }, [allRegionHits]);
 
+    const sortedRegionHits = useMemo(
+        () => [...visibleRegionHits].sort((a, b) => a.label.localeCompare(b.label, 'ko')),
+        [visibleRegionHits],
+    );
+
     const currentPageWidth = useMemo(() => {
         if (usingPreprocessedPages) {
             return pageImages[currentPage - 1]?.width || 0;
@@ -469,7 +474,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                     <div className="mb-4">
                         <div className="mb-2 text-xs font-bold text-gray-500">지역 바로가기</div>
                         <div className="flex flex-wrap gap-2">
-                            {visibleRegionHits.map((region) => (
+                            {sortedRegionHits.map((region) => (
                                 <button
                                     key={`${region.label}-${region.page}`}
                                     type="button"
@@ -573,59 +578,16 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                             </div>
                         </div>
 
-                        <div className="flex min-h-0 flex-1 flex-col">
-                            <div className="flex items-center justify-between border-b border-gray-200 px-5 py-3">
-                                <button
-                                    type="button"
-                                    disabled={currentPage <= 1}
-                                    onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                                    className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-40"
-                                >
-                                    이전 페이지
-                                </button>
-                                <div className="text-sm font-bold text-gray-600">
-                                    {currentPage} / {numPages || '-'}
-                                </div>
-                                <button
-                                    type="button"
-                                    disabled={numPages === 0 || currentPage >= numPages}
-                                    onClick={() => setCurrentPage((prev) => Math.min(numPages, prev + 1))}
-                                    className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-40"
-                                >
-                                    다음 페이지
-                                </button>
-                            </div>
-
-                            <div className="flex min-h-0 flex-1 items-center justify-center bg-slate-100 p-4">
-                                <div className="flex h-full w-full max-w-[160vh] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-                                    <div
-                                        ref={modalSurfaceRef}
-                                        className="min-h-0 flex-1 overflow-auto bg-slate-100 p-4 cursor-grab active:cursor-grabbing"
-                                        onWheel={handleWheelZoom}
-                                        onTouchStart={handleTouchStart}
-                                        onTouchMove={handleTouchMove}
-                                        onTouchEnd={handleTouchEnd}
-                                        onMouseDown={handleDragStart}
-                                        onMouseMove={handleDragMove}
-                                        onMouseUp={handleDragEnd}
-                                        onMouseLeave={handleDragEnd}
-                                    >
-                                        <div className="flex min-h-full items-start justify-center">
-                                            {renderPageSurface(false)}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="border-t border-gray-200 bg-gray-50 px-5 py-4">
+                        <div className="grid min-h-0 flex-1 lg:grid-cols-[17rem_minmax(0,1fr)]">
+                            <aside className="min-h-0 border-r border-gray-200 bg-gray-50 p-4">
                                 <div className="mb-3 text-xs font-bold text-gray-500">지역 바로가기</div>
-                                <div className="flex max-h-[7.5rem] flex-wrap gap-2 overflow-auto">
-                                    {visibleRegionHits.map((region) => (
+                                <div className="flex max-h-[calc(90vh-10rem)] flex-wrap content-start gap-2 overflow-y-auto pr-1">
+                                    {sortedRegionHits.map((region) => (
                                         <button
                                             key={`modal-${region.label}-${region.page}`}
                                             type="button"
                                             onClick={() => handleSelectRegion(region)}
-                                            className={`rounded-full px-3 py-2 text-xs font-bold transition ${
+                                            className={`rounded-xl px-3 py-2 text-left text-xs font-bold transition ${
                                                 selectedRegion?.label === region.label
                                                     ? 'bg-blue-600 text-white'
                                                     : 'bg-white text-gray-700 hover:bg-blue-50'
@@ -634,6 +596,51 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                                             {region.label}
                                         </button>
                                     ))}
+                                </div>
+                            </aside>
+
+                            <div className="flex min-h-0 flex-1 flex-col">
+                                <div className="flex items-center justify-between border-b border-gray-200 px-5 py-3">
+                                    <button
+                                        type="button"
+                                        disabled={currentPage <= 1}
+                                        onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                                        className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                                    >
+                                        이전 페이지
+                                    </button>
+                                    <div className="text-sm font-bold text-gray-600">
+                                        {currentPage} / {numPages || '-'}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        disabled={numPages === 0 || currentPage >= numPages}
+                                        onClick={() => setCurrentPage((prev) => Math.min(numPages, prev + 1))}
+                                        className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                                    >
+                                        다음 페이지
+                                    </button>
+                                </div>
+
+                                <div className="flex min-h-0 flex-1 items-center justify-center bg-slate-100 p-4">
+                                    <div className="flex h-full w-full max-w-[160vh] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+                                        <div
+                                            ref={modalSurfaceRef}
+                                            className="min-h-0 flex-1 overflow-auto bg-slate-100 p-4 cursor-grab active:cursor-grabbing"
+                                            onWheel={handleWheelZoom}
+                                            onTouchStart={handleTouchStart}
+                                            onTouchMove={handleTouchMove}
+                                            onTouchEnd={handleTouchEnd}
+                                            onMouseDown={handleDragStart}
+                                            onMouseMove={handleDragMove}
+                                            onMouseUp={handleDragEnd}
+                                            onMouseLeave={handleDragEnd}
+                                        >
+                                            <div className="flex min-h-full items-start justify-center">
+                                                {renderPageSurface(false)}
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>

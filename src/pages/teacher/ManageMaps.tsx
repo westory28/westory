@@ -208,6 +208,17 @@ const ManageMaps: React.FC = () => {
         }));
     };
 
+    const handlePdfRegionLabelChange = (index: number, value: string) => {
+        setDraft((prev) => ({
+            ...prev,
+            pdfRegions: (prev.pdfRegions || []).map((region, regionIndex) => (
+                regionIndex === index
+                    ? { ...region, label: value.trim() }
+                    : region
+            )),
+        }));
+    };
+
     const handleCreateNew = () => {
         setSelectedId('');
         resetFileInput();
@@ -835,6 +846,34 @@ const ManageMaps: React.FC = () => {
                                     Google 지도는 검색어 기반 iframe으로 표시됩니다. PDF 전용 지역 이름 추출 기능은
                                     Google 지도에는 적용되지 않습니다.
                                 </p>
+                            </div>
+                        )}
+
+                        {draft.type === 'pdf' && (draft.pdfRegions?.length || 0) > 0 && (
+                            <div className="mt-6">
+                                <div className="mb-2 flex items-center justify-between gap-3">
+                                    <div>
+                                        <h3 className="text-sm font-bold text-gray-900">지역 바로가기 명칭 수정</h3>
+                                        <p className="mt-1 text-xs text-gray-500">저장하면 PDF 지역 바로가기 이름이 이 값으로 표시됩니다.</p>
+                                    </div>
+                                    <div className="text-xs font-medium text-gray-400">
+                                        {(draft.pdfRegions || []).length}개
+                                    </div>
+                                </div>
+                                <div className="max-h-72 space-y-2 overflow-y-auto rounded-2xl border border-gray-200 bg-gray-50 p-3">
+                                    {(draft.pdfRegions || []).map((region, index) => (
+                                        <div key={`${region.page}-${region.left}-${region.top}-${index}`} className="grid gap-2 rounded-xl bg-white p-3 md:grid-cols-[5rem_minmax(0,1fr)] md:items-center">
+                                            <div className="text-xs font-bold text-gray-500">p.{region.page}</div>
+                                            <input
+                                                type="text"
+                                                value={region.label}
+                                                onChange={(e) => handlePdfRegionLabelChange(index, e.target.value)}
+                                                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                                                placeholder="지역명 입력"
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         )}
 
