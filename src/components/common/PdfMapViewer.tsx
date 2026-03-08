@@ -38,22 +38,65 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({ fileUrl, title }) => {
     const [zoom, setZoom] = useState(1.2);
     const [regionHits, setRegionHits] = useState<RegionHit[]>([]);
     const [selectedRegion, setSelectedRegion] = useState<RegionHit | null>(null);
+    const [pdfObjectUrl, setPdfObjectUrl] = useState('');
+    const [loadingPdf, setLoadingPdf] = useState(true);
+    const [loadError, setLoadError] = useState('');
     const pageWrapRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
-        setCurrentPage(1);
-        setZoom(1.2);
-        setRegionHits([]);
-        setSelectedRegion(null);
+        let revokedUrl = '';
+        let active = true;
+
+        const loadPdf = async () => {
+            setLoadingPdf(true);
+            setLoadError('');
+            setPdfObjectUrl('');
+            setCurrentPage(1);
+            setZoom(1.2);
+            setRegionHits([]);
+            setSelectedRegion(null);
+
+            try {
+                const response = await fetch(fileUrl);
+                if (!response.ok) {
+                    throw new Error(`pdf-fetch-failed:${response.status}`);
+                }
+
+                const blob = await response.blob();
+                if (blob.type && !blob.type.includes('pdf')) {
+                    throw new Error(`pdf-invalid-mime:${blob.type}`);
+                }
+
+                revokedUrl = URL.createObjectURL(blob);
+                if (!active) return;
+                setPdfObjectUrl(revokedUrl);
+            } catch (error) {
+                console.error('Failed to fetch PDF file:', error);
+                if (!active) return;
+                setLoadError(error instanceof Error ? error.message : 'pdf-fetch-failed');
+            } finally {
+                if (active) {
+                    setLoadingPdf(false);
+                }
+            }
+        };
+
+        void loadPdf();
+
+        return () => {
+            active = false;
+            if (revokedUrl) {
+                URL.revokeObjectURL(revokedUrl);
+            }
+        };
     }, [fileUrl]);
 
     const visibleRegionHits = useMemo(() => {
         const seen = new Set<string>();
 
         return regionHits.filter((item) => {
-            const key = item.label;
-            if (seen.has(key)) return false;
-            seen.add(key);
+            if (seen.has(item.label)) return false;
+            seen.add(item.label);
             return true;
         }).slice(0, 40);
     }, [regionHits]);
@@ -97,6 +140,11 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({ fileUrl, title }) => {
         window.setTimeout(() => {
             pageWrapRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 60);
+    };
+
+    const handleLoadError = (error: Error) => {
+        console.error('Failed to render PDF file:', error);
+        setLoadError(error.message || 'pdf-render-failed');
     };
 
     return (
@@ -170,28 +218,48 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({ fileUrl, title }) => {
                 </div>
 
                 <div ref={pageWrapRef} className="overflow-auto rounded-2xl border border-gray-200 bg-gray-100 p-3">
-                    <Document file={fileUrl} onLoadSuccess={handleLoadSuccess} loading="PDF를 불러오는 중입니다.">
-                        <div className="relative inline-block">
-                            <Page
-                                pageNumber={currentPage}
-                                scale={zoom}
-                                renderTextLayer
-                                renderAnnotationLayer
-                                loading="페이지를 불러오는 중입니다."
-                            />
-                            {selectedRegion && selectedRegion.page === currentPage && (
-                                <div
-                                    className="pointer-events-none absolute rounded border-4 border-red-500 bg-red-200/30"
-                                    style={{
-                                        left: `${selectedRegion.left * zoom - 16}px`,
-                                        top: `${selectedRegion.top * zoom - 16}px`,
-                                        width: `${selectedRegion.width * zoom + 32}px`,
-                                        height: `${selectedRegion.height * zoom + 24}px`,
-                                    }}
-                                />
-                            )}
+                    {loadingPdf && (
+                        <div className="rounded-xl bg-white px-4 py-6 text-sm text-gray-500">
+                            PDF 파일을 준비하는 중입니다.
                         </div>
-                    </Document>
+                    )}
+
+                    {!loadingPdf && loadError && (
+                        <div className="rounded-xl bg-white px-4 py-6 text-sm text-red-600">
+                            PDF 파일을 불러오지 못했습니다. 파일 형식이나 다운로드 URL을 확인해 주세요.
+                            <div className="mt-2 text-xs text-gray-500">{loadError}</div>
+                        </div>
+                    )}
+
+                    {!loadingPdf && !loadError && pdfObjectUrl && (
+                        <Document
+                            file={pdfObjectUrl}
+                            onLoadSuccess={handleLoadSuccess}
+                            onLoadError={handleLoadError}
+                            loading="PDF를 불러오는 중입니다."
+                        >
+                            <div className="relative inline-block">
+                                <Page
+                                    pageNumber={currentPage}
+                                    scale={zoom}
+                                    renderTextLayer
+                                    renderAnnotationLayer
+                                    loading="페이지를 불러오는 중입니다."
+                                />
+                                {selectedRegion && selectedRegion.page === currentPage && (
+                                    <div
+                                        className="pointer-events-none absolute rounded border-4 border-red-500 bg-red-200/30"
+                                        style={{
+                                            left: `${selectedRegion.left * zoom - 16}px`,
+                                            top: `${selectedRegion.top * zoom - 16}px`,
+                                            width: `${selectedRegion.width * zoom + 32}px`,
+                                            height: `${selectedRegion.height * zoom + 24}px`,
+                                        }}
+                                    />
+                                )}
+                            </div>
+                        </Document>
+                    )}
                 </div>
 
                 <p className="mt-3 text-xs leading-6 text-gray-500">
