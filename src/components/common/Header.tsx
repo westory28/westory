@@ -175,13 +175,27 @@ const Header: React.FC = () => {
         return () => window.clearInterval(timerId);
     }, [currentUser, sessionExpiry]);
 
+    useEffect(() => {
+        if (!currentUser) return;
+
+        const handleActivityClick = (event: MouseEvent) => {
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+            if (target.closest('[data-session-ignore="true"]')) return;
+            extendSession();
+        };
+
+        document.addEventListener('click', handleActivityClick, true);
+        return () => document.removeEventListener('click', handleActivityClick, true);
+    }, [currentUser]);
+
     if (!isReady) return null;
 
     return (
         <header>
             <div className="header-container">
                 <div className="flex items-center gap-4 h-full">
-                    <Link to={home} className="logo-text">
+                    <Link to={home} className="logo-text" data-session-ignore="true">
                         <span className="logo-we">We</span>
                         <span className="logo-story">story</span>
                     </Link>
@@ -194,7 +208,7 @@ const Header: React.FC = () => {
 
                             if (!hasChildren) {
                                 return (
-                                    <Link key={`${item.url}-${idx}`} to={item.url} className={`nav-link ${active ? 'active' : ''} ${!isTeacherPortal ? 'student-nav-link' : ''}`}>
+                                    <Link key={`${item.url}-${idx}`} to={item.url} data-session-ignore="true" className={`nav-link ${active ? 'active' : ''} ${!isTeacherPortal ? 'student-nav-link' : ''}`}>
                                         {item.name}
                                     </Link>
                                 );
@@ -202,7 +216,7 @@ const Header: React.FC = () => {
 
                             return (
                                 <div key={`${item.url}-${idx}`} className="relative group h-full flex items-center">
-                                    <Link to={item.url} className={`nav-link ${active ? 'active' : ''} ${!isTeacherPortal ? 'student-nav-link' : ''} flex items-center gap-1`}>
+                                    <Link to={item.url} data-session-ignore="true" className={`nav-link ${active ? 'active' : ''} ${!isTeacherPortal ? 'student-nav-link' : ''} flex items-center gap-1`}>
                                         {item.name}
                                         <i className="fas fa-chevron-down text-[10px] ml-1 opacity-50 group-hover:opacity-100 transition"></i>
                                     </Link>
@@ -212,6 +226,7 @@ const Header: React.FC = () => {
                                                 <Link
                                                     key={`${child.url}-${childIdx}`}
                                                     to={child.url}
+                                                    data-session-ignore="true"
                                                     className={`block px-2.5 py-3 text-[13px] border-b border-gray-50 last:border-0 whitespace-nowrap font-bold ${isChildActive(child.url, visibleChildren) ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'}`}
                                                 >
                                                     {child.name}
@@ -227,12 +242,12 @@ const Header: React.FC = () => {
 
                 <div className="header-right">
                     {isTeacherPortal && (
-                        <Link to="/teacher/settings" className="text-gray-400 hover:text-blue-600 transition" title="설정">
+                        <Link to="/teacher/settings" data-session-ignore="true" className="text-gray-400 hover:text-blue-600 transition" title="설정">
                             <i className="fas fa-cog fa-lg"></i>
                         </Link>
                     )}
 
-                    <Link to={profileTarget} className="user-greeting header-user-link inline-flex items-center hover:text-blue-600 transition cursor-pointer" title={isTeacherPortal ? '관리자 페이지' : '마이페이지'}>
+                    <Link to={profileTarget} data-session-ignore="true" className="user-greeting header-user-link inline-flex items-center hover:text-blue-600 transition cursor-pointer" title={isTeacherPortal ? '관리자 페이지' : '마이페이지'}>
                         {!isTeacherPortal && (
                             <span className="mr-1.5 inline-flex h-6 w-6 items-center justify-center rounded-full border border-gray-300 bg-gray-100 text-[14px] leading-none">
                                 {studentProfileIcon}
@@ -245,6 +260,7 @@ const Header: React.FC = () => {
                         type="button"
                         onClick={extendSession}
                         title="시간 연장"
+                        data-session-ignore="true"
                         className={`lg:hidden inline-flex items-center justify-center font-mono font-bold text-xs min-w-[46px] px-2 py-1 rounded-md border border-stone-300 bg-stone-100 transition ${remainingSeconds < 300 ? 'text-red-500 border-red-300 bg-red-50' : 'text-stone-600'} hover:text-blue-600`}
                     >
                         {formatCountdown(remainingSeconds)}
@@ -255,18 +271,19 @@ const Header: React.FC = () => {
                         <span className={`font-mono font-bold text-sm w-[42px] text-center ${remainingSeconds < 300 ? 'text-red-500' : 'text-stone-600'}`}>
                             {formatCountdown(remainingSeconds)}
                         </span>
-                        <button onClick={extendSession} className="text-stone-400 hover:text-blue-600 transition p-1" title="시간 연장">
+                        <button onClick={extendSession} data-session-ignore="true" className="text-stone-400 hover:text-blue-600 transition p-1" title="시간 연장">
                             <i className="fas fa-redo-alt text-xs"></i>
                         </button>
                     </div>
 
 
-                    <button onClick={handleLogout} className="btn-logout">
+                    <button onClick={handleLogout} data-session-ignore="true" className="btn-logout">
                         로그아웃
                     </button>
 
                     <button
                         onClick={() => setMobileMenuOpen((prev) => !prev)}
+                        data-session-ignore="true"
                         className="mobile-menu-btn"
                         aria-label="모바일 메뉴 열기"
                     >
@@ -290,6 +307,7 @@ const Header: React.FC = () => {
                     <div key={`${item.url}-mobile-${idx}`}>
                         <Link
                             to={item.url}
+                            data-session-ignore="true"
                             className={`mobile-link ${isActive(item.url) || visibleChildren.some((child) => isChildActive(child.url, visibleChildren)) ? 'active' : ''}`}
                             onClick={() => setMobileMenuOpen(false)}
                         >
@@ -301,6 +319,7 @@ const Header: React.FC = () => {
                                     <Link
                                         key={`${child.url}-mobile-child-${childIdx}`}
                                         to={child.url}
+                                        data-session-ignore="true"
                                         className={`block pl-12 pr-4 py-1.5 text-sm rounded-r-full mr-2 font-bold ${isChildActive(child.url, visibleChildren) ? 'text-blue-600 bg-blue-50' : 'text-gray-500 hover:text-blue-600 hover:bg-gray-100'}`}
                                         onClick={() => setMobileMenuOpen(false)}
                                     >
