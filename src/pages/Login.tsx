@@ -208,6 +208,7 @@ const Login: React.FC = () => {
     const [consentReadReady, setConsentReadReady] = useState<Record<string, boolean>>({});
     const consentResolverRef = useRef<((value: string[] | null) => void) | null>(null);
     const redirectHandledRef = useRef(false);
+    const autoResumeUidRef = useRef<string | null>(null);
 
     const preferredRole = getSavedRole();
     const isTeacherUser = (preferredRole || userData?.role) === 'teacher';
@@ -619,6 +620,37 @@ const Login: React.FC = () => {
 
         void resolveRedirect();
     }, []);
+
+    useEffect(() => {
+        if (!currentUser) {
+            autoResumeUidRef.current = null;
+            return;
+        }
+
+        if (loading || authBusy || !redirectHandledRef.current) return;
+        if (autoResumeUidRef.current === currentUser.uid) return;
+
+        autoResumeUidRef.current = currentUser.uid;
+
+        const resumeAuthenticatedSession = async () => {
+            const resolvedRole: LoginMode = currentUser.email === TEACHER_EMAIL
+                || preferredRole === 'teacher'
+                || userData?.role === 'teacher'
+                ? 'teacher'
+                : 'student';
+
+            if (resolvedRole === 'teacher') {
+                saveRoleCache('teacher');
+                clearPendingLoginMode();
+                navigate('/teacher/dashboard');
+                return;
+            }
+
+            await goToDashboard();
+        };
+
+        void resumeAuthenticatedSession();
+    }, [authBusy, currentUser, loading, navigate, preferredRole, userData?.role]);
 
     const goToDashboard = async () => {
         if (!currentUser) return;
