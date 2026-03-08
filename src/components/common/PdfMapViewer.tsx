@@ -29,8 +29,17 @@ interface RegionHit {
 }
 
 const BASE_MODAL_RATIO = 0.92;
+const PREVIEW_PADDING = 24;
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+const sanitizeRegionLabel = (value: string) => value
+    .replace(/\s*[→>-].*$/u, '')
+    .replace(/\([^)]*\)/gu, '')
+    .replace(/\[[^\]]*\]/gu, '')
+    .replace(/[,:;]+$/u, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 
 const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> => {
     let timeoutId: number | undefined;
@@ -66,10 +75,12 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
     const [nativeViewerFallback, setNativeViewerFallback] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const pageWrapRef = useRef<HTMLDivElement | null>(null);
+    const previewSurfaceRef = useRef<HTMLDivElement | null>(null);
     const modalSurfaceRef = useRef<HTMLDivElement | null>(null);
     const pinchStateRef = useRef<{ distance: number; zoom: number } | null>(null);
     const dragStateRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
     const usingPreprocessedPages = pageImages.length > 0;
+    const [previewScale, setPreviewScale] = useState(1);
 
     const allRegionHits = useMemo<RegionHit[]>(
         () => (usingPreprocessedPages ? regions : regionHits),
@@ -78,7 +89,13 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
 
     const visibleRegionHits = useMemo(() => {
         const seen = new Set<string>();
-        return allRegionHits.filter((item) => {
+        return allRegionHits.map((item) => ({
+            ...item,
+            label: sanitizeRegionLabel(item.label),
+        })).filter((item) => {
+            if (!item.label || item.label.length < 2 || item.label.length > 12) return false;
+            if (/[(){}\[\]<>]/u.test(item.label)) return false;
+            if (/설명|유역|기후|분포|국경|수도|왕조|제국/u.test(item.label)) return false;
             if (seen.has(item.label)) return false;
             seen.add(item.label);
             return true;
@@ -157,9 +174,30 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
         const nextFitZoom = clamp((containerWidth / currentPageWidth) * BASE_MODAL_RATIO, 0.45, 2.2);
         setFitZoom(nextFitZoom);
         setZoom(nextFitZoom);
-        setSelectedRegion(null);
-        modalSurfaceRef.current.scrollTo({ left: 0, top: 0 });
+        if (!selectedRegion) {
+            modalSurfaceRef.current.scrollTo({ left: 0, top: 0 });
+        }
     }, [currentPage, currentPageWidth, isModalOpen]);
+
+    useEffect(() => {
+        if (!usingPreprocessedPages || currentPageWidth <= 0 || !previewSurfaceRef.current) return;
+
+        const updatePreviewScale = () => {
+            if (!previewSurfaceRef.current || currentPageWidth <= 0) return;
+            const nextWidth = Math.max(0, previewSurfaceRef.current.clientWidth - PREVIEW_PADDING);
+            if (!nextWidth) return;
+            setPreviewScale(nextWidth / currentPageWidth);
+        };
+
+        updatePreviewScale();
+        const observer = new ResizeObserver(() => updatePreviewScale());
+        observer.observe(previewSurfaceRef.current);
+        window.addEventListener('resize', updatePreviewScale);
+        return () => {
+            observer.disconnect();
+            window.removeEventListener('resize', updatePreviewScale);
+        };
+    }, [currentPageWidth, usingPreprocessedPages]);
 
     useEffect(() => {
         if (!isModalOpen) return;
@@ -227,6 +265,10 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
     const handleSelectRegion = (region: RegionHit) => {
         setCurrentPage(region.page);
         setSelectedRegion(region);
+        if (!isModalOpen) {
+            setIsModalOpen(true);
+            return;
+        }
         setZoom(Math.max(fitZoom, 2));
     };
 
@@ -293,9 +335,14 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
         dragStateRef.current = null;
     };
 
-    const renderPageSurface = (interactive: boolean) => (
+    const renderPageSurface = (interactive: boolean) => {
+        const surfaceScale = interactive && usingPreprocessedPages
+            ? previewScale || 1
+            : zoom;
+
+        return (
         <div
-            ref={interactive ? pageWrapRef : undefined}
+            ref={interactive ? previewSurfaceRef : pageWrapRef}
             className={`rounded-2xl border border-gray-200 bg-gray-100 p-3 ${
                 interactive ? 'overflow-auto cursor-zoom-in' : 'overflow-visible'
             }`}
@@ -333,7 +380,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                         alt={`${title} ${currentPage}페이지`}
                         className={interactive ? 'transition-transform' : ''}
                         style={{
-                            width: `${pageImages[currentPage - 1].width * zoom}px`,
+                            width: `${pageImages[currentPage - 1].width * surfaceScale}px`,
                             maxWidth: 'none',
                         }}
                     />
@@ -341,10 +388,10 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                         <div
                             className="pointer-events-none absolute rounded border-4 border-red-500 bg-red-200/30"
                             style={{
-                                left: `${selectedRegion.left * zoom - 16}px`,
-                                top: `${selectedRegion.top * zoom - 16}px`,
-                                width: `${selectedRegion.width * zoom + 32}px`,
-                                height: `${selectedRegion.height * zoom + 24}px`,
+                                left: `${selectedRegion.left * surfaceScale - 16}px`,
+                                top: `${selectedRegion.top * surfaceScale - 16}px`,
+                                width: `${selectedRegion.width * surfaceScale + 32}px`,
+                                height: `${selectedRegion.height * surfaceScale + 24}px`,
                             }}
                         />
                     )}
@@ -381,7 +428,8 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                 </Document>
             )}
         </div>
-    );
+        );
+    };
 
     return (
         <div className="space-y-4">
