@@ -24,6 +24,21 @@ const resolveMenuTarget = (url: string, portal: 'student' | 'teacher') => {
     return /(^|\/)quiz\/history2(\/|$)|(^|\/)history2(\/|$)/.test(normalized) ? canonicalRoot : normalized;
 };
 
+const resolveChildMenuTarget = (
+    parentUrl: string,
+    childName: string,
+    childUrl: string,
+    portal: 'student' | 'teacher',
+) => {
+    const normalizedName = (childName || '').trim().toLowerCase();
+    const normalizedParent = (parentUrl || '').trim();
+    const canonicalRoot = portal === 'teacher' ? '/teacher/quiz' : '/student/quiz';
+    if (normalizedName === '역사2' && normalizedParent.startsWith(canonicalRoot)) {
+        return canonicalRoot;
+    }
+    return resolveMenuTarget(childUrl, portal);
+};
+
 const Header: React.FC = () => {
     const { currentUser, userData, logout } = useAuth();
     const location = useLocation();
@@ -233,7 +248,7 @@ const Header: React.FC = () => {
                                     <div className="absolute top-[calc(100%-8px)] left-0 w-[10.5rem] pt-0 invisible opacity-0 group-hover:visible group-hover:opacity-100 transition duration-150 transform translate-y-0 z-[100]">
                                         <div className="bg-white border border-gray-200 shadow-xl rounded-xl overflow-hidden">
                                             {visibleChildren.map((child, childIdx) => {
-                                                const childTarget = resolveTarget(child.url);
+                                                const childTarget = resolveChildMenuTarget(item.url, child.name, child.url, portal);
                                                 return (
                                                 <Link
                                                     key={`${child.url}-${childIdx}`}
@@ -329,7 +344,7 @@ const Header: React.FC = () => {
                         {visibleChildren.length > 0 && (
                             <div className="bg-gray-50 border-b border-gray-100 pb-1">
                                 {visibleChildren.map((child, childIdx) => {
-                                    const childTarget = resolveTarget(child.url);
+                                    const childTarget = resolveChildMenuTarget(item.url, child.name, child.url, portal);
                                     return (
                                     <Link
                                         key={`${child.url}-mobile-child-${childIdx}`}
