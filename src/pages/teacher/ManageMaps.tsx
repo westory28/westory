@@ -13,6 +13,7 @@ import {
     type MapResource,
     type MapResourceType,
 } from '../../lib/mapResources';
+import { processPdfMapFile } from '../../lib/pdfMapProcessor';
 import { getSemesterCollectionPath } from '../../lib/semesterScope';
 
 type StorageScope = 'semester' | 'legacy';
@@ -35,6 +36,8 @@ const createDraft = (): StoredMapResource => ({
     embedUrl: '',
     googleQuery: '',
     externalUrl: '',
+    pdfPageImages: [],
+    pdfRegions: [],
     sortOrder: 99,
     storageScope: 'semester',
 });
@@ -227,6 +230,8 @@ const ManageMaps: React.FC = () => {
                 storagePath: draft.storagePath || '',
                 fileName: draft.fileName || '',
                 mimeType: draft.mimeType || '',
+                pdfPageImages: draft.pdfPageImages || [],
+                pdfRegions: draft.pdfRegions || [],
             };
         }
 
@@ -245,12 +250,47 @@ const ManageMaps: React.FC = () => {
 
         const fileUrl = await withTimeout(getDownloadURL(objectRef), 10000, 'storage-download-url');
 
+        if (draft.type === 'pdf') {
+            const processed = await processPdfMapFile(selectedFile);
+            const uploadedPages = [];
+
+            for (const page of processed.pageImages) {
+                const pageRef = ref(storage, `map-resources/${resourceId}/pages/page-${page.page}.png`);
+                await withTimeout(
+                    uploadBytes(pageRef, page.blob, {
+                        contentType: 'image/png',
+                    }),
+                    20000,
+                    `storage-upload-page-${page.page}`,
+                );
+                const pageUrl = await withTimeout(getDownloadURL(pageRef), 10000, `storage-page-url-${page.page}`);
+                uploadedPages.push({
+                    page: page.page,
+                    imageUrl: pageUrl,
+                    width: page.width,
+                    height: page.height,
+                });
+            }
+
+            return {
+                fileUrl,
+                imageUrl: '',
+                storagePath: objectRef.fullPath,
+                fileName: selectedFile.name,
+                mimeType: selectedFile.type || '',
+                pdfPageImages: uploadedPages,
+                pdfRegions: processed.regions,
+            };
+        }
+
         return {
             fileUrl,
             imageUrl: draft.type === 'image' ? fileUrl : '',
             storagePath: objectRef.fullPath,
             fileName: selectedFile.name,
             mimeType: selectedFile.type || '',
+            pdfPageImages: [],
+            pdfRegions: [],
         };
     };
 
@@ -267,6 +307,8 @@ const ManageMaps: React.FC = () => {
             mimeType: nextType === 'image' || nextType === 'pdf' ? prev.mimeType : '',
             embedUrl: nextType === 'iframe' ? prev.embedUrl : '',
             googleQuery: nextType === 'google' ? prev.googleQuery : '',
+            pdfPageImages: nextType === 'pdf' ? prev.pdfPageImages : [],
+            pdfRegions: nextType === 'pdf' ? prev.pdfRegions : [],
         }));
     };
 
@@ -320,6 +362,12 @@ const ManageMaps: React.FC = () => {
                     : '',
                 embedUrl: payloadBase.type === 'iframe' ? payloadBase.embedUrl : '',
                 googleQuery: payloadBase.type === 'google' ? payloadBase.googleQuery : '',
+                pdfPageImages: payloadBase.type === 'pdf'
+                    ? (fileInfo.pdfPageImages || payloadBase.pdfPageImages || [])
+                    : [],
+                pdfRegions: payloadBase.type === 'pdf'
+                    ? (fileInfo.pdfRegions || payloadBase.pdfRegions || [])
+                    : [],
             };
 
             const preferredScope: StorageScope = draft.storageScope || 'semester';

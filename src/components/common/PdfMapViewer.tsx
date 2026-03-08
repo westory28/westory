@@ -3,6 +3,7 @@ import { Document, Page, pdfjs } from 'react-pdf';
 import type { PDFDocumentProxy, TextItem } from 'pdfjs-dist/types/src/display/api';
 import { getBlob, getBytes, getDownloadURL, ref } from 'firebase/storage';
 import { storage } from '../../lib/firebase';
+import type { PdfMapPageImage, PdfMapRegion } from '../../lib/mapResources';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
     'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -13,6 +14,8 @@ interface PdfMapViewerProps {
     fileUrl: string;
     storagePath?: string;
     title: string;
+    pageImages?: PdfMapPageImage[];
+    regions?: PdfMapRegion[];
 }
 
 interface RegionHit {
@@ -53,7 +56,7 @@ const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, label: st
     }
 };
 
-const PdfMapViewer: React.FC<PdfMapViewerProps> = ({ fileUrl, storagePath, title }) => {
+const PdfMapViewer: React.FC<PdfMapViewerProps> = ({ fileUrl, storagePath, title, pageImages = [], regions = [] }) => {
     const [numPages, setNumPages] = useState(0);
     const [currentPage, setCurrentPage] = useState(1);
     const [zoom, setZoom] = useState(1.2);
@@ -64,6 +67,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({ fileUrl, storagePath, title
     const [loadError, setLoadError] = useState('');
     const [nativeViewerFallback, setNativeViewerFallback] = useState(false);
     const pageWrapRef = useRef<HTMLDivElement | null>(null);
+    const usingPreprocessedPages = pageImages.length > 0;
 
     useEffect(() => {
         let revokedUrl = '';
@@ -78,7 +82,12 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({ fileUrl, storagePath, title
             setZoom(1.2);
             setRegionHits([]);
             setSelectedRegion(null);
-            setNumPages(0);
+            setNumPages(usingPreprocessedPages ? pageImages.length : 0);
+
+            if (usingPreprocessedPages) {
+                setLoadingPdf(false);
+                return;
+            }
 
             try {
                 let blob: Blob | null = null;
@@ -151,17 +160,30 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({ fileUrl, storagePath, title
                 URL.revokeObjectURL(revokedUrl);
             }
         };
-    }, [fileUrl, storagePath]);
+    }, [fileUrl, storagePath, usingPreprocessedPages, pageImages.length]);
 
     const visibleRegionHits = useMemo(() => {
         const seen = new Set<string>();
 
-        return regionHits.filter((item) => {
+        const source = usingPreprocessedPages ? regions : regionHits;
+
+        return source.filter((item) => {
             if (seen.has(item.label)) return false;
             seen.add(item.label);
             return true;
         }).slice(0, 40);
-    }, [regionHits]);
+    }, [regionHits, regions, usingPreprocessedPages]);
+
+    useEffect(() => {
+        if (!usingPreprocessedPages) return;
+
+        setLoadingPdf(false);
+        setLoadError('');
+        setNativeViewerFallback(false);
+        setPdfObjectUrl('');
+        setNumPages(pageImages.length);
+        setRegionHits([]);
+    }, [pageImages, usingPreprocessedPages]);
 
     const handleLoadSuccess = async (pdf: PDFDocumentProxy) => {
         setNumPages(pdf.numPages);
@@ -309,7 +331,31 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({ fileUrl, storagePath, title
                         </div>
                     )}
 
-                    {!loadingPdf && !loadError && pdfObjectUrl && (
+                    {!loadingPdf && usingPreprocessedPages && pageImages[currentPage - 1] && (
+                        <div className="relative inline-block">
+                            <img
+                                src={pageImages[currentPage - 1].imageUrl}
+                                alt={`${title} ${currentPage}페이지`}
+                                style={{
+                                    width: `${pageImages[currentPage - 1].width * zoom}px`,
+                                    maxWidth: 'none',
+                                }}
+                            />
+                            {selectedRegion && selectedRegion.page === currentPage && (
+                                <div
+                                    className="pointer-events-none absolute rounded border-4 border-red-500 bg-red-200/30"
+                                    style={{
+                                        left: `${selectedRegion.left * zoom - 16}px`,
+                                        top: `${selectedRegion.top * zoom - 16}px`,
+                                        width: `${selectedRegion.width * zoom + 32}px`,
+                                        height: `${selectedRegion.height * zoom + 24}px`,
+                                    }}
+                                />
+                            )}
+                        </div>
+                    )}
+
+                    {!loadingPdf && !loadError && !usingPreprocessedPages && pdfObjectUrl && (
                         <Document
                             file={pdfObjectUrl}
                             onLoadSuccess={handleLoadSuccess}

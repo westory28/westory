@@ -1,5 +1,21 @@
 export type MapResourceType = 'image' | 'iframe' | 'google' | 'pdf';
 
+export interface PdfMapPageImage {
+    page: number;
+    imageUrl: string;
+    width: number;
+    height: number;
+}
+
+export interface PdfMapRegion {
+    label: string;
+    page: number;
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+}
+
 export interface MapResource {
     id: string;
     title: string;
@@ -14,6 +30,8 @@ export interface MapResource {
     embedUrl?: string;
     googleQuery?: string;
     externalUrl?: string;
+    pdfPageImages?: PdfMapPageImage[];
+    pdfRegions?: PdfMapRegion[];
     sortOrder: number;
 }
 
@@ -62,6 +80,29 @@ export const normalizeMapResource = (id: string, raw: Partial<MapResource>): Map
     embedUrl: String(raw.embedUrl || '').trim(),
     googleQuery: String(raw.googleQuery || '').trim(),
     externalUrl: String(raw.externalUrl || '').trim(),
+    pdfPageImages: Array.isArray(raw.pdfPageImages)
+        ? raw.pdfPageImages
+            .map((page) => ({
+                page: Number(page?.page) || 1,
+                imageUrl: String(page?.imageUrl || '').trim(),
+                width: Number(page?.width) || 0,
+                height: Number(page?.height) || 0,
+            }))
+            .filter((page) => page.imageUrl)
+            .sort((a, b) => a.page - b.page)
+        : [],
+    pdfRegions: Array.isArray(raw.pdfRegions)
+        ? raw.pdfRegions
+            .map((region) => ({
+                label: String(region?.label || '').trim(),
+                page: Number(region?.page) || 1,
+                left: Number(region?.left) || 0,
+                top: Number(region?.top) || 0,
+                width: Number(region?.width) || 0,
+                height: Number(region?.height) || 0,
+            }))
+            .filter((region) => region.label)
+        : [],
     sortOrder: Number.isFinite(Number(raw.sortOrder)) ? Number(raw.sortOrder) : 999,
 });
 
