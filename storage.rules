@@ -9,7 +9,7 @@ service firebase.storage {
       return isSignedIn() && request.auth.token.email == "westoria28@gmail.com";
     }
 
-    match /map-resources/{resourceId}/{fileName} {
+    match /map-resources/{resourceId}/{allPaths=**} {
       allow read: if isSignedIn();
       allow write: if isTeacher();
     }

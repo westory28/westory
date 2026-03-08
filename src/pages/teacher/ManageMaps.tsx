@@ -255,7 +255,7 @@ const ManageMaps: React.FC = () => {
             const uploadedPages = [];
 
             for (const page of processed.pageImages) {
-                const pageRef = ref(storage, `map-resources/${resourceId}/pages/page-${page.page}.png`);
+                const pageRef = ref(storage, `map-resources/${resourceId}/page-${page.page}.png`);
                 await withTimeout(
                     uploadBytes(pageRef, page.blob, {
                         contentType: 'image/png',
