@@ -4,6 +4,7 @@ import type { PDFDocumentProxy, TextItem } from 'pdfjs-dist/types/src/display/ap
 import { getBlob, getBytes, getDownloadURL, ref } from 'firebase/storage';
 import { storage } from '../../lib/firebase';
 import type { PdfMapPageImage, PdfMapRegion } from '../../lib/mapResources';
+import { extractPdfTextRegions } from '../../lib/pdfTextRegions';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
     'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -29,17 +30,6 @@ interface RegionHit {
 
 const MAX_PDF_BYTES = 40 * 1024 * 1024;
 const BASE_MODAL_RATIO = 0.92;
-
-const hasUsefulLetters = (text: string) => /[가-힣A-Za-z]/.test(text);
-
-const isLikelyRegionLabel = (value: string) => {
-    const text = value.trim();
-    if (text.length < 2 || text.length > 20) return false;
-    if (/^\d+$/.test(text)) return false;
-    if (!hasUsefulLetters(text)) return false;
-    if (/^[^가-힣A-Za-z0-9]+$/.test(text)) return false;
-    return true;
-};
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
@@ -235,24 +225,14 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
             const page = await pdf.getPage(pageNumber);
             const viewport = page.getViewport({ scale: 1 });
             const textContent = await page.getTextContent();
-
-            textContent.items.forEach((item) => {
-                if (!('str' in item)) return;
-
-                const textItem = item as TextItem;
-                const label = String(textItem.str || '').trim();
-                if (!isLikelyRegionLabel(label)) return;
-
-                const [, , scaleX, scaleY, x, y] = textItem.transform;
-                nextHits.push({
-                    label,
-                    page: pageNumber,
-                    left: Math.max(0, x),
-                    top: Math.max(0, viewport.height - y),
-                    width: Math.max(70, Math.abs(scaleX) * Math.max(label.length, 2)),
-                    height: Math.max(28, Math.abs(scaleY) + 14),
-                });
-            });
+            const pageHits = extractPdfTextRegions(
+                textContent.items.filter((item): item is TextItem => 'str' in item),
+                viewport.height,
+            ).map((region) => ({
+                ...region,
+                page: pageNumber,
+            }));
+            nextHits.push(...pageHits);
         }
 
         setRegionHits(nextHits);
@@ -430,6 +410,14 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                     <h3 className="text-lg font-extrabold text-gray-900">PDF 지도 보기</h3>
                     <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={openModal}
+                            disabled={loadingPdf}
+                            className="rounded-lg border border-blue-200 px-3 py-2 text-sm font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-40"
+                        >
+                            확대 보기
+                        </button>
                         <button
                             type="button"
                             onClick={() => changeZoom(-0.2)}

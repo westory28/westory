@@ -1,22 +1,12 @@
 import { pdfjs } from 'react-pdf';
 import type { TextItem } from 'pdfjs-dist/types/src/display/api';
 import type { PdfMapPageImage, PdfMapRegion } from './mapResources';
+import { extractPdfTextRegions } from './pdfTextRegions';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
     'pdfjs-dist/build/pdf.worker.min.mjs',
     import.meta.url,
 ).toString();
-
-const hasUsefulLetters = (text: string) => /[가-힣A-Za-z]/.test(text);
-
-const isLikelyRegionLabel = (value: string) => {
-    const text = value.trim();
-    if (text.length < 2 || text.length > 20) return false;
-    if (/^\d+$/.test(text)) return false;
-    if (!hasUsefulLetters(text)) return false;
-    if (/^[^가-힣A-Za-z0-9]+$/.test(text)) return false;
-    return true;
-};
 
 const canvasToBlob = (canvas: HTMLCanvasElement) =>
     new Promise<Blob>((resolve, reject) => {
@@ -69,23 +59,15 @@ export const processPdfMapFile = async (file: File): Promise<ProcessedPdfMap> =>
         });
 
         const textContent = await page.getTextContent();
-        textContent.items.forEach((item) => {
-            if (!('str' in item)) return;
-
-            const textItem = item as TextItem;
-            const label = String(textItem.str || '').trim();
-            if (!isLikelyRegionLabel(label)) return;
-
-            const [, , scaleX, scaleY, x, y] = textItem.transform;
-            regions.push({
-                label,
-                page: pageNumber,
-                left: Math.max(0, x) * 1.8,
-                top: Math.max(0, page.getViewport({ scale: 1 }).height - y) * 1.8,
-                width: Math.max(70, Math.abs(scaleX) * Math.max(label.length, 2)) * 1.8,
-                height: Math.max(28, Math.abs(scaleY) + 14) * 1.8,
-            });
-        });
+        const pageRegions = extractPdfTextRegions(
+            textContent.items.filter((item): item is TextItem => 'str' in item),
+            page.getViewport({ scale: 1 }).height,
+            1.8,
+        ).map((region) => ({
+            ...region,
+            page: pageNumber,
+        }));
+        regions.push(...pageRegions);
     }
 
     return { pageImages, regions };
