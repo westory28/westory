@@ -89,6 +89,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
     const [regionHits, setRegionHits] = useState<RegionHit[]>([]);
     const [selectedRegion, setSelectedRegion] = useState<RegionHit | null>(null);
     const [selectedTag, setSelectedTag] = useState('');
+    const [showAllShortcuts, setShowAllShortcuts] = useState(false);
     const [pdfSourceUrl, setPdfSourceUrl] = useState('');
     const [loadingPdf, setLoadingPdf] = useState(true);
     const [loadError, setLoadError] = useState('');
@@ -145,6 +146,10 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
     const sortedRegionHits = useMemo(
         () => [...filteredRegionHits].sort((a, b) => a.label.localeCompare(b.label, 'ko')),
         [filteredRegionHits],
+    );
+    const collapsedShortcutHits = useMemo(
+        () => (showAllShortcuts ? sortedRegionHits : sortedRegionHits.slice(0, 16)),
+        [showAllShortcuts, sortedRegionHits],
     );
 
     const currentPageWidth = useMemo(() => {
@@ -267,6 +272,10 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
             setSelectedTag('');
         }
     }, [availableTags, selectedTag]);
+
+    useEffect(() => {
+        setShowAllShortcuts(false);
+    }, [selectedTag, currentPage, title]);
 
     useEffect(() => {
         if (!selectedRegion) return;
@@ -456,8 +465,10 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
         <>
             <div className="mb-2 text-xs font-bold text-gray-500">지역 바로가기</div>
             {sortedRegionHits.length > 0 ? (
+                <>
+                <div className={`${showAllShortcuts ? '' : 'max-h-28 overflow-hidden'}`}>
                 <div className="flex flex-wrap gap-2">
-                    {sortedRegionHits.map((region) => (
+                    {collapsedShortcutHits.map((region) => (
                         <button
                             key={`${region.label}-${region.page}-${region.left}-${region.top}`}
                             type="button"
@@ -472,6 +483,17 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                         </button>
                     ))}
                 </div>
+                </div>
+                {sortedRegionHits.length > 16 && (
+                    <button
+                        type="button"
+                        onClick={() => setShowAllShortcuts((prev) => !prev)}
+                        className="mt-3 rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50"
+                    >
+                        {showAllShortcuts ? '접기' : `펼치기 (${sortedRegionHits.length - 16}개 더)`}
+                    </button>
+                )}
+                </>
             ) : (
                 <p className="text-xs text-gray-500">선택한 태그에 해당하는 지역이 없습니다.</p>
             )}

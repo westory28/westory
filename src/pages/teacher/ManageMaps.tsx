@@ -15,9 +15,10 @@ import {
     normalizeMapResource,
     type MapResource,
     type MapResourceType,
+    type PdfMapPageImage,
     type PdfMapRegion,
 } from '../../lib/mapResources';
-import { processPdfMapFile } from '../../lib/pdfMapProcessor';
+import { processPdfMapFile, type ProcessedPdfMap } from '../../lib/pdfMapProcessor';
 import { getSemesterCollectionPath } from '../../lib/semesterScope';
 
 type StorageScope = 'semester' | 'legacy';
@@ -25,6 +26,14 @@ type StorageScope = 'semester' | 'legacy';
 type StoredMapResource = MapResource & {
     storageScope?: StorageScope;
 };
+
+interface PendingPdfUpload {
+    id: string;
+    file: File;
+    processed: ProcessedPdfMap;
+    pageImages: PdfMapPageImage[];
+    regions: PdfMapRegion[];
+}
 
 const createDraft = (): StoredMapResource => ({
     id: '',
@@ -53,6 +62,8 @@ const normalizeRegionTags = (tags: string[]) => Array.from(new Set(
         .map((tag) => String(tag || '').trim())
         .filter(Boolean),
 )).sort((a, b) => a.localeCompare(b, 'ko'));
+
+const fileNameWithoutExtension = (value: string) => value.replace(/\.[^.]+$/u, '').trim();
 
 const normalizeErrorMessage = (error: unknown) => {
     const code = typeof error === 'object' && error && 'code' in error
@@ -147,14 +158,34 @@ const ManageMaps: React.FC = () => {
     const [isReorderMode, setIsReorderMode] = useState(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [selectedFilePreviewUrl, setSelectedFilePreviewUrl] = useState('');
+    const [pendingPdfUploads, setPendingPdfUploads] = useState<PendingPdfUpload[]>([]);
+    const [activePendingPdfId, setActivePendingPdfId] = useState('');
+    const [isPdfShortcutExpanded, setIsPdfShortcutExpanded] = useState(false);
+    const [isPreparingPdfUploads, setIsPreparingPdfUploads] = useState(false);
     const [customTagInputs, setCustomTagInputs] = useState<Record<number, string>>({});
     const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     const collectionPath = useMemo(() => getSemesterCollectionPath(config, 'map_resources'), [config]);
     const legacyCollectionPath = 'map_resources';
 
+    const revokePendingPdfUploadResources = (uploads: PendingPdfUpload[]) => {
+        uploads.forEach((upload) => {
+            upload.pageImages.forEach((page) => {
+                if (page.imageUrl.startsWith('blob:')) {
+                    URL.revokeObjectURL(page.imageUrl);
+                }
+            });
+        });
+    };
+
     const resetFileInput = () => {
         setSelectedFile(null);
+        setSelectedFilePreviewUrl('');
+        setActivePendingPdfId('');
+        setPendingPdfUploads((prev) => {
+            revokePendingPdfUploadResources(prev);
+            return [];
+        });
         if (fileInputRef.current) {
             fileInputRef.current.value = '';
         }
@@ -213,6 +244,7 @@ const ManageMaps: React.FC = () => {
 
         setDraft(next);
         setCustomTagInputs({});
+        setIsPdfShortcutExpanded(false);
         resetFileInput();
     }, [items, selectedId]);
 
@@ -226,6 +258,10 @@ const ManageMaps: React.FC = () => {
         setSelectedFilePreviewUrl(previewUrl);
         return () => URL.revokeObjectURL(previewUrl);
     }, [selectedFile]);
+
+    useEffect(() => () => {
+        revokePendingPdfUploadResources(pendingPdfUploads);
+    }, [pendingPdfUploads]);
 
     const handleDraftChange = (field: keyof MapResource, value: string | number) => {
         setDraft((prev) => ({
@@ -295,6 +331,107 @@ const ManageMaps: React.FC = () => {
             ...prev,
             [index]: '',
         }));
+    };
+
+    const buildPendingPdfUpload = async (file: File): Promise<PendingPdfUpload> => {
+        const processed = await processPdfMapFile(file);
+        return {
+            id: `${file.name}-${file.size}-${file.lastModified}`,
+            file,
+            processed,
+            pageImages: processed.pageImages.map((page) => ({
+                page: page.page,
+                imageUrl: URL.createObjectURL(page.blob),
+                width: page.width,
+                height: page.height,
+            })),
+            regions: processed.regions,
+        };
+    };
+
+    const applyPendingPdfUpload = (upload: PendingPdfUpload) => {
+        setActivePendingPdfId(upload.id);
+        setSelectedFile(upload.file);
+        setCustomTagInputs({});
+        setIsPdfShortcutExpanded(false);
+        setDraft((prev) => ({
+            ...prev,
+            fileName: upload.file.name,
+            mimeType: upload.file.type || 'application/pdf',
+            pdfPageImages: upload.pageImages,
+            pdfRegions: upload.regions,
+            title: prev.id || prev.title
+                ? prev.title
+                : fileNameWithoutExtension(upload.file.name),
+        }));
+    };
+
+    const handlePendingPdfUploadSelect = (uploadId: string) => {
+        const next = pendingPdfUploads.find((upload) => upload.id === uploadId);
+        if (!next) return;
+        applyPendingPdfUpload(next);
+    };
+
+    const handlePendingPdfUploadRemove = (uploadId: string) => {
+        setPendingPdfUploads((prev) => {
+            const nextUploads = prev.filter((upload) => upload.id !== uploadId);
+            const removed = prev.find((upload) => upload.id === uploadId);
+            if (removed) {
+                revokePendingPdfUploadResources([removed]);
+            }
+
+            if (activePendingPdfId === uploadId) {
+                const fallback = nextUploads[0];
+                if (fallback) {
+                    applyPendingPdfUpload(fallback);
+                } else {
+                    setActivePendingPdfId('');
+                    setSelectedFile(null);
+                    setCustomTagInputs({});
+                    setDraft((current) => ({
+                        ...current,
+                        fileName: '',
+                        mimeType: '',
+                        pdfPageImages: [],
+                        pdfRegions: [],
+                    }));
+                }
+            }
+
+            return nextUploads;
+        });
+    };
+
+    const handleFileInputChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(event.target.files || []);
+        if (files.length === 0) return;
+
+        if (draft.type !== 'pdf') {
+            setSelectedFile(files[0] || null);
+            return;
+        }
+
+        setIsPreparingPdfUploads(true);
+        try {
+            const uploads: PendingPdfUpload[] = [];
+            for (const file of files) {
+                uploads.push(await buildPendingPdfUpload(file));
+            }
+
+            setPendingPdfUploads((prev) => {
+                revokePendingPdfUploadResources(prev);
+                return uploads;
+            });
+
+            if (uploads[0]) {
+                applyPendingPdfUpload(uploads[0]);
+            }
+        } catch (error) {
+            console.error('Failed to prepare local PDF previews:', error);
+            alert(`PDF 전처리에 실패했습니다.\n${normalizeErrorMessage(error)}`);
+        } finally {
+            setIsPreparingPdfUploads(false);
+        }
     };
 
     const handleCreateNew = () => {
@@ -426,8 +563,14 @@ const ManageMaps: React.FC = () => {
         }
     };
 
-    const uploadSelectedFile = async (resourceId: string) => {
-        if (!selectedFile) {
+    const uploadSelectedFile = async (
+        resourceId: string,
+        fileOverride?: File | null,
+        processedOverride?: ProcessedPdfMap | null,
+    ) => {
+        const targetFile = fileOverride ?? selectedFile;
+
+        if (!targetFile) {
             return {
                 fileUrl: draft.fileUrl || '',
                 imageUrl: draft.imageUrl || '',
@@ -439,14 +582,14 @@ const ManageMaps: React.FC = () => {
             };
         }
 
-        const extension = selectedFile.name.includes('.')
-            ? `.${selectedFile.name.split('.').pop()}`
+        const extension = targetFile.name.includes('.')
+            ? `.${targetFile.name.split('.').pop()}`
             : '';
         const objectRef = ref(storage, `map-resources/${resourceId}/${Date.now()}${extension}`);
 
         await withTimeout(
-            uploadBytes(objectRef, selectedFile, {
-                contentType: selectedFile.type || undefined,
+            uploadBytes(objectRef, targetFile, {
+                contentType: targetFile.type || undefined,
             }),
             20000,
             'storage-upload',
@@ -455,15 +598,15 @@ const ManageMaps: React.FC = () => {
         const fileUrl = await withTimeout(getDownloadURL(objectRef), 10000, 'storage-download-url');
 
         if (draft.type === 'pdf') {
-            const processed = await processPdfMapFile(selectedFile);
+            const processed = processedOverride || await processPdfMapFile(targetFile);
             const uploadedPages = await uploadProcessedPdfPages(resourceId, processed);
 
             return {
                 fileUrl,
                 imageUrl: '',
                 storagePath: objectRef.fullPath,
-                fileName: selectedFile.name,
-                mimeType: selectedFile.type || '',
+                fileName: targetFile.name,
+                mimeType: targetFile.type || '',
                 pdfPageImages: uploadedPages,
                 pdfRegions: processed.regions,
             };
@@ -473,8 +616,8 @@ const ManageMaps: React.FC = () => {
             fileUrl,
             imageUrl: draft.type === 'image' ? fileUrl : '',
             storagePath: objectRef.fullPath,
-            fileName: selectedFile.name,
-            mimeType: selectedFile.type || '',
+            fileName: targetFile.name,
+            mimeType: targetFile.type || '',
             pdfPageImages: [],
             pdfRegions: [],
         };
@@ -524,9 +667,76 @@ const ManageMaps: React.FC = () => {
             return;
         }
 
+        if (payloadBase.type === 'pdf' && draft.id && pendingPdfUploads.length > 1) {
+            alert('기존 PDF 지도 수정은 한 파일씩만 교체할 수 있습니다.');
+            return;
+        }
+
         setSaving(true);
 
         try {
+            if (payloadBase.type === 'pdf' && !draft.id && pendingPdfUploads.length > 1) {
+                const createdPayloads: Array<MapResource & { storageScope?: StorageScope }> = [];
+                const preferredScope = draft.storageScope || 'semester';
+                const fallbackScope: StorageScope = preferredScope === 'semester' ? 'legacy' : 'semester';
+
+                for (let index = 0; index < pendingPdfUploads.length; index += 1) {
+                    const upload = pendingPdfUploads[index];
+                    const nextResourceId = `map-${Date.now()}-${index}`;
+                    const payloadSeed = normalizeMapResource(nextResourceId, {
+                        ...draft,
+                        id: nextResourceId,
+                        title: fileNameWithoutExtension(upload.file.name),
+                        fileName: upload.file.name,
+                        mimeType: upload.file.type || 'application/pdf',
+                        pdfRegions: upload.regions,
+                        pdfPageImages: upload.pageImages,
+                    });
+                    const fileInfo = await uploadSelectedFile(nextResourceId, upload.file, upload.processed);
+                    const payload: MapResource = {
+                        ...payloadSeed,
+                        ...fileInfo,
+                        imageUrl: '',
+                        fileUrl: fileInfo.fileUrl || '',
+                        storagePath: fileInfo.storagePath || '',
+                        fileName: fileInfo.fileName || upload.file.name,
+                        mimeType: fileInfo.mimeType || upload.file.type || '',
+                        pdfPageImages: fileInfo.pdfPageImages || [],
+                        pdfRegions: fileInfo.pdfRegions || [],
+                    };
+
+                    let resolvedScope = preferredScope;
+                    try {
+                        await persistToScope(preferredScope, payload);
+                    } catch (primaryError) {
+                        console.error(`Failed to save map resource to ${preferredScope}:`, primaryError);
+                        await persistToScope(fallbackScope, payload);
+                        resolvedScope = fallbackScope;
+                    }
+
+                    createdPayloads.push({ ...payload, storageScope: resolvedScope });
+                }
+
+                const merged = mergeMapResources([
+                    ...items,
+                    ...createdPayloads,
+                ]).map((item) => {
+                    const created = createdPayloads.find((payload) => payload.id === item.id);
+                    const existing = items.find((resource) => resource.id === item.id);
+                    return { ...item, storageScope: created?.storageScope || existing?.storageScope || preferredScope };
+                });
+
+                setItems(merged);
+                if (createdPayloads[0]) {
+                    setSelectedId(createdPayloads[0].id);
+                    setDraft(createdPayloads[0]);
+                }
+                resetFileInput();
+                setIsSettingsOpen(false);
+                alert(`${createdPayloads.length}개의 PDF 지도를 저장했습니다.`);
+                return;
+            }
+
             const fileInfo = await uploadSelectedFile(resourceId);
             const payload: MapResource = {
                 ...payloadBase,
@@ -689,6 +899,10 @@ const ManageMaps: React.FC = () => {
         ...DEFAULT_PDF_TAG_OPTIONS,
         ...(draft.pdfRegions || []).flatMap((region) => region.tags || []),
     ]), [draft.pdfRegions]);
+    const displayedPdfRegions = useMemo(
+        () => isPdfShortcutExpanded ? (draft.pdfRegions || []) : (draft.pdfRegions || []).slice(0, 12),
+        [draft.pdfRegions, isPdfShortcutExpanded],
+    );
     const activePdfShortcutCount = useMemo(
         () => (draft.pdfRegions || []).filter((region) => region.shortcutEnabled !== false).length,
         [draft.pdfRegions],
@@ -696,6 +910,10 @@ const ManageMaps: React.FC = () => {
     const activePdfTagCount = useMemo(
         () => new Set((draft.pdfRegions || []).flatMap((region) => region.tags || [])).size,
         [draft.pdfRegions],
+    );
+    const activePendingPdfUpload = useMemo(
+        () => pendingPdfUploads.find((upload) => upload.id === activePendingPdfId) || pendingPdfUploads[0] || null,
+        [activePendingPdfId, pendingPdfUploads],
     );
     const settingsPdfPreviewUrl = draft.type === 'pdf'
         ? (selectedFilePreviewUrl || draft.fileUrl || '')
@@ -910,12 +1128,42 @@ const ManageMaps: React.FC = () => {
                                         ref={fileInputRef}
                                         type="file"
                                         accept={draft.type === 'pdf' ? '.pdf,application/pdf' : 'image/*'}
+                                        multiple={draft.type === 'pdf' && !draft.id}
                                         onClick={(e) => {
                                             (e.currentTarget as HTMLInputElement).value = '';
                                         }}
-                                        onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                                        onChange={(e) => void handleFileInputChange(e)}
                                         className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
                                     />
+                                    {draft.type === 'pdf' && pendingPdfUploads.length > 0 && (
+                                        <div className="mt-3 space-y-2 rounded-2xl border border-gray-200 bg-gray-50 p-3">
+                                            {pendingPdfUploads.map((upload) => (
+                                                <div
+                                                    key={upload.id}
+                                                    className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2 text-sm ${
+                                                        activePendingPdfUpload?.id === upload.id
+                                                            ? 'border-blue-200 bg-blue-50'
+                                                            : 'border-gray-200 bg-white'
+                                                    }`}
+                                                >
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handlePendingPdfUploadSelect(upload.id)}
+                                                        className="min-w-0 flex-1 truncate text-left font-medium text-gray-700"
+                                                    >
+                                                        {upload.file.name}
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handlePendingPdfUploadRemove(upload.id)}
+                                                        className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 text-gray-400 hover:bg-white hover:text-red-500"
+                                                    >
+                                                        <i className="fas fa-times text-xs"></i>
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="text-xs leading-6 text-gray-500">
                                     <div>현재 파일: {selectedFile?.name || draft.fileName || '없음'}</div>
@@ -982,7 +1230,15 @@ const ManageMaps: React.FC = () => {
                                     </div>
                                 </div>
                                 <div className="max-h-[32rem] space-y-3 overflow-y-auto rounded-2xl border border-gray-200 bg-gray-50 p-3">
-                                    {(draft.pdfRegions || []).map((region, index) => (
+                                    {displayedPdfRegions.map((region) => {
+                                        const index = (draft.pdfRegions || []).findIndex((item) => (
+                                            item.page === region.page
+                                            && item.left === region.left
+                                            && item.top === region.top
+                                            && item.label === region.label
+                                        ));
+
+                                        return (
                                         <div key={`${region.page}-${region.left}-${region.top}-${index}`} className="space-y-3 rounded-xl bg-white p-3">
                                             <div className="grid gap-3 md:grid-cols-[5rem_minmax(0,1fr)_auto] md:items-center">
                                                 <div className="text-xs font-bold text-gray-500">p.{region.page}</div>
@@ -1054,8 +1310,18 @@ const ManageMaps: React.FC = () => {
                                                 </button>
                                             </div>
                                         </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
+                                {(draft.pdfRegions || []).length > 12 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsPdfShortcutExpanded((prev) => !prev)}
+                                        className="mt-3 rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
+                                    >
+                                        {isPdfShortcutExpanded ? '접기' : `펼치기 (${(draft.pdfRegions || []).length - 12}개 더)`}
+                                    </button>
+                                )}
                             </div>
                         )}
 
@@ -1099,7 +1365,7 @@ const ManageMaps: React.FC = () => {
                                                 fileUrl={settingsPdfPreviewUrl}
                                                 storagePath={selectedFile ? undefined : draft.storagePath}
                                                 title={draft.title || selectedFile?.name || 'PDF 지도'}
-                                                pageImages={selectedFile ? [] : (draft.pdfPageImages || [])}
+                                                pageImages={draft.pdfPageImages || []}
                                                 regions={draft.pdfRegions || []}
                                             />
                                         </div>

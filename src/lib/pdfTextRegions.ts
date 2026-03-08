@@ -31,6 +31,21 @@ const isLikelyRegionLabel = (value: string) => {
     return true;
 };
 
+const collapseRepeatedLabel = (value: string) => {
+    const text = value.trim();
+    if (!text) return text;
+
+    for (let size = 1; size <= Math.floor(text.length / 2); size += 1) {
+        if (text.length % size !== 0) continue;
+        const token = text.slice(0, size);
+        if (token.repeat(text.length / size) === text) {
+            return token;
+        }
+    }
+
+    return text.replace(/(.{2,12}?)\1+/gu, '$1');
+};
+
 const normalizeSegmentText = (value: string) => value.replace(/\s+/g, ' ').trim();
 
 const resolveLabelBounds = (segment: TextSegment, normalizedText: string, label: string) => {
@@ -72,7 +87,7 @@ export const extractPdfTextRegions = (
         if (!current) return;
 
         const normalizedText = normalizeSegmentText(current.text);
-        const label = sanitizeRegionLabel(normalizedText);
+        const label = collapseRepeatedLabel(sanitizeRegionLabel(normalizedText));
         if (isLikelyRegionLabel(label)) {
             const bounds = resolveLabelBounds(current, normalizedText, label);
             regions.push({
