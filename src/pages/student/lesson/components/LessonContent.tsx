@@ -13,6 +13,7 @@ interface LessonData {
     title: string;
     videoUrl?: string;
     contentHtml?: string;
+    isVisibleToStudents?: boolean;
 }
 
 const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) => {
@@ -20,6 +21,7 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
     const [lesson, setLesson] = useState<LessonData | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(false);
+    const [isBlocked, setIsBlocked] = useState(false);
 
     // Check Answers State
     const contentRef = useRef<HTMLDivElement>(null);
@@ -28,12 +30,14 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
     useEffect(() => {
         if (!unitId) {
             setLesson(null);
+            setIsBlocked(false);
             return;
         }
 
         const fetchLesson = async () => {
             setLoading(true);
             setError(false);
+            setIsBlocked(false);
             try {
                 const semesterQuery = query(
                     collection(db, getSemesterCollectionPath(config, 'lessons')),
@@ -48,7 +52,9 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
                 }
 
                 if (!snap.empty) {
-                    setLesson(snap.docs[0].data() as LessonData);
+                    const data = snap.docs[0].data() as LessonData;
+                    setLesson(data);
+                    setIsBlocked(data.isVisibleToStudents === false);
                 } else {
                     setLesson(null);
                 }
@@ -274,6 +280,16 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
                 <div className="text-6xl mb-4 text-gray-200">📭</div>
                 <h2 className="text-xl font-bold text-gray-500">수업 자료를 찾을 수 없습니다</h2>
                 <p className="text-gray-400 mt-2 text-sm">등록된 자료가 없거나 불러오지 못했습니다.</p>
+            </div>
+        );
+    }
+
+    if (isBlocked) {
+        return (
+            <div className="flex flex-col items-center justify-center h-full text-center py-32 animate-fadeIn">
+                <div className="text-6xl mb-4 text-amber-400">🔒</div>
+                <h2 className="text-xl font-bold text-gray-700">수업 자료가 공개되지 않았습니다</h2>
+                <p className="text-gray-500 mt-2 text-sm">교사가 학생 수업에 활성화한 뒤에만 확인할 수 있습니다.</p>
             </div>
         );
     }

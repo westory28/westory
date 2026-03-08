@@ -28,6 +28,7 @@ interface LessonData {
     title: string;
     videoUrl?: string;
     contentHtml?: string;
+    isVisibleToStudents?: boolean;
 }
 
 const ManageLesson: React.FC = () => {
@@ -41,6 +42,7 @@ const ManageLesson: React.FC = () => {
     const [lessonTitle, setLessonTitle] = useState('');
     const [lessonVideo, setLessonVideo] = useState('');
     const [lessonContent, setLessonContent] = useState('');
+    const [lessonVisibleToStudents, setLessonVisibleToStudents] = useState(true);
 
     const [modalOpen, setModalOpen] = useState(false);
     const [modalMode, setModalMode] = useState<'root' | 'child' | 'rename' | null>(null);
@@ -170,9 +172,10 @@ const ManageLesson: React.FC = () => {
         if (selectedNodeId === node.id) {
             setSelectedNodeId(null);
             setSelectedNodeTitle('');
-            setLessonTitle('');
-            setLessonVideo('');
-            setLessonContent('');
+        setLessonTitle('');
+        setLessonVideo('');
+        setLessonContent('');
+        setLessonVisibleToStudents(true);
         }
         void saveTree(nextTree);
     };
@@ -255,6 +258,7 @@ const ManageLesson: React.FC = () => {
         setLessonTitle(title);
         setLessonVideo('');
         setLessonContent('');
+        setLessonVisibleToStudents(true);
 
         try {
             const scopedRef = collection(db, getSemesterCollectionPath(config, 'lessons'));
@@ -272,6 +276,7 @@ const ManageLesson: React.FC = () => {
                 setLessonTitle(data.title || title);
                 setLessonVideo(data.videoUrl || '');
                 setLessonContent(data.contentHtml || '');
+                setLessonVisibleToStudents(data.isVisibleToStudents !== false);
             }
         } catch (error) {
             console.error(error);
@@ -297,6 +302,7 @@ const ManageLesson: React.FC = () => {
                 title: lessonTitle,
                 videoUrl: lessonVideo,
                 contentHtml: normalizedContentHtml,
+                isVisibleToStudents: lessonVisibleToStudents,
                 updatedAt: serverTimestamp(),
             };
 
@@ -382,7 +388,21 @@ const ManageLesson: React.FC = () => {
                                         <span className="bg-blue-600 text-white text-xs px-2 py-1 rounded font-bold shrink-0">EDIT</span>
                                         <span className="font-bold text-gray-700 truncate max-w-[150px] lg:max-w-none">{selectedNodeTitle}</span>
                                     </div>
-                                    <div className="flex gap-2">
+                                    <div className="flex flex-wrap items-center justify-end gap-2">
+                                        <label className="inline-flex items-center gap-3 rounded-full border border-gray-200 bg-white px-3 py-2 text-xs md:text-sm font-bold text-gray-700">
+                                            <span className={lessonVisibleToStudents ? 'text-emerald-600' : 'text-gray-400'}>학생 공개</span>
+                                            <button
+                                                type="button"
+                                                role="switch"
+                                                aria-checked={lessonVisibleToStudents}
+                                                onClick={() => setLessonVisibleToStudents((prev) => !prev)}
+                                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${lessonVisibleToStudents ? 'bg-emerald-500' : 'bg-gray-300'}`}
+                                            >
+                                                <span
+                                                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${lessonVisibleToStudents ? 'translate-x-5' : 'translate-x-1'}`}
+                                                />
+                                            </button>
+                                        </label>
                                         <button onClick={() => setPreviewOpen(true)} className="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg font-bold hover:bg-gray-50 text-xs md:text-sm">
                                             <i className="fas fa-eye mr-2"></i><span>미리보기</span>
                                         </button>
@@ -480,23 +500,33 @@ const ManageLesson: React.FC = () => {
                             <div className="max-w-2xl mx-auto bg-white p-6 lg:p-8 rounded-xl shadow-sm border border-gray-200 min-h-full">
                                 <h1 className="text-2xl font-bold mb-4 text-gray-900 border-b pb-4">{lessonTitle}</h1>
 
-                                {lessonVideo && getEmbedUrl(lessonVideo) && (
-                                    <div className="mb-6">
-                                        <div className="relative pb-[56.25%] h-0 overflow-hidden rounded-xl bg-black">
-                                            <iframe
-                                                src={getEmbedUrl(lessonVideo)!}
-                                                className="absolute top-0 left-0 w-full h-full"
-                                                frameBorder="0"
-                                                allowFullScreen
-                                            ></iframe>
-                                        </div>
+                                {!lessonVisibleToStudents ? (
+                                    <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-10 text-center text-amber-800">
+                                        <div className="text-4xl mb-3">🔒</div>
+                                        <h2 className="text-xl font-bold">수업 자료가 공개되지 않았습니다</h2>
+                                        <p className="mt-2 text-sm">학생은 교사가 공개한 자료만 확인할 수 있습니다.</p>
                                     </div>
-                                )}
+                                ) : (
+                                    <>
+                                        {lessonVideo && getEmbedUrl(lessonVideo) && (
+                                            <div className="mb-6">
+                                                <div className="relative pb-[56.25%] h-0 overflow-hidden rounded-xl bg-black">
+                                                    <iframe
+                                                        src={getEmbedUrl(lessonVideo)!}
+                                                        className="absolute top-0 left-0 w-full h-full"
+                                                        frameBorder="0"
+                                                        allowFullScreen
+                                                    ></iframe>
+                                                </div>
+                                            </div>
+                                        )}
 
-                                <div
-                                    className="prose max-w-none text-gray-800 leading-loose lesson-preview-content"
-                                    dangerouslySetInnerHTML={{ __html: renderPreviewContent(lessonContent) }}
-                                />
+                                        <div
+                                            className="prose max-w-none text-gray-800 leading-loose lesson-preview-content"
+                                            dangerouslySetInnerHTML={{ __html: renderPreviewContent(lessonContent) }}
+                                        />
+                                    </>
+                                )}
                                 <style>{`
                                     .lesson-preview-content p {
                                         white-space: pre-wrap;
