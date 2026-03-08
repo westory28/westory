@@ -41,7 +41,7 @@ const createDraft = (): StoredMapResource => ({
     category: '',
     tabGroup: '',
     description: '',
-    type: 'image',
+    type: 'pdf',
     imageUrl: '',
     fileUrl: '',
     storagePath: '',
@@ -1092,9 +1092,7 @@ const ManageMaps: React.FC = () => {
                                             onChange={(e) => handleTypeChange(e.target.value as MapResourceType)}
                                             className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
                                         >
-                                            <option value="image">이미지</option>
                                             <option value="pdf">PDF</option>
-                                            <option value="iframe">외부 iframe</option>
                                             <option value="google">구글 지도</option>
                                         </select>
                                     </div>
@@ -1123,12 +1121,12 @@ const ManageMaps: React.FC = () => {
                                     <div className="mt-4 grid gap-4 md:grid-cols-[minmax(0,1fr)_15rem]">
                                         <div>
                                             <label className="mb-1 block text-xs font-bold text-gray-500">
-                                                {draft.type === 'pdf' ? 'PDF 파일 업로드' : '이미지 파일 업로드'}
+                                                PDF 파일 업로드
                                             </label>
                                             <input
                                                 ref={fileInputRef}
                                                 type="file"
-                                                accept={draft.type === 'pdf' ? '.pdf,application/pdf' : 'image/*'}
+                                                accept=".pdf,application/pdf"
                                                 multiple={draft.type === 'pdf'}
                                                 onClick={(e) => {
                                                     (e.currentTarget as HTMLInputElement).value = '';

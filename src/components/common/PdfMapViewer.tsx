@@ -625,7 +625,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
         <div className="space-y-4">
             <div className="rounded-2xl border border-gray-200 bg-white p-4">
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                    <h3 className="text-lg font-extrabold text-gray-900">PDF 지도 보기</h3>
+                    <h3 className="text-lg font-extrabold text-gray-900">{title || '지도'}</h3>
                     <div className="flex items-center gap-2">
                         <button type="button" onClick={openModal} disabled={loadingPdf} className="rounded-lg border border-blue-200 px-3 py-2 text-sm font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-40">확대 보기</button>
                         <button type="button" onClick={() => changeZoom(-0.2)} className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50">축소</button>
