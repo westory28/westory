@@ -668,15 +668,10 @@ const ManageMaps: React.FC = () => {
             return;
         }
 
-        if (payloadBase.type === 'pdf' && draft.id && pendingPdfUploads.length > 1) {
-            alert('????????PDF ?轅붽틓?????????蹂κ텥??? ????????癲ル슢????????????????????????낆젵.');
-            return;
-        }
-
         setSaving(true);
 
         try {
-            if (payloadBase.type === 'pdf' && !draft.id && pendingPdfUploads.length > 1) {
+            if (payloadBase.type === 'pdf' && pendingPdfUploads.length > 1) {
                 const createdPayloads: Array<MapResource & { storageScope?: StorageScope }> = [];
                 const preferredScope = draft.storageScope || 'semester';
                 const fallbackScope: StorageScope = preferredScope === 'semester' ? 'legacy' : 'semester';
@@ -734,7 +729,7 @@ const ManageMaps: React.FC = () => {
                 }
                 resetFileInput();
                 setIsSettingsOpen(false);
-                alert(`${createdPayloads.length}???ル봿????PDF ?轅붽틓?????? ????μ떝?롧땟?삵맪??????`);
+                alert(`${createdPayloads.length}개의 PDF 지도를 한 번에 저장했습니다.`);
                 return;
             }
 
@@ -1134,7 +1129,7 @@ const ManageMaps: React.FC = () => {
                                                 ref={fileInputRef}
                                                 type="file"
                                                 accept={draft.type === 'pdf' ? '.pdf,application/pdf' : 'image/*'}
-                                                multiple={draft.type === 'pdf' && !draft.id}
+                                                multiple={draft.type === 'pdf'}
                                                 onClick={(e) => {
                                                     (e.currentTarget as HTMLInputElement).value = '';
                                                 }}
@@ -1174,6 +1169,11 @@ const ManageMaps: React.FC = () => {
                                             )}
                                             {isPreparingPdfUploads && (
                                                 <div className="mt-2 text-xs font-medium text-blue-600">PDF 미리보기와 키워드를 추출하는 중입니다.</div>
+                                            )}
+                                            {draft.type === 'pdf' && (
+                                                <div className="mt-2 text-xs text-gray-500">
+                                                    여러 파일을 함께 선택하면 각각 별도 지도 자료로 저장됩니다.
+                                                </div>
                                             )}
                                         </div>
                                         <div className="space-y-2 text-xs leading-6 text-gray-500">
