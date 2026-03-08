@@ -79,35 +79,39 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({ fileUrl, storagePath, title
             setNumPages(0);
 
             try {
-                let blob: Blob;
+                let blob: Blob | null = null;
 
-                if (storagePath) {
+                if (fileUrl) {
+                    const response = await withTimeout(fetch(fileUrl, { mode: 'cors' }), 20000, 'pdf-fetch');
+                    if (!response.ok) {
+                        throw new Error(`pdf-fetch-failed:${response.status}`);
+                    }
+                    blob = await withTimeout(response.blob(), 15000, 'pdf-blob');
+                } else if (storagePath) {
                     const fileRef = ref(storage, storagePath);
 
                     try {
-                        const downloadUrl = await withTimeout(getDownloadURL(fileRef), 10000, 'storage-download-url');
-                        const response = await withTimeout(fetch(downloadUrl), 15000, 'storage-fetch');
+                        const downloadUrl = await withTimeout(getDownloadURL(fileRef), 15000, 'storage-download-url');
+                        const response = await withTimeout(fetch(downloadUrl, { mode: 'cors' }), 20000, 'storage-fetch');
                         if (!response.ok) {
                             throw new Error(`storage-fetch-failed:${response.status}`);
                         }
-                        blob = await withTimeout(response.blob(), 10000, 'storage-fetch-blob');
+                        blob = await withTimeout(response.blob(), 15000, 'storage-fetch-blob');
                     } catch (downloadError) {
                         console.warn('Storage download fetch failed, falling back to SDK blob APIs:', downloadError);
 
                         try {
-                            blob = await withTimeout(getBlob(fileRef), 12000, 'storage-get-blob');
+                            blob = await withTimeout(getBlob(fileRef), 15000, 'storage-get-blob');
                         } catch (blobError) {
                             console.warn('Storage getBlob failed, falling back to getBytes:', blobError);
-                            const bytes = await withTimeout(getBytes(fileRef, MAX_PDF_BYTES), 12000, 'storage-get-bytes');
+                            const bytes = await withTimeout(getBytes(fileRef, MAX_PDF_BYTES), 15000, 'storage-get-bytes');
                             blob = new Blob([bytes], { type: 'application/pdf' });
                         }
                     }
-                } else {
-                    const response = await withTimeout(fetch(fileUrl), 12000, 'pdf-fetch');
-                    if (!response.ok) {
-                        throw new Error(`pdf-fetch-failed:${response.status}`);
-                    }
-                    blob = await withTimeout(response.blob(), 8000, 'pdf-blob');
+                }
+
+                if (!blob) {
+                    throw new Error('pdf-source-missing');
                 }
 
                 if (blob.type && !blob.type.includes('pdf')) {
