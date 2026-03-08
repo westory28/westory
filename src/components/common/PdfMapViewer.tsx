@@ -6,8 +6,10 @@ import { storage } from '../../lib/firebase';
 import {
     DEFAULT_PDF_ERA_TAGS,
     DEFAULT_PDF_REGION_TAGS,
+    DEFAULT_PDF_TAG_SECTIONS,
     type PdfMapPageImage,
     type PdfMapRegion,
+    type PdfTagSection,
 } from '../../lib/mapResources';
 import { extractPdfTextRegions } from '../../lib/pdfTextRegions';
 
@@ -22,6 +24,9 @@ interface PdfMapViewerProps {
     title: string;
     pageImages?: PdfMapPageImage[];
     regions?: PdfMapRegion[];
+    tagSections?: PdfTagSection[];
+    onRenameTagSection?: (sectionId: string) => void;
+    onAddTagSection?: () => void;
 }
 
 interface RegionHit {
@@ -36,6 +41,7 @@ interface RegionHit {
 }
 
 interface TagSection {
+    id: string;
     heading: string;
     tags: string[];
 }
@@ -44,8 +50,6 @@ const PREVIEW_PADDING = 24;
 const BUILT_IN_TAG_ORDER = [...DEFAULT_PDF_REGION_TAGS, ...DEFAULT_PDF_ERA_TAGS];
 const SHORTCUT_LIMIT = 6;
 const TAG_ROW_LIMIT = 5;
-const TAG_SECTION_ORDER = ['시대별', '지도 관련', '사용자 태그'] as const;
-
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const createRegionKey = (region: RegionHit) => `${region.label}-${region.page}-${region.left}-${region.top}`;
 
@@ -83,18 +87,15 @@ const sortTags = (tags: string[]) => [...tags].sort((a, b) => {
     return a.localeCompare(b, 'ko');
 });
 
-const getTagSectionHeading = (tag: string) => {
-    if (DEFAULT_PDF_ERA_TAGS.includes(tag as (typeof DEFAULT_PDF_ERA_TAGS)[number])) return '시대별';
-    if (DEFAULT_PDF_REGION_TAGS.includes(tag as (typeof DEFAULT_PDF_REGION_TAGS)[number])) return '지도 관련';
-    return '사용자 태그';
-};
-
 const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
     fileUrl,
     storagePath,
     title,
     pageImages = [],
     regions = [],
+    tagSections: tagSectionConfig = DEFAULT_PDF_TAG_SECTIONS,
+    onRenameTagSection,
+    onAddTagSection,
 }) => {
     const [numPages, setNumPages] = useState(0);
     const [currentPage, setCurrentPage] = useState(1);
@@ -146,22 +147,33 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
         return sortTags(Array.from(nextTags));
     }, [visibleRegionHits]);
 
-    const tagSections = useMemo<TagSection[]>(() => {
-        const sections = new Map<string, string[]>();
-        availableTags.forEach((tag) => {
-            const heading = getTagSectionHeading(tag);
-            const current = sections.get(heading) || [];
-            current.push(tag);
-            sections.set(heading, current);
+    const normalizedTagSections = useMemo(() => (
+        tagSectionConfig.map((section) => ({ ...section, tags: sortTags([...(section.tags || [])]) }))
+    ), [tagSectionConfig]);
+
+    const resolvedTagSections = useMemo<TagSection[]>(() => {
+        const usedTags = new Set<string>();
+        const configuredSections = normalizedTagSections.map((section) => {
+            const nextTags = section.tags.filter((tag) => availableTags.includes(tag));
+            nextTags.forEach((tag) => usedTags.add(tag));
+            return {
+                id: section.id,
+                heading: section.label,
+                tags: nextTags,
+            };
         });
 
-        return TAG_SECTION_ORDER
-            .filter((heading) => (sections.get(heading) || []).length > 0)
-            .map((heading) => ({
-                heading,
-                tags: sortTags(sections.get(heading) || []),
-            }));
-    }, [availableTags]);
+        const uncategorizedTags = availableTags.filter((tag) => !usedTags.has(tag));
+        if (uncategorizedTags.length > 0) {
+            configuredSections.push({
+                id: 'uncategorized',
+                heading: '사용자 태그',
+                tags: uncategorizedTags,
+            });
+        }
+
+        return configuredSections.filter((section) => section.tags.length > 0 || !!onRenameTagSection || !!onAddTagSection);
+    }, [availableTags, normalizedTagSections, onAddTagSection, onRenameTagSection]);
 
     const filteredRegionHits = useMemo(() => (
         selectedTag ? visibleRegionHits.filter((region) => (region.tags || []).includes(selectedTag)) : visibleRegionHits
@@ -196,15 +208,15 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
             tags.forEach((tag) => appendRegion(tag, region));
         });
 
-        return tagSections
+        return resolvedTagSections
             .flatMap((section) => section.tags)
             .filter((tag) => groups.has(tag))
             .map((tag) => ({
                 tag,
                 items: [...(groups.get(tag) || [])].sort((a, b) => a.label.localeCompare(b.label, 'ko')),
-                heading: getTagSectionHeading(tag),
+                heading: resolvedTagSections.find((section) => section.tags.includes(tag))?.heading || '사용자 태그',
             }));
-    }, [filteredRegionHits, selectedTag, tagSections, visibleRegionHits]);
+    }, [filteredRegionHits, resolvedTagSections, selectedTag, visibleRegionHits]);
 
     const currentPageImage = pageImages[currentPage - 1] || null;
     const currentPageWidth = currentPageImage?.width || 1200;
@@ -433,9 +445,22 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
         pinchStateRef.current = null;
     };
 
-    const renderTagFilters = () => tagSections.length > 0 && (
+    const renderTagFilters = () => resolvedTagSections.length > 0 && (
         <div className="mb-4 space-y-3">
-            <div className="text-xs font-bold text-gray-500">태그 목차</div>
+            <div className="flex items-center justify-between gap-3">
+                <div className="text-xs font-bold text-gray-500">태그 목차</div>
+                {onAddTagSection && (
+                    <button
+                        type="button"
+                        onClick={onAddTagSection}
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                        aria-label="태그 범주 추가"
+                        title="태그 범주 추가"
+                    >
+                        <i className="fas fa-plus text-xs"></i>
+                    </button>
+                )}
+            </div>
             <button
                 type="button"
                 onClick={() => setSelectedTag('')}
@@ -443,10 +468,25 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
             >
                 전체
             </button>
-            {tagSections.map((section) => (
+            {resolvedTagSections.map((section) => (
                 <div key={section.heading} className="rounded-2xl border border-gray-200 bg-white/80 px-3 py-2">
                     <div className="flex items-start gap-3 text-sm">
-                        <div className="shrink-0 pt-1 text-xs font-bold text-gray-400">{section.heading}</div>
+                        <div className="shrink-0 pt-1 text-xs font-bold text-gray-400">
+                            <div className="inline-flex items-center gap-1.5">
+                                <span>{section.heading}</span>
+                                {onRenameTagSection && section.id !== 'uncategorized' && (
+                                    <button
+                                        type="button"
+                                        onClick={() => onRenameTagSection(section.id)}
+                                        className="inline-flex h-5 w-5 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                                        aria-label={`${section.heading} 이름 수정`}
+                                        title="범주 이름 수정"
+                                    >
+                                        <i className="fas fa-pen text-[10px]"></i>
+                                    </button>
+                                )}
+                            </div>
+                        </div>
                         <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2">
                                 {(expandedTagSections[section.heading] ? section.tags : section.tags.slice(0, TAG_ROW_LIMIT)).map((tag) => (

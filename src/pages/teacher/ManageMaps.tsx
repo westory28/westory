@@ -10,6 +10,7 @@ import {
     DEFAULT_GOOGLE_MAP_RESOURCE,
     DEFAULT_PDF_ERA_TAGS,
     DEFAULT_PDF_REGION_TAGS,
+    DEFAULT_PDF_TAG_SECTIONS,
     GOOGLE_MAP_RESOURCE_ID,
     getGoogleMapsExternalUrl,
     groupMapResourcesForDisplay,
@@ -19,6 +20,7 @@ import {
     type MapResourceType,
     type PdfMapPageImage,
     type PdfMapRegion,
+    type PdfTagSection,
 } from '../../lib/mapResources';
 import { processPdfMapFile, type ProcessedPdfMap } from '../../lib/pdfMapProcessor';
 import { getSemesterCollectionPath } from '../../lib/semesterScope';
@@ -54,6 +56,7 @@ const createDraft = (): StoredMapResource => ({
     externalUrl: '',
     pdfPageImages: [],
     pdfRegions: [],
+    pdfTagSections: DEFAULT_PDF_TAG_SECTIONS.map((section) => ({ ...section, tags: [...section.tags] })),
     sortOrder: 99,
     storageScope: 'semester',
 });
@@ -65,6 +68,11 @@ const normalizeRegionTags = (tags: string[]) => Array.from(new Set(
         .map((tag) => String(tag || '').trim())
         .filter(Boolean),
 )).sort((a, b) => a.localeCompare(b, 'ko'));
+
+const clonePdfTagSections = (sections: PdfTagSection[]) => sections.map((section) => ({
+    ...section,
+    tags: [...section.tags],
+}));
 
 const fileNameWithoutExtension = (value: string) => value.replace(/\.[^.]+$/u, '').trim();
 
@@ -167,6 +175,7 @@ const ManageMaps: React.FC = () => {
     const [isPdfShortcutExpanded, setIsPdfShortcutExpanded] = useState(false);
     const [isPreparingPdfUploads, setIsPreparingPdfUploads] = useState(false);
     const [customTagInputs, setCustomTagInputs] = useState<Record<number, string>>({});
+    const [customTagSectionInputs, setCustomTagSectionInputs] = useState<Record<number, string>>({});
     const [tabRenameSourceKey, setTabRenameSourceKey] = useState('');
     const [tabRenameValue, setTabRenameValue] = useState('');
     const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -250,6 +259,7 @@ const ManageMaps: React.FC = () => {
 
         setDraft(next);
         setCustomTagInputs({});
+        setCustomTagSectionInputs({});
         setIsPdfShortcutExpanded(false);
         resetFileInput();
     }, [items, selectedId]);
@@ -324,19 +334,70 @@ const ManageMaps: React.FC = () => {
         }));
     };
 
+    const handlePdfRegionCustomTagSectionChange = (index: number, sectionId: string) => {
+        setCustomTagSectionInputs((prev) => ({
+            ...prev,
+            [index]: sectionId,
+        }));
+    };
+
     const handlePdfRegionAddCustomTag = (index: number) => {
         const nextTag = String(customTagInputs[index] || '').trim();
         if (!nextTag) return;
+        const targetSectionId = String(customTagSectionInputs[index] || 'region').trim() || 'region';
 
         updatePdfRegion(index, (region) => ({
             ...region,
             tags: normalizeRegionTags([...(region.tags || []), nextTag]),
         }));
 
+        setDraft((prev) => ({
+            ...prev,
+            pdfTagSections: clonePdfTagSections(prev.pdfTagSections || []).map((section) => (
+                section.id === targetSectionId
+                    ? { ...section, tags: normalizeRegionTags([...(section.tags || []), nextTag]) }
+                    : section
+            )),
+        }));
+
         setCustomTagInputs((prev) => ({
             ...prev,
             [index]: '',
         }));
+    };
+
+    const handleRenamePdfTagSection = (sectionId: string) => {
+        const current = (draft.pdfTagSections || []).find((section) => section.id === sectionId);
+        if (!current) return;
+        const nextLabel = window.prompt('태그 범주 이름', current.label)?.trim();
+        if (!nextLabel || nextLabel === current.label) return;
+
+        setDraft((prev) => ({
+            ...prev,
+            pdfTagSections: clonePdfTagSections(prev.pdfTagSections || []).map((section) => (
+                section.id === sectionId ? { ...section, label: nextLabel } : section
+            )),
+        }));
+    };
+
+    const handleAddPdfTagSection = () => {
+        const nextLabel = window.prompt('새 태그 범주 이름')?.trim();
+        if (!nextLabel) return;
+
+        setDraft((prev) => {
+            const existing = clonePdfTagSections(prev.pdfTagSections || DEFAULT_PDF_TAG_SECTIONS);
+            const nextIdBase = nextLabel.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-_]/g, '') || `custom-${existing.length + 1}`;
+            let nextId = nextIdBase;
+            let suffix = 2;
+            while (existing.some((section) => section.id === nextId)) {
+                nextId = `${nextIdBase}-${suffix}`;
+                suffix += 1;
+            }
+            return {
+                ...prev,
+                pdfTagSections: [...existing, { id: nextId, label: nextLabel, tags: [] }],
+            };
+        });
     };
 
     const buildPendingPdfUpload = async (file: File): Promise<PendingPdfUpload> => {
@@ -359,6 +420,7 @@ const ManageMaps: React.FC = () => {
         setActivePendingPdfId(upload.id);
         setSelectedFile(upload.file);
         setCustomTagInputs({});
+        setCustomTagSectionInputs({});
         setIsPdfShortcutExpanded(false);
         setDraft((prev) => ({
             ...prev,
@@ -366,6 +428,7 @@ const ManageMaps: React.FC = () => {
             mimeType: upload.file.type || 'application/pdf',
             pdfPageImages: upload.pageImages,
             pdfRegions: upload.regions,
+            pdfTagSections: clonePdfTagSections(prev.pdfTagSections || DEFAULT_PDF_TAG_SECTIONS),
             title: prev.id || prev.title
                 ? prev.title
                 : fileNameWithoutExtension(upload.file.name),
@@ -975,10 +1038,15 @@ const ManageMaps: React.FC = () => {
         )),
         [currentSettingsTabGroup, items],
     );
+    const currentPdfTagSections = useMemo(
+        () => clonePdfTagSections(draft.pdfTagSections || DEFAULT_PDF_TAG_SECTIONS),
+        [draft.pdfTagSections],
+    );
     const allPdfTagOptions = useMemo(() => normalizeRegionTags([
         ...DEFAULT_PDF_TAG_OPTIONS,
+        ...currentPdfTagSections.flatMap((section) => section.tags || []),
         ...(draft.pdfRegions || []).flatMap((region) => region.tags || []),
-    ]), [draft.pdfRegions]);
+    ]), [currentPdfTagSections, draft.pdfRegions]);
     const displayedPdfRegions = useMemo(
         () => isPdfShortcutExpanded ? (draft.pdfRegions || []) : (draft.pdfRegions || []).slice(0, 12),
         [draft.pdfRegions, isPdfShortcutExpanded],
@@ -1446,6 +1514,15 @@ const ManageMaps: React.FC = () => {
                                                         </div>
 
                                                         <div className="flex flex-col gap-2 md:flex-row">
+                                                            <select
+                                                                value={customTagSectionInputs[index] || currentPdfTagSections[0]?.id || 'region'}
+                                                                onChange={(e) => handlePdfRegionCustomTagSectionChange(index, e.target.value)}
+                                                                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm md:w-40"
+                                                            >
+                                                                {currentPdfTagSections.map((section) => (
+                                                                    <option key={section.id} value={section.id}>{section.label}</option>
+                                                                ))}
+                                                            </select>
                                                             <input
                                                                 type="text"
                                                                 value={customTagInputs[index] || ''}
@@ -1527,6 +1604,9 @@ const ManageMaps: React.FC = () => {
                                                 title={draft.title || selectedFile?.name || 'PDF 지도'}
                                                 pageImages={draft.pdfPageImages || []}
                                                 regions={draft.pdfRegions || []}
+                                                tagSections={currentPdfTagSections}
+                                                onRenameTagSection={handleRenamePdfTagSection}
+                                                onAddTagSection={handleAddPdfTagSection}
                                             />
                                         </div>
                                     ) : (

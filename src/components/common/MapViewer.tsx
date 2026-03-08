@@ -141,6 +141,7 @@ const MapViewer: React.FC<MapViewerProps> = ({
                     title={item.title}
                     pageImages={item.pdfPageImages}
                     regions={item.pdfRegions}
+                    tagSections={item.pdfTagSections}
                 />
             )}
         </>

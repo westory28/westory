@@ -18,6 +18,12 @@ export interface PdfMapRegion {
     tags?: string[];
 }
 
+export interface PdfTagSection {
+    id: string;
+    label: string;
+    tags: string[];
+}
+
 export interface MapResource {
     id: string;
     title: string;
@@ -35,6 +41,7 @@ export interface MapResource {
     externalUrl?: string;
     pdfPageImages?: PdfMapPageImage[];
     pdfRegions?: PdfMapRegion[];
+    pdfTagSections?: PdfTagSection[];
     sortOrder: number;
 }
 
@@ -67,6 +74,11 @@ export const DEFAULT_PDF_ERA_TAGS = [
     '개항기',
     '일제강점기',
 ] as const;
+
+export const DEFAULT_PDF_TAG_SECTIONS: PdfTagSection[] = [
+    { id: 'era', label: '시대별', tags: [...DEFAULT_PDF_ERA_TAGS] },
+    { id: 'region', label: '지도 관련', tags: [...DEFAULT_PDF_REGION_TAGS] },
+];
 
 export const DEFAULT_GOOGLE_MAP_RESOURCE: MapResource = {
     id: GOOGLE_MAP_RESOURCE_ID,
@@ -104,6 +116,35 @@ const normalizeRegionTags = (tags: unknown) => {
             .map((tag) => String(tag || '').trim())
             .filter(Boolean),
     )).sort((a, b) => a.localeCompare(b, 'ko'));
+};
+
+const normalizePdfTagSections = (sections: unknown): PdfTagSection[] => {
+    const defaults = DEFAULT_PDF_TAG_SECTIONS.map((section) => ({ ...section, tags: [...section.tags] }));
+    if (!Array.isArray(sections)) return defaults;
+
+    const parsed = sections
+        .map((section, index) => ({
+            id: String(section && typeof section === 'object' && 'id' in section ? (section as { id?: string }).id : '').trim() || `custom-${index + 1}`,
+            label: String(section && typeof section === 'object' && 'label' in section ? (section as { label?: string }).label : '').trim(),
+            tags: normalizeRegionTags(section && typeof section === 'object' && 'tags' in section ? (section as { tags?: unknown }).tags : []),
+        }))
+        .filter((section) => section.label);
+
+    const merged = [...defaults];
+    parsed.forEach((section) => {
+        const existingIndex = merged.findIndex((item) => item.id === section.id);
+        if (existingIndex >= 0) {
+            merged[existingIndex] = {
+                ...merged[existingIndex],
+                label: section.label,
+                tags: section.tags.length > 0 ? section.tags : merged[existingIndex].tags,
+            };
+            return;
+        }
+        merged.push(section);
+    });
+
+    return merged;
 };
 
 export const normalizeMapResource = (id: string, raw: Partial<MapResource>): MapResource => ({
@@ -148,6 +189,7 @@ export const normalizeMapResource = (id: string, raw: Partial<MapResource>): Map
             }))
             .filter((region) => region.label)
         : [],
+    pdfTagSections: normalizePdfTagSections(raw.pdfTagSections),
     sortOrder: Number.isFinite(Number(raw.sortOrder)) ? Number(raw.sortOrder) : 999,
 });
 
