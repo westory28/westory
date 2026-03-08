@@ -2,15 +2,15 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { collection, getDocs, orderBy, query } from 'firebase/firestore';
 import MapSidebar from '../../../components/common/MapSidebar';
 import MapViewer from '../../../components/common/MapViewer';
-import { db } from '../../../lib/firebase';
-import { getSemesterCollectionPath } from '../../../lib/semesterScope';
-import { mergeMapResources, normalizeMapResource, type MapResource } from '../../../lib/mapResources';
 import { useAuth } from '../../../contexts/AuthContext';
+import { db } from '../../../lib/firebase';
+import { mergeMapResources, normalizeMapResource, type MapResource } from '../../../lib/mapResources';
+import { getSemesterCollectionPath } from '../../../lib/semesterScope';
 
 const StudentMaps: React.FC = () => {
     const { config } = useAuth();
     const [items, setItems] = useState<MapResource[]>([]);
-    const [selectedCategory, setSelectedCategory] = useState('');
+    const [selectedTabGroup, setSelectedTabGroup] = useState('');
     const [selectedId, setSelectedId] = useState('');
     const [loading, setLoading] = useState(true);
     const [googleSearchQuery, setGoogleSearchQuery] = useState('');
@@ -35,14 +35,14 @@ const StudentMaps: React.FC = () => {
                 const first = merged[0] || null;
 
                 setItems(merged);
-                setSelectedCategory((prev) => prev || first?.category || '');
+                setSelectedTabGroup((prev) => prev || first?.tabGroup || first?.category || '');
                 setSelectedId((prev) => prev || first?.id || '');
             } catch (error) {
                 console.error('Failed to load map resources:', error);
                 const fallback = mergeMapResources([]);
                 const first = fallback[0] || null;
                 setItems(fallback);
-                setSelectedCategory((prev) => prev || first?.category || '');
+                setSelectedTabGroup((prev) => prev || first?.tabGroup || first?.category || '');
                 setSelectedId((prev) => prev || first?.id || '');
             } finally {
                 setLoading(false);
@@ -55,48 +55,43 @@ const StudentMaps: React.FC = () => {
     const groupedItems = useMemo(() => {
         const groups = new Map<string, MapResource[]>();
         items.forEach((item) => {
-            const current = groups.get(item.category) || [];
+            const key = item.tabGroup || item.category || '기타 지도';
+            const current = groups.get(key) || [];
             current.push(item);
-            groups.set(item.category, current);
+            groups.set(key, current);
         });
         return groups;
     }, [items]);
 
-    const categorySidebarItems = useMemo<MapResource[]>(() => (
-        Array.from(groupedItems.entries()).map(([category, group]) => ({
+    const tabGroupSidebarItems = useMemo<MapResource[]>(() => (
+        Array.from(groupedItems.entries()).map(([tabGroup, group]) => ({
             ...group[0],
-            id: `category:${category}`,
-            title: category,
-            category: group.length > 1 ? `${group.length}개 지도` : '지도 1개',
+            id: `tab-group:${tabGroup}`,
+            title: tabGroup,
+            category: group[0]?.category || '',
+            tabGroup,
         }))
     ), [groupedItems]);
 
-    const currentCategory = selectedCategory || categorySidebarItems[0]?.title || '';
-    const currentCategoryItems = groupedItems.get(currentCategory) || [];
-    const selectedItem = currentCategoryItems.find((item) => item.id === selectedId) || currentCategoryItems[0] || items[0] || null;
+    const currentTabGroup = selectedTabGroup || tabGroupSidebarItems[0]?.tabGroup || '';
+    const currentTabItems = groupedItems.get(currentTabGroup) || [];
+    const selectedItem = currentTabItems.find((item) => item.id === selectedId) || currentTabItems[0] || items[0] || null;
 
     useEffect(() => {
-        if (!categorySidebarItems.length) return;
-        if (!currentCategory || !groupedItems.has(currentCategory)) {
-            const nextCategory = categorySidebarItems[0].title;
-            setSelectedCategory(nextCategory);
-            setSelectedId(groupedItems.get(nextCategory)?.[0]?.id || '');
+        if (!tabGroupSidebarItems.length) return;
+        if (!currentTabGroup || !groupedItems.has(currentTabGroup)) {
+            const nextGroup = tabGroupSidebarItems[0].tabGroup || '';
+            setSelectedTabGroup(nextGroup);
+            setSelectedId(groupedItems.get(nextGroup)?.[0]?.id || '');
         }
-    }, [categorySidebarItems, currentCategory, groupedItems]);
+    }, [currentTabGroup, groupedItems, tabGroupSidebarItems]);
 
     useEffect(() => {
-        if (!selectedItem) return;
-        if (selectedItem.category !== currentCategory) {
-            setSelectedCategory(selectedItem.category);
+        if (!currentTabItems.length) return;
+        if (!currentTabItems.some((item) => item.id === selectedId)) {
+            setSelectedId(currentTabItems[0].id);
         }
-    }, [currentCategory, selectedItem]);
-
-    useEffect(() => {
-        if (!currentCategoryItems.length) return;
-        if (!currentCategoryItems.some((item) => item.id === selectedId)) {
-            setSelectedId(currentCategoryItems[0].id);
-        }
-    }, [currentCategoryItems, selectedId]);
+    }, [currentTabItems, selectedId]);
 
     useEffect(() => {
         if (selectedItem?.type === 'google') {
@@ -107,24 +102,24 @@ const StudentMaps: React.FC = () => {
     }, [selectedItem?.googleQuery, selectedItem?.id, selectedItem?.type]);
 
     return (
-        <div className="min-h-screen bg-gray-50 flex flex-col">
-            <main className="flex flex-col lg:flex-row flex-1 p-6 lg:p-10 gap-8 max-w-7xl mx-auto w-full">
+        <div className="flex min-h-screen flex-col bg-gray-50">
+            <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 p-6 lg:flex-row lg:p-10">
                 <MapSidebar
-                    heading="지도"
-                    items={categorySidebarItems}
-                    selectedId={`category:${currentCategory}`}
-                    onSelect={(categoryId) => {
-                        const nextCategory = categoryId.replace(/^category:/u, '');
-                        setSelectedCategory(nextCategory);
-                        setSelectedId(groupedItems.get(nextCategory)?.[0]?.id || '');
+                    heading="지도 탭"
+                    items={tabGroupSidebarItems}
+                    selectedId={`tab-group:${currentTabGroup}`}
+                    onSelect={(tabGroupId) => {
+                        const nextGroup = tabGroupId.replace(/^tab-group:/u, '');
+                        setSelectedTabGroup(nextGroup);
+                        setSelectedId(groupedItems.get(nextGroup)?.[0]?.id || '');
                     }}
                 />
 
-                <section className="flex-1 min-w-0 space-y-4">
-                    {!loading && currentCategoryItems.length > 0 && (
+                <section className="min-w-0 flex-1 space-y-4">
+                    {!loading && currentTabItems.length > 0 && (
                         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
                             <div className="flex overflow-x-auto border-b border-gray-200">
-                                {currentCategoryItems.map((item) => (
+                                {currentTabItems.map((item) => (
                                     <button
                                         key={item.id}
                                         type="button"
@@ -143,7 +138,7 @@ const StudentMaps: React.FC = () => {
                     )}
 
                     {loading ? (
-                        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-10 text-center text-gray-400">
+                        <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center text-gray-400 shadow-sm">
                             <i className="fas fa-spinner fa-spin text-2xl"></i>
                             <p className="mt-3">지도를 불러오는 중입니다.</p>
                         </div>

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { collection, deleteDoc, doc, getDocs, orderBy, query, serverTimestamp, setDoc } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import MapSidebar from '../../components/common/MapSidebar';
@@ -39,6 +39,7 @@ const createDraft = (): StoredMapResource => ({
     id: '',
     title: '',
     category: '',
+    tabGroup: '',
     description: '',
     type: 'image',
     imageUrl: '',
@@ -428,7 +429,7 @@ const ManageMaps: React.FC = () => {
             }
         } catch (error) {
             console.error('Failed to prepare local PDF previews:', error);
-            alert(`PDF 전처리에 실패했습니다.\n${normalizeErrorMessage(error)}`);
+            alert(`PDF ?????밸븶????숆강?????????怨뚯댅???????????낆젵.\n${normalizeErrorMessage(error)}`);
         } finally {
             setIsPreparingPdfUploads(false);
         }
@@ -483,7 +484,7 @@ const ManageMaps: React.FC = () => {
             await persistOrderedItems(orderedItems);
         } catch (error) {
             console.error('Failed to reorder map resources:', error);
-            alert(`지도 순서 저장에 실패했습니다.\n${normalizeErrorMessage(error)}`);
+            alert(`?轅붽틓???????癲?嶺???????얜∥???????怨뚯댅???????????낆젵.\n${normalizeErrorMessage(error)}`);
         }
     };
 
@@ -557,9 +558,9 @@ const ManageMaps: React.FC = () => {
         setIsSettingsOpen(false);
 
         if (resolvedScope === preferredScope) {
-            alert('지도 자료를 저장했습니다.');
+            alert('?轅붽틓???????????????μ떝?롧땟?삵맪??????');
         } else {
-            alert('지도 자료를 저장했습니다. 학기 범위 경로 대신 기본 컬렉션에 저장되었습니다.');
+            alert('?轅붽틓???????????????μ떝?롧땟?삵맪?????? ???????틯 ?嶺???????β뼯援????る쑏????????????????β뼯爰????癲ル슢???с궘?????녾낮?녔틦?쀂???????????낆젵.');
         }
     };
 
@@ -646,29 +647,29 @@ const ManageMaps: React.FC = () => {
         const payloadBase = normalizeMapResource(resourceId, draft);
 
         if (!payloadBase.title || !payloadBase.category) {
-            alert('지도 제목과 분류를 입력해 주세요.');
+            alert('?轅붽틓???????癲ル슢흮?룰쑤援?????怨쀫뮝力?遊븀빊???곴껍癲??????⑤챷竊??????용츧????ロ뒌??');
             return;
         }
 
         if (payloadBase.type === 'iframe' && !payloadBase.embedUrl) {
-            alert('iframe 지도는 iframe URL이 필요합니다.');
+            alert('iframe ?轅붽틓????????밸븶???iframe URL???????밸븶???癲ル슢?????');
             return;
         }
 
         if (payloadBase.type === 'google' && !payloadBase.googleQuery) {
-            alert('Google 지도는 검색어를 입력해 주세요.');
+            alert('Google ?轅붽틓????????밸븶?????β뼯援????嚥싲갭큔?댁쉮????????⑤챷竊??????용츧????ロ뒌??');
             return;
         }
 
         if ((payloadBase.type === 'image' || payloadBase.type === 'pdf')
             && !selectedFile
             && !(payloadBase.type === 'image' ? payloadBase.imageUrl : payloadBase.fileUrl)) {
-            alert(payloadBase.type === 'pdf' ? 'PDF 파일을 업로드해 주세요.' : '이미지 파일을 업로드해 주세요.');
+            alert(payloadBase.type === 'pdf' ? 'PDF ??????????野?????筌?????용츧????ロ뒌??' : '?????轅붽틓??? ??????????野?????筌?????용츧????ロ뒌??');
             return;
         }
 
         if (payloadBase.type === 'pdf' && draft.id && pendingPdfUploads.length > 1) {
-            alert('기존 PDF 지도 수정은 한 파일씩만 교체할 수 있습니다.');
+            alert('????????PDF ?轅붽틓?????????蹂κ텥??? ????????癲ル슢????????????????????????낆젵.');
             return;
         }
 
@@ -733,7 +734,7 @@ const ManageMaps: React.FC = () => {
                 }
                 resetFileInput();
                 setIsSettingsOpen(false);
-                alert(`${createdPayloads.length}개의 PDF 지도를 저장했습니다.`);
+                alert(`${createdPayloads.length}???ル봿????PDF ?轅붽틓?????? ????μ떝?롧땟?삵맪??????`);
                 return;
             }
 
@@ -799,17 +800,17 @@ const ManageMaps: React.FC = () => {
             setIsSettingsOpen(false);
 
             if (resolvedScope === preferredScope) {
-                alert('지도 자료를 저장했습니다.');
+                alert('?轅붽틓???????????????μ떝?롧땟?삵맪??????');
             } else {
-                alert('지도 자료를 저장했습니다. 학기 범위 경로 대신 기본 컬렉션에 저장되었습니다.');
+                alert('?轅붽틓???????????????μ떝?롧땟?삵맪?????? ???????틯 ?嶺???????β뼯援????る쑏????????????????β뼯爰????癲ル슢???с궘?????녾낮?녔틦?쀂???????????낆젵.');
             }
         } catch (error) {
             console.error('Failed to save map resource:', error);
             const message = normalizeErrorMessage(error);
             const storageHint = message.includes('storage-upload-timeout') || message.includes('storage-download-url-timeout')
-                ? '\nFirebase Storage 버킷 또는 Storage 규칙이 아직 준비되지 않았을 가능성이 큽니다.'
+                ? '\nFirebase Storage ?嶺?????諭裕??????Storage ????????????밸븶??볧돯??μ떝?띄몭?吏녶젆?빧??????쒕???? ?????源낅돹?????ル봿??????얜Ŧ?????????낅쨦??'
                 : '';
-            alert(`지도 자료 저장에 실패했습니다.\n${message}${storageHint}`);
+            alert(`?轅붽틓????????????????얜∥???????怨뚯댅???????????낆젵.\n${message}${storageHint}`);
         } finally {
             setSaving(false);
         }
@@ -820,7 +821,7 @@ const ManageMaps: React.FC = () => {
 
         let sourceFile = selectedFile;
         if (!sourceFile) {
-            alert('PDF 재처리를 위해 같은 PDF 파일을 다시 선택해 주세요.');
+            alert('PDF ?????쒋???? ????袁ｋ쨨?????ル봿??? PDF ???????????ㅻ쿋??????節떷???????용츧????ロ뒌??');
             sourceFile = await requestLocalPdfFile();
             if (!sourceFile) {
                 return;
@@ -842,7 +843,7 @@ const ManageMaps: React.FC = () => {
             await persistMapPayload(payload, draft.storageScope || 'semester');
         } catch (error) {
             console.error('Failed to reprocess PDF map:', error);
-            alert(`PDF 재처리에 실패했습니다.\n${normalizeErrorMessage(error)}`);
+            alert(`PDF ?????쒋??????????怨뚯댅???????????낆젵.\n${normalizeErrorMessage(error)}`);
         } finally {
             setSaving(false);
         }
@@ -852,11 +853,11 @@ const ManageMaps: React.FC = () => {
         if (!draft.id) return;
 
         if (draft.id === GOOGLE_MAP_RESOURCE_ID) {
-            alert('구글 지도 기본 항목은 삭제할 수 없습니다.');
+            alert('??? ?轅붽틓?????????????????? ????????????욱룏???????낆젵.');
             return;
         }
 
-        if (!window.confirm(`'${draft.title}' 지도를 삭제하시겠습니까?`)) {
+        if (!window.confirm(`'${draft.title}' ?轅붽틓?????? ?????癲ル슢???숈춿??β뼯援?臾뚰겫????????`)) {
             return;
         }
 
@@ -885,15 +886,18 @@ const ManageMaps: React.FC = () => {
             setIsSettingsOpen(false);
         } catch (error) {
             console.error('Failed to delete map resource:', error);
-            alert(`지도 자료 삭제에 실패했습니다.\n${normalizeErrorMessage(error)}`);
+            alert(`?轅붽틓????????????????????怨뚯댅???????????낆젵.\n${normalizeErrorMessage(error)}`);
         }
     };
 
     const selectedPreview = draft.id ? draft : null;
     const acceptsFile = draft.type === 'image' || draft.type === 'pdf';
-    const pdfSettingsTabs = useMemo(
-        () => items.filter((item) => item.type === 'pdf'),
-        [items],
+    const currentSettingsTabGroup = (draft.tabGroup || draft.category || '').trim();
+    const settingsTabs = useMemo(
+        () => items.filter((item) => (
+            (item.tabGroup || item.category || '').trim() === currentSettingsTabGroup
+        )),
+        [currentSettingsTabGroup, items],
     );
     const allPdfTagOptions = useMemo(() => normalizeRegionTags([
         ...DEFAULT_PDF_TAG_OPTIONS,
@@ -920,7 +924,7 @@ const ManageMaps: React.FC = () => {
         : '';
 
     return (
-        <div className="min-h-screen bg-gray-50 flex flex-col">
+        <div className="flex min-h-screen flex-col bg-gray-50">
             <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 p-6 lg:flex-row lg:p-10">
                 <MapSidebar
                     heading="지도"
@@ -941,7 +945,7 @@ const ManageMaps: React.FC = () => {
                         <button
                             type="button"
                             onClick={() => setIsReorderMode((prev) => !prev)}
-                            className={`inline-flex min-w-[42px] items-center justify-center rounded-lg border px-2 py-1 text-xs font-extrabold leading-none transition ${
+                            className={`inline-flex min-w-[44px] items-center justify-center rounded-lg border px-2 py-1 text-xs font-extrabold leading-none transition ${
                                 isReorderMode
                                     ? 'border-blue-200 bg-blue-50 text-blue-700'
                                     : 'border-transparent text-gray-400 hover:border-gray-200 hover:bg-gray-50 hover:text-gray-700'
@@ -949,15 +953,12 @@ const ManageMaps: React.FC = () => {
                             aria-label="지도 순서 변경"
                             title="지도 순서 변경"
                         >
-                            ↑↓
+                            순서
                         </button>
                     )}
                     renderItemAction={(item) => (
                         isReorderMode ? (
-                            <div
-                                className="flex items-center gap-1"
-                                onClick={(e) => e.stopPropagation()}
-                            >
+                            <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                                 <button
                                     type="button"
                                     onClick={() => void handleMoveItem(item.id, 'up')}
@@ -1001,19 +1002,16 @@ const ManageMaps: React.FC = () => {
                     {loading ? (
                         <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center text-gray-400 shadow-sm">
                             <i className="fas fa-spinner fa-spin text-2xl"></i>
-                            <p className="mt-3">지도를 불러오는 중입니다.</p>
+                            <p className="mt-3">지도 자료를 불러오는 중입니다.</p>
                         </div>
                     ) : (
-                        <>
-                            <MapViewer
-                                item={selectedPreview}
-                                googleSearchQuery={draft.type === 'google' ? (draft.googleQuery || '') : undefined}
-                                onGoogleSearchQueryChange={draft.type === 'google'
-                                    ? (value) => handleDraftChange('googleQuery', value)
-                                    : undefined}
-                            />
-
-                        </>
+                        <MapViewer
+                            item={selectedPreview}
+                            googleSearchQuery={draft.type === 'google' ? (draft.googleQuery || '') : undefined}
+                            onGoogleSearchQueryChange={draft.type === 'google'
+                                ? (value) => handleDraftChange('googleQuery', value)
+                                : undefined}
+                        />
                     )}
                 </section>
             </main>
@@ -1025,23 +1023,23 @@ const ManageMaps: React.FC = () => {
                             <div>
                                 <h2 className="text-xl font-extrabold text-gray-900">지도 설정</h2>
                                 <p className="mt-1 text-sm text-gray-500">
-                                    지도 순서와 표시 방식을 여기서 바꿀 수 있습니다.
+                                    지도 탭, 파일, 태그, 바로가기 구성을 한 곳에서 편집합니다.
                                 </p>
                             </div>
                             <button
                                 type="button"
                                 onClick={() => setIsSettingsOpen(false)}
                                 className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700"
-                                aria-label="설정창 닫기"
+                                aria-label="설정 닫기"
                             >
                                 <i className="fas fa-times"></i>
                             </button>
                         </div>
 
-                        {pdfSettingsTabs.length > 1 && (
+                        {settingsTabs.length > 1 && (
                             <div className="overflow-x-auto border-y border-gray-100 px-6 md:px-8">
                                 <div className="flex min-w-max">
-                                    {pdfSettingsTabs.map((item) => (
+                                    {settingsTabs.map((item) => (
                                         <button
                                             key={item.id}
                                             type="button"
@@ -1061,290 +1059,297 @@ const ManageMaps: React.FC = () => {
 
                         <div className="grid gap-6 p-6 md:p-8 lg:grid-cols-[minmax(0,30rem)_minmax(0,1fr)]">
                             <div className="min-w-0">
-
-                        <div className="grid gap-4 md:grid-cols-2">
-                            <div>
-                                <label className="mb-1 block text-xs font-bold text-gray-500">지도 제목</label>
-                                <input
-                                    type="text"
-                                    value={draft.title}
-                                    onChange={(e) => handleDraftChange('title', e.target.value)}
-                                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                                    placeholder="예: 조선 후기 한반도 지도"
-                                />
-                            </div>
-                            <div>
-                                <label className="mb-1 block text-xs font-bold text-gray-500">분류</label>
-                                <input
-                                    type="text"
-                                    value={draft.category}
-                                    onChange={(e) => handleDraftChange('category', e.target.value)}
-                                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                                    placeholder="예: 한국사 지도"
-                                />
-                            </div>
-                            <div>
-                                <label className="mb-1 block text-xs font-bold text-gray-500">지도 유형</label>
-                                <select
-                                    value={draft.type}
-                                    onChange={(e) => handleTypeChange(e.target.value as MapResourceType)}
-                                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
-                                >
-                                    <option value="image">이미지</option>
-                                    <option value="pdf">PDF</option>
-                                    <option value="iframe">외부 iframe</option>
-                                    <option value="google">Google 지도</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="mb-1 block text-xs font-bold text-gray-500">지도 순서</label>
-                                <input
-                                    type="number"
-                                    value={draft.sortOrder}
-                                    onChange={(e) => handleDraftChange('sortOrder', Number(e.target.value) || 0)}
-                                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="mt-4">
-                            <label className="mb-1 block text-xs font-bold text-gray-500">설명</label>
-                            <textarea
-                                value={draft.description}
-                                onChange={(e) => handleDraftChange('description', e.target.value)}
-                                rows={4}
-                                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                                placeholder="학생이 지도를 볼 때 함께 보일 설명을 입력해 주세요."
-                            />
-                        </div>
-
-                        {acceptsFile && (
-                            <div className="mt-4 grid gap-4 md:grid-cols-[minmax(0,1fr)_15rem]">
-                                <div>
-                                    <label className="mb-1 block text-xs font-bold text-gray-500">
-                                        {draft.type === 'pdf' ? 'PDF 파일 업로드' : '이미지 파일 업로드'}
-                                    </label>
-                                    <input
-                                        ref={fileInputRef}
-                                        type="file"
-                                        accept={draft.type === 'pdf' ? '.pdf,application/pdf' : 'image/*'}
-                                        multiple={draft.type === 'pdf' && !draft.id}
-                                        onClick={(e) => {
-                                            (e.currentTarget as HTMLInputElement).value = '';
-                                        }}
-                                        onChange={(e) => void handleFileInputChange(e)}
-                                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
-                                    />
-                                    {draft.type === 'pdf' && pendingPdfUploads.length > 0 && (
-                                        <div className="mt-3 space-y-2 rounded-2xl border border-gray-200 bg-gray-50 p-3">
-                                            {pendingPdfUploads.map((upload) => (
-                                                <div
-                                                    key={upload.id}
-                                                    className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2 text-sm ${
-                                                        activePendingPdfUpload?.id === upload.id
-                                                            ? 'border-blue-200 bg-blue-50'
-                                                            : 'border-gray-200 bg-white'
-                                                    }`}
-                                                >
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handlePendingPdfUploadSelect(upload.id)}
-                                                        className="min-w-0 flex-1 truncate text-left font-medium text-gray-700"
-                                                    >
-                                                        {upload.file.name}
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handlePendingPdfUploadRemove(upload.id)}
-                                                        className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 text-gray-400 hover:bg-white hover:text-red-500"
-                                                    >
-                                                        <i className="fas fa-times text-xs"></i>
-                                                    </button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="text-xs leading-6 text-gray-500">
-                                    <div>현재 파일: {selectedFile?.name || draft.fileName || '없음'}</div>
+                                <div className="grid gap-4 md:grid-cols-2">
                                     <div>
-                                        {draft.type === 'pdf'
-                                            ? 'PDF는 확대와 축소를 지원하고, 상단에서 지역 이름 후보를 눌러 해당 위치를 크게 볼 수 있습니다.'
-                                            : '이미지 지도는 업로드 후 학생 화면에 바로 표시됩니다.'}
+                                        <label className="mb-1 block text-xs font-bold text-gray-500">지도 제목</label>
+                                        <input
+                                            type="text"
+                                            value={draft.title}
+                                            onChange={(e) => handleDraftChange('title', e.target.value)}
+                                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                                            placeholder="예: 한반도의 자연지형 지도"
+                                        />
                                     </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {draft.type === 'iframe' && (
-                            <div className="mt-4">
-                                <label className="mb-1 block text-xs font-bold text-gray-500">iframe URL</label>
-                                <input
-                                    type="text"
-                                    value={draft.embedUrl || ''}
-                                    onChange={(e) => handleDraftChange('embedUrl', e.target.value)}
-                                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                                    placeholder="https://..."
-                                />
-                            </div>
-                        )}
-
-                        {draft.type === 'google' && (
-                            <div className="mt-4 grid gap-4 md:grid-cols-2">
-                                <div>
-                                    <label className="mb-1 block text-xs font-bold text-gray-500">Google 지도 검색어</label>
-                                    <input
-                                        type="text"
-                                        value={draft.googleQuery || ''}
-                                        onChange={(e) => handleDraftChange('googleQuery', e.target.value)}
-                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                                        placeholder="예: 대한민국 서울 경복궁"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="mb-1 block text-xs font-bold text-gray-500">외부 링크</label>
-                                    <input
-                                        type="text"
-                                        value={draft.externalUrl || ''}
-                                        onChange={(e) => handleDraftChange('externalUrl', e.target.value)}
-                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                                        placeholder="https://www.google.com/maps"
-                                    />
-                                </div>
-                                <p className="text-xs leading-6 text-gray-500 md:col-span-2">
-                                    Google 지도는 검색어 기반 iframe으로 표시됩니다. PDF 전용 지역 이름 추출 기능은
-                                    Google 지도에는 적용되지 않습니다.
-                                </p>
-                            </div>
-                        )}
-
-                        {draft.type === 'pdf' && (draft.pdfRegions?.length || 0) > 0 && (
-                            <div className="mt-6">
-                                <div className="mb-2 flex items-center justify-between gap-3">
                                     <div>
-                                        <h3 className="text-sm font-bold text-gray-900">지역 바로가기 명칭 수정</h3>
-                                        <p className="mt-1 text-xs text-gray-500">이름 수정과 바로가기 포함 여부를 함께 정할 수 있습니다.</p>
+                                        <label className="mb-1 block text-xs font-bold text-gray-500">분류</label>
+                                        <input
+                                            type="text"
+                                            value={draft.category}
+                                            onChange={(e) => handleDraftChange('category', e.target.value)}
+                                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                                            placeholder="예: 한국사"
+                                        />
                                     </div>
-                                    <div className="text-xs font-medium text-gray-400">
-                                        {(draft.pdfRegions || []).length}개
+                                    <div>
+                                        <label className="mb-1 block text-xs font-bold text-gray-500">지도 탭</label>
+                                        <input
+                                            type="text"
+                                            value={draft.tabGroup || ''}
+                                            onChange={(e) => handleDraftChange('tabGroup', e.target.value)}
+                                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                                            placeholder="예: 한반도 지도"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="mb-1 block text-xs font-bold text-gray-500">지도 유형</label>
+                                        <select
+                                            value={draft.type}
+                                            onChange={(e) => handleTypeChange(e.target.value as MapResourceType)}
+                                            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                                        >
+                                            <option value="image">이미지</option>
+                                            <option value="pdf">PDF</option>
+                                            <option value="iframe">외부 iframe</option>
+                                            <option value="google">구글 지도</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="mb-1 block text-xs font-bold text-gray-500">지도 순서</label>
+                                        <input
+                                            type="number"
+                                            value={draft.sortOrder}
+                                            onChange={(e) => handleDraftChange('sortOrder', Number(e.target.value) || 0)}
+                                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                                        />
                                     </div>
                                 </div>
-                                <div className="max-h-[32rem] space-y-3 overflow-y-auto rounded-2xl border border-gray-200 bg-gray-50 p-3">
-                                    {displayedPdfRegions.map((region) => {
-                                        const index = (draft.pdfRegions || []).findIndex((item) => (
-                                            item.page === region.page
-                                            && item.left === region.left
-                                            && item.top === region.top
-                                            && item.label === region.label
-                                        ));
 
-                                        return (
-                                        <div key={`${region.page}-${region.left}-${region.top}-${index}`} className="space-y-3 rounded-xl bg-white p-3">
-                                            <div className="grid gap-3 md:grid-cols-[5rem_minmax(0,1fr)_auto] md:items-center">
-                                                <div className="text-xs font-bold text-gray-500">p.{region.page}</div>
-                                                <input
-                                                    type="text"
-                                                    value={region.label}
-                                                    onChange={(e) => handlePdfRegionLabelChange(index, e.target.value)}
-                                                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                                                    placeholder="지역명 입력"
-                                                />
-                                                <label className="inline-flex items-center gap-2 text-xs font-bold text-gray-600">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={region.shortcutEnabled !== false}
-                                                        onChange={(e) => handlePdfRegionShortcutToggle(index, e.target.checked)}
-                                                        className="h-4 w-4 rounded border-gray-300"
-                                                    />
-                                                    바로가기
-                                                </label>
-                                            </div>
-
-                                            <div>
-                                                <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-gray-400">Tag</div>
-                                                <div className="flex flex-wrap gap-2">
-                                                    {allPdfTagOptions.map((tag) => {
-                                                        const checked = (region.tags || []).includes(tag);
-                                                        return (
-                                                            <label
-                                                                key={`${region.page}-${index}-${tag}`}
-                                                                className={`inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold transition ${
-                                                                    checked
-                                                                        ? 'border-blue-200 bg-blue-50 text-blue-700'
-                                                                        : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                                                                }`}
+                                <div className="mt-4">
+                                    <label className="mb-1 block text-xs font-bold text-gray-500">설명</label>
+                                    <textarea
+                                        value={draft.description}
+                                        onChange={(e) => handleDraftChange('description', e.target.value)}
+                                        rows={4}
+                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                                        placeholder="학생에게 보여줄 지도 설명을 입력하세요."
+                                    />
+                                </div>
+                                {acceptsFile && (
+                                    <div className="mt-4 grid gap-4 md:grid-cols-[minmax(0,1fr)_15rem]">
+                                        <div>
+                                            <label className="mb-1 block text-xs font-bold text-gray-500">
+                                                {draft.type === 'pdf' ? 'PDF 파일 업로드' : '이미지 파일 업로드'}
+                                            </label>
+                                            <input
+                                                ref={fileInputRef}
+                                                type="file"
+                                                accept={draft.type === 'pdf' ? '.pdf,application/pdf' : 'image/*'}
+                                                multiple={draft.type === 'pdf' && !draft.id}
+                                                onClick={(e) => {
+                                                    (e.currentTarget as HTMLInputElement).value = '';
+                                                }}
+                                                onChange={(e) => void handleFileInputChange(e)}
+                                                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                                            />
+                                            {draft.type === 'pdf' && pendingPdfUploads.length > 0 && (
+                                                <div className="mt-3 space-y-2 rounded-2xl border border-gray-200 bg-gray-50 p-3">
+                                                    {pendingPdfUploads.map((upload) => (
+                                                        <div
+                                                            key={upload.id}
+                                                            className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2 text-sm ${
+                                                                activePendingPdfUpload?.id === upload.id
+                                                                    ? 'border-blue-200 bg-blue-50'
+                                                                    : 'border-gray-200 bg-white'
+                                                            }`}
+                                                        >
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handlePendingPdfUploadSelect(upload.id)}
+                                                                className="min-w-0 flex-1 truncate text-left font-medium text-gray-700"
                                                             >
+                                                                {upload.file.name}
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handlePendingPdfUploadRemove(upload.id)}
+                                                                className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 text-gray-400 hover:bg-white hover:text-red-500"
+                                                                aria-label={`${upload.file.name} 삭제`}
+                                                                title="파일 삭제"
+                                                            >
+                                                                <i className="fas fa-times text-xs"></i>
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                            {isPreparingPdfUploads && (
+                                                <div className="mt-2 text-xs font-medium text-blue-600">PDF 미리보기와 키워드를 추출하는 중입니다.</div>
+                                            )}
+                                        </div>
+                                        <div className="space-y-2 text-xs leading-6 text-gray-500">
+                                            <div>현재 파일: {selectedFile?.name || draft.fileName || '선택된 파일 없음'}</div>
+                                            <div>
+                                                {draft.type === 'pdf'
+                                                    ? '여러 PDF를 동시에 고르면 각각의 지도 자료로 저장할 수 있습니다.'
+                                                    : '이미지 파일은 업로드 후 바로 미리보기에 반영됩니다.'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {draft.type === 'iframe' && (
+                                    <div className="mt-4">
+                                        <label className="mb-1 block text-xs font-bold text-gray-500">iframe URL</label>
+                                        <input
+                                            type="text"
+                                            value={draft.embedUrl || ''}
+                                            onChange={(e) => handleDraftChange('embedUrl', e.target.value)}
+                                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                                            placeholder="https://..."
+                                        />
+                                    </div>
+                                )}
+
+                                {draft.type === 'google' && (
+                                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                                        <div>
+                                            <label className="mb-1 block text-xs font-bold text-gray-500">구글 지도 검색어</label>
+                                            <input
+                                                type="text"
+                                                value={draft.googleQuery || ''}
+                                                onChange={(e) => handleDraftChange('googleQuery', e.target.value)}
+                                                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                                                placeholder="예: 서울 경복궁"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="mb-1 block text-xs font-bold text-gray-500">외부 링크</label>
+                                            <input
+                                                type="text"
+                                                value={draft.externalUrl || ''}
+                                                onChange={(e) => handleDraftChange('externalUrl', e.target.value)}
+                                                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                                                placeholder="https://www.google.com/maps"
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {draft.type === 'pdf' && (draft.pdfRegions?.length || 0) > 0 && (
+                                    <div className="mt-6">
+                                        <div className="mb-2 flex items-center justify-between gap-3">
+                                            <div>
+                                                <h3 className="text-sm font-bold text-gray-900">지역 바로가기 명칭 수정</h3>
+                                                <p className="mt-1 text-xs text-gray-500">
+                                                    이름 수정, 바로가기 표시, 태그 지정을 함께 편집합니다.
+                                                </p>
+                                            </div>
+                                            <div className="text-xs font-medium text-gray-400">{(draft.pdfRegions || []).length}개</div>
+                                        </div>
+                                        <div className="max-h-[32rem] space-y-3 overflow-y-auto rounded-2xl border border-gray-200 bg-gray-50 p-3">
+                                            {displayedPdfRegions.map((region) => {
+                                                const index = (draft.pdfRegions || []).findIndex((item) => (
+                                                    item.page === region.page
+                                                    && item.left === region.left
+                                                    && item.top === region.top
+                                                    && item.label === region.label
+                                                ));
+
+                                                return (
+                                                    <div key={`${region.page}-${region.left}-${region.top}-${index}`} className="space-y-3 rounded-xl bg-white p-3">
+                                                        <div className="grid gap-3 md:grid-cols-[5rem_minmax(0,1fr)_auto] md:items-center">
+                                                            <div className="text-xs font-bold text-gray-500">p.{region.page}</div>
+                                                            <input
+                                                                type="text"
+                                                                value={region.label}
+                                                                onChange={(e) => handlePdfRegionLabelChange(index, e.target.value)}
+                                                                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                                                                placeholder="지역 바로가기 이름"
+                                                            />
+                                                            <label className="inline-flex items-center gap-2 text-xs font-bold text-gray-600">
                                                                 <input
                                                                     type="checkbox"
-                                                                    checked={checked}
-                                                                    onChange={(e) => handlePdfRegionTagToggle(index, tag, e.target.checked)}
-                                                                    className="h-3.5 w-3.5 rounded border-gray-300"
+                                                                    checked={region.shortcutEnabled !== false}
+                                                                    onChange={(e) => handlePdfRegionShortcutToggle(index, e.target.checked)}
+                                                                    className="h-4 w-4 rounded border-gray-300"
                                                                 />
-                                                                {tag}
+                                                                바로가기
                                                             </label>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
+                                                        </div>
 
-                                            <div className="flex flex-col gap-2 md:flex-row">
-                                                <input
-                                                    type="text"
-                                                    value={customTagInputs[index] || ''}
-                                                    onChange={(e) => handlePdfRegionCustomTagInputChange(index, e.target.value)}
-                                                    onKeyDown={(e) => {
-                                                        if (e.key === 'Enter') {
-                                                            e.preventDefault();
-                                                            handlePdfRegionAddCustomTag(index);
-                                                        }
-                                                    }}
-                                                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                                                    placeholder="직접 태그 추가"
-                                                />
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handlePdfRegionAddCustomTag(index)}
-                                                    className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
-                                                >
-                                                    태그 추가
-                                                </button>
-                                            </div>
+                                                        <div>
+                                                            <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-gray-400">Tag</div>
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {allPdfTagOptions.map((tag) => {
+                                                                    const checked = (region.tags || []).includes(tag);
+                                                                    return (
+                                                                        <label
+                                                                            key={`${region.page}-${index}-${tag}`}
+                                                                            className={`inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold transition ${
+                                                                                checked
+                                                                                    ? 'border-blue-200 bg-blue-50 text-blue-700'
+                                                                                    : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                                                                            }`}
+                                                                        >
+                                                                            <input
+                                                                                type="checkbox"
+                                                                                checked={checked}
+                                                                                onChange={(e) => handlePdfRegionTagToggle(index, tag, e.target.checked)}
+                                                                                className="h-3.5 w-3.5 rounded border-gray-300"
+                                                                            />
+                                                                            {tag}
+                                                                        </label>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex flex-col gap-2 md:flex-row">
+                                                            <input
+                                                                type="text"
+                                                                value={customTagInputs[index] || ''}
+                                                                onChange={(e) => handlePdfRegionCustomTagInputChange(index, e.target.value)}
+                                                                onKeyDown={(e) => {
+                                                                    if (e.key === 'Enter') {
+                                                                        e.preventDefault();
+                                                                        handlePdfRegionAddCustomTag(index);
+                                                                    }
+                                                                }}
+                                                                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                                                                placeholder="직접 태그 추가"
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handlePdfRegionAddCustomTag(index)}
+                                                                className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
+                                                            >
+                                                                태그 추가
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
-                                        );
-                                    })}
-                                </div>
-                                {(draft.pdfRegions || []).length > 12 && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsPdfShortcutExpanded((prev) => !prev)}
-                                        className="mt-3 rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
-                                    >
-                                        {isPdfShortcutExpanded ? '접기' : `펼치기 (${(draft.pdfRegions || []).length - 12}개 더)`}
-                                    </button>
+                                        {(draft.pdfRegions || []).length > 12 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsPdfShortcutExpanded((prev) => !prev)}
+                                                className="mt-3 rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
+                                            >
+                                                {isPdfShortcutExpanded ? '접기' : `더 보기 (${(draft.pdfRegions || []).length - 12}개 더)`}
+                                            </button>
+                                        )}
+                                    </div>
                                 )}
                             </div>
-                        )}
-
-                            </div>
-
                             <div className="min-w-0 space-y-4">
                                 <div className="flex flex-wrap items-start justify-between gap-3">
                                     <div>
                                         <div className="text-xs font-bold uppercase tracking-[0.2em] text-gray-400">Preview</div>
                                         <h3 className="mt-2 text-lg font-extrabold text-gray-900">
-                                            {draft.type === 'pdf' ? 'PDF 상세 보기' : '자료 미리보기'}
+                                            {draft.type === 'pdf' ? 'PDF 상세 보기' : '미리보기'}
                                         </h3>
                                         <p className="mt-1 text-sm text-gray-500">
                                             {draft.type === 'pdf'
                                                 ? '업로드한 PDF 파일과 추출 상태를 우측에서 바로 확인합니다.'
-                                                : '저장 전 현재 설정 기준으로 표시 형태를 확인합니다.'}
+                                                : '현재 설정한 지도 내용을 우측 미리보기에서 바로 확인합니다.'}
                                         </p>
                                     </div>
                                     {draft.type === 'pdf' && (
-                                        <div className="grid grid-cols-3 gap-2 text-center text-xs font-bold text-gray-600">
+                                        <div className="grid grid-cols-4 gap-2 text-center text-xs font-bold text-gray-600">
                                             <div className="rounded-xl border border-gray-200 bg-white px-3 py-2">
                                                 <div className="text-[11px] text-gray-400">파일</div>
-                                                <div className="mt-1">{selectedFile ? '신규' : '저장됨'}</div>
+                                                <div className="mt-1">{selectedFile ? '준비됨' : draft.fileUrl ? '저장됨' : '신규'}</div>
                                             </div>
                                             <div className="rounded-xl border border-gray-200 bg-white px-3 py-2">
                                                 <div className="text-[11px] text-gray-400">페이지</div>
@@ -1353,6 +1358,10 @@ const ManageMaps: React.FC = () => {
                                             <div className="rounded-xl border border-gray-200 bg-white px-3 py-2">
                                                 <div className="text-[11px] text-gray-400">바로가기</div>
                                                 <div className="mt-1">{activePdfShortcutCount}</div>
+                                            </div>
+                                            <div className="rounded-xl border border-gray-200 bg-white px-3 py-2">
+                                                <div className="text-[11px] text-gray-400">태그</div>
+                                                <div className="mt-1">{activePdfTagCount}</div>
                                             </div>
                                         </div>
                                     )}
@@ -1371,7 +1380,7 @@ const ManageMaps: React.FC = () => {
                                         </div>
                                     ) : (
                                         <div className="rounded-3xl border border-dashed border-gray-300 bg-white px-6 py-16 text-center text-sm text-gray-500">
-                                            PDF 파일을 선택하면 이 영역에 상세 미리보기가 표시됩니다.
+                                            PDF 파일을 선택하면 이 영역에서 미리보기와 추출 결과를 바로 확인할 수 있습니다.
                                         </div>
                                     )
                                 ) : (
@@ -1389,46 +1398,46 @@ const ManageMaps: React.FC = () => {
                         </div>
 
                         <div className="border-t border-gray-100 px-6 py-6 md:px-8">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div className="flex flex-wrap gap-2">
-                                {draft.id && draft.type === 'pdf' && draft.fileUrl && (
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div className="flex flex-wrap gap-2">
+                                    {draft.id && draft.type === 'pdf' && draft.fileUrl && (
+                                        <button
+                                            type="button"
+                                            onClick={() => void handleReprocessPdf()}
+                                            disabled={saving}
+                                            className="rounded-lg border border-amber-200 px-4 py-2 text-sm font-bold text-amber-700 hover:bg-amber-50 disabled:opacity-60"
+                                        >
+                                            PDF 재처리
+                                        </button>
+                                    )}
+                                    {draft.id && (
+                                        <button
+                                            type="button"
+                                            onClick={handleDelete}
+                                            className="rounded-lg border border-red-200 px-4 py-2 text-sm font-bold text-red-600 hover:bg-red-50"
+                                        >
+                                            삭제
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="flex gap-2">
                                     <button
                                         type="button"
-                                        onClick={() => void handleReprocessPdf()}
+                                        onClick={() => setIsSettingsOpen(false)}
+                                        className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
+                                    >
+                                        닫기
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => void handleSave()}
                                         disabled={saving}
-                                        className="rounded-lg border border-amber-200 px-4 py-2 text-sm font-bold text-amber-700 hover:bg-amber-50 disabled:opacity-60"
+                                        className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60"
                                     >
-                                        PDF 재처리
+                                        {saving ? '저장 중...' : '저장'}
                                     </button>
-                                )}
-                                {draft.id && (
-                                    <button
-                                        type="button"
-                                        onClick={handleDelete}
-                                        className="rounded-lg border border-red-200 px-4 py-2 text-sm font-bold text-red-600 hover:bg-red-50"
-                                    >
-                                        삭제
-                                    </button>
-                                )}
+                                </div>
                             </div>
-                            <div className="flex gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => setIsSettingsOpen(false)}
-                                    className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
-                                >
-                                    닫기
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => void handleSave()}
-                                    disabled={saving}
-                                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60"
-                                >
-                                    {saving ? '저장 중...' : '저장'}
-                                </button>
-                            </div>
-                        </div>
                         </div>
                     </div>
                 </div>

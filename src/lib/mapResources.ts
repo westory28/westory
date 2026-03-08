@@ -22,6 +22,7 @@ export interface MapResource {
     id: string;
     title: string;
     category: string;
+    tabGroup?: string;
     description: string;
     type: MapResourceType;
     imageUrl?: string;
@@ -51,6 +52,7 @@ export const DEFAULT_PDF_REGION_TAGS = [
 ] as const;
 
 export const DEFAULT_PDF_ERA_TAGS = [
+    '고조선',
     '삼국시대',
     '통일신라',
     '고려',
@@ -63,7 +65,8 @@ export const DEFAULT_GOOGLE_MAP_RESOURCE: MapResource = {
     id: GOOGLE_MAP_RESOURCE_ID,
     title: '구글 지도',
     category: '실시간 지도',
-    description: 'Google Maps Embed API를 연결하면 원하는 지역 지도를 바로 수업에 넣을 수 있습니다.',
+    tabGroup: '구글 지도',
+    description: 'Google Maps Embed API를 연결하면 원하는 지명을 바로 검색할 수 있습니다.',
     type: 'google',
     googleQuery: '대한민국 서울 경복궁',
     externalUrl: 'https://www.google.com/maps',
@@ -100,6 +103,7 @@ export const normalizeMapResource = (id: string, raw: Partial<MapResource>): Map
     id,
     title: String(raw.title || '').trim() || '지도 자료',
     category: String(raw.category || '').trim() || '기타 지도',
+    tabGroup: String(raw.tabGroup || raw.category || '').trim() || '기타 지도',
     description: String(raw.description || '').trim(),
     type: raw.type === 'image' || raw.type === 'iframe' || raw.type === 'google' || raw.type === 'pdf'
         ? raw.type
@@ -135,7 +139,7 @@ export const normalizeMapResource = (id: string, raw: Partial<MapResource>): Map
                 shortcutEnabled: region?.shortcutEnabled !== false,
                 tags: normalizeRegionTags(region?.tags),
             }))
-        .filter((region) => region.label)
+            .filter((region) => region.label)
         : [],
     sortOrder: Number.isFinite(Number(raw.sortOrder)) ? Number(raw.sortOrder) : 999,
 });
