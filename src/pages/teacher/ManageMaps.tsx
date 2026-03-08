@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { collection, deleteDoc, doc, getDocs, orderBy, query, serverTimestamp, setDoc } from 'firebase/firestore';
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import MapSidebar from '../../components/common/MapSidebar';
 import MapViewer from '../../components/common/MapViewer';
-import { db } from '../../lib/firebase';
-import { getSemesterCollectionPath } from '../../lib/semesterScope';
+import { useAuth } from '../../contexts/AuthContext';
+import { db, storage } from '../../lib/firebase';
 import {
     DEFAULT_GOOGLE_MAP_RESOURCE,
     GOOGLE_MAP_RESOURCE_ID,
@@ -12,7 +13,7 @@ import {
     type MapResource,
     type MapResourceType,
 } from '../../lib/mapResources';
-import { useAuth } from '../../contexts/AuthContext';
+import { getSemesterCollectionPath } from '../../lib/semesterScope';
 
 type StorageScope = 'semester' | 'legacy';
 
@@ -27,6 +28,9 @@ const createDraft = (): StoredMapResource => ({
     description: '',
     type: 'image',
     imageUrl: '',
+    fileUrl: '',
+    fileName: '',
+    mimeType: '',
     embedUrl: '',
     googleQuery: '',
     externalUrl: '',
@@ -35,8 +39,13 @@ const createDraft = (): StoredMapResource => ({
 });
 
 const normalizeErrorMessage = (error: unknown) => {
-    const code = typeof error === 'object' && error && 'code' in error ? String((error as { code?: string }).code || '') : '';
-    const message = typeof error === 'object' && error && 'message' in error ? String((error as { message?: string }).message || '') : '';
+    const code = typeof error === 'object' && error && 'code' in error
+        ? String((error as { code?: string }).code || '')
+        : '';
+    const message = typeof error === 'object' && error && 'message' in error
+        ? String((error as { message?: string }).message || '')
+        : '';
+
     if (code) return `${code}${message ? `: ${message}` : ''}`;
     return message || 'unknown-error';
 };
@@ -48,14 +57,23 @@ const ManageMaps: React.FC = () => {
     const [draft, setDraft] = useState<StoredMapResource>(createDraft());
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     const collectionPath = useMemo(() => getSemesterCollectionPath(config, 'map_resources'), [config]);
     const legacyCollectionPath = 'map_resources';
 
+    const resetFileInput = () => {
+        setSelectedFile(null);
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+    };
+
     const loadFromScope = async (scope: StorageScope): Promise<StoredMapResource[]> => {
         const path = scope === 'semester' ? collectionPath : legacyCollectionPath;
-        const ref = collection(db, path);
-        const snapshot = await getDocs(query(ref, orderBy('sortOrder', 'asc')));
+        const snapshot = await getDocs(query(collection(db, path), orderBy('sortOrder', 'asc')));
+
         return snapshot.docs.map((docSnap) => ({
             ...normalizeMapResource(docSnap.id, docSnap.data()),
             storageScope: scope,
@@ -65,6 +83,7 @@ const ManageMaps: React.FC = () => {
     useEffect(() => {
         const loadMaps = async () => {
             setLoading(true);
+
             try {
                 let resourceList = await loadFromScope('semester');
                 if (resourceList.length === 0) {
@@ -80,8 +99,8 @@ const ManageMaps: React.FC = () => {
                     };
                 });
 
-                setItems(merged);
                 const initial = merged[0] || { ...DEFAULT_GOOGLE_MAP_RESOURCE, storageScope: baseScope };
+                setItems(merged);
                 setSelectedId(initial.id);
                 setDraft(initial);
             } catch (error) {
@@ -100,9 +119,10 @@ const ManageMaps: React.FC = () => {
 
     useEffect(() => {
         const next = items.find((item) => item.id === selectedId);
-        if (next) {
-            setDraft(next);
-        }
+        if (!next) return;
+
+        setDraft(next);
+        resetFileInput();
     }, [items, selectedId]);
 
     const handleDraftChange = (field: keyof MapResource, value: string | number) => {
@@ -114,38 +134,116 @@ const ManageMaps: React.FC = () => {
 
     const handleCreateNew = () => {
         setSelectedId('');
+        resetFileInput();
         setDraft(createDraft());
     };
 
     const persistToScope = async (scope: StorageScope, payload: MapResource) => {
         const path = scope === 'semester' ? collectionPath : legacyCollectionPath;
-        await setDoc(doc(db, `${path}/${payload.id}`), {
-            ...payload,
-            updatedAt: serverTimestamp(),
-        }, { merge: true });
+
+        await setDoc(
+            doc(db, `${path}/${payload.id}`),
+            {
+                ...payload,
+                updatedAt: serverTimestamp(),
+            },
+            { merge: true },
+        );
+    };
+
+    const uploadSelectedFile = async (resourceId: string) => {
+        if (!selectedFile) {
+            return {
+                fileUrl: draft.fileUrl || '',
+                imageUrl: draft.imageUrl || '',
+                fileName: draft.fileName || '',
+                mimeType: draft.mimeType || '',
+            };
+        }
+
+        const extension = selectedFile.name.includes('.')
+            ? `.${selectedFile.name.split('.').pop()}`
+            : '';
+        const objectRef = ref(storage, `map-resources/${resourceId}/${Date.now()}${extension}`);
+
+        await uploadBytes(objectRef, selectedFile, {
+            contentType: selectedFile.type || undefined,
+        });
+
+        const fileUrl = await getDownloadURL(objectRef);
+
+        return {
+            fileUrl,
+            imageUrl: draft.type === 'image' ? fileUrl : '',
+            fileName: selectedFile.name,
+            mimeType: selectedFile.type || '',
+        };
+    };
+
+    const handleTypeChange = (nextType: MapResourceType) => {
+        resetFileInput();
+
+        setDraft((prev) => ({
+            ...prev,
+            type: nextType,
+            imageUrl: nextType === 'image' ? prev.imageUrl : '',
+            fileUrl: nextType === 'image' || nextType === 'pdf' ? prev.fileUrl : '',
+            fileName: nextType === 'image' || nextType === 'pdf' ? prev.fileName : '',
+            mimeType: nextType === 'image' || nextType === 'pdf' ? prev.mimeType : '',
+            embedUrl: nextType === 'iframe' ? prev.embedUrl : '',
+            googleQuery: nextType === 'google' ? prev.googleQuery : '',
+        }));
     };
 
     const handleSave = async () => {
-        const payload = normalizeMapResource(draft.id || `map-${Date.now()}`, draft);
-        if (!payload.title || !payload.category) {
+        const resourceId = draft.id || `map-${Date.now()}`;
+        const payloadBase = normalizeMapResource(resourceId, draft);
+
+        if (!payloadBase.title || !payloadBase.category) {
             alert('지도 제목과 분류를 입력해 주세요.');
             return;
         }
-        if (payload.type === 'image' && !payload.imageUrl) {
-            alert('이미지 지도는 이미지 URL이 필요합니다.');
+
+        if (payloadBase.type === 'iframe' && !payloadBase.embedUrl) {
+            alert('iframe 지도는 iframe URL이 필요합니다.');
             return;
         }
-        if (payload.type === 'iframe' && !payload.embedUrl) {
-            alert('임베드 지도는 iframe URL이 필요합니다.');
-            return;
-        }
-        if (payload.type === 'google' && !payload.googleQuery) {
+
+        if (payloadBase.type === 'google' && !payloadBase.googleQuery) {
             alert('Google 지도는 검색어를 입력해 주세요.');
             return;
         }
 
+        if ((payloadBase.type === 'image' || payloadBase.type === 'pdf')
+            && !selectedFile
+            && !(payloadBase.type === 'image' ? payloadBase.imageUrl : payloadBase.fileUrl)) {
+            alert(payloadBase.type === 'pdf' ? 'PDF 파일을 업로드해 주세요.' : '이미지 파일을 업로드해 주세요.');
+            return;
+        }
+
         setSaving(true);
+
         try {
+            const fileInfo = await uploadSelectedFile(resourceId);
+            const payload: MapResource = {
+                ...payloadBase,
+                ...fileInfo,
+                imageUrl: payloadBase.type === 'image'
+                    ? (fileInfo.imageUrl || payloadBase.imageUrl)
+                    : '',
+                fileUrl: payloadBase.type === 'image' || payloadBase.type === 'pdf'
+                    ? (fileInfo.fileUrl || payloadBase.fileUrl)
+                    : '',
+                fileName: payloadBase.type === 'image' || payloadBase.type === 'pdf'
+                    ? (fileInfo.fileName || payloadBase.fileName)
+                    : '',
+                mimeType: payloadBase.type === 'image' || payloadBase.type === 'pdf'
+                    ? (fileInfo.mimeType || payloadBase.mimeType)
+                    : '',
+                embedUrl: payloadBase.type === 'iframe' ? payloadBase.embedUrl : '',
+                googleQuery: payloadBase.type === 'google' ? payloadBase.googleQuery : '',
+            };
+
             const preferredScope: StorageScope = draft.storageScope || 'semester';
             const fallbackScope: StorageScope = preferredScope === 'semester' ? 'legacy' : 'semester';
             let resolvedScope = preferredScope;
@@ -163,16 +261,22 @@ const ManageMaps: React.FC = () => {
                 { ...payload, storageScope: resolvedScope },
             ]).map((item) => {
                 const existing = items.find((resource) => resource.id === item.id);
-                if (item.id === payload.id) return { ...item, storageScope: resolvedScope };
+                if (item.id === payload.id) {
+                    return { ...item, storageScope: resolvedScope };
+                }
                 return { ...item, storageScope: existing?.storageScope || resolvedScope };
             });
 
             setItems(merged);
             setSelectedId(payload.id);
             setDraft({ ...payload, storageScope: resolvedScope });
-            alert(resolvedScope === preferredScope
-                ? '지도 자료를 저장했습니다.'
-                : '지도 자료를 저장했습니다. 학기 범위 경로 대신 기본 컬렉션에 저장되었습니다.');
+            resetFileInput();
+
+            if (resolvedScope === preferredScope) {
+                alert('지도 자료를 저장했습니다.');
+            } else {
+                alert('지도 자료를 저장했습니다. 학기 범위 경로 대신 기본 컬렉션에 저장되었습니다.');
+            }
         } catch (error) {
             console.error('Failed to save map resource:', error);
             alert(`지도 자료 저장에 실패했습니다.\n${normalizeErrorMessage(error)}`);
@@ -183,11 +287,15 @@ const ManageMaps: React.FC = () => {
 
     const handleDelete = async () => {
         if (!draft.id) return;
+
         if (draft.id === GOOGLE_MAP_RESOURCE_ID) {
             alert('구글 지도 기본 항목은 삭제할 수 없습니다.');
             return;
         }
-        if (!window.confirm(`'${draft.title}' 지도를 삭제하시겠습니까?`)) return;
+
+        if (!window.confirm(`'${draft.title}' 지도를 삭제하시겠습니까?`)) {
+            return;
+        }
 
         try {
             const preferredScope: StorageScope = draft.storageScope || 'semester';
@@ -206,9 +314,11 @@ const ManageMaps: React.FC = () => {
                 const existing = items.find((resource) => resource.id === item.id);
                 return { ...item, storageScope: existing?.storageScope || 'semester' };
             });
+
             setItems(nextItems);
             setSelectedId(nextItems[0]?.id || '');
             setDraft(nextItems[0] || createDraft());
+            resetFileInput();
         } catch (error) {
             console.error('Failed to delete map resource:', error);
             alert(`지도 자료 삭제에 실패했습니다.\n${normalizeErrorMessage(error)}`);
@@ -216,10 +326,11 @@ const ManageMaps: React.FC = () => {
     };
 
     const selectedPreview = draft.id ? draft : null;
+    const acceptsFile = draft.type === 'image' || draft.type === 'pdf';
 
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col">
-            <main className="flex flex-col lg:flex-row flex-1 p-6 lg:p-10 gap-8 max-w-7xl mx-auto w-full">
+            <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 p-6 lg:flex-row lg:p-10">
                 <MapSidebar
                     heading="지도 관리"
                     items={items}
@@ -237,9 +348,9 @@ const ManageMaps: React.FC = () => {
                     )}
                 />
 
-                <section className="flex-1 min-w-0 space-y-6">
+                <section className="min-w-0 flex-1 space-y-6">
                     {loading ? (
-                        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-10 text-center text-gray-400">
+                        <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center text-gray-400 shadow-sm">
                             <i className="fas fa-spinner fa-spin text-2xl"></i>
                             <p className="mt-3">지도를 불러오는 중입니다.</p>
                         </div>
@@ -253,8 +364,8 @@ const ManageMaps: React.FC = () => {
                                     : undefined}
                             />
 
-                            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 md:p-8">
-                                <div className="flex items-center justify-between gap-3 mb-6">
+                            <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm md:p-8">
+                                <div className="mb-6 flex items-center justify-between gap-3">
                                     <h2 className="text-xl font-extrabold text-gray-900">지도 편집</h2>
                                     <div className="flex gap-2">
                                         {draft.id && (
@@ -279,39 +390,40 @@ const ManageMaps: React.FC = () => {
 
                                 <div className="grid gap-4 md:grid-cols-2">
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-500 mb-1">지도 제목</label>
+                                        <label className="mb-1 block text-xs font-bold text-gray-500">지도 제목</label>
                                         <input
                                             type="text"
                                             value={draft.title}
                                             onChange={(e) => handleDraftChange('title', e.target.value)}
                                             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                                            placeholder="예: 동북아시아 지도"
+                                            placeholder="예: 조선 후기 한반도 지도"
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-500 mb-1">분류</label>
+                                        <label className="mb-1 block text-xs font-bold text-gray-500">분류</label>
                                         <input
                                             type="text"
                                             value={draft.category}
                                             onChange={(e) => handleDraftChange('category', e.target.value)}
                                             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                                            placeholder="예: 세계 지도"
+                                            placeholder="예: 한국사 지도"
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-500 mb-1">지도 유형</label>
+                                        <label className="mb-1 block text-xs font-bold text-gray-500">지도 유형</label>
                                         <select
                                             value={draft.type}
-                                            onChange={(e) => handleDraftChange('type', e.target.value as MapResourceType)}
-                                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white"
+                                            onChange={(e) => handleTypeChange(e.target.value as MapResourceType)}
+                                            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
                                         >
                                             <option value="image">이미지</option>
-                                            <option value="iframe">임베드 iframe</option>
+                                            <option value="pdf">PDF</option>
+                                            <option value="iframe">외부 iframe</option>
                                             <option value="google">Google 지도</option>
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-500 mb-1">정렬 순서</label>
+                                        <label className="mb-1 block text-xs font-bold text-gray-500">정렬 순서</label>
                                         <input
                                             type="number"
                                             value={draft.sortOrder}
@@ -322,32 +434,44 @@ const ManageMaps: React.FC = () => {
                                 </div>
 
                                 <div className="mt-4">
-                                    <label className="block text-xs font-bold text-gray-500 mb-1">설명</label>
+                                    <label className="mb-1 block text-xs font-bold text-gray-500">설명</label>
                                     <textarea
                                         value={draft.description}
                                         onChange={(e) => handleDraftChange('description', e.target.value)}
                                         rows={4}
                                         className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                                        placeholder="학생이 지도를 볼 때 함께 표시할 설명을 입력하세요."
+                                        placeholder="학생이 지도를 볼 때 함께 보일 설명을 입력해 주세요."
                                     />
                                 </div>
 
-                                {draft.type === 'image' && (
-                                    <div className="mt-4">
-                                        <label className="block text-xs font-bold text-gray-500 mb-1">이미지 URL</label>
-                                        <input
-                                            type="text"
-                                            value={draft.imageUrl || ''}
-                                            onChange={(e) => handleDraftChange('imageUrl', e.target.value)}
-                                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                                            placeholder="https://..."
-                                        />
+                                {acceptsFile && (
+                                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                                        <div>
+                                            <label className="mb-1 block text-xs font-bold text-gray-500">
+                                                {draft.type === 'pdf' ? 'PDF 파일 업로드' : '이미지 파일 업로드'}
+                                            </label>
+                                            <input
+                                                ref={fileInputRef}
+                                                type="file"
+                                                accept={draft.type === 'pdf' ? '.pdf,application/pdf' : 'image/*'}
+                                                onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                                                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                                            />
+                                        </div>
+                                        <div className="text-xs leading-6 text-gray-500">
+                                            <div>현재 파일: {selectedFile?.name || draft.fileName || '없음'}</div>
+                                            <div>
+                                                {draft.type === 'pdf'
+                                                    ? 'PDF는 확대와 축소를 지원하고, 상단에서 지역 이름 후보를 눌러 해당 위치를 크게 볼 수 있습니다.'
+                                                    : '이미지 지도는 업로드 후 학생 화면에 바로 표시됩니다.'}
+                                            </div>
+                                        </div>
                                     </div>
                                 )}
 
                                 {draft.type === 'iframe' && (
                                     <div className="mt-4">
-                                        <label className="block text-xs font-bold text-gray-500 mb-1">iframe URL</label>
+                                        <label className="mb-1 block text-xs font-bold text-gray-500">iframe URL</label>
                                         <input
                                             type="text"
                                             value={draft.embedUrl || ''}
@@ -361,7 +485,7 @@ const ManageMaps: React.FC = () => {
                                 {draft.type === 'google' && (
                                     <div className="mt-4 grid gap-4 md:grid-cols-2">
                                         <div>
-                                            <label className="block text-xs font-bold text-gray-500 mb-1">Google 지도 검색어</label>
+                                            <label className="mb-1 block text-xs font-bold text-gray-500">Google 지도 검색어</label>
                                             <input
                                                 type="text"
                                                 value={draft.googleQuery || ''}
@@ -371,7 +495,7 @@ const ManageMaps: React.FC = () => {
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-xs font-bold text-gray-500 mb-1">외부 링크</label>
+                                            <label className="mb-1 block text-xs font-bold text-gray-500">외부 링크</label>
                                             <input
                                                 type="text"
                                                 value={draft.externalUrl || ''}
@@ -380,8 +504,9 @@ const ManageMaps: React.FC = () => {
                                                 placeholder="https://www.google.com/maps"
                                             />
                                         </div>
-                                        <p className="md:col-span-2 text-xs leading-6 text-gray-500">
-                                            Google 지도 iframe은 `VITE_GOOGLE_MAPS_EMBED_API_KEY`가 설정된 경우에만 화면에 표시됩니다.
+                                        <p className="text-xs leading-6 text-gray-500 md:col-span-2">
+                                            Google 지도는 검색어 기반 iframe으로 표시됩니다. PDF 전용 지역 이름 추출 기능은
+                                            Google 지도에는 적용되지 않습니다.
                                         </p>
                                     </div>
                                 )}

@@ -1,4 +1,4 @@
-export type MapResourceType = 'image' | 'iframe' | 'google';
+export type MapResourceType = 'image' | 'iframe' | 'google' | 'pdf';
 
 export interface MapResource {
     id: string;
@@ -7,6 +7,9 @@ export interface MapResource {
     description: string;
     type: MapResourceType;
     imageUrl?: string;
+    fileUrl?: string;
+    fileName?: string;
+    mimeType?: string;
     embedUrl?: string;
     googleQuery?: string;
     externalUrl?: string;
@@ -33,19 +36,26 @@ export const normalizeMapResource = (id: string, raw: Partial<MapResource>): Map
     title: String(raw.title || '').trim() || '지도 자료',
     category: String(raw.category || '').trim() || '기타 지도',
     description: String(raw.description || '').trim(),
-    type: raw.type === 'image' || raw.type === 'iframe' || raw.type === 'google' ? raw.type : 'image',
+    type: raw.type === 'image' || raw.type === 'iframe' || raw.type === 'google' || raw.type === 'pdf'
+        ? raw.type
+        : 'image',
     imageUrl: String(raw.imageUrl || '').trim(),
+    fileUrl: String(raw.fileUrl || '').trim(),
+    fileName: String(raw.fileName || '').trim(),
+    mimeType: String(raw.mimeType || '').trim(),
     embedUrl: String(raw.embedUrl || '').trim(),
     googleQuery: String(raw.googleQuery || '').trim(),
     externalUrl: String(raw.externalUrl || '').trim(),
     sortOrder: Number.isFinite(Number(raw.sortOrder)) ? Number(raw.sortOrder) : 999,
 });
 
-export const mergeMapResources = (resources: MapResource[]): MapResource[] => {
+export const mergeMapResources = (resources: MapResource[]) => {
     const deduped = new Map<string, MapResource>();
+
     [DEFAULT_GOOGLE_MAP_RESOURCE, ...resources].forEach((item) => {
         deduped.set(item.id, { ...item });
     });
+
     return Array.from(deduped.values()).sort((a, b) => {
         if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
         return a.title.localeCompare(b.title, 'ko');
@@ -55,11 +65,13 @@ export const mergeMapResources = (resources: MapResource[]): MapResource[] => {
 export const getGoogleMapsEmbedUrl = (query?: string) => {
     const normalizedQuery = String(query || '').trim();
     if (!normalizedQuery || !GOOGLE_MAPS_EMBED_KEY) return '';
+
     return `https://www.google.com/maps/embed/v1/search?key=${encodeURIComponent(GOOGLE_MAPS_EMBED_KEY)}&q=${encodeURIComponent(normalizedQuery)}&language=ko`;
 };
 
 export const getGoogleMapsExternalUrl = (query?: string) => {
     const normalizedQuery = String(query || '').trim();
     if (!normalizedQuery) return 'https://www.google.com/maps';
+
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(normalizedQuery)}`;
 };

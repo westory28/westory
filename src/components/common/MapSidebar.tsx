@@ -33,7 +33,7 @@ const MapSidebar: React.FC<MapSidebarProps> = ({ heading, items, selectedId, onS
                             }`}
                         >
                             <div className="w-6 text-center">
-                                <i className={`fas ${item.type === 'google' ? 'fa-globe-asia' : item.type === 'iframe' ? 'fa-window-maximize' : 'fa-map'} text-sm`}></i>
+                                <i className={`fas ${item.type === 'google' ? 'fa-globe-asia' : item.type === 'iframe' ? 'fa-window-maximize' : item.type === 'pdf' ? 'fa-file-pdf' : 'fa-map'} text-sm`}></i>
                             </div>
                             <div className="min-w-0">
                                 <div className="font-bold text-sm truncate">{item.title}</div>
