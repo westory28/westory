@@ -41,6 +41,15 @@ const resolveChildMenuTarget = (
     return resolveMenuTarget(childUrl, portal);
 };
 
+const getResolvedChildUrls = (
+    parentUrl: string,
+    children: Array<{ name: string; url: string }>,
+    portal: 'student' | 'teacher',
+) => children.map((child) => ({
+    ...child,
+    resolvedUrl: resolveChildMenuTarget(parentUrl, child.name, child.url, portal),
+}));
+
 const Header: React.FC = () => {
     const { currentUser, userData, logout } = useAuth();
     const location = useLocation();
@@ -88,8 +97,8 @@ const Header: React.FC = () => {
         return true;
     };
 
-    const getChildMatchScore = (url: string, siblings: Array<{ url: string }>) => {
-        const [path, query] = resolveTarget(url).split('?');
+    const getChildMatchScore = (resolvedUrl: string, siblings: Array<{ resolvedUrl: string }>) => {
+        const [path, query] = resolvedUrl.split('?');
         const pathMatches = location.pathname === path || location.pathname.startsWith(`${path}/`);
         if (!pathMatches) return -1;
 
@@ -100,7 +109,7 @@ const Header: React.FC = () => {
         }
 
         const hasQuerySiblingOnSamePath = siblings.some((sibling) => {
-            const [siblingPath, siblingQuery] = resolveTarget(sibling.url).split('?');
+            const [siblingPath, siblingQuery] = sibling.resolvedUrl.split('?');
             return siblingPath === path && !!siblingQuery;
         });
         const noQueryPenalty = !query && hasQuerySiblingOnSamePath && location.search.length > 0 ? -500 : 0;
@@ -108,12 +117,12 @@ const Header: React.FC = () => {
         return path.length * 10 + queryParams.size * 100 + noQueryPenalty;
     };
 
-    const isChildActive = (childUrl: string, siblings: Array<{ url: string }>) => {
-        const targetScore = getChildMatchScore(childUrl, siblings);
+    const isChildActive = (resolvedUrl: string, siblings: Array<{ resolvedUrl: string }>) => {
+        const targetScore = getChildMatchScore(resolvedUrl, siblings);
         if (targetScore < 0) return false;
 
         const bestScore = siblings.reduce((max, sibling) => {
-            return Math.max(max, getChildMatchScore(sibling.url, siblings));
+            return Math.max(max, getChildMatchScore(sibling.resolvedUrl, siblings));
         }, -1);
 
         return targetScore === bestScore;
@@ -228,8 +237,9 @@ const Header: React.FC = () => {
                     <nav className={`desktop-nav ml-4 ${!isTeacherPortal ? 'student-desktop-nav' : ''}`}>
                         {menuItems.map((item, idx) => {
                             const visibleChildren = getVisibleChildren(item);
+                            const resolvedChildren = getResolvedChildUrls(item.url, visibleChildren, portal);
                             const hasChildren = visibleChildren.length > 0;
-                            const active = isActive(item.url) || visibleChildren.some((child) => isChildActive(child.url, visibleChildren));
+                            const active = isActive(item.url) || resolvedChildren.some((child) => isChildActive(child.resolvedUrl, resolvedChildren));
 
                             if (!hasChildren) {
                                 const itemTarget = resolveTarget(item.url);
@@ -249,14 +259,14 @@ const Header: React.FC = () => {
                                     </Link>
                                     <div className="absolute top-[calc(100%-8px)] left-0 w-[10.5rem] pt-0 invisible opacity-0 group-hover:visible group-hover:opacity-100 transition duration-150 transform translate-y-0 z-[100]">
                                         <div className="bg-white border border-gray-200 shadow-xl rounded-xl overflow-hidden">
-                                            {visibleChildren.map((child, childIdx) => {
-                                                const childTarget = resolveChildMenuTarget(item.url, child.name, child.url, portal);
+                                            {resolvedChildren.map((child, childIdx) => {
+                                                const childTarget = child.resolvedUrl;
                                                 return (
                                                 <Link
                                                     key={`${child.url}-${childIdx}`}
                                                     to={childTarget}
                                                     data-session-ignore="true"
-                                                    className={`block px-2.5 py-3 text-[13px] border-b border-gray-50 last:border-0 whitespace-nowrap font-bold ${isChildActive(child.url, visibleChildren) ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'}`}
+                                                    className={`block px-2.5 py-3 text-[13px] border-b border-gray-50 last:border-0 whitespace-nowrap font-bold ${isChildActive(child.resolvedUrl, resolvedChildren) ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'}`}
                                                 >
                                                     {child.name}
                                                 </Link>
@@ -332,27 +342,28 @@ const Header: React.FC = () => {
             <div id="mobile-menu" className={mobileMenuOpen ? 'open' : ''}>
                 {menuItems.map((item, idx) => {
                     const visibleChildren = getVisibleChildren(item);
+                    const resolvedChildren = getResolvedChildUrls(item.url, visibleChildren, portal);
                     const itemTarget = resolveTarget(item.url);
                     return (
                     <div key={`${item.url}-mobile-${idx}`}>
                         <Link
                             to={itemTarget}
                             data-session-ignore="true"
-                            className={`mobile-link ${isActive(item.url) || visibleChildren.some((child) => isChildActive(child.url, visibleChildren)) ? 'active' : ''}`}
+                            className={`mobile-link ${isActive(item.url) || resolvedChildren.some((child) => isChildActive(child.resolvedUrl, resolvedChildren)) ? 'active' : ''}`}
                             onClick={() => setMobileMenuOpen(false)}
                         >
                             {item.name}
                         </Link>
                         {visibleChildren.length > 0 && (
                             <div className="bg-gray-50 border-b border-gray-100 pb-1">
-                                {visibleChildren.map((child, childIdx) => {
-                                    const childTarget = resolveChildMenuTarget(item.url, child.name, child.url, portal);
+                                {resolvedChildren.map((child, childIdx) => {
+                                    const childTarget = child.resolvedUrl;
                                     return (
                                     <Link
                                         key={`${child.url}-mobile-child-${childIdx}`}
                                         to={childTarget}
                                         data-session-ignore="true"
-                                        className={`block pl-12 pr-4 py-1.5 text-sm rounded-r-full mr-2 font-bold ${isChildActive(child.url, visibleChildren) ? 'text-blue-600 bg-blue-50' : 'text-gray-500 hover:text-blue-600 hover:bg-gray-100'}`}
+                                        className={`block pl-12 pr-4 py-1.5 text-sm rounded-r-full mr-2 font-bold ${isChildActive(child.resolvedUrl, resolvedChildren) ? 'text-blue-600 bg-blue-50' : 'text-gray-500 hover:text-blue-600 hover:bg-gray-100'}`}
                                         onClick={() => setMobileMenuOpen(false)}
                                     >
                                         <i className="fas fa-angle-right mr-2 text-xs opacity-50"></i>
