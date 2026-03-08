@@ -27,7 +27,7 @@ interface RegionHit {
     height: number;
 }
 
-const MAX_PDF_BYTES = 20 * 1024 * 1024;
+const MAX_PDF_BYTES = 40 * 1024 * 1024;
 const BASE_MODAL_RATIO = 0.92;
 
 const hasUsefulLetters = (text: string) => /[가-힣A-Za-z]/.test(text);
@@ -127,34 +127,42 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
 
                 if (fileUrl) {
                     try {
-                        const response = await withTimeout(fetch(fileUrl, { mode: 'cors' }), 20000, 'pdf-fetch');
+                        const response = await withTimeout(fetch(fileUrl, { mode: 'cors' }), 45000, 'pdf-fetch');
                         if (!response.ok) {
                             throw new Error(`pdf-fetch-failed:${response.status}`);
                         }
-                        blob = await withTimeout(response.blob(), 15000, 'pdf-blob');
+                        blob = await withTimeout(response.blob(), 30000, 'pdf-blob');
                     } catch (urlError) {
                         console.warn('Direct PDF fetch failed, trying storage path fallback:', urlError);
                     }
                 }
 
-                if (!blob && storagePath) {
-                    const fileRef = ref(storage, storagePath);
+                if (!blob) {
+                    const storageCandidates = [
+                        storagePath ? ref(storage, storagePath) : null,
+                        fileUrl ? ref(storage, fileUrl) : null,
+                    ].filter(Boolean) as ReturnType<typeof ref>[];
 
-                    try {
-                        const downloadUrl = await withTimeout(getDownloadURL(fileRef), 15000, 'storage-download-url');
-                        const response = await withTimeout(fetch(downloadUrl, { mode: 'cors' }), 20000, 'storage-fetch');
-                        if (!response.ok) {
-                            throw new Error(`storage-fetch-failed:${response.status}`);
-                        }
-                        blob = await withTimeout(response.blob(), 15000, 'storage-fetch-blob');
-                    } catch (downloadError) {
-                        console.warn('Storage download fetch failed, falling back to SDK blob APIs:', downloadError);
+                    for (const fileRef of storageCandidates) {
                         try {
-                            blob = await withTimeout(getBlob(fileRef), 15000, 'storage-get-blob');
-                        } catch (blobError) {
-                            console.warn('Storage getBlob failed, falling back to getBytes:', blobError);
-                            const bytes = await withTimeout(getBytes(fileRef, MAX_PDF_BYTES), 15000, 'storage-get-bytes');
-                            blob = new Blob([bytes], { type: 'application/pdf' });
+                            const downloadUrl = await withTimeout(getDownloadURL(fileRef), 30000, 'storage-download-url');
+                            const response = await withTimeout(fetch(downloadUrl, { mode: 'cors' }), 45000, 'storage-fetch');
+                            if (!response.ok) {
+                                throw new Error(`storage-fetch-failed:${response.status}`);
+                            }
+                            blob = await withTimeout(response.blob(), 30000, 'storage-fetch-blob');
+                            if (blob) break;
+                        } catch (downloadError) {
+                            console.warn('Storage download fetch failed, falling back to SDK blob APIs:', downloadError);
+                            try {
+                                blob = await withTimeout(getBlob(fileRef), 45000, 'storage-get-blob');
+                                if (blob) break;
+                            } catch (blobError) {
+                                console.warn('Storage getBlob failed, falling back to getBytes:', blobError);
+                                const bytes = await withTimeout(getBytes(fileRef, MAX_PDF_BYTES), 45000, 'storage-get-bytes');
+                                blob = new Blob([bytes], { type: 'application/pdf' });
+                                if (blob) break;
+                            }
                         }
                     }
                 }

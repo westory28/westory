@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { collection, deleteDoc, doc, getDocs, orderBy, query, serverTimestamp, setDoc } from 'firebase/firestore';
-import { getBlob, getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { getBlob, getBytes, getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import MapSidebar from '../../components/common/MapSidebar';
 import MapViewer from '../../components/common/MapViewer';
 import { useAuth } from '../../contexts/AuthContext';
@@ -71,6 +71,54 @@ const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, label: st
         }
     }
 };
+
+const requestLocalPdfFile = (): Promise<File | null> => new Promise((resolve) => {
+    if (typeof document === 'undefined') {
+        resolve(null);
+        return;
+    }
+
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.pdf,application/pdf';
+    input.style.display = 'none';
+    document.body.appendChild(input);
+
+    let settled = false;
+    const cleanup = () => {
+        if (input.parentNode) {
+            input.parentNode.removeChild(input);
+        }
+    };
+
+    const finish = (file: File | null) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(file);
+    };
+
+    input.addEventListener('change', () => {
+        finish(input.files?.[0] || null);
+    }, { once: true });
+
+    window.addEventListener('focus', () => {
+        window.setTimeout(() => {
+            if (!settled) {
+                finish(null);
+            }
+        }, 500);
+    }, { once: true });
+
+    input.click();
+});
+
+const blobToPdfFile = (blob: Blob, resourceId: string, fileName?: string, mimeType?: string) =>
+    new File(
+        [blob],
+        fileName || `${resourceId}.pdf`,
+        { type: blob.type || mimeType || 'application/pdf' },
+    );
 
 const ManageMaps: React.FC = () => {
     const { config } = useAuth();
@@ -247,6 +295,50 @@ const ManageMaps: React.FC = () => {
         }
 
         return uploadedPages;
+    };
+
+    const loadStoredPdfSourceFile = async (resourceId: string) => {
+        const candidateRefs = [
+            draft.storagePath ? ref(storage, draft.storagePath) : null,
+            draft.fileUrl ? ref(storage, draft.fileUrl) : null,
+        ].filter(Boolean) as ReturnType<typeof ref>[];
+
+        let lastError: unknown = null;
+
+        for (const fileRef of candidateRefs) {
+            try {
+                const blob = await withTimeout(getBlob(fileRef), 45000, 'storage-pdf-blob');
+                return blobToPdfFile(blob, resourceId, draft.fileName, draft.mimeType);
+            } catch (blobError) {
+                lastError = blobError;
+                try {
+                    const bytes = await withTimeout(getBytes(fileRef, 40 * 1024 * 1024), 45000, 'storage-pdf-bytes');
+                    return blobToPdfFile(
+                        new Blob([bytes], { type: draft.mimeType || 'application/pdf' }),
+                        resourceId,
+                        draft.fileName,
+                        draft.mimeType,
+                    );
+                } catch (bytesError) {
+                    lastError = bytesError;
+                }
+            }
+        }
+
+        if (draft.fileUrl) {
+            try {
+                const response = await withTimeout(fetch(draft.fileUrl, { mode: 'cors' }), 45000, 'pdf-reprocess-fetch');
+                if (!response.ok) {
+                    throw new Error(`pdf-reprocess-fetch-failed:${response.status}`);
+                }
+                const blob = await withTimeout(response.blob(), 30000, 'pdf-reprocess-blob');
+                return blobToPdfFile(blob, resourceId, draft.fileName, draft.mimeType);
+            } catch (fetchError) {
+                lastError = fetchError;
+            }
+        }
+
+        throw lastError || new Error('pdf-reprocess-source-missing');
     };
 
     const persistMapPayload = async (payload: MapResource, preferredScope: StorageScope) => {
@@ -470,33 +562,22 @@ const ManageMaps: React.FC = () => {
         setSaving(true);
 
         try {
-            let blob: Blob | null = null;
+            let sourceFile = selectedFile;
 
-            if (draft.storagePath) {
+            if (!sourceFile) {
                 try {
-                    blob = await withTimeout(getBlob(ref(storage, draft.storagePath)), 20000, 'storage-pdf-blob');
-                } catch (storageError) {
-                    console.warn('Failed to load stored PDF blob, trying direct URL fallback:', storageError);
+                    sourceFile = await loadStoredPdfSourceFile(draft.id);
+                } catch (remoteError) {
+                    console.warn('Stored PDF reload failed, asking for local PDF file:', remoteError);
+                    alert('기존 PDF를 자동으로 다시 읽지 못했습니다. 같은 PDF 파일을 한 번 선택해 주시면 재처리를 이어갑니다.');
+                    sourceFile = await requestLocalPdfFile();
+                    if (!sourceFile) {
+                        throw remoteError;
+                    }
+                    setSelectedFile(sourceFile);
                 }
             }
 
-            if (!blob && draft.fileUrl) {
-                const response = await withTimeout(fetch(draft.fileUrl, { mode: 'cors' }), 20000, 'pdf-reprocess-fetch');
-                if (!response.ok) {
-                    throw new Error(`pdf-reprocess-fetch-failed:${response.status}`);
-                }
-                blob = await withTimeout(response.blob(), 15000, 'pdf-reprocess-blob');
-            }
-
-            if (!blob) {
-                throw new Error('pdf-reprocess-source-missing');
-            }
-
-            const sourceFile = new File(
-                [blob],
-                draft.fileName || `${draft.id}.pdf`,
-                { type: blob.type || draft.mimeType || 'application/pdf' },
-            );
             const processed = await processPdfMapFile(sourceFile);
             const uploadedPages = await uploadProcessedPdfPages(draft.id, processed);
             const payload: MapResource = {
