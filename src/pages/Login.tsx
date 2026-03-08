@@ -189,6 +189,15 @@ const isPopupFallbackError = (error: unknown): boolean => {
     ].includes(code);
 };
 
+const isIgnorableRedirectError = (error: unknown): boolean => {
+    const code = (error as Partial<AuthError>)?.code || '';
+    return [
+        'auth/missing-initial-state',
+        'auth/no-auth-event',
+        'auth/null-user',
+    ].includes(code);
+};
+
 const Login: React.FC = () => {
     const { currentUser, userData, interfaceConfig, loading } = useAuth();
     const navigate = useNavigate();
@@ -637,6 +646,12 @@ const Login: React.FC = () => {
 
                 await finishLoginForRole(redirectedUser, resolvedMode);
             } catch (error) {
+                if (isIgnorableRedirectError(error)) {
+                    console.warn('Redirect state unavailable, skipping redirect recovery', error);
+                    clearPendingLoginMode();
+                    return;
+                }
+
                 console.error('Redirect login failed', error);
                 const recoveredUser = auth.currentUser;
                 if (recoveredUser) {
