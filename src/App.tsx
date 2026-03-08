@@ -66,7 +66,9 @@ const App: React.FC = () => {
                                 </MainLayout>
                             } />
                             <Route path="/student/quiz/history2" element={
-                                <Navigate to="/student/quiz" replace />
+                                <MainLayout>
+                                    <StudentQuizIndex />
+                                </MainLayout>
                             } />
                             <Route path="/student/quiz/run" element={
                                 <MainLayout>
@@ -104,7 +106,9 @@ const App: React.FC = () => {
                                 </MainLayout>
                             } />
                             <Route path="/teacher/quiz/history2" element={
-                                <Navigate to="/teacher/quiz" replace />
+                                <MainLayout>
+                                    <ManageQuiz />
+                                </MainLayout>
                             } />
                             <Route path="/teacher/quiz/history-classroom" element={
                                 <MainLayout>
