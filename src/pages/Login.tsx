@@ -213,6 +213,19 @@ const Login: React.FC = () => {
     const preferredRole = getSavedRole();
     const isTeacherUser = (preferredRole || userData?.role) === 'teacher';
 
+    const forceRoute = (targetPath: string) => {
+        navigate(targetPath, { replace: true });
+
+        if (typeof window === 'undefined') return;
+
+        window.setTimeout(() => {
+            const desiredHash = `#${targetPath}`;
+            if (window.location.hash !== desiredHash) {
+                window.location.replace(`${window.location.pathname}${window.location.search}${desiredHash}`);
+            }
+        }, 80);
+    };
+
     const clearRoleCache = () => {
         removeStorage(ROLE_SESSION_KEY);
     };
@@ -591,7 +604,7 @@ const Login: React.FC = () => {
 
         saveRoleCache(nextRole);
         clearPendingLoginMode();
-        navigate(nextRole === 'teacher' ? '/teacher/dashboard' : '/student/dashboard');
+        forceRoute(nextRole === 'teacher' ? '/teacher/dashboard' : '/student/dashboard');
     };
 
     useEffect(() => {
@@ -602,15 +615,24 @@ const Login: React.FC = () => {
             setAuthBusy(true);
             try {
                 const result = await getRedirectResult(auth);
-                if (!result?.user) return;
+                const redirectedUser = result?.user || auth.currentUser;
+                if (!redirectedUser) return;
 
                 const savedMode = getPendingLoginMode();
                 const resolvedMode: LoginMode = savedMode
-                    || (result.user.email === TEACHER_EMAIL ? 'teacher' : 'student');
+                    || (redirectedUser.email === TEACHER_EMAIL ? 'teacher' : 'student');
 
-                await finishLoginForRole(result.user, resolvedMode);
+                await finishLoginForRole(redirectedUser, resolvedMode);
             } catch (error) {
                 console.error('Redirect login failed', error);
+                const recoveredUser = auth.currentUser;
+                if (recoveredUser) {
+                    const savedMode = getPendingLoginMode();
+                    const resolvedMode: LoginMode = savedMode
+                        || (recoveredUser.email === TEACHER_EMAIL ? 'teacher' : 'student');
+                    await finishLoginForRole(recoveredUser, resolvedMode);
+                    return;
+                }
                 clearPendingLoginMode();
                 alert('리다이렉트 로그인 처리 중 오류가 발생했습니다. 다시 시도해주세요.');
             } finally {
@@ -627,7 +649,7 @@ const Login: React.FC = () => {
             return;
         }
 
-        if (loading || authBusy || !redirectHandledRef.current) return;
+        if (loading || authBusy) return;
         if (autoResumeUidRef.current === currentUser.uid) return;
 
         autoResumeUidRef.current = currentUser.uid;
@@ -642,7 +664,7 @@ const Login: React.FC = () => {
             if (resolvedRole === 'teacher') {
                 saveRoleCache('teacher');
                 clearPendingLoginMode();
-                navigate('/teacher/dashboard');
+                forceRoute('/teacher/dashboard');
                 return;
             }
 
@@ -655,7 +677,7 @@ const Login: React.FC = () => {
     const goToDashboard = async () => {
         if (!currentUser) return;
         if (isTeacherUser) {
-            navigate('/teacher/dashboard');
+            forceRoute('/teacher/dashboard');
             return;
         }
 
@@ -699,7 +721,8 @@ const Login: React.FC = () => {
 
             await setDoc(userRef, updatePayload, { merge: true });
             saveRoleCache('student');
-            navigate('/student/dashboard');
+            clearPendingLoginMode();
+            forceRoute('/student/dashboard');
         } catch (error) {
             console.error('Failed to continue student onboarding', error);
             alert('학생 정보 확인 중 오류가 발생했습니다.');
