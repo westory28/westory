@@ -14,7 +14,13 @@ import {
 } from '../../lib/mapResources';
 import { useAuth } from '../../contexts/AuthContext';
 
-const createDraft = (): MapResource => ({
+type StorageScope = 'semester' | 'legacy';
+
+type StoredMapResource = MapResource & {
+    storageScope?: StorageScope;
+};
+
+const createDraft = (): StoredMapResource => ({
     id: '',
     title: '',
     category: '',
@@ -25,46 +31,65 @@ const createDraft = (): MapResource => ({
     googleQuery: '',
     externalUrl: '',
     sortOrder: 99,
+    storageScope: 'semester',
 });
+
+const normalizeErrorMessage = (error: unknown) => {
+    const code = typeof error === 'object' && error && 'code' in error ? String((error as { code?: string }).code || '') : '';
+    const message = typeof error === 'object' && error && 'message' in error ? String((error as { message?: string }).message || '') : '';
+    if (code) return `${code}${message ? `: ${message}` : ''}`;
+    return message || 'unknown-error';
+};
 
 const ManageMaps: React.FC = () => {
     const { config } = useAuth();
-    const [items, setItems] = useState<MapResource[]>([]);
+    const [items, setItems] = useState<StoredMapResource[]>([]);
     const [selectedId, setSelectedId] = useState('');
-    const [draft, setDraft] = useState<MapResource>(createDraft());
+    const [draft, setDraft] = useState<StoredMapResource>(createDraft());
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
     const collectionPath = useMemo(() => getSemesterCollectionPath(config, 'map_resources'), [config]);
+    const legacyCollectionPath = 'map_resources';
+
+    const loadFromScope = async (scope: StorageScope): Promise<StoredMapResource[]> => {
+        const path = scope === 'semester' ? collectionPath : legacyCollectionPath;
+        const ref = collection(db, path);
+        const snapshot = await getDocs(query(ref, orderBy('sortOrder', 'asc')));
+        return snapshot.docs.map((docSnap) => ({
+            ...normalizeMapResource(docSnap.id, docSnap.data()),
+            storageScope: scope,
+        }));
+    };
 
     useEffect(() => {
         const loadMaps = async () => {
             setLoading(true);
             try {
-                const scopedRef = collection(db, collectionPath);
-                const scopedQuery = query(scopedRef, orderBy('sortOrder', 'asc'));
-                const snap = await getDocs(scopedQuery);
-                const resourceList = snap.docs.map((docSnap) => normalizeMapResource(docSnap.id, docSnap.data()));
-
-                if (!resourceList.some((item) => item.id === GOOGLE_MAP_RESOURCE_ID)) {
-                    await setDoc(doc(db, `${collectionPath}/${GOOGLE_MAP_RESOURCE_ID}`), {
-                        ...DEFAULT_GOOGLE_MAP_RESOURCE,
-                        updatedAt: serverTimestamp(),
-                    }, { merge: true });
-                    resourceList.unshift(DEFAULT_GOOGLE_MAP_RESOURCE);
+                let resourceList = await loadFromScope('semester');
+                if (resourceList.length === 0) {
+                    resourceList = await loadFromScope('legacy');
                 }
 
-                const merged = mergeMapResources(resourceList);
+                const baseScope: StorageScope = resourceList[0]?.storageScope || 'semester';
+                const merged = mergeMapResources(resourceList).map((item) => {
+                    const existing = resourceList.find((resource) => resource.id === item.id);
+                    return {
+                        ...item,
+                        storageScope: existing?.storageScope || baseScope,
+                    };
+                });
+
                 setItems(merged);
-                const initial = merged[0] || DEFAULT_GOOGLE_MAP_RESOURCE;
+                const initial = merged[0] || { ...DEFAULT_GOOGLE_MAP_RESOURCE, storageScope: baseScope };
                 setSelectedId(initial.id);
                 setDraft(initial);
             } catch (error) {
                 console.error('Failed to load teacher map resources:', error);
-                const fallback = mergeMapResources([DEFAULT_GOOGLE_MAP_RESOURCE]);
+                const fallback = [{ ...DEFAULT_GOOGLE_MAP_RESOURCE, storageScope: 'semester' as const }];
                 setItems(fallback);
-                setSelectedId(fallback[0]?.id || '');
-                setDraft(fallback[0] || createDraft());
+                setSelectedId(fallback[0].id);
+                setDraft(fallback[0]);
             } finally {
                 setLoading(false);
             }
@@ -88,9 +113,16 @@ const ManageMaps: React.FC = () => {
     };
 
     const handleCreateNew = () => {
-        const next = createDraft();
         setSelectedId('');
-        setDraft(next);
+        setDraft(createDraft());
+    };
+
+    const persistToScope = async (scope: StorageScope, payload: MapResource) => {
+        const path = scope === 'semester' ? collectionPath : legacyCollectionPath;
+        await setDoc(doc(db, `${path}/${payload.id}`), {
+            ...payload,
+            updatedAt: serverTimestamp(),
+        }, { merge: true });
     };
 
     const handleSave = async () => {
@@ -114,22 +146,36 @@ const ManageMaps: React.FC = () => {
 
         setSaving(true);
         try {
-            await setDoc(doc(db, `${collectionPath}/${payload.id}`), {
-                ...payload,
-                updatedAt: serverTimestamp(),
-            }, { merge: true });
+            const preferredScope: StorageScope = draft.storageScope || 'semester';
+            const fallbackScope: StorageScope = preferredScope === 'semester' ? 'legacy' : 'semester';
+            let resolvedScope = preferredScope;
+
+            try {
+                await persistToScope(preferredScope, payload);
+            } catch (primaryError) {
+                console.error(`Failed to save map resource to ${preferredScope}:`, primaryError);
+                await persistToScope(fallbackScope, payload);
+                resolvedScope = fallbackScope;
+            }
 
             const merged = mergeMapResources([
                 ...items.filter((item) => item.id !== payload.id),
-                payload,
-            ]);
+                { ...payload, storageScope: resolvedScope },
+            ]).map((item) => {
+                const existing = items.find((resource) => resource.id === item.id);
+                if (item.id === payload.id) return { ...item, storageScope: resolvedScope };
+                return { ...item, storageScope: existing?.storageScope || resolvedScope };
+            });
+
             setItems(merged);
             setSelectedId(payload.id);
-            setDraft(payload);
-            alert('지도 자료를 저장했습니다.');
+            setDraft({ ...payload, storageScope: resolvedScope });
+            alert(resolvedScope === preferredScope
+                ? '지도 자료를 저장했습니다.'
+                : '지도 자료를 저장했습니다. 학기 범위 경로 대신 기본 컬렉션에 저장되었습니다.');
         } catch (error) {
             console.error('Failed to save map resource:', error);
-            alert('지도 자료 저장에 실패했습니다.');
+            alert(`지도 자료 저장에 실패했습니다.\n${normalizeErrorMessage(error)}`);
         } finally {
             setSaving(false);
         }
@@ -144,14 +190,28 @@ const ManageMaps: React.FC = () => {
         if (!window.confirm(`'${draft.title}' 지도를 삭제하시겠습니까?`)) return;
 
         try {
-            await deleteDoc(doc(db, `${collectionPath}/${draft.id}`));
-            const nextItems = mergeMapResources(items.filter((item) => item.id !== draft.id));
+            const preferredScope: StorageScope = draft.storageScope || 'semester';
+            const fallbackScope: StorageScope = preferredScope === 'semester' ? 'legacy' : 'semester';
+            const primaryPath = preferredScope === 'semester' ? collectionPath : legacyCollectionPath;
+            const fallbackPath = fallbackScope === 'semester' ? collectionPath : legacyCollectionPath;
+
+            try {
+                await deleteDoc(doc(db, `${primaryPath}/${draft.id}`));
+            } catch (primaryError) {
+                console.error(`Failed to delete map resource from ${primaryPath}:`, primaryError);
+                await deleteDoc(doc(db, `${fallbackPath}/${draft.id}`));
+            }
+
+            const nextItems = mergeMapResources(items.filter((item) => item.id !== draft.id)).map((item) => {
+                const existing = items.find((resource) => resource.id === item.id);
+                return { ...item, storageScope: existing?.storageScope || 'semester' };
+            });
             setItems(nextItems);
             setSelectedId(nextItems[0]?.id || '');
             setDraft(nextItems[0] || createDraft());
         } catch (error) {
             console.error('Failed to delete map resource:', error);
-            alert('지도 자료 삭제에 실패했습니다.');
+            alert(`지도 자료 삭제에 실패했습니다.\n${normalizeErrorMessage(error)}`);
         }
     };
 
