@@ -11,12 +11,23 @@ interface TextSegment {
 
 const hasUsefulLetters = (text: string) => /[\p{L}]/u.test(text);
 
+const sanitizeRegionLabel = (value: string) => value
+    .replace(/\s*[→>-].*$/u, '')
+    .replace(/\([^)]*\)/gu, '')
+    .replace(/\[[^\]]*\]/gu, '')
+    .replace(/[,:;]+$/u, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
 const isLikelyRegionLabel = (value: string) => {
-    const text = value.trim();
-    if (text.length < 2 || text.length > 30) return false;
-    if (/^\d+$/.test(text)) return false;
+    const text = sanitizeRegionLabel(value);
+    if (text.length < 2 || text.length > 14) return false;
+    if (/^\d+$/u.test(text)) return false;
     if (!hasUsefulLetters(text)) return false;
     if (/^[^\p{L}\p{N}]+$/u.test(text)) return false;
+    if (/[(){}\[\]<>]/u.test(text)) return false;
+    if (/설명|유역|기후|분포|국경|수도|왕조|제국/u.test(text)) return false;
+    if (text.split(' ').length > 2) return false;
     return true;
 };
 
@@ -24,7 +35,7 @@ const normalizeSegmentText = (value: string) => value.replace(/\s+/g, ' ').trim(
 
 const shouldInsertSpace = (segmentText: string, nextText: string, gap: number, height: number) => {
     if (!segmentText) return false;
-    if (/\s$/.test(segmentText) || /^\s/.test(nextText)) return false;
+    if (/\s$/u.test(segmentText) || /^\s/u.test(nextText)) return false;
     return gap > Math.max(6, height * 0.35);
 };
 
@@ -39,7 +50,7 @@ export const extractPdfTextRegions = (
     const flush = () => {
         if (!current) return;
 
-        const label = normalizeSegmentText(current.text);
+        const label = sanitizeRegionLabel(normalizeSegmentText(current.text));
         if (isLikelyRegionLabel(label)) {
             regions.push({
                 label,
@@ -93,5 +104,15 @@ export const extractPdfTextRegions = (
 
     flush();
 
-    return regions;
+    const deduped = new Map<string, PdfMapRegion>();
+    for (const region of regions) {
+        const existing = deduped.get(region.label);
+        const nextArea = region.width * region.height;
+        const currentArea = existing ? existing.width * existing.height : 0;
+        if (!existing || nextArea >= currentArea) {
+            deduped.set(region.label, region);
+        }
+    }
+
+    return Array.from(deduped.values());
 };

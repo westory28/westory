@@ -82,7 +82,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
             if (seen.has(item.label)) return false;
             seen.add(item.label);
             return true;
-        }).slice(0, 40);
+        }).slice(0, 24);
     }, [allRegionHits]);
 
     const currentPageWidth = useMemo(() => {
@@ -157,7 +157,9 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
         const nextFitZoom = clamp((containerWidth / currentPageWidth) * BASE_MODAL_RATIO, 0.45, 2.2);
         setFitZoom(nextFitZoom);
         setZoom(nextFitZoom);
-    }, [isModalOpen, currentPage, currentPageWidth]);
+        setSelectedRegion(null);
+        modalSurfaceRef.current.scrollTo({ left: 0, top: 0 });
+    }, [currentPage, currentPageWidth, isModalOpen]);
 
     useEffect(() => {
         if (!isModalOpen) return;
@@ -175,6 +177,26 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
             window.removeEventListener('keydown', handleKeyDown);
         };
     }, [isModalOpen]);
+
+    useEffect(() => {
+        if (!isModalOpen || !selectedRegion || !modalSurfaceRef.current || selectedRegion.page !== currentPage) return;
+
+        const frameId = window.requestAnimationFrame(() => {
+            const surface = modalSurfaceRef.current;
+            if (!surface) return;
+
+            const targetLeft = Math.max(0, selectedRegion.left * zoom - (surface.clientWidth / 2) + (selectedRegion.width * zoom / 2));
+            const targetTop = Math.max(0, selectedRegion.top * zoom - (surface.clientHeight / 2) + (selectedRegion.height * zoom / 2));
+
+            surface.scrollTo({
+                left: targetLeft,
+                top: targetTop,
+                behavior: 'smooth',
+            });
+        });
+
+        return () => window.cancelAnimationFrame(frameId);
+    }, [currentPage, isModalOpen, selectedRegion, zoom]);
 
     const handleLoadSuccess = async (pdf: PDFDocumentProxy) => {
         setNumPages(pdf.numPages);
@@ -203,13 +225,9 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
     };
 
     const handleSelectRegion = (region: RegionHit) => {
-        setSelectedRegion(region);
         setCurrentPage(region.page);
-        setZoom(Math.max(fitZoom, 2.2));
-
-        window.setTimeout(() => {
-            pageWrapRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 60);
+        setSelectedRegion(region);
+        setZoom(Math.max(fitZoom, 2));
     };
 
     const openModal = () => {
@@ -254,7 +272,8 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
     };
 
     const handleDragStart = (event: React.MouseEvent<HTMLDivElement>) => {
-        if (!modalSurfaceRef.current) return;
+        if (event.button !== 0 || !modalSurfaceRef.current) return;
+        event.preventDefault();
         dragStateRef.current = {
             x: event.clientX,
             y: event.clientY,
@@ -265,6 +284,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
 
     const handleDragMove = (event: React.MouseEvent<HTMLDivElement>) => {
         if (!modalSurfaceRef.current || !dragStateRef.current) return;
+        event.preventDefault();
         modalSurfaceRef.current.scrollLeft = dragStateRef.current.left - (event.clientX - dragStateRef.current.x);
         modalSurfaceRef.current.scrollTop = dragStateRef.current.top - (event.clientY - dragStateRef.current.y);
     };
@@ -276,8 +296,8 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
     const renderPageSurface = (interactive: boolean) => (
         <div
             ref={interactive ? pageWrapRef : undefined}
-            className={`overflow-auto rounded-2xl border border-gray-200 bg-gray-100 p-3 ${
-                interactive ? 'cursor-zoom-in' : ''
+            className={`rounded-2xl border border-gray-200 bg-gray-100 p-3 ${
+                interactive ? 'overflow-auto cursor-zoom-in' : 'overflow-visible'
             }`}
             onClick={interactive ? openModal : undefined}
         >
@@ -289,7 +309,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
 
             {!loadingPdf && loadError && !nativeViewerFallback && (
                 <div className="rounded-xl bg-white px-4 py-6 text-sm text-red-600">
-                    PDF 파일을 불러오지 못했습니다. 파일 형식이나 다운로드 경로를 확인해 주세요.
+                    PDF 파일을 불러오지 못했습니다.
                     <div className="mt-2 text-xs text-gray-500">{loadError}</div>
                 </div>
             )}
@@ -297,7 +317,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
             {!loadingPdf && nativeViewerFallback && fileUrl && (
                 <div className="space-y-3">
                     <div className="rounded-xl bg-white px-4 py-4 text-sm text-amber-700">
-                        PDF 추출 보기에는 실패해서 브라우저 기본 뷰어로 대신 표시합니다.
+                        PDF 추출 보기는 실패해서 브라우저 기본 뷰어로 대신 표시합니다.
                         <div className="mt-2 text-xs text-gray-500">{loadError}</div>
                     </div>
                     <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
@@ -399,7 +419,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
 
                 {visibleRegionHits.length > 0 && (
                     <div className="mb-4">
-                        <div className="mb-2 text-xs font-bold text-gray-500">상단 지역 이름</div>
+                        <div className="mb-2 text-xs font-bold text-gray-500">지역 바로가기</div>
                         <div className="flex flex-wrap gap-2">
                             {visibleRegionHits.map((region) => (
                                 <button
@@ -444,10 +464,10 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                 {renderPageSurface(true)}
 
                 <p className="mt-3 text-xs leading-6 text-gray-500">
-                    PDF 지도는 클릭하면 확대 팝업으로 열립니다. 팝업에서는 PC 휠, 모바일과 태블릿 핀치로 확대/축소할 수 있습니다.
+                    PDF 지도는 클릭하면 확대 팝업으로 열립니다. 팝업에서는 휠, 핀치, 드래그로 이동과 확대를 할 수 있습니다.
                 </p>
                 <p className="mt-2 text-xs leading-6 text-gray-500">
-                    업로드 시 저장된 지역 좌표를 사용하므로 화면 크기가 달라도 같은 지점을 기준으로 강조됩니다.
+                    업로드 시 저장된 좌표를 사용하므로 화면 크기가 달라도 같은 지점을 기준으로 강조됩니다.
                 </p>
                 <p className="mt-2 text-xs font-medium text-gray-600">{title}</p>
             </div>
@@ -458,21 +478,25 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                     onClick={() => setIsModalOpen(false)}
                 >
                     <div
-                        className="flex h-[88vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"
+                        className="flex h-[90vh] w-full max-w-[96vw] flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"
                         onClick={(event) => event.stopPropagation()}
                     >
                         <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
                             <div>
                                 <div className="text-lg font-extrabold text-gray-900">{title}</div>
-                                <div className="text-xs text-gray-500">밖을 클릭하거나 `Esc`를 누르면 닫힙니다.</div>
+                                <div className="text-xs text-gray-500">바깥쪽 클릭 또는 Esc로 닫습니다.</div>
                             </div>
                             <div className="flex items-center gap-2">
                                 <button
                                     type="button"
-                                    onClick={() => setZoom(fitZoom)}
+                                    onClick={() => {
+                                        setSelectedRegion(null);
+                                        setZoom(fitZoom);
+                                        modalSurfaceRef.current?.scrollTo({ left: 0, top: 0, behavior: 'smooth' });
+                                    }}
                                     className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
                                 >
-                                    맞춤
+                                    전체 보기
                                 </button>
                                 <button
                                     type="button"
@@ -501,66 +525,67 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                             </div>
                         </div>
 
-                        <div className="grid min-h-0 flex-1 gap-0 lg:grid-cols-[18rem_minmax(0,1fr)]">
-                            <div className="border-b border-gray-200 bg-gray-50 p-4 lg:border-b-0 lg:border-r">
+                        <div className="flex min-h-0 flex-1 flex-col">
+                            <div className="flex items-center justify-between border-b border-gray-200 px-5 py-3">
+                                <button
+                                    type="button"
+                                    disabled={currentPage <= 1}
+                                    onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                                    className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                                >
+                                    이전 페이지
+                                </button>
+                                <div className="text-sm font-bold text-gray-600">
+                                    {currentPage} / {numPages || '-'}
+                                </div>
+                                <button
+                                    type="button"
+                                    disabled={numPages === 0 || currentPage >= numPages}
+                                    onClick={() => setCurrentPage((prev) => Math.min(numPages, prev + 1))}
+                                    className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                                >
+                                    다음 페이지
+                                </button>
+                            </div>
+
+                            <div className="flex min-h-0 flex-1 items-center justify-center bg-slate-100 p-4">
+                                <div className="flex h-full w-full max-w-[160vh] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+                                    <div
+                                        ref={modalSurfaceRef}
+                                        className="min-h-0 flex-1 overflow-auto bg-slate-100 p-4 cursor-grab active:cursor-grabbing"
+                                        onWheel={handleWheelZoom}
+                                        onTouchStart={handleTouchStart}
+                                        onTouchMove={handleTouchMove}
+                                        onTouchEnd={handleTouchEnd}
+                                        onMouseDown={handleDragStart}
+                                        onMouseMove={handleDragMove}
+                                        onMouseUp={handleDragEnd}
+                                        onMouseLeave={handleDragEnd}
+                                    >
+                                        <div className="flex min-h-full items-start justify-center">
+                                            {renderPageSurface(false)}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="border-t border-gray-200 bg-gray-50 px-5 py-4">
                                 <div className="mb-3 text-xs font-bold text-gray-500">지역 바로가기</div>
-                                <div className="flex max-h-[22vh] flex-wrap gap-2 overflow-auto lg:max-h-[calc(88vh-9rem)] lg:block lg:space-y-2 lg:overflow-y-auto">
+                                <div className="flex max-h-[7.5rem] flex-wrap gap-2 overflow-auto">
                                     {visibleRegionHits.map((region) => (
                                         <button
                                             key={`modal-${region.label}-${region.page}`}
                                             type="button"
                                             onClick={() => handleSelectRegion(region)}
-                                            className={`rounded-full px-3 py-2 text-xs font-bold transition lg:flex lg:w-full lg:items-center lg:justify-between lg:rounded-xl ${
+                                            className={`rounded-full px-3 py-2 text-xs font-bold transition ${
                                                 selectedRegion?.label === region.label
                                                     ? 'bg-blue-600 text-white'
                                                     : 'bg-white text-gray-700 hover:bg-blue-50'
                                             }`}
                                         >
-                                            <span>{region.label}</span>
-                                            <span className="ml-2 text-[11px] opacity-70">p.{region.page}</span>
+                                            {region.label}
                                         </button>
                                     ))}
-                                </div>
-                            </div>
-
-                            <div className="flex min-h-0 flex-col">
-                                <div className="flex items-center justify-between border-b border-gray-200 px-5 py-3">
-                                    <button
-                                        type="button"
-                                        disabled={currentPage <= 1}
-                                        onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                                        className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-40"
-                                    >
-                                        이전 페이지
-                                    </button>
-                                    <div className="text-sm font-bold text-gray-600">
-                                        {currentPage} / {numPages || '-'}
-                                    </div>
-                                    <button
-                                        type="button"
-                                        disabled={numPages === 0 || currentPage >= numPages}
-                                        onClick={() => setCurrentPage((prev) => Math.min(numPages, prev + 1))}
-                                        className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-40"
-                                    >
-                                        다음 페이지
-                                    </button>
-                                </div>
-
-                                <div
-                                    ref={modalSurfaceRef}
-                                    className="min-h-0 flex-1 overflow-auto bg-slate-100 p-4 cursor-grab active:cursor-grabbing"
-                                    onWheel={handleWheelZoom}
-                                    onTouchStart={handleTouchStart}
-                                    onTouchMove={handleTouchMove}
-                                    onTouchEnd={handleTouchEnd}
-                                    onMouseDown={handleDragStart}
-                                    onMouseMove={handleDragMove}
-                                    onMouseUp={handleDragEnd}
-                                    onMouseLeave={handleDragEnd}
-                                >
-                                    <div className="flex min-h-full items-start justify-center">
-                                        {renderPageSurface(false)}
-                                    </div>
                                 </div>
                             </div>
                         </div>
