@@ -7,9 +7,17 @@ interface MapSidebarProps {
     selectedId: string;
     onSelect: (id: string) => void;
     action?: React.ReactNode;
+    renderItemAction?: (item: MapResource) => React.ReactNode;
 }
 
-const MapSidebar: React.FC<MapSidebarProps> = ({ heading, items, selectedId, onSelect, action }) => {
+const MapSidebar: React.FC<MapSidebarProps> = ({
+    heading,
+    items,
+    selectedId,
+    onSelect,
+    action,
+    renderItemAction,
+}) => {
     return (
         <aside className="w-full lg:w-72 shrink-0">
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden lg:sticky lg:top-8">
@@ -39,6 +47,11 @@ const MapSidebar: React.FC<MapSidebarProps> = ({ heading, items, selectedId, onS
                                 <div className="font-bold text-sm truncate">{item.title}</div>
                                 <div className="text-[11px] text-gray-400 truncate">{item.category}</div>
                             </div>
+                            {renderItemAction && (
+                                <div className="ml-auto shrink-0">
+                                    {renderItemAction(item)}
+                                </div>
+                            )}
                         </button>
                     ))}
                 </nav>
