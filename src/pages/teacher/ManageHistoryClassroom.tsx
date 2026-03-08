@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { collection, getDocs, orderBy, query, setDoc, doc, serverTimestamp, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, orderBy, query, serverTimestamp, setDoc } from 'firebase/firestore';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../lib/firebase';
 import { normalizeMapResource, type MapResource } from '../../lib/mapResources';
@@ -10,6 +11,7 @@ import {
     type HistoryClassroomBlank,
 } from '../../lib/historyClassroom';
 import { getSemesterCollectionPath } from '../../lib/semesterScope';
+import { cloneDefaultMenus, sanitizeMenuConfig } from '../../constants/menus';
 
 interface StudentOption {
     uid: string;
@@ -31,6 +33,7 @@ const createBlank = (page: number, left: number, top: number): HistoryClassroomB
 
 const ManageHistoryClassroom: React.FC = () => {
     const { config } = useAuth();
+    const navigate = useNavigate();
     const [maps, setMaps] = useState<MapResource[]>([]);
     const [assignments, setAssignments] = useState<HistoryClassroomAssignment[]>([]);
     const [students, setStudents] = useState<StudentOption[]>([]);
@@ -44,6 +47,12 @@ const ManageHistoryClassroom: React.FC = () => {
     const [blanks, setBlanks] = useState<HistoryClassroomBlank[]>([]);
     const [currentPage, setCurrentPage] = useState(1);
     const [saving, setSaving] = useState(false);
+    const [tabLabels, setTabLabels] = useState({
+        manage: '문제 등록',
+        log: '제출 현황',
+        bank: '문제 은행',
+        historyClassroom: '역사교실',
+    });
 
     useEffect(() => {
         const loadData = async () => {
@@ -88,10 +97,34 @@ const ManageHistoryClassroom: React.FC = () => {
         void loadData();
     }, [config]);
 
+    useEffect(() => {
+        const resolveMenuLabels = async () => {
+            try {
+                const menuSnap = await getDoc(doc(db, 'site_settings', 'menu_config'));
+                const menuConfig = menuSnap.exists()
+                    ? sanitizeMenuConfig(menuSnap.data())
+                    : cloneDefaultMenus();
+                const teacherQuizMenu = (menuConfig.teacher || []).find((menu) => menu.url === '/teacher/quiz');
+                const children = teacherQuizMenu?.children || [];
+                setTabLabels({
+                    manage: children.find((child) => child.url === '/teacher/quiz/history2')?.name || '문제 등록',
+                    log: children.find((child) => child.url === '/teacher/quiz?tab=log')?.name || '제출 현황',
+                    bank: children.find((child) => child.url === '/teacher/quiz?tab=bank')?.name || '문제 은행',
+                    historyClassroom: children.find((child) => child.url === '/teacher/quiz/history-classroom')?.name || '역사교실',
+                });
+            } catch (error) {
+                console.error('Failed to load quiz menu labels:', error);
+            }
+        };
+
+        void resolveMenuLabels();
+    }, []);
+
     const selectedMap = useMemo(
         () => maps.find((item) => item.id === selectedMapId) || null,
         [maps, selectedMapId],
     );
+
     const pageImage = useMemo(
         () => selectedMap?.pdfPageImages?.find((page) => page.page === currentPage) || null,
         [currentPage, selectedMap],
@@ -134,7 +167,7 @@ const ManageHistoryClassroom: React.FC = () => {
             return;
         }
         if (!blanks.length || blanks.some((blank) => !blank.answer.trim())) {
-            alert('모든 빈칸에 정답을 입력해 주세요.');
+            alert('모든 빈칸의 정답을 입력해 주세요.');
             return;
         }
 
@@ -176,14 +209,44 @@ const ManageHistoryClassroom: React.FC = () => {
 
     return (
         <div className="mx-auto max-w-7xl px-4 py-8">
-            <div className="mb-8 rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-                <div className="text-sm font-bold text-orange-500">평가 관리 &gt; 역사교실</div>
-                <h1 className="mt-2 text-3xl font-black text-gray-900">역사교실 제작</h1>
-                <p className="mt-2 text-sm text-gray-600">PDF 지도 위 원하는 위치를 눌러 빈칸을 만들고, 특정 학생에게만 공개할 수 있습니다.</p>
+            <div className="mb-8 overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm">
+                <div className="flex overflow-x-auto border-b border-gray-200 bg-white px-2">
+                    <button
+                        type="button"
+                        onClick={() => navigate('/teacher/quiz/history2')}
+                        className="border-b-2 border-transparent px-6 py-3 text-sm font-bold text-gray-600 transition hover:bg-gray-50"
+                    >
+                        {tabLabels.manage}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => navigate('/teacher/quiz?tab=log')}
+                        className="border-b-2 border-transparent px-6 py-3 text-sm font-bold text-gray-600 transition hover:bg-gray-50"
+                    >
+                        {tabLabels.log}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => navigate('/teacher/quiz?tab=bank')}
+                        className="border-b-2 border-transparent px-6 py-3 text-sm font-bold text-gray-600 transition hover:bg-gray-50"
+                    >
+                        {tabLabels.bank}
+                    </button>
+                    <button
+                        type="button"
+                        className="border-b-2 border-blue-500 bg-blue-50 px-6 py-3 text-sm font-bold text-blue-600 transition"
+                    >
+                        {tabLabels.historyClassroom}
+                    </button>
+                </div>
+                <div className="p-6">
+                    <h1 className="text-3xl font-black text-gray-900">역사교실 제작</h1>
+                    <p className="mt-2 text-sm text-gray-600">PDF 지도 위 원하는 위치를 눌러 빈칸을 만들고, 특정 학생에게만 공개할 수 있습니다.</p>
+                </div>
             </div>
 
             <div className="grid gap-6 xl:grid-cols-[24rem_minmax(0,1fr)]">
-                <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm space-y-4">
+                <section className="space-y-4 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
                     <div>
                         <label className="mb-1 block text-xs font-bold text-gray-500">PDF 지도 선택</label>
                         <select
@@ -209,7 +272,7 @@ const ManageHistoryClassroom: React.FC = () => {
                         <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm" />
                     </div>
                     <div>
-                        <label className="mb-1 block text-xs font-bold text-gray-500">재응시 시간(분)</label>
+                        <label className="mb-1 block text-xs font-bold text-gray-500">사용 제한 시간(분)</label>
                         <input type="number" min={0} value={cooldownMinutes} onChange={(e) => setCooldownMinutes(Number(e.target.value) || 0)} className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm" />
                     </div>
                     <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-1">
