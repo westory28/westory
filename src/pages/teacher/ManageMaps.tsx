@@ -740,7 +740,7 @@ const ManageMaps: React.FC = () => {
 
             {isSettingsOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-                    <div className="max-h-[92vh] w-full max-w-7xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+                    <div className="max-h-[92vh] w-full max-w-7xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
                         <div className="flex items-center justify-between gap-3 p-6 md:p-8">
                             <div>
                                 <h2 className="text-xl font-extrabold text-gray-900">지도 설정</h2>
@@ -779,7 +779,7 @@ const ManageMaps: React.FC = () => {
                             </div>
                         )}
 
-                        <div className="grid gap-6 overflow-y-auto p-6 md:p-8 lg:grid-cols-[minmax(0,30rem)_minmax(0,1fr)]">
+                        <div className="grid gap-6 p-6 md:p-8 lg:grid-cols-[minmax(0,30rem)_minmax(0,1fr)]">
                             <div className="min-w-0">
 
                         <div className="grid gap-4 md:grid-cols-2">
@@ -839,7 +839,7 @@ const ManageMaps: React.FC = () => {
                         </div>
 
                         {acceptsFile && (
-                            <div className="mt-4 grid gap-4 md:grid-cols-2">
+                            <div className="mt-4 grid gap-4 md:grid-cols-[minmax(0,1fr)_15rem]">
                                 <div>
                                     <label className="mb-1 block text-xs font-bold text-gray-500">
                                         {draft.type === 'pdf' ? 'PDF 파일 업로드' : '이미지 파일 업로드'}
