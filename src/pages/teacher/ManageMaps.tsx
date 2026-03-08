@@ -297,40 +297,6 @@ const ManageMaps: React.FC = () => {
         return uploadedPages;
     };
 
-    const loadStoredPdfSourceFile = async (resourceId: string) => {
-        const candidateUrls = [draft.fileUrl || ''];
-
-        if (draft.storagePath) {
-            try {
-                const storageUrl = await withTimeout(
-                    getDownloadURL(ref(storage, draft.storagePath)),
-                    30000,
-                    'storage-pdf-download-url',
-                );
-                candidateUrls.unshift(storageUrl);
-            } catch (storageUrlError) {
-                console.warn('Failed to resolve storage download URL for PDF reprocess:', storageUrlError);
-            }
-        }
-
-        let lastError: unknown = null;
-
-        for (const candidateUrl of candidateUrls.map((value) => value.trim()).filter(Boolean)) {
-            try {
-                const response = await withTimeout(fetch(candidateUrl, { mode: 'cors' }), 45000, 'pdf-reprocess-fetch');
-                if (!response.ok) {
-                    throw new Error(`pdf-reprocess-fetch-failed:${response.status}`);
-                }
-                const blob = await withTimeout(response.blob(), 30000, 'pdf-reprocess-blob');
-                return blobToPdfFile(blob, resourceId, draft.fileName, draft.mimeType);
-            } catch (fetchError) {
-                lastError = fetchError;
-            }
-        }
-
-        throw lastError || new Error('pdf-reprocess-source-missing');
-    };
-
     const persistMapPayload = async (payload: MapResource, preferredScope: StorageScope) => {
         const fallbackScope: StorageScope = preferredScope === 'semester' ? 'legacy' : 'semester';
         let resolvedScope = preferredScope;
@@ -549,25 +515,19 @@ const ManageMaps: React.FC = () => {
     const handleReprocessPdf = async () => {
         if (draft.type !== 'pdf' || !draft.id) return;
 
+        let sourceFile = selectedFile;
+        if (!sourceFile) {
+            alert('PDF 재처리를 위해 같은 PDF 파일을 다시 선택해 주세요.');
+            sourceFile = await requestLocalPdfFile();
+            if (!sourceFile) {
+                return;
+            }
+            setSelectedFile(sourceFile);
+        }
+
         setSaving(true);
 
         try {
-            let sourceFile = selectedFile;
-
-            if (!sourceFile) {
-                try {
-                    sourceFile = await loadStoredPdfSourceFile(draft.id);
-                } catch (remoteError) {
-                    console.warn('Stored PDF reload failed, asking for local PDF file:', remoteError);
-                    alert('기존 PDF를 자동으로 다시 읽지 못했습니다. 같은 PDF 파일을 한 번 선택해 주시면 재처리를 이어갑니다.');
-                    sourceFile = await requestLocalPdfFile();
-                    if (!sourceFile) {
-                        throw remoteError;
-                    }
-                    setSelectedFile(sourceFile);
-                }
-            }
-
             const processed = await processPdfMapFile(sourceFile);
             const uploadedPages = await uploadProcessedPdfPages(draft.id, processed);
             const payload: MapResource = {
