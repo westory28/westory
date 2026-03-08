@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import type { PDFDocumentProxy, TextItem } from 'pdfjs-dist/types/src/display/api';
-import { getBlob, getBytes, ref } from 'firebase/storage';
+import { getBlob, getBytes, getDownloadURL, ref } from 'firebase/storage';
 import { storage } from '../../lib/firebase';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -85,11 +85,22 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({ fileUrl, storagePath, title
                     const fileRef = ref(storage, storagePath);
 
                     try {
-                        blob = await withTimeout(getBlob(fileRef), 12000, 'storage-get-blob');
-                    } catch (blobError) {
-                        console.warn('Storage getBlob failed, falling back to getBytes:', blobError);
-                        const bytes = await withTimeout(getBytes(fileRef, MAX_PDF_BYTES), 12000, 'storage-get-bytes');
-                        blob = new Blob([bytes], { type: 'application/pdf' });
+                        const downloadUrl = await withTimeout(getDownloadURL(fileRef), 10000, 'storage-download-url');
+                        const response = await withTimeout(fetch(downloadUrl), 15000, 'storage-fetch');
+                        if (!response.ok) {
+                            throw new Error(`storage-fetch-failed:${response.status}`);
+                        }
+                        blob = await withTimeout(response.blob(), 10000, 'storage-fetch-blob');
+                    } catch (downloadError) {
+                        console.warn('Storage download fetch failed, falling back to SDK blob APIs:', downloadError);
+
+                        try {
+                            blob = await withTimeout(getBlob(fileRef), 12000, 'storage-get-blob');
+                        } catch (blobError) {
+                            console.warn('Storage getBlob failed, falling back to getBytes:', blobError);
+                            const bytes = await withTimeout(getBytes(fileRef, MAX_PDF_BYTES), 12000, 'storage-get-bytes');
+                            blob = new Blob([bytes], { type: 'application/pdf' });
+                        }
                     }
                 } else {
                     const response = await withTimeout(fetch(fileUrl), 12000, 'pdf-fetch');

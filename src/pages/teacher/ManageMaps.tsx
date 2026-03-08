@@ -434,7 +434,7 @@ const ManageMaps: React.FC = () => {
                         <button
                             type="button"
                             onClick={() => setIsReorderMode((prev) => !prev)}
-                            className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border text-sm transition ${
+                            className={`inline-flex min-w-[42px] items-center justify-center rounded-lg border px-2 py-1 text-xs font-extrabold leading-none transition ${
                                 isReorderMode
                                     ? 'border-blue-200 bg-blue-50 text-blue-700'
                                     : 'border-transparent text-gray-400 hover:border-gray-200 hover:bg-gray-50 hover:text-gray-700'
@@ -442,7 +442,7 @@ const ManageMaps: React.FC = () => {
                             aria-label="지도 순서 변경"
                             title="지도 순서 변경"
                         >
-                            <i className="fas fa-arrow-up-down"></i>
+                            ↑↓
                         </button>
                     )}
                     renderItemAction={(item) => (
