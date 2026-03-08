@@ -634,7 +634,6 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                     </div>
                 </div>
                 {visibleRegionHits.length > 0 && <div className="mb-4">{renderTagFilters()}{renderShortcutList('rounded-full px-3 py-1.5 text-xs font-bold transition')}</div>}
-                <div className="mb-4 flex items-center justify-center"><div className="text-sm font-bold text-gray-600">{currentPage} / {numPages || '-'}</div></div>
                 {renderPageSurface(true)}
                 <p className="mt-3 text-xs leading-6 text-gray-500">PDF 지도를 클릭하면 확대 모달이 열립니다. 모달에서는 휠로 확대하고 드래그로 이동할 수 있습니다.</p>
                 <p className="mt-2 text-xs leading-6 text-gray-500">태그는 시대별, 지도 관련, 사용자 태그 목차로 정리됩니다.</p>
