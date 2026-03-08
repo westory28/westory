@@ -15,6 +15,7 @@ export interface PdfMapRegion {
     width: number;
     height: number;
     shortcutEnabled?: boolean;
+    tags?: string[];
 }
 
 export interface MapResource {
@@ -37,6 +38,26 @@ export interface MapResource {
 }
 
 export const GOOGLE_MAP_RESOURCE_ID = 'google-maps';
+
+export const DEFAULT_PDF_REGION_TAGS = [
+    '하천',
+    '산맥',
+    '지방',
+    '수도',
+    '성',
+    '항구',
+    '비석',
+    '지역명',
+] as const;
+
+export const DEFAULT_PDF_ERA_TAGS = [
+    '삼국시대',
+    '통일신라',
+    '고려',
+    '조선',
+    '개항기',
+    '일제강점기',
+] as const;
 
 export const DEFAULT_GOOGLE_MAP_RESOURCE: MapResource = {
     id: GOOGLE_MAP_RESOURCE_ID,
@@ -63,6 +84,16 @@ const deriveStoragePathFromUrl = (fileUrl?: string) => {
     } catch {
         return '';
     }
+};
+
+const normalizeRegionTags = (tags: unknown) => {
+    if (!Array.isArray(tags)) return [];
+
+    return Array.from(new Set(
+        tags
+            .map((tag) => String(tag || '').trim())
+            .filter(Boolean),
+    )).sort((a, b) => a.localeCompare(b, 'ko'));
 };
 
 export const normalizeMapResource = (id: string, raw: Partial<MapResource>): MapResource => ({
@@ -102,6 +133,7 @@ export const normalizeMapResource = (id: string, raw: Partial<MapResource>): Map
                 width: Number(region?.width) || 0,
                 height: Number(region?.height) || 0,
                 shortcutEnabled: region?.shortcutEnabled !== false,
+                tags: normalizeRegionTags(region?.tags),
             }))
         .filter((region) => region.label)
         : [],

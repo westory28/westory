@@ -3,7 +3,12 @@ import { Document, Page, pdfjs } from 'react-pdf';
 import type { PDFDocumentProxy, TextItem } from 'pdfjs-dist/types/src/display/api';
 import { getDownloadURL, ref } from 'firebase/storage';
 import { storage } from '../../lib/firebase';
-import type { PdfMapPageImage, PdfMapRegion } from '../../lib/mapResources';
+import {
+    DEFAULT_PDF_ERA_TAGS,
+    DEFAULT_PDF_REGION_TAGS,
+    type PdfMapPageImage,
+    type PdfMapRegion,
+} from '../../lib/mapResources';
 import { extractPdfTextRegions } from '../../lib/pdfTextRegions';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -27,15 +32,17 @@ interface RegionHit {
     width: number;
     height: number;
     shortcutEnabled?: boolean;
+    tags?: string[];
 }
 
 const BASE_MODAL_RATIO = 0.92;
 const PREVIEW_PADDING = 24;
+const BUILT_IN_TAG_ORDER = [...DEFAULT_PDF_REGION_TAGS, ...DEFAULT_PDF_ERA_TAGS];
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 const sanitizeRegionLabel = (value: string) => value
-    .replace(/\s*[→>-].*$/u, '')
+    .replace(/\s*[→-].*$/u, '')
     .replace(/\([^)]*\)/gu, '')
     .replace(/\[[^\]]*\]/gu, '')
     .replace(/[,:;]+$/u, '')
@@ -57,6 +64,17 @@ const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, label: st
     }
 };
 
+const sortTags = (tags: string[]) => [...tags].sort((a, b) => {
+    const indexA = BUILT_IN_TAG_ORDER.indexOf(a as (typeof BUILT_IN_TAG_ORDER)[number]);
+    const indexB = BUILT_IN_TAG_ORDER.indexOf(b as (typeof BUILT_IN_TAG_ORDER)[number]);
+    if (indexA !== -1 || indexB !== -1) {
+        if (indexA === -1) return 1;
+        if (indexB === -1) return -1;
+        return indexA - indexB;
+    }
+    return a.localeCompare(b, 'ko');
+});
+
 const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
     fileUrl,
     storagePath,
@@ -70,19 +88,21 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
     const [fitZoom, setFitZoom] = useState(1);
     const [regionHits, setRegionHits] = useState<RegionHit[]>([]);
     const [selectedRegion, setSelectedRegion] = useState<RegionHit | null>(null);
+    const [selectedTag, setSelectedTag] = useState('');
     const [pdfSourceUrl, setPdfSourceUrl] = useState('');
     const [loadingPdf, setLoadingPdf] = useState(true);
     const [loadError, setLoadError] = useState('');
     const [nativeViewerFallback, setNativeViewerFallback] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const pageWrapRef = useRef<HTMLDivElement | null>(null);
+    const [previewScale, setPreviewScale] = useState(1);
+
     const previewSurfaceRef = useRef<HTMLDivElement | null>(null);
     const modalSurfaceRef = useRef<HTMLDivElement | null>(null);
     const modalRegionHighlightRef = useRef<HTMLDivElement | null>(null);
     const pinchStateRef = useRef<{ distance: number; zoom: number } | null>(null);
     const dragStateRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
+
     const usingPreprocessedPages = pageImages.length > 0;
-    const [previewScale, setPreviewScale] = useState(1);
 
     const allRegionHits = useMemo<RegionHit[]>(
         () => (usingPreprocessedPages ? regions : regionHits),
@@ -91,23 +111,40 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
 
     const visibleRegionHits = useMemo(() => {
         const seen = new Set<string>();
-        return allRegionHits.map((item) => ({
-            ...item,
-            label: sanitizeRegionLabel(item.label),
-        })).filter((item) => {
-            if (item.shortcutEnabled === false) return false;
-            if (!item.label || item.label.length < 2 || item.label.length > 12) return false;
-            if (/[(){}\[\]<>]/u.test(item.label)) return false;
-            if (/설명|유역|기후|분포|국경|수도|왕조|제국/u.test(item.label)) return false;
-            if (seen.has(item.label)) return false;
-            seen.add(item.label);
-            return true;
-        }).slice(0, 24);
+        return allRegionHits
+            .map((item) => ({
+                ...item,
+                label: sanitizeRegionLabel(item.label),
+                tags: Array.from(new Set((item.tags || []).map((tag) => String(tag || '').trim()).filter(Boolean))),
+            }))
+            .filter((item) => {
+                if (item.shortcutEnabled === false) return false;
+                if (!item.label || item.label.length < 2 || item.label.length > 12) return false;
+                if (/[(){}\[\]<>]/u.test(item.label)) return false;
+                if (/설명|영역|기후|분포|국경|반도|왕조|수도권/u.test(item.label)) return false;
+                if (seen.has(item.label)) return false;
+                seen.add(item.label);
+                return true;
+            })
+            .slice(0, 48);
     }, [allRegionHits]);
 
+    const availableTags = useMemo(() => {
+        const nextTags = new Set<string>();
+        visibleRegionHits.forEach((region) => {
+            (region.tags || []).forEach((tag) => nextTags.add(tag));
+        });
+        return sortTags(Array.from(nextTags));
+    }, [visibleRegionHits]);
+
+    const filteredRegionHits = useMemo(() => {
+        if (!selectedTag) return visibleRegionHits;
+        return visibleRegionHits.filter((region) => (region.tags || []).includes(selectedTag));
+    }, [selectedTag, visibleRegionHits]);
+
     const sortedRegionHits = useMemo(
-        () => [...visibleRegionHits].sort((a, b) => a.label.localeCompare(b.label, 'ko')),
-        [visibleRegionHits],
+        () => [...filteredRegionHits].sort((a, b) => a.label.localeCompare(b.label, 'ko')),
+        [filteredRegionHits],
     );
 
     const currentPageWidth = useMemo(() => {
@@ -127,6 +164,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
             setNativeViewerFallback(false);
             setCurrentPage(1);
             setSelectedRegion(null);
+            setSelectedTag('');
             setRegionHits([]);
             setNumPages(usingPreprocessedPages ? pageImages.length : 0);
 
@@ -181,11 +219,11 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
         const containerWidth = modalSurfaceRef.current.clientWidth - 32;
         const nextFitZoom = clamp((containerWidth / currentPageWidth) * BASE_MODAL_RATIO, 0.45, 2.2);
         setFitZoom(nextFitZoom);
-        setZoom(nextFitZoom);
         if (!selectedRegion) {
+            setZoom(nextFitZoom);
             modalSurfaceRef.current.scrollTo({ left: 0, top: 0 });
         }
-    }, [currentPage, currentPageWidth, isModalOpen]);
+    }, [currentPage, currentPageWidth, isModalOpen, selectedRegion]);
 
     useEffect(() => {
         if (!usingPreprocessedPages || currentPageWidth <= 0 || !previewSurfaceRef.current) return;
@@ -198,7 +236,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
         };
 
         updatePreviewScale();
-        const observer = new ResizeObserver(() => updatePreviewScale());
+        const observer = new ResizeObserver(updatePreviewScale);
         observer.observe(previewSurfaceRef.current);
         window.addEventListener('resize', updatePreviewScale);
         return () => {
@@ -223,6 +261,25 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
             window.removeEventListener('keydown', handleKeyDown);
         };
     }, [isModalOpen]);
+
+    useEffect(() => {
+        if (selectedTag && !availableTags.includes(selectedTag)) {
+            setSelectedTag('');
+        }
+    }, [availableTags, selectedTag]);
+
+    useEffect(() => {
+        if (!selectedRegion) return;
+        const stillVisible = visibleRegionHits.find((region) => (
+            region.label === selectedRegion.label
+            && region.page === selectedRegion.page
+            && region.left === selectedRegion.left
+            && region.top === selectedRegion.top
+        ));
+        if (!stillVisible) {
+            setSelectedRegion(null);
+        }
+    }, [selectedRegion, visibleRegionHits]);
 
     useEffect(() => {
         if (!isModalOpen || !selectedRegion || !modalSurfaceRef.current || selectedRegion.page !== currentPage) return;
@@ -268,6 +325,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                 ...region,
                 page: pageNumber,
                 shortcutEnabled: true,
+                tags: [],
             }));
             nextHits.push(...pageHits);
         }
@@ -324,7 +382,11 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
         event.preventDefault();
         const nextDistance = distanceBetweenTouches(event.touches);
         const ratio = nextDistance / pinchStateRef.current.distance;
-        setZoom(clamp(Number((pinchStateRef.current.zoom * ratio).toFixed(2)), Math.max(0.3, fitZoom * 0.7), 4));
+        setZoom(clamp(
+            Number((pinchStateRef.current.zoom * ratio).toFixed(2)),
+            Math.max(0.3, fitZoom * 0.7),
+            4,
+        ));
     };
 
     const handleTouchEnd = () => {
@@ -353,101 +415,164 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
         dragStateRef.current = null;
     };
 
+    const renderTagFilters = () => {
+        if (availableTags.length === 0) return null;
+
+        return (
+            <div className="mb-4">
+                <div className="mb-2 text-xs font-bold text-gray-500">태그 필터</div>
+                <div className="flex flex-wrap gap-2">
+                    <button
+                        type="button"
+                        onClick={() => setSelectedTag('')}
+                        className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${
+                            !selectedTag
+                                ? 'bg-slate-800 text-white'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                    >
+                        전체
+                    </button>
+                    {availableTags.map((tag) => (
+                        <button
+                            key={tag}
+                            type="button"
+                            onClick={() => setSelectedTag(tag)}
+                            className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${
+                                selectedTag === tag
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                            }`}
+                        >
+                            {tag}
+                        </button>
+                    ))}
+                </div>
+            </div>
+        );
+    };
+
+    const renderShortcutList = (buttonClassName: string) => (
+        <>
+            <div className="mb-2 text-xs font-bold text-gray-500">지역 바로가기</div>
+            {sortedRegionHits.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                    {sortedRegionHits.map((region) => (
+                        <button
+                            key={`${region.label}-${region.page}-${region.left}-${region.top}`}
+                            type="button"
+                            onClick={() => handleSelectRegion(region)}
+                            className={`${buttonClassName} ${
+                                selectedRegion?.label === region.label
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                            }`}
+                        >
+                            {region.label}
+                        </button>
+                    ))}
+                </div>
+            ) : (
+                <p className="text-xs text-gray-500">선택한 태그에 해당하는 지역이 없습니다.</p>
+            )}
+        </>
+    );
+
     const renderPageSurface = (interactive: boolean) => {
         const surfaceScale = interactive && usingPreprocessedPages
             ? previewScale || 1
             : zoom;
 
         return (
-        <div
-            ref={interactive ? previewSurfaceRef : pageWrapRef}
-            className={`rounded-2xl border border-gray-200 bg-gray-100 p-3 ${
-                interactive ? 'overflow-auto cursor-zoom-in' : 'overflow-visible'
-            }`}
-            onClick={interactive ? openModal : undefined}
-        >
-            {loadingPdf && (
-                <div className="rounded-xl bg-white px-4 py-6 text-sm text-gray-500">
-                    PDF 파일을 준비하고 있습니다.
-                </div>
-            )}
+            <div
+                ref={interactive ? previewSurfaceRef : undefined}
+                className={`rounded-2xl border border-gray-200 bg-gray-100 p-3 ${
+                    interactive ? 'cursor-zoom-in overflow-auto' : 'overflow-visible'
+                }`}
+                onClick={interactive ? openModal : undefined}
+            >
+                {loadingPdf && (
+                    <div className="rounded-xl bg-white px-4 py-6 text-sm text-gray-500">
+                        PDF 파일을 준비하고 있습니다.
+                    </div>
+                )}
 
-            {!loadingPdf && loadError && !nativeViewerFallback && (
-                <div className="rounded-xl bg-white px-4 py-6 text-sm text-red-600">
-                    PDF 파일을 불러오지 못했습니다.
-                    <div className="mt-2 text-xs text-gray-500">{loadError}</div>
-                </div>
-            )}
-
-            {!loadingPdf && nativeViewerFallback && fileUrl && (
-                <div className="space-y-3">
-                    <div className="rounded-xl bg-white px-4 py-4 text-sm text-amber-700">
-                        PDF 추출 보기는 실패해서 브라우저 기본 뷰어로 대신 표시합니다.
+                {!loadingPdf && loadError && !nativeViewerFallback && (
+                    <div className="rounded-xl bg-white px-4 py-6 text-sm text-red-600">
+                        PDF 파일을 불러오지 못했습니다.
                         <div className="mt-2 text-xs text-gray-500">{loadError}</div>
                     </div>
-                    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-                        <iframe src={fileUrl} title={`${title} PDF`} className="h-[72vh] w-full" />
+                )}
+
+                {!loadingPdf && nativeViewerFallback && fileUrl && (
+                    <div className="space-y-3">
+                        <div className="rounded-xl bg-white px-4 py-4 text-sm text-amber-700">
+                            PDF 추출 보기에 실패해서 브라우저 기본 뷰어로 대신 표시합니다.
+                            <div className="mt-2 text-xs text-gray-500">{loadError}</div>
+                        </div>
+                        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+                            <iframe src={fileUrl} title={`${title} PDF`} className="h-[72vh] w-full" />
+                        </div>
                     </div>
-                </div>
-            )}
+                )}
 
-            {!loadingPdf && usingPreprocessedPages && pageImages[currentPage - 1] && (
-                <div className="relative inline-block">
-                    <img
-                        src={pageImages[currentPage - 1].imageUrl}
-                        alt={`${title} ${currentPage}페이지`}
-                        className={interactive ? 'transition-transform' : ''}
-                        style={{
-                            width: `${pageImages[currentPage - 1].width * surfaceScale}px`,
-                            maxWidth: 'none',
-                        }}
-                    />
-                    {selectedRegion && selectedRegion.page === currentPage && (
-                        <div
-                            ref={interactive ? undefined : modalRegionHighlightRef}
-                            className="pointer-events-none absolute rounded border-4 border-red-500 bg-red-200/30"
-                            style={{
-                                left: `${selectedRegion.left * surfaceScale - 16}px`,
-                                top: `${selectedRegion.top * surfaceScale - 16}px`,
-                                width: `${selectedRegion.width * surfaceScale + 32}px`,
-                                height: `${selectedRegion.height * surfaceScale + 24}px`,
-                            }}
-                        />
-                    )}
-                </div>
-            )}
-
-            {!loadingPdf && !loadError && !usingPreprocessedPages && pdfSourceUrl && (
-                <Document
-                    file={pdfSourceUrl}
-                    onLoadSuccess={handleLoadSuccess}
-                    onLoadError={handleLoadError}
-                    loading="PDF를 불러오는 중입니다."
-                >
+                {!loadingPdf && usingPreprocessedPages && pageImages[currentPage - 1] && (
                     <div className="relative inline-block">
-                        <Page
-                            pageNumber={currentPage}
-                            scale={zoom}
-                            renderTextLayer
-                            renderAnnotationLayer
-                            loading="페이지를 불러오는 중입니다."
+                        <img
+                            src={pageImages[currentPage - 1].imageUrl}
+                            alt={`${title} ${currentPage}페이지`}
+                            className={interactive ? 'transition-transform' : ''}
+                            style={{
+                                width: `${pageImages[currentPage - 1].width * surfaceScale}px`,
+                                maxWidth: 'none',
+                            }}
                         />
                         {selectedRegion && selectedRegion.page === currentPage && (
                             <div
                                 ref={interactive ? undefined : modalRegionHighlightRef}
                                 className="pointer-events-none absolute rounded border-4 border-red-500 bg-red-200/30"
                                 style={{
-                                    left: `${selectedRegion.left * zoom - 16}px`,
-                                    top: `${selectedRegion.top * zoom - 16}px`,
-                                    width: `${selectedRegion.width * zoom + 32}px`,
-                                    height: `${selectedRegion.height * zoom + 24}px`,
+                                    left: `${selectedRegion.left * surfaceScale - 16}px`,
+                                    top: `${selectedRegion.top * surfaceScale - 16}px`,
+                                    width: `${selectedRegion.width * surfaceScale + 32}px`,
+                                    height: `${selectedRegion.height * surfaceScale + 24}px`,
                                 }}
                             />
                         )}
                     </div>
-                </Document>
-            )}
-        </div>
+                )}
+
+                {!loadingPdf && !loadError && !usingPreprocessedPages && pdfSourceUrl && (
+                    <Document
+                        file={pdfSourceUrl}
+                        onLoadSuccess={handleLoadSuccess}
+                        onLoadError={handleLoadError}
+                        loading="PDF를 불러오는 중입니다."
+                    >
+                        <div className="relative inline-block">
+                            <Page
+                                pageNumber={currentPage}
+                                scale={zoom}
+                                renderTextLayer
+                                renderAnnotationLayer
+                                loading="페이지를 불러오는 중입니다."
+                            />
+                            {selectedRegion && selectedRegion.page === currentPage && (
+                                <div
+                                    ref={interactive ? undefined : modalRegionHighlightRef}
+                                    className="pointer-events-none absolute rounded border-4 border-red-500 bg-red-200/30"
+                                    style={{
+                                        left: `${selectedRegion.left * zoom - 16}px`,
+                                        top: `${selectedRegion.top * zoom - 16}px`,
+                                        width: `${selectedRegion.width * zoom + 32}px`,
+                                        height: `${selectedRegion.height * zoom + 24}px`,
+                                    }}
+                                />
+                            )}
+                        </div>
+                    </Document>
+                )}
+            </div>
         );
     };
 
@@ -487,23 +612,8 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
 
                 {visibleRegionHits.length > 0 && (
                     <div className="mb-4">
-                        <div className="mb-2 text-xs font-bold text-gray-500">지역 바로가기</div>
-                        <div className="flex flex-wrap gap-2">
-                            {sortedRegionHits.map((region) => (
-                                <button
-                                    key={`${region.label}-${region.page}`}
-                                    type="button"
-                                    onClick={() => handleSelectRegion(region)}
-                                    className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${
-                                        selectedRegion?.label === region.label
-                                            ? 'bg-blue-600 text-white'
-                                            : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
-                                    }`}
-                                >
-                                    {region.label}
-                                </button>
-                            ))}
-                        </div>
+                        {renderTagFilters()}
+                        {renderShortcutList('rounded-full px-3 py-1.5 text-xs font-bold transition')}
                     </div>
                 )}
 
@@ -532,10 +642,10 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                 {renderPageSurface(true)}
 
                 <p className="mt-3 text-xs leading-6 text-gray-500">
-                    PDF 지도는 클릭하면 확대 팝업으로 열립니다. 팝업에서는 휠, 핀치, 드래그로 이동과 확대를 할 수 있습니다.
+                    PDF 지도를 클릭하면 확대 모달로 열립니다. 모달에서는 휠 또는 터치로 확대하고, 드래그로 이동할 수 있습니다.
                 </p>
                 <p className="mt-2 text-xs leading-6 text-gray-500">
-                    업로드 시 저장된 좌표를 사용하므로 화면 크기가 달라도 같은 지점을 기준으로 강조됩니다.
+                    지역 바로가기와 태그 필터는 저장된 좌표와 태그 기준으로 동작합니다.
                 </p>
                 <p className="mt-2 text-xs font-medium text-gray-600">{title}</p>
             </div>
@@ -593,24 +703,11 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                             </div>
                         </div>
 
-                        <div className="grid min-h-0 flex-1 lg:grid-cols-[17rem_minmax(0,1fr)]">
+                        <div className="grid min-h-0 flex-1 lg:grid-cols-[18rem_minmax(0,1fr)]">
                             <aside className="min-h-0 border-r border-gray-200 bg-gray-50 p-4">
-                                <div className="mb-3 text-xs font-bold text-gray-500">지역 바로가기</div>
-                                <div className="flex max-h-[calc(90vh-10rem)] flex-wrap content-start gap-2 overflow-y-auto pr-1">
-                                    {sortedRegionHits.map((region) => (
-                                        <button
-                                            key={`modal-${region.label}-${region.page}`}
-                                            type="button"
-                                            onClick={() => handleSelectRegion(region)}
-                                            className={`rounded-xl px-3 py-2 text-left text-xs font-bold transition ${
-                                                selectedRegion?.label === region.label
-                                                    ? 'bg-blue-600 text-white'
-                                                    : 'bg-white text-gray-700 hover:bg-blue-50'
-                                            }`}
-                                        >
-                                            {region.label}
-                                        </button>
-                                    ))}
+                                {renderTagFilters()}
+                                <div className="max-h-[calc(90vh-12rem)] overflow-y-auto pr-1">
+                                    {renderShortcutList('rounded-xl px-3 py-2 text-left text-xs font-bold transition')}
                                 </div>
                             </aside>
 
@@ -641,7 +738,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                                     <div className="flex h-full w-full max-w-[160vh] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
                                         <div
                                             ref={modalSurfaceRef}
-                                            className="min-h-0 flex-1 overflow-auto bg-slate-100 p-4 cursor-grab active:cursor-grabbing"
+                                            className="min-h-0 flex-1 cursor-grab overflow-auto bg-slate-100 p-4 active:cursor-grabbing"
                                             onWheel={handleWheelZoom}
                                             onTouchStart={handleTouchStart}
                                             onTouchMove={handleTouchMove}

@@ -8,11 +8,14 @@ import { useAuth } from '../../contexts/AuthContext';
 import { db, storage } from '../../lib/firebase';
 import {
     DEFAULT_GOOGLE_MAP_RESOURCE,
+    DEFAULT_PDF_ERA_TAGS,
+    DEFAULT_PDF_REGION_TAGS,
     GOOGLE_MAP_RESOURCE_ID,
     mergeMapResources,
     normalizeMapResource,
     type MapResource,
     type MapResourceType,
+    type PdfMapRegion,
 } from '../../lib/mapResources';
 import { processPdfMapFile } from '../../lib/pdfMapProcessor';
 import { getSemesterCollectionPath } from '../../lib/semesterScope';
@@ -42,6 +45,14 @@ const createDraft = (): StoredMapResource => ({
     sortOrder: 99,
     storageScope: 'semester',
 });
+
+const DEFAULT_PDF_TAG_OPTIONS = [...DEFAULT_PDF_REGION_TAGS, ...DEFAULT_PDF_ERA_TAGS];
+
+const normalizeRegionTags = (tags: string[]) => Array.from(new Set(
+    tags
+        .map((tag) => String(tag || '').trim())
+        .filter(Boolean),
+)).sort((a, b) => a.localeCompare(b, 'ko'));
 
 const normalizeErrorMessage = (error: unknown) => {
     const code = typeof error === 'object' && error && 'code' in error
@@ -136,6 +147,7 @@ const ManageMaps: React.FC = () => {
     const [isReorderMode, setIsReorderMode] = useState(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [selectedFilePreviewUrl, setSelectedFilePreviewUrl] = useState('');
+    const [customTagInputs, setCustomTagInputs] = useState<Record<number, string>>({});
     const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     const collectionPath = useMemo(() => getSemesterCollectionPath(config, 'map_resources'), [config]);
@@ -200,6 +212,7 @@ const ManageMaps: React.FC = () => {
         if (!next) return;
 
         setDraft(next);
+        setCustomTagInputs({});
         resetFileInput();
     }, [items, selectedId]);
 
@@ -240,6 +253,47 @@ const ManageMaps: React.FC = () => {
                     ? { ...region, shortcutEnabled: checked }
                     : region
             )),
+        }));
+    };
+
+    const updatePdfRegion = (index: number, updater: (region: PdfMapRegion) => PdfMapRegion) => {
+        setDraft((prev) => ({
+            ...prev,
+            pdfRegions: (prev.pdfRegions || []).map((region, regionIndex) => (
+                regionIndex === index ? updater(region) : region
+            )),
+        }));
+    };
+
+    const handlePdfRegionTagToggle = (index: number, tag: string, checked: boolean) => {
+        updatePdfRegion(index, (region) => {
+            const currentTags = normalizeRegionTags(region.tags || []);
+            const nextTags = checked
+                ? normalizeRegionTags([...currentTags, tag])
+                : currentTags.filter((item) => item !== tag);
+            return { ...region, tags: nextTags };
+        });
+    };
+
+    const handlePdfRegionCustomTagInputChange = (index: number, value: string) => {
+        setCustomTagInputs((prev) => ({
+            ...prev,
+            [index]: value,
+        }));
+    };
+
+    const handlePdfRegionAddCustomTag = (index: number) => {
+        const nextTag = String(customTagInputs[index] || '').trim();
+        if (!nextTag) return;
+
+        updatePdfRegion(index, (region) => ({
+            ...region,
+            tags: normalizeRegionTags([...(region.tags || []), nextTag]),
+        }));
+
+        setCustomTagInputs((prev) => ({
+            ...prev,
+            [index]: '',
         }));
     };
 
@@ -631,8 +685,16 @@ const ManageMaps: React.FC = () => {
         () => items.filter((item) => item.type === 'pdf'),
         [items],
     );
+    const allPdfTagOptions = useMemo(() => normalizeRegionTags([
+        ...DEFAULT_PDF_TAG_OPTIONS,
+        ...(draft.pdfRegions || []).flatMap((region) => region.tags || []),
+    ]), [draft.pdfRegions]);
     const activePdfShortcutCount = useMemo(
         () => (draft.pdfRegions || []).filter((region) => region.shortcutEnabled !== false).length,
+        [draft.pdfRegions],
+    );
+    const activePdfTagCount = useMemo(
+        () => new Set((draft.pdfRegions || []).flatMap((region) => region.tags || [])).size,
         [draft.pdfRegions],
     );
     const settingsPdfPreviewUrl = draft.type === 'pdf'
@@ -919,26 +981,78 @@ const ManageMaps: React.FC = () => {
                                         {(draft.pdfRegions || []).length}개
                                     </div>
                                 </div>
-                                <div className="max-h-72 space-y-2 overflow-y-auto rounded-2xl border border-gray-200 bg-gray-50 p-3">
+                                <div className="max-h-[32rem] space-y-3 overflow-y-auto rounded-2xl border border-gray-200 bg-gray-50 p-3">
                                     {(draft.pdfRegions || []).map((region, index) => (
-                                        <div key={`${region.page}-${region.left}-${region.top}-${index}`} className="grid gap-3 rounded-xl bg-white p-3 md:grid-cols-[5rem_minmax(0,1fr)_auto] md:items-center">
-                                            <div className="text-xs font-bold text-gray-500">p.{region.page}</div>
-                                            <input
-                                                type="text"
-                                                value={region.label}
-                                                onChange={(e) => handlePdfRegionLabelChange(index, e.target.value)}
-                                                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                                                placeholder="지역명 입력"
-                                            />
-                                            <label className="inline-flex items-center gap-2 text-xs font-bold text-gray-600">
+                                        <div key={`${region.page}-${region.left}-${region.top}-${index}`} className="space-y-3 rounded-xl bg-white p-3">
+                                            <div className="grid gap-3 md:grid-cols-[5rem_minmax(0,1fr)_auto] md:items-center">
+                                                <div className="text-xs font-bold text-gray-500">p.{region.page}</div>
                                                 <input
-                                                    type="checkbox"
-                                                    checked={region.shortcutEnabled !== false}
-                                                    onChange={(e) => handlePdfRegionShortcutToggle(index, e.target.checked)}
-                                                    className="h-4 w-4 rounded border-gray-300"
+                                                    type="text"
+                                                    value={region.label}
+                                                    onChange={(e) => handlePdfRegionLabelChange(index, e.target.value)}
+                                                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                                                    placeholder="지역명 입력"
                                                 />
-                                                바로가기
-                                            </label>
+                                                <label className="inline-flex items-center gap-2 text-xs font-bold text-gray-600">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={region.shortcutEnabled !== false}
+                                                        onChange={(e) => handlePdfRegionShortcutToggle(index, e.target.checked)}
+                                                        className="h-4 w-4 rounded border-gray-300"
+                                                    />
+                                                    바로가기
+                                                </label>
+                                            </div>
+
+                                            <div>
+                                                <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-gray-400">Tag</div>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {allPdfTagOptions.map((tag) => {
+                                                        const checked = (region.tags || []).includes(tag);
+                                                        return (
+                                                            <label
+                                                                key={`${region.page}-${index}-${tag}`}
+                                                                className={`inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold transition ${
+                                                                    checked
+                                                                        ? 'border-blue-200 bg-blue-50 text-blue-700'
+                                                                        : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                                                                }`}
+                                                            >
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={checked}
+                                                                    onChange={(e) => handlePdfRegionTagToggle(index, tag, e.target.checked)}
+                                                                    className="h-3.5 w-3.5 rounded border-gray-300"
+                                                                />
+                                                                {tag}
+                                                            </label>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+
+                                            <div className="flex flex-col gap-2 md:flex-row">
+                                                <input
+                                                    type="text"
+                                                    value={customTagInputs[index] || ''}
+                                                    onChange={(e) => handlePdfRegionCustomTagInputChange(index, e.target.value)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                            e.preventDefault();
+                                                            handlePdfRegionAddCustomTag(index);
+                                                        }
+                                                    }}
+                                                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                                                    placeholder="직접 태그 추가"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handlePdfRegionAddCustomTag(index)}
+                                                    className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
+                                                >
+                                                    ?? ??
+                                                </button>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
