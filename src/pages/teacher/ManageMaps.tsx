@@ -245,7 +245,13 @@ const ManageMaps: React.FC = () => {
                         </div>
                     ) : (
                         <>
-                            <MapViewer item={selectedPreview} />
+                            <MapViewer
+                                item={selectedPreview}
+                                googleSearchQuery={draft.type === 'google' ? (draft.googleQuery || '') : undefined}
+                                onGoogleSearchQueryChange={draft.type === 'google'
+                                    ? (value) => handleDraftChange('googleQuery', value)
+                                    : undefined}
+                            />
 
                             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 md:p-8">
                                 <div className="flex items-center justify-between gap-3 mb-6">

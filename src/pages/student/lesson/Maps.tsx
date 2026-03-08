@@ -12,6 +12,7 @@ const StudentMaps: React.FC = () => {
     const [items, setItems] = useState<MapResource[]>([]);
     const [selectedId, setSelectedId] = useState('');
     const [loading, setLoading] = useState(true);
+    const [googleSearchQuery, setGoogleSearchQuery] = useState('');
 
     useEffect(() => {
         const loadMaps = async () => {
@@ -47,6 +48,14 @@ const StudentMaps: React.FC = () => {
 
     const selectedItem = items.find((item) => item.id === selectedId) || items[0] || null;
 
+    useEffect(() => {
+        if (selectedItem?.type === 'google') {
+            setGoogleSearchQuery(selectedItem.googleQuery || '');
+        } else {
+            setGoogleSearchQuery('');
+        }
+    }, [selectedItem?.id, selectedItem?.type, selectedItem?.googleQuery]);
+
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col">
             <main className="flex flex-col lg:flex-row flex-1 p-6 lg:p-10 gap-8 max-w-7xl mx-auto w-full">
@@ -64,7 +73,11 @@ const StudentMaps: React.FC = () => {
                             <p className="mt-3">지도를 불러오는 중입니다.</p>
                         </div>
                     ) : (
-                        <MapViewer item={selectedItem} />
+                        <MapViewer
+                            item={selectedItem}
+                            googleSearchQuery={selectedItem?.type === 'google' ? googleSearchQuery : undefined}
+                            onGoogleSearchQueryChange={selectedItem?.type === 'google' ? setGoogleSearchQuery : undefined}
+                        />
                     )}
                 </section>
             </main>
