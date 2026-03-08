@@ -26,6 +26,19 @@ const MyPage = lazy(() => import('./pages/student/MyPage'));
 const StudentHistory = lazy(() => import('./pages/student/History'));
 const Calendar = lazy(() => import('./pages/student/Calendar'));
 
+const getBootRedirectHash = () => {
+    if (typeof window === 'undefined') return '';
+    if (window.location.hash) return '';
+
+    const normalizedPath = window.location.pathname.replace(/\/+$/, '');
+    const routeMatch = normalizedPath.match(/\/(student|teacher)(?:\/.*)?$/);
+    if (!routeMatch) return '';
+
+    const routePath = normalizedPath.slice(routeMatch.index || 0);
+    if (!routePath || routePath === '/') return '';
+    return `#${routePath}${window.location.search}`;
+};
+
 const LegacyRouteRedirect: React.FC<{ to: string }> = ({ to }) => {
     const location = useLocation();
     return <Navigate to={`${to}${location.search}`} replace />;
@@ -38,6 +51,12 @@ const LegacyRouteRedirect: React.FC<{ to: string }> = ({ to }) => {
 
 
 const App: React.FC = () => {
+    const bootRedirectHash = getBootRedirectHash();
+    if (bootRedirectHash) {
+        window.location.replace(`${window.location.origin}${window.location.pathname}${window.location.search}${bootRedirectHash}`);
+        return null;
+    }
+
     return (
         <AuthProvider>
             <Router>
