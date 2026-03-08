@@ -62,6 +62,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({ fileUrl, storagePath, title
     const [pdfObjectUrl, setPdfObjectUrl] = useState('');
     const [loadingPdf, setLoadingPdf] = useState(true);
     const [loadError, setLoadError] = useState('');
+    const [nativeViewerFallback, setNativeViewerFallback] = useState(false);
     const pageWrapRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
@@ -72,6 +73,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({ fileUrl, storagePath, title
             setLoadingPdf(true);
             setLoadError('');
             setPdfObjectUrl('');
+            setNativeViewerFallback(false);
             setCurrentPage(1);
             setZoom(1.2);
             setRegionHits([]);
@@ -82,12 +84,18 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({ fileUrl, storagePath, title
                 let blob: Blob | null = null;
 
                 if (fileUrl) {
-                    const response = await withTimeout(fetch(fileUrl, { mode: 'cors' }), 20000, 'pdf-fetch');
-                    if (!response.ok) {
-                        throw new Error(`pdf-fetch-failed:${response.status}`);
+                    try {
+                        const response = await withTimeout(fetch(fileUrl, { mode: 'cors' }), 20000, 'pdf-fetch');
+                        if (!response.ok) {
+                            throw new Error(`pdf-fetch-failed:${response.status}`);
+                        }
+                        blob = await withTimeout(response.blob(), 15000, 'pdf-blob');
+                    } catch (urlError) {
+                        console.warn('Direct PDF fetch failed, trying storage path fallback:', urlError);
                     }
-                    blob = await withTimeout(response.blob(), 15000, 'pdf-blob');
-                } else if (storagePath) {
+                }
+
+                if (!blob && storagePath) {
                     const fileRef = ref(storage, storagePath);
 
                     try {
@@ -125,6 +133,9 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({ fileUrl, storagePath, title
                 console.error('Failed to prepare PDF file:', error);
                 if (!active) return;
                 setLoadError(error instanceof Error ? error.message : 'pdf-load-failed');
+                if (fileUrl) {
+                    setNativeViewerFallback(true);
+                }
             } finally {
                 if (active) {
                     setLoadingPdf(false);
@@ -275,10 +286,26 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({ fileUrl, storagePath, title
                         </div>
                     )}
 
-                    {!loadingPdf && loadError && (
+                    {!loadingPdf && loadError && !nativeViewerFallback && (
                         <div className="rounded-xl bg-white px-4 py-6 text-sm text-red-600">
                             PDF 파일을 불러오지 못했습니다. 파일 형식이나 다운로드 경로를 확인해 주세요.
                             <div className="mt-2 text-xs text-gray-500">{loadError}</div>
+                        </div>
+                    )}
+
+                    {!loadingPdf && nativeViewerFallback && fileUrl && (
+                        <div className="space-y-3">
+                            <div className="rounded-xl bg-white px-4 py-4 text-sm text-amber-700">
+                                PDF 추출 보기에는 실패해서 브라우저 기본 뷰어로 대신 표시합니다.
+                                <div className="mt-2 text-xs text-gray-500">{loadError}</div>
+                            </div>
+                            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+                                <iframe
+                                    src={fileUrl}
+                                    title={`${title} PDF`}
+                                    className="h-[72vh] w-full"
+                                />
+                            </div>
                         </div>
                     )}
 
