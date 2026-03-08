@@ -1,0 +1,17 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isTeacher() {
+      return isSignedIn() && request.auth.token.email == "westoria28@gmail.com";
+    }
+
+    match /map-resources/{resourceId}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isTeacher();
+    }
+  }
+}

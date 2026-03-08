@@ -50,6 +50,24 @@ const normalizeErrorMessage = (error: unknown) => {
     return message || 'unknown-error';
 };
 
+const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> => {
+    let timeoutId: number | undefined;
+
+    const timeoutPromise = new Promise<T>((_, reject) => {
+        timeoutId = window.setTimeout(() => {
+            reject(new Error(`${label}-timeout`));
+        }, timeoutMs);
+    });
+
+    try {
+        return await Promise.race([promise, timeoutPromise]);
+    } finally {
+        if (timeoutId) {
+            window.clearTimeout(timeoutId);
+        }
+    }
+};
+
 const ManageMaps: React.FC = () => {
     const { config } = useAuth();
     const [items, setItems] = useState<StoredMapResource[]>([]);
@@ -166,11 +184,15 @@ const ManageMaps: React.FC = () => {
             : '';
         const objectRef = ref(storage, `map-resources/${resourceId}/${Date.now()}${extension}`);
 
-        await uploadBytes(objectRef, selectedFile, {
-            contentType: selectedFile.type || undefined,
-        });
+        await withTimeout(
+            uploadBytes(objectRef, selectedFile, {
+                contentType: selectedFile.type || undefined,
+            }),
+            20000,
+            'storage-upload',
+        );
 
-        const fileUrl = await getDownloadURL(objectRef);
+        const fileUrl = await withTimeout(getDownloadURL(objectRef), 10000, 'storage-download-url');
 
         return {
             fileUrl,
@@ -279,7 +301,11 @@ const ManageMaps: React.FC = () => {
             }
         } catch (error) {
             console.error('Failed to save map resource:', error);
-            alert(`지도 자료 저장에 실패했습니다.\n${normalizeErrorMessage(error)}`);
+            const message = normalizeErrorMessage(error);
+            const storageHint = message.includes('storage-upload-timeout') || message.includes('storage-download-url-timeout')
+                ? '\nFirebase Storage 버킷 또는 Storage 규칙이 아직 준비되지 않았을 가능성이 큽니다.'
+                : '';
+            alert(`지도 자료 저장에 실패했습니다.\n${message}${storageHint}`);
         } finally {
             setSaving(false);
         }
