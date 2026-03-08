@@ -87,6 +87,11 @@ service cloud.firestore {
       allow write: if isTeacher();
     }
 
+    match /map_resources/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isTeacher();
+    }
+
     match /quiz_questions/{docId} {
       allow read: if isSignedIn();
       allow write: if isTeacher();
@@ -172,6 +177,11 @@ service cloud.firestore {
       }
 
       match /lessons/{docId} {
+        allow read: if isSignedIn();
+        allow write: if isTeacher();
+      }
+
+      match /map_resources/{docId} {
         allow read: if isSignedIn();
         allow write: if isTeacher();
       }

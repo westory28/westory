@@ -1,0 +1,65 @@
+export type MapResourceType = 'image' | 'iframe' | 'google';
+
+export interface MapResource {
+    id: string;
+    title: string;
+    category: string;
+    description: string;
+    type: MapResourceType;
+    imageUrl?: string;
+    embedUrl?: string;
+    googleQuery?: string;
+    externalUrl?: string;
+    sortOrder: number;
+}
+
+export const GOOGLE_MAP_RESOURCE_ID = 'google-maps';
+
+export const DEFAULT_GOOGLE_MAP_RESOURCE: MapResource = {
+    id: GOOGLE_MAP_RESOURCE_ID,
+    title: '구글 지도',
+    category: '실시간 지도',
+    description: 'Google Maps Embed API를 연결하면 원하는 지역 지도를 바로 수업에 넣을 수 있습니다.',
+    type: 'google',
+    googleQuery: '대한민국 서울 경복궁',
+    externalUrl: 'https://www.google.com/maps',
+    sortOrder: 0,
+};
+
+const GOOGLE_MAPS_EMBED_KEY = (import.meta.env.VITE_GOOGLE_MAPS_EMBED_API_KEY || '').trim();
+
+export const normalizeMapResource = (id: string, raw: Partial<MapResource>): MapResource => ({
+    id,
+    title: String(raw.title || '').trim() || '지도 자료',
+    category: String(raw.category || '').trim() || '기타 지도',
+    description: String(raw.description || '').trim(),
+    type: raw.type === 'image' || raw.type === 'iframe' || raw.type === 'google' ? raw.type : 'image',
+    imageUrl: String(raw.imageUrl || '').trim(),
+    embedUrl: String(raw.embedUrl || '').trim(),
+    googleQuery: String(raw.googleQuery || '').trim(),
+    externalUrl: String(raw.externalUrl || '').trim(),
+    sortOrder: Number.isFinite(Number(raw.sortOrder)) ? Number(raw.sortOrder) : 999,
+});
+
+export const mergeMapResources = (resources: MapResource[]): MapResource[] => {
+    const deduped = new Map<string, MapResource>();
+    [DEFAULT_GOOGLE_MAP_RESOURCE, ...resources].forEach((item) => {
+        deduped.set(item.id, { ...item });
+    });
+    return Array.from(deduped.values()).sort((a, b) => {
+        if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+        return a.title.localeCompare(b.title, 'ko');
+    });
+};
+
+export const getGoogleMapsEmbedUrl = (query?: string) => {
+    const normalizedQuery = String(query || '').trim();
+    if (!normalizedQuery || !GOOGLE_MAPS_EMBED_KEY) return '';
+    return `https://www.google.com/maps/embed/v1/search?key=${encodeURIComponent(GOOGLE_MAPS_EMBED_KEY)}&q=${encodeURIComponent(normalizedQuery)}&language=ko`;
+};
+
+export const getGoogleMapsExternalUrl = (query?: string) => {
+    const normalizedQuery = String(query || '').trim();
+    if (!normalizedQuery) return 'https://www.google.com/maps';
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(normalizedQuery)}`;
+};

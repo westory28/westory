@@ -5,6 +5,7 @@ import MainLayout from './components/layout/MainLayout';
 const Login = lazy(() => import('./pages/Login'));
 const StudentDashboard = lazy(() => import('./pages/student/Dashboard'));
 const StudentNote = lazy(() => import('./pages/student/lesson/Note'));
+const StudentMaps = lazy(() => import('./pages/student/lesson/Maps'));
 const StudentThinkCloud = lazy(() => import('./pages/student/lesson/ThinkCloud'));
 const StudentQuizIndex = lazy(() => import('./pages/student/quiz/QuizIndex'));
 const QuizRunner = lazy(() => import('./pages/student/quiz/QuizRunner'));
@@ -16,6 +17,7 @@ const ManageExam = lazy(() => import('./pages/teacher/ManageExam'));
 const Settings = lazy(() => import('./pages/teacher/Settings'));
 const ManageSchedule = lazy(() => import('./pages/teacher/ManageSchedule'));
 const ManageLesson = lazy(() => import('./pages/teacher/ManageLesson'));
+const ManageMaps = lazy(() => import('./pages/teacher/ManageMaps'));
 const ManageThinkCloud = lazy(() => import('./pages/teacher/ManageThinkCloud'));
 const MyPage = lazy(() => import('./pages/student/MyPage'));
 const StudentHistory = lazy(() => import('./pages/student/History'));
@@ -43,6 +45,11 @@ const App: React.FC = () => {
                             <Route path="/student/lesson/note" element={
                                 <MainLayout>
                                     <StudentNote />
+                                </MainLayout>
+                            } />
+                            <Route path="/student/lesson/maps" element={
+                                <MainLayout>
+                                    <StudentMaps />
                                 </MainLayout>
                             } />
                             <Route path="/student/lesson/think-cloud" element={
@@ -98,6 +105,11 @@ const App: React.FC = () => {
                             <Route path="/teacher/lesson" element={
                                 <MainLayout>
                                     <ManageLesson />
+                                </MainLayout>
+                            } />
+                            <Route path="/teacher/lesson/maps" element={
+                                <MainLayout>
+                                    <ManageMaps />
                                 </MainLayout>
                             } />
                             <Route path="/teacher/lesson/think-cloud" element={
