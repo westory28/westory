@@ -247,10 +247,16 @@ const MapViewer: React.FC<MapViewerProps> = ({
                                             loading="lazy"
                                             referrerPolicy="no-referrer-when-downgrade"
                                             title={item.title}
+                                            allowFullScreen
                                         />
                                     </div>
                                 )}
                             </div>
+                            {(item.type === 'google' || item.type === 'iframe') && (
+                                <div className="mt-3 text-center text-xs text-gray-500">
+                                    모달 안에서 휠, 핀치, 드래그는 지도 원본 인터랙션으로 동작합니다.
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

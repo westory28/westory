@@ -79,6 +79,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
     const pageWrapRef = useRef<HTMLDivElement | null>(null);
     const modalSurfaceRef = useRef<HTMLDivElement | null>(null);
     const pinchStateRef = useRef<{ distance: number; zoom: number } | null>(null);
+    const dragStateRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
     const usingPreprocessedPages = pageImages.length > 0;
 
     const allRegionHits = useMemo<RegionHit[]>(
@@ -303,6 +304,26 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
 
     const handleTouchEnd = () => {
         pinchStateRef.current = null;
+    };
+
+    const handleDragStart = (event: React.MouseEvent<HTMLDivElement>) => {
+        if (!modalSurfaceRef.current) return;
+        dragStateRef.current = {
+            x: event.clientX,
+            y: event.clientY,
+            left: modalSurfaceRef.current.scrollLeft,
+            top: modalSurfaceRef.current.scrollTop,
+        };
+    };
+
+    const handleDragMove = (event: React.MouseEvent<HTMLDivElement>) => {
+        if (!modalSurfaceRef.current || !dragStateRef.current) return;
+        modalSurfaceRef.current.scrollLeft = dragStateRef.current.left - (event.clientX - dragStateRef.current.x);
+        modalSurfaceRef.current.scrollTop = dragStateRef.current.top - (event.clientY - dragStateRef.current.y);
+    };
+
+    const handleDragEnd = () => {
+        dragStateRef.current = null;
     };
 
     const renderPageSurface = (interactive: boolean) => (
@@ -572,11 +593,15 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
 
                                 <div
                                     ref={modalSurfaceRef}
-                                    className="min-h-0 flex-1 overflow-auto bg-slate-100 p-4"
+                                    className="min-h-0 flex-1 overflow-auto bg-slate-100 p-4 cursor-grab active:cursor-grabbing"
                                     onWheel={handleWheelZoom}
                                     onTouchStart={handleTouchStart}
                                     onTouchMove={handleTouchMove}
                                     onTouchEnd={handleTouchEnd}
+                                    onMouseDown={handleDragStart}
+                                    onMouseMove={handleDragMove}
+                                    onMouseUp={handleDragEnd}
+                                    onMouseLeave={handleDragEnd}
                                 >
                                     <div className="flex min-h-full items-start justify-center">
                                         {renderPageSurface(false)}
