@@ -97,6 +97,17 @@ service cloud.firestore {
       allow write: if isTeacher();
     }
 
+    match /history_classrooms/{docId} {
+      allow read: if isTeacher() || (isSignedIn() && resource.data.targetStudentUid == request.auth.uid);
+      allow write: if isTeacher();
+    }
+
+    match /history_classroom_results/{docId} {
+      allow read: if isTeacher() || (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if isTeacher();
+    }
+
     match /assessment_config/{docId} {
       allow read: if isSignedIn();
       allow write: if isTeacher();
@@ -189,6 +200,17 @@ service cloud.firestore {
       match /quiz_questions/{docId} {
         allow read: if isSignedIn();
         allow write: if isTeacher();
+      }
+
+      match /history_classrooms/{docId} {
+        allow read: if isTeacher() || (isSignedIn() && resource.data.targetStudentUid == request.auth.uid);
+        allow write: if isTeacher();
+      }
+
+      match /history_classroom_results/{docId} {
+        allow read: if isTeacher() || (isSignedIn() && resource.data.uid == request.auth.uid);
+        allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+        allow update, delete: if isTeacher();
       }
 
       match /assessment_config/{docId} {

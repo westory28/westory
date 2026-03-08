@@ -28,8 +28,12 @@ export const MENUS: MenuConfig = {
         },
         {
             name: '평가',
-            url: '/student/quiz',
+            url: '/student/quiz/history2',
             icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2',
+            children: [
+                { name: '역사2', url: '/student/quiz/history2' },
+                { name: '역사교실', url: '/student/history-classroom' },
+            ],
         },
         {
             name: '성적',
@@ -57,9 +61,11 @@ export const MENUS: MenuConfig = {
             url: '/teacher/quiz',
             icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z',
             children: [
-                { name: '문제 등록', url: '/teacher/quiz' },
+                { name: '역사2', url: '/teacher/quiz/history2' },
+                { name: '문제 등록', url: '/teacher/quiz/history2' },
                 { name: '제출 현황', url: '/teacher/quiz?tab=log' },
                 { name: '문제 은행', url: '/teacher/quiz?tab=bank' },
+                { name: '역사교실', url: '/teacher/quiz/history-classroom' },
             ],
         },
         {

@@ -9,10 +9,13 @@ const StudentMaps = lazy(() => import('./pages/student/lesson/Maps'));
 const StudentThinkCloud = lazy(() => import('./pages/student/lesson/ThinkCloud'));
 const StudentQuizIndex = lazy(() => import('./pages/student/quiz/QuizIndex'));
 const QuizRunner = lazy(() => import('./pages/student/quiz/QuizRunner'));
+const HistoryClassroomIndex = lazy(() => import('./pages/student/history-classroom/HistoryClassroomIndex'));
+const HistoryClassroomRunner = lazy(() => import('./pages/student/history-classroom/HistoryClassroomRunner'));
 const StudentScoreDashboard = lazy(() => import('./pages/student/score/ScoreDashboard'));
 const TeacherDashboard = lazy(() => import('./pages/teacher/Dashboard'));
 const StudentList = lazy(() => import('./pages/teacher/StudentList'));
 const ManageQuiz = lazy(() => import('./pages/teacher/ManageQuiz'));
+const ManageHistoryClassroom = lazy(() => import('./pages/teacher/ManageHistoryClassroom'));
 const ManageExam = lazy(() => import('./pages/teacher/ManageExam'));
 const Settings = lazy(() => import('./pages/teacher/Settings'));
 const ManageSchedule = lazy(() => import('./pages/teacher/ManageSchedule'));
@@ -58,6 +61,9 @@ const App: React.FC = () => {
                                 </MainLayout>
                             } />
                             <Route path="/student/quiz" element={
+                                <Navigate to="/student/quiz/history2" replace />
+                            } />
+                            <Route path="/student/quiz/history2" element={
                                 <MainLayout>
                                     <StudentQuizIndex />
                                 </MainLayout>
@@ -65,6 +71,16 @@ const App: React.FC = () => {
                             <Route path="/student/quiz/run" element={
                                 <MainLayout>
                                     <QuizRunner />
+                                </MainLayout>
+                            } />
+                            <Route path="/student/history-classroom" element={
+                                <MainLayout>
+                                    <HistoryClassroomIndex />
+                                </MainLayout>
+                            } />
+                            <Route path="/student/history-classroom/run" element={
+                                <MainLayout>
+                                    <HistoryClassroomRunner />
                                 </MainLayout>
                             } />
                             <Route path="/student/score" element={
@@ -85,6 +101,16 @@ const App: React.FC = () => {
                             <Route path="/teacher/quiz" element={
                                 <MainLayout>
                                     <ManageQuiz />
+                                </MainLayout>
+                            } />
+                            <Route path="/teacher/quiz/history2" element={
+                                <MainLayout>
+                                    <ManageQuiz />
+                                </MainLayout>
+                            } />
+                            <Route path="/teacher/quiz/history-classroom" element={
+                                <MainLayout>
+                                    <ManageHistoryClassroom />
                                 </MainLayout>
                             } />
                             <Route path="/teacher/exam" element={
