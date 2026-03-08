@@ -28,10 +28,9 @@ export const MENUS: MenuConfig = {
         },
         {
             name: '평가',
-            url: '/student/quiz/history2',
+            url: '/student/quiz',
             icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2',
             children: [
-                { name: '역사2', url: '/student/quiz/history2' },
                 { name: '역사교실', url: '/student/history-classroom' },
             ],
         },
@@ -61,8 +60,7 @@ export const MENUS: MenuConfig = {
             url: '/teacher/quiz',
             icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z',
             children: [
-                { name: '역사2', url: '/teacher/quiz/history2' },
-                { name: '문제 등록', url: '/teacher/quiz/history2' },
+                { name: '문제 등록', url: '/teacher/quiz' },
                 { name: '제출 현황', url: '/teacher/quiz?tab=log' },
                 { name: '문제 은행', url: '/teacher/quiz?tab=bank' },
                 { name: '역사교실', url: '/teacher/quiz/history-classroom' },
@@ -90,6 +88,11 @@ const deepCloneMenus = (menus: MenuConfig): MenuConfig =>
 
 const toSafeText = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 
+const REMOVED_MENU_URLS = new Set([
+    '/student/quiz/history2',
+    '/teacher/quiz/history2',
+]);
+
 const sanitizeChildren = (children: unknown): MenuChild[] => {
     if (!Array.isArray(children)) return [];
     return children
@@ -98,7 +101,7 @@ const sanitizeChildren = (children: unknown): MenuChild[] => {
             url: toSafeText((child as MenuChild)?.url),
             hidden: (child as MenuChild)?.hidden === true,
         }))
-        .filter((child) => child.name && child.url);
+        .filter((child) => child.name && child.url && !REMOVED_MENU_URLS.has(child.url));
 };
 
 const mergeFallbackChildren = (items: MenuItem[], fallbackItems: MenuItem[]): MenuItem[] => {
@@ -142,7 +145,7 @@ export const sanitizeMenuConfig = (raw: unknown): MenuConfig => {
                 icon: toSafeText((item as MenuItem)?.icon),
                 children: sanitizeChildren((item as MenuItem)?.children),
             }))
-            .filter((item) => item.name && item.url)
+            .filter((item) => item.name && item.url && !REMOVED_MENU_URLS.has(item.url))
             .map((item) => ({
                 ...item,
                 icon: item.icon || fallback[portal].find((x) => x.url === item.url)?.icon || '',

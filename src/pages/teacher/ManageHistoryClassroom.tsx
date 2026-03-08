@@ -107,7 +107,7 @@ const ManageHistoryClassroom: React.FC = () => {
                 const teacherQuizMenu = (menuConfig.teacher || []).find((menu) => menu.url === '/teacher/quiz');
                 const children = teacherQuizMenu?.children || [];
                 setTabLabels({
-                    manage: children.find((child) => child.url === '/teacher/quiz/history2')?.name || '문제 등록',
+                    manage: children.find((child) => child.url === '/teacher/quiz')?.name || '문제 등록',
                     log: children.find((child) => child.url === '/teacher/quiz?tab=log')?.name || '제출 현황',
                     bank: children.find((child) => child.url === '/teacher/quiz?tab=bank')?.name || '문제 은행',
                     historyClassroom: children.find((child) => child.url === '/teacher/quiz/history-classroom')?.name || '역사교실',
@@ -213,7 +213,7 @@ const ManageHistoryClassroom: React.FC = () => {
                 <div className="flex overflow-x-auto border-b border-gray-200 bg-white px-2">
                     <button
                         type="button"
-                        onClick={() => navigate('/teacher/quiz/history2')}
+                        onClick={() => navigate('/teacher/quiz')}
                         className="border-b-2 border-transparent px-6 py-3 text-sm font-bold text-gray-600 transition hover:bg-gray-50"
                     >
                         {tabLabels.manage}
