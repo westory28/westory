@@ -93,6 +93,16 @@ const LEGACY_MENU_URL_PREFIXES = [
     '/teacher/quiz/history2',
 ];
 
+const getLegacyCanonicalUrl = (pathOnly: string) => {
+    if (pathOnly === '/student/quiz/history2' || pathOnly.startsWith('/student/quiz/history2/')) {
+        return '/student/quiz';
+    }
+    if (pathOnly === '/teacher/quiz/history2' || pathOnly.startsWith('/teacher/quiz/history2/')) {
+        return '/teacher/quiz';
+    }
+    return '';
+};
+
 const normalizeMenuUrl = (value: unknown) => {
     let raw = toSafeText(value);
     if (!raw) return '';
@@ -113,7 +123,8 @@ const normalizeMenuUrl = (value: unknown) => {
 
     const [pathPart, queryPart = ''] = raw.split('?');
     const normalizedPath = pathPart.replace(/\/{2,}/g, '/').replace(/\/+$/, '') || '/';
-    return queryPart ? `${normalizedPath}?${queryPart}` : normalizedPath;
+    const canonicalPath = getLegacyCanonicalUrl(normalizedPath) || normalizedPath;
+    return queryPart && canonicalPath === normalizedPath ? `${canonicalPath}?${queryPart}` : canonicalPath;
 };
 
 const isLegacyRemovedUrl = (value: unknown) => {
