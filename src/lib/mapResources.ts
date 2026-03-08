@@ -165,13 +165,12 @@ export const mergeMapResources = (resources: MapResource[]) => {
 };
 
 const getMapResourceGroupSeed = (item: MapResource) => {
-    if (item.type === 'google') return `google:${item.id}`;
+    const normalizedTabGroup = String(item.tabGroup || '').trim();
+    if (normalizedTabGroup) return normalizedTabGroup;
 
-    const normalizedTitle = String(item.title || '').trim();
-    if (!normalizedTitle) return item.id;
+    if (item.type === 'google') return item.title || `google:${item.id}`;
 
-    const firstToken = normalizedTitle.split(/\s+/u)[0];
-    return firstToken || normalizedTitle;
+    return String(item.title || '').trim() || item.id;
 };
 
 const sortMapResources = <T extends MapResource>(items: T[]) => (
@@ -201,7 +200,7 @@ export const groupMapResourcesForDisplay = <T extends MapResource>(resources: T[
 
             return {
                 key,
-                title: representative?.title || items[0]?.title || '지도 자료',
+                title: key || representative?.title || items[0]?.title || '지도 자료',
                 representative: representative || items[0],
                 items,
             };

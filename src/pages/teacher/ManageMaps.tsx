@@ -158,6 +158,7 @@ const ManageMaps: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [isTabRenameOpen, setIsTabRenameOpen] = useState(false);
     const [isReorderMode, setIsReorderMode] = useState(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [selectedFilePreviewUrl, setSelectedFilePreviewUrl] = useState('');
@@ -166,6 +167,8 @@ const ManageMaps: React.FC = () => {
     const [isPdfShortcutExpanded, setIsPdfShortcutExpanded] = useState(false);
     const [isPreparingPdfUploads, setIsPreparingPdfUploads] = useState(false);
     const [customTagInputs, setCustomTagInputs] = useState<Record<number, string>>({});
+    const [tabRenameSourceKey, setTabRenameSourceKey] = useState('');
+    const [tabRenameValue, setTabRenameValue] = useState('');
     const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     const collectionPath = useMemo(() => getSemesterCollectionPath(config, 'map_resources'), [config]);
@@ -449,6 +452,13 @@ const ManageMaps: React.FC = () => {
             setSelectedId(itemId);
         }
         setIsSettingsOpen(true);
+    };
+
+    const handleOpenTabRename = (groupKey: string) => {
+        const targetGroup = displayGroupMap.get(groupKey);
+        setTabRenameSourceKey(groupKey);
+        setTabRenameValue(targetGroup?.title || '');
+        setIsTabRenameOpen(true);
     };
 
     const persistOrderedItems = async (orderedItems: StoredMapResource[]) => {
@@ -887,6 +897,47 @@ const ManageMaps: React.FC = () => {
         }
     };
 
+    const handleSaveTabRename = async () => {
+        const nextTabGroup = tabRenameValue.trim();
+        if (!tabRenameSourceKey || !nextTabGroup) {
+            alert('지도 탭 이름을 입력해 주세요.');
+            return;
+        }
+
+        const targetGroup = displayGroupMap.get(tabRenameSourceKey);
+        if (!targetGroup?.items.length) {
+            setIsTabRenameOpen(false);
+            return;
+        }
+
+        try {
+            const nextItems = items.map((item) => {
+                if (!targetGroup.items.some((groupItem) => groupItem.id === item.id)) return item;
+                return { ...item, tabGroup: nextTabGroup };
+            });
+
+            for (const item of nextItems) {
+                const existing = items.find((current) => current.id === item.id);
+                if (!existing || existing.tabGroup === item.tabGroup) continue;
+                await persistToScope(
+                    item.storageScope || 'semester',
+                    { ...normalizeMapResource(item.id, item), tabGroup: nextTabGroup },
+                );
+            }
+
+            setItems(nextItems);
+            setDraft((prev) => (
+                targetGroup.items.some((item) => item.id === prev.id)
+                    ? { ...prev, tabGroup: nextTabGroup }
+                    : prev
+            ));
+            setIsTabRenameOpen(false);
+        } catch (error) {
+            console.error('Failed to rename map tab:', error);
+            alert(`지도 탭 이름을 변경하지 못했습니다.\n${normalizeErrorMessage(error)}`);
+        }
+    };
+
     const selectedPreview = draft.id ? draft : null;
     const displayGroups = useMemo(() => groupMapResourcesForDisplay(items), [items]);
     const displayGroupMap = useMemo(
@@ -1011,28 +1062,15 @@ const ManageMaps: React.FC = () => {
                                 </button>
                             </div>
                         ) : (
-                                <button
-                                    type="button"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (isReorderMode) {
-                                            handleOpenSettings(item.id);
-                                            return;
-                                        }
-
-                                        const groupKey = item.id.replace(/^map-group:/u, '');
-                                        const targetGroup = displayGroupMap.get(groupKey);
-                                        const targetId = currentDisplayGroup?.key === groupKey
-                                            ? (currentPreviewItem?.id || targetGroup?.representative.id || '')
-                                            : (targetGroup?.representative.id || '');
-
-                                        if (targetId) {
-                                            handleOpenSettings(targetId);
-                                        }
-                                    }}
-                                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-gray-400 transition hover:border-gray-200 hover:bg-white hover:text-gray-700"
-                                    aria-label={`${item.title} 설정 열기`}
-                                title="설정"
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenTabRename(item.id.replace(/^map-group:/u, ''));
+                                }}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-gray-400 transition hover:border-gray-200 hover:bg-white hover:text-gray-700"
+                                aria-label={`${item.title} 탭 이름 설정`}
+                                title="탭 이름 설정"
                             >
                                 <i className="fas fa-cog text-sm"></i>
                             </button>
@@ -1055,9 +1093,18 @@ const ManageMaps: React.FC = () => {
                                         <div className="mb-3 inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
                                             {currentPreviewItem.category}
                                         </div>
-                                        <h1 className="text-2xl font-extrabold text-gray-900">
-                                            {currentDisplayGroup?.title || currentPreviewItem.title}
-                                        </h1>
+                                        <div className="flex flex-wrap items-center gap-3">
+                                            <h1 className="text-2xl font-extrabold text-gray-900">
+                                                {currentDisplayGroup?.title || currentPreviewItem.title}
+                                            </h1>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleOpenSettings(currentPreviewItem.id)}
+                                                className="inline-flex items-center rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-bold text-gray-700 hover:bg-gray-50"
+                                            >
+                                                편집
+                                            </button>
+                                        </div>
                                     </div>
                                     {previewExternalUrl && (
                                         <a
@@ -1120,9 +1167,9 @@ const ManageMaps: React.FC = () => {
                     <div className="max-h-[92vh] w-full max-w-7xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
                         <div className="flex items-center justify-between gap-3 p-6 md:p-8">
                             <div>
-                                <h2 className="text-xl font-extrabold text-gray-900">지도 설정</h2>
+                                <h2 className="text-xl font-extrabold text-gray-900">지도 편집</h2>
                                 <p className="mt-1 text-sm text-gray-500">
-                                    지도 탭, 파일, 태그, 바로가기 구성을 한 곳에서 편집합니다.
+                                    지도 탭, 제목, 분류, 파일, 태그, 바로가기를 이 창에서 편집합니다.
                                 </p>
                             </div>
                             <button
@@ -1160,14 +1207,26 @@ const ManageMaps: React.FC = () => {
                             <div className="min-w-0">
                                 <div className="grid gap-4 md:grid-cols-2">
                                     <div>
+                                        <label className="mb-1 block text-xs font-bold text-gray-500">지도 탭</label>
+                                        <input
+                                            type="text"
+                                            value={draft.tabGroup || ''}
+                                            onChange={(e) => handleDraftChange('tabGroup', e.target.value)}
+                                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                                            placeholder="예: 한반도"
+                                        />
+                                        <p className="mt-1 text-xs text-gray-400">해당 지도가 속하는 상위 탭 이름입니다.</p>
+                                    </div>
+                                    <div>
                                         <label className="mb-1 block text-xs font-bold text-gray-500">지도 제목</label>
                                         <input
                                             type="text"
                                             value={draft.title}
                                             onChange={(e) => handleDraftChange('title', e.target.value)}
                                             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                                            placeholder="예: 한반도의 자연지형 지도"
+                                            placeholder="예: 한반도 자연지형 지도"
                                         />
+                                        <p className="mt-1 text-xs text-gray-400">가로 하위 탭에 표시되는 제목입니다.</p>
                                     </div>
                                     <div>
                                         <label className="mb-1 block text-xs font-bold text-gray-500">분류</label>
@@ -1178,16 +1237,7 @@ const ManageMaps: React.FC = () => {
                                             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                                             placeholder="예: 한국사"
                                         />
-                                    </div>
-                                    <div>
-                                        <label className="mb-1 block text-xs font-bold text-gray-500">지도 탭</label>
-                                        <input
-                                            type="text"
-                                            value={draft.tabGroup || ''}
-                                            onChange={(e) => handleDraftChange('tabGroup', e.target.value)}
-                                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                                            placeholder="예: 한반도 지도"
-                                        />
+                                        <p className="mt-1 text-xs text-gray-400">지도 이름 옆 배지에만 표시되는 유형입니다.</p>
                                     </div>
                                     <div>
                                         <label className="mb-1 block text-xs font-bold text-gray-500">지도 유형</label>
@@ -1540,6 +1590,57 @@ const ManageMaps: React.FC = () => {
                                     </button>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {isTabRenameOpen && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4">
+                    <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+                        <div className="flex items-start justify-between gap-3">
+                            <div>
+                                <h2 className="text-lg font-extrabold text-gray-900">지도 탭 이름 변경</h2>
+                                <p className="mt-1 text-sm text-gray-500">
+                                    좌측 탭에 표시되는 이름만 먼저 바꿉니다.
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsTabRenameOpen(false)}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                                aria-label="탭 이름 설정 닫기"
+                            >
+                                <i className="fas fa-times"></i>
+                            </button>
+                        </div>
+
+                        <div className="mt-5">
+                            <label className="mb-1 block text-xs font-bold text-gray-500">지도 탭</label>
+                            <input
+                                type="text"
+                                value={tabRenameValue}
+                                onChange={(e) => setTabRenameValue(e.target.value)}
+                                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                                placeholder="예: 한반도"
+                            />
+                        </div>
+
+                        <div className="mt-6 flex justify-end gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setIsTabRenameOpen(false)}
+                                className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
+                            >
+                                닫기
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => void handleSaveTabRename()}
+                                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700"
+                            >
+                                저장
+                            </button>
                         </div>
                     </div>
                 </div>
