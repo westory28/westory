@@ -21,7 +21,9 @@ const resolveMenuTarget = (url: string, portal: 'student' | 'teacher') => {
     const normalized = (url || '').trim();
     if (!normalized) return normalized;
     const canonicalRoot = portal === 'teacher' ? '/teacher/quiz' : '/student/quiz';
-    return /(^|\/)quiz\/history2(\/|$)|(^|\/)history2(\/|$)/.test(normalized) ? canonicalRoot : normalized;
+    return /(^|\/)quiz\/history2(\/|$)|(^|\/)history2(\/|$)/.test(normalized)
+        ? `${canonicalRoot}?menu=history2`
+        : normalized;
 };
 
 const resolveChildMenuTarget = (
@@ -34,7 +36,7 @@ const resolveChildMenuTarget = (
     const normalizedParent = (parentUrl || '').trim();
     const canonicalRoot = portal === 'teacher' ? '/teacher/quiz' : '/student/quiz';
     if (normalizedName === '역사2' && normalizedParent.startsWith(canonicalRoot)) {
-        return canonicalRoot;
+        return `${canonicalRoot}?menu=history2`;
     }
     return resolveMenuTarget(childUrl, portal);
 };
