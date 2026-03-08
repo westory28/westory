@@ -1,5 +1,5 @@
 import React, { Suspense, lazy } from 'react';
-import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import MainLayout from './components/layout/MainLayout';
 const Login = lazy(() => import('./pages/Login'));
@@ -25,6 +25,11 @@ const ManageThinkCloud = lazy(() => import('./pages/teacher/ManageThinkCloud'));
 const MyPage = lazy(() => import('./pages/student/MyPage'));
 const StudentHistory = lazy(() => import('./pages/student/History'));
 const Calendar = lazy(() => import('./pages/student/Calendar'));
+
+const LegacyRouteRedirect: React.FC<{ to: string }> = ({ to }) => {
+    const location = useLocation();
+    return <Navigate to={`${to}${location.search}`} replace />;
+};
 
 
 
@@ -66,9 +71,10 @@ const App: React.FC = () => {
                                 </MainLayout>
                             } />
                             <Route path="/student/quiz/history2" element={
-                                <MainLayout>
-                                    <StudentQuizIndex />
-                                </MainLayout>
+                                <LegacyRouteRedirect to="/student/quiz" />
+                            } />
+                            <Route path="/student/quiz/history2/*" element={
+                                <LegacyRouteRedirect to="/student/quiz" />
                             } />
                             <Route path="/student/quiz/run" element={
                                 <MainLayout>
@@ -106,9 +112,10 @@ const App: React.FC = () => {
                                 </MainLayout>
                             } />
                             <Route path="/teacher/quiz/history2" element={
-                                <MainLayout>
-                                    <ManageQuiz />
-                                </MainLayout>
+                                <LegacyRouteRedirect to="/teacher/quiz" />
+                            } />
+                            <Route path="/teacher/quiz/history2/*" element={
+                                <LegacyRouteRedirect to="/teacher/quiz" />
                             } />
                             <Route path="/teacher/quiz/history-classroom" element={
                                 <MainLayout>
