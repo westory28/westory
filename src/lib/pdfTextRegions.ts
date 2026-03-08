@@ -33,6 +33,27 @@ const isLikelyRegionLabel = (value: string) => {
 
 const normalizeSegmentText = (value: string) => value.replace(/\s+/g, ' ').trim();
 
+const resolveLabelBounds = (segment: TextSegment, normalizedText: string, label: string) => {
+    const segmentWidth = Math.max(segment.right - segment.left, 1);
+    const averageCharWidth = segmentWidth / Math.max(normalizedText.length, 1);
+    const labelIndex = normalizedText.indexOf(label);
+
+    if (labelIndex < 0) {
+        return {
+            left: segment.left,
+            width: segmentWidth,
+        };
+    }
+
+    const left = segment.left + (averageCharWidth * labelIndex);
+    const width = Math.max(averageCharWidth * Math.max(label.length, 2), segment.height * 1.6);
+
+    return {
+        left,
+        width,
+    };
+};
+
 const shouldInsertSpace = (segmentText: string, nextText: string, gap: number, height: number) => {
     if (!segmentText) return false;
     if (/\s$/u.test(segmentText) || /^\s/u.test(nextText)) return false;
@@ -50,14 +71,16 @@ export const extractPdfTextRegions = (
     const flush = () => {
         if (!current) return;
 
-        const label = sanitizeRegionLabel(normalizeSegmentText(current.text));
+        const normalizedText = normalizeSegmentText(current.text);
+        const label = sanitizeRegionLabel(normalizedText);
         if (isLikelyRegionLabel(label)) {
+            const bounds = resolveLabelBounds(current, normalizedText, label);
             regions.push({
                 label,
                 page: 1,
-                left: Math.max(0, current.left) * scale,
+                left: Math.max(0, bounds.left) * scale,
                 top: Math.max(0, pageHeight - current.baselineY - current.height) * scale,
-                width: Math.max(70, current.right - current.left + 18) * scale,
+                width: Math.max(70, bounds.width + 18) * scale,
                 height: Math.max(28, current.height + 14) * scale,
             });
         }
