@@ -77,6 +77,7 @@ const ManageMaps: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [isReorderMode, setIsReorderMode] = useState(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -164,6 +165,45 @@ const ManageMaps: React.FC = () => {
             setSelectedId(itemId);
         }
         setIsSettingsOpen(true);
+    };
+
+    const persistOrderedItems = async (orderedItems: StoredMapResource[]) => {
+        for (let index = 0; index < orderedItems.length; index += 1) {
+            const item = orderedItems[index];
+            const nextPayload: MapResource = {
+                ...normalizeMapResource(item.id, item),
+                sortOrder: index,
+            };
+            const targetScope = item.storageScope || 'semester';
+            await persistToScope(targetScope, nextPayload);
+        }
+    };
+
+    const handleMoveItem = async (itemId: string, direction: 'up' | 'down') => {
+        const currentIndex = items.findIndex((item) => item.id === itemId);
+        if (currentIndex < 0) return;
+
+        const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+        if (targetIndex < 0 || targetIndex >= items.length) return;
+
+        const nextItems = [...items];
+        const [movedItem] = nextItems.splice(currentIndex, 1);
+        nextItems.splice(targetIndex, 0, movedItem);
+
+        const orderedItems = nextItems.map((item, index) => ({
+            ...item,
+            sortOrder: index,
+        }));
+
+        setItems(orderedItems);
+        setSelectedId(itemId);
+
+        try {
+            await persistOrderedItems(orderedItems);
+        } catch (error) {
+            console.error('Failed to reorder map resources:', error);
+            alert(`지도 순서 저장에 실패했습니다.\n${normalizeErrorMessage(error)}`);
+        }
     };
 
     const persistToScope = async (scope: StorageScope, payload: MapResource) => {
@@ -390,20 +430,64 @@ const ManageMaps: React.FC = () => {
                             추가
                         </button>
                     )}
-                    renderItemAction={(item) => (
+                    headingAction={(
                         <button
                             type="button"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenSettings(item.id);
-                            }}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-gray-400 transition hover:border-gray-200 hover:bg-white hover:text-gray-700"
-                            aria-label={`${item.title} 설정 열기`}
-                            title="설정"
+                            onClick={() => setIsReorderMode((prev) => !prev)}
+                            className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border text-sm transition ${
+                                isReorderMode
+                                    ? 'border-blue-200 bg-blue-50 text-blue-700'
+                                    : 'border-transparent text-gray-400 hover:border-gray-200 hover:bg-gray-50 hover:text-gray-700'
+                            }`}
+                            aria-label="지도 순서 변경"
+                            title="지도 순서 변경"
                         >
-                            <i className="fas fa-cog text-sm"></i>
+                            <i className="fas fa-arrow-up-down"></i>
                         </button>
                     )}
+                    renderItemAction={(item) => (
+                        isReorderMode ? (
+                            <div
+                                className="flex items-center gap-1"
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                <button
+                                    type="button"
+                                    onClick={() => void handleMoveItem(item.id, 'up')}
+                                    disabled={items[0]?.id === item.id}
+                                    className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-gray-200 text-gray-500 hover:bg-white disabled:opacity-30"
+                                    aria-label={`${item.title} 위로 이동`}
+                                    title="위로 이동"
+                                >
+                                    <i className="fas fa-chevron-up text-xs"></i>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => void handleMoveItem(item.id, 'down')}
+                                    disabled={items[items.length - 1]?.id === item.id}
+                                    className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-gray-200 text-gray-500 hover:bg-white disabled:opacity-30"
+                                    aria-label={`${item.title} 아래로 이동`}
+                                    title="아래로 이동"
+                                >
+                                    <i className="fas fa-chevron-down text-xs"></i>
+                                </button>
+                            </div>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenSettings(item.id);
+                                }}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-gray-400 transition hover:border-gray-200 hover:bg-white hover:text-gray-700"
+                                aria-label={`${item.title} 설정 열기`}
+                                title="설정"
+                            >
+                                <i className="fas fa-cog text-sm"></i>
+                            </button>
+                        )
+                    )}
+                    reorderMode={isReorderMode}
                 />
 
                 <section className="min-w-0 flex-1 space-y-6">

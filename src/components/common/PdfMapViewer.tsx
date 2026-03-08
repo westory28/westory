@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import type { PDFDocumentProxy, TextItem } from 'pdfjs-dist/types/src/display/api';
-import { getBlob, ref } from 'firebase/storage';
+import { getBlob, getBytes, ref } from 'firebase/storage';
 import { storage } from '../../lib/firebase';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -24,6 +24,8 @@ interface RegionHit {
     height: number;
 }
 
+const MAX_PDF_BYTES = 20 * 1024 * 1024;
+
 const hasUsefulLetters = (text: string) => /[가-힣A-Za-z]/.test(text);
 
 const isLikelyRegionLabel = (value: string) => {
@@ -33,6 +35,22 @@ const isLikelyRegionLabel = (value: string) => {
     if (!hasUsefulLetters(text)) return false;
     if (/^[^가-힣A-Za-z0-9]+$/.test(text)) return false;
     return true;
+};
+
+const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> => {
+    let timeoutId: number | undefined;
+
+    const timeoutPromise = new Promise<T>((_, reject) => {
+        timeoutId = window.setTimeout(() => reject(new Error(`${label}-timeout`)), timeoutMs);
+    });
+
+    try {
+        return await Promise.race([promise, timeoutPromise]);
+    } finally {
+        if (timeoutId) {
+            window.clearTimeout(timeoutId);
+        }
+    }
 };
 
 const PdfMapViewer: React.FC<PdfMapViewerProps> = ({ fileUrl, storagePath, title }) => {
@@ -58,18 +76,27 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({ fileUrl, storagePath, title
             setZoom(1.2);
             setRegionHits([]);
             setSelectedRegion(null);
+            setNumPages(0);
 
             try {
                 let blob: Blob;
 
                 if (storagePath) {
-                    blob = await getBlob(ref(storage, storagePath));
+                    const fileRef = ref(storage, storagePath);
+
+                    try {
+                        blob = await withTimeout(getBlob(fileRef), 12000, 'storage-get-blob');
+                    } catch (blobError) {
+                        console.warn('Storage getBlob failed, falling back to getBytes:', blobError);
+                        const bytes = await withTimeout(getBytes(fileRef, MAX_PDF_BYTES), 12000, 'storage-get-bytes');
+                        blob = new Blob([bytes], { type: 'application/pdf' });
+                    }
                 } else {
-                    const response = await fetch(fileUrl);
+                    const response = await withTimeout(fetch(fileUrl), 12000, 'pdf-fetch');
                     if (!response.ok) {
                         throw new Error(`pdf-fetch-failed:${response.status}`);
                     }
-                    blob = await response.blob();
+                    blob = await withTimeout(response.blob(), 8000, 'pdf-blob');
                 }
 
                 if (blob.type && !blob.type.includes('pdf')) {
@@ -80,9 +107,9 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({ fileUrl, storagePath, title
                 if (!active) return;
                 setPdfObjectUrl(revokedUrl);
             } catch (error) {
-                console.error('Failed to fetch PDF file:', error);
+                console.error('Failed to prepare PDF file:', error);
                 if (!active) return;
-                setLoadError(error instanceof Error ? error.message : 'pdf-fetch-failed');
+                setLoadError(error instanceof Error ? error.message : 'pdf-load-failed');
             } finally {
                 if (active) {
                     setLoadingPdf(false);
@@ -235,7 +262,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({ fileUrl, storagePath, title
 
                     {!loadingPdf && loadError && (
                         <div className="rounded-xl bg-white px-4 py-6 text-sm text-red-600">
-                            PDF 파일을 불러오지 못했습니다. 파일 형식이나 다운로드 URL을 확인해 주세요.
+                            PDF 파일을 불러오지 못했습니다. 파일 형식이나 다운로드 경로를 확인해 주세요.
                             <div className="mt-2 text-xs text-gray-500">{loadError}</div>
                         </div>
                     )}
