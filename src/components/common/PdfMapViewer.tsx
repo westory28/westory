@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import type { PDFDocumentProxy, TextItem } from 'pdfjs-dist/types/src/display/api';
-import { getBlob, getBytes, getDownloadURL, ref } from 'firebase/storage';
+import { getDownloadURL, ref } from 'firebase/storage';
 import { storage } from '../../lib/firebase';
 import type { PdfMapPageImage, PdfMapRegion } from '../../lib/mapResources';
 import { extractPdfTextRegions } from '../../lib/pdfTextRegions';
@@ -28,7 +28,6 @@ interface RegionHit {
     height: number;
 }
 
-const MAX_PDF_BYTES = 40 * 1024 * 1024;
 const BASE_MODAL_RATIO = 0.92;
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -61,7 +60,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
     const [fitZoom, setFitZoom] = useState(1);
     const [regionHits, setRegionHits] = useState<RegionHit[]>([]);
     const [selectedRegion, setSelectedRegion] = useState<RegionHit | null>(null);
-    const [pdfObjectUrl, setPdfObjectUrl] = useState('');
+    const [pdfSourceUrl, setPdfSourceUrl] = useState('');
     const [loadingPdf, setLoadingPdf] = useState(true);
     const [loadError, setLoadError] = useState('');
     const [nativeViewerFallback, setNativeViewerFallback] = useState(false);
@@ -94,13 +93,12 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
     }, [currentPage, pageImages, usingPreprocessedPages]);
 
     useEffect(() => {
-        let revokedUrl = '';
         let active = true;
 
         const loadPdf = async () => {
             setLoadingPdf(true);
             setLoadError('');
-            setPdfObjectUrl('');
+            setPdfSourceUrl('');
             setNativeViewerFallback(false);
             setCurrentPage(1);
             setSelectedRegion(null);
@@ -113,60 +111,24 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
             }
 
             try {
-                let blob: Blob | null = null;
-
                 if (fileUrl) {
-                    try {
-                        const response = await withTimeout(fetch(fileUrl, { mode: 'cors' }), 45000, 'pdf-fetch');
-                        if (!response.ok) {
-                            throw new Error(`pdf-fetch-failed:${response.status}`);
-                        }
-                        blob = await withTimeout(response.blob(), 30000, 'pdf-blob');
-                    } catch (urlError) {
-                        console.warn('Direct PDF fetch failed, trying storage path fallback:', urlError);
-                    }
+                    if (!active) return;
+                    setPdfSourceUrl(fileUrl);
+                    return;
                 }
 
-                if (!blob) {
-                    const storageCandidates = [
-                        storagePath ? ref(storage, storagePath) : null,
-                        fileUrl ? ref(storage, fileUrl) : null,
-                    ].filter(Boolean) as ReturnType<typeof ref>[];
-
-                    for (const fileRef of storageCandidates) {
-                        try {
-                            const downloadUrl = await withTimeout(getDownloadURL(fileRef), 30000, 'storage-download-url');
-                            const response = await withTimeout(fetch(downloadUrl, { mode: 'cors' }), 45000, 'storage-fetch');
-                            if (!response.ok) {
-                                throw new Error(`storage-fetch-failed:${response.status}`);
-                            }
-                            blob = await withTimeout(response.blob(), 30000, 'storage-fetch-blob');
-                            if (blob) break;
-                        } catch (downloadError) {
-                            console.warn('Storage download fetch failed, falling back to SDK blob APIs:', downloadError);
-                            try {
-                                blob = await withTimeout(getBlob(fileRef), 45000, 'storage-get-blob');
-                                if (blob) break;
-                            } catch (blobError) {
-                                console.warn('Storage getBlob failed, falling back to getBytes:', blobError);
-                                const bytes = await withTimeout(getBytes(fileRef, MAX_PDF_BYTES), 45000, 'storage-get-bytes');
-                                blob = new Blob([bytes], { type: 'application/pdf' });
-                                if (blob) break;
-                            }
-                        }
-                    }
+                if (storagePath) {
+                    const downloadUrl = await withTimeout(
+                        getDownloadURL(ref(storage, storagePath)),
+                        30000,
+                        'storage-download-url',
+                    );
+                    if (!active) return;
+                    setPdfSourceUrl(downloadUrl);
+                    return;
                 }
 
-                if (!blob) {
-                    throw new Error('pdf-source-missing');
-                }
-                if (blob.type && !blob.type.includes('pdf')) {
-                    throw new Error(`pdf-invalid-mime:${blob.type}`);
-                }
-
-                revokedUrl = URL.createObjectURL(blob);
-                if (!active) return;
-                setPdfObjectUrl(revokedUrl);
+                throw new Error('pdf-source-missing');
             } catch (error) {
                 console.error('Failed to prepare PDF file:', error);
                 if (!active) return;
@@ -185,9 +147,6 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
 
         return () => {
             active = false;
-            if (revokedUrl) {
-                URL.revokeObjectURL(revokedUrl);
-            }
         };
     }, [fileUrl, storagePath, usingPreprocessedPages, pageImages.length]);
 
@@ -372,9 +331,9 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                 </div>
             )}
 
-            {!loadingPdf && !loadError && !usingPreprocessedPages && pdfObjectUrl && (
+            {!loadingPdf && !loadError && !usingPreprocessedPages && pdfSourceUrl && (
                 <Document
-                    file={pdfObjectUrl}
+                    file={pdfSourceUrl}
                     onLoadSuccess={handleLoadSuccess}
                     onLoadError={handleLoadError}
                     loading="PDF를 불러오는 중입니다."
