@@ -102,12 +102,16 @@ const requestLocalPdfFile = (): Promise<File | null> => new Promise((resolve) =>
         finish(input.files?.[0] || null);
     }, { once: true });
 
+    input.addEventListener('cancel', () => {
+        finish(null);
+    }, { once: true });
+
     window.addEventListener('focus', () => {
         window.setTimeout(() => {
-            if (!settled) {
+            if (!settled && !input.files?.length) {
                 finish(null);
             }
-        }, 500);
+        }, 1500);
     }, { once: true });
 
     input.click();
@@ -774,6 +778,9 @@ const ManageMaps: React.FC = () => {
                                         ref={fileInputRef}
                                         type="file"
                                         accept={draft.type === 'pdf' ? '.pdf,application/pdf' : 'image/*'}
+                                        onClick={(e) => {
+                                            (e.currentTarget as HTMLInputElement).value = '';
+                                        }}
                                         onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
                                         className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
                                     />
