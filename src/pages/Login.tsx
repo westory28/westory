@@ -163,6 +163,12 @@ const isIOSDevice = (): boolean => {
     return /iPhone|iPad|iPod/i.test(ua);
 };
 
+const isRestrictedInAppBrowser = (): boolean => {
+    if (typeof navigator === 'undefined') return false;
+    const ua = navigator.userAgent || '';
+    return /(NAVER|KAKAOTALK)/i.test(ua);
+};
+
 const shouldPreferRedirectLogin = (): boolean => {
     return isLikelyInAppBrowser() && !isIOSDevice();
 };
@@ -201,6 +207,7 @@ const isIgnorableRedirectError = (error: unknown): boolean => {
 const Login: React.FC = () => {
     const { currentUser, userData, interfaceConfig, loading } = useAuth();
     const navigate = useNavigate();
+    const restrictedInAppBrowser = isRestrictedInAppBrowser();
 
     const [authBusy, setAuthBusy] = useState(false);
 
@@ -761,6 +768,10 @@ const Login: React.FC = () => {
 
     const handleLogin = async (mode: LoginMode) => {
         if (authBusy) return;
+        if (restrictedInAppBrowser) {
+            alert('네이버앱 또는 카카오톡 인앱 브라우저에서는 로그인할 수 없습니다. Chrome 또는 Safari에서 위스토리를 열어주세요.');
+            return;
+        }
         const provider = new GoogleAuthProvider();
         provider.setCustomParameters({ prompt: 'select_account' });
         setPendingLoginMode(mode);
@@ -826,6 +837,15 @@ const Login: React.FC = () => {
                 </h1>
                 <p className="text-gray-500 text-xl font-medium mb-8">{interfaceConfig?.mainSubtitle || '우리가 써 내려가는 이야기'}</p>
 
+                {restrictedInAppBrowser && (
+                    <div className="w-full max-w-sm mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-left shadow-sm">
+                        <p className="text-sm font-extrabold text-amber-900">네이버앱·카카오톡 인앱 브라우저에서는 로그인할 수 없습니다.</p>
+                        <p className="mt-2 text-sm leading-6 text-amber-800">
+                            하단 메뉴에서 외부 브라우저로 열기를 선택한 뒤 Chrome 또는 Safari에서 다시 접속해주세요.
+                        </p>
+                    </div>
+                )}
+
                 {currentUser ? (
                     <div className="flex flex-col items-center gap-3 w-full max-w-sm">
                         <p className="text-sm text-gray-500 break-all text-center px-2">{currentUser.email || '로그인 계정'}</p>
@@ -838,7 +858,7 @@ const Login: React.FC = () => {
                         </button>
                         <button
                             onClick={() => handleLogin('student')}
-                            disabled={authBusy}
+                            disabled={authBusy || restrictedInAppBrowser}
                             className="w-full bg-white border border-gray-300 px-6 py-3 rounded-full text-sm font-bold text-gray-700 shadow hover:bg-gray-50 transition disabled:opacity-60 disabled:cursor-not-allowed"
                         >
                             학생 로그인 (계정 선택)
@@ -858,7 +878,7 @@ const Login: React.FC = () => {
                     <div className="w-full max-w-sm flex flex-col gap-3">
                         <button
                             onClick={() => handleLogin('student')}
-                            disabled={authBusy}
+                            disabled={authBusy || restrictedInAppBrowser}
                             className="w-full bg-white border border-gray-200 px-8 py-4 rounded-full text-lg font-bold text-gray-700 shadow hover:bg-gray-50 transition flex items-center justify-center gap-3 disabled:opacity-60 disabled:cursor-not-allowed"
                         >
                             <img src="https://fonts.gstatic.com/s/i/productlogos/googleg/v6/24px.svg" width={24} height={24} alt="Google" />
@@ -877,6 +897,7 @@ const Login: React.FC = () => {
             <div className="absolute bottom-12 left-1/2 -translate-x-1/2 md:hidden z-20">
                 <button
                     onClick={() => handleLogin('teacher')}
+                    disabled={authBusy || restrictedInAppBrowser}
                     className="text-gray-400 hover:text-gray-700 text-xs font-semibold px-2 py-1 rounded hover:bg-gray-200/60 transition whitespace-nowrap"
                 >
                     <i className="fas fa-chalkboard-teacher mr-1"></i>
@@ -887,6 +908,7 @@ const Login: React.FC = () => {
             <div className="fixed bottom-8 right-8 hidden lg:block z-30">
                 <button
                     onClick={() => handleLogin('teacher')}
+                    disabled={authBusy || restrictedInAppBrowser}
                     className="text-gray-400 hover:text-gray-700 text-xs font-semibold px-2 py-1 rounded hover:bg-gray-200/60 transition"
                 >
                     <i className="fas fa-chalkboard-teacher mr-1"></i>
