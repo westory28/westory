@@ -15,6 +15,7 @@ interface LessonWorksheetStageProps {
     selectedBlankId?: string | null;
     studentAnswers?: Record<string, { value?: string; status?: '' | 'correct' | 'wrong' }>;
     onSelectBlank?: (blankId: string) => void;
+    onDeleteBlank?: (blankId: string) => void;
     onCreateBlankFromSelection?: (
         page: number,
         rect: {
@@ -37,7 +38,7 @@ interface DraftRect {
     currentY: number;
 }
 
-const MIN_DRAG_SIZE = 0.008;
+const MIN_DRAG_SIZE = 0.003;
 const LIVE_REGION_INTERSECTION_RATIO = 0.04;
 const FINAL_REGION_INTERSECTION_RATIO = 0.12;
 
@@ -94,6 +95,45 @@ const getMatchedRegions = (
     });
 };
 
+const getPointMatchedRegions = (
+    pageImage: LessonWorksheetPageImage,
+    pageRegions: LessonWorksheetTextRegion[],
+    point: { x: number; y: number },
+) => {
+    const px = point.x * pageImage.width;
+    const py = point.y * pageImage.height;
+
+    const directHits = pageRegions.filter((region) => {
+        const bounds = getTightTextRegionBounds(region, pageImage);
+        if (!bounds) return false;
+        const left = bounds.left;
+        const top = bounds.top;
+        const right = bounds.left + bounds.width;
+        const bottom = bounds.top + bounds.height;
+        return px >= left && px <= right && py >= top && py <= bottom;
+    });
+    if (directHits.length) return directHits;
+
+    let nearest: LessonWorksheetTextRegion | null = null;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    pageRegions.forEach((region) => {
+        const bounds = getTightTextRegionBounds(region, pageImage);
+        if (!bounds) return;
+        const cx = bounds.left + (bounds.width / 2);
+        const cy = bounds.top + (bounds.height / 2);
+        const dx = cx - px;
+        const dy = cy - py;
+        const distance = Math.hypot(dx, dy);
+        const threshold = Math.max(bounds.width, bounds.height) * 0.9;
+        if (distance <= threshold && distance < nearestDistance) {
+            nearest = region;
+            nearestDistance = distance;
+        }
+    });
+
+    return nearest ? [nearest] : [];
+};
+
 const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     pageImages,
     blanks,
@@ -102,6 +142,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     selectedBlankId,
     studentAnswers = {},
     onSelectBlank,
+    onDeleteBlank,
     onCreateBlankFromSelection,
     onStudentAnswerChange,
     pendingBlank = null,
@@ -179,17 +220,18 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
             heightRatio: Math.abs(draftRect.currentY - draftRect.startY),
         };
 
-        if (nextRect.widthRatio < MIN_DRAG_SIZE || nextRect.heightRatio < MIN_DRAG_SIZE) {
-            setDraftRect(null);
-            return;
-        }
-
-        const matchedRegions = getMatchedRegions(
-            pageImage,
-            regionsByPage.get(pageImage.page) || [],
-            nextRect,
-            FINAL_REGION_INTERSECTION_RATIO,
-        );
+        const pageRegions = regionsByPage.get(pageImage.page) || [];
+        const matchedRegions = nextRect.widthRatio < MIN_DRAG_SIZE || nextRect.heightRatio < MIN_DRAG_SIZE
+            ? getPointMatchedRegions(pageImage, pageRegions, {
+                x: (draftRect.startX + draftRect.currentX) / 2,
+                y: (draftRect.startY + draftRect.currentY) / 2,
+            })
+            : getMatchedRegions(
+                pageImage,
+                pageRegions,
+                nextRect,
+                FINAL_REGION_INTERSECTION_RATIO,
+            );
         if (!matchedRegions.length) {
             setDraftRect(null);
             return;
@@ -308,6 +350,10 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                         type="button"
                                         data-blank-box="true"
                                         onClick={() => onSelectBlank?.(blank.id)}
+                                        onContextMenu={(event) => {
+                                            event.preventDefault();
+                                            onDeleteBlank?.(blank.id);
+                                        }}
                                         aria-label="빈칸 선택"
                                         className={`absolute border-0 p-0 ${
                                             selectedBlankId === blank.id

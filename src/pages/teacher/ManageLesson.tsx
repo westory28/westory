@@ -800,6 +800,7 @@ const ManageLesson: React.FC = () => {
                                                         selectedBlankId={activeBlankId}
                                                         pendingBlank={draftBlank}
                                                         onSelectBlank={handleSelectBlank}
+                                                        onDeleteBlank={handleDeleteBlank}
                                                         onCreateBlankFromSelection={handleCreateBlankFromSelection}
                                                     />
                                                 </div>
