@@ -163,6 +163,14 @@ const isIOSDevice = (): boolean => {
     return /iPhone|iPad|iPod/i.test(ua);
 };
 
+const isSafariBrowser = (): boolean => {
+    if (typeof navigator === 'undefined') return false;
+    const ua = navigator.userAgent || '';
+    const isSafariEngine = /Safari/i.test(ua);
+    const isOtherIOSBrowser = /(CriOS|FxiOS|EdgiOS|OPT\/|OPiOS|DuckDuckGo|YaBrowser)/i.test(ua);
+    return isSafariEngine && !isOtherIOSBrowser;
+};
+
 const isRestrictedInAppBrowser = (): boolean => {
     if (typeof navigator === 'undefined') return false;
     const ua = navigator.userAgent || '';
@@ -170,7 +178,7 @@ const isRestrictedInAppBrowser = (): boolean => {
 };
 
 const shouldPreferRedirectLogin = (): boolean => {
-    return isLikelyInAppBrowser() && !isIOSDevice();
+    return isIOSDevice() || isSafariBrowser() || isLikelyInAppBrowser();
 };
 
 const getLoginFailureMessage = (): string => {
@@ -179,7 +187,7 @@ const getLoginFailureMessage = (): string => {
     }
 
     if (isIOSDevice()) {
-        return 'iPhone 브라우저에서 로그인 창이 차단되었습니다. Safari 또는 Chrome에서 팝업 차단을 해제한 뒤 다시 시도해주세요.';
+        return 'iPhone 또는 iPad에서는 리다이렉트 로그인으로 전환됩니다. 로그인 후에도 진행되지 않으면 Safari에서 다시 시도해주세요.';
     }
 
     return '로그인에 실패했습니다.';
@@ -805,6 +813,27 @@ const Login: React.FC = () => {
         }
     };
 
+    const handleSwitchAccount = async () => {
+        if (authBusy) return;
+
+        setAuthBusy(true);
+        clearRoleCache();
+        clearPendingLoginMode();
+        autoResumeUidRef.current = null;
+
+        try {
+            await signOut(auth);
+        } catch (error) {
+            console.error('Failed to sign out before switching account', error);
+        } finally {
+            if (typeof window !== 'undefined') {
+                window.location.replace(`${window.location.pathname}${window.location.search}#/`);
+                return;
+            }
+            setAuthBusy(false);
+        }
+    };
+
     const showPolicy = async (type: 'terms' | 'privacy') => {
         setPolicyOpen(true);
         setPolicyTitle(type === 'terms' ? '이용 약관' : '개인정보 처리 방침');
@@ -864,10 +893,7 @@ const Login: React.FC = () => {
                             학생 로그인 (계정 선택)
                         </button>
                         <button
-                            onClick={async () => {
-                                clearRoleCache();
-                                await signOut(auth);
-                            }}
+                            onClick={() => void handleSwitchAccount()}
                             disabled={authBusy}
                             className="w-full bg-white border border-gray-200 px-6 py-3 rounded-full text-sm font-bold text-gray-700 shadow hover:bg-gray-50 transition disabled:opacity-60 disabled:cursor-not-allowed"
                         >
