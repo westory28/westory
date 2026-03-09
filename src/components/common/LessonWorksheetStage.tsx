@@ -593,7 +593,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                             onDeleteBlank?.(blank.id);
                                         }}
                                         aria-label="빈칸 선택"
-                                        className={`absolute border-0 p-0 ${
+                                        className={`absolute z-10 border-0 p-0 ${
                                             selectedBlankId === blank.id
                                                 ? 'bg-sky-300/42 mix-blend-multiply'
                                                 : 'bg-sky-300/30 mix-blend-multiply'
@@ -688,7 +688,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                     ).map((region) => (
                                         <div
                                             key={region.key}
-                                            className="pointer-events-none absolute bg-sky-300/36 mix-blend-multiply"
+                                            className="pointer-events-none absolute z-20 bg-sky-400/40"
                                             style={{
                                                 left: toPercent(region.leftRatio),
                                                 top: toPercent(region.topRatio),
@@ -707,7 +707,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                     return (
                                         <div
                                             key={`draft-${pageImage.page}-${index}`}
-                                            className="pointer-events-none absolute bg-sky-300/35 mix-blend-multiply"
+                                            className="pointer-events-none absolute z-30 bg-sky-500/42"
                                             style={{
                                                 left: toPercent(bounds.leftRatio),
                                                 top: toPercent(bounds.topRatio),
@@ -720,7 +720,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                             ))}
                             {showDraftRect && liveDraft && (
                                 <div
-                                    className="pointer-events-none absolute bg-sky-400/32 mix-blend-multiply"
+                                    className="pointer-events-none absolute z-30 bg-sky-500/38"
                                     style={{
                                         left: toPercent(liveDraft.leftRatio),
                                         top: toPercent(liveDraft.topRatio),

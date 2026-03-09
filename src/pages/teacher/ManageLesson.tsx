@@ -1019,19 +1019,19 @@ const ManageLesson: React.FC = () => {
             </main>
 
             {(draftBlank || selectedBlank || sortedBlanks.length > 0) && (
-                <div className="fixed bottom-6 right-20 z-40 w-[min(20rem,calc(100vw-6.5rem))] space-y-3">
-                    <div className="rounded-2xl border border-gray-200 bg-white/96 p-3 shadow-2xl backdrop-blur">
+                <div className="fixed bottom-5 right-16 z-40 w-[min(16.5rem,calc(100vw-5.5rem))] space-y-2.5">
+                    <div className="rounded-2xl border border-gray-200 bg-white/96 p-2.5 shadow-2xl backdrop-blur">
                         <div className="flex items-center justify-between gap-3">
                             <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400">Tool</div>
                             <div className="text-[11px] font-semibold text-gray-500">
                                 {worksheetTool === 'box' ? '텍스트 박스' : 'OCR 선택'}
                             </div>
                         </div>
-                        <div className="mt-3 flex flex-wrap gap-2">
+                        <div className="mt-2.5 flex flex-wrap gap-1.5">
                             <button
                                 type="button"
                                 onClick={() => setWorksheetTool('box')}
-                                className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                                className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
                                     worksheetTool === 'box'
                                         ? 'bg-blue-600 text-white shadow-sm'
                                         : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
@@ -1042,7 +1042,7 @@ const ManageLesson: React.FC = () => {
                             <button
                                 type="button"
                                 onClick={() => setWorksheetTool('ocr')}
-                                className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                                className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
                                     worksheetTool === 'ocr'
                                         ? 'bg-blue-600 text-white shadow-sm'
                                         : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
@@ -1051,25 +1051,25 @@ const ManageLesson: React.FC = () => {
                                 OCR 선택
                             </button>
                         </div>
-                        <div className="mt-3 text-xs leading-5 text-gray-500">
+                        <div className="mt-2 text-[11px] leading-4 text-gray-500">
                             {worksheetTool === 'box'
                                 ? '텍스트 박스는 드래그한 크기 그대로 빈칸을 만듭니다.'
                                 : 'OCR 선택은 드래그한 글자를 기준으로 키워드를 맞춰 잡습니다.'}
                         </div>
                     </div>
 
-                    <div className="rounded-2xl border border-gray-200 bg-white/96 p-3 shadow-2xl backdrop-blur">
+                    <div className="rounded-2xl border border-gray-200 bg-white/96 p-2.5 shadow-2xl backdrop-blur">
                         <div className="flex items-center justify-between gap-3">
                             <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400">Blank List</div>
                             <div className="text-[11px] font-semibold text-gray-500">{sortedBlanks.length}개</div>
                         </div>
-                        <div className="mt-3 flex flex-wrap gap-2">
+                        <div className="mt-2.5 flex flex-wrap gap-1.5">
                             {sortedBlanks.map((blank, index) => (
                                 <button
                                     key={blank.id}
                                     type="button"
                                     onClick={() => handleSelectBlank(blank.id)}
-                                    className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                                    className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
                                         activeBlankId === blank.id
                                             ? 'border-blue-300 bg-blue-50 text-blue-700'
                                             : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
@@ -1082,7 +1082,7 @@ const ManageLesson: React.FC = () => {
                     </div>
 
                     {draftBlank ? (
-                        <div className="space-y-3 rounded-2xl border border-amber-200 bg-white/98 p-4 shadow-2xl backdrop-blur">
+                        <div className="space-y-2.5 rounded-2xl border border-amber-200 bg-white/98 p-3 shadow-2xl backdrop-blur">
                             <div className="flex items-center justify-between gap-2">
                                 <div className="text-sm font-bold text-amber-900">새 빈칸 초안</div>
                                 <button type="button" onClick={handleCancelDraftBlank} className="text-xs font-bold text-gray-500">
@@ -1094,7 +1094,7 @@ const ManageLesson: React.FC = () => {
                                 type="text"
                                 value={draftBlankAnswer}
                                 onChange={(e) => setDraftBlankAnswer(e.target.value)}
-                                className="w-full rounded-lg border border-amber-300 px-3 py-2 text-sm"
+                                className="w-full rounded-lg border border-amber-300 px-2.5 py-1.5 text-sm"
                                 placeholder="정답을 입력하세요"
                                 autoFocus
                             />
@@ -1102,19 +1102,19 @@ const ManageLesson: React.FC = () => {
                                 type="text"
                                 value={draftBlankPrompt}
                                 onChange={(e) => setDraftBlankPrompt(e.target.value)}
-                                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                                className="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
                                 placeholder="힌트 또는 설명 (선택)"
                             />
                             <button
                                 type="button"
                                 onClick={handleConfirmDraftBlank}
-                                className="w-full rounded-lg bg-amber-500 px-3 py-2 text-sm font-bold text-white hover:bg-amber-600"
+                                className="w-full rounded-lg bg-amber-500 px-3 py-1.5 text-sm font-bold text-white hover:bg-amber-600"
                             >
                                 정답 확인
                             </button>
                         </div>
                     ) : selectedBlank ? (
-                        <div className="space-y-3 rounded-2xl border border-blue-100 bg-white/98 p-4 shadow-2xl backdrop-blur">
+                        <div className="space-y-2.5 rounded-2xl border border-blue-100 bg-white/98 p-3 shadow-2xl backdrop-blur">
                             <div className="flex items-center justify-between gap-2">
                                 <div className="text-sm font-bold text-blue-900">선택한 빈칸</div>
                                 <button type="button" onClick={() => handleDeleteBlank(selectedBlank.id)} className="text-xs font-bold text-red-600">
@@ -1126,14 +1126,14 @@ const ManageLesson: React.FC = () => {
                                 type="text"
                                 value={selectedBlank.answer}
                                 onChange={(e) => updateBlank(selectedBlank.id, { answer: e.target.value })}
-                                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                                className="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
                                 placeholder="정답"
                             />
                             <input
                                 type="text"
                                 value={selectedBlank.prompt || ''}
                                 onChange={(e) => updateBlank(selectedBlank.id, { prompt: e.target.value })}
-                                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                                className="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
                                 placeholder="힌트 또는 설명 (선택)"
                             />
                         </div>
