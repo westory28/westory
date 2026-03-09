@@ -29,6 +29,48 @@ export const clampRatio = (value: number) => Math.min(1, Math.max(0, value));
 
 export const normalizeBlankText = (value: string) => String(value || '').trim().replace(/\s+/g, '');
 
+const TOKEN_PATTERN = /\[[^\]]+\]|[\p{L}\p{N}]+/gu;
+
+export const splitTextRegionIntoTokens = (
+    region: LessonWorksheetTextRegion,
+    pageImage?: LessonWorksheetPageImage | null,
+): LessonWorksheetTextRegion[] => {
+    const source = String(region.label || '');
+    if (!source.trim()) return [];
+
+    const matches = Array.from(source.matchAll(TOKEN_PATTERN));
+    if (!matches.length) {
+        return [region];
+    }
+
+    const safeWidth = Math.max(region.width, 1);
+    const safeHeight = Math.max(region.height, 10);
+    const totalChars = Math.max(source.length, 1);
+    const avgCharWidth = safeWidth / totalChars;
+    const tokenHeight = Math.max(10, safeHeight * 0.82);
+    const top = region.top + Math.max(0, (safeHeight - tokenHeight) / 2);
+
+    return matches.map((match, index) => {
+        const text = String(match[0] || '').trim();
+        const start = match.index ?? 0;
+        const end = start + text.length;
+        const rawLeft = region.left + (avgCharWidth * start);
+        const rawWidth = Math.max(tokenHeight * 0.9, avgCharWidth * Math.max(end - start, 1));
+        const left = Math.max(region.left, rawLeft - 1);
+        const right = Math.min(region.left + region.width, rawLeft + rawWidth + 1);
+        const width = Math.max(8, right - left);
+
+        return {
+            label: text,
+            page: region.page,
+            left,
+            top,
+            width,
+            height: tokenHeight,
+        };
+    }).filter((item) => item.width > 0 && item.height > 0 && item.label);
+};
+
 export const getTightTextRegionBounds = (
     region: LessonWorksheetTextRegion,
     pageImage?: LessonWorksheetPageImage | null,

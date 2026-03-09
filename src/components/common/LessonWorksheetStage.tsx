@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     clampRatio,
     getTightTextRegionBounds,
+    normalizeBlankText,
+    splitTextRegionIntoTokens,
     type LessonWorksheetBlank,
     type LessonWorksheetPageImage,
     type LessonWorksheetTextRegion,
@@ -59,6 +61,14 @@ const getIntersectionArea = (
     return width * height;
 };
 
+const expandRegionsForSelection = (
+    pageRegions: LessonWorksheetTextRegion[],
+    pageImage: LessonWorksheetPageImage,
+) => pageRegions.flatMap((region) => {
+    const tokens = splitTextRegionIntoTokens(region, pageImage);
+    return tokens.length > 0 ? tokens : [region];
+});
+
 const getMatchedRegions = (
     pageImage: LessonWorksheetPageImage,
     pageRegions: LessonWorksheetTextRegion[],
@@ -70,6 +80,7 @@ const getMatchedRegions = (
     },
     minIntersectionRatio: number,
 ) => {
+    const expandedRegions = expandRegionsForSelection(pageRegions, pageImage);
     const selection = {
         left: rect.leftRatio * pageImage.width,
         top: rect.topRatio * pageImage.height,
@@ -77,7 +88,7 @@ const getMatchedRegions = (
         bottom: (rect.topRatio + rect.heightRatio) * pageImage.height,
     };
 
-    return pageRegions.filter((region) => {
+    return expandedRegions.filter((region) => {
         const regionRight = region.left + region.width;
         const regionBottom = region.top + region.height;
         const intersectionArea = getIntersectionArea(
@@ -100,10 +111,11 @@ const getPointMatchedRegions = (
     pageRegions: LessonWorksheetTextRegion[],
     point: { x: number; y: number },
 ) => {
+    const expandedRegions = expandRegionsForSelection(pageRegions, pageImage);
     const px = point.x * pageImage.width;
     const py = point.y * pageImage.height;
 
-    const directHits = pageRegions.filter((region) => {
+    const directHits = expandedRegions.filter((region) => {
         const bounds = getTightTextRegionBounds(region, pageImage);
         if (!bounds) return false;
         const left = Math.min(region.left, bounds.left) - 6;
@@ -116,7 +128,7 @@ const getPointMatchedRegions = (
 
     let nearest: LessonWorksheetTextRegion | null = null;
     let nearestDistance = Number.POSITIVE_INFINITY;
-    pageRegions.forEach((region) => {
+    expandedRegions.forEach((region) => {
         const bounds = getTightTextRegionBounds(region, pageImage);
         if (!bounds) return;
         const cx = bounds.left + (bounds.width / 2);
@@ -132,6 +144,47 @@ const getPointMatchedRegions = (
     });
 
     return nearest ? [nearest] : [];
+};
+
+const resolveBlankRenderRect = (
+    blank: LessonWorksheetBlank,
+    pageImage: LessonWorksheetPageImage,
+    pageRegions: LessonWorksheetTextRegion[],
+) => {
+    const blankCenterX = blank.leftRatio + (blank.widthRatio / 2);
+    const blankCenterY = blank.topRatio + (blank.heightRatio / 2);
+    const normalizedAnswer = normalizeBlankText(blank.answer);
+    const expandedRegions = expandRegionsForSelection(pageRegions, pageImage);
+    const candidates = normalizedAnswer
+        ? expandedRegions.filter((region) => normalizeBlankText(region.label) === normalizedAnswer)
+        : [];
+
+    if (candidates.length) {
+        const nearest = candidates
+            .map((region) => {
+                const bounds = getTightTextRegionBounds(region, pageImage);
+                if (!bounds) return null;
+                const dx = (bounds.leftRatio + (bounds.widthRatio / 2)) - blankCenterX;
+                const dy = (bounds.topRatio + (bounds.heightRatio / 2)) - blankCenterY;
+                return {
+                    bounds,
+                    distance: Math.hypot(dx, dy),
+                };
+            })
+            .filter((item): item is NonNullable<typeof item> => Boolean(item))
+            .sort((a, b) => a.distance - b.distance)[0];
+
+        if (nearest) {
+            return nearest.bounds;
+        }
+    }
+
+    return {
+        leftRatio: blank.leftRatio,
+        topRatio: blank.topRatio,
+        widthRatio: blank.widthRatio,
+        heightRatio: blank.heightRatio,
+    };
 };
 
 const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
@@ -388,6 +441,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                             {mode === 'student' && pageBlanks.map((blank) => {
                                 const studentAnswer = studentAnswers[blank.id];
                                 const status = studentAnswer?.status || '';
+                                const renderRect = resolveBlankRenderRect(blank, pageImage, pageRegions);
 
                                 return (
                                     <div
@@ -401,10 +455,10 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                                     : 'border-slate-300 bg-white/98'
                                         }`}
                                         style={{
-                                            left: toPercent(blank.leftRatio),
-                                            top: toPercent(blank.topRatio),
-                                            width: toPercent(blank.widthRatio),
-                                            height: toPercent(blank.heightRatio),
+                                            left: toPercent(renderRect.leftRatio),
+                                            top: toPercent(renderRect.topRatio),
+                                            width: toPercent(renderRect.widthRatio),
+                                            height: toPercent(renderRect.heightRatio),
                                         }}
                                     >
                                         <input
