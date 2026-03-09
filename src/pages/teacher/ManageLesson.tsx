@@ -21,7 +21,6 @@ import { getSemesterCollectionPath, getSemesterDocPath } from '../../lib/semeste
 import { processPdfMapFile, type ProcessedPdfMap } from '../../lib/pdfMapProcessor';
 import {
     clampRatio,
-    createBlankFromRegion,
     normalizeWorksheetBlanks,
     type LessonWorksheetBlank,
     type LessonWorksheetPageImage,
@@ -80,6 +79,11 @@ const createBlankFromPoint = (page: number, point: { x: number; y: number }): Le
         heightRatio,
     });
 };
+
+const getBlankAnswerFromRegions = (regions: LessonWorksheetTextRegion[]) => regions
+    .map((region) => String(region.label || '').trim())
+    .filter(Boolean)
+    .join(' ');
 
 const normalizePageImages = (raw: unknown): LessonWorksheetPageImage[] => {
     if (!Array.isArray(raw)) return [];
@@ -461,21 +465,25 @@ const ManageLesson: React.FC = () => {
         }
     };
 
-    const handleCreateBlankFromRegion = (region: LessonWorksheetTextRegion) => {
-        const pageImage = worksheetPageImages.find((page) => page.page === region.page);
-        const blank = createBlankFromRegion(region, pageImage);
-        if (!blank) return;
-
-        setDraftBlank(blank);
-        setDraftBlankAnswer(blank.answer);
-        setDraftBlankPrompt(blank.prompt || '');
-        setActiveBlankId(null);
-    };
-
     const handleCreateBlankAtPoint = (page: number, point: { x: number; y: number }) => {
         const blank = createBlankFromPoint(page, point);
         setDraftBlank(blank);
         setDraftBlankAnswer('');
+        setDraftBlankPrompt('');
+        setActiveBlankId(null);
+    };
+
+    const handleCreateBlankFromSelection = (page: number, rect: {
+        leftRatio: number;
+        topRatio: number;
+        widthRatio: number;
+        heightRatio: number;
+    }, matchedRegions: LessonWorksheetTextRegion[]) => {
+        const blank = createBlankFromRect(page, rect);
+        const autoAnswer = getBlankAnswerFromRegions(matchedRegions);
+
+        setDraftBlank(blank);
+        setDraftBlankAnswer(autoAnswer);
         setDraftBlankPrompt('');
         setActiveBlankId(null);
     };
@@ -654,7 +662,7 @@ const ManageLesson: React.FC = () => {
                 <div className="flex flex-col lg:flex-row gap-6 h-full pb-4 relative">
                     {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)}></div>}
 
-                    <div className={`${sidebarOpen ? 'translate-x-0' : 'translate-x-full'} lg:translate-x-0 fixed lg:static top-0 right-0 h-full lg:h-auto w-[80%] max-w-[320px] lg:w-[320px] lg:flex-none bg-white z-50 lg:z-auto shadow-xl lg:shadow-sm border border-gray-200 transition-transform duration-300 flex flex-col min-h-[300px] lg:min-h-0 rounded-none lg:rounded-xl`}>
+                    <div className={`${sidebarOpen ? 'translate-x-0' : 'translate-x-full'} lg:translate-x-0 fixed lg:static top-0 right-0 h-full lg:h-auto w-[85%] max-w-[380px] lg:w-[380px] lg:flex-none bg-white z-50 lg:z-auto shadow-xl lg:shadow-sm border border-gray-200 transition-transform duration-300 flex flex-col min-h-[300px] lg:min-h-0 rounded-none lg:rounded-xl`}>
                         <div className="p-4 border-b bg-gray-50 font-bold text-gray-700 flex justify-between items-center">
                             <span className="flex items-center gap-2"><i className="fas fa-list"></i> 단원 목록</span>
                             <div className="flex gap-1 items-center">
@@ -785,8 +793,8 @@ const ManageLesson: React.FC = () => {
                                                         selectedBlankId={activeBlankId}
                                                         pendingBlank={draftBlank}
                                                         onSelectBlank={handleSelectBlank}
-                                                        onCreateBlankFromRegion={handleCreateBlankFromRegion}
                                                         onCreateBlankAtPoint={handleCreateBlankAtPoint}
+                                                        onCreateBlankFromSelection={handleCreateBlankFromSelection}
                                                     />
                                                 </div>
 
