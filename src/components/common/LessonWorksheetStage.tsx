@@ -40,7 +40,7 @@ interface DraftRect {
     currentY: number;
 }
 
-const MIN_DRAG_SIZE = 0.003;
+const MIN_DRAG_SIZE = 0.0012;
 const LIVE_REGION_INTERSECTION_RATIO = 0.04;
 const FINAL_REGION_INTERSECTION_RATIO = 0.12;
 

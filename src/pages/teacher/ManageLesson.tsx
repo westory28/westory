@@ -826,7 +826,7 @@ const ManageLesson: React.FC = () => {
                                                         </div>
                                                     </div>
 
-                                                    <div className="grid gap-4 xl:grid-cols-[minmax(18rem,24rem)_minmax(0,1fr)]">
+                                                    <div className="grid gap-4 xl:grid-cols-[minmax(18rem,24rem)_minmax(0,1fr)] [&>*:first-child]:hidden [&>*:last-child]:col-span-full">
                                                         {draftBlank ? (
                                                             <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50/80 p-4">
                                                                 <div className="flex items-center justify-between gap-2">
@@ -950,6 +950,68 @@ const ManageLesson: React.FC = () => {
                     <i className="fas fa-list text-lg"></i>
                 </button>
             </main>
+
+            {(draftBlank || selectedBlank) && (
+                <div className="fixed bottom-6 right-6 z-40 w-[min(24rem,calc(100vw-2rem))]">
+                    {draftBlank ? (
+                        <div className="space-y-3 rounded-2xl border border-amber-200 bg-white/98 p-4 shadow-2xl backdrop-blur">
+                            <div className="flex items-center justify-between gap-2">
+                                <div className="text-sm font-bold text-amber-900">새 빈칸 초안</div>
+                                <button type="button" onClick={handleCancelDraftBlank} className="text-xs font-bold text-gray-500">
+                                    취소
+                                </button>
+                            </div>
+                            <div className="text-xs text-gray-500">p.{draftBlank.page} 페이지의 선택 영역입니다.</div>
+                            <input
+                                type="text"
+                                value={draftBlankAnswer}
+                                onChange={(e) => setDraftBlankAnswer(e.target.value)}
+                                className="w-full rounded-lg border border-amber-300 px-3 py-2 text-sm"
+                                placeholder="정답을 입력하세요"
+                                autoFocus
+                            />
+                            <input
+                                type="text"
+                                value={draftBlankPrompt}
+                                onChange={(e) => setDraftBlankPrompt(e.target.value)}
+                                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                                placeholder="힌트 또는 설명 (선택)"
+                            />
+                            <button
+                                type="button"
+                                onClick={handleConfirmDraftBlank}
+                                className="w-full rounded-lg bg-amber-500 px-3 py-2 text-sm font-bold text-white hover:bg-amber-600"
+                            >
+                                정답 확인
+                            </button>
+                        </div>
+                    ) : selectedBlank ? (
+                        <div className="space-y-3 rounded-2xl border border-blue-100 bg-white/98 p-4 shadow-2xl backdrop-blur">
+                            <div className="flex items-center justify-between gap-2">
+                                <div className="text-sm font-bold text-blue-900">선택한 빈칸</div>
+                                <button type="button" onClick={() => handleDeleteBlank(selectedBlank.id)} className="text-xs font-bold text-red-600">
+                                    삭제
+                                </button>
+                            </div>
+                            <div className="text-xs text-gray-500">p.{selectedBlank.page}</div>
+                            <input
+                                type="text"
+                                value={selectedBlank.answer}
+                                onChange={(e) => updateBlank(selectedBlank.id, { answer: e.target.value })}
+                                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                                placeholder="정답"
+                            />
+                            <input
+                                type="text"
+                                value={selectedBlank.prompt || ''}
+                                onChange={(e) => updateBlank(selectedBlank.id, { prompt: e.target.value })}
+                                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                                placeholder="힌트 또는 설명 (선택)"
+                            />
+                        </div>
+                    ) : null}
+                </div>
+            )}
 
             {modalOpen && (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
