@@ -250,11 +250,13 @@ const MapViewer: React.FC<MapViewerProps> = ({
                         <div className="min-h-0 flex-1 overflow-auto bg-slate-100 p-4">
                             <div className="flex min-h-full items-center justify-center">
                                 {item.type === 'image' && item.imageUrl && (
-                                    <img
-                                        src={item.imageUrl}
-                                        alt={item.title}
-                                        className="max-h-full w-auto max-w-full rounded-2xl bg-white shadow-lg"
-                                    />
+                                    <div className="flex h-full w-full items-center justify-center">
+                                        <img
+                                            src={item.imageUrl}
+                                            alt={item.title}
+                                            className="h-full w-full rounded-2xl bg-white object-contain shadow-lg"
+                                        />
+                                    </div>
                                 )}
                                 {item.type === 'iframe' && item.embedUrl && (
                                     <div className="h-full w-full overflow-hidden rounded-2xl bg-white shadow-lg">

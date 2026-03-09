@@ -270,24 +270,41 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
         };
     }, [fileUrl, pageImages.length, storagePath, usingPreprocessedPages]);
 
-    useEffect(() => {
-        if (!isModalOpen || !modalSurfaceRef.current || currentPageWidth <= 0 || currentPageHeight <= 0) return;
+    React.useLayoutEffect(() => {
+        if (!isModalOpen || !modalSurfaceRef.current || currentPageWidth <= 0 || currentPageHeight <= 0) return undefined;
 
-        const frameWidth = Math.max(0, modalSurfaceRef.current.clientWidth - 48);
-        const frameHeight = Math.max(0, modalSurfaceRef.current.clientHeight - 48);
-        const nextFitZoom = clamp(
-            currentPageHeight > currentPageWidth
-                ? (frameHeight / currentPageHeight)
-                : Math.min(frameWidth / currentPageWidth, frameHeight / currentPageHeight),
-            0.25,
-            2.2,
-        );
+        const surface = modalSurfaceRef.current;
+        const updateModalFitZoom = () => {
+            const frameWidth = Math.max(0, surface.clientWidth - 48);
+            const frameHeight = Math.max(0, surface.clientHeight - 48);
+            if (!frameWidth || !frameHeight) return;
 
-        setFitZoom(nextFitZoom);
-        if (!selectedRegion) {
-            setZoom(nextFitZoom);
-            modalSurfaceRef.current.scrollTo({ left: 0, top: 0 });
-        }
+            const nextFitZoom = clamp(
+                currentPageHeight > currentPageWidth
+                    ? (frameHeight / currentPageHeight)
+                    : Math.min(frameWidth / currentPageWidth, frameHeight / currentPageHeight),
+                0.25,
+                2.2,
+            );
+
+            setFitZoom(nextFitZoom);
+            if (!selectedRegion) {
+                setZoom(nextFitZoom);
+                surface.scrollTo({ left: 0, top: 0 });
+            }
+        };
+
+        updateModalFitZoom();
+        const frameId = window.requestAnimationFrame(updateModalFitZoom);
+        const observer = new ResizeObserver(updateModalFitZoom);
+        observer.observe(surface);
+        window.addEventListener('resize', updateModalFitZoom);
+
+        return () => {
+            window.cancelAnimationFrame(frameId);
+            observer.disconnect();
+            window.removeEventListener('resize', updateModalFitZoom);
+        };
     }, [currentPageHeight, currentPageWidth, isModalOpen, selectedRegion]);
 
     useEffect(() => {
