@@ -823,18 +823,18 @@ const ManageLesson: React.FC = () => {
                                                         {draftBlank ? (
                                                             <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50/80 p-4">
                                                                 <div className="flex items-center justify-between gap-2">
-                                                                    <div className="text-sm font-bold text-amber-900">? ?? ??</div>
+                                                                    <div className="text-sm font-bold text-amber-900">새 빈칸 초안</div>
                                                                     <button type="button" onClick={handleCancelDraftBlank} className="text-xs font-bold text-gray-500">
-                                                                        ??
+                                                                        취소
                                                                     </button>
                                                                 </div>
-                                                                <div className="text-xs text-gray-500">p.{draftBlank.page} ??? ? ??? ??? ????.</div>
+                                                                <div className="text-xs text-gray-500">p.{draftBlank.page} 페이지에 새 빈칸을 만드는 중입니다.</div>
                                                                 <input
                                                                     type="text"
                                                                     value={draftBlankAnswer}
                                                                     onChange={(e) => setDraftBlankAnswer(e.target.value)}
                                                                     className="w-full rounded-lg border border-amber-300 px-3 py-2 text-sm"
-                                                                    placeholder="??? ?????"
+                                                                    placeholder="정답을 입력하세요"
                                                                     autoFocus
                                                                 />
                                                                 <input
@@ -842,22 +842,22 @@ const ManageLesson: React.FC = () => {
                                                                     value={draftBlankPrompt}
                                                                     onChange={(e) => setDraftBlankPrompt(e.target.value)}
                                                                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                                                                    placeholder="?? ?? ?? (??)"
+                                                                    placeholder="힌트 또는 설명 (선택)"
                                                                 />
                                                                 <button
                                                                     type="button"
                                                                     onClick={handleConfirmDraftBlank}
                                                                     className="w-full rounded-lg bg-amber-500 px-3 py-2 text-sm font-bold text-white hover:bg-amber-600"
                                                                 >
-                                                                    ?? ??
+                                                                    정답 확인
                                                                 </button>
                                                             </div>
                                                         ) : selectedBlank ? (
                                                             <div className="space-y-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
                                                                 <div className="flex items-center justify-between gap-2">
-                                                                    <div className="text-sm font-bold text-blue-900">??? ??</div>
+                                                                    <div className="text-sm font-bold text-blue-900">선택한 빈칸</div>
                                                                     <button type="button" onClick={() => handleDeleteBlank(selectedBlank.id)} className="text-xs font-bold text-red-600">
-                                                                        ??
+                                                                        삭제
                                                                     </button>
                                                                 </div>
                                                                 <div className="text-xs text-gray-500">p.{selectedBlank.page}</div>
@@ -866,19 +866,19 @@ const ManageLesson: React.FC = () => {
                                                                     value={selectedBlank.answer}
                                                                     onChange={(e) => updateBlank(selectedBlank.id, { answer: e.target.value })}
                                                                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                                                                    placeholder="??"
+                                                                    placeholder="정답"
                                                                 />
                                                                 <input
                                                                     type="text"
                                                                     value={selectedBlank.prompt || ''}
                                                                     onChange={(e) => updateBlank(selectedBlank.id, { prompt: e.target.value })}
                                                                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                                                                    placeholder="?? ?? ?? (??)"
+                                                                    placeholder="힌트 또는 설명 (선택)"
                                                                 />
                                                             </div>
                                                         ) : (
                                                             <div className="rounded-2xl border border-dashed border-gray-300 px-4 py-6 text-center text-sm text-gray-500 flex items-center justify-center">
-                                                                ??? ?? ??? ???? ? ??? ????, ?? ???? ?? ??? ?????.
+                                                                빈칸 초안 또는 기존 빈칸을 선택하면 이곳에서 내용을 편집할 수 있습니다.
                                                             </div>
                                                         )}
 
