@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     clampRatio,
+    getTightTextRegionBounds,
     type LessonWorksheetBlank,
     type LessonWorksheetPageImage,
     type LessonWorksheetTextRegion,
@@ -283,13 +284,16 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                     FINAL_REGION_INTERSECTION_RATIO,
                                 );
                                 const renderRegions = maskedRegions.length
-                                    ? maskedRegions.map((region) => ({
+                                    ? maskedRegions.map((region) => {
+                                        const bounds = getTightTextRegionBounds(region, pageImage);
+                                        return bounds ? {
                                         key: `${blank.id}-${region.left}-${region.top}`,
-                                        leftRatio: region.left / pageImage.width,
-                                        topRatio: region.top / pageImage.height,
-                                        widthRatio: region.width / pageImage.width,
-                                        heightRatio: region.height / pageImage.height,
-                                    }))
+                                        leftRatio: bounds.leftRatio,
+                                        topRatio: bounds.topRatio,
+                                        widthRatio: bounds.widthRatio,
+                                        heightRatio: bounds.heightRatio,
+                                    } : null;
+                                    }).filter((item): item is NonNullable<typeof item> => Boolean(item))
                                     : [{
                                         key: blank.id,
                                         leftRatio: blank.leftRatio,
@@ -365,13 +369,16 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                             {mode === 'teacher' && pagePendingBlank && (
                                 <>
                                     {(getMatchedRegions(pageImage, pageRegions, pagePendingBlank, FINAL_REGION_INTERSECTION_RATIO).length
-                                        ? getMatchedRegions(pageImage, pageRegions, pagePendingBlank, FINAL_REGION_INTERSECTION_RATIO).map((region) => ({
+                                        ? getMatchedRegions(pageImage, pageRegions, pagePendingBlank, FINAL_REGION_INTERSECTION_RATIO).map((region) => {
+                                            const bounds = getTightTextRegionBounds(region, pageImage);
+                                            return bounds ? {
                                             key: `pending-${region.left}-${region.top}`,
-                                            leftRatio: region.left / pageImage.width,
-                                            topRatio: region.top / pageImage.height,
-                                            widthRatio: region.width / pageImage.width,
-                                            heightRatio: region.height / pageImage.height,
-                                        }))
+                                            leftRatio: bounds.leftRatio,
+                                            topRatio: bounds.topRatio,
+                                            widthRatio: bounds.widthRatio,
+                                            heightRatio: bounds.heightRatio,
+                                        } : null;
+                                        }).filter((item): item is NonNullable<typeof item> => Boolean(item))
                                         : [{
                                             key: `pending-${pagePendingBlank.id}`,
                                             leftRatio: pagePendingBlank.leftRatio,
@@ -395,16 +402,22 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                             )}
 
                             {mode === 'teacher' && draftRegions.map((region, index) => (
-                                <div
-                                    key={`draft-${pageImage.page}-${index}`}
-                                    className="pointer-events-none absolute bg-blue-200/55"
-                                    style={{
-                                        left: toPercent(region.left / pageImage.width),
-                                        top: toPercent(region.top / pageImage.height),
-                                        width: toPercent(region.width / pageImage.width),
-                                        height: toPercent(region.height / pageImage.height),
-                                    }}
-                                />
+                                (() => {
+                                    const bounds = getTightTextRegionBounds(region, pageImage);
+                                    if (!bounds) return null;
+                                    return (
+                                        <div
+                                            key={`draft-${pageImage.page}-${index}`}
+                                            className="pointer-events-none absolute bg-sky-300/35 mix-blend-multiply"
+                                            style={{
+                                                left: toPercent(bounds.leftRatio),
+                                                top: toPercent(bounds.topRatio),
+                                                width: toPercent(bounds.widthRatio),
+                                                height: toPercent(bounds.heightRatio),
+                                            }}
+                                        />
+                                    );
+                                })()
                             ))}
                         </div>
                     </section>

@@ -29,21 +29,58 @@ export const clampRatio = (value: number) => Math.min(1, Math.max(0, value));
 
 export const normalizeBlankText = (value: string) => String(value || '').trim().replace(/\s+/g, '');
 
+export const getTightTextRegionBounds = (
+    region: LessonWorksheetTextRegion,
+    pageImage?: LessonWorksheetPageImage | null,
+) => {
+    if (!pageImage || pageImage.width <= 0 || pageImage.height <= 0) {
+        return null;
+    }
+
+    const label = String(region.label || '').trim();
+    const charCount = Math.max(label.replace(/\s+/g, '').length, 1);
+    const targetHeight = Math.max(12, region.height * 0.76);
+    const estimatedCharWidth = targetHeight * 0.9;
+    const targetWidth = Math.min(
+        region.width,
+        Math.max(targetHeight * 1.2, (estimatedCharWidth * charCount) + targetHeight * 0.35),
+    );
+    const insetX = Math.max(0, (region.width - targetWidth) / 2);
+    const insetY = Math.max(0, (region.height - targetHeight) / 2);
+
+    const left = region.left + insetX;
+    const top = region.top + insetY;
+    const width = Math.max(targetWidth, targetHeight * 1.15);
+    const height = Math.max(targetHeight, 10);
+
+    return {
+        left,
+        top,
+        width,
+        height,
+        leftRatio: clampRatio(left / pageImage.width),
+        topRatio: clampRatio(top / pageImage.height),
+        widthRatio: clampRatio(width / pageImage.width),
+        heightRatio: clampRatio(height / pageImage.height),
+    };
+};
+
 export const createBlankFromRegion = (
     region: LessonWorksheetTextRegion,
     pageImage?: LessonWorksheetPageImage | null,
 ): LessonWorksheetBlank | null => {
-    if (!pageImage || pageImage.width <= 0 || pageImage.height <= 0) {
+    const bounds = getTightTextRegionBounds(region, pageImage);
+    if (!bounds) {
         return null;
     }
 
     return {
         id: `blank-${region.page}-${Math.round(region.left)}-${Math.round(region.top)}-${Date.now()}`,
         page: region.page,
-        leftRatio: clampRatio(region.left / pageImage.width),
-        topRatio: clampRatio(region.top / pageImage.height),
-        widthRatio: clampRatio(region.width / pageImage.width),
-        heightRatio: clampRatio(region.height / pageImage.height),
+        leftRatio: bounds.leftRatio,
+        topRatio: bounds.topRatio,
+        widthRatio: bounds.widthRatio,
+        heightRatio: bounds.heightRatio,
         answer: String(region.label || '').trim(),
         prompt: '',
     };

@@ -98,8 +98,8 @@ export const extractPdfTextRegions = (
                 page: 1,
                 left: Math.max(0, bounds.left) * scale,
                 top: Math.max(0, pageHeight - current.baselineY - current.height) * scale,
-                width: Math.max(70, bounds.width + 18) * scale,
-                height: Math.max(28, current.height + 14) * scale,
+                width: Math.max(18, bounds.width + 4) * scale,
+                height: Math.max(12, current.height + 4) * scale,
             });
         }
 

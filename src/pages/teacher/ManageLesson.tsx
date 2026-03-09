@@ -21,6 +21,7 @@ import { getSemesterCollectionPath, getSemesterDocPath } from '../../lib/semeste
 import { processPdfMapFile, type ProcessedPdfMap } from '../../lib/pdfMapProcessor';
 import {
     clampRatio,
+    getTightTextRegionBounds,
     normalizeWorksheetBlanks,
     type LessonWorksheetBlank,
     type LessonWorksheetPageImage,
@@ -76,10 +77,18 @@ const getBoundsFromRegions = (
         return null;
     }
 
-    const left = Math.min(...regions.map((region) => region.left));
-    const top = Math.min(...regions.map((region) => region.top));
-    const right = Math.max(...regions.map((region) => region.left + region.width));
-    const bottom = Math.max(...regions.map((region) => region.top + region.height));
+    const tightened = regions
+        .map((region) => getTightTextRegionBounds(region, pageImage))
+        .filter((item): item is NonNullable<typeof item> => Boolean(item));
+
+    if (!tightened.length) {
+        return null;
+    }
+
+    const left = Math.min(...tightened.map((region) => region.left));
+    const top = Math.min(...tightened.map((region) => region.top));
+    const right = Math.max(...tightened.map((region) => region.left + region.width));
+    const bottom = Math.max(...tightened.map((region) => region.top + region.height));
 
     return {
         leftRatio: clampRatio(left / pageImage.width),
