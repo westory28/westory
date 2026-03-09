@@ -187,6 +187,40 @@ const resolveBlankRenderRect = (
     };
 };
 
+const expandRect = (
+    rect: {
+        leftRatio: number;
+        topRatio: number;
+        widthRatio: number;
+        heightRatio: number;
+    },
+    pageImage: LessonWorksheetPageImage,
+    options?: {
+        padX?: number;
+        padY?: number;
+        minWidth?: number;
+        minHeight?: number;
+    },
+) => {
+    const padX = options?.padX ?? 8;
+    const padY = options?.padY ?? 5;
+    const minWidth = options?.minWidth ?? 44;
+    const minHeight = options?.minHeight ?? 20;
+    const left = Math.max(0, (rect.leftRatio * pageImage.width) - padX);
+    const top = Math.max(0, (rect.topRatio * pageImage.height) - padY);
+    const right = Math.min(pageImage.width, ((rect.leftRatio + rect.widthRatio) * pageImage.width) + padX);
+    const bottom = Math.min(pageImage.height, ((rect.topRatio + rect.heightRatio) * pageImage.height) + padY);
+    const width = Math.max(minWidth, right - left);
+    const height = Math.max(minHeight, bottom - top);
+
+    return {
+        leftRatio: left / pageImage.width,
+        topRatio: top / pageImage.height,
+        widthRatio: Math.min(1 - (left / pageImage.width), width / pageImage.width),
+        heightRatio: Math.min(1 - (top / pageImage.height), height / pageImage.height),
+    };
+};
+
 const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     pageImages,
     blanks,
@@ -449,7 +483,10 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                             {mode === 'student' && pageBlanks.map((blank) => {
                                 const studentAnswer = studentAnswers[blank.id];
                                 const status = studentAnswer?.status || '';
-                                const renderRect = resolveBlankRenderRect(blank, pageImage, pageRegions);
+                                const renderRect = expandRect(
+                                    resolveBlankRenderRect(blank, pageImage, pageRegions),
+                                    pageImage,
+                                );
 
                                 return (
                                     <div
@@ -459,8 +496,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                             status === 'correct'
                                                 ? 'border-emerald-500 bg-emerald-50/98'
                                                 : status === 'wrong'
-                                                    ? 'border-rose-500 bg-rose-50/98'
-                                                    : 'border-slate-300 bg-white/98'
+                                                    ? 'border-rose-500 bg-rose-50'
+                                                    : 'border-slate-200 bg-white'
                                         }`}
                                         style={{
                                             left: toPercent(renderRect.leftRatio),
@@ -474,7 +511,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                             value={studentAnswer?.value || ''}
                                             data-blank-id={blank.id}
                                             data-answer={blank.answer}
-                                            className={`worksheet-blank-input h-full w-full border-0 px-2 text-center font-bold outline-none ${
+                                            className={`worksheet-blank-input relative z-10 h-full w-full border-0 px-2 text-center font-bold outline-none ${
                                                 status === 'correct'
                                                     ? 'bg-emerald-50 text-emerald-700'
                                                     : status === 'wrong'

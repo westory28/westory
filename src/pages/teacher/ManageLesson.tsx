@@ -805,7 +805,7 @@ const ManageLesson: React.FC = () => {
                                                     />
                                                 </div>
 
-                                                <aside className="rounded-2xl border border-gray-200 bg-white p-4 space-y-4 h-fit order-1">
+                                                <aside className="hidden rounded-2xl border border-gray-200 bg-white p-4 space-y-4 h-fit order-1">
                                                     <div>
                                                         <div className="text-xs font-bold uppercase tracking-[0.18em] text-gray-400">Blank List</div>
                                                         <p className="mt-1 text-sm text-gray-500">OCR 박스나 페이지 어디든 클릭하면 빈칸 초안이 생깁니다. 정답을 쓴 뒤 정답 확인으로 확정하세요.</p>
@@ -951,8 +951,31 @@ const ManageLesson: React.FC = () => {
                 </button>
             </main>
 
-            {(draftBlank || selectedBlank) && (
-                <div className="fixed bottom-6 right-6 z-40 w-[min(24rem,calc(100vw-2rem))]">
+            {(draftBlank || selectedBlank || sortedBlanks.length > 0) && (
+                <div className="fixed bottom-6 right-20 z-40 w-[min(26rem,calc(100vw-5.5rem))] space-y-3">
+                    <div className="rounded-2xl border border-gray-200 bg-white/96 p-3 shadow-2xl backdrop-blur">
+                        <div className="flex items-center justify-between gap-3">
+                            <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400">Blank List</div>
+                            <div className="text-[11px] font-semibold text-gray-500">{sortedBlanks.length}개</div>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                            {sortedBlanks.map((blank, index) => (
+                                <button
+                                    key={blank.id}
+                                    type="button"
+                                    onClick={() => handleSelectBlank(blank.id)}
+                                    className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                                        activeBlankId === blank.id
+                                            ? 'border-blue-300 bg-blue-50 text-blue-700'
+                                            : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    {blank.answer || `빈칸 ${index + 1}`}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
                     {draftBlank ? (
                         <div className="space-y-3 rounded-2xl border border-amber-200 bg-white/98 p-4 shadow-2xl backdrop-blur">
                             <div className="flex items-center justify-between gap-2">
