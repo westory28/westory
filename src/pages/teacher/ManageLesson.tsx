@@ -327,7 +327,7 @@ const ManageLesson: React.FC = () => {
         const isExpanded = expandedIds.has(node.id);
         const isSelected = selectedNodeId === node.id;
         const isLeaf = level >= 2;
-        const canManageUnit = level <= 1;
+        const canManageUnit = level <= 2;
 
         return (
             <div style={{ marginLeft: level > 0 ? 16 : 0 }} className="mb-1 select-none">
@@ -344,7 +344,17 @@ const ManageLesson: React.FC = () => {
                     <div className="mr-2 text-yellow-500">
                         <i className={`fas ${isLeaf ? 'fa-file-alt text-gray-400' : (isExpanded ? 'fa-folder-open' : 'fa-folder')}`}></i>
                     </div>
-                    <span className="flex-1 truncate text-sm">{node.title}</span>
+                    <div className="group/title relative min-w-0 flex-1">
+                        <span
+                            className="block truncate text-sm"
+                            title={node.title}
+                        >
+                            {node.title}
+                        </span>
+                        <div className="pointer-events-none absolute left-0 top-full z-20 mt-1 hidden max-w-[17rem] whitespace-normal break-words rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium leading-5 text-gray-700 shadow-lg group-hover/title:block">
+                            {node.title}
+                        </div>
+                    </div>
 
                     {canManageUnit && (
                         <div className="flex gap-1 ml-2 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity">
