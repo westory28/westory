@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import {
     browserLocalPersistence,
+    browserSessionPersistence,
     getAuth,
     indexedDBLocalPersistence,
     inMemoryPersistence,
@@ -40,7 +41,12 @@ const authPersistenceReady = typeof window === 'undefined'
                 await setPersistence(auth, browserLocalPersistence);
                 return;
             } catch {
-                await setPersistence(auth, inMemoryPersistence);
+                try {
+                    await setPersistence(auth, browserSessionPersistence);
+                    return;
+                } catch {
+                    await setPersistence(auth, inMemoryPersistence);
+                }
             }
         }
     })();

@@ -796,7 +796,7 @@ const Login: React.FC = () => {
             const result = await signInWithPopup(auth, provider);
             await finishLoginForRole(result.user, mode);
         } catch (error) {
-            if (isPopupFallbackError(error) && shouldPreferRedirectLogin()) {
+            if (isPopupFallbackError(error)) {
                 try {
                     await signInWithRedirect(auth, provider);
                     return;
