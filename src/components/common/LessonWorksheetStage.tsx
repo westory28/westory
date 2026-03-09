@@ -56,6 +56,41 @@ const getIntersectionArea = (
     return width * height;
 };
 
+const getMatchedRegions = (
+    pageImage: LessonWorksheetPageImage,
+    pageRegions: LessonWorksheetTextRegion[],
+    rect: {
+        leftRatio: number;
+        topRatio: number;
+        widthRatio: number;
+        heightRatio: number;
+    },
+) => {
+    const selection = {
+        left: rect.leftRatio * pageImage.width,
+        top: rect.topRatio * pageImage.height,
+        right: (rect.leftRatio + rect.widthRatio) * pageImage.width,
+        bottom: (rect.topRatio + rect.heightRatio) * pageImage.height,
+    };
+
+    return pageRegions.filter((region) => {
+        const regionRight = region.left + region.width;
+        const regionBottom = region.top + region.height;
+        const intersectionArea = getIntersectionArea(
+            selection.left,
+            selection.top,
+            selection.right,
+            selection.bottom,
+            region.left,
+            region.top,
+            regionRight,
+            regionBottom,
+        );
+        const regionArea = Math.max(1, region.width * region.height);
+        return (intersectionArea / regionArea) >= MIN_REGION_INTERSECTION_RATIO;
+    });
+};
+
 const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     pageImages,
     blanks,
@@ -134,46 +169,25 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     const handlePointerUp = (pageImage: LessonWorksheetPageImage) => {
         if (!draftRect || draftRect.page !== pageImage.page) return;
 
-        const leftRatio = Math.min(draftRect.startX, draftRect.currentX);
-        const topRatio = Math.min(draftRect.startY, draftRect.currentY);
-        const widthRatio = Math.abs(draftRect.currentX - draftRect.startX);
-        const heightRatio = Math.abs(draftRect.currentY - draftRect.startY);
+        const nextRect = {
+            leftRatio: Math.min(draftRect.startX, draftRect.currentX),
+            topRatio: Math.min(draftRect.startY, draftRect.currentY),
+            widthRatio: Math.abs(draftRect.currentX - draftRect.startX),
+            heightRatio: Math.abs(draftRect.currentY - draftRect.startY),
+        };
 
-        if (widthRatio < MIN_DRAG_SIZE || heightRatio < MIN_DRAG_SIZE) {
+        if (nextRect.widthRatio < MIN_DRAG_SIZE || nextRect.heightRatio < MIN_DRAG_SIZE) {
             setDraftRect(null);
             return;
         }
 
-        const selection = {
-            left: leftRatio * pageImage.width,
-            top: topRatio * pageImage.height,
-            right: (leftRatio + widthRatio) * pageImage.width,
-            bottom: (topRatio + heightRatio) * pageImage.height,
-        };
-
-        const matchedRegions = (regionsByPage.get(pageImage.page) || []).filter((region) => {
-            const regionRight = region.left + region.width;
-            const regionBottom = region.top + region.height;
-            const intersectionArea = getIntersectionArea(
-                selection.left,
-                selection.top,
-                selection.right,
-                selection.bottom,
-                region.left,
-                region.top,
-                regionRight,
-                regionBottom,
-            );
-            const regionArea = Math.max(1, region.width * region.height);
-            return (intersectionArea / regionArea) >= MIN_REGION_INTERSECTION_RATIO;
-        });
-
+        const matchedRegions = getMatchedRegions(pageImage, regionsByPage.get(pageImage.page) || [], nextRect);
         if (!matchedRegions.length) {
             setDraftRect(null);
             return;
         }
 
-        onCreateBlankFromSelection?.(pageImage.page, { leftRatio, topRatio, widthRatio, heightRatio }, matchedRegions);
+        onCreateBlankFromSelection?.(pageImage.page, nextRect, matchedRegions);
         setDraftRect(null);
     };
 
@@ -181,6 +195,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         <div className="space-y-6">
             {pageImages.map((pageImage) => {
                 const pageBlanks = blanksByPage.get(pageImage.page) || [];
+                const pageRegions = regionsByPage.get(pageImage.page) || [];
                 const pagePendingBlank = pendingBlank?.page === pageImage.page ? pendingBlank : null;
                 const liveDraft = draftRect && draftRect.page === pageImage.page
                     ? {
@@ -191,6 +206,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     }
                     : null;
 
+                const draftRegions = liveDraft ? getMatchedRegions(pageImage, pageRegions, liveDraft) : [];
+
                 return (
                     <section key={pageImage.page} className="rounded-3xl border border-gray-200 bg-white p-3 shadow-sm md:p-4">
                         <div className="mb-3 flex items-center justify-between gap-2">
@@ -199,7 +216,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                             </div>
                             {mode === 'teacher' && (
                                 <div className="text-xs text-gray-500">
-                                    페이지에서 원하는 글자를 드래그하면 해당 부분이 바로 가려지고 OCR 글자가 정답으로 들어갑니다.
+                                    페이지에서 원하는 글자를 드래그하면 실제 선택처럼 음영이 보이고, 놓으면 그 글자만 가려집니다.
                                 </div>
                             )}
                         </div>
@@ -208,7 +225,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                             ref={(node) => {
                                 pageRefs.current[pageImage.page] = node;
                             }}
-                            className={`relative overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 ${mode === 'teacher' ? 'touch-none' : ''}`}
+                            className={`relative overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 ${mode === 'teacher' ? 'touch-none cursor-text' : ''}`}
                             onDragStart={(event) => event.preventDefault()}
                             onPointerDown={(event) => handlePointerDown(pageImage.page, event)}
                             onPointerMove={(event) => handlePointerMove(pageImage.page, event)}
@@ -218,12 +235,52 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                             <img
                                 src={pageImage.imageUrl}
                                 alt={`학습지 ${pageImage.page}페이지`}
-                                className="block h-auto w-full"
+                                className="block h-auto w-full select-none"
                                 draggable={false}
                                 onDragStart={(event) => event.preventDefault()}
                             />
 
-                            {pageBlanks.map((blank) => {
+                            {mode === 'teacher' && pageBlanks.map((blank) => {
+                                const maskedRegions = getMatchedRegions(pageImage, pageRegions, blank);
+                                const renderRegions = maskedRegions.length
+                                    ? maskedRegions.map((region) => ({
+                                        key: `${blank.id}-${region.left}-${region.top}`,
+                                        leftRatio: region.left / pageImage.width,
+                                        topRatio: region.top / pageImage.height,
+                                        widthRatio: region.width / pageImage.width,
+                                        heightRatio: region.height / pageImage.height,
+                                    }))
+                                    : [{
+                                        key: blank.id,
+                                        leftRatio: blank.leftRatio,
+                                        topRatio: blank.topRatio,
+                                        widthRatio: blank.widthRatio,
+                                        heightRatio: blank.heightRatio,
+                                    }];
+
+                                return renderRegions.map((region) => (
+                                    <button
+                                        key={region.key}
+                                        type="button"
+                                        data-blank-box="true"
+                                        onClick={() => onSelectBlank?.(blank.id)}
+                                        aria-label="빈칸 선택"
+                                        className={`absolute border-0 p-0 ${
+                                            selectedBlankId === blank.id
+                                                ? 'bg-slate-100/96 shadow-[0_0_0_1px_rgba(59,130,246,0.38)]'
+                                                : 'bg-white/96'
+                                        }`}
+                                        style={{
+                                            left: toPercent(region.leftRatio),
+                                            top: toPercent(region.topRatio),
+                                            width: toPercent(region.widthRatio),
+                                            height: toPercent(region.heightRatio),
+                                        }}
+                                    />
+                                ));
+                            })}
+
+                            {mode === 'student' && pageBlanks.map((blank) => {
                                 const studentAnswer = studentAnswers[blank.id];
                                 const status = studentAnswer?.status || '';
 
@@ -231,17 +288,12 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                     <div
                                         key={blank.id}
                                         data-blank-box="true"
-                                        onClick={() => onSelectBlank?.(blank.id)}
-                                        className={`absolute overflow-hidden rounded-md border shadow-sm ${
-                                            mode === 'teacher'
-                                                ? selectedBlankId === blank.id
-                                                    ? 'border-blue-600 bg-white ring-2 ring-blue-200'
-                                                    : 'border-slate-300 bg-white'
-                                                : status === 'correct'
-                                                    ? 'border-emerald-500 bg-emerald-50/98'
-                                                    : status === 'wrong'
-                                                        ? 'border-rose-500 bg-rose-50/98'
-                                                        : 'border-slate-300 bg-white/98'
+                                        className={`absolute overflow-hidden rounded-sm border shadow-sm ${
+                                            status === 'correct'
+                                                ? 'border-emerald-500 bg-emerald-50/98'
+                                                : status === 'wrong'
+                                                    ? 'border-rose-500 bg-rose-50/98'
+                                                    : 'border-slate-300 bg-white/98'
                                         }`}
                                         style={{
                                             left: toPercent(blank.leftRatio),
@@ -250,57 +302,70 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                             height: toPercent(blank.heightRatio),
                                         }}
                                     >
-                                        {mode === 'teacher' ? (
-                                            <div className="flex h-full w-full items-center justify-center px-1">
-                                                <span className="rounded bg-slate-100/95 px-1.5 py-0.5 text-[10px] font-bold leading-none text-slate-500 md:text-[11px]">
-                                                    빈칸
-                                                </span>
-                                            </div>
-                                        ) : (
-                                            <input
-                                                type="text"
-                                                value={studentAnswer?.value || ''}
-                                                data-blank-id={blank.id}
-                                                data-answer={blank.answer}
-                                                className={`worksheet-blank-input h-full w-full border-0 px-2 text-center font-bold outline-none ${
-                                                    status === 'correct'
-                                                        ? 'bg-emerald-50 text-emerald-700'
-                                                        : status === 'wrong'
-                                                            ? 'bg-rose-50 text-rose-700'
-                                                            : 'bg-white text-blue-700'
-                                                }`}
-                                                placeholder={blank.prompt || '빈칸'}
-                                                onChange={(event) => onStudentAnswerChange?.(blank.id, event.target.value)}
-                                                style={{ fontSize: 'clamp(11px, 1.6vw, 18px)' }}
-                                            />
-                                        )}
+                                        <input
+                                            type="text"
+                                            value={studentAnswer?.value || ''}
+                                            data-blank-id={blank.id}
+                                            data-answer={blank.answer}
+                                            className={`worksheet-blank-input h-full w-full border-0 px-2 text-center font-bold outline-none ${
+                                                status === 'correct'
+                                                    ? 'bg-emerald-50 text-emerald-700'
+                                                    : status === 'wrong'
+                                                        ? 'bg-rose-50 text-rose-700'
+                                                        : 'bg-white text-blue-700'
+                                            }`}
+                                            placeholder={blank.prompt || '빈칸'}
+                                            onChange={(event) => onStudentAnswerChange?.(blank.id, event.target.value)}
+                                            style={{ fontSize: 'clamp(11px, 1.6vw, 18px)' }}
+                                        />
                                     </div>
                                 );
                             })}
 
                             {mode === 'teacher' && pagePendingBlank && (
-                                <div
-                                    className="pointer-events-none absolute rounded-md border border-amber-300 bg-white shadow-sm ring-2 ring-amber-200/70"
-                                    style={{
-                                        left: toPercent(pagePendingBlank.leftRatio),
-                                        top: toPercent(pagePendingBlank.topRatio),
-                                        width: toPercent(pagePendingBlank.widthRatio),
-                                        height: toPercent(pagePendingBlank.heightRatio),
-                                    }}
-                                />
+                                <>
+                                    {(getMatchedRegions(pageImage, pageRegions, pagePendingBlank).length
+                                        ? getMatchedRegions(pageImage, pageRegions, pagePendingBlank).map((region) => ({
+                                            key: `pending-${region.left}-${region.top}`,
+                                            leftRatio: region.left / pageImage.width,
+                                            topRatio: region.top / pageImage.height,
+                                            widthRatio: region.width / pageImage.width,
+                                            heightRatio: region.height / pageImage.height,
+                                        }))
+                                        : [{
+                                            key: `pending-${pagePendingBlank.id}`,
+                                            leftRatio: pagePendingBlank.leftRatio,
+                                            topRatio: pagePendingBlank.topRatio,
+                                            widthRatio: pagePendingBlank.widthRatio,
+                                            heightRatio: pagePendingBlank.heightRatio,
+                                        }]
+                                    ).map((region) => (
+                                        <div
+                                            key={region.key}
+                                            className="pointer-events-none absolute bg-slate-100/95 shadow-[0_0_0_1px_rgba(245,158,11,0.45)]"
+                                            style={{
+                                                left: toPercent(region.leftRatio),
+                                                top: toPercent(region.topRatio),
+                                                width: toPercent(region.widthRatio),
+                                                height: toPercent(region.heightRatio),
+                                            }}
+                                        />
+                                    ))}
+                                </>
                             )}
 
-                            {mode === 'teacher' && liveDraft && (
+                            {mode === 'teacher' && draftRegions.map((region, index) => (
                                 <div
-                                    className="pointer-events-none absolute rounded-md border border-blue-300 bg-white/92 shadow-sm ring-2 ring-blue-200/70"
+                                    key={`draft-${pageImage.page}-${index}`}
+                                    className="pointer-events-none absolute bg-blue-200/55"
                                     style={{
-                                        left: toPercent(liveDraft.leftRatio),
-                                        top: toPercent(liveDraft.topRatio),
-                                        width: toPercent(liveDraft.widthRatio),
-                                        height: toPercent(liveDraft.heightRatio),
+                                        left: toPercent(region.left / pageImage.width),
+                                        top: toPercent(region.top / pageImage.height),
+                                        width: toPercent(region.width / pageImage.width),
+                                        height: toPercent(region.height / pageImage.height),
                                     }}
                                 />
-                            )}
+                            ))}
                         </div>
                     </section>
                 );
