@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { db, storage } from '../../lib/firebase';
 import {
@@ -14,10 +14,18 @@ import {
     updateDoc,
     where,
 } from 'firebase/firestore';
-import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { deleteObject, getDownloadURL, listAll, ref, uploadBytes } from 'firebase/storage';
 import QuillEditor from '../../components/common/QuillEditor';
+import LessonWorksheetStage from '../../components/common/LessonWorksheetStage';
 import { getSemesterCollectionPath, getSemesterDocPath } from '../../lib/semesterScope';
-import { buildClozeDraftFromText, extractTextFromPdf, textToLessonHtml } from '../../lib/pdf';
+import { processPdfMapFile, type ProcessedPdfMap } from '../../lib/pdfMapProcessor';
+import {
+    createBlankFromRegion,
+    normalizeWorksheetBlanks,
+    type LessonWorksheetBlank,
+    type LessonWorksheetPageImage,
+    type LessonWorksheetTextRegion,
+} from '../../lib/lessonWorksheet';
 
 interface TreeNode {
     id: string;
@@ -34,7 +42,61 @@ interface LessonData {
     pdfName?: string;
     pdfUrl?: string;
     pdfStoragePath?: string;
+    worksheetPageImages?: LessonWorksheetPageImage[];
+    worksheetTextRegions?: LessonWorksheetTextRegion[];
+    worksheetBlanks?: LessonWorksheetBlank[];
 }
+
+const createBlankFromRect = (page: number, rect: {
+    leftRatio: number;
+    topRatio: number;
+    widthRatio: number;
+    heightRatio: number;
+}): LessonWorksheetBlank => ({
+    id: `blank-${page}-${Date.now()}`,
+    page,
+    leftRatio: rect.leftRatio,
+    topRatio: rect.topRatio,
+    widthRatio: rect.widthRatio,
+    heightRatio: rect.heightRatio,
+    answer: '',
+    prompt: '',
+});
+
+const normalizePageImages = (raw: unknown): LessonWorksheetPageImage[] => {
+    if (!Array.isArray(raw)) return [];
+    return raw
+        .map((page) => ({
+            page: Math.max(1, Number(page && typeof page === 'object' && 'page' in page ? (page as { page?: number }).page : 1) || 1),
+            imageUrl: String(page && typeof page === 'object' && 'imageUrl' in page ? (page as { imageUrl?: string }).imageUrl : '').trim(),
+            width: Number(page && typeof page === 'object' && 'width' in page ? (page as { width?: number }).width : 0) || 0,
+            height: Number(page && typeof page === 'object' && 'height' in page ? (page as { height?: number }).height : 0) || 0,
+        }))
+        .filter((page) => page.imageUrl)
+        .sort((a, b) => a.page - b.page);
+};
+
+const normalizeTextRegions = (raw: unknown): LessonWorksheetTextRegion[] => {
+    if (!Array.isArray(raw)) return [];
+    return raw
+        .map((region) => ({
+            label: String(region && typeof region === 'object' && 'label' in region ? (region as { label?: string }).label : '').trim(),
+            page: Math.max(1, Number(region && typeof region === 'object' && 'page' in region ? (region as { page?: number }).page : 1) || 1),
+            left: Number(region && typeof region === 'object' && 'left' in region ? (region as { left?: number }).left : 0) || 0,
+            top: Number(region && typeof region === 'object' && 'top' in region ? (region as { top?: number }).top : 0) || 0,
+            width: Number(region && typeof region === 'object' && 'width' in region ? (region as { width?: number }).width : 0) || 0,
+            height: Number(region && typeof region === 'object' && 'height' in region ? (region as { height?: number }).height : 0) || 0,
+        }))
+        .filter((region) => region.width > 0 && region.height > 0);
+};
+
+const revokeBlobUrls = (pages: LessonWorksheetPageImage[]) => {
+    pages.forEach((page) => {
+        if (page.imageUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(page.imageUrl);
+        }
+    });
+};
 
 const ManageLesson: React.FC = () => {
     const { config } = useAuth();
@@ -43,7 +105,6 @@ const ManageLesson: React.FC = () => {
     const [selectedNodeTitle, setSelectedNodeTitle] = useState('');
     const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
     const [sidebarOpen, setSidebarOpen] = useState(false);
-
     const [lessonTitle, setLessonTitle] = useState('');
     const [lessonVideo, setLessonVideo] = useState('');
     const [lessonContent, setLessonContent] = useState('');
@@ -51,20 +112,51 @@ const ManageLesson: React.FC = () => {
     const [lessonPdfName, setLessonPdfName] = useState('');
     const [lessonPdfUrl, setLessonPdfUrl] = useState('');
     const [lessonPdfStoragePath, setLessonPdfStoragePath] = useState('');
+    const [worksheetPageImages, setWorksheetPageImages] = useState<LessonWorksheetPageImage[]>([]);
+    const [worksheetTextRegions, setWorksheetTextRegions] = useState<LessonWorksheetTextRegion[]>([]);
+    const [worksheetBlanks, setWorksheetBlanks] = useState<LessonWorksheetBlank[]>([]);
     const [selectedPdfFile, setSelectedPdfFile] = useState<File | null>(null);
-    const [extractedPdfText, setExtractedPdfText] = useState('');
+    const [preparedPdf, setPreparedPdf] = useState<ProcessedPdfMap | null>(null);
+    const [activeBlankId, setActiveBlankId] = useState<string | null>(null);
     const [pdfBusy, setPdfBusy] = useState(false);
-
     const [modalOpen, setModalOpen] = useState(false);
     const [modalMode, setModalMode] = useState<'root' | 'child' | 'rename' | null>(null);
     const [targetNode, setTargetNode] = useState<TreeNode | null>(null);
     const [modalInput, setModalInput] = useState('');
-
     const [previewOpen, setPreviewOpen] = useState(false);
+
+    const selectedBlank = useMemo(
+        () => worksheetBlanks.find((blank) => blank.id === activeBlankId) || null,
+        [activeBlankId, worksheetBlanks],
+    );
+
+    const sortedBlanks = useMemo(
+        () => [...worksheetBlanks].sort((a, b) => (a.page - b.page) || a.topRatio - b.topRatio || a.leftRatio - b.leftRatio),
+        [worksheetBlanks],
+    );
 
     useEffect(() => {
         void loadTree();
     }, [config]);
+
+    useEffect(() => () => {
+        revokeBlobUrls(worksheetPageImages);
+    }, [worksheetPageImages]);
+
+    const resetWorksheetState = (revokeExisting = false) => {
+        if (revokeExisting) {
+            revokeBlobUrls(worksheetPageImages);
+        }
+        setLessonPdfName('');
+        setLessonPdfUrl('');
+        setLessonPdfStoragePath('');
+        setWorksheetPageImages([]);
+        setWorksheetTextRegions([]);
+        setWorksheetBlanks([]);
+        setPreparedPdf(null);
+        setSelectedPdfFile(null);
+        setActiveBlankId(null);
+    };
 
     const loadTree = async () => {
         try {
@@ -93,9 +185,7 @@ const ManageLesson: React.FC = () => {
                 updatedAt: serverTimestamp(),
             });
             setTreeData(newTree);
-            if (!silent) {
-                alert('단원 구조를 저장했습니다.');
-            }
+            if (!silent) alert('단원 구조를 저장했습니다.');
         } catch (error) {
             console.error(error);
             alert('단원 구조 저장에 실패했습니다.');
@@ -161,9 +251,7 @@ const ManageLesson: React.FC = () => {
             const node = findNode(nextTree, targetNode.id);
             if (node) {
                 node.title = value;
-                if (selectedNodeId === node.id) {
-                    setSelectedNodeTitle(value);
-                }
+                if (selectedNodeId === node.id) setSelectedNodeTitle(value);
             }
         }
 
@@ -187,11 +275,7 @@ const ManageLesson: React.FC = () => {
             setLessonVideo('');
             setLessonContent('');
             setLessonVisibleToStudents(true);
-            setLessonPdfName('');
-            setLessonPdfUrl('');
-            setLessonPdfStoragePath('');
-            setSelectedPdfFile(null);
-            setExtractedPdfText('');
+            resetWorksheetState(true);
         }
         void saveTree(nextTree);
     };
@@ -212,9 +296,7 @@ const ManageLesson: React.FC = () => {
                     }}
                 >
                     <div className="w-6 text-center text-gray-400 mr-1">
-                        {!isLeaf && (
-                            <i className={`fas fa-caret-${isExpanded ? 'down' : 'right'} transition-transform`}></i>
-                        )}
+                        {!isLeaf && <i className={`fas fa-caret-${isExpanded ? 'down' : 'right'} transition-transform`}></i>}
                     </div>
                     <div className="mr-2 text-yellow-500">
                         <i className={`fas ${isLeaf ? 'fa-file-alt text-gray-400' : (isExpanded ? 'fa-folder-open' : 'fa-folder')}`}></i>
@@ -275,11 +357,7 @@ const ManageLesson: React.FC = () => {
         setLessonVideo('');
         setLessonContent('');
         setLessonVisibleToStudents(true);
-        setLessonPdfName('');
-        setLessonPdfUrl('');
-        setLessonPdfStoragePath('');
-        setSelectedPdfFile(null);
-        setExtractedPdfText('');
+        resetWorksheetState(true);
 
         try {
             const scopedRef = collection(db, getSemesterCollectionPath(config, 'lessons'));
@@ -301,6 +379,9 @@ const ManageLesson: React.FC = () => {
                 setLessonPdfName(data.pdfName || '');
                 setLessonPdfUrl(data.pdfUrl || '');
                 setLessonPdfStoragePath(data.pdfStoragePath || '');
+                setWorksheetPageImages(normalizePageImages(data.worksheetPageImages));
+                setWorksheetTextRegions(normalizeTextRegions(data.worksheetTextRegions));
+                setWorksheetBlanks(normalizeWorksheetBlanks(data.worksheetBlanks));
             }
         } catch (error) {
             console.error(error);
@@ -310,6 +391,7 @@ const ManageLesson: React.FC = () => {
     const handlePdfFileChange = (file: File | null) => {
         if (!file) {
             setSelectedPdfFile(null);
+            setPreparedPdf(null);
             return;
         }
 
@@ -321,7 +403,7 @@ const ManageLesson: React.FC = () => {
         setSelectedPdfFile(file);
     };
 
-    const handleExtractPdf = async () => {
+    const handlePreparePdf = async () => {
         if (!selectedPdfFile) {
             alert('먼저 PDF 파일을 선택해 주세요.');
             return;
@@ -329,54 +411,118 @@ const ManageLesson: React.FC = () => {
 
         setPdfBusy(true);
         try {
-            const text = await extractTextFromPdf(selectedPdfFile);
-            setExtractedPdfText(text);
-            if (!lessonContent.trim()) {
-                setLessonContent(textToLessonHtml(text));
-            }
+            const processed = await processPdfMapFile(selectedPdfFile);
+            const nextPageImages = processed.pageImages.map((page) => ({
+                page: page.page,
+                imageUrl: URL.createObjectURL(page.blob),
+                width: page.width,
+                height: page.height,
+            }));
+
+            revokeBlobUrls(worksheetPageImages);
+            setPreparedPdf(processed);
+            setLessonPdfName(selectedPdfFile.name);
+            setWorksheetPageImages(nextPageImages);
+            setWorksheetTextRegions(processed.regions);
+            setWorksheetBlanks([]);
+            setActiveBlankId(null);
         } catch (error) {
             console.error(error);
-            alert('PDF 텍스트 추출에 실패했습니다. 스캔본 PDF는 추출이 제한될 수 있습니다.');
+            alert('PDF 레이아웃 준비에 실패했습니다.');
         } finally {
             setPdfBusy(false);
         }
     };
 
-    const applyExtractedTextToEditor = () => {
-        if (!extractedPdfText.trim()) {
-            alert('추출된 텍스트가 없습니다.');
-            return;
-        }
-        setLessonContent(textToLessonHtml(extractedPdfText));
+    const handleCreateBlankFromRegion = (region: LessonWorksheetTextRegion) => {
+        const pageImage = worksheetPageImages.find((page) => page.page === region.page);
+        const blank = createBlankFromRegion(region, pageImage);
+        if (!blank) return;
+
+        setWorksheetBlanks((prev) => [...prev, blank]);
+        setActiveBlankId(blank.id);
     };
 
-    const applyClozeDraftToEditor = () => {
-        if (!extractedPdfText.trim()) {
-            alert('먼저 PDF 텍스트를 추출해 주세요.');
-            return;
-        }
-        const draft = buildClozeDraftFromText(extractedPdfText);
-        setLessonContent(draft.html);
-        alert(`자동으로 ${draft.blankCount}개의 빈칸 초안을 만들었습니다. 저장 전 내용을 꼭 확인해 주세요.`);
+    const handleCreateBlankFromRect = (page: number, rect: {
+        leftRatio: number;
+        topRatio: number;
+        widthRatio: number;
+        heightRatio: number;
+    }) => {
+        const blank = createBlankFromRect(page, rect);
+        setWorksheetBlanks((prev) => [...prev, blank]);
+        setActiveBlankId(blank.id);
+    };
+
+    const updateBlank = (blankId: string, patch: Partial<LessonWorksheetBlank>) => {
+        setWorksheetBlanks((prev) => prev.map((blank) => (
+            blank.id === blankId ? { ...blank, ...patch } : blank
+        )));
+    };
+
+    const handleDeleteBlank = (blankId: string) => {
+        setWorksheetBlanks((prev) => prev.filter((blank) => blank.id !== blankId));
+        if (activeBlankId === blankId) setActiveBlankId(null);
     };
 
     const removeAttachedPdf = async () => {
-        if (!selectedPdfFile && !lessonPdfUrl) return;
-        if (!window.confirm('연결된 PDF를 해제하시겠습니까?')) return;
-
-        try {
-            if (lessonPdfStoragePath) {
-                await deleteObject(ref(storage, lessonPdfStoragePath));
-            }
-        } catch (error) {
-            console.error('Failed to delete old pdf from storage:', error);
+        if (!selectedNodeId) {
+            resetWorksheetState(true);
+            return;
         }
 
-        setSelectedPdfFile(null);
-        setLessonPdfName('');
-        setLessonPdfUrl('');
-        setLessonPdfStoragePath('');
-        setExtractedPdfText('');
+        if (!window.confirm('연결된 PDF 학습지를 해제하시겠습니까?')) return;
+
+        try {
+            const basePath = `${getSemesterCollectionPath(config, 'lesson_pdfs')}/${selectedNodeId}`;
+            const folderRef = ref(storage, basePath);
+            const listing = await listAll(folderRef);
+            await Promise.all(listing.items.map((item) => deleteObject(item).catch(() => undefined)));
+        } catch (error) {
+            console.error('Failed to delete lesson pdf assets:', error);
+        }
+
+        resetWorksheetState(true);
+    };
+
+    const uploadWorksheetAssets = async (unitId: string) => {
+        if (!selectedPdfFile || !preparedPdf) {
+            return {
+                pdfName: lessonPdfName,
+                pdfUrl: lessonPdfUrl,
+                pdfStoragePath: lessonPdfStoragePath,
+                pageImages: worksheetPageImages,
+                textRegions: worksheetTextRegions,
+            };
+        }
+
+        const basePath = `${getSemesterCollectionPath(config, 'lesson_pdfs')}/${unitId}`;
+        const pdfRef = ref(storage, `${basePath}/source.pdf`);
+        await uploadBytes(pdfRef, selectedPdfFile, {
+            contentType: 'application/pdf',
+        });
+
+        const pageImages: LessonWorksheetPageImage[] = [];
+        for (const page of preparedPdf.pageImages) {
+            const pageRef = ref(storage, `${basePath}/page-${page.page}.png`);
+            await uploadBytes(pageRef, page.blob, {
+                contentType: 'image/png',
+            });
+            pageImages.push({
+                page: page.page,
+                imageUrl: await getDownloadURL(pageRef),
+                width: page.width,
+                height: page.height,
+            });
+        }
+
+        return {
+            pdfName: selectedPdfFile.name,
+            pdfUrl: await getDownloadURL(pdfRef),
+            pdfStoragePath: pdfRef.fullPath,
+            pageImages,
+            textRegions: preparedPdf.regions,
+        };
     };
 
     const saveLesson = async () => {
@@ -387,36 +533,11 @@ const ManageLesson: React.FC = () => {
             const scopedQuery = query(scopedRef, where('unitId', '==', selectedNodeId), limit(1));
             const scopedSnap = await getDocs(scopedQuery);
             const normalizedContentHtml = lessonContent.replace(/(^|>)([ \t]+)(?=\S)/gm, (_match, prefix: string, spaces: string) => {
-                const preserved = spaces
-                    .replace(/\t/g, '    ')
-                    .replace(/ /g, '&nbsp;');
+                const preserved = spaces.replace(/\t/g, '    ').replace(/ /g, '&nbsp;');
                 return `${prefix}${preserved}`;
             });
 
-            let pdfName = lessonPdfName;
-            let pdfUrl = lessonPdfUrl;
-            let pdfStoragePath = lessonPdfStoragePath;
-
-            if (selectedPdfFile) {
-                const safeName = selectedPdfFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-                const storagePath = `${getSemesterCollectionPath(config, 'lesson_pdfs')}/${selectedNodeId}/${Date.now()}-${safeName}`;
-                const storageRef = ref(storage, storagePath);
-
-                await uploadBytes(storageRef, selectedPdfFile, {
-                    contentType: 'application/pdf',
-                });
-                pdfUrl = await getDownloadURL(storageRef);
-                pdfName = selectedPdfFile.name;
-                pdfStoragePath = storagePath;
-
-                if (lessonPdfStoragePath && lessonPdfStoragePath !== storagePath) {
-                    try {
-                        await deleteObject(ref(storage, lessonPdfStoragePath));
-                    } catch (cleanupError) {
-                        console.error('Failed to clean up previous pdf:', cleanupError);
-                    }
-                }
-            }
+            const uploadedWorksheet = await uploadWorksheetAssets(selectedNodeId);
 
             const payload = {
                 unitId: selectedNodeId,
@@ -424,9 +545,12 @@ const ManageLesson: React.FC = () => {
                 videoUrl: lessonVideo,
                 contentHtml: normalizedContentHtml,
                 isVisibleToStudents: lessonVisibleToStudents,
-                pdfName,
-                pdfUrl,
-                pdfStoragePath,
+                pdfName: uploadedWorksheet.pdfName,
+                pdfUrl: uploadedWorksheet.pdfUrl,
+                pdfStoragePath: uploadedWorksheet.pdfStoragePath,
+                worksheetPageImages: uploadedWorksheet.pageImages,
+                worksheetTextRegions: uploadedWorksheet.textRegions,
+                worksheetBlanks: worksheetBlanks,
                 updatedAt: serverTimestamp(),
             };
 
@@ -436,23 +560,18 @@ const ManageLesson: React.FC = () => {
                 await updateDoc(doc(scopedRef, scopedSnap.docs[0].id), payload);
             }
 
-            setLessonPdfName(pdfName || '');
-            setLessonPdfUrl(pdfUrl || '');
-            setLessonPdfStoragePath(pdfStoragePath || '');
+            setLessonPdfName(uploadedWorksheet.pdfName || '');
+            setLessonPdfUrl(uploadedWorksheet.pdfUrl || '');
+            setLessonPdfStoragePath(uploadedWorksheet.pdfStoragePath || '');
+            setWorksheetPageImages(uploadedWorksheet.pageImages || []);
+            setWorksheetTextRegions(uploadedWorksheet.textRegions || []);
+            setPreparedPdf(null);
             setSelectedPdfFile(null);
             alert('수업 자료를 저장했습니다.');
         } catch (error) {
             console.error(error);
             alert('수업 자료 저장에 실패했습니다.');
         }
-    };
-
-    const renderPreviewContent = (html: string) => {
-        return html.replace(/\[(.*?)\]/g, (_match, p1) => {
-            const answer = String(p1 || '').trim();
-            const inputWidth = Math.min(180, Math.max(52, answer.length * 12 + 20));
-            return `<span class="lesson-preview-cloze-wrap"><input type="text" readonly value="" placeholder="빈칸" style="width:${inputWidth}px;" class="lesson-preview-cloze" /></span>`;
-        });
     };
 
     const getEmbedUrl = (url: string) => {
@@ -464,7 +583,7 @@ const ManageLesson: React.FC = () => {
 
     return (
         <div className="bg-gray-50 flex flex-col min-h-screen">
-            <main className="flex-1 w-full max-w-[90rem] mx-auto px-4 lg:px-6 py-6 h-full flex flex-col relative">
+            <main className="flex-1 w-full max-w-[96rem] mx-auto px-4 lg:px-6 py-6 h-full flex flex-col relative">
                 <div className="flex justify-between items-center mb-4 shrink-0">
                     <h1 className="text-xl lg:text-2xl font-bold text-gray-800">
                         <i className="fas fa-sitemap text-blue-500 mr-2"></i>수업 자료 관리
@@ -472,11 +591,9 @@ const ManageLesson: React.FC = () => {
                 </div>
 
                 <div className="flex flex-col lg:flex-row gap-6 h-full pb-4 relative">
-                    {sidebarOpen && (
-                        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)}></div>
-                    )}
+                    {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)}></div>}
 
-                    <div className={`${sidebarOpen ? 'translate-x-0' : 'translate-x-full'} lg:translate-x-0 fixed lg:static top-0 right-0 h-full lg:h-auto w-[80%] max-w-[320px] lg:max-w-none lg:w-1/3 bg-white z-50 lg:z-auto shadow-xl lg:shadow-sm border border-gray-200 transition-transform duration-300 flex flex-col min-h-[300px] lg:min-h-0 rounded-none lg:rounded-xl`}>
+                    <div className={`${sidebarOpen ? 'translate-x-0' : 'translate-x-full'} lg:translate-x-0 fixed lg:static top-0 right-0 h-full lg:h-auto w-[80%] max-w-[320px] lg:max-w-none lg:w-1/4 bg-white z-50 lg:z-auto shadow-xl lg:shadow-sm border border-gray-200 transition-transform duration-300 flex flex-col min-h-[300px] lg:min-h-0 rounded-none lg:rounded-xl`}>
                         <div className="p-4 border-b bg-gray-50 font-bold text-gray-700 flex justify-between items-center">
                             <span className="flex items-center gap-2"><i className="fas fa-list"></i> 단원 목록</span>
                             <div className="flex gap-1 items-center">
@@ -492,13 +609,11 @@ const ManageLesson: React.FC = () => {
                             </div>
                         </div>
                         <div className="flex-1 overflow-y-auto p-4">
-                            {treeData.map((node) => (
-                                <TreeCard key={node.id} node={node} level={0} />
-                            ))}
+                            {treeData.map((node) => <TreeCard key={node.id} node={node} level={0} />)}
                         </div>
                     </div>
 
-                    <div className="w-full lg:w-2/3 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col relative min-h-[600px]">
+                    <div className="w-full lg:w-3/4 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col relative min-h-[600px]">
                         {!selectedNodeId ? (
                             <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 bg-white z-10 rounded-xl p-6 text-center">
                                 <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4">
@@ -526,9 +641,7 @@ const ManageLesson: React.FC = () => {
                                                 onClick={() => setLessonVisibleToStudents((prev) => !prev)}
                                                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${lessonVisibleToStudents ? 'bg-emerald-500' : 'bg-gray-300'}`}
                                             >
-                                                <span
-                                                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${lessonVisibleToStudents ? 'translate-x-5' : 'translate-x-1'}`}
-                                                />
+                                                <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${lessonVisibleToStudents ? 'translate-x-5' : 'translate-x-1'}`} />
                                             </button>
                                         </label>
                                         <button onClick={() => setPreviewOpen(true)} className="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg font-bold hover:bg-gray-50 text-xs md:text-sm">
@@ -540,7 +653,7 @@ const ManageLesson: React.FC = () => {
                                     </div>
                                 </div>
 
-                                <div className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-4">
+                                <div className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-5">
                                     <div>
                                         <label className="block text-xs font-bold text-gray-500 mb-1">자료 제목</label>
                                         <input
@@ -563,83 +676,149 @@ const ManageLesson: React.FC = () => {
                                         />
                                     </div>
 
-                                    <div className="rounded-2xl border border-gray-200 bg-gray-50/80 p-4 space-y-3">
+                                    <div className="rounded-3xl border border-gray-200 bg-gray-50/80 p-4 md:p-5 space-y-4">
                                         <div className="flex flex-wrap items-center justify-between gap-2">
-                                            <label className="block text-xs font-bold text-gray-500">수업 PDF 등록</label>
-                                            <span className="text-[11px] text-gray-500">PDF 업로드 후 텍스트 추출과 빈칸 초안 생성을 지원합니다.</span>
-                                        </div>
-
-                                        <div className="flex flex-col md:flex-row gap-3 md:items-center md:flex-wrap">
-                                            <label className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-white border border-gray-300 text-sm font-bold text-gray-700 cursor-pointer hover:bg-gray-100">
-                                                <i className="fas fa-file-pdf mr-2 text-red-500"></i>PDF 선택
-                                                <input
-                                                    type="file"
-                                                    accept="application/pdf,.pdf"
-                                                    className="hidden"
-                                                    onChange={(e) => handlePdfFileChange(e.target.files?.[0] || null)}
-                                                />
-                                            </label>
-                                            <button
-                                                type="button"
-                                                onClick={() => void handleExtractPdf()}
-                                                disabled={pdfBusy || !selectedPdfFile}
-                                                className="px-4 py-2 rounded-lg bg-stone-900 text-white text-sm font-bold disabled:opacity-50"
-                                            >
-                                                <i className={`fas ${pdfBusy ? 'fa-spinner fa-spin' : 'fa-file-import'} mr-2`}></i>PDF 텍스트 추출
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={applyExtractedTextToEditor}
-                                                disabled={!extractedPdfText.trim()}
-                                                className="px-4 py-2 rounded-lg bg-blue-50 text-blue-700 text-sm font-bold disabled:opacity-50"
-                                            >
-                                                추출 텍스트 적용
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={applyClozeDraftToEditor}
-                                                disabled={!extractedPdfText.trim()}
-                                                className="px-4 py-2 rounded-lg bg-emerald-50 text-emerald-700 text-sm font-bold disabled:opacity-50"
-                                            >
-                                                자동 빈칸 초안
-                                            </button>
+                                            <div>
+                                                <div className="text-xs font-bold text-gray-500">PDF 학습지</div>
+                                                <p className="mt-1 text-sm text-gray-500">원본 PDF 모양을 유지한 채 좌표형 빈칸을 올립니다. 지도처럼 페이지 이미지 위에 배치됩니다.</p>
+                                            </div>
+                                            <div className="flex flex-wrap gap-2">
+                                                <label className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-white border border-gray-300 text-sm font-bold text-gray-700 cursor-pointer hover:bg-gray-100">
+                                                    <i className="fas fa-file-pdf mr-2 text-red-500"></i>PDF 선택
+                                                    <input type="file" accept="application/pdf,.pdf" className="hidden" onChange={(e) => handlePdfFileChange(e.target.files?.[0] || null)} />
+                                                </label>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => void handlePreparePdf()}
+                                                    disabled={pdfBusy || !selectedPdfFile}
+                                                    className="px-4 py-2 rounded-lg bg-stone-900 text-white text-sm font-bold disabled:opacity-50"
+                                                >
+                                                    <i className={`fas ${pdfBusy ? 'fa-spinner fa-spin' : 'fa-layer-group'} mr-2`}></i>레이아웃 불러오기
+                                                </button>
+                                                {(lessonPdfUrl || selectedPdfFile || worksheetPageImages.length > 0) && (
+                                                    <button type="button" onClick={() => void removeAttachedPdf()} className="px-4 py-2 rounded-lg bg-red-50 text-red-700 text-sm font-bold">
+                                                        PDF 해제
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
 
                                         <div className="text-sm text-gray-600 space-y-1">
                                             {selectedPdfFile && <p>선택 파일: <span className="font-semibold">{selectedPdfFile.name}</span></p>}
                                             {!selectedPdfFile && lessonPdfName && <p>저장된 PDF: <span className="font-semibold">{lessonPdfName}</span></p>}
-                                            {(lessonPdfUrl || selectedPdfFile) && (
-                                                <div className="flex flex-wrap items-center gap-3">
-                                                    {lessonPdfUrl && !selectedPdfFile && (
-                                                        <a href={lessonPdfUrl} target="_blank" rel="noreferrer" className="text-blue-600 font-semibold hover:underline">
-                                                            원본 PDF 열기
-                                                        </a>
-                                                    )}
-                                                    <button type="button" onClick={() => void removeAttachedPdf()} className="text-red-600 font-semibold">
-                                                        PDF 연결 해제
-                                                    </button>
-                                                </div>
+                                            {lessonPdfUrl && (
+                                                <a href={lessonPdfUrl} target="_blank" rel="noreferrer" className="inline-flex items-center text-blue-600 font-semibold hover:underline">
+                                                    <i className="fas fa-file-pdf mr-2"></i>원본 PDF 열기
+                                                </a>
                                             )}
                                         </div>
 
-                                        <textarea
-                                            value={extractedPdfText}
-                                            onChange={(e) => setExtractedPdfText(e.target.value)}
-                                            className="w-full min-h-[140px] rounded-xl border border-gray-200 bg-white p-3 text-sm outline-none focus:border-blue-500"
-                                            placeholder="PDF에서 추출한 텍스트가 여기에 표시됩니다. 필요한 부분을 수정한 뒤 에디터에 적용하거나 자동 빈칸 초안을 생성하세요."
-                                        />
+                                        {worksheetPageImages.length > 0 ? (
+                                            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
+                                                <div className="min-w-0">
+                                                    <LessonWorksheetStage
+                                                        pageImages={worksheetPageImages}
+                                                        blanks={worksheetBlanks}
+                                                        textRegions={worksheetTextRegions}
+                                                        mode="teacher"
+                                                        selectedBlankId={activeBlankId}
+                                                        onSelectBlank={setActiveBlankId}
+                                                        onCreateBlankFromRegion={handleCreateBlankFromRegion}
+                                                        onCreateBlankFromRect={handleCreateBlankFromRect}
+                                                    />
+                                                </div>
+
+                                                <aside className="rounded-2xl border border-gray-200 bg-white p-4 space-y-4 h-fit">
+                                                    <div>
+                                                        <div className="text-xs font-bold uppercase tracking-[0.18em] text-gray-400">Blank List</div>
+                                                        <p className="mt-1 text-sm text-gray-500">OCR 박스를 클릭하거나 직접 드래그해서 빈칸을 만든 뒤 정답을 입력하세요.</p>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-3 gap-3 text-center">
+                                                        <div className="rounded-xl bg-gray-50 px-3 py-2">
+                                                            <div className="text-[11px] text-gray-400">페이지</div>
+                                                            <div className="mt-1 font-bold text-gray-700">{worksheetPageImages.length}</div>
+                                                        </div>
+                                                        <div className="rounded-xl bg-gray-50 px-3 py-2">
+                                                            <div className="text-[11px] text-gray-400">OCR 박스</div>
+                                                            <div className="mt-1 font-bold text-gray-700">{worksheetTextRegions.length}</div>
+                                                        </div>
+                                                        <div className="rounded-xl bg-gray-50 px-3 py-2">
+                                                            <div className="text-[11px] text-gray-400">빈칸</div>
+                                                            <div className="mt-1 font-bold text-gray-700">{worksheetBlanks.length}</div>
+                                                        </div>
+                                                    </div>
+
+                                                    {selectedBlank ? (
+                                                        <div className="space-y-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
+                                                            <div className="flex items-center justify-between gap-2">
+                                                                <div className="text-sm font-bold text-blue-900">선택한 빈칸</div>
+                                                                <button type="button" onClick={() => handleDeleteBlank(selectedBlank.id)} className="text-xs font-bold text-red-600">
+                                                                    삭제
+                                                                </button>
+                                                            </div>
+                                                            <div className="text-xs text-gray-500">p.{selectedBlank.page}</div>
+                                                            <input
+                                                                type="text"
+                                                                value={selectedBlank.answer}
+                                                                onChange={(e) => updateBlank(selectedBlank.id, { answer: e.target.value })}
+                                                                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                                                                placeholder="정답"
+                                                            />
+                                                            <input
+                                                                type="text"
+                                                                value={selectedBlank.prompt || ''}
+                                                                onChange={(e) => updateBlank(selectedBlank.id, { prompt: e.target.value })}
+                                                                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                                                                placeholder="학생 입력칸 안내문(선택)"
+                                                            />
+                                                        </div>
+                                                    ) : (
+                                                        <div className="rounded-2xl border border-dashed border-gray-300 px-4 py-6 text-center text-sm text-gray-500">
+                                                            오른쪽 학습지에서 빈칸을 선택하면 정답을 수정할 수 있습니다.
+                                                        </div>
+                                                    )}
+
+                                                    <div className="max-h-[28rem] overflow-y-auto space-y-2 pr-1">
+                                                        {sortedBlanks.map((blank, index) => (
+                                                            <button
+                                                                key={blank.id}
+                                                                type="button"
+                                                                onClick={() => setActiveBlankId(blank.id)}
+                                                                className={`w-full rounded-xl border px-3 py-3 text-left transition ${
+                                                                    activeBlankId === blank.id
+                                                                        ? 'border-blue-300 bg-blue-50'
+                                                                        : 'border-gray-200 bg-white hover:bg-gray-50'
+                                                                }`}
+                                                            >
+                                                                <div className="flex items-center justify-between gap-2">
+                                                                    <div className="text-xs font-bold text-gray-400">#{index + 1} · p.{blank.page}</div>
+                                                                    <span className="text-[11px] text-gray-500">{Math.round(blank.widthRatio * 100)}%</span>
+                                                                </div>
+                                                                <div className="mt-1 font-bold text-gray-800 truncate">{blank.answer || '정답 미입력'}</div>
+                                                                {blank.prompt && <div className="mt-1 text-xs text-gray-500 truncate">{blank.prompt}</div>}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </aside>
+                                            </div>
+                                        ) : (
+                                            <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-16 text-center text-sm text-gray-500">
+                                                PDF를 선택한 뒤 <strong>레이아웃 불러오기</strong>를 누르면 페이지 이미지와 OCR 좌표가 준비됩니다.
+                                            </div>
+                                        )}
                                     </div>
 
-                                    <div className="flex-1 flex flex-col h-full min-h-[400px]">
+                                    <div className="flex-1 flex flex-col h-full min-h-[240px]">
                                         <label className="block text-xs font-bold text-gray-500 mb-1 flex justify-between">
-                                            <span>학습 내용</span>
-                                            <span className="text-blue-600 text-[10px]">빈칸 표기: [정답]</span>
+                                            <span>보조 설명/정리 내용</span>
+                                            <span className="text-gray-400 text-[10px]">선택 입력</span>
                                         </label>
                                         <QuillEditor
                                             value={lessonContent}
                                             onChange={setLessonContent}
-                                            placeholder="여기에 수업 내용을 작성하세요. 빈칸 문제는 [정답] 형식을 사용하세요."
-                                            minHeight={460}
+                                            placeholder="PDF 학습지 아래에 추가 설명이나 정리 내용을 넣고 싶다면 입력하세요."
+                                            minHeight={260}
                                             toolbar={[
                                                 [{ header: [1, 2, 3, false] }],
                                                 ['bold', 'italic', 'underline', 'strike'],
@@ -686,13 +865,13 @@ const ManageLesson: React.FC = () => {
 
             {previewOpen && (
                 <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setPreviewOpen(false)}>
-                    <div className="bg-white w-full max-w-4xl h-[85vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden relative" onClick={(e) => e.stopPropagation()}>
+                    <div className="bg-white w-full max-w-6xl h-[88vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden relative" onClick={(e) => e.stopPropagation()}>
                         <div className="p-4 border-b flex justify-between items-center bg-gray-50">
                             <h3 className="font-bold text-lg"><i className="fas fa-mobile-alt mr-2"></i>학생 화면 미리보기</h3>
                             <button onClick={() => setPreviewOpen(false)} className="text-gray-500 hover:text-gray-800"><i className="fas fa-times text-xl"></i></button>
                         </div>
                         <div className="flex-1 overflow-y-auto p-4 lg:p-8 bg-gray-50">
-                            <div className="max-w-2xl mx-auto bg-white p-6 lg:p-8 rounded-xl shadow-sm border border-gray-200 min-h-full">
+                            <div className="max-w-4xl mx-auto bg-white p-6 lg:p-8 rounded-xl shadow-sm border border-gray-200 min-h-full">
                                 <h1 className="text-2xl font-bold mb-4 text-gray-900 border-b pb-4">{lessonTitle}</h1>
 
                                 {!lessonVisibleToStudents ? (
@@ -702,58 +881,22 @@ const ManageLesson: React.FC = () => {
                                         <p className="mt-2 text-sm">학생은 교사가 공개한 자료만 확인할 수 있습니다.</p>
                                     </div>
                                 ) : (
-                                    <>
+                                    <div className="space-y-6">
                                         {lessonVideo && getEmbedUrl(lessonVideo) && (
-                                            <div className="mb-6">
-                                                <div className="relative pb-[56.25%] h-0 overflow-hidden rounded-xl bg-black">
-                                                    <iframe
-                                                        src={getEmbedUrl(lessonVideo)!}
-                                                        className="absolute top-0 left-0 w-full h-full"
-                                                        frameBorder="0"
-                                                        allowFullScreen
-                                                    ></iframe>
-                                                </div>
+                                            <div className="relative pb-[56.25%] h-0 overflow-hidden rounded-xl bg-black">
+                                                <iframe src={getEmbedUrl(lessonVideo)!} className="absolute top-0 left-0 w-full h-full" frameBorder="0" allowFullScreen></iframe>
                                             </div>
                                         )}
 
-                                        <div
-                                            className="prose max-w-none text-gray-800 leading-loose lesson-preview-content"
-                                            dangerouslySetInnerHTML={{ __html: renderPreviewContent(lessonContent) }}
-                                        />
-                                    </>
+                                        {worksheetPageImages.length > 0 && (
+                                            <LessonWorksheetStage pageImages={worksheetPageImages} blanks={worksheetBlanks} mode="student" studentAnswers={{}} />
+                                        )}
+
+                                        {lessonContent && (
+                                            <div className="prose max-w-none text-gray-800 leading-loose" dangerouslySetInnerHTML={{ __html: lessonContent }} />
+                                        )}
+                                    </div>
                                 )}
-                                <style>{`
-                                    .lesson-preview-content p {
-                                        white-space: pre-wrap;
-                                    }
-                                    .lesson-preview-cloze-wrap {
-                                        display: inline-flex;
-                                        align-items: baseline;
-                                        vertical-align: baseline;
-                                        white-space: nowrap;
-                                        margin: 0 0.2rem;
-                                    }
-                                    .lesson-preview-cloze {
-                                        border: none;
-                                        border-bottom: 2px solid #374151;
-                                        text-align: center;
-                                        font-weight: 700;
-                                        color: #2563eb;
-                                        background: transparent;
-                                        padding: 0 4px;
-                                        margin: 0;
-                                        line-height: 1.2;
-                                        vertical-align: baseline;
-                                        display: inline-block;
-                                    }
-                                    .lesson-preview-cloze:focus {
-                                        outline: none;
-                                    }
-                                    .lesson-preview-cloze::placeholder {
-                                        color: #9ca3af;
-                                        font-weight: 700;
-                                    }
-                                `}</style>
                             </div>
                         </div>
                     </div>
@@ -764,4 +907,3 @@ const ManageLesson: React.FC = () => {
 };
 
 export default ManageLesson;
-

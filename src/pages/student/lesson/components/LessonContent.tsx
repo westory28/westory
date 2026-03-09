@@ -3,6 +3,8 @@ import { db } from '../../../../lib/firebase';
 import { collection, query, where, getDocs, limit, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../../../../contexts/AuthContext';
 import { getSemesterCollectionPath } from '../../../../lib/semesterScope';
+import LessonWorksheetStage from '../../../../components/common/LessonWorksheetStage';
+import type { LessonWorksheetBlank, LessonWorksheetPageImage, LessonWorksheetTextRegion } from '../../../../lib/lessonWorksheet';
 
 interface LessonContentProps {
     unitId: string | null;
@@ -16,6 +18,9 @@ interface LessonData {
     isVisibleToStudents?: boolean;
     pdfName?: string;
     pdfUrl?: string;
+    worksheetPageImages?: LessonWorksheetPageImage[];
+    worksheetTextRegions?: LessonWorksheetTextRegion[];
+    worksheetBlanks?: LessonWorksheetBlank[];
 }
 
 const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) => {
@@ -24,6 +29,7 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(false);
     const [isBlocked, setIsBlocked] = useState(false);
+    const [studentAnswers, setStudentAnswers] = useState<Record<string, { value?: string; status?: '' | 'correct' | 'wrong' }>>({});
 
     // Check Answers State
     const contentRef = useRef<HTMLDivElement>(null);
@@ -33,6 +39,7 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
         if (!unitId) {
             setLesson(null);
             setIsBlocked(false);
+            setStudentAnswers({});
             return;
         }
 
@@ -57,8 +64,10 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
                     const data = snap.docs[0].data() as LessonData;
                     setLesson(data);
                     setIsBlocked(data.isVisibleToStudents === false);
+                    setStudentAnswers({});
                 } else {
                     setLesson(null);
+                    setStudentAnswers({});
                 }
             } catch (err) {
                 console.error("Error fetching lesson:", err);
@@ -82,10 +91,10 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
     const serializeAnswers = () => {
         const container = contentRef.current;
         if (!container) return {};
-        const inputs = container.querySelectorAll('.cloze-input') as NodeListOf<HTMLInputElement>;
+        const inputs = container.querySelectorAll('.cloze-input, .worksheet-blank-input') as NodeListOf<HTMLInputElement>;
         const answers: Record<string, { value: string; status: '' | 'correct' | 'wrong' }> = {};
         inputs.forEach((input, index) => {
-            const key = input.dataset.blankIndex || String(index);
+            const key = input.dataset.blankId || input.dataset.blankIndex || String(index);
             const status: '' | 'correct' | 'wrong' = input.classList.contains('correct')
                 ? 'correct'
                 : input.classList.contains('wrong')
@@ -163,7 +172,7 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
         if (!container) return;
         const handleInput = (event: Event) => {
             const target = event.target as HTMLElement | null;
-            if (!target || !target.classList.contains('cloze-input')) return;
+            if (!target || (!target.classList.contains('cloze-input') && !target.classList.contains('worksheet-blank-input'))) return;
             target.classList.remove('correct', 'wrong');
             scheduleProgressSave();
         };
@@ -171,7 +180,7 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
         return () => {
             container.removeEventListener('input', handleInput);
         };
-    }, [unitId, lesson?.contentHtml, currentUser?.uid]);
+    }, [unitId, lesson?.contentHtml, lesson?.worksheetBlanks, currentUser?.uid]);
 
     useEffect(() => {
         const restoreProgress = async () => {
@@ -185,9 +194,10 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
                     answers?: Record<string, { value?: string; status?: '' | 'correct' | 'wrong' }>;
                 };
                 const answers = data.answers || {};
-                const inputs = container.querySelectorAll('.cloze-input') as NodeListOf<HTMLInputElement>;
+                setStudentAnswers(answers);
+                const inputs = container.querySelectorAll('.cloze-input, .worksheet-blank-input') as NodeListOf<HTMLInputElement>;
                 inputs.forEach((input, index) => {
-                    const key = input.dataset.blankIndex || String(index);
+                    const key = input.dataset.blankId || input.dataset.blankIndex || String(index);
                     const saved = answers[key];
                     if (!saved) return;
                     input.value = saved.value || '';
@@ -201,9 +211,9 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
             }
         };
 
-        if (!lesson?.contentHtml || !unitId || !currentUser?.uid) return;
+        if ((!lesson?.contentHtml && !(lesson?.worksheetBlanks || []).length) || !unitId || !currentUser?.uid) return;
         void restoreProgress();
-    }, [config, lesson?.contentHtml, unitId, currentUser?.uid]);
+    }, [config, lesson?.contentHtml, lesson?.worksheetBlanks, unitId, currentUser?.uid]);
 
     useEffect(() => {
         return () => {
@@ -215,7 +225,7 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
 
     const handleCheckAnswers = () => {
         if (!contentRef.current) return;
-        const inputs = contentRef.current.querySelectorAll('.cloze-input') as NodeListOf<HTMLInputElement>;
+        const inputs = contentRef.current.querySelectorAll('.cloze-input, .worksheet-blank-input') as NodeListOf<HTMLInputElement>;
 
         if (inputs.length === 0) {
             alert("채점할 빈칸이 없습니다.");
@@ -247,12 +257,26 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
         if (!contentRef.current) return;
         if (!confirm("입력한 내용을 모두 지우시겠습니까?")) return;
 
-        const inputs = contentRef.current.querySelectorAll('.cloze-input') as NodeListOf<HTMLInputElement>;
+        const inputs = contentRef.current.querySelectorAll('.cloze-input, .worksheet-blank-input') as NodeListOf<HTMLInputElement>;
         inputs.forEach(input => {
             input.value = '';
             input.classList.remove('correct', 'wrong');
         });
+        setStudentAnswers((prev) => Object.fromEntries(
+            Object.keys(prev).map((key) => [key, { value: '', status: '' }]),
+        ));
         void saveProgressToFirestore();
+    };
+
+    const handleWorksheetAnswerChange = (blankId: string, value: string) => {
+        setStudentAnswers((prev) => ({
+            ...prev,
+            [blankId]: {
+                value,
+                status: '',
+            },
+        }));
+        scheduleProgressSave();
     };
 
     const getVideoEmbedUrl = (url?: string) => {
@@ -342,12 +366,25 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
                 </div>
             )}
 
-            {/* Content Body */}
-            <div
-                ref={contentRef}
-                className="prose prose-blue max-w-none bg-white p-6 md:p-10 rounded-2xl shadow-sm border border-gray-100 leading-loose text-gray-700 font-medium note-content"
-                dangerouslySetInnerHTML={{ __html: renderContent(lesson.contentHtml || '') }}
-            />
+            <div ref={contentRef} className="space-y-8">
+                {(lesson.worksheetPageImages || []).length > 0 && (
+                    <LessonWorksheetStage
+                        pageImages={lesson.worksheetPageImages || []}
+                        blanks={lesson.worksheetBlanks || []}
+                        textRegions={lesson.worksheetTextRegions || []}
+                        mode="student"
+                        studentAnswers={studentAnswers}
+                        onStudentAnswerChange={handleWorksheetAnswerChange}
+                    />
+                )}
+
+                {!!lesson.contentHtml && (
+                    <div
+                        className="prose prose-blue max-w-none bg-white p-6 md:p-10 rounded-2xl shadow-sm border border-gray-100 leading-loose text-gray-700 font-medium note-content"
+                        dangerouslySetInnerHTML={{ __html: renderContent(lesson.contentHtml || '') }}
+                    />
+                )}
+            </div>
 
             {/* Actions */}
             <div className="mt-8 flex justify-center gap-4 py-8">

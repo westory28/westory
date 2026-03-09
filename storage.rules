@@ -13,5 +13,15 @@ service firebase.storage {
       allow read: if isSignedIn();
       allow write: if isTeacher();
     }
+
+    match /lesson_pdfs/{unitId}/{allPaths=**} {
+      allow read: if isSignedIn();
+      allow write: if isTeacher();
+    }
+
+    match /years/{year}/semesters/{semester}/lesson_pdfs/{unitId}/{allPaths=**} {
+      allow read: if isSignedIn();
+      allow write: if isTeacher();
+    }
   }
 }
