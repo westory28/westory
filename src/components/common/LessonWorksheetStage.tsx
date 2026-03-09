@@ -106,10 +106,10 @@ const getPointMatchedRegions = (
     const directHits = pageRegions.filter((region) => {
         const bounds = getTightTextRegionBounds(region, pageImage);
         if (!bounds) return false;
-        const left = bounds.left;
-        const top = bounds.top;
-        const right = bounds.left + bounds.width;
-        const bottom = bounds.top + bounds.height;
+        const left = Math.min(region.left, bounds.left) - 6;
+        const top = Math.min(region.top, bounds.top) - 4;
+        const right = Math.max(region.left + region.width, bounds.left + bounds.width) + 6;
+        const bottom = Math.max(region.top + region.height, bounds.top + bounds.height) + 4;
         return px >= left && px <= right && py >= top && py <= bottom;
     });
     if (directHits.length) return directHits;
@@ -124,7 +124,7 @@ const getPointMatchedRegions = (
         const dx = cx - px;
         const dy = cy - py;
         const distance = Math.hypot(dx, dy);
-        const threshold = Math.max(bounds.width, bounds.height) * 0.9;
+        const threshold = Math.max(region.width, bounds.width, bounds.height) * 1.8;
         if (distance <= threshold && distance < nearestDistance) {
             nearest = region;
             nearestDistance = distance;
@@ -283,7 +283,14 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     : null;
 
                 const draftRegions = liveDraft
-                    ? getMatchedRegions(pageImage, pageRegions, liveDraft, LIVE_REGION_INTERSECTION_RATIO)
+                    ? (
+                        liveDraft.widthRatio < MIN_DRAG_SIZE || liveDraft.heightRatio < MIN_DRAG_SIZE
+                            ? getPointMatchedRegions(pageImage, pageRegions, {
+                                x: (draftRect!.startX + draftRect!.currentX) / 2,
+                                y: (draftRect!.startY + draftRect!.currentY) / 2,
+                            })
+                            : getMatchedRegions(pageImage, pageRegions, liveDraft, LIVE_REGION_INTERSECTION_RATIO)
+                    )
                     : [];
 
                 return (
@@ -350,15 +357,23 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                         type="button"
                                         data-blank-box="true"
                                         onClick={() => onSelectBlank?.(blank.id)}
+                                        onPointerDown={(event) => {
+                                            if (event.button === 2) {
+                                                event.preventDefault();
+                                                event.stopPropagation();
+                                                onDeleteBlank?.(blank.id);
+                                            }
+                                        }}
                                         onContextMenu={(event) => {
                                             event.preventDefault();
+                                            event.stopPropagation();
                                             onDeleteBlank?.(blank.id);
                                         }}
                                         aria-label="빈칸 선택"
                                         className={`absolute border-0 p-0 ${
                                             selectedBlankId === blank.id
-                                                ? 'bg-slate-100/96 shadow-[0_0_0_1px_rgba(59,130,246,0.38)]'
-                                                : 'bg-white/96'
+                                                ? 'bg-sky-300/42 mix-blend-multiply'
+                                                : 'bg-sky-300/30 mix-blend-multiply'
                                         }`}
                                         style={{
                                             left: toPercent(region.leftRatio),
@@ -435,7 +450,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                     ).map((region) => (
                                         <div
                                             key={region.key}
-                                            className="pointer-events-none absolute bg-slate-100/95 shadow-[0_0_0_1px_rgba(245,158,11,0.45)]"
+                                            className="pointer-events-none absolute bg-sky-300/36 mix-blend-multiply"
                                             style={{
                                                 left: toPercent(region.leftRatio),
                                                 top: toPercent(region.topRatio),
