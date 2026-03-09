@@ -284,6 +284,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
 }) => {
     const pageRefs = useRef<Record<number, HTMLDivElement | null>>({});
     const [draftRect, setDraftRect] = useState<DraftRect | null>(null);
+    const [activeTeacherPage, setActiveTeacherPage] = useState<number | null>(pageImages[0]?.page ?? null);
 
     const regionsByPage = useMemo(() => {
         const grouped = new Map<number, LessonWorksheetTextRegion[]>();
@@ -304,6 +305,40 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         });
         return grouped;
     }, [blanks]);
+
+    useEffect(() => {
+        if (!pageImages.length) {
+            setActiveTeacherPage(null);
+            return;
+        }
+
+        setActiveTeacherPage((current) => {
+            if (current && pageImages.some((page) => page.page === current)) {
+                return current;
+            }
+            return pageImages[0].page;
+        });
+    }, [pageImages]);
+
+    const visiblePageImages = useMemo(() => {
+        if (mode !== 'teacher' || activeTeacherPage == null) {
+            return pageImages;
+        }
+
+        return pageImages.filter((pageImage) => pageImage.page === activeTeacherPage);
+    }, [activeTeacherPage, mode, pageImages]);
+
+    const activeTeacherPageIndex = mode === 'teacher' && activeTeacherPage != null
+        ? pageImages.findIndex((pageImage) => pageImage.page === activeTeacherPage)
+        : -1;
+
+    const handleTeacherPageChange = (direction: -1 | 1) => {
+        if (mode !== 'teacher' || activeTeacherPageIndex < 0) return;
+        const nextPage = pageImages[activeTeacherPageIndex + direction];
+        if (!nextPage) return;
+        setDraftRect(null);
+        setActiveTeacherPage(nextPage.page);
+    };
 
     const resolveRatioPoint = (page: number, clientX: number, clientY: number) => {
         const host = pageRefs.current[page];
@@ -418,7 +453,35 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
 
     return (
         <div className="space-y-6">
-            {pageImages.map((pageImage) => {
+            {mode === 'teacher' && pageImages.length > 1 && activeTeacherPageIndex >= 0 && (
+                <div className="flex items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+                    <button
+                        type="button"
+                        onClick={() => handleTeacherPageChange(-1)}
+                        disabled={activeTeacherPageIndex === 0}
+                        className="inline-flex items-center gap-2 rounded-full border border-gray-200 px-3 py-1.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                        <i className="fas fa-chevron-left text-xs"></i>
+                        이전
+                    </button>
+                    <div className="text-center">
+                        <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400">Page</div>
+                        <div className="text-sm font-bold text-gray-800">
+                            {activeTeacherPageIndex + 1} / {pageImages.length}
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => handleTeacherPageChange(1)}
+                        disabled={activeTeacherPageIndex === pageImages.length - 1}
+                        className="inline-flex items-center gap-2 rounded-full border border-gray-200 px-3 py-1.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                        다음
+                        <i className="fas fa-chevron-right text-xs"></i>
+                    </button>
+                </div>
+            )}
+            {visiblePageImages.map((pageImage) => {
                 const pageBlanks = blanksByPage.get(pageImage.page) || [];
                 const pageRegions = regionsByPage.get(pageImage.page) || [];
                 const pagePendingBlank = pendingBlank?.page === pageImage.page ? pendingBlank : null;
