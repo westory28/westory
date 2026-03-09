@@ -345,7 +345,7 @@ const ManageLesson: React.FC = () => {
         return (
             <div style={{ marginLeft: level > 0 ? 16 : 0 }} className="mb-1 select-none">
                 <div
-                    className={`flex items-center p-2 rounded cursor-pointer transition-colors group ${isSelected ? 'bg-blue-50 text-blue-600 font-bold' : 'hover:bg-gray-50'}`}
+                    className={`flex items-start p-2 rounded cursor-pointer transition-colors group ${isSelected ? 'bg-blue-50 text-blue-600 font-bold' : 'hover:bg-gray-50'}`}
                     onClick={(e) => {
                         e.stopPropagation();
                         handleNodeClick(node, level);
@@ -357,16 +357,13 @@ const ManageLesson: React.FC = () => {
                     <div className="mr-2 text-yellow-500">
                         <i className={`fas ${isLeaf ? 'fa-file-alt text-gray-400' : (isExpanded ? 'fa-folder-open' : 'fa-folder')}`}></i>
                     </div>
-                    <div className="group/title relative min-w-0 flex-1">
+                    <div className="min-w-0 flex-1">
                         <span
-                            className="block truncate text-sm"
+                            className="block truncate text-sm leading-5 group-hover:whitespace-normal group-hover:break-words"
                             title={node.title}
                         >
                             {node.title}
                         </span>
-                        <div className="pointer-events-none absolute left-0 top-full z-20 mt-1 hidden max-w-[17rem] whitespace-normal break-words rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium leading-5 text-gray-700 shadow-lg group-hover/title:block">
-                            {node.title}
-                        </div>
                     </div>
 
                     {canManageUnit && (
@@ -744,11 +741,7 @@ const ManageLesson: React.FC = () => {
                             </div>
                         ) : (
                             <>
-                                <div className="p-4 border-b flex flex-wrap justify-between items-center bg-gray-50 shrink-0 gap-2">
-                                    <div className="flex items-center gap-2 overflow-hidden">
-                                        <span className="bg-blue-600 text-white text-xs px-2 py-1 rounded font-bold shrink-0">EDIT</span>
-                                        <span className="font-bold text-gray-700 truncate max-w-[150px] lg:max-w-none">{selectedNodeTitle}</span>
-                                    </div>
+                                <div className="p-4 border-b flex flex-wrap justify-end items-center bg-gray-50 shrink-0 gap-2">
                                     <div className="flex flex-wrap items-center justify-end gap-2">
                                         <label className="inline-flex items-center gap-3 rounded-full border border-gray-200 bg-white px-3 py-2 text-xs md:text-sm font-bold text-gray-700">
                                             <span className={lessonVisibleToStudents ? 'text-emerald-600' : 'text-gray-400'}>학생 공개</span>
@@ -1026,7 +1019,7 @@ const ManageLesson: React.FC = () => {
             </main>
 
             {(draftBlank || selectedBlank || sortedBlanks.length > 0) && (
-                <div className="fixed bottom-6 right-20 z-40 w-[min(26rem,calc(100vw-5.5rem))] space-y-3">
+                <div className="fixed bottom-6 right-20 z-40 w-[min(20rem,calc(100vw-6.5rem))] space-y-3">
                     <div className="rounded-2xl border border-gray-200 bg-white/96 p-3 shadow-2xl backdrop-blur">
                         <div className="flex items-center justify-between gap-3">
                             <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400">Tool</div>
