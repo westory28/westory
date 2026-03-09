@@ -53,7 +53,7 @@ const createBlankFromRect = (page: number, rect: {
     topRatio: number;
     widthRatio: number;
     heightRatio: number;
-}): LessonWorksheetBlank => ({
+}, source: 'ocr' | 'manual' = 'manual'): LessonWorksheetBlank => ({
     id: `blank-${page}-${Date.now()}`,
     page,
     leftRatio: rect.leftRatio,
@@ -62,6 +62,7 @@ const createBlankFromRect = (page: number, rect: {
     heightRatio: rect.heightRatio,
     answer: '',
     prompt: '',
+    source,
 });
 
 const getBlankAnswerFromRegions = (regions: LessonWorksheetTextRegion[]) => regions
@@ -156,6 +157,7 @@ const ManageLesson: React.FC = () => {
     const [draftBlank, setDraftBlank] = useState<LessonWorksheetBlank | null>(null);
     const [draftBlankAnswer, setDraftBlankAnswer] = useState('');
     const [draftBlankPrompt, setDraftBlankPrompt] = useState('');
+    const [worksheetTool, setWorksheetTool] = useState<'ocr' | 'box'>('box');
     const [pdfBusy, setPdfBusy] = useState(false);
     const [modalOpen, setModalOpen] = useState(false);
     const [modalMode, setModalMode] = useState<'root' | 'child' | 'rename' | null>(null);
@@ -483,10 +485,10 @@ const ManageLesson: React.FC = () => {
         topRatio: number;
         widthRatio: number;
         heightRatio: number;
-    }, matchedRegions: LessonWorksheetTextRegion[]) => {
+    }, matchedRegions: LessonWorksheetTextRegion[], source: 'ocr' | 'manual') => {
         const pageImage = worksheetPageImages.find((item) => item.page === page) || null;
         const regionBounds = getBoundsFromRegions(matchedRegions, pageImage);
-        const blank = createBlankFromRect(page, regionBounds || rect);
+        const blank = createBlankFromRect(page, regionBounds || rect, matchedRegions.length ? 'ocr' : source);
         const autoAnswer = getBlankAnswerFromRegions(matchedRegions);
 
         setDraftBlank(blank);
@@ -791,12 +793,44 @@ const ManageLesson: React.FC = () => {
 
                                         {worksheetPageImages.length > 0 ? (
                                             <div className="grid gap-5">
+                                                <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3">
+                                                    <div className="text-xs font-bold uppercase tracking-[0.18em] text-gray-400">Tool</div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setWorksheetTool('box')}
+                                                        className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${
+                                                            worksheetTool === 'box'
+                                                                ? 'bg-blue-600 text-white shadow-sm'
+                                                                : 'bg-white text-gray-700 hover:bg-gray-100'
+                                                        }`}
+                                                    >
+                                                        자유 박스
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setWorksheetTool('ocr')}
+                                                        className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${
+                                                            worksheetTool === 'ocr'
+                                                                ? 'bg-blue-600 text-white shadow-sm'
+                                                                : 'bg-white text-gray-700 hover:bg-gray-100'
+                                                        }`}
+                                                    >
+                                                        OCR 선택
+                                                    </button>
+                                                    <div className="text-xs text-gray-500">
+                                                        {worksheetTool === 'box'
+                                                            ? '드래그한 크기 그대로 빈칸을 만듭니다.'
+                                                            : '드래그한 글자를 OCR 기준으로 키워드에 맞춰 잡습니다.'}
+                                                    </div>
+                                                </div>
+
                                                 <div className="min-w-0 order-2">
                                                     <LessonWorksheetStage
                                                         pageImages={worksheetPageImages}
                                                         blanks={worksheetBlanks}
                                                         textRegions={worksheetTextRegions}
                                                         mode="teacher"
+                                                        teacherTool={worksheetTool}
                                                         selectedBlankId={activeBlankId}
                                                         pendingBlank={draftBlank}
                                                         onSelectBlank={handleSelectBlank}
@@ -970,7 +1004,7 @@ const ManageLesson: React.FC = () => {
                                             : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
                                     }`}
                                 >
-                                    {blank.answer || `빈칸 ${index + 1}`}
+                                    {blank.source === 'manual' ? '박스' : 'OCR'} · {blank.answer || `빈칸 ${index + 1}`}
                                 </button>
                             ))}
                         </div>

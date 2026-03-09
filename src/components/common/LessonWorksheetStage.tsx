@@ -13,6 +13,7 @@ interface LessonWorksheetStageProps {
     pageImages: LessonWorksheetPageImage[];
     blanks: LessonWorksheetBlank[];
     mode: 'teacher' | 'student';
+    teacherTool?: 'ocr' | 'box';
     textRegions?: LessonWorksheetTextRegion[];
     selectedBlankId?: string | null;
     studentAnswers?: Record<string, { value?: string; status?: '' | 'correct' | 'wrong' }>;
@@ -27,6 +28,7 @@ interface LessonWorksheetStageProps {
             heightRatio: number;
         },
         matchedRegions: LessonWorksheetTextRegion[],
+        source: 'ocr' | 'manual',
     ) => void;
     onStudentAnswerChange?: (blankId: string, value: string) => void;
     pendingBlank?: LessonWorksheetBlank | null;
@@ -41,6 +43,7 @@ interface DraftRect {
 }
 
 const MIN_DRAG_SIZE = 0.0012;
+const MIN_BOX_DRAG_SIZE = 0.003;
 const LIVE_REGION_INTERSECTION_RATIO = 0.04;
 const FINAL_REGION_INTERSECTION_RATIO = 0.12;
 
@@ -221,10 +224,44 @@ const expandRect = (
     };
 };
 
+const getStudentBlankRect = (
+    blank: LessonWorksheetBlank,
+    pageImage: LessonWorksheetPageImage,
+    pageRegions: LessonWorksheetTextRegion[],
+) => {
+    const baseRect = blank.source === 'manual'
+        ? {
+            leftRatio: blank.leftRatio,
+            topRatio: blank.topRatio,
+            widthRatio: blank.widthRatio,
+            heightRatio: blank.heightRatio,
+        }
+        : resolveBlankRenderRect(blank, pageImage, pageRegions);
+    const pixelWidth = Math.max(1, baseRect.widthRatio * pageImage.width);
+    const pixelHeight = Math.max(1, baseRect.heightRatio * pageImage.height);
+
+    if (blank.source === 'manual') {
+        return expandRect(baseRect, pageImage, {
+            padX: pixelWidth < 30 ? 1 : 2,
+            padY: pixelHeight < 18 ? 1 : 2,
+            minWidth: Math.max(18, Math.min(pixelWidth + 2, 54)),
+            minHeight: Math.max(14, Math.min(pixelHeight + 2, 28)),
+        });
+    }
+
+    return expandRect(baseRect, pageImage, {
+        padX: pixelWidth < 40 ? 2 : 3,
+        padY: pixelHeight < 20 ? 1.5 : 2,
+        minWidth: Math.max(22, Math.min(pixelWidth + 6, 62)),
+        minHeight: Math.max(16, Math.min(pixelHeight + 4, 30)),
+    });
+};
+
 const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     pageImages,
     blanks,
     mode,
+    teacherTool = 'ocr',
     textRegions = [],
     selectedBlankId,
     studentAnswers = {},
@@ -308,7 +345,15 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         };
 
         const pageRegions = regionsByPage.get(pageImage.page) || [];
-        const matchedRegions = nextRect.widthRatio < MIN_DRAG_SIZE || nextRect.heightRatio < MIN_DRAG_SIZE
+        const isTinyDrag = nextRect.widthRatio < MIN_DRAG_SIZE || nextRect.heightRatio < MIN_DRAG_SIZE;
+        const isBoxTool = teacherTool === 'box';
+
+        if (isBoxTool && (nextRect.widthRatio < MIN_BOX_DRAG_SIZE || nextRect.heightRatio < MIN_BOX_DRAG_SIZE)) {
+            setDraftRect(null);
+            return;
+        }
+
+        const matchedRegions = isTinyDrag
             ? getPointMatchedRegions(pageImage, pageRegions, {
                 x: (draftRect.startX + draftRect.currentX) / 2,
                 y: (draftRect.startY + draftRect.currentY) / 2,
@@ -320,12 +365,17 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                 FINAL_REGION_INTERSECTION_RATIO,
             );
 
-        if (!matchedRegions.length && (nextRect.widthRatio < MIN_DRAG_SIZE || nextRect.heightRatio < MIN_DRAG_SIZE)) {
+        if (!isBoxTool && !matchedRegions.length && isTinyDrag) {
             setDraftRect(null);
             return;
         }
 
-        onCreateBlankFromSelection?.(pageImage.page, nextRect, matchedRegions);
+        onCreateBlankFromSelection?.(
+            pageImage.page,
+            nextRect,
+            isBoxTool ? [] : matchedRegions,
+            isBoxTool ? 'manual' : (matchedRegions.length ? 'ocr' : 'manual'),
+        );
         setDraftRect(null);
     };
 
@@ -370,7 +420,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     }
                     : null;
 
-                const draftRegions = liveDraft
+                const draftRegions = liveDraft && teacherTool === 'ocr'
                     ? (
                         liveDraft.widthRatio < MIN_DRAG_SIZE || liveDraft.heightRatio < MIN_DRAG_SIZE
                             ? getPointMatchedRegions(pageImage, pageRegions, {
@@ -383,9 +433,9 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                 const showDraftRect = Boolean(
                     mode === 'teacher'
                     && liveDraft
-                    && draftRegions.length === 0
-                    && liveDraft.widthRatio >= MIN_DRAG_SIZE
-                    && liveDraft.heightRatio >= MIN_DRAG_SIZE,
+                    && (teacherTool === 'box' || draftRegions.length === 0)
+                    && liveDraft.widthRatio >= (teacherTool === 'box' ? MIN_BOX_DRAG_SIZE : MIN_DRAG_SIZE)
+                    && liveDraft.heightRatio >= (teacherTool === 'box' ? MIN_BOX_DRAG_SIZE : MIN_DRAG_SIZE),
                 );
 
                 return (
@@ -427,7 +477,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                     blank,
                                     FINAL_REGION_INTERSECTION_RATIO,
                                 );
-                                const renderRegions = maskedRegions.length
+                                const renderRegions = blank.source !== 'manual' && maskedRegions.length
                                     ? maskedRegions.map((region) => {
                                         const bounds = getTightTextRegionBounds(region, pageImage);
                                         return bounds ? {
@@ -483,10 +533,10 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                             {mode === 'student' && pageBlanks.map((blank) => {
                                 const studentAnswer = studentAnswers[blank.id];
                                 const status = studentAnswer?.status || '';
-                                const renderRect = expandRect(
-                                    resolveBlankRenderRect(blank, pageImage, pageRegions),
-                                    pageImage,
-                                );
+                                const renderRect = getStudentBlankRect(blank, pageImage, pageRegions);
+                                const pixelWidth = renderRect.widthRatio * pageImage.width;
+                                const pixelHeight = renderRect.heightRatio * pageImage.height;
+                                const fontSize = Math.max(10, Math.min(18, Math.min(pixelWidth * 0.32, pixelHeight * 0.72)));
 
                                 return (
                                     <div
@@ -520,7 +570,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                             }`}
                                             placeholder={blank.prompt || '빈칸'}
                                             onChange={(event) => onStudentAnswerChange?.(blank.id, event.target.value)}
-                                            style={{ fontSize: 'clamp(11px, 1.6vw, 18px)' }}
+                                            style={{ fontSize: `${fontSize}px` }}
                                         />
                                     </div>
                                 );
@@ -528,7 +578,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
 
                             {mode === 'teacher' && pagePendingBlank && (
                                 <>
-                                    {(getMatchedRegions(pageImage, pageRegions, pagePendingBlank, FINAL_REGION_INTERSECTION_RATIO).length
+                                    {(pagePendingBlank.source !== 'manual' && getMatchedRegions(pageImage, pageRegions, pagePendingBlank, FINAL_REGION_INTERSECTION_RATIO).length
                                         ? getMatchedRegions(pageImage, pageRegions, pagePendingBlank, FINAL_REGION_INTERSECTION_RATIO).map((region) => {
                                             const bounds = getTightTextRegionBounds(region, pageImage);
                                             return bounds ? {

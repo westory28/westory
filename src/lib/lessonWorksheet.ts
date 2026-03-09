@@ -23,6 +23,7 @@ export interface LessonWorksheetBlank {
     heightRatio: number;
     answer: string;
     prompt?: string;
+    source?: 'ocr' | 'manual';
 }
 
 export const clampRatio = (value: number) => Math.min(1, Math.max(0, value));
@@ -125,6 +126,7 @@ export const createBlankFromRegion = (
         heightRatio: bounds.heightRatio,
         answer: String(region.label || '').trim(),
         prompt: '',
+        source: 'ocr',
     };
 };
 
@@ -141,6 +143,9 @@ export const normalizeWorksheetBlanks = (raw: unknown): LessonWorksheetBlank[] =
             heightRatio: clampRatio(Number(item && typeof item === 'object' && 'heightRatio' in item ? (item as { heightRatio?: number }).heightRatio : 0) || 0),
             answer: String(item && typeof item === 'object' && 'answer' in item ? (item as { answer?: string }).answer : '').trim(),
             prompt: String(item && typeof item === 'object' && 'prompt' in item ? (item as { prompt?: string }).prompt : '').trim(),
+            source: (item && typeof item === 'object' && 'source' in item && (item as { source?: string }).source === 'manual'
+                ? 'manual'
+                : 'ocr') as 'ocr' | 'manual',
         }))
         .filter((item) => item.widthRatio > 0 && item.heightRatio > 0);
 };
