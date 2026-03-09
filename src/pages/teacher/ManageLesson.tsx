@@ -159,6 +159,7 @@ const ManageLesson: React.FC = () => {
     const [draftBlankPrompt, setDraftBlankPrompt] = useState('');
     const [worksheetTool, setWorksheetTool] = useState<'ocr' | 'box'>('box');
     const [pdfBusy, setPdfBusy] = useState(false);
+    const [screenBusyMessage, setScreenBusyMessage] = useState<string | null>(null);
     const [modalOpen, setModalOpen] = useState(false);
     const [modalMode, setModalMode] = useState<'root' | 'child' | 'rename' | null>(null);
     const [targetNode, setTargetNode] = useState<TreeNode | null>(null);
@@ -222,6 +223,7 @@ const ManageLesson: React.FC = () => {
     };
 
     const saveTree = async (newTree: TreeNode[], silent = true) => {
+        setScreenBusyMessage('목차를 저장하는 중입니다...');
         try {
             await setDoc(doc(db, getSemesterDocPath(config, 'curriculum', 'tree')), {
                 tree: newTree,
@@ -233,6 +235,7 @@ const ManageLesson: React.FC = () => {
             console.error(error);
             alert('단원 구조 저장에 실패했습니다.');
         }
+        setScreenBusyMessage(null);
     };
 
     const toggleExpand = (id: string) => {
@@ -269,6 +272,16 @@ const ManageLesson: React.FC = () => {
         }
         return null;
     };
+
+    const replaceNodeTitle = (nodes: TreeNode[], id: string, title: string): TreeNode[] => nodes.map((node) => {
+        if (node.id === id) {
+            return { ...node, title };
+        }
+        if (!node.children?.length) {
+            return node;
+        }
+        return { ...node, children: replaceNodeTitle(node.children, id, title) };
+    });
 
     const handleModalConfirm = () => {
         const value = modalInput.trim();
@@ -411,6 +424,7 @@ const ManageLesson: React.FC = () => {
         setLessonContent('');
         setLessonVisibleToStudents(true);
         resetWorksheetState(true);
+        setScreenBusyMessage('수업 자료를 불러오는 중입니다...');
 
         try {
             const scopedRef = collection(db, getSemesterCollectionPath(config, 'lessons'));
@@ -439,6 +453,7 @@ const ManageLesson: React.FC = () => {
         } catch (error) {
             console.error(error);
         }
+        setScreenBusyMessage(null);
     };
 
     const handlePdfFileChange = (file: File | null) => {
@@ -463,6 +478,7 @@ const ManageLesson: React.FC = () => {
         }
 
         setPdfBusy(true);
+        setScreenBusyMessage('PDF 레이아웃을 준비하는 중입니다...');
         try {
             const processed = await processPdfMapFile(selectedPdfFile);
             const nextPageImages = processed.pageImages.map((page) => ({
@@ -487,6 +503,7 @@ const ManageLesson: React.FC = () => {
             alert('PDF 레이아웃 준비에 실패했습니다.');
         } finally {
             setPdfBusy(false);
+            setScreenBusyMessage(null);
         }
     };
 
@@ -616,6 +633,7 @@ const ManageLesson: React.FC = () => {
     const saveLesson = async () => {
         if (!selectedNodeId) return;
 
+        setScreenBusyMessage('수업 자료를 저장하는 중입니다...');
         try {
             const scopedRef = collection(db, getSemesterCollectionPath(config, 'lessons'));
             const scopedQuery = query(scopedRef, where('unitId', '==', selectedNodeId), limit(1));
@@ -655,11 +673,23 @@ const ManageLesson: React.FC = () => {
             setWorksheetTextRegions(uploadedWorksheet.textRegions || []);
             setPreparedPdf(null);
             setSelectedPdfFile(null);
+            const normalizedLessonTitle = lessonTitle.trim();
+            if (normalizedLessonTitle && normalizedLessonTitle !== selectedNodeTitle) {
+                const nextTree = replaceNodeTitle(treeData, selectedNodeId, normalizedLessonTitle);
+                await setDoc(doc(db, getSemesterDocPath(config, 'curriculum', 'tree')), {
+                    tree: nextTree,
+                    updatedAt: serverTimestamp(),
+                });
+                setTreeData(nextTree);
+                setSelectedNodeTitle(normalizedLessonTitle);
+                setLessonTitle(normalizedLessonTitle);
+            }
             alert('수업 자료를 저장했습니다.');
         } catch (error) {
             console.error(error);
             alert('수업 자료 저장에 실패했습니다.');
         }
+        setScreenBusyMessage(null);
     };
 
     const getEmbedUrl = (url: string) => {
@@ -743,7 +773,7 @@ const ManageLesson: React.FC = () => {
 
                                 <div className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-5">
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-500 mb-1">자료 제목</label>
+                                        <label className="block text-xs font-bold text-gray-500 mb-1">수업 제목</label>
                                         <input
                                             type="text"
                                             className="w-full text-lg font-bold border-b-2 border-gray-200 focus:border-blue-500 outline-none py-2 px-1 transition"
@@ -1152,7 +1182,7 @@ const ManageLesson: React.FC = () => {
                             <div className="max-w-4xl mx-auto bg-white p-6 lg:p-8 rounded-xl shadow-sm border border-gray-200 min-h-full">
                                 <h1 className="text-2xl font-bold mb-4 text-gray-900 border-b pb-4">{lessonTitle}</h1>
 
-                                {!lessonVisibleToStudents ? (
+                                {false ? (
                                     <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-10 text-center text-amber-800">
                                         <div className="text-4xl mb-3">🔒</div>
                                         <h2 className="text-xl font-bold">수업 자료가 공개되지 않았습니다</h2>
@@ -1177,6 +1207,18 @@ const ManageLesson: React.FC = () => {
                                 )}
                             </div>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {screenBusyMessage && (
+                <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/30 backdrop-blur-sm">
+                    <div className="rounded-2xl bg-white px-6 py-5 text-center shadow-2xl">
+                        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                            <i className="fas fa-spinner fa-spin text-xl"></i>
+                        </div>
+                        <div className="text-sm font-bold text-gray-800">{screenBusyMessage}</div>
+                        <div className="mt-1 text-xs text-gray-500">잠시만 기다려 주세요.</div>
                     </div>
                 </div>
             )}

@@ -541,6 +541,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                 const pixelWidth = renderRect.widthRatio * pageImage.width;
                                 const pixelHeight = renderRect.heightRatio * pageImage.height;
                                 const fontSize = Math.max(10, Math.min(18, Math.min(pixelWidth * 0.32, pixelHeight * 0.72)));
+                                const placeholder = blank.prompt || (pixelWidth < 42 ? '' : pixelWidth < 68 ? '빈' : '빈칸');
 
                                 return (
                                     <div
@@ -572,7 +573,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                                         ? 'bg-rose-50 text-rose-700'
                                                         : 'bg-white text-blue-700'
                                             }`}
-                                            placeholder={blank.prompt || '빈칸'}
+                                            placeholder={placeholder}
                                             onChange={(event) => onStudentAnswerChange?.(blank.id, event.target.value)}
                                             style={{ fontSize: `${fontSize}px` }}
                                         />

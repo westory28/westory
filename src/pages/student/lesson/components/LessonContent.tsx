@@ -315,7 +315,17 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
     }
 
     if (loading) {
-        return <div className="flex justify-center items-center h-full"><i className="fas fa-spinner fa-spin text-3xl text-blue-500"></i></div>;
+        return (
+            <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/20 backdrop-blur-sm">
+                <div className="rounded-2xl bg-white px-6 py-5 text-center shadow-2xl">
+                    <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                        <i className="fas fa-spinner fa-spin text-xl"></i>
+                    </div>
+                    <div className="text-sm font-bold text-gray-800">수업 자료를 불러오는 중입니다.</div>
+                    <div className="mt-1 text-xs text-gray-500">잠시만 기다려 주세요.</div>
+                </div>
+            </div>
+        );
     }
 
     if (error || !lesson) {
