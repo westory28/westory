@@ -662,7 +662,7 @@ const ManageLesson: React.FC = () => {
                 <div className="flex flex-col lg:flex-row gap-6 h-full pb-4 relative">
                     {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)}></div>}
 
-                    <div className={`${sidebarOpen ? 'translate-x-0' : 'translate-x-full'} lg:translate-x-0 fixed lg:static top-0 right-0 h-full lg:h-auto w-[85%] max-w-[380px] lg:w-[380px] lg:flex-none bg-white z-50 lg:z-auto shadow-xl lg:shadow-sm border border-gray-200 transition-transform duration-300 flex flex-col min-h-[300px] lg:min-h-0 rounded-none lg:rounded-xl`}>
+                    <div className={`${sidebarOpen ? 'translate-x-0' : 'translate-x-full'} lg:translate-x-0 fixed lg:static top-0 right-0 h-full lg:h-auto w-[85%] max-w-[420px] lg:w-[420px] lg:flex-none bg-white z-50 lg:z-auto shadow-xl lg:shadow-sm border border-gray-200 transition-transform duration-300 flex flex-col min-h-[300px] lg:min-h-0 rounded-none lg:rounded-xl`}>
                         <div className="p-4 border-b bg-gray-50 font-bold text-gray-700 flex justify-between items-center">
                             <span className="flex items-center gap-2"><i className="fas fa-list"></i> 단원 목록</span>
                             <div className="flex gap-1 items-center">
