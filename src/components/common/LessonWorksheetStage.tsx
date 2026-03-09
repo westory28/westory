@@ -285,7 +285,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                 nextRect,
                 FINAL_REGION_INTERSECTION_RATIO,
             );
-        if (!matchedRegions.length) {
+
+        if (!matchedRegions.length && (nextRect.widthRatio < MIN_DRAG_SIZE || nextRect.heightRatio < MIN_DRAG_SIZE)) {
             setDraftRect(null);
             return;
         }
@@ -345,6 +346,13 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                             : getMatchedRegions(pageImage, pageRegions, liveDraft, LIVE_REGION_INTERSECTION_RATIO)
                     )
                     : [];
+                const showDraftRect = Boolean(
+                    mode === 'teacher'
+                    && liveDraft
+                    && draftRegions.length === 0
+                    && liveDraft.widthRatio >= MIN_DRAG_SIZE
+                    && liveDraft.heightRatio >= MIN_DRAG_SIZE,
+                );
 
                 return (
                     <section key={pageImage.page} className="rounded-3xl border border-gray-200 bg-white p-3 shadow-sm md:p-4">
@@ -534,6 +542,17 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                     );
                                 })()
                             ))}
+                            {showDraftRect && liveDraft && (
+                                <div
+                                    className="pointer-events-none absolute bg-sky-300/28 mix-blend-multiply"
+                                    style={{
+                                        left: toPercent(liveDraft.leftRatio),
+                                        top: toPercent(liveDraft.topRatio),
+                                        width: toPercent(liveDraft.widthRatio),
+                                        height: toPercent(liveDraft.heightRatio),
+                                    }}
+                                />
+                            )}
                         </div>
                     </section>
                 );
