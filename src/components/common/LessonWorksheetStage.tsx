@@ -455,7 +455,11 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                             ref={(node) => {
                                 pageRefs.current[pageImage.page] = node;
                             }}
-                            className={`relative overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 ${mode === 'teacher' ? 'touch-none cursor-text' : ''}`}
+                            className={`relative overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 ${
+                                mode === 'teacher'
+                                    ? `touch-none ${teacherTool === 'box' ? 'cursor-default' : 'cursor-text'}`
+                                    : ''
+                            }`}
                             onDragStart={(event) => event.preventDefault()}
                             onPointerDown={(event) => handlePointerDown(pageImage.page, event)}
                             onPointerMove={(event) => updateDraftPoint(pageImage.page, event.clientX, event.clientY)}

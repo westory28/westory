@@ -803,7 +803,7 @@ const ManageLesson: React.FC = () => {
 
                                         {worksheetPageImages.length > 0 ? (
                                             <div className="grid gap-5">
-                                                <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3">
+                                                <div className="hidden flex-wrap items-center gap-2 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3">
                                                     <div className="text-xs font-bold uppercase tracking-[0.18em] text-gray-400">Tool</div>
                                                     <button
                                                         type="button"
@@ -997,6 +997,44 @@ const ManageLesson: React.FC = () => {
 
             {(draftBlank || selectedBlank || sortedBlanks.length > 0) && (
                 <div className="fixed bottom-6 right-20 z-40 w-[min(26rem,calc(100vw-5.5rem))] space-y-3">
+                    <div className="rounded-2xl border border-gray-200 bg-white/96 p-3 shadow-2xl backdrop-blur">
+                        <div className="flex items-center justify-between gap-3">
+                            <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400">Tool</div>
+                            <div className="text-[11px] font-semibold text-gray-500">
+                                {worksheetTool === 'box' ? '텍스트 박스' : 'OCR 선택'}
+                            </div>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setWorksheetTool('box')}
+                                className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                                    worksheetTool === 'box'
+                                        ? 'bg-blue-600 text-white shadow-sm'
+                                        : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                                }`}
+                            >
+                                텍스트 박스
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setWorksheetTool('ocr')}
+                                className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                                    worksheetTool === 'ocr'
+                                        ? 'bg-blue-600 text-white shadow-sm'
+                                        : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                                }`}
+                            >
+                                OCR 선택
+                            </button>
+                        </div>
+                        <div className="mt-3 text-xs leading-5 text-gray-500">
+                            {worksheetTool === 'box'
+                                ? '텍스트 박스는 드래그한 크기 그대로 빈칸을 만듭니다.'
+                                : 'OCR 선택은 드래그한 글자를 기준으로 키워드를 맞춰 잡습니다.'}
+                        </div>
+                    </div>
+
                     <div className="rounded-2xl border border-gray-200 bg-white/96 p-3 shadow-2xl backdrop-blur">
                         <div className="flex items-center justify-between gap-3">
                             <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400">Blank List</div>
