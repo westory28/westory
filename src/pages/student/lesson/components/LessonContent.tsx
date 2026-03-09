@@ -14,6 +14,8 @@ interface LessonData {
     videoUrl?: string;
     contentHtml?: string;
     isVisibleToStudents?: boolean;
+    pdfName?: string;
+    pdfUrl?: string;
 }
 
 const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) => {
@@ -318,6 +320,25 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
                         allowFullScreen
                         title="Lesson Video"
                     ></iframe>
+                </div>
+            )}
+
+            {lesson.pdfUrl && (
+                <div className="mb-8 rounded-2xl border border-red-100 bg-red-50/60 p-4 md:p-5">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                        <div>
+                            <p className="text-xs font-bold text-red-600 mb-1">원본 수업 자료</p>
+                            <p className="text-sm text-gray-700 font-semibold">{lesson.pdfName || '첨부 PDF'}</p>
+                        </div>
+                        <a
+                            href={lesson.pdfUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center justify-center px-4 py-2 rounded-xl bg-white border border-red-200 text-red-700 font-bold hover:bg-red-100 transition"
+                        >
+                            <i className="fas fa-file-pdf mr-2"></i>PDF 보기
+                        </a>
+                    </div>
                 </div>
             )}
 

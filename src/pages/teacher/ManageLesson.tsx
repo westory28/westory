@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { db } from '../../lib/firebase';
+import { db, storage } from '../../lib/firebase';
 import {
     addDoc,
     collection,
@@ -14,8 +14,10 @@ import {
     updateDoc,
     where,
 } from 'firebase/firestore';
+import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import QuillEditor from '../../components/common/QuillEditor';
 import { getSemesterCollectionPath, getSemesterDocPath } from '../../lib/semesterScope';
+import { buildClozeDraftFromText, extractTextFromPdf, textToLessonHtml } from '../../lib/pdf';
 
 interface TreeNode {
     id: string;
@@ -29,6 +31,9 @@ interface LessonData {
     videoUrl?: string;
     contentHtml?: string;
     isVisibleToStudents?: boolean;
+    pdfName?: string;
+    pdfUrl?: string;
+    pdfStoragePath?: string;
 }
 
 const ManageLesson: React.FC = () => {
@@ -43,6 +48,12 @@ const ManageLesson: React.FC = () => {
     const [lessonVideo, setLessonVideo] = useState('');
     const [lessonContent, setLessonContent] = useState('');
     const [lessonVisibleToStudents, setLessonVisibleToStudents] = useState(true);
+    const [lessonPdfName, setLessonPdfName] = useState('');
+    const [lessonPdfUrl, setLessonPdfUrl] = useState('');
+    const [lessonPdfStoragePath, setLessonPdfStoragePath] = useState('');
+    const [selectedPdfFile, setSelectedPdfFile] = useState<File | null>(null);
+    const [extractedPdfText, setExtractedPdfText] = useState('');
+    const [pdfBusy, setPdfBusy] = useState(false);
 
     const [modalOpen, setModalOpen] = useState(false);
     const [modalMode, setModalMode] = useState<'root' | 'child' | 'rename' | null>(null);
@@ -172,10 +183,15 @@ const ManageLesson: React.FC = () => {
         if (selectedNodeId === node.id) {
             setSelectedNodeId(null);
             setSelectedNodeTitle('');
-        setLessonTitle('');
-        setLessonVideo('');
-        setLessonContent('');
-        setLessonVisibleToStudents(true);
+            setLessonTitle('');
+            setLessonVideo('');
+            setLessonContent('');
+            setLessonVisibleToStudents(true);
+            setLessonPdfName('');
+            setLessonPdfUrl('');
+            setLessonPdfStoragePath('');
+            setSelectedPdfFile(null);
+            setExtractedPdfText('');
         }
         void saveTree(nextTree);
     };
@@ -259,6 +275,11 @@ const ManageLesson: React.FC = () => {
         setLessonVideo('');
         setLessonContent('');
         setLessonVisibleToStudents(true);
+        setLessonPdfName('');
+        setLessonPdfUrl('');
+        setLessonPdfStoragePath('');
+        setSelectedPdfFile(null);
+        setExtractedPdfText('');
 
         try {
             const scopedRef = collection(db, getSemesterCollectionPath(config, 'lessons'));
@@ -277,10 +298,85 @@ const ManageLesson: React.FC = () => {
                 setLessonVideo(data.videoUrl || '');
                 setLessonContent(data.contentHtml || '');
                 setLessonVisibleToStudents(data.isVisibleToStudents !== false);
+                setLessonPdfName(data.pdfName || '');
+                setLessonPdfUrl(data.pdfUrl || '');
+                setLessonPdfStoragePath(data.pdfStoragePath || '');
             }
         } catch (error) {
             console.error(error);
         }
+    };
+
+    const handlePdfFileChange = (file: File | null) => {
+        if (!file) {
+            setSelectedPdfFile(null);
+            return;
+        }
+
+        if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+            alert('PDF 파일만 업로드할 수 있습니다.');
+            return;
+        }
+
+        setSelectedPdfFile(file);
+    };
+
+    const handleExtractPdf = async () => {
+        if (!selectedPdfFile) {
+            alert('먼저 PDF 파일을 선택해 주세요.');
+            return;
+        }
+
+        setPdfBusy(true);
+        try {
+            const text = await extractTextFromPdf(selectedPdfFile);
+            setExtractedPdfText(text);
+            if (!lessonContent.trim()) {
+                setLessonContent(textToLessonHtml(text));
+            }
+        } catch (error) {
+            console.error(error);
+            alert('PDF 텍스트 추출에 실패했습니다. 스캔본 PDF는 추출이 제한될 수 있습니다.');
+        } finally {
+            setPdfBusy(false);
+        }
+    };
+
+    const applyExtractedTextToEditor = () => {
+        if (!extractedPdfText.trim()) {
+            alert('추출된 텍스트가 없습니다.');
+            return;
+        }
+        setLessonContent(textToLessonHtml(extractedPdfText));
+    };
+
+    const applyClozeDraftToEditor = () => {
+        if (!extractedPdfText.trim()) {
+            alert('먼저 PDF 텍스트를 추출해 주세요.');
+            return;
+        }
+        const draft = buildClozeDraftFromText(extractedPdfText);
+        setLessonContent(draft.html);
+        alert(`자동으로 ${draft.blankCount}개의 빈칸 초안을 만들었습니다. 저장 전 내용을 꼭 확인해 주세요.`);
+    };
+
+    const removeAttachedPdf = async () => {
+        if (!selectedPdfFile && !lessonPdfUrl) return;
+        if (!window.confirm('연결된 PDF를 해제하시겠습니까?')) return;
+
+        try {
+            if (lessonPdfStoragePath) {
+                await deleteObject(ref(storage, lessonPdfStoragePath));
+            }
+        } catch (error) {
+            console.error('Failed to delete old pdf from storage:', error);
+        }
+
+        setSelectedPdfFile(null);
+        setLessonPdfName('');
+        setLessonPdfUrl('');
+        setLessonPdfStoragePath('');
+        setExtractedPdfText('');
     };
 
     const saveLesson = async () => {
@@ -297,12 +393,40 @@ const ManageLesson: React.FC = () => {
                 return `${prefix}${preserved}`;
             });
 
+            let pdfName = lessonPdfName;
+            let pdfUrl = lessonPdfUrl;
+            let pdfStoragePath = lessonPdfStoragePath;
+
+            if (selectedPdfFile) {
+                const safeName = selectedPdfFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+                const storagePath = `${getSemesterCollectionPath(config, 'lesson_pdfs')}/${selectedNodeId}/${Date.now()}-${safeName}`;
+                const storageRef = ref(storage, storagePath);
+
+                await uploadBytes(storageRef, selectedPdfFile, {
+                    contentType: 'application/pdf',
+                });
+                pdfUrl = await getDownloadURL(storageRef);
+                pdfName = selectedPdfFile.name;
+                pdfStoragePath = storagePath;
+
+                if (lessonPdfStoragePath && lessonPdfStoragePath !== storagePath) {
+                    try {
+                        await deleteObject(ref(storage, lessonPdfStoragePath));
+                    } catch (cleanupError) {
+                        console.error('Failed to clean up previous pdf:', cleanupError);
+                    }
+                }
+            }
+
             const payload = {
                 unitId: selectedNodeId,
                 title: lessonTitle,
                 videoUrl: lessonVideo,
                 contentHtml: normalizedContentHtml,
                 isVisibleToStudents: lessonVisibleToStudents,
+                pdfName,
+                pdfUrl,
+                pdfStoragePath,
                 updatedAt: serverTimestamp(),
             };
 
@@ -312,6 +436,10 @@ const ManageLesson: React.FC = () => {
                 await updateDoc(doc(scopedRef, scopedSnap.docs[0].id), payload);
             }
 
+            setLessonPdfName(pdfName || '');
+            setLessonPdfUrl(pdfUrl || '');
+            setLessonPdfStoragePath(pdfStoragePath || '');
+            setSelectedPdfFile(null);
             alert('수업 자료를 저장했습니다.');
         } catch (error) {
             console.error(error);
@@ -432,6 +560,73 @@ const ManageLesson: React.FC = () => {
                                             value={lessonVideo}
                                             onChange={(e) => setLessonVideo(e.target.value)}
                                             placeholder="https://youtu.be/..."
+                                        />
+                                    </div>
+
+                                    <div className="rounded-2xl border border-gray-200 bg-gray-50/80 p-4 space-y-3">
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                            <label className="block text-xs font-bold text-gray-500">수업 PDF 등록</label>
+                                            <span className="text-[11px] text-gray-500">PDF 업로드 후 텍스트 추출과 빈칸 초안 생성을 지원합니다.</span>
+                                        </div>
+
+                                        <div className="flex flex-col md:flex-row gap-3 md:items-center md:flex-wrap">
+                                            <label className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-white border border-gray-300 text-sm font-bold text-gray-700 cursor-pointer hover:bg-gray-100">
+                                                <i className="fas fa-file-pdf mr-2 text-red-500"></i>PDF 선택
+                                                <input
+                                                    type="file"
+                                                    accept="application/pdf,.pdf"
+                                                    className="hidden"
+                                                    onChange={(e) => handlePdfFileChange(e.target.files?.[0] || null)}
+                                                />
+                                            </label>
+                                            <button
+                                                type="button"
+                                                onClick={() => void handleExtractPdf()}
+                                                disabled={pdfBusy || !selectedPdfFile}
+                                                className="px-4 py-2 rounded-lg bg-stone-900 text-white text-sm font-bold disabled:opacity-50"
+                                            >
+                                                <i className={`fas ${pdfBusy ? 'fa-spinner fa-spin' : 'fa-file-import'} mr-2`}></i>PDF 텍스트 추출
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={applyExtractedTextToEditor}
+                                                disabled={!extractedPdfText.trim()}
+                                                className="px-4 py-2 rounded-lg bg-blue-50 text-blue-700 text-sm font-bold disabled:opacity-50"
+                                            >
+                                                추출 텍스트 적용
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={applyClozeDraftToEditor}
+                                                disabled={!extractedPdfText.trim()}
+                                                className="px-4 py-2 rounded-lg bg-emerald-50 text-emerald-700 text-sm font-bold disabled:opacity-50"
+                                            >
+                                                자동 빈칸 초안
+                                            </button>
+                                        </div>
+
+                                        <div className="text-sm text-gray-600 space-y-1">
+                                            {selectedPdfFile && <p>선택 파일: <span className="font-semibold">{selectedPdfFile.name}</span></p>}
+                                            {!selectedPdfFile && lessonPdfName && <p>저장된 PDF: <span className="font-semibold">{lessonPdfName}</span></p>}
+                                            {(lessonPdfUrl || selectedPdfFile) && (
+                                                <div className="flex flex-wrap items-center gap-3">
+                                                    {lessonPdfUrl && !selectedPdfFile && (
+                                                        <a href={lessonPdfUrl} target="_blank" rel="noreferrer" className="text-blue-600 font-semibold hover:underline">
+                                                            원본 PDF 열기
+                                                        </a>
+                                                    )}
+                                                    <button type="button" onClick={() => void removeAttachedPdf()} className="text-red-600 font-semibold">
+                                                        PDF 연결 해제
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <textarea
+                                            value={extractedPdfText}
+                                            onChange={(e) => setExtractedPdfText(e.target.value)}
+                                            className="w-full min-h-[140px] rounded-xl border border-gray-200 bg-white p-3 text-sm outline-none focus:border-blue-500"
+                                            placeholder="PDF에서 추출한 텍스트가 여기에 표시됩니다. 필요한 부분을 수정한 뒤 에디터에 적용하거나 자동 빈칸 초안을 생성하세요."
                                         />
                                     </div>
 
