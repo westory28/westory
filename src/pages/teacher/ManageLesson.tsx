@@ -20,6 +20,7 @@ import LessonWorksheetStage from '../../components/common/LessonWorksheetStage';
 import { getSemesterCollectionPath, getSemesterDocPath } from '../../lib/semesterScope';
 import { processPdfMapFile, type ProcessedPdfMap } from '../../lib/pdfMapProcessor';
 import {
+    clampRatio,
     createBlankFromRegion,
     normalizeWorksheetBlanks,
     type LessonWorksheetBlank,
@@ -62,6 +63,23 @@ const createBlankFromRect = (page: number, rect: {
     answer: '',
     prompt: '',
 });
+
+const DEFAULT_BLANK_WIDTH_RATIO = 0.16;
+const DEFAULT_BLANK_HEIGHT_RATIO = 0.045;
+
+const createBlankFromPoint = (page: number, point: { x: number; y: number }): LessonWorksheetBlank => {
+    const widthRatio = DEFAULT_BLANK_WIDTH_RATIO;
+    const heightRatio = DEFAULT_BLANK_HEIGHT_RATIO;
+    const leftRatio = clampRatio(Math.min(point.x - widthRatio / 2, 1 - widthRatio));
+    const topRatio = clampRatio(Math.min(point.y - heightRatio / 2, 1 - heightRatio));
+
+    return createBlankFromRect(page, {
+        leftRatio: Math.max(0, leftRatio),
+        topRatio: Math.max(0, topRatio),
+        widthRatio,
+        heightRatio,
+    });
+};
 
 const normalizePageImages = (raw: unknown): LessonWorksheetPageImage[] => {
     if (!Array.isArray(raw)) return [];
@@ -118,6 +136,9 @@ const ManageLesson: React.FC = () => {
     const [selectedPdfFile, setSelectedPdfFile] = useState<File | null>(null);
     const [preparedPdf, setPreparedPdf] = useState<ProcessedPdfMap | null>(null);
     const [activeBlankId, setActiveBlankId] = useState<string | null>(null);
+    const [draftBlank, setDraftBlank] = useState<LessonWorksheetBlank | null>(null);
+    const [draftBlankAnswer, setDraftBlankAnswer] = useState('');
+    const [draftBlankPrompt, setDraftBlankPrompt] = useState('');
     const [pdfBusy, setPdfBusy] = useState(false);
     const [modalOpen, setModalOpen] = useState(false);
     const [modalMode, setModalMode] = useState<'root' | 'child' | 'rename' | null>(null);
@@ -156,6 +177,9 @@ const ManageLesson: React.FC = () => {
         setPreparedPdf(null);
         setSelectedPdfFile(null);
         setActiveBlankId(null);
+        setDraftBlank(null);
+        setDraftBlankAnswer('');
+        setDraftBlankPrompt('');
     };
 
     const loadTree = async () => {
@@ -426,6 +450,9 @@ const ManageLesson: React.FC = () => {
             setWorksheetTextRegions(processed.regions);
             setWorksheetBlanks([]);
             setActiveBlankId(null);
+            setDraftBlank(null);
+            setDraftBlankAnswer('');
+            setDraftBlankPrompt('');
         } catch (error) {
             console.error(error);
             alert('PDF 레이아웃 준비에 실패했습니다.');
@@ -439,19 +466,53 @@ const ManageLesson: React.FC = () => {
         const blank = createBlankFromRegion(region, pageImage);
         if (!blank) return;
 
-        setWorksheetBlanks((prev) => [...prev, blank]);
-        setActiveBlankId(blank.id);
+        setDraftBlank(blank);
+        setDraftBlankAnswer(blank.answer);
+        setDraftBlankPrompt(blank.prompt || '');
+        setActiveBlankId(null);
     };
 
-    const handleCreateBlankFromRect = (page: number, rect: {
-        leftRatio: number;
-        topRatio: number;
-        widthRatio: number;
-        heightRatio: number;
-    }) => {
-        const blank = createBlankFromRect(page, rect);
-        setWorksheetBlanks((prev) => [...prev, blank]);
-        setActiveBlankId(blank.id);
+    const handleCreateBlankAtPoint = (page: number, point: { x: number; y: number }) => {
+        const blank = createBlankFromPoint(page, point);
+        setDraftBlank(blank);
+        setDraftBlankAnswer('');
+        setDraftBlankPrompt('');
+        setActiveBlankId(null);
+    };
+
+    const handleConfirmDraftBlank = () => {
+        if (!draftBlank) return;
+
+        const answer = draftBlankAnswer.trim();
+        if (!answer) {
+            alert('빈칸 정답을 입력한 뒤 확인해 주세요.');
+            return;
+        }
+
+        const nextBlank = {
+            ...draftBlank,
+            answer,
+            prompt: draftBlankPrompt.trim(),
+        };
+
+        setWorksheetBlanks((prev) => [...prev, nextBlank]);
+        setActiveBlankId(nextBlank.id);
+        setDraftBlank(null);
+        setDraftBlankAnswer('');
+        setDraftBlankPrompt('');
+    };
+
+    const handleCancelDraftBlank = () => {
+        setDraftBlank(null);
+        setDraftBlankAnswer('');
+        setDraftBlankPrompt('');
+    };
+
+    const handleSelectBlank = (blankId: string) => {
+        setActiveBlankId(blankId);
+        setDraftBlank(null);
+        setDraftBlankAnswer('');
+        setDraftBlankPrompt('');
     };
 
     const updateBlank = (blankId: string, patch: Partial<LessonWorksheetBlank>) => {
@@ -722,16 +783,17 @@ const ManageLesson: React.FC = () => {
                                                         textRegions={worksheetTextRegions}
                                                         mode="teacher"
                                                         selectedBlankId={activeBlankId}
-                                                        onSelectBlank={setActiveBlankId}
+                                                        pendingBlank={draftBlank}
+                                                        onSelectBlank={handleSelectBlank}
                                                         onCreateBlankFromRegion={handleCreateBlankFromRegion}
-                                                        onCreateBlankFromRect={handleCreateBlankFromRect}
+                                                        onCreateBlankAtPoint={handleCreateBlankAtPoint}
                                                     />
                                                 </div>
 
                                                 <aside className="rounded-2xl border border-gray-200 bg-white p-4 space-y-4 h-fit order-1">
                                                     <div>
                                                         <div className="text-xs font-bold uppercase tracking-[0.18em] text-gray-400">Blank List</div>
-                                                        <p className="mt-1 text-sm text-gray-500">OCR 박스를 클릭하거나 직접 드래그해서 빈칸을 만든 뒤 정답을 입력하세요.</p>
+                                                        <p className="mt-1 text-sm text-gray-500">OCR 박스나 페이지 어디든 클릭하면 빈칸 초안이 생깁니다. 정답을 쓴 뒤 정답 확인으로 확정하세요.</p>
                                                     </div>
 
                                                     <div className="grid grid-cols-3 gap-3 text-center">
@@ -750,42 +812,74 @@ const ManageLesson: React.FC = () => {
                                                     </div>
 
                                                     <div className="grid gap-4 xl:grid-cols-[minmax(18rem,24rem)_minmax(0,1fr)]">
-                                                    {selectedBlank ? (
-                                                        <div className="space-y-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
-                                                            <div className="flex items-center justify-between gap-2">
-                                                                <div className="text-sm font-bold text-blue-900">선택한 빈칸</div>
-                                                                <button type="button" onClick={() => handleDeleteBlank(selectedBlank.id)} className="text-xs font-bold text-red-600">
-                                                                    삭제
+                                                        {draftBlank ? (
+                                                            <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50/80 p-4">
+                                                                <div className="flex items-center justify-between gap-2">
+                                                                    <div className="text-sm font-bold text-amber-900">? ?? ??</div>
+                                                                    <button type="button" onClick={handleCancelDraftBlank} className="text-xs font-bold text-gray-500">
+                                                                        ??
+                                                                    </button>
+                                                                </div>
+                                                                <div className="text-xs text-gray-500">p.{draftBlank.page} ??? ? ??? ??? ????.</div>
+                                                                <input
+                                                                    type="text"
+                                                                    value={draftBlankAnswer}
+                                                                    onChange={(e) => setDraftBlankAnswer(e.target.value)}
+                                                                    className="w-full rounded-lg border border-amber-300 px-3 py-2 text-sm"
+                                                                    placeholder="??? ?????"
+                                                                    autoFocus
+                                                                />
+                                                                <input
+                                                                    type="text"
+                                                                    value={draftBlankPrompt}
+                                                                    onChange={(e) => setDraftBlankPrompt(e.target.value)}
+                                                                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                                                                    placeholder="?? ?? ?? (??)"
+                                                                />
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={handleConfirmDraftBlank}
+                                                                    className="w-full rounded-lg bg-amber-500 px-3 py-2 text-sm font-bold text-white hover:bg-amber-600"
+                                                                >
+                                                                    ?? ??
                                                                 </button>
                                                             </div>
-                                                            <div className="text-xs text-gray-500">p.{selectedBlank.page}</div>
-                                                            <input
-                                                                type="text"
-                                                                value={selectedBlank.answer}
-                                                                onChange={(e) => updateBlank(selectedBlank.id, { answer: e.target.value })}
-                                                                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                                                                placeholder="정답"
-                                                            />
-                                                            <input
-                                                                type="text"
-                                                                value={selectedBlank.prompt || ''}
-                                                                onChange={(e) => updateBlank(selectedBlank.id, { prompt: e.target.value })}
-                                                                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                                                                placeholder="학생 입력칸 안내문(선택)"
-                                                            />
-                                                        </div>
-                                                    ) : (
-                                                        <div className="rounded-2xl border border-dashed border-gray-300 px-4 py-6 text-center text-sm text-gray-500 flex items-center justify-center">
-                                                            오른쪽 학습지에서 빈칸을 선택하면 정답을 수정할 수 있습니다.
-                                                        </div>
-                                                    )}
+                                                        ) : selectedBlank ? (
+                                                            <div className="space-y-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
+                                                                <div className="flex items-center justify-between gap-2">
+                                                                    <div className="text-sm font-bold text-blue-900">??? ??</div>
+                                                                    <button type="button" onClick={() => handleDeleteBlank(selectedBlank.id)} className="text-xs font-bold text-red-600">
+                                                                        ??
+                                                                    </button>
+                                                                </div>
+                                                                <div className="text-xs text-gray-500">p.{selectedBlank.page}</div>
+                                                                <input
+                                                                    type="text"
+                                                                    value={selectedBlank.answer}
+                                                                    onChange={(e) => updateBlank(selectedBlank.id, { answer: e.target.value })}
+                                                                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                                                                    placeholder="??"
+                                                                />
+                                                                <input
+                                                                    type="text"
+                                                                    value={selectedBlank.prompt || ''}
+                                                                    onChange={(e) => updateBlank(selectedBlank.id, { prompt: e.target.value })}
+                                                                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                                                                    placeholder="?? ?? ?? (??)"
+                                                                />
+                                                            </div>
+                                                        ) : (
+                                                            <div className="rounded-2xl border border-dashed border-gray-300 px-4 py-6 text-center text-sm text-gray-500 flex items-center justify-center">
+                                                                ??? ?? ??? ???? ? ??? ????, ?? ???? ?? ??? ?????.
+                                                            </div>
+                                                        )}
 
-                                                    <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
+                                                        <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
                                                         {sortedBlanks.map((blank, index) => (
                                                             <button
                                                                 key={blank.id}
                                                                 type="button"
-                                                                onClick={() => setActiveBlankId(blank.id)}
+                                                                onClick={() => handleSelectBlank(blank.id)}
                                                                 className={`w-full rounded-xl border px-3 py-3 text-left transition ${
                                                                     activeBlankId === blank.id
                                                                         ? 'border-blue-300 bg-blue-50'
