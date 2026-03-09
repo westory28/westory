@@ -257,6 +257,17 @@ const getStudentBlankRect = (
     });
 };
 
+const getStudentBlankFontSize = (
+    pixelWidth: number,
+    pixelHeight: number,
+    contentLength: number,
+) => {
+    const safeLength = Math.max(1, contentLength);
+    const widthBased = (pixelWidth - 6) / (safeLength * 0.92);
+    const heightBased = pixelHeight * 0.58;
+    return Math.max(8, Math.min(18, widthBased, heightBased));
+};
+
 const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     pageImages,
     blanks,
@@ -540,8 +551,11 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                 const renderRect = getStudentBlankRect(blank, pageImage, pageRegions);
                                 const pixelWidth = renderRect.widthRatio * pageImage.width;
                                 const pixelHeight = renderRect.heightRatio * pageImage.height;
-                                const fontSize = Math.max(10, Math.min(18, Math.min(pixelWidth * 0.32, pixelHeight * 0.72)));
                                 const placeholder = blank.prompt || (pixelWidth < 42 ? '' : pixelWidth < 68 ? '빈' : '빈칸');
+                                const activeText = (studentAnswer?.value || placeholder || blank.answer || '').trim();
+                                const fontSize = getStudentBlankFontSize(pixelWidth, pixelHeight, activeText.length);
+                                const horizontalPadding = pixelWidth < 48 ? 2 : pixelWidth < 72 ? 4 : 6;
+                                const verticalPadding = pixelHeight < 22 ? 1 : 2;
 
                                 return (
                                     <div
@@ -575,7 +589,14 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                             }`}
                                             placeholder={placeholder}
                                             onChange={(event) => onStudentAnswerChange?.(blank.id, event.target.value)}
-                                            style={{ fontSize: `${fontSize}px` }}
+                                            style={{
+                                                fontSize: `${fontSize}px`,
+                                                lineHeight: 1.05,
+                                                paddingLeft: `${horizontalPadding}px`,
+                                                paddingRight: `${horizontalPadding}px`,
+                                                paddingTop: `${verticalPadding}px`,
+                                                paddingBottom: `${verticalPadding}px`,
+                                            }}
                                         />
                                     </div>
                                 );
@@ -636,7 +657,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                             ))}
                             {showDraftRect && liveDraft && (
                                 <div
-                                    className="pointer-events-none absolute bg-sky-300/28 mix-blend-multiply"
+                                    className="pointer-events-none absolute bg-sky-400/32 mix-blend-multiply"
                                     style={{
                                         left: toPercent(liveDraft.leftRatio),
                                         top: toPercent(liveDraft.topRatio),
