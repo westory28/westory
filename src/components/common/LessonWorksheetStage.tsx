@@ -14,7 +14,6 @@ interface LessonWorksheetStageProps {
     selectedBlankId?: string | null;
     studentAnswers?: Record<string, { value?: string; status?: '' | 'correct' | 'wrong' }>;
     onSelectBlank?: (blankId: string) => void;
-    onCreateBlankAtPoint?: (page: number, point: { x: number; y: number }) => void;
     onCreateBlankFromSelection?: (
         page: number,
         rect: {
@@ -65,7 +64,6 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     selectedBlankId,
     studentAnswers = {},
     onSelectBlank,
-    onCreateBlankAtPoint,
     onCreateBlankFromSelection,
     onStudentAnswerChange,
     pendingBlank = null,
@@ -113,6 +111,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         const point = resolveRatioPoint(page, event.clientX, event.clientY);
         if (!point) return;
 
+        event.preventDefault();
         event.currentTarget.setPointerCapture(event.pointerId);
         setDraftRect({
             page,
@@ -141,7 +140,6 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         const heightRatio = Math.abs(draftRect.currentY - draftRect.startY);
 
         if (widthRatio < MIN_DRAG_SIZE || heightRatio < MIN_DRAG_SIZE) {
-            onCreateBlankAtPoint?.(pageImage.page, { x: draftRect.startX, y: draftRect.startY });
             setDraftRect(null);
             return;
         }
@@ -169,6 +167,11 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
             const regionArea = Math.max(1, region.width * region.height);
             return (intersectionArea / regionArea) >= MIN_REGION_INTERSECTION_RATIO;
         });
+
+        if (!matchedRegions.length) {
+            setDraftRect(null);
+            return;
+        }
 
         onCreateBlankFromSelection?.(pageImage.page, { leftRatio, topRatio, widthRatio, heightRatio }, matchedRegions);
         setDraftRect(null);
@@ -206,6 +209,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                 pageRefs.current[pageImage.page] = node;
                             }}
                             className={`relative overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 ${mode === 'teacher' ? 'touch-none' : ''}`}
+                            onDragStart={(event) => event.preventDefault()}
                             onPointerDown={(event) => handlePointerDown(pageImage.page, event)}
                             onPointerMove={(event) => handlePointerMove(pageImage.page, event)}
                             onPointerUp={() => handlePointerUp(pageImage)}
@@ -215,6 +219,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                 src={pageImage.imageUrl}
                                 alt={`학습지 ${pageImage.page}페이지`}
                                 className="block h-auto w-full"
+                                draggable={false}
+                                onDragStart={(event) => event.preventDefault()}
                             />
 
                             {pageBlanks.map((blank) => {

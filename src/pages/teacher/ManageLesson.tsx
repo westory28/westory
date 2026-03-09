@@ -63,23 +63,6 @@ const createBlankFromRect = (page: number, rect: {
     prompt: '',
 });
 
-const DEFAULT_BLANK_WIDTH_RATIO = 0.16;
-const DEFAULT_BLANK_HEIGHT_RATIO = 0.045;
-
-const createBlankFromPoint = (page: number, point: { x: number; y: number }): LessonWorksheetBlank => {
-    const widthRatio = DEFAULT_BLANK_WIDTH_RATIO;
-    const heightRatio = DEFAULT_BLANK_HEIGHT_RATIO;
-    const leftRatio = clampRatio(Math.min(point.x - widthRatio / 2, 1 - widthRatio));
-    const topRatio = clampRatio(Math.min(point.y - heightRatio / 2, 1 - heightRatio));
-
-    return createBlankFromRect(page, {
-        leftRatio: Math.max(0, leftRatio),
-        topRatio: Math.max(0, topRatio),
-        widthRatio,
-        heightRatio,
-    });
-};
-
 const getBlankAnswerFromRegions = (regions: LessonWorksheetTextRegion[]) => regions
     .map((region) => String(region.label || '').trim())
     .filter(Boolean)
@@ -486,32 +469,6 @@ const ManageLesson: React.FC = () => {
         }
     };
 
-    const handleCreateBlankAtPoint = (page: number, point: { x: number; y: number }) => {
-        const pageImage = worksheetPageImages.find((item) => item.page === page) || null;
-        const hitRegion = worksheetTextRegions.find((region) => {
-            if (region.page !== page || !pageImage) return false;
-            const leftRatio = region.left / pageImage.width;
-            const topRatio = region.top / pageImage.height;
-            const rightRatio = (region.left + region.width) / pageImage.width;
-            const bottomRatio = (region.top + region.height) / pageImage.height;
-            return point.x >= leftRatio && point.x <= rightRatio && point.y >= topRatio && point.y <= bottomRatio;
-        });
-
-        const blank = hitRegion && pageImage
-            ? createBlankFromRect(page, {
-                leftRatio: clampRatio(hitRegion.left / pageImage.width),
-                topRatio: clampRatio(hitRegion.top / pageImage.height),
-                widthRatio: clampRatio(hitRegion.width / pageImage.width),
-                heightRatio: clampRatio(hitRegion.height / pageImage.height),
-            })
-            : createBlankFromPoint(page, point);
-
-        setDraftBlank(blank);
-        setDraftBlankAnswer(hitRegion ? String(hitRegion.label || '').trim() : '');
-        setDraftBlankPrompt('');
-        setActiveBlankId(null);
-    };
-
     const handleCreateBlankFromSelection = (page: number, rect: {
         leftRatio: number;
         topRatio: number;
@@ -834,7 +791,6 @@ const ManageLesson: React.FC = () => {
                                                         selectedBlankId={activeBlankId}
                                                         pendingBlank={draftBlank}
                                                         onSelectBlank={handleSelectBlank}
-                                                        onCreateBlankAtPoint={handleCreateBlankAtPoint}
                                                         onCreateBlankFromSelection={handleCreateBlankFromSelection}
                                                     />
                                                 </div>
