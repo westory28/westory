@@ -242,18 +242,18 @@ const getStudentBlankRect = (
 
     if (blank.source === 'manual') {
         return expandRect(baseRect, pageImage, {
-            padX: pixelWidth < 30 ? 1 : 2,
-            padY: pixelHeight < 18 ? 1 : 2,
-            minWidth: Math.max(18, Math.min(pixelWidth + 2, 54)),
-            minHeight: Math.max(14, Math.min(pixelHeight + 2, 28)),
+            padX: pixelWidth < 30 ? 1.5 : 2.5,
+            padY: pixelHeight < 18 ? 1.5 : 2.5,
+            minWidth: Math.max(28, Math.min(pixelWidth + 8, 78)),
+            minHeight: Math.max(18, Math.min(pixelHeight + 6, 34)),
         });
     }
 
     return expandRect(baseRect, pageImage, {
-        padX: pixelWidth < 40 ? 2 : 3,
-        padY: pixelHeight < 20 ? 1.5 : 2,
-        minWidth: Math.max(22, Math.min(pixelWidth + 6, 62)),
-        minHeight: Math.max(16, Math.min(pixelHeight + 4, 30)),
+        padX: pixelWidth < 40 ? 2.5 : 3.5,
+        padY: pixelHeight < 20 ? 2 : 2.5,
+        minWidth: Math.max(32, Math.min(pixelWidth + 12, 86)),
+        minHeight: Math.max(20, Math.min(pixelHeight + 8, 36)),
     });
 };
 
@@ -263,9 +263,9 @@ const getStudentBlankFontSize = (
     contentLength: number,
 ) => {
     const safeLength = Math.max(1, contentLength);
-    const widthBased = (pixelWidth - 6) / (safeLength * 0.92);
-    const heightBased = pixelHeight * 0.58;
-    return Math.max(8, Math.min(18, widthBased, heightBased));
+    const widthBased = Math.max(1, pixelWidth - 4) / (safeLength * 0.96);
+    const heightBased = Math.max(1, pixelHeight - 2) * 0.72;
+    return Math.max(7, Math.min(17, widthBased, heightBased));
 };
 
 const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
@@ -614,11 +614,12 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                 const renderRect = getStudentBlankRect(blank, pageImage, pageRegions);
                                 const pixelWidth = renderRect.widthRatio * pageImage.width;
                                 const pixelHeight = renderRect.heightRatio * pageImage.height;
-                                const placeholder = blank.prompt || (pixelWidth < 42 ? '' : pixelWidth < 68 ? '빈' : '빈칸');
-                                const activeText = (studentAnswer?.value || placeholder || blank.answer || '').trim();
-                                const fontSize = getStudentBlankFontSize(pixelWidth, pixelHeight, activeText.length);
-                                const horizontalPadding = pixelWidth < 48 ? 2 : pixelWidth < 72 ? 4 : 6;
-                                const verticalPadding = pixelHeight < 22 ? 1 : 2;
+                                const placeholder = blank.prompt || (pixelWidth < 38 ? '' : pixelWidth < 58 ? '빈' : '빈칸');
+                                const activeValue = (studentAnswer?.value || '').trim();
+                                const sizingText = activeValue || placeholder || blank.answer || '';
+                                const fontSize = getStudentBlankFontSize(pixelWidth, pixelHeight, sizingText.length);
+                                const horizontalPadding = pixelWidth < 52 ? 1.5 : pixelWidth < 80 ? 3 : 4;
+                                const verticalPadding = pixelHeight < 24 ? 0.5 : 1;
 
                                 return (
                                     <div
@@ -643,7 +644,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                             value={studentAnswer?.value || ''}
                                             data-blank-id={blank.id}
                                             data-answer={blank.answer}
-                                            className={`worksheet-blank-input relative z-10 h-full w-full border-0 px-2 text-center font-bold outline-none ${
+                                            className={`worksheet-blank-input relative z-10 block h-full w-full border-0 text-center font-bold outline-none ${
                                                 status === 'correct'
                                                     ? 'bg-emerald-50 text-emerald-700'
                                                     : status === 'wrong'
@@ -654,11 +655,12 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                             onChange={(event) => onStudentAnswerChange?.(blank.id, event.target.value)}
                                             style={{
                                                 fontSize: `${fontSize}px`,
-                                                lineHeight: 1.05,
+                                                lineHeight: 1,
                                                 paddingLeft: `${horizontalPadding}px`,
                                                 paddingRight: `${horizontalPadding}px`,
                                                 paddingTop: `${verticalPadding}px`,
                                                 paddingBottom: `${verticalPadding}px`,
+                                                boxSizing: 'border-box',
                                             }}
                                         />
                                     </div>
