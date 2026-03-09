@@ -10,27 +10,26 @@ interface TextSegment {
 }
 
 const hasUsefulLetters = (text: string) => /[\p{L}]/u.test(text);
-const hasVisibleKeywordChars = (text: string) => /[가-힣A-Za-z0-9]/u.test(text);
+const hasVisibleKeywordChars = (text: string) => /[가-ힱA-Za-z0-9]/u.test(text);
 const looksCorruptedText = (text: string) => /[?\uFFFD]/u.test(text);
 
+// Keep text inside brackets and only drop the bracket characters themselves.
 const sanitizeRegionLabel = (value: string) => value
-    .replace(/\s*[→-].*$/u, '')
-    .replace(/\([^)]*\)/gu, '')
-    .replace(/\[[^\]]*\]/gu, '')
+    .replace(/\s*[?？]{2}.*$/u, '')
+    .replace(/[\[\](){}<>]/gu, ' ')
     .replace(/[,:;]+$/u, '')
     .replace(/\s+/g, ' ')
     .trim();
 
 const isLikelyRegionLabel = (value: string) => {
     const text = sanitizeRegionLabel(value);
-    if (text.length < 2 || text.length > 14) return false;
+    if (text.length < 1 || text.length > 24) return false;
     if (/^\d+$/u.test(text)) return false;
     if (!hasUsefulLetters(text)) return false;
     if (!hasVisibleKeywordChars(text)) return false;
     if (looksCorruptedText(text)) return false;
     if (/^[^\p{L}\p{N}]+$/u.test(text)) return false;
-    if (/[(){}\[\]<>]/u.test(text)) return false;
-    if (text.split(' ').length > 2) return false;
+    if (text.split(' ').length > 4) return false;
     return true;
 };
 
@@ -64,7 +63,7 @@ const resolveLabelBounds = (segment: TextSegment, normalizedText: string, label:
     }
 
     const left = segment.left + (averageCharWidth * labelIndex);
-    const width = Math.max(averageCharWidth * Math.max(label.length, 2), segment.height * 1.6);
+    const width = Math.max(averageCharWidth * Math.max(label.length, 1), segment.height * 1.15);
 
     return {
         left,
@@ -75,7 +74,7 @@ const resolveLabelBounds = (segment: TextSegment, normalizedText: string, label:
 const shouldInsertSpace = (segmentText: string, nextText: string, gap: number, height: number) => {
     if (!segmentText) return false;
     if (/\s$/u.test(segmentText) || /^\s/u.test(nextText)) return false;
-    return gap > Math.max(6, height * 0.35);
+    return gap > Math.max(4, height * 0.2);
 };
 
 export const extractPdfTextRegions = (
@@ -124,9 +123,9 @@ export const extractPdfTextRegions = (
             return;
         }
 
-        const sameLine = Math.abs(y - current.baselineY) <= Math.max(current.height, height) * 0.65;
+        const sameLine = Math.abs(y - current.baselineY) <= Math.max(current.height, height) * 0.45;
         const gap = left - current.right;
-        const isJoinable = sameLine && gap <= Math.max(20, Math.max(current.height, height) * 1.4);
+        const isJoinable = sameLine && gap <= Math.max(8, Math.max(current.height, height) * 0.55);
 
         if (!isJoinable) {
             flush();
