@@ -178,7 +178,11 @@ const isRestrictedInAppBrowser = (): boolean => {
 };
 
 const shouldPreferRedirectLogin = (): boolean => {
-    return isIOSDevice() || isSafariBrowser() || isLikelyInAppBrowser();
+    return isSafariBrowser();
+};
+
+const canFallbackToRedirect = (): boolean => {
+    return isSafariBrowser();
 };
 
 const getLoginFailureMessage = (): string => {
@@ -186,8 +190,12 @@ const getLoginFailureMessage = (): string => {
         return 'iPhone 앱 내부 브라우저에서는 구글 로그인이 정상 유지되지 않을 수 있습니다. Safari에서 위스토리를 연 뒤 다시 로그인해주세요.';
     }
 
+    if (isSafariBrowser()) {
+        return 'Safari에서 로그인 팝업이 열리지 않으면 다시 시도하거나 Safari 설정을 확인해주세요.';
+    }
+
     if (isIOSDevice()) {
-        return 'iPhone 또는 iPad에서는 리다이렉트 로그인으로 전환됩니다. 로그인 후에도 진행되지 않으면 Safari에서 다시 시도해주세요.';
+        return 'iPhone 또는 iPad에서는 Chrome에서 직접 로그인해보시고, 계속 실패하면 Safari에서 다시 시도해주세요.';
     }
 
     return '로그인에 실패했습니다.';
@@ -787,16 +795,10 @@ const Login: React.FC = () => {
 
         try {
             await authPersistenceReady;
-
-            if (shouldPreferRedirectLogin()) {
-                await signInWithRedirect(auth, provider);
-                return;
-            }
-
             const result = await signInWithPopup(auth, provider);
             await finishLoginForRole(result.user, mode);
         } catch (error) {
-            if (isPopupFallbackError(error)) {
+            if (isPopupFallbackError(error) && canFallbackToRedirect()) {
                 try {
                     await signInWithRedirect(auth, provider);
                     return;
