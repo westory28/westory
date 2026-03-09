@@ -1,4 +1,4 @@
-﻿import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 
 interface WordCloudEntry {
     text: string;
@@ -10,6 +10,7 @@ interface WordCloudViewProps {
     entries: WordCloudEntry[];
     className?: string;
     showSubmitters?: boolean;
+    variant?: 'default' | 'modal';
 }
 
 interface PositionedWord extends WordCloudEntry {
@@ -19,14 +20,14 @@ interface PositionedWord extends WordCloudEntry {
     width: number;
     height: number;
     color: string;
-    rotate: 0 | 90;
+    rotate: 0;
     tooltip: string;
 }
 
 const WIDTH = 1600;
 const HEIGHT = 900;
-const RADIUS_X = 630;
-const RADIUS_Y = 350;
+const RADIUS_X = 660;
+const RADIUS_Y = 370;
 const CENTER_X = WIDTH / 2;
 const CENTER_Y = HEIGHT / 2;
 const MAX_WORDS = 80;
@@ -48,19 +49,27 @@ const isInsideEllipse = (x: number, y: number, width: number, height: number) =>
         { x: x - width / 2, y: y + height / 2 },
         { x: x + width / 2, y: y + height / 2 },
     ];
+
     return corners.every((corner) => {
         const nx = (corner.x - CENTER_X) / RADIUS_X;
         const ny = (corner.y - CENTER_Y) / RADIUS_Y;
-        return nx * nx + ny * ny <= 1.02;
+        return nx * nx + ny * ny <= 1;
     });
 };
 
-const overlaps = (candidate: PositionedWord, placed: PositionedWord[]) =>
-    placed.some((item) => {
+const overlaps = (candidate: PositionedWord, placed: PositionedWord[]) => {
+    const candidatePaddingX = Math.max(18, candidate.fontSize * 0.24);
+    const candidatePaddingY = Math.max(10, candidate.fontSize * 0.16);
+
+    return placed.some((item) => {
+        const itemPaddingX = Math.max(16, item.fontSize * 0.2);
+        const itemPaddingY = Math.max(8, item.fontSize * 0.14);
         const xGap = Math.abs(candidate.x - item.x);
         const yGap = Math.abs(candidate.y - item.y);
-        return xGap < (candidate.width + item.width) / 2 + 8 && yGap < (candidate.height + item.height) / 2 + 6;
+        return xGap < (candidate.width + item.width) / 2 + candidatePaddingX + itemPaddingX
+            && yGap < (candidate.height + item.height) / 2 + candidatePaddingY + itemPaddingY;
     });
+};
 
 const buildTooltip = (entry: WordCloudEntry, showSubmitters: boolean) => {
     const base = `${entry.text}: ${entry.count}회`;
@@ -76,7 +85,24 @@ const buildTooltip = (entry: WordCloudEntry, showSubmitters: boolean) => {
     return `${base}\n제출자: ${preview}${suffix}`;
 };
 
-const WordCloudView: React.FC<WordCloudViewProps> = ({ entries, className = '', showSubmitters = false }) => {
+const estimateWordWidth = (text: string, fontSize: number) => {
+    const normalized = Array.from(text);
+    const unitWidth = normalized.reduce((sum, char) => {
+        if (/[A-Z0-9]/.test(char)) return sum + 0.74;
+        if (/[a-z]/.test(char)) return sum + 0.63;
+        if (/[가-힣]/.test(char)) return sum + 0.98;
+        return sum + 0.82;
+    }, 0);
+
+    return Math.max(fontSize * 2.4, fontSize * (unitWidth + 1.25));
+};
+
+const WordCloudView: React.FC<WordCloudViewProps> = ({
+    entries,
+    className = '',
+    showSubmitters = false,
+    variant = 'default',
+}) => {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const [hoveredText, setHoveredText] = useState<string>('');
     const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -89,28 +115,29 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({ entries, className = '', 
         const maxCount = Math.max(...source.map((item) => item.count));
         const placed: PositionedWord[] = [];
 
+        const fontRange = variant === 'modal'
+            ? { min: 34, max: 118, fallback: 28 }
+            : { min: 26, max: 88, fallback: 22 };
+
         for (const item of source) {
-            const ratio = maxCount === minCount ? 1 : (item.count - minCount) / (maxCount - minCount);
-            // Start larger overall so early clouds remain readable.
-            const baseSize = Math.round(42 + Math.pow(ratio, 0.84) * 56);
+            const ratio = maxCount === minCount ? 0.55 : (item.count - minCount) / (maxCount - minCount);
+            const easedRatio = Math.pow(ratio, 0.72);
+            const baseSize = Math.round(fontRange.min + easedRatio * (fontRange.max - fontRange.min));
 
             let fontSize = baseSize;
             let placedWord: PositionedWord | null = null;
 
-            for (let shrink = 0; shrink < 4 && !placedWord; shrink += 1) {
-                const baseWidth = Math.max(fontSize * (item.text.length * 0.52 + 1.8), fontSize * 2.5);
-                const baseHeight = fontSize * 1.06;
-                // Favor horizontal layout; keep vertical words as sparse accents.
-                const rotate: 0 | 90 = hashCode(item.text) % 10 === 0 ? 90 : 0;
-                const width = rotate === 90 ? baseHeight : baseWidth;
-                const height = rotate === 90 ? baseWidth : baseHeight;
+            for (let shrink = 0; shrink < 7 && !placedWord; shrink += 1) {
+                const width = estimateWordWidth(item.text, fontSize);
+                const height = Math.max(fontSize * 1.04, 34);
                 const angleSeed = hashCode(item.text) % 360;
 
-                for (let step = 0; step < 1300; step += 1) {
-                    const angle = ((angleSeed + step * 11) * Math.PI) / 180;
-                    const radius = 5 + step * 0.57;
+                for (let step = 0; step < 2200; step += 1) {
+                    const angle = ((angleSeed + step * 13) * Math.PI) / 180;
+                    const radius = 6 + step * (variant === 'modal' ? 0.9 : 0.78);
+                    const ellipseBias = 0.6 + Math.min(0.46, step / 2800);
                     const x = CENTER_X + Math.cos(angle) * radius;
-                    const y = CENTER_Y + Math.sin(angle) * radius * 0.68;
+                    const y = CENTER_Y + Math.sin(angle) * radius * ellipseBias;
 
                     const candidate: PositionedWord = {
                         ...item,
@@ -120,7 +147,7 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({ entries, className = '', 
                         width,
                         height,
                         color: COLORS[hashCode(item.text) % COLORS.length],
-                        rotate,
+                        rotate: 0,
                         tooltip: buildTooltip(item, showSubmitters),
                     };
 
@@ -130,14 +157,14 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({ entries, className = '', 
                     break;
                 }
 
-                fontSize = Math.max(26, Math.floor(fontSize * 0.92));
+                fontSize = Math.max(fontRange.fallback, Math.floor(fontSize * 0.92));
             }
 
             if (placedWord) placed.push(placedWord);
         }
 
         return placed;
-    }, [entries, showSubmitters]);
+    }, [entries, showSubmitters, variant]);
 
     const hoveredWord = hoveredText
         ? positioned.find((item) => item.text === hoveredText) || null
@@ -158,19 +185,21 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({ entries, className = '', 
     };
 
     return (
-        <div className={`w-full flex justify-center ${className}`}>
+        <div className={`flex w-full justify-center ${className}`}>
             <div
                 ref={containerRef}
-                className="relative w-full max-w-[1600px] aspect-video rounded-2xl bg-gradient-to-br from-blue-50 via-white to-cyan-50 border border-blue-100 overflow-hidden"
+                className={`relative w-full overflow-hidden rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-cyan-50 ${
+                    variant === 'modal' ? 'aspect-[16/10] min-h-[72vh]' : 'max-w-[1600px] aspect-video'
+                }`}
             >
                 <svg
-                    className="absolute inset-0 w-full h-full"
+                    className="absolute inset-0 h-full w-full"
                     viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
                     preserveAspectRatio="xMidYMid meet"
                     role="img"
                     aria-label="word cloud"
                 >
-                    <ellipse cx={CENTER_X} cy={CENTER_Y} rx={RADIUS_X} ry={RADIUS_Y} fill="rgba(255,255,255,0.65)" />
+                    <ellipse cx={CENTER_X} cy={CENTER_Y} rx={RADIUS_X} ry={RADIUS_Y} fill="rgba(255,255,255,0.72)" />
                     {positioned.map((item) => (
                         <text
                             key={item.text}
@@ -179,7 +208,7 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({ entries, className = '', 
                             fontSize={item.fontSize}
                             fill={item.color}
                             stroke={hoveredText === item.text ? '#111827' : 'none'}
-                            strokeWidth={hoveredText === item.text ? Math.max(1.4, item.fontSize * 0.06) : 0}
+                            strokeWidth={hoveredText === item.text ? Math.max(1.4, item.fontSize * 0.055) : 0}
                             paintOrder="stroke fill"
                             strokeLinejoin="round"
                             fontWeight={900}
@@ -206,7 +235,7 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({ entries, className = '', 
 
                 {showSubmitters && hoveredWord && (
                     <div
-                        className="absolute z-20 min-w-[220px] max-w-[360px] rounded-md bg-black/75 text-white shadow-2xl p-2.5 pl-3 border-l-4 border-orange-400 pointer-events-none"
+                        className="pointer-events-none absolute z-20 min-w-[220px] max-w-[360px] rounded-md border-l-4 border-orange-400 bg-black/75 p-2.5 pl-3 text-white shadow-2xl"
                         style={{
                             left: `${tooltipLeft}px`,
                             top: `${tooltipTop}px`,
@@ -214,24 +243,24 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({ entries, className = '', 
                         }}
                     >
                         <div
-                            className="absolute -left-2 top-4 w-0 h-0"
+                            className="absolute -left-2 top-4 h-0 w-0"
                             style={{
                                 borderTop: '8px solid transparent',
                                 borderBottom: '8px solid transparent',
                                 borderRight: '8px solid rgba(0, 0, 0, 0.75)',
                             }}
                         />
-                        <div className="text-base font-bold leading-none mb-1.5">
+                        <div className="mb-1.5 text-base font-bold leading-none">
                             {hoveredWord.text} ({hoveredWord.count})
                         </div>
-                        <div className="text-[11px] font-bold text-orange-200 mb-1">Submitters</div>
+                        <div className="mb-1 text-[11px] font-bold text-orange-200">Submitters</div>
                         <div className="space-y-1">
                             {(hoveredWord.submitters || []).map((name) => (
                                 <div
                                     key={`${hoveredWord.text}-${name}`}
-                                    className="flex items-center gap-1.5 text-[12px] leading-tight font-semibold"
+                                    className="flex items-center gap-1.5 text-[12px] font-semibold leading-tight"
                                 >
-                                    <span className="inline-block w-2 h-2 border border-orange-300 bg-transparent" />
+                                    <span className="inline-block h-2 w-2 border border-orange-300 bg-transparent" />
                                     <span>{name}</span>
                                 </div>
                             ))}
@@ -244,4 +273,3 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({ entries, className = '', 
 };
 
 export default WordCloudView;
-
