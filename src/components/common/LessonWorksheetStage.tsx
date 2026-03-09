@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     clampRatio,
     type LessonWorksheetBlank,
@@ -37,7 +37,8 @@ interface DraftRect {
 }
 
 const MIN_DRAG_SIZE = 0.008;
-const MIN_REGION_INTERSECTION_RATIO = 0.28;
+const LIVE_REGION_INTERSECTION_RATIO = 0.04;
+const FINAL_REGION_INTERSECTION_RATIO = 0.12;
 
 const toPercent = (value: number) => `${value * 100}%`;
 
@@ -65,6 +66,7 @@ const getMatchedRegions = (
         widthRatio: number;
         heightRatio: number;
     },
+    minIntersectionRatio: number,
 ) => {
     const selection = {
         left: rect.leftRatio * pageImage.width,
@@ -87,7 +89,7 @@ const getMatchedRegions = (
             regionBottom,
         );
         const regionArea = Math.max(1, region.width * region.height);
-        return (intersectionArea / regionArea) >= MIN_REGION_INTERSECTION_RATIO;
+        return (intersectionArea / regionArea) >= minIntersectionRatio;
     });
 };
 
@@ -157,10 +159,10 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         });
     };
 
-    const handlePointerMove = (page: number, event: React.PointerEvent<HTMLDivElement>) => {
+    const updateDraftPoint = (page: number, clientX: number, clientY: number) => {
         if (!draftRect || draftRect.page !== page) return;
 
-        const point = resolveRatioPoint(page, event.clientX, event.clientY);
+        const point = resolveRatioPoint(page, clientX, clientY);
         if (!point) return;
 
         setDraftRect((prev) => (prev ? { ...prev, currentX: point.x, currentY: point.y } : null));
@@ -181,7 +183,12 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
             return;
         }
 
-        const matchedRegions = getMatchedRegions(pageImage, regionsByPage.get(pageImage.page) || [], nextRect);
+        const matchedRegions = getMatchedRegions(
+            pageImage,
+            regionsByPage.get(pageImage.page) || [],
+            nextRect,
+            FINAL_REGION_INTERSECTION_RATIO,
+        );
         if (!matchedRegions.length) {
             setDraftRect(null);
             return;
@@ -190,6 +197,32 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         onCreateBlankFromSelection?.(pageImage.page, nextRect, matchedRegions);
         setDraftRect(null);
     };
+
+    useEffect(() => {
+        if (!draftRect) return undefined;
+
+        const handleWindowPointerMove = (event: PointerEvent) => {
+            updateDraftPoint(draftRect.page, event.clientX, event.clientY);
+        };
+
+        const handleWindowPointerUp = () => {
+            const pageImage = pageImages.find((item) => item.page === draftRect.page);
+            if (!pageImage) {
+                setDraftRect(null);
+                return;
+            }
+            handlePointerUp(pageImage);
+        };
+
+        window.addEventListener('pointermove', handleWindowPointerMove);
+        window.addEventListener('pointerup', handleWindowPointerUp);
+        window.addEventListener('pointercancel', handleWindowPointerUp);
+        return () => {
+            window.removeEventListener('pointermove', handleWindowPointerMove);
+            window.removeEventListener('pointerup', handleWindowPointerUp);
+            window.removeEventListener('pointercancel', handleWindowPointerUp);
+        };
+    }, [draftRect, pageImages, regionsByPage]);
 
     return (
         <div className="space-y-6">
@@ -206,7 +239,9 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     }
                     : null;
 
-                const draftRegions = liveDraft ? getMatchedRegions(pageImage, pageRegions, liveDraft) : [];
+                const draftRegions = liveDraft
+                    ? getMatchedRegions(pageImage, pageRegions, liveDraft, LIVE_REGION_INTERSECTION_RATIO)
+                    : [];
 
                 return (
                     <section key={pageImage.page} className="rounded-3xl border border-gray-200 bg-white p-3 shadow-sm md:p-4">
@@ -228,7 +263,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                             className={`relative overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 ${mode === 'teacher' ? 'touch-none cursor-text' : ''}`}
                             onDragStart={(event) => event.preventDefault()}
                             onPointerDown={(event) => handlePointerDown(pageImage.page, event)}
-                            onPointerMove={(event) => handlePointerMove(pageImage.page, event)}
+                            onPointerMove={(event) => updateDraftPoint(pageImage.page, event.clientX, event.clientY)}
                             onPointerUp={() => handlePointerUp(pageImage)}
                             onPointerCancel={() => setDraftRect(null)}
                         >
@@ -241,7 +276,12 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                             />
 
                             {mode === 'teacher' && pageBlanks.map((blank) => {
-                                const maskedRegions = getMatchedRegions(pageImage, pageRegions, blank);
+                                const maskedRegions = getMatchedRegions(
+                                    pageImage,
+                                    pageRegions,
+                                    blank,
+                                    FINAL_REGION_INTERSECTION_RATIO,
+                                );
                                 const renderRegions = maskedRegions.length
                                     ? maskedRegions.map((region) => ({
                                         key: `${blank.id}-${region.left}-${region.top}`,
@@ -324,8 +364,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
 
                             {mode === 'teacher' && pagePendingBlank && (
                                 <>
-                                    {(getMatchedRegions(pageImage, pageRegions, pagePendingBlank).length
-                                        ? getMatchedRegions(pageImage, pageRegions, pagePendingBlank).map((region) => ({
+                                    {(getMatchedRegions(pageImage, pageRegions, pagePendingBlank, FINAL_REGION_INTERSECTION_RATIO).length
+                                        ? getMatchedRegions(pageImage, pageRegions, pagePendingBlank, FINAL_REGION_INTERSECTION_RATIO).map((region) => ({
                                             key: `pending-${region.left}-${region.top}`,
                                             leftRatio: region.left / pageImage.width,
                                             topRatio: region.top / pageImage.height,
