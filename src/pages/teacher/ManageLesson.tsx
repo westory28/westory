@@ -583,7 +583,7 @@ const ManageLesson: React.FC = () => {
 
     return (
         <div className="bg-gray-50 flex flex-col min-h-screen">
-            <main className="flex-1 w-full max-w-[96rem] mx-auto px-4 lg:px-6 py-6 h-full flex flex-col relative">
+            <main className="flex-1 w-full px-4 lg:px-6 xl:px-8 py-6 h-full flex flex-col relative">
                 <div className="flex justify-between items-center mb-4 shrink-0">
                     <h1 className="text-xl lg:text-2xl font-bold text-gray-800">
                         <i className="fas fa-sitemap text-blue-500 mr-2"></i>수업 자료 관리
@@ -593,7 +593,7 @@ const ManageLesson: React.FC = () => {
                 <div className="flex flex-col lg:flex-row gap-6 h-full pb-4 relative">
                     {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)}></div>}
 
-                    <div className={`${sidebarOpen ? 'translate-x-0' : 'translate-x-full'} lg:translate-x-0 fixed lg:static top-0 right-0 h-full lg:h-auto w-[80%] max-w-[320px] lg:max-w-none lg:w-1/4 bg-white z-50 lg:z-auto shadow-xl lg:shadow-sm border border-gray-200 transition-transform duration-300 flex flex-col min-h-[300px] lg:min-h-0 rounded-none lg:rounded-xl`}>
+                    <div className={`${sidebarOpen ? 'translate-x-0' : 'translate-x-full'} lg:translate-x-0 fixed lg:static top-0 right-0 h-full lg:h-auto w-[80%] max-w-[320px] lg:w-[320px] lg:flex-none bg-white z-50 lg:z-auto shadow-xl lg:shadow-sm border border-gray-200 transition-transform duration-300 flex flex-col min-h-[300px] lg:min-h-0 rounded-none lg:rounded-xl`}>
                         <div className="p-4 border-b bg-gray-50 font-bold text-gray-700 flex justify-between items-center">
                             <span className="flex items-center gap-2"><i className="fas fa-list"></i> 단원 목록</span>
                             <div className="flex gap-1 items-center">
@@ -613,7 +613,7 @@ const ManageLesson: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="w-full lg:w-3/4 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col relative min-h-[600px]">
+                    <div className="min-w-0 flex-1 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col relative min-h-[600px]">
                         {!selectedNodeId ? (
                             <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 bg-white z-10 rounded-xl p-6 text-center">
                                 <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4">
@@ -714,8 +714,8 @@ const ManageLesson: React.FC = () => {
                                         </div>
 
                                         {worksheetPageImages.length > 0 ? (
-                                            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
-                                                <div className="min-w-0">
+                                            <div className="grid gap-5">
+                                                <div className="min-w-0 order-2">
                                                     <LessonWorksheetStage
                                                         pageImages={worksheetPageImages}
                                                         blanks={worksheetBlanks}
@@ -728,7 +728,7 @@ const ManageLesson: React.FC = () => {
                                                     />
                                                 </div>
 
-                                                <aside className="rounded-2xl border border-gray-200 bg-white p-4 space-y-4 h-fit">
+                                                <aside className="rounded-2xl border border-gray-200 bg-white p-4 space-y-4 h-fit order-1">
                                                     <div>
                                                         <div className="text-xs font-bold uppercase tracking-[0.18em] text-gray-400">Blank List</div>
                                                         <p className="mt-1 text-sm text-gray-500">OCR 박스를 클릭하거나 직접 드래그해서 빈칸을 만든 뒤 정답을 입력하세요.</p>
@@ -749,6 +749,7 @@ const ManageLesson: React.FC = () => {
                                                         </div>
                                                     </div>
 
+                                                    <div className="grid gap-4 xl:grid-cols-[minmax(18rem,24rem)_minmax(0,1fr)]">
                                                     {selectedBlank ? (
                                                         <div className="space-y-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
                                                             <div className="flex items-center justify-between gap-2">
@@ -774,12 +775,12 @@ const ManageLesson: React.FC = () => {
                                                             />
                                                         </div>
                                                     ) : (
-                                                        <div className="rounded-2xl border border-dashed border-gray-300 px-4 py-6 text-center text-sm text-gray-500">
+                                                        <div className="rounded-2xl border border-dashed border-gray-300 px-4 py-6 text-center text-sm text-gray-500 flex items-center justify-center">
                                                             오른쪽 학습지에서 빈칸을 선택하면 정답을 수정할 수 있습니다.
                                                         </div>
                                                     )}
 
-                                                    <div className="max-h-[28rem] overflow-y-auto space-y-2 pr-1">
+                                                    <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
                                                         {sortedBlanks.map((blank, index) => (
                                                             <button
                                                                 key={blank.id}
@@ -799,6 +800,7 @@ const ManageLesson: React.FC = () => {
                                                                 {blank.prompt && <div className="mt-1 text-xs text-gray-500 truncate">{blank.prompt}</div>}
                                                             </button>
                                                         ))}
+                                                    </div>
                                                     </div>
                                                 </aside>
                                             </div>
