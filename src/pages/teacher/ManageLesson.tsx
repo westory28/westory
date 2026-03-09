@@ -85,6 +85,27 @@ const getBlankAnswerFromRegions = (regions: LessonWorksheetTextRegion[]) => regi
     .filter(Boolean)
     .join(' ');
 
+const getBoundsFromRegions = (
+    regions: LessonWorksheetTextRegion[],
+    pageImage?: LessonWorksheetPageImage | null,
+) => {
+    if (!regions.length || !pageImage || pageImage.width <= 0 || pageImage.height <= 0) {
+        return null;
+    }
+
+    const left = Math.min(...regions.map((region) => region.left));
+    const top = Math.min(...regions.map((region) => region.top));
+    const right = Math.max(...regions.map((region) => region.left + region.width));
+    const bottom = Math.max(...regions.map((region) => region.top + region.height));
+
+    return {
+        leftRatio: clampRatio(left / pageImage.width),
+        topRatio: clampRatio(top / pageImage.height),
+        widthRatio: clampRatio((right - left) / pageImage.width),
+        heightRatio: clampRatio((bottom - top) / pageImage.height),
+    };
+};
+
 const normalizePageImages = (raw: unknown): LessonWorksheetPageImage[] => {
     if (!Array.isArray(raw)) return [];
     return raw
@@ -466,9 +487,27 @@ const ManageLesson: React.FC = () => {
     };
 
     const handleCreateBlankAtPoint = (page: number, point: { x: number; y: number }) => {
-        const blank = createBlankFromPoint(page, point);
+        const pageImage = worksheetPageImages.find((item) => item.page === page) || null;
+        const hitRegion = worksheetTextRegions.find((region) => {
+            if (region.page !== page || !pageImage) return false;
+            const leftRatio = region.left / pageImage.width;
+            const topRatio = region.top / pageImage.height;
+            const rightRatio = (region.left + region.width) / pageImage.width;
+            const bottomRatio = (region.top + region.height) / pageImage.height;
+            return point.x >= leftRatio && point.x <= rightRatio && point.y >= topRatio && point.y <= bottomRatio;
+        });
+
+        const blank = hitRegion && pageImage
+            ? createBlankFromRect(page, {
+                leftRatio: clampRatio(hitRegion.left / pageImage.width),
+                topRatio: clampRatio(hitRegion.top / pageImage.height),
+                widthRatio: clampRatio(hitRegion.width / pageImage.width),
+                heightRatio: clampRatio(hitRegion.height / pageImage.height),
+            })
+            : createBlankFromPoint(page, point);
+
         setDraftBlank(blank);
-        setDraftBlankAnswer('');
+        setDraftBlankAnswer(hitRegion ? String(hitRegion.label || '').trim() : '');
         setDraftBlankPrompt('');
         setActiveBlankId(null);
     };
@@ -479,7 +518,9 @@ const ManageLesson: React.FC = () => {
         widthRatio: number;
         heightRatio: number;
     }, matchedRegions: LessonWorksheetTextRegion[]) => {
-        const blank = createBlankFromRect(page, rect);
+        const pageImage = worksheetPageImages.find((item) => item.page === page) || null;
+        const regionBounds = getBoundsFromRegions(matchedRegions, pageImage);
+        const blank = createBlankFromRect(page, regionBounds || rect);
         const autoAnswer = getBlankAnswerFromRegions(matchedRegions);
 
         setDraftBlank(blank);

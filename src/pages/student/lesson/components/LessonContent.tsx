@@ -233,11 +233,14 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
         }
 
         let correctCount = 0;
+        const nextWorksheetAnswers: Record<string, { value?: string; status?: '' | 'correct' | 'wrong' }> = {};
         inputs.forEach(input => {
             const userAnswer = input.value.trim().replace(/\s+/g, '');
             const correctAnswer = (input.dataset.answer || '').replace(/\s+/g, '');
+            const key = input.dataset.blankId || input.dataset.blankIndex || '';
+            const status: '' | 'correct' | 'wrong' = userAnswer === correctAnswer ? 'correct' : 'wrong';
 
-            if (userAnswer === correctAnswer) {
+            if (status === 'correct') {
                 input.classList.add('correct');
                 input.classList.remove('wrong');
                 correctCount++;
@@ -245,7 +248,19 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
                 input.classList.add('wrong');
                 input.classList.remove('correct');
             }
+
+            if (key) {
+                nextWorksheetAnswers[key] = {
+                    value: input.value || '',
+                    status,
+                };
+            }
         });
+
+        setStudentAnswers((prev) => ({
+            ...prev,
+            ...nextWorksheetAnswers,
+        }));
 
         if (correctCount === inputs.length) {
             alert("🎉 훌륭합니다! 모든 빈칸을 완벽하게 채웠습니다.");
@@ -258,13 +273,16 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
         if (!confirm("입력한 내용을 모두 지우시겠습니까?")) return;
 
         const inputs = contentRef.current.querySelectorAll('.cloze-input, .worksheet-blank-input') as NodeListOf<HTMLInputElement>;
+        const nextAnswers: Record<string, { value?: string; status?: '' | 'correct' | 'wrong' }> = {};
         inputs.forEach(input => {
+            const key = input.dataset.blankId || input.dataset.blankIndex || '';
             input.value = '';
             input.classList.remove('correct', 'wrong');
+            if (key) {
+                nextAnswers[key] = { value: '', status: '' };
+            }
         });
-        setStudentAnswers((prev) => Object.fromEntries(
-            Object.keys(prev).map((key) => [key, { value: '', status: '' }]),
-        ));
+        setStudentAnswers(nextAnswers);
         void saveProgressToFirestore();
     };
 
@@ -428,6 +446,12 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
                     border-bottom-color: #ef4444;
                     color: #b91c1c;
                     background-color: #fee2e2;
+                }
+                .worksheet-blank-input {
+                    border-radius: 0;
+                }
+                .worksheet-blank-input:focus {
+                    box-shadow: inset 0 0 0 2px rgba(37, 99, 235, 0.22);
                 }
                 .note-content h1 { font-size: 1.5em; font-weight: bold; margin-top: 1em; margin-bottom: 0.5em; color: #111827; }
                 .note-content h2 { font-size: 1.25em; font-weight: bold; margin-top: 1em; margin-bottom: 0.5em; border-left: 4px solid #2563eb; padding-left: 10px; color: #374151; }
