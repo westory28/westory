@@ -177,10 +177,6 @@ const isRestrictedInAppBrowser = (): boolean => {
     return /(NAVER|KAKAOTALK)/i.test(ua);
 };
 
-const shouldPreferRedirectLogin = (): boolean => {
-    return isSafariBrowser();
-};
-
 const canFallbackToRedirect = (): boolean => {
     return isSafariBrowser();
 };
