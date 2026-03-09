@@ -165,6 +165,7 @@ const ManageLesson: React.FC = () => {
     const [targetNode, setTargetNode] = useState<TreeNode | null>(null);
     const [modalInput, setModalInput] = useState('');
     const [previewOpen, setPreviewOpen] = useState(false);
+    const [showAllBlankTags, setShowAllBlankTags] = useState(false);
 
     const selectedBlank = useMemo(
         () => worksheetBlanks.find((blank) => blank.id === activeBlankId) || null,
@@ -176,6 +177,11 @@ const ManageLesson: React.FC = () => {
         [worksheetBlanks],
     );
 
+    const visibleBlankTags = useMemo(
+        () => (showAllBlankTags ? sortedBlanks : sortedBlanks.slice(0, 6)),
+        [showAllBlankTags, sortedBlanks],
+    );
+
     useEffect(() => {
         void loadTree();
     }, [config]);
@@ -183,6 +189,12 @@ const ManageLesson: React.FC = () => {
     useEffect(() => () => {
         revokeBlobUrls(worksheetPageImages);
     }, [worksheetPageImages]);
+
+    useEffect(() => {
+        if (sortedBlanks.length <= 6 && showAllBlankTags) {
+            setShowAllBlankTags(false);
+        }
+    }, [showAllBlankTags, sortedBlanks.length]);
 
     const resetWorksheetState = (revokeExisting = false) => {
         if (revokeExisting) {
@@ -1064,7 +1076,7 @@ const ManageLesson: React.FC = () => {
                             <div className="text-[11px] font-semibold text-gray-500">{sortedBlanks.length}개</div>
                         </div>
                         <div className="mt-2.5 flex flex-wrap gap-1.5">
-                            {sortedBlanks.map((blank, index) => (
+                            {visibleBlankTags.map((blank, index) => (
                                 <button
                                     key={blank.id}
                                     type="button"
@@ -1078,6 +1090,15 @@ const ManageLesson: React.FC = () => {
                                     {blank.source === 'manual' ? '박스' : 'OCR'} · {blank.answer || `빈칸 ${index + 1}`}
                                 </button>
                             ))}
+                            {sortedBlanks.length > 6 && (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowAllBlankTags((prev) => !prev)}
+                                    className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 transition hover:bg-blue-100"
+                                >
+                                    {showAllBlankTags ? '접기' : `더보기 +${sortedBlanks.length - visibleBlankTags.length}`}
+                                </button>
+                            )}
                         </div>
                     </div>
 
