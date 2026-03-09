@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, getDoc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { auth, authPersistenceReady, db } from '../lib/firebase';
 import { SystemConfig, InterfaceConfig, UserData } from '../types';
 
@@ -90,11 +90,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                                             class: '',
                                             number: '',
                                         };
-                                        await setDoc(userRef, {
-                                            ...bootstrapUser,
-                                            createdAt: serverTimestamp(),
-                                            lastLogin: serverTimestamp(),
-                                        }, { merge: true });
                                         setUserData(bootstrapUser);
                                     }
                                 } catch (e) {

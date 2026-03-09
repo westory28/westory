@@ -23,6 +23,7 @@ interface SchoolClassOption {
 
 const STUDENTS_PER_PAGE = 50;
 const ADMIN_EMAIL = 'westoria28@gmail.com';
+const KOREAN_NAME_PATTERN = /^[가-힣]{2,4}$/;
 
 const parseGradeValue = (data: any) => {
     const raw = String(data?.grade ?? '').trim();
@@ -56,6 +57,10 @@ const classSortValue = (classValue: string) => {
     if (!Number.isNaN(parsed)) return { numeric: true, value: parsed };
     return { numeric: false, value: classValue };
 };
+
+const normalizeStudentName = (value: unknown) => String(value || '').trim();
+
+const isValidKoreanStudentName = (value: unknown) => KOREAN_NAME_PATTERN.test(normalizeStudentName(value));
 
 const StudentList: React.FC = () => {
     const [students, setStudents] = useState<Student[]>([]);
@@ -124,6 +129,25 @@ const StudentList: React.FC = () => {
                             data.customName ||
                             '',
                         ).trim();
+                    const hasConfirmedKoreanName =
+                        data.customNameConfirmed === true
+                        && isValidKoreanStudentName(resolvedName);
+                    const hasLegacyKoreanName =
+                        !data.customNameConfirmed
+                        && isValidKoreanStudentName(resolvedName)
+                        && (
+                            !!String(data.grade || '').trim()
+                            || !!String(data.class || '').trim()
+                            || !!String(data.number || '').trim()
+                            || !!String(data.studentGrade || '').trim()
+                            || !!String(data.studentClass || '').trim()
+                            || !!String(data.studentNumber || '').trim()
+                        );
+
+                    if (!hasConfirmedKoreanName && !hasLegacyKoreanName) {
+                        return;
+                    }
+
                     list.push({
                         id: d.id,
                         userId: d.id,
