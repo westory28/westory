@@ -102,8 +102,8 @@ const HistoryClassroomIndex: React.FC = () => {
 
     return (
         <div className="mx-auto max-w-6xl px-4 py-8">
-            <div className="mb-8 rounded-3xl bg-white p-6 shadow-sm border border-gray-200">
-                <div className="text-sm font-bold text-orange-500">평가 &gt; 역사교실</div>
+            <div className="mb-8 rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
+                <div className="text-sm font-bold text-orange-500">학습 &gt; 역사교실</div>
                 <h1 className="mt-2 text-3xl font-black text-gray-900">역사교실</h1>
                 <p className="mt-2 text-sm text-gray-600">
                     지도 위 빈칸을 채우고, 정답 보기에서 답안을 골라 배치하세요.

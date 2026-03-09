@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { addDoc, collection, getDoc, getDocs, query, serverTimestamp, where, doc } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, getDocs, query, serverTimestamp, where } from 'firebase/firestore';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../contexts/AuthContext';
 import { db } from '../../../lib/firebase';
@@ -42,7 +42,7 @@ const HistoryClassroomRunner: React.FC = () => {
                 }
                 const loaded = normalizeHistoryClassroomAssignment(snap.id, snap.data());
                 if (loaded.targetStudentUid !== userData.uid) {
-                    throw new Error('이 과제에 접근할 수 없습니다.');
+                    throw new Error('이 과제는 현재 계정에 배정되지 않았습니다.');
                 }
                 if (!loaded.isPublished) {
                     throw new Error('아직 공개되지 않은 과제입니다.');
@@ -90,6 +90,7 @@ const HistoryClassroomRunner: React.FC = () => {
         () => assignment?.pdfPageImages?.find((page) => page.page === currentPage) || null,
         [assignment?.pdfPageImages, currentPage],
     );
+
     const currentBlanks = useMemo(
         () => assignment?.blanks.filter((blank) => blank.page === currentPage) || [],
         [assignment?.blanks, currentPage],
@@ -105,9 +106,9 @@ const HistoryClassroomRunner: React.FC = () => {
         setSubmitting(true);
         try {
             const total = assignment.blanks.length;
-            const score = assignment.blanks.reduce((sum, blank) => {
-                return sum + (answers[blank.id] === blank.answer ? 1 : 0);
-            }, 0);
+            const score = assignment.blanks.reduce((sum, blank) => (
+                sum + (answers[blank.id] === blank.answer ? 1 : 0)
+            ), 0);
 
             await addDoc(collection(db, getSemesterCollectionPath(config, 'history_classroom_results')), {
                 assignmentId: assignment.id,

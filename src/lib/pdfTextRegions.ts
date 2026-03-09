@@ -10,9 +10,11 @@ interface TextSegment {
 }
 
 const hasUsefulLetters = (text: string) => /[\p{L}]/u.test(text);
+const hasVisibleKeywordChars = (text: string) => /[가-힣A-Za-z0-9]/u.test(text);
+const looksCorruptedText = (text: string) => /[?\uFFFD]/u.test(text);
 
 const sanitizeRegionLabel = (value: string) => value
-    .replace(/\s*[→>-].*$/u, '')
+    .replace(/\s*[→-].*$/u, '')
     .replace(/\([^)]*\)/gu, '')
     .replace(/\[[^\]]*\]/gu, '')
     .replace(/[,:;]+$/u, '')
@@ -24,9 +26,10 @@ const isLikelyRegionLabel = (value: string) => {
     if (text.length < 2 || text.length > 14) return false;
     if (/^\d+$/u.test(text)) return false;
     if (!hasUsefulLetters(text)) return false;
+    if (!hasVisibleKeywordChars(text)) return false;
+    if (looksCorruptedText(text)) return false;
     if (/^[^\p{L}\p{N}]+$/u.test(text)) return false;
     if (/[(){}\[\]<>]/u.test(text)) return false;
-    if (/설명|유역|기후|분포|국경|수도|왕조|제국/u.test(text)) return false;
     if (text.split(' ').length > 2) return false;
     return true;
 };

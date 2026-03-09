@@ -56,13 +56,13 @@ export const GOOGLE_MAP_RESOURCE_ID = 'google-maps';
 
 export const DEFAULT_PDF_REGION_TAGS = [
     '하천',
-    '산맥',
+    '평야',
     '지방',
-    '수도',
-    '성',
-    '항구',
+    '반도',
+    '산맥',
+    '고원',
     '비석',
-    '지역명',
+    '지명',
 ] as const;
 
 export const DEFAULT_PDF_ERA_TAGS = [
@@ -77,7 +77,7 @@ export const DEFAULT_PDF_ERA_TAGS = [
 
 export const DEFAULT_PDF_TAG_SECTIONS: PdfTagSection[] = [
     { id: 'era', label: '시대별', tags: [...DEFAULT_PDF_ERA_TAGS] },
-    { id: 'region', label: '지도 관련', tags: [...DEFAULT_PDF_REGION_TAGS] },
+    { id: 'region', label: '지리 관련', tags: [...DEFAULT_PDF_REGION_TAGS] },
 ];
 
 export const DEFAULT_GOOGLE_MAP_RESOURCE: MapResource = {
