@@ -20,6 +20,7 @@ export interface HistoryClassroomAssignment {
     blanks: HistoryClassroomBlank[];
     answerOptions: string[];
     cooldownMinutes: number;
+    passThresholdPercent: number;
     targetGrade: string;
     targetClass: string;
     targetStudentUid: string;
@@ -30,14 +31,25 @@ export interface HistoryClassroomAssignment {
     updatedAt?: unknown;
 }
 
+export type HistoryClassroomResultStatus = 'passed' | 'failed' | 'cancelled';
+
 export interface HistoryClassroomResult {
     id: string;
     assignmentId: string;
+    assignmentTitle?: string;
     uid: string;
     studentName: string;
+    studentGrade?: string;
+    studentClass?: string;
+    studentNumber?: string;
     answers: Record<string, string>;
     score: number;
     total: number;
+    percent: number;
+    passThresholdPercent: number;
+    passed: boolean;
+    status: HistoryClassroomResultStatus;
+    cancellationReason?: string;
     createdAt?: unknown;
 }
 
@@ -66,6 +78,7 @@ export const normalizeHistoryClassroomAssignment = (
         ? raw.answerOptions.map((item) => String(item || '').trim()).filter(Boolean)
         : [],
     cooldownMinutes: Number(raw.cooldownMinutes) || 0,
+    passThresholdPercent: Math.min(100, Math.max(0, Number(raw.passThresholdPercent) || 80)),
     targetGrade: String(raw.targetGrade || '').trim(),
     targetClass: String(raw.targetClass || '').trim(),
     targetStudentUid: String(raw.targetStudentUid || '').trim(),
@@ -74,6 +87,31 @@ export const normalizeHistoryClassroomAssignment = (
     isPublished: raw.isPublished === true,
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
+});
+
+export const normalizeHistoryClassroomResult = (
+    id: string,
+    raw: Partial<HistoryClassroomResult>,
+): HistoryClassroomResult => ({
+    id,
+    assignmentId: String(raw.assignmentId || '').trim(),
+    assignmentTitle: String(raw.assignmentTitle || '').trim(),
+    uid: String(raw.uid || '').trim(),
+    studentName: String(raw.studentName || '').trim(),
+    studentGrade: String(raw.studentGrade || '').trim(),
+    studentClass: String(raw.studentClass || '').trim(),
+    studentNumber: String(raw.studentNumber || '').trim(),
+    answers: raw.answers && typeof raw.answers === 'object' ? raw.answers : {},
+    score: Number(raw.score) || 0,
+    total: Number(raw.total) || 0,
+    percent: Math.min(100, Math.max(0, Number(raw.percent) || 0)),
+    passThresholdPercent: Math.min(100, Math.max(0, Number(raw.passThresholdPercent) || 80)),
+    passed: raw.passed === true,
+    status: raw.status === 'cancelled' || raw.status === 'passed' || raw.status === 'failed'
+        ? raw.status
+        : (raw.passed ? 'passed' : 'failed'),
+    cancellationReason: String(raw.cancellationReason || '').trim(),
+    createdAt: raw.createdAt,
 });
 
 export const buildAnswerOptions = (blanks: HistoryClassroomBlank[]) =>

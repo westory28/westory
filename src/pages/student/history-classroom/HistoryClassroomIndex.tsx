@@ -5,6 +5,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { db } from '../../../lib/firebase';
 import {
     normalizeHistoryClassroomAssignment,
+    normalizeHistoryClassroomResult,
     type HistoryClassroomAssignment,
     type HistoryClassroomResult,
 } from '../../../lib/historyClassroom';
@@ -65,8 +66,7 @@ const HistoryClassroomIndex: React.FC = () => {
 
                 const grouped: Record<string, HistoryClassroomResult[]> = {};
                 resultSnap.docs.forEach((docSnap) => {
-                    const data = docSnap.data() as Omit<HistoryClassroomResult, 'id'>;
-                    const item: HistoryClassroomResult = { id: docSnap.id, ...data };
+                    const item = normalizeHistoryClassroomResult(docSnap.id, docSnap.data());
                     grouped[item.assignmentId] = [...(grouped[item.assignmentId] || []), item];
                 });
                 Object.keys(grouped).forEach((key) => {
@@ -88,12 +88,7 @@ const HistoryClassroomIndex: React.FC = () => {
         const attempts = resultsByAssignment[assignment.id] || [];
         const latest = attempts[0];
         const remainMinutes = formatCooldown(latest?.createdAt, assignment.cooldownMinutes);
-        return {
-            assignment,
-            attemptCount: attempts.length,
-            latest,
-            remainMinutes,
-        };
+        return { assignment, attemptCount: attempts.length, latest, remainMinutes };
     }), [assignments, resultsByAssignment]);
 
     if (loading) {
@@ -105,9 +100,7 @@ const HistoryClassroomIndex: React.FC = () => {
             <div className="mb-8 rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
                 <div className="text-sm font-bold text-orange-500">학습 &gt; 역사교실</div>
                 <h1 className="mt-2 text-3xl font-black text-gray-900">역사교실</h1>
-                <p className="mt-2 text-sm text-gray-600">
-                    지도 위 빈칸을 채우고, 정답 보기에서 답안을 골라 배치하세요.
-                </p>
+                <p className="mt-2 text-sm text-gray-600">지도 위 빈칸을 채우고 기준 점수 이상이면 통과합니다.</p>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -125,9 +118,10 @@ const HistoryClassroomIndex: React.FC = () => {
                         <p className="mt-3 line-clamp-3 text-sm leading-6 text-gray-600">{assignment.description || '설명 없음'}</p>
                         <div className="mt-4 space-y-1 text-xs text-gray-500">
                             <div>배정 학생: {assignment.targetStudentName || '미지정'}</div>
+                            <div>통과 기준: {assignment.passThresholdPercent}% 이상</div>
                             <div>재응시 제한: {assignment.cooldownMinutes > 0 ? `${assignment.cooldownMinutes}분` : '없음'}</div>
                             <div>응시 기록: {attemptCount}회</div>
-                            {latest && <div>최근 점수: {latest.score}/{latest.total}</div>}
+                            {latest && <div>최근 결과: {latest.percent}% · {latest.status === 'passed' ? '통과' : latest.status === 'failed' ? '미통과' : '자동 취소'}</div>}
                         </div>
                         <div className="mt-5">
                             {remainMinutes ? (

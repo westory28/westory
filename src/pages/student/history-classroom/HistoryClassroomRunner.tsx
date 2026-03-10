@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { addDoc, collection, doc, getDoc, getDocs, query, serverTimestamp, where } from 'firebase/firestore';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../contexts/AuthContext';
 import { db } from '../../../lib/firebase';
 import {
     normalizeHistoryClassroomAssignment,
+    normalizeHistoryClassroomResult,
     type HistoryClassroomAssignment,
 } from '../../../lib/historyClassroom';
 import { getSemesterCollectionPath, getSemesterDocPath } from '../../../lib/semesterScope';
@@ -24,22 +25,24 @@ const HistoryClassroomRunner: React.FC = () => {
     const [answers, setAnswers] = useState<Record<string, string>>({});
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
+    const [completed, setCompleted] = useState(false);
     const [error, setError] = useState('');
     const [resultText, setResultText] = useState('');
+    const cancellationInFlightRef = useRef(false);
 
     useEffect(() => {
         const loadAssignment = async () => {
             if (!assignmentId || !userData?.uid) return;
             setLoading(true);
             setError('');
+
             try {
                 let snap = await getDoc(doc(db, getSemesterDocPath(config, 'history_classrooms', assignmentId)));
                 if (!snap.exists()) {
                     snap = await getDoc(doc(db, `history_classrooms/${assignmentId}`));
                 }
-                if (!snap.exists()) {
-                    throw new Error('역사교실 자료를 찾을 수 없습니다.');
-                }
+                if (!snap.exists()) throw new Error('역사교실 자료를 찾을 수 없습니다.');
+
                 const loaded = normalizeHistoryClassroomAssignment(snap.id, snap.data());
                 if (loaded.targetStudentUid !== userData.uid) {
                     throw new Error('이 과제는 현재 계정에 배정되지 않았습니다.');
@@ -62,9 +65,11 @@ const HistoryClassroomRunner: React.FC = () => {
                 }
 
                 const latest = resultSnap.docs
-                    .map((docSnap) => docSnap.data() as { createdAt?: { seconds?: number } })
-                    .sort((a, b) => Number((b.createdAt?.seconds || 0)) - Number((a.createdAt?.seconds || 0)))[0];
-                const lastSeconds = Number(latest?.createdAt?.seconds || 0);
+                    .map((docSnap) => normalizeHistoryClassroomResult(docSnap.id, docSnap.data()))
+                    .sort((a, b) => Number((b.createdAt as { seconds?: number } | undefined)?.seconds || 0)
+                        - Number((a.createdAt as { seconds?: number } | undefined)?.seconds || 0))[0];
+
+                const lastSeconds = Number((latest?.createdAt as { seconds?: number } | undefined)?.seconds || 0);
                 if (lastSeconds && loaded.cooldownMinutes > 0) {
                     const availableAt = lastSeconds * 1000 + loaded.cooldownMinutes * 60 * 1000;
                     if (availableAt > Date.now()) {
@@ -96,6 +101,78 @@ const HistoryClassroomRunner: React.FC = () => {
         [assignment?.blanks, currentPage],
     );
 
+    const saveResult = async (options: { status: 'passed' | 'failed' | 'cancelled'; cancellationReason?: string }) => {
+        if (!assignment || !userData) return;
+        const total = assignment.blanks.length;
+        const score = assignment.blanks.reduce((sum, blank) => sum + (answers[blank.id] === blank.answer ? 1 : 0), 0);
+        const percent = total > 0 ? Math.round((score / total) * 100) : 0;
+        const passed = options.status === 'cancelled' ? false : percent >= assignment.passThresholdPercent;
+        const status = options.status === 'cancelled' ? 'cancelled' : (passed ? 'passed' : 'failed');
+
+        await addDoc(collection(db, getSemesterCollectionPath(config, 'history_classroom_results')), {
+            assignmentId: assignment.id,
+            assignmentTitle: assignment.title,
+            uid: userData.uid,
+            studentName: userData.name || '',
+            studentGrade: String(userData.grade || ''),
+            studentClass: String(userData.class || ''),
+            studentNumber: String(userData.number || ''),
+            answers,
+            score,
+            total,
+            percent,
+            passThresholdPercent: assignment.passThresholdPercent,
+            passed,
+            status,
+            cancellationReason: options.cancellationReason || '',
+            createdAt: serverTimestamp(),
+        });
+
+        return { score, total, percent, status, passed };
+    };
+
+    const handleForcedCancel = async (reason: string) => {
+        if (!assignment || !userData || completed || submitting || cancellationInFlightRef.current) return;
+        cancellationInFlightRef.current = true;
+        try {
+            await saveResult({ status: 'cancelled', cancellationReason: reason });
+            setCompleted(true);
+            setResultText('화면 이탈로 응시가 자동 취소되었습니다. 재응시 제한이 시작됩니다.');
+            navigate('/student/history-classroom', { replace: true });
+        } catch (cancelError) {
+            console.error('Failed to save cancelled attempt:', cancelError);
+        }
+    };
+
+    useEffect(() => {
+        if (!assignment || completed) return undefined;
+
+        const handleVisibility = () => {
+            if (document.visibilityState === 'hidden') {
+                void handleForcedCancel('visibility-hidden');
+            }
+        };
+        const handlePageHide = () => {
+            void handleForcedCancel('pagehide');
+        };
+        const handleBlur = () => {
+            window.setTimeout(() => {
+                if (!document.hasFocus()) {
+                    void handleForcedCancel('window-blur');
+                }
+            }, 0);
+        };
+
+        document.addEventListener('visibilitychange', handleVisibility);
+        window.addEventListener('pagehide', handlePageHide);
+        window.addEventListener('blur', handleBlur);
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibility);
+            window.removeEventListener('pagehide', handlePageHide);
+            window.removeEventListener('blur', handleBlur);
+        };
+    }, [assignment, completed, submitting]);
+
     const placeAnswer = (blankId: string) => {
         if (!selectedAnswer) return;
         setAnswers((prev) => ({ ...prev, [blankId]: selectedAnswer }));
@@ -105,22 +182,11 @@ const HistoryClassroomRunner: React.FC = () => {
         if (!assignment || !userData) return;
         setSubmitting(true);
         try {
-            const total = assignment.blanks.length;
-            const score = assignment.blanks.reduce((sum, blank) => (
-                sum + (answers[blank.id] === blank.answer ? 1 : 0)
-            ), 0);
-
-            await addDoc(collection(db, getSemesterCollectionPath(config, 'history_classroom_results')), {
-                assignmentId: assignment.id,
-                uid: userData.uid,
-                studentName: userData.name || '',
-                answers,
-                score,
-                total,
-                createdAt: serverTimestamp(),
-            });
-
-            setResultText(`제출 완료: ${score}/${total}`);
+            const result = await saveResult({ status: 'failed' });
+            setCompleted(true);
+            if (!result) return;
+            const statusLabel = result.status === 'passed' ? '통과' : '미통과';
+            setResultText(`제출 완료: ${result.score}/${result.total} (${result.percent}%) · ${statusLabel}`);
         } catch (submitError) {
             console.error(submitError);
             setResultText('제출에 실패했습니다.');
@@ -151,6 +217,7 @@ const HistoryClassroomRunner: React.FC = () => {
                         <div className="text-sm font-bold text-orange-500">역사교실</div>
                         <h1 className="mt-1 text-3xl font-black text-gray-900">{assignment.title}</h1>
                         <p className="mt-2 text-sm text-gray-600">{assignment.description}</p>
+                        <p className="mt-2 text-xs font-bold text-gray-500">통과 기준: {assignment.passThresholdPercent}% 이상</p>
                     </div>
                     <button
                         type="button"
@@ -233,9 +300,7 @@ const HistoryClassroomRunner: React.FC = () => {
                                         type="button"
                                         onClick={() => setSelectedAnswer(option)}
                                         className={`rounded-full px-3 py-2 text-sm font-bold transition ${
-                                            selectedAnswer === option
-                                                ? 'bg-orange-500 text-white'
-                                                : 'bg-gray-100 text-gray-700 hover:bg-orange-100'
+                                            selectedAnswer === option ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-orange-100'
                                         }`}
                                     >
                                         {option}
@@ -246,19 +311,19 @@ const HistoryClassroomRunner: React.FC = () => {
                     </div>
 
                     <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
-                        <div className="text-sm font-bold text-gray-700">풀이 안내</div>
+                        <div className="text-sm font-bold text-gray-700">안내</div>
                         <ul className="mt-3 space-y-2 text-sm leading-6 text-gray-600">
                             <li>1. 오른쪽 정답 보기에서 답 하나를 선택합니다.</li>
-                            <li>2. 지도 위 빈칸을 눌러 답을 배치합니다.</li>
-                            <li>3. 모든 빈칸을 채운 뒤 제출합니다.</li>
+                            <li>2. 지도 위 빈칸을 눌러 답을 채웁니다.</li>
+                            <li>3. 다른 창 전환, 홈 이동, 멀티태스킹 시 자동 취소됩니다.</li>
                         </ul>
                         <button
                             type="button"
                             onClick={() => void submitAnswers()}
-                            disabled={submitting}
+                            disabled={submitting || completed}
                             className="mt-5 w-full rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60"
                         >
-                            {submitting ? '제출 중...' : '제출하기'}
+                            {submitting ? '제출 중...' : completed ? '제출 완료' : '제출하기'}
                         </button>
                         {resultText && <div className="mt-3 text-sm font-bold text-blue-700">{resultText}</div>}
                     </div>
