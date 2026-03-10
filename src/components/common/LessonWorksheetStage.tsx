@@ -263,9 +263,9 @@ const getStudentBlankFontSize = (
     contentLength: number,
 ) => {
     const safeLength = Math.max(1, contentLength);
-    const widthBased = Math.max(1, pixelWidth - 4) / (safeLength * 0.96);
-    const heightBased = Math.max(1, pixelHeight - 2) * 0.72;
-    return Math.max(7, Math.min(17, widthBased, heightBased));
+    const widthBased = Math.max(1, pixelWidth - 1) / (safeLength * 0.8);
+    const heightBased = Math.max(1, pixelHeight - 1) * 0.82;
+    return Math.max(8, Math.min(19, widthBased, heightBased));
 };
 
 const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
@@ -618,8 +618,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                 const activeValue = (studentAnswer?.value || '').trim();
                                 const sizingText = activeValue || placeholder || blank.answer || '';
                                 const fontSize = getStudentBlankFontSize(pixelWidth, pixelHeight, sizingText.length);
-                                const horizontalPadding = pixelWidth < 52 ? 1.5 : pixelWidth < 80 ? 3 : 4;
-                                const verticalPadding = pixelHeight < 24 ? 0.5 : 1;
+                                const horizontalPadding = pixelWidth < 52 ? 0.5 : pixelWidth < 80 ? 1 : 1.5;
+                                const verticalPadding = pixelHeight < 24 ? 0 : 0.5;
 
                                 return (
                                     <div
@@ -656,6 +656,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                             style={{
                                                 fontSize: `${fontSize}px`,
                                                 lineHeight: 1,
+                                                letterSpacing: '-0.02em',
                                                 paddingLeft: `${horizontalPadding}px`,
                                                 paddingRight: `${horizontalPadding}px`,
                                                 paddingTop: `${verticalPadding}px`,
