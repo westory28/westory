@@ -9,6 +9,8 @@ interface Log {
     id: string;
     timestamp: any;
     uid?: string;
+    unitId?: string;
+    category?: string;
     gradeClass?: string;
     studentName: string;
     email?: string;
@@ -47,6 +49,28 @@ const normalizeNumber = (value: unknown): string => {
 };
 
 const toText = (value: unknown): string => String(value ?? '').trim();
+
+const getTimestampSeconds = (value: any): number => {
+    if (typeof value?.seconds === 'number') return value.seconds;
+    if (typeof value?.toDate === 'function') {
+        const date = value.toDate();
+        if (date instanceof Date && !Number.isNaN(date.getTime())) {
+            return Math.floor(date.getTime() / 1000);
+        }
+    }
+    return 0;
+};
+
+const buildDedupKey = (log: Log): string => {
+    const identity = toText(log.uid) || toText(log.email) || `${toText(log.classOnly)}-${toText(log.studentNumber)}-${toText(log.studentName)}`;
+    return [
+        identity,
+        toText(log.unitId),
+        toText(log.category),
+        String(getTimestampSeconds(log.timestamp)),
+        String(log.score),
+    ].join('::');
+};
 
 const QuizLogTab: React.FC = () => {
     const { config } = useAuth();
@@ -127,6 +151,8 @@ const QuizLogTab: React.FC = () => {
                     id: doc.id,
                     timestamp: d.timestamp,
                     uid,
+                    unitId: toText(d.unitId),
+                    category: toText(d.category),
                     gradeClass: gradeClassRaw,
                     studentName,
                     email,
@@ -177,7 +203,16 @@ const QuizLogTab: React.FC = () => {
                 if (email && !profileByEmail.has(email)) profileByEmail.set(email, profile);
             });
 
-            const list = rawList.map((item) => {
+            const dedupedMap = new Map<string, Log>();
+            rawList.forEach((item) => {
+                const key = buildDedupKey(item);
+                const existing = dedupedMap.get(key);
+                if (!existing || getTimestampSeconds(item.timestamp) >= getTimestampSeconds(existing.timestamp)) {
+                    dedupedMap.set(key, item);
+                }
+            });
+
+            const list = Array.from(dedupedMap.values()).map((item) => {
                 const uidProfile = item.uid ? userByUid.get(item.uid) : undefined;
                 const emailProfile = item.email ? profileByEmail.get(item.email) : undefined;
                 const profile = uidProfile || emailProfile;
@@ -189,6 +224,7 @@ const QuizLogTab: React.FC = () => {
                 };
             });
 
+            list.sort((a, b) => getTimestampSeconds(b.timestamp) - getTimestampSeconds(a.timestamp));
             setLogs(list);
         } catch (e) {
             console.error(e);
