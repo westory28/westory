@@ -3,10 +3,11 @@ import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import listPlugin from '@fullcalendar/list';
-import { CalendarEvent } from '../../../types';
+import { collection, doc, getDoc, getDocs, query, where, writeBatch } from 'firebase/firestore';
 import { useAuth } from '../../../contexts/AuthContext';
 import { db } from '../../../lib/firebase';
-import { collection, doc, getDoc, getDocs, query, where, writeBatch } from 'firebase/firestore';
+import { getScheduleCategoryMeta, useScheduleCategories } from '../../../lib/scheduleCategories';
+import { CalendarEvent } from '../../../types';
 
 interface TeacherCalendarSectionProps {
     events: CalendarEvent[];
@@ -23,36 +24,6 @@ interface TeacherCalendarSectionProps {
 
 type HolidayItem = { title: string; start: string; eventType?: 'holiday' };
 type SchoolOption = { value: string; label: string };
-
-const EVENT_COLOR_MAP: Record<string, string> = {
-    exam: '#ef4444',
-    performance: '#f97316',
-    event: '#10b981',
-    diagnosis: '#3b82f6',
-    formative: '#3b82f6',
-};
-
-const EVENT_LABEL_MAP: Record<string, string> = {
-    holiday: '공휴일',
-    exam: '정기시험',
-    performance: '수행평가',
-    event: '행사',
-    diagnosis: '진단평가',
-    formative: '형성평가',
-};
-
-const getEventTypeLabel = (eventType: unknown) => {
-    const key = String(eventType || '').trim();
-    return EVENT_LABEL_MAP[key] || '일정';
-};
-
-const toExclusiveEnd = (start?: string, end?: string) => {
-    if (!start || !end || end <= start) return undefined;
-    const endDate = new Date(`${end}T00:00:00`);
-    endDate.setDate(endDate.getDate() + 1);
-    const offset = endDate.getTimezoneOffset() * 60000;
-    return new Date(endDate.getTime() - offset).toISOString().split('T')[0];
-};
 
 const DEFAULT_2026_HOLIDAYS: HolidayItem[] = [
     { title: '신정', start: '2026-01-01', eventType: 'holiday' },
@@ -78,10 +49,28 @@ const DEFAULT_2026_HOLIDAYS: HolidayItem[] = [
     { title: '성탄절', start: '2026-12-25', eventType: 'holiday' },
 ];
 
+const toExclusiveEnd = (start?: string, end?: string) => {
+    if (!start || !end || end <= start) return undefined;
+    const endDate = new Date(`${end}T00:00:00`);
+    endDate.setDate(endDate.getDate() + 1);
+    const offset = endDate.getTimezoneOffset() * 60000;
+    return new Date(endDate.getTime() - offset).toISOString().split('T')[0];
+};
+
 const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
-    events, onDateClick, onDateDoubleClick, onEventClick, onAddEvent, onSearchClick, calendarRef, filterClass, onFilterChange, selectedDate,
+    events,
+    onDateClick,
+    onDateDoubleClick,
+    onEventClick,
+    onAddEvent,
+    onSearchClick,
+    calendarRef,
+    filterClass,
+    onFilterChange,
+    selectedDate,
 }) => {
     const { config } = useAuth();
+    const { categories } = useScheduleCategories();
     const [gradeOptions, setGradeOptions] = useState<SchoolOption[]>([
         { value: '1', label: '1학년' },
         { value: '2', label: '2학년' },
@@ -91,24 +80,26 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
         Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}반` }))
     );
 
-    const fcEvents = events.map((e) => ({
-        id: e.id,
-        title: e.title,
-        start: e.start,
-        end: toExclusiveEnd(e.start, e.end),
-        backgroundColor: e.eventType === 'holiday' ? '#ef4444' : (EVENT_COLOR_MAP[e.eventType] || '#6b7280'),
-        borderColor: e.eventType === 'holiday' ? '#ef4444' : (EVENT_COLOR_MAP[e.eventType] || '#6b7280'),
-        textColor: e.eventType === 'holiday' ? '#ffffff' : undefined,
-        classNames: e.eventType === 'holiday' ? ['holiday-text-event'] : [],
-        extendedProps: { ...e },
-    }));
+    const fcEvents = events.map((event) => {
+        const meta = getScheduleCategoryMeta(event.eventType, categories);
+        const isHoliday = event.eventType === 'holiday';
+        return {
+            id: event.id,
+            title: event.title,
+            start: event.start,
+            end: toExclusiveEnd(event.start, event.end),
+            backgroundColor: isHoliday ? '#ef4444' : meta.color,
+            borderColor: isHoliday ? '#ef4444' : meta.color,
+            textColor: isHoliday ? '#ffffff' : undefined,
+            classNames: isHoliday ? ['holiday-text-event'] : [],
+            extendedProps: { ...event },
+        };
+    });
 
     const holidayDateSet = useMemo(() => {
         const set = new Set<string>();
-        events.forEach((eventItem) => {
-            if (eventItem.eventType === 'holiday') {
-                set.add(eventItem.start);
-            }
+        events.forEach((event) => {
+            if (event.eventType === 'holiday') set.add(event.start);
         });
         return set;
     }, [events]);
@@ -172,14 +163,14 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
             const holidays = await loadHolidaySource();
             const batch = writeBatch(db);
 
-            holidaySnap.forEach((snap) => batch.delete(snap.ref));
-            holidays.forEach((h) => {
-                const docId = `holiday_${h.start}_${h.title.replace(/\s+/g, '')}`;
+            holidaySnap.forEach((item) => batch.delete(item.ref));
+            holidays.forEach((holiday) => {
+                const docId = `holiday_${holiday.start}_${holiday.title.replace(/\s+/g, '')}`;
                 const ref = doc(db, path, docId);
                 batch.set(ref, {
-                    title: h.title,
-                    start: h.start,
-                    end: h.start,
+                    title: holiday.title,
+                    start: holiday.start,
+                    end: holiday.start,
                     eventType: 'holiday',
                     targetType: 'common',
                     targetClass: null,
@@ -191,28 +182,28 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
 
             await batch.commit();
             alert(`공휴일 ${holidays.length}건을 적용했습니다.`);
-        } catch (e: any) {
-            console.error(e);
-            alert(`공휴일 적용 실패: ${e.message}`);
+        } catch (error: any) {
+            console.error(error);
+            alert(`공휴일 적용 실패: ${error.message}`);
         }
     };
 
     return (
-        <div className="bg-white rounded-xl shadow-sm p-4 flex flex-col min-h-[500px] md:min-h-0 h-full">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-2 gap-2">
-                <h2 className="text-lg font-bold text-gray-800 whitespace-nowrap">
+        <div className="flex h-full min-h-[500px] flex-col rounded-xl bg-white p-4 shadow-sm md:min-h-0">
+            <div className="mb-2 flex flex-col items-start justify-between gap-2 md:flex-row md:items-center">
+                <h2 className="whitespace-nowrap text-lg font-bold text-gray-800">
                     <i className="far fa-calendar-alt mr-2 text-blue-600"></i>학사 일정
                 </h2>
 
-                <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-                    <button onClick={onSearchClick} className="bg-gray-50 border border-gray-200 text-gray-600 hover:text-blue-600 p-1.5 rounded-lg transition shrink-0" title="검색">
+                <div className="flex w-full flex-wrap items-center gap-2 md:w-auto">
+                    <button onClick={onSearchClick} className="shrink-0 rounded-lg border border-gray-200 bg-gray-50 p-1.5 text-gray-600 transition hover:text-blue-600" title="검색">
                         <i className="fas fa-search"></i>
                     </button>
 
                     <select
                         value={filterClass}
                         onChange={(e) => onFilterChange(e.target.value)}
-                        className="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg p-1.5 outline-none shrink-0 max-w-[100px]"
+                        className="max-w-[120px] shrink-0 rounded-lg border border-gray-200 bg-gray-50 p-1.5 text-sm text-gray-700 outline-none"
                     >
                         <option value="all">전체</option>
                         <option value="common">공통</option>
@@ -221,28 +212,25 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                         ))}
                     </select>
 
-                    <div className="flex items-center gap-1 ml-auto md:ml-2">
-                        <button onClick={onAddEvent} className="bg-blue-600 text-white px-2 py-1.5 rounded-md text-xs font-bold hover:bg-blue-700 shadow-sm transition whitespace-nowrap">
+                    <div className="ml-auto flex items-center gap-1 md:ml-2">
+                        <button onClick={onAddEvent} className="whitespace-nowrap rounded-md bg-blue-600 px-2 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-blue-700">
                             <i className="fas fa-plus"></i> 추가
                         </button>
-                        <button onClick={populateHolidays} className="bg-green-600 text-white px-2 py-1.5 rounded-md hover:bg-green-700 transition shadow-sm text-xs font-bold whitespace-nowrap" title="공휴일 불러오기">
+                        <button onClick={populateHolidays} className="whitespace-nowrap rounded-md bg-green-600 px-2 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-green-700" title="공휴일 불러오기">
                             <i className="fas fa-calendar-check"></i> 공휴일
                         </button>
                     </div>
                 </div>
             </div>
 
-            <div className="flex-1 calendar-wrapper">
+            <div className="calendar-wrapper flex-1">
                 <FullCalendar
                     ref={calendarRef}
                     plugins={[dayGridPlugin, interactionPlugin, listPlugin]}
                     initialView="dayGridMonth"
                     locale="ko"
                     headerToolbar={{ left: 'prev,next today', center: 'title', right: 'dayGridMonth,listMonth' }}
-                    buttonText={{
-                        dayGridMonth: '달력',
-                        listMonth: '목록',
-                    }}
+                    buttonText={{ dayGridMonth: '달력', listMonth: '목록' }}
                     events={fcEvents}
                     dateClick={(arg) => onDateClick(arg.dateStr)}
                     dayCellDidMount={(arg) => {
@@ -255,11 +243,10 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                     eventClick={(arg) => onEventClick(arg.event.extendedProps as CalendarEvent)}
                     eventDidMount={(arg) => {
                         if (arg.view.type !== 'listMonth') return;
-                        const label = getEventTypeLabel(arg.event.extendedProps?.eventType);
+                        const meta = getScheduleCategoryMeta(arg.event.extendedProps?.eventType, categories);
+                        const label = arg.event.extendedProps?.eventType === 'holiday' ? '공휴일' : `${meta.emoji} ${meta.label}`;
                         const timeCell = arg.el.querySelector('.fc-list-event-time');
-                        if (timeCell) {
-                            timeCell.textContent = `${label} |`;
-                        }
+                        if (timeCell) timeCell.textContent = `${label} |`;
                     }}
                     eventContent={(arg) => {
                         const isHoliday = arg.event.extendedProps?.eventType === 'holiday';
@@ -276,10 +263,7 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
 
                         if (arg.view.type !== 'dayGridMonth') return undefined;
                         return (
-                            <div
-                                className={`fc-segment-title ${isHoliday ? 'holiday-segment-title' : ''}`}
-                                title={safeTitle}
-                            >
+                            <div className={`fc-segment-title ${isHoliday ? 'holiday-segment-title' : ''}`} title={safeTitle}>
                                 {safeTitle}
                             </div>
                         );

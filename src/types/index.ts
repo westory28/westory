@@ -36,7 +36,7 @@ export interface CalendarEvent {
     description?: string;
     start: string;
     end?: string;
-    eventType: 'exam' | 'performance' | 'event' | 'diagnosis' | 'formative' | 'holiday';
+    eventType: string;
     targetType: 'all' | 'common' | 'class';
     targetClass?: string;
     dDay?: number;

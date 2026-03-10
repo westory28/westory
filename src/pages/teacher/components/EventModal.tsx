@@ -2,6 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { collection, deleteDoc, doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { useAuth } from '../../../contexts/AuthContext';
 import { db } from '../../../lib/firebase';
+import {
+    COLOR_EMOJI_OPTIONS,
+    DEFAULT_SCHEDULE_CATEGORIES,
+    ScheduleCategory,
+    createScheduleCategoryKey,
+    resolveScheduleCategories,
+    useScheduleCategories,
+} from '../../../lib/scheduleCategories';
 import { CalendarEvent } from '../../../types';
 
 interface EventModalProps {
@@ -16,12 +24,14 @@ type SchoolOption = { value: string; label: string };
 
 const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onSave, initialDate }) => {
     const { config } = useAuth();
+    const { categories } = useScheduleCategories();
+
     const [title, setTitle] = useState('');
     const [start, setStart] = useState('');
     const [end, setEnd] = useState('');
     const [endEnabled, setEndEnabled] = useState(false);
     const [description, setDescription] = useState('');
-    const [eventType, setEventType] = useState('exam');
+    const [eventType, setEventType] = useState(DEFAULT_SCHEDULE_CATEGORIES[0].key);
     const [targetType, setTargetType] = useState('common');
     const [targetGrade, setTargetGrade] = useState('1');
     const [targetClass, setTargetClass] = useState('1');
@@ -34,6 +44,11 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
         Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}반` }))
     );
     const [loading, setLoading] = useState(false);
+    const [savingCategories, setSavingCategories] = useState(false);
+    const [categoryDrafts, setCategoryDrafts] = useState<ScheduleCategory[]>(DEFAULT_SCHEDULE_CATEGORIES);
+    const [newCategoryLabel, setNewCategoryLabel] = useState('');
+    const [newCategoryColor, setNewCategoryColor] = useState('#0ea5e9');
+    const [newCategoryEmoji, setNewCategoryEmoji] = useState('🔵');
 
     useEffect(() => {
         const loadSchoolConfig = async () => {
@@ -60,6 +75,16 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
     }, []);
 
     useEffect(() => {
+        setCategoryDrafts(categories);
+    }, [categories]);
+
+    useEffect(() => {
+        if (!categoryDrafts.some((item) => item.key === eventType)) {
+            setEventType(categoryDrafts[0]?.key || DEFAULT_SCHEDULE_CATEGORIES[0].key);
+        }
+    }, [categoryDrafts, eventType]);
+
+    useEffect(() => {
         if (!isOpen) return;
 
         if (eventData) {
@@ -68,7 +93,7 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
             setEnd(eventData.end || '');
             setEndEnabled(Boolean(eventData.end && eventData.end !== eventData.start));
             setDescription(eventData.description || '');
-            setEventType(eventData.eventType || 'exam');
+            setEventType(eventData.eventType || categories[0]?.key || DEFAULT_SCHEDULE_CATEGORIES[0].key);
             setTargetType(eventData.targetType || 'common');
             const [g, c] = (eventData.targetClass || '1-1').split('-');
             setTargetGrade(g || '1');
@@ -81,32 +106,95 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
         setEnd('');
         setEndEnabled(false);
         setDescription('');
-        setEventType('exam');
+        setEventType(categories[0]?.key || DEFAULT_SCHEDULE_CATEGORIES[0].key);
         setTargetType('common');
         setTargetGrade(gradeOptions[0]?.value || '1');
         setTargetClass(classOptions[0]?.value || '1');
-    }, [isOpen, eventData, initialDate, gradeOptions, classOptions]);
+    }, [isOpen, eventData, initialDate, gradeOptions, classOptions, categories]);
 
     useEffect(() => {
-        if (eventType !== 'exam' || endEnabled) return;
+        const category = categories.find((item) => item.key === eventType);
+        if (category?.key !== 'exam' || endEnabled) return;
         setEndEnabled(true);
-        if (!end && start) {
-            setEnd(start);
-        }
-    }, [eventType, endEnabled, end, start]);
+        if (!end && start) setEnd(start);
+    }, [categories, eventType, endEnabled, end, start]);
 
     if (!isOpen) return null;
+
+    const handleCategoryDraftChange = (key: string, patch: Partial<ScheduleCategory>) => {
+        setCategoryDrafts((prev) => prev.map((item) => (
+            item.key === key ? { ...item, ...patch } : item
+        )));
+    };
+
+    const handleAddCategory = () => {
+        const label = newCategoryLabel.trim();
+        if (!label) {
+            alert('새 일정 분류 이름을 입력해주세요.');
+            return;
+        }
+
+        const nextKey = createScheduleCategoryKey(label);
+        const nextCategory: ScheduleCategory = {
+            key: nextKey,
+            label,
+            color: newCategoryColor,
+            emoji: newCategoryEmoji,
+            order: categoryDrafts.length,
+        };
+
+        setCategoryDrafts((prev) => [...prev, nextCategory]);
+        setEventType(nextKey);
+        setNewCategoryLabel('');
+        setNewCategoryColor('#0ea5e9');
+        setNewCategoryEmoji('🔵');
+    };
+
+    const persistCategoryDrafts = async () => {
+        const items = resolveScheduleCategories(categoryDrafts).map((item, index) => ({
+            key: item.key,
+            label: item.label.trim(),
+            color: item.color,
+            emoji: item.emoji,
+            order: index,
+        }));
+
+        if (items.some((item) => !item.label)) {
+            alert('분류 이름이 비어 있으면 저장할 수 없습니다.');
+            return;
+        }
+
+        await setDoc(doc(db, 'site_settings', 'schedule_categories'), {
+            items,
+            updatedAt: serverTimestamp(),
+        }, { merge: true });
+    };
+
+    const handleSaveCategories = async () => {
+        setSavingCategories(true);
+        try {
+            await persistCategoryDrafts();
+        } catch (error) {
+            console.error('Error saving schedule categories:', error);
+            alert('일정 분류 저장에 실패했습니다.');
+        } finally {
+            setSavingCategories(false);
+        }
+    };
 
     const handleSave = async () => {
         if (!config || !title.trim() || !start) return;
         setLoading(true);
 
         try {
+            if (!categories.some((item) => item.key === eventType)) {
+                await persistCategoryDrafts();
+            }
             const path = `years/${config.year}/semesters/${config.semester}/calendar`;
             const docRef = eventData ? doc(db, path, eventData.id) : doc(collection(db, path));
             const finalEnd = endEnabled ? (end || start) : start;
 
-            const data: any = {
+            const data: Record<string, unknown> = {
                 title: title.trim(),
                 start,
                 end: finalEnd,
@@ -117,23 +205,21 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
                 updatedAt: serverTimestamp(),
             };
 
-            if (!eventData) {
-                data.createdAt = serverTimestamp();
-            }
+            if (!eventData) data.createdAt = serverTimestamp();
 
             await setDoc(docRef, data, { merge: true });
             onSave();
             onClose();
         } catch (error) {
             console.error('Error saving event:', error);
-            alert('일정 저장 실패');
+            alert('일정 저장에 실패했습니다.');
         } finally {
             setLoading(false);
         }
     };
 
     const handleDelete = async () => {
-        if (!eventData || !config || !confirm('정말 삭제하시겠습니까?')) return;
+        if (!eventData || !config || !confirm('이 일정을 삭제하시겠습니까?')) return;
         setLoading(true);
         try {
             const path = `years/${config.year}/semesters/${config.semester}/calendar`;
@@ -142,61 +228,60 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
             onClose();
         } catch (error) {
             console.error('Error deleting event:', error);
-            alert('일정 삭제 실패');
+            alert('일정 삭제에 실패했습니다.');
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-[60] flex items-center justify-center" onClick={onClose}>
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-4 md:p-6 m-4" onClick={(e) => e.stopPropagation()}>
-                <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-xl font-bold text-gray-800"><i className="fas fa-edit text-blue-500 mr-2"></i>일정 등록</h3>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50" onClick={onClose}>
+            <div className="m-4 w-full max-w-2xl rounded-xl bg-white p-4 shadow-2xl md:p-6" onClick={(e) => e.stopPropagation()}>
+                <div className="mb-6 flex items-center justify-between">
+                    <h3 className="text-xl font-bold text-gray-800">
+                        <i className="fas fa-edit mr-2 text-blue-500"></i>
+                        {eventData ? '일정 수정' : '일정 등록'}
+                    </h3>
+                    <button onClick={onClose} className="text-gray-400 transition hover:text-gray-600">
                         <i className="fas fa-times fa-lg"></i>
                     </button>
                 </div>
 
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">일정 제목</label>
+                        <label className="mb-1 block text-sm font-bold text-gray-700">일정 제목</label>
                         <input
                             type="text"
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
-                            className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                            className="w-full rounded-lg border border-gray-300 p-2.5 outline-none focus:ring-2 focus:ring-blue-500"
                             placeholder="예: 국사 수행평가"
                         />
                     </div>
 
                     <div className={`grid ${endEnabled ? 'grid-cols-2' : 'grid-cols-[minmax(0,1fr)_64px]'} gap-1.5 items-end overflow-hidden`}>
                         <div className="min-w-0 overflow-hidden">
-                            <label className="block text-[11px] md:text-sm font-bold text-gray-700 mb-1">시작 날짜</label>
+                            <label className="mb-1 block text-[11px] font-bold text-gray-700 md:text-sm">시작 날짜</label>
                             <input
                                 type="date"
                                 value={start}
                                 onChange={(e) => {
                                     const nextStart = e.target.value;
                                     setStart(nextStart);
-                                    if (endEnabled && !end) {
-                                        setEnd(nextStart);
-                                    }
+                                    if (endEnabled && !end) setEnd(nextStart);
                                 }}
-                                className="block w-full max-w-full min-w-0 border border-gray-300 rounded-lg p-1.5 text-[10px] md:text-sm md:p-2.5 outline-none"
-                                style={{ minWidth: 0 }}
+                                className="block w-full min-w-0 max-w-full rounded-lg border border-gray-300 p-1.5 text-[10px] outline-none md:p-2.5 md:text-sm"
                             />
                         </div>
                         <div className="min-w-0 overflow-hidden">
-                            <label className="block text-[10px] md:text-xs font-bold text-gray-500 mb-1">{endEnabled ? '종료 날짜' : '종료'}</label>
+                            <label className="mb-1 block text-[10px] font-bold text-gray-500 md:text-xs">{endEnabled ? '종료 날짜' : '종료'}</label>
                             {endEnabled ? (
                                 <div className="flex items-center gap-1">
                                     <input
                                         type="date"
                                         value={end}
                                         onChange={(e) => setEnd(e.target.value)}
-                                        className="block w-full max-w-full min-w-0 border border-gray-300 rounded-lg p-1.5 text-[10px] md:text-sm md:p-2.5 outline-none"
-                                        style={{ minWidth: 0 }}
+                                        className="block w-full min-w-0 max-w-full rounded-lg border border-gray-300 p-1.5 text-[10px] outline-none md:p-2.5 md:text-sm"
                                     />
                                     {eventType !== 'exam' && (
                                         <button
@@ -205,7 +290,7 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
                                                 setEndEnabled(false);
                                                 setEnd('');
                                             }}
-                                            className="h-8 w-8 md:h-9 md:w-9 shrink-0 rounded-lg border border-gray-300 text-gray-500 hover:text-gray-700"
+                                            className="h-8 w-8 shrink-0 rounded-lg border border-gray-300 text-gray-500 hover:text-gray-700 md:h-9 md:w-9"
                                             aria-label="종료 날짜 비활성화"
                                         >
                                             <i className="fas fa-times text-xs"></i>
@@ -219,7 +304,7 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
                                         setEndEnabled(true);
                                         setEnd((prev) => prev || start);
                                     }}
-                                    className="w-full border border-gray-300 rounded-lg px-2 py-2 text-[11px] font-bold text-gray-600 hover:bg-gray-50"
+                                    className="w-full rounded-lg border border-gray-300 px-2 py-2 text-[11px] font-bold text-gray-600 hover:bg-gray-50"
                                 >
                                     종료+
                                 </button>
@@ -228,44 +313,121 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
                     </div>
 
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">일정 종류</label>
+                        <label className="mb-1 block text-sm font-bold text-gray-700">일정 분류</label>
                         <select
                             value={eventType}
                             onChange={(e) => setEventType(e.target.value)}
-                            className="w-full border border-gray-300 rounded-lg p-2.5 outline-none font-bold"
+                            className="w-full rounded-lg border border-gray-300 p-2.5 font-bold outline-none"
                         >
-                            <option value="exam">🔴 정기 시험</option>
-                            <option value="performance">🟠 수행평가</option>
-                            <option value="event">🟢 행사</option>
-                            <option value="diagnosis">🔵 진단평가</option>
-                            <option value="formative">🔵 형성평가</option>
+                            {categoryDrafts.map((category) => (
+                                <option key={category.key} value={category.key}>
+                                    {`${category.emoji} ${category.label}`}
+                                </option>
+                            ))}
                         </select>
                     </div>
 
+                    <div className="space-y-3 rounded-xl border border-blue-100 bg-blue-50/70 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                            <div>
+                                <p className="text-sm font-bold text-gray-800">분류 편집</p>
+                                <p className="text-xs text-gray-500">새 분류를 추가하고, 이름/색상/동그라미 이모지를 바로 수정할 수 있습니다.</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleSaveCategories}
+                                disabled={savingCategories}
+                                className="shrink-0 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                            >
+                                {savingCategories ? '저장 중...' : '분류 저장'}
+                            </button>
+                        </div>
+
+                        <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+                            {categoryDrafts.map((category) => (
+                                <div key={category.key} className="grid grid-cols-[minmax(0,1fr)_74px_92px] items-center gap-2 rounded-lg border border-blue-100 bg-white p-2">
+                                    <input
+                                        type="text"
+                                        value={category.label}
+                                        onChange={(e) => handleCategoryDraftChange(category.key, { label: e.target.value })}
+                                        className="min-w-0 rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold outline-none"
+                                    />
+                                    <select
+                                        value={category.emoji}
+                                        onChange={(e) => handleCategoryDraftChange(category.key, { emoji: e.target.value })}
+                                        className="rounded-lg border border-gray-300 px-2 py-2 text-sm outline-none"
+                                    >
+                                        {COLOR_EMOJI_OPTIONS.map((emoji) => (
+                                            <option key={emoji} value={emoji}>{emoji}</option>
+                                        ))}
+                                    </select>
+                                    <input
+                                        type="color"
+                                        value={category.color}
+                                        onChange={(e) => handleCategoryDraftChange(category.key, { color: e.target.value })}
+                                        className="h-10 w-full cursor-pointer rounded-lg border border-gray-300 bg-white p-1"
+                                    />
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="grid grid-cols-[minmax(0,1fr)_74px_92px_auto] items-center gap-2">
+                            <input
+                                type="text"
+                                value={newCategoryLabel}
+                                onChange={(e) => setNewCategoryLabel(e.target.value)}
+                                placeholder="새 분류 이름"
+                                className="min-w-0 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none"
+                            />
+                            <select
+                                value={newCategoryEmoji}
+                                onChange={(e) => setNewCategoryEmoji(e.target.value)}
+                                className="rounded-lg border border-gray-300 px-2 py-2 text-sm outline-none"
+                            >
+                                {COLOR_EMOJI_OPTIONS.map((emoji) => (
+                                    <option key={emoji} value={emoji}>{emoji}</option>
+                                ))}
+                            </select>
+                            <input
+                                type="color"
+                                value={newCategoryColor}
+                                onChange={(e) => setNewCategoryColor(e.target.value)}
+                                className="h-10 w-full cursor-pointer rounded-lg border border-gray-300 bg-white p-1"
+                            />
+                            <button
+                                type="button"
+                                onClick={handleAddCategory}
+                                className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100"
+                            >
+                                추가
+                            </button>
+                        </div>
+                    </div>
+
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-2">대상 선택</label>
-                        <div className="flex items-center space-x-4 mb-2">
-                            <label className="flex items-center cursor-pointer">
+                        <label className="mb-2 block text-sm font-bold text-gray-700">대상 선택</label>
+                        <div className="mb-2 flex items-center space-x-4">
+                            <label className="flex cursor-pointer items-center">
                                 <input
                                     type="radio"
                                     name="eventTargetType"
                                     value="common"
                                     checked={targetType === 'common'}
                                     onChange={() => setTargetType('common')}
-                                    className="w-4 h-4 text-blue-600"
+                                    className="h-4 w-4 text-blue-600"
                                 />
                                 <span className="ml-2 text-sm font-bold text-gray-700">전체 공통</span>
                             </label>
-                            <label className="flex items-center cursor-pointer">
+                            <label className="flex cursor-pointer items-center">
                                 <input
                                     type="radio"
                                     name="eventTargetType"
                                     value="class"
                                     checked={targetType === 'class'}
                                     onChange={() => setTargetType('class')}
-                                    className="w-4 h-4 text-blue-600"
+                                    className="h-4 w-4 text-blue-600"
                                 />
-                                <span className="ml-2 text-sm font-bold text-gray-700">반별 선택</span>
+                                <span className="ml-2 text-sm font-bold text-gray-700">반별 지정</span>
                             </label>
                         </div>
 
@@ -274,7 +436,7 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
                                 value={targetGrade}
                                 onChange={(e) => setTargetGrade(e.target.value)}
                                 disabled={targetType !== 'class'}
-                                className="w-1/3 border border-gray-300 rounded-lg p-2.5 outline-none bg-gray-50 transition font-bold text-center disabled:opacity-50"
+                                className="w-1/3 rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-center font-bold outline-none transition disabled:opacity-50"
                             >
                                 {gradeOptions.map((gradeOpt) => (
                                     <option key={gradeOpt.value} value={gradeOpt.value}>{gradeOpt.label}</option>
@@ -284,7 +446,7 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
                                 value={targetClass}
                                 onChange={(e) => setTargetClass(e.target.value)}
                                 disabled={targetType !== 'class'}
-                                className="w-2/3 border border-gray-300 rounded-lg p-2.5 outline-none bg-gray-50 transition font-bold disabled:opacity-50"
+                                className="w-2/3 rounded-lg border border-gray-300 bg-gray-50 p-2.5 font-bold outline-none transition disabled:opacity-50"
                             >
                                 {classOptions.map((classOpt) => (
                                     <option key={classOpt.value} value={classOpt.value}>{classOpt.label}</option>
@@ -294,24 +456,24 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
                     </div>
 
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">상세 내용 (선택)</label>
+                        <label className="mb-1 block text-sm font-bold text-gray-700">상세 내용 (선택)</label>
                         <textarea
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
                             rows={3}
-                            className="w-full border border-gray-300 rounded-lg p-2.5 outline-none resize-none"
+                            className="w-full resize-none rounded-lg border border-gray-300 p-2.5 outline-none"
                             placeholder="일정에 대한 상세 설명을 입력하세요."
                         ></textarea>
                     </div>
                 </div>
 
-                <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-gray-100">
+                <div className="mt-6 flex justify-end gap-2 border-t border-gray-100 pt-4">
                     {eventData && (
                         <button
                             type="button"
                             onClick={handleDelete}
                             disabled={loading}
-                            className="px-4 py-2 bg-red-100 text-red-600 rounded-lg font-bold hover:bg-red-200 transition"
+                            className="rounded-lg bg-red-100 px-4 py-2 font-bold text-red-600 transition hover:bg-red-200"
                         >
                             삭제
                         </button>
@@ -319,7 +481,7 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
                     <button
                         type="button"
                         onClick={onClose}
-                        className="px-5 py-2 bg-gray-100 text-gray-600 rounded-lg font-bold hover:bg-gray-200 transition"
+                        className="rounded-lg bg-gray-100 px-5 py-2 font-bold text-gray-600 transition hover:bg-gray-200"
                     >
                         취소
                     </button>
@@ -327,7 +489,7 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
                         type="button"
                         onClick={handleSave}
                         disabled={loading}
-                        className="px-5 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 shadow-md transition transform active:scale-95 disabled:opacity-50"
+                        className="rounded-lg bg-blue-600 px-5 py-2 font-bold text-white shadow-md transition active:scale-95 hover:bg-blue-700 disabled:opacity-50"
                     >
                         {loading ? '저장 중...' : '저장'}
                     </button>

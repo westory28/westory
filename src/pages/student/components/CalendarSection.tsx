@@ -3,30 +3,8 @@ import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import listPlugin from '@fullcalendar/list';
+import { getScheduleCategoryMeta, useScheduleCategories } from '../../../lib/scheduleCategories';
 import { CalendarEvent } from '../../../types';
-// import '@fullcalendar/react/dist/vdom'; // Not needed for v6+
-
-const EVENT_COLOR_MAP: Record<string, string> = {
-    exam: '#ef4444',
-    performance: '#f97316',
-    event: '#10b981',
-    diagnosis: '#3b82f6',
-    formative: '#3b82f6',
-};
-
-const EVENT_LABEL_MAP: Record<string, string> = {
-    holiday: '공휴일',
-    exam: '정기시험',
-    performance: '수행평가',
-    event: '행사',
-    diagnosis: '진단평가',
-    formative: '형성평가',
-};
-
-const getEventTypeLabel = (eventType: unknown) => {
-    const key = String(eventType || '').trim();
-    return EVENT_LABEL_MAP[key] || '일정';
-};
 
 const toExclusiveEnd = (start?: string, end?: string) => {
     if (!start || !end || end <= start) return undefined;
@@ -53,30 +31,29 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
     calendarRef,
     selectedDate,
 }) => {
+    const { categories } = useScheduleCategories();
 
-    // Convert logic for holidays to classNames or verify events structure
-    // Since we pass pre-processed events from Dashboard, we can just use them.
-    // However, FullCalendar events prop expects specific format.
-    // We map our CalendarEvent to FullCalendar event object.
+    const fcEvents = events.map((event) => {
+        const meta = getScheduleCategoryMeta(event.eventType, categories);
+        const isHoliday = event.eventType === 'holiday';
 
-    const fcEvents = events.map(e => ({
-        id: e.id,
-        title: e.title,
-        start: e.start,
-        end: toExclusiveEnd(e.start, e.end),
-        backgroundColor: e.eventType === 'holiday' ? '#ef4444' : (EVENT_COLOR_MAP[e.eventType] || '#6b7280'),
-        borderColor: e.eventType === 'holiday' ? '#ef4444' : (EVENT_COLOR_MAP[e.eventType] || '#6b7280'),
-        textColor: e.eventType === 'holiday' ? '#ffffff' : undefined,
-        classNames: e.eventType === 'holiday' ? ['holiday-text-event'] : [],
-        extendedProps: { ...e }
-    }));
+        return {
+            id: event.id,
+            title: event.title,
+            start: event.start,
+            end: toExclusiveEnd(event.start, event.end),
+            backgroundColor: isHoliday ? '#ef4444' : meta.color,
+            borderColor: isHoliday ? '#ef4444' : meta.color,
+            textColor: isHoliday ? '#ffffff' : undefined,
+            classNames: isHoliday ? ['holiday-text-event'] : [],
+            extendedProps: { ...event },
+        };
+    });
 
     const holidayDateSet = useMemo(() => {
         const set = new Set<string>();
-        events.forEach((eventItem) => {
-            if (eventItem.eventType === 'holiday') {
-                set.add(String(eventItem.start).split('T')[0]);
-            }
+        events.forEach((event) => {
+            if (event.eventType === 'holiday') set.add(String(event.start).split('T')[0]);
         });
         return set;
     }, [events]);
@@ -86,7 +63,6 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
         return new Date(date.getTime() - offset).toISOString().split('T')[0];
     };
 
-    // Custom CSS for holiday text event
     useEffect(() => {
         const style = document.createElement('style');
         style.innerHTML = `
@@ -110,20 +86,20 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
     }, []);
 
     return (
-        <div className="bg-white rounded-xl shadow-sm p-4 flex flex-col min-h-[500px] md:min-h-0 h-full">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-2 gap-2">
-                <h2 className="text-lg font-bold text-gray-800 whitespace-nowrap">
+        <div className="flex h-full min-h-[500px] flex-col rounded-xl bg-white p-4 shadow-sm md:min-h-0">
+            <div className="mb-2 flex flex-col items-start justify-between gap-2 md:flex-row md:items-center">
+                <h2 className="whitespace-nowrap text-lg font-bold text-gray-800">
                     <i className="far fa-calendar-alt mr-2 text-blue-600"></i>학사 일정
                 </h2>
                 <button
                     onClick={onSearchClick}
-                    className="bg-gray-50 border border-gray-200 text-gray-600 hover:text-blue-600 p-1.5 rounded-lg transition"
+                    className="rounded-lg border border-gray-200 bg-gray-50 p-1.5 text-gray-600 transition hover:text-blue-600"
                     title="일정 검색"
                 >
                     <i className="fas fa-search"></i>
                 </button>
             </div>
-            <div className="flex-1 calendar-wrapper">
+            <div className="calendar-wrapper flex-1">
                 <FullCalendar
                     ref={calendarRef}
                     plugins={[dayGridPlugin, interactionPlugin, listPlugin]}
@@ -132,7 +108,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                     headerToolbar={{
                         left: 'prev,next today',
                         center: 'title',
-                        right: 'dayGridMonth,listMonth'
+                        right: 'dayGridMonth,listMonth',
                     }}
                     buttonText={{
                         dayGridMonth: '달력',
@@ -143,11 +119,10 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                     eventClick={(arg) => onEventClick(arg.event.extendedProps as CalendarEvent)}
                     eventDidMount={(arg) => {
                         if (arg.view.type !== 'listMonth') return;
-                        const label = getEventTypeLabel(arg.event.extendedProps?.eventType);
+                        const meta = getScheduleCategoryMeta(arg.event.extendedProps?.eventType, categories);
+                        const label = arg.event.extendedProps?.eventType === 'holiday' ? '공휴일' : `${meta.emoji} ${meta.label}`;
                         const timeCell = arg.el.querySelector('.fc-list-event-time');
-                        if (timeCell) {
-                            timeCell.textContent = `${label} |`;
-                        }
+                        if (timeCell) timeCell.textContent = `${label} |`;
                     }}
                     eventContent={(arg) => {
                         const isHoliday = arg.event.extendedProps?.eventType === 'holiday';
@@ -164,17 +139,14 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
 
                         if (arg.view.type !== 'dayGridMonth') return undefined;
                         return (
-                            <div
-                                className={`fc-segment-title ${isHoliday ? 'holiday-segment-title' : ''}`}
-                                title={safeTitle}
-                            >
+                            <div className={`fc-segment-title ${isHoliday ? 'holiday-segment-title' : ''}`} title={safeTitle}>
                                 {safeTitle}
                             </div>
                         );
                     }}
                     height="100%"
                     contentHeight="100%"
-                    dayMaxEvents={true}
+                    dayMaxEvents
                     fixedWeekCount={false}
                     showNonCurrentDates={false}
                     dayCellClassNames={(arg) => {
