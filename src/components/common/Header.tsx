@@ -5,6 +5,14 @@ import { doc, getDoc } from 'firebase/firestore';
 import { MENUS, cloneDefaultMenus, sanitizeMenuConfig, type MenuConfig } from '../../constants/menus';
 import { db } from '../../lib/firebase';
 import { readLocalOnly, readStorage, removeStorage, writeLocalOnly } from '../../lib/safeStorage';
+import {
+    canAccessTeacherPortal,
+    canManageSettings,
+    canReadLessonManagement,
+    canReadQuizManagement,
+    canReadStudentList,
+    getDefaultTeacherRoute,
+} from '../../lib/permissions';
 
 const SESSION_DURATION_SECONDS = 60 * 60;
 const SESSION_EXPIRY_KEY = 'sessionExpiry';
@@ -66,7 +74,7 @@ const Header: React.FC = () => {
     const isReady = !!currentUser;
     const savedRole = readStorage(ROLE_SESSION_KEY);
     const sessionRole = savedRole === 'teacher' || savedRole === 'student' ? savedRole : null;
-    const isTeacherUser = (sessionRole || userData?.role) === 'teacher';
+    const isTeacherUser = canAccessTeacherPortal(userData, currentUser?.email || '');
     const displayName = (userData?.name || '').trim() || '이름 미설정';
 
     const portal: 'teacher' | 'student' = location.pathname.startsWith('/teacher')
@@ -76,13 +84,29 @@ const Header: React.FC = () => {
             : (isTeacherUser ? 'teacher' : 'student');
 
     const isTeacherPortal = portal === 'teacher';
-    const menuItems = menuConfig[portal] || MENUS[portal] || [];
+    const baseMenuItems = menuConfig[portal] || MENUS[portal] || [];
+    const menuItems = portal === 'teacher'
+        ? baseMenuItems.filter((item) => {
+            if (item.url === '/teacher/lesson') return canReadLessonManagement(userData, currentUser?.email || '');
+            if (item.url === '/teacher/quiz') return canReadQuizManagement(userData, currentUser?.email || '');
+            if (item.url === '/teacher/students') return canReadStudentList(userData, currentUser?.email || '');
+            if (item.url === '/teacher/exam') return false;
+            return false;
+        })
+        : baseMenuItems;
     const getVisibleChildren = (item: { children?: Array<{ hidden?: boolean; url: string; name: string }> }) => {
         if (!item.children?.length) return [];
-        return isTeacherPortal ? item.children : item.children.filter((child) => child.hidden !== true);
+        const visible = isTeacherPortal ? item.children : item.children.filter((child) => child.hidden !== true);
+        if (!isTeacherPortal) return visible;
+        return visible.filter((child) => {
+            if (child.url === '/teacher/quiz/history-classroom') return false;
+            return true;
+        });
     };
-    const home = `/${portal}/dashboard`;
-    const profileTarget = isTeacherPortal ? '/teacher/settings' : '/student/mypage';
+    const home = isTeacherPortal ? getDefaultTeacherRoute(userData, currentUser?.email || '') : `/${portal}/dashboard`;
+    const profileTarget = isTeacherPortal
+        ? (canManageSettings(userData, currentUser?.email || '') ? '/teacher/settings' : home)
+        : '/student/mypage';
     const profileLabel = `${displayName} ${isTeacherPortal ? '교사' : '학생'}`;
     const studentProfileIcon = userData?.profileIcon || '🧑‍🎓';
     const resolveTarget = (url: string) => resolveMenuTarget(url, portal);
@@ -301,7 +325,7 @@ const Header: React.FC = () => {
                 </div>
 
                 <div className="header-right">
-                    {isTeacherPortal && (
+                    {isTeacherPortal && canManageSettings(userData, currentUser?.email || '') && (
                         <Link to="/teacher/settings" data-session-ignore="true" className="text-gray-400 hover:text-blue-600 transition" title="설정">
                             <i className="fas fa-cog fa-lg"></i>
                         </Link>

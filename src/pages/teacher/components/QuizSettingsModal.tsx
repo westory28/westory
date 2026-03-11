@@ -9,9 +9,10 @@ interface QuizSettingsModalProps {
     onClose: () => void;
     nodeId: string;
     category: string;
+    canEdit: boolean;
 }
 
-const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({ isOpen, onClose, nodeId, category }) => {
+const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({ isOpen, onClose, nodeId, category, canEdit }) => {
     const { config } = useAuth();
     const [settings, setSettings] = useState({
         active: false,
@@ -64,6 +65,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({ isOpen, onClose, 
     };
 
     const handleSave = async () => {
+        if (!canEdit) return;
         try {
             const key = `${nodeId}_${category}`;
             const payload = {
@@ -189,12 +191,14 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({ isOpen, onClose, 
 
                 <div className="mt-8 flex justify-end gap-2">
                     <button onClick={onClose} className="px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-100 font-bold transition">닫기</button>
-                    <button
-                        onClick={handleSave}
-                        className="flex-1 bg-blue-600 text-white px-4 py-3 rounded-lg font-bold hover:bg-blue-700 shadow-lg transition transform active:scale-95"
-                    >
-                        설정 저장하기
-                    </button>
+                    {canEdit && (
+                        <button
+                            onClick={handleSave}
+                            className="flex-1 bg-blue-600 text-white px-4 py-3 rounded-lg font-bold hover:bg-blue-700 shadow-lg transition transform active:scale-95"
+                        >
+                            설정 저장하기
+                        </button>
+                    )}
                 </div>
             </div>
         </div>

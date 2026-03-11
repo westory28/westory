@@ -35,6 +35,7 @@ interface QuizEditorProps {
     type: 'special' | 'normal';
     parentTitle?: string;
     treeData: TreeUnit[];
+    canEdit: boolean;
     onOpenSettings: (category: string) => void;
 }
 
@@ -61,7 +62,7 @@ const shuffle = <T,>(input: T[]): T[] => {
     return list;
 };
 
-const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeData, onOpenSettings }) => {
+const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeData, canEdit, onOpenSettings }) => {
     const { config } = useAuth();
     const [questions, setQuestions] = useState<Question[]>([]);
     const [category, setCategory] = useState<string>('diagnostic');
@@ -352,6 +353,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
     };
 
     const handleAdd = async () => {
+        if (!canEdit) return;
         const payload = buildQuestionPayload();
         if (!payload) return;
         const targetId = editingQuestionId ?? Date.now();
@@ -397,6 +399,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
     };
 
     const handleDelete = async (id: number) => {
+        if (!canEdit) return;
         if (!window.confirm('이 문제를 삭제하시겠습니까?')) return;
         try {
             try {
@@ -424,19 +427,23 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
                     <div className="text-xs text-gray-500 font-bold mb-1">{type === 'special' ? '학기 시험 대비' : `${parentTitle} > ${node.title}`}</div>
                     <div className="flex items-center gap-2">
                         <h2 className="text-xl font-bold text-gray-800">{node.title}</h2>
-                        <button onClick={() => onOpenSettings(category)} className="text-gray-400 hover:text-blue-600 transition p-1" title="평가 설정">
-                            <i className="fas fa-cog"></i>
-                        </button>
+                        {canEdit && (
+                            <button onClick={() => onOpenSettings(category)} className="text-gray-400 hover:text-blue-600 transition p-1" title="평가 설정">
+                                <i className="fas fa-cog"></i>
+                            </button>
+                        )}
                     </div>
                 </div>
-                <button
-                    type="button"
-                    onClick={openCreateComposer}
-                    className="bg-blue-600 text-white font-bold px-4 py-2.5 rounded-full shadow hover:bg-blue-700 transition flex items-center gap-2"
-                >
-                    <i className="fas fa-plus"></i>
-                    <span>문제 등록</span>
-                </button>
+                {canEdit && (
+                    <button
+                        type="button"
+                        onClick={openCreateComposer}
+                        className="bg-blue-600 text-white font-bold px-4 py-2.5 rounded-full shadow hover:bg-blue-700 transition flex items-center gap-2"
+                    >
+                        <i className="fas fa-plus"></i>
+                        <span>문제 등록</span>
+                    </button>
+                )}
             </div>
 
             {type !== 'special' && (
@@ -490,17 +497,19 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
                                         <span className="bg-gray-100 text-gray-600 text-[10px] font-bold px-2 py-1 rounded">
                                             Q{idx + 1} | {TYPE_LABEL[q.type] || q.type} | {getQuestionSubUnitLabel(q)}
                                         </span>
-                                        <div className="flex items-center gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => startEdit(q)}
-                                                className="text-gray-300 hover:text-blue-500"
-                                                title="문제 수정"
-                                            >
-                                                <i className="fas fa-pen"></i>
-                                            </button>
-                                            <button onClick={() => void handleDelete(q.id)} className="text-gray-300 hover:text-red-500" title="문제 삭제"><i className="fas fa-trash"></i></button>
-                                        </div>
+                                        {canEdit && (
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => startEdit(q)}
+                                                    className="text-gray-300 hover:text-blue-500"
+                                                    title="문제 수정"
+                                                >
+                                                    <i className="fas fa-pen"></i>
+                                                </button>
+                                                <button onClick={() => void handleDelete(q.id)} className="text-gray-300 hover:text-red-500" title="문제 삭제"><i className="fas fa-trash"></i></button>
+                                            </div>
+                                        )}
                                     </div>
                                     <p className="font-bold text-gray-800 mb-1 text-sm">{q.question}</p>
                                     {q.image && (

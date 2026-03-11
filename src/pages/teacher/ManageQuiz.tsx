@@ -9,6 +9,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { getSemesterDocPath } from '../../lib/semesterScope';
+import { canReadQuizManagement, canWriteQuizManagement } from '../../lib/permissions';
 
 interface TreeUnit {
     id: string;
@@ -17,7 +18,7 @@ interface TreeUnit {
 }
 
 const ManageQuiz: React.FC = () => {
-    const { config } = useAuth();
+    const { config, userData, currentUser } = useAuth();
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const [activeTab, setActiveTab] = useState<'manage' | 'log' | 'bank'>('manage');
@@ -28,14 +29,18 @@ const ManageQuiz: React.FC = () => {
     const [settingsModalOpen, setSettingsModalOpen] = useState(false);
     const [settingsCategory, setSettingsCategory] = useState('diagnostic');
     const [mobileTreeOpen, setMobileTreeOpen] = useState(false);
+    const canRead = canReadQuizManagement(userData, currentUser?.email || '');
+    const canWrite = canWriteQuizManagement(userData, currentUser?.email || '');
 
     useEffect(() => {
         const requestedTab = searchParams.get('tab');
         if (requestedTab === 'log') setActiveTab('log');
         else if (requestedTab === 'bank') setActiveTab('bank');
-        else setActiveTab('manage');
+        else setActiveTab(canWrite ? 'manage' : 'log');
         setMobileTreeOpen(false);
-    }, [searchParams]);
+    }, [canWrite, searchParams]);
+
+    if (!canRead) return null;
 
     useEffect(() => {
         const loadTree = async () => {
@@ -68,12 +73,14 @@ const ManageQuiz: React.FC = () => {
         <div className="min-h-screen bg-gray-50 flex flex-col">
             <main className="flex-1 w-full max-w-7xl mx-auto px-4 lg:px-6 py-6 flex flex-col min-h-0">
                 <div className="flex border-b border-gray-200 mb-4 bg-white rounded-t-lg px-2 shrink-0 overflow-x-auto">
-                    <button
-                        onClick={() => setActiveTab('manage')}
-                        className={`py-3 px-6 font-bold text-sm border-b-2 transition ${activeTab === 'manage' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-600 hover:bg-gray-50'}`}
-                    >
-                        문제 등록
-                    </button>
+                    {canWrite && (
+                        <button
+                            onClick={() => setActiveTab('manage')}
+                            className={`py-3 px-6 font-bold text-sm border-b-2 transition ${activeTab === 'manage' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-600 hover:bg-gray-50'}`}
+                        >
+                            문제 등록
+                        </button>
+                    )}
                     <button
                         onClick={() => setActiveTab('log')}
                         className={`py-3 px-6 font-bold text-sm border-b-2 transition ${activeTab === 'log' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-600 hover:bg-gray-50'}`}
@@ -86,16 +93,24 @@ const ManageQuiz: React.FC = () => {
                     >
                         문제 은행
                     </button>
-                    <button
-                        type="button"
-                        onClick={() => navigate('/teacher/quiz/history-classroom')}
-                        className="py-3 px-6 font-bold text-sm border-b-2 border-transparent text-gray-600 transition hover:bg-gray-50"
-                    >
-                        역사교실
-                    </button>
+                    {canWrite && (
+                        <button
+                            type="button"
+                            onClick={() => navigate('/teacher/quiz/history-classroom')}
+                            className="py-3 px-6 font-bold text-sm border-b-2 border-transparent text-gray-600 transition hover:bg-gray-50"
+                        >
+                            역사교실
+                        </button>
+                    )}
                 </div>
 
-                {activeTab === 'manage' && (
+                {!canWrite && (
+                    <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
+                        읽기 전용 권한입니다. 문제 등록, 수정, 삭제는 관리자만 가능합니다.
+                    </div>
+                )}
+
+                {canWrite && activeTab === 'manage' && (
                     <div className="flex-1 flex flex-col lg:flex-row gap-6 overflow-hidden pb-2 relative min-h-0">
                         {mobileTreeOpen && (
                             <button
@@ -130,6 +145,7 @@ const ManageQuiz: React.FC = () => {
                                     type={selectedNodeType}
                                     parentTitle={parentTitle}
                                     treeData={treeData}
+                                    canEdit={canWrite}
                                     onOpenSettings={(cat) => {
                                         setSettingsCategory(cat);
                                         setSettingsModalOpen(true);
@@ -159,13 +175,14 @@ const ManageQuiz: React.FC = () => {
                 )}
 
                 {activeTab === 'log' && <QuizLogTab />}
-                {activeTab === 'bank' && <QuizBankTab />}
+                {activeTab === 'bank' && <QuizBankTab canEdit={canWrite} />}
 
                 <QuizSettingsModal
-                    isOpen={settingsModalOpen}
+                    isOpen={canWrite && settingsModalOpen}
                     onClose={() => setSettingsModalOpen(false)}
                     nodeId={selectedNode?.id || ''}
                     category={settingsCategory}
+                    canEdit={canWrite}
                 />
             </main>
         </div>

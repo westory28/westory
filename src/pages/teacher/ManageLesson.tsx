@@ -27,6 +27,7 @@ import {
     type LessonWorksheetPageImage,
     type LessonWorksheetTextRegion,
 } from '../../lib/lessonWorksheet';
+import { canWriteLessonManagement } from '../../lib/permissions';
 
 interface TreeNode {
     id: string;
@@ -135,7 +136,7 @@ const revokeBlobUrls = (pages: LessonWorksheetPageImage[]) => {
 };
 
 const ManageLesson: React.FC = () => {
-    const { config } = useAuth();
+    const { config, userData, currentUser } = useAuth();
     const [treeData, setTreeData] = useState<TreeNode[]>([]);
     const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
     const [selectedNodeTitle, setSelectedNodeTitle] = useState('');
@@ -166,6 +167,7 @@ const ManageLesson: React.FC = () => {
     const [modalInput, setModalInput] = useState('');
     const [previewOpen, setPreviewOpen] = useState(false);
     const [showAllBlankTags, setShowAllBlankTags] = useState(false);
+    const canEdit = canWriteLessonManagement(userData, currentUser?.email || '');
 
     const selectedBlank = useMemo(
         () => worksheetBlanks.find((blank) => blank.id === activeBlankId) || null,
@@ -235,6 +237,7 @@ const ManageLesson: React.FC = () => {
     };
 
     const saveTree = async (newTree: TreeNode[], silent = true) => {
+        if (!canEdit) return;
         setScreenBusyMessage('목차를 저장하는 중입니다...');
         try {
             await setDoc(doc(db, getSemesterDocPath(config, 'curriculum', 'tree')), {
@@ -296,6 +299,7 @@ const ManageLesson: React.FC = () => {
     });
 
     const handleModalConfirm = () => {
+        if (!canEdit) return;
         const value = modalInput.trim();
         if (!value) {
             alert('이름을 입력해 주세요.');
@@ -328,6 +332,7 @@ const ManageLesson: React.FC = () => {
     };
 
     const handleDeleteNode = (node: TreeNode) => {
+        if (!canEdit) return;
         if (!window.confirm(`'${node.title}' 및 하위 내용을 삭제하시겠습니까?`)) return;
 
         const removeRecursive = (nodes: TreeNode[]): TreeNode[] =>
@@ -580,6 +585,7 @@ const ManageLesson: React.FC = () => {
     };
 
     const removeAttachedPdf = async () => {
+        if (!canEdit) return;
         if (!selectedNodeId) {
             resetWorksheetState(true);
             return;
@@ -640,6 +646,7 @@ const ManageLesson: React.FC = () => {
     };
 
     const saveLesson = async () => {
+        if (!canEdit) return;
         if (!selectedNodeId) return;
 
         setScreenBusyMessage('수업 자료를 저장하는 중입니다...');
@@ -716,6 +723,12 @@ const ManageLesson: React.FC = () => {
                         <i className="fas fa-sitemap text-blue-500 mr-2"></i>수업 자료 관리
                     </h1>
                 </div>
+
+                {!canEdit && (
+                    <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
+                        읽기 전용 권한입니다. 학습 자료 조회만 가능하며 저장, 수정, 삭제는 관리자만 가능합니다.
+                    </div>
+                )}
 
                 <div className="flex flex-col lg:flex-row gap-6 h-full pb-4 relative">
                     {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)}></div>}

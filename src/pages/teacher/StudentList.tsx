@@ -4,6 +4,8 @@ import { db } from '../../lib/firebase';
 import MoveClassModal from './components/MoveClassModal';
 import StudentEditModal from './components/StudentEditModal';
 import StudentHistoryModal from './components/StudentHistoryModal';
+import { useAuth } from '../../contexts/AuthContext';
+import { canEditStudentList } from '../../lib/permissions';
 
 interface Student {
     id: string;
@@ -91,6 +93,7 @@ const normalizeStudentName = (value: unknown) => String(value || '').trim();
 const isValidKoreanStudentName = (value: unknown) => KOREAN_NAME_PATTERN.test(normalizeStudentName(value));
 
 const StudentList: React.FC = () => {
+    const { userData, currentUser } = useAuth();
     const [students, setStudents] = useState<Student[]>([]);
     const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
     const [loading, setLoading] = useState(true);
@@ -113,6 +116,7 @@ const StudentList: React.FC = () => {
     const [historyModalOpen, setHistoryModalOpen] = useState(false);
     const [moveClassModalOpen, setMoveClassModalOpen] = useState(false);
     const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+    const readOnly = !canEditStudentList(userData, currentUser?.email || '');
 
     useEffect(() => {
         void fetchStudents();
@@ -309,6 +313,7 @@ const StudentList: React.FC = () => {
     };
 
     const handleDelete = async (id: string) => {
+        if (readOnly) return;
         if (!window.confirm('정말 삭제하시겠습니까? (복구 불가)')) return;
         try {
             const target = students.find((student) => student.id === id);
@@ -335,6 +340,7 @@ const StudentList: React.FC = () => {
     };
 
     const handleBulkDelete = async () => {
+        if (readOnly) return;
         if (!window.confirm(`선택한 ${selectedIds.size}명을 정말 삭제하시겠습니까?`)) return;
         try {
             const batch = writeBatch(db);
@@ -365,6 +371,7 @@ const StudentList: React.FC = () => {
     };
 
     const handleBulkPromote = async () => {
+        if (readOnly) return;
         if (!window.confirm(`선택한 ${selectedIds.size}명의 학년을 1 올리시겠습니까?`)) return;
         try {
             const batch = writeBatch(db);
@@ -406,6 +413,11 @@ const StudentList: React.FC = () => {
                     </div>
 
                     <div className="flex flex-col items-center justify-between gap-3 border-b border-gray-100 p-5 md:flex-row">
+                        {readOnly && (
+                            <div className="w-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-700">
+                                읽기 전용 권한입니다. 학생 명단 조회만 가능합니다.
+                            </div>
+                        )}
                         <div className="flex w-full items-center gap-2 overflow-x-auto md:w-auto">
                             <select
                                 value={gradeFilter}
@@ -507,6 +519,8 @@ const StudentList: React.FC = () => {
                                             <td className="hidden p-4 font-mono text-xs text-gray-500 lg:table-cell">{student.email}</td>
                                             <td className="p-4 text-center">
                                                 <div className="flex justify-center gap-1">
+                                                    {!readOnly && (
+                                                        <>
                                                     <button
                                                         onClick={() => {
                                                             setSelectedStudent(student);
@@ -526,6 +540,8 @@ const StudentList: React.FC = () => {
                                                         <i className="fas fa-trash"></i>
                                                         <span className="hidden lg:inline">삭제</span>
                                                     </button>
+                                                        </>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -550,7 +566,7 @@ const StudentList: React.FC = () => {
                     )}
                 </div>
 
-                {selectedIds.size > 0 && (
+                {!readOnly && selectedIds.size > 0 && (
                     <div className="fixed bottom-4 left-1/2 z-40 flex w-[calc(100%-1rem)] max-w-[720px] -translate-x-1/2 animate-slideUp flex-wrap items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-3 py-2.5 shadow-2xl md:bottom-8 md:w-auto md:flex-nowrap md:gap-4 md:rounded-full md:px-6 md:py-3">
                         <div className="flex items-center justify-center gap-2 whitespace-nowrap leading-tight">
                             <span className="rounded-full bg-blue-600 px-2 py-0.5 text-xs font-bold text-white">{selectedIds.size}명</span>
@@ -579,7 +595,7 @@ const StudentList: React.FC = () => {
                 )}
 
                 <StudentEditModal
-                    isOpen={editModalOpen}
+                    isOpen={!readOnly && editModalOpen}
                     onClose={() => setEditModalOpen(false)}
                     student={selectedStudent}
                     onUpdate={fetchStudents}
@@ -593,7 +609,7 @@ const StudentList: React.FC = () => {
                 />
 
                 <MoveClassModal
-                    isOpen={moveClassModalOpen}
+                    isOpen={!readOnly && moveClassModalOpen}
                     onClose={() => setMoveClassModalOpen(false)}
                     selectedIds={selectedIds}
                     onComplete={() => {

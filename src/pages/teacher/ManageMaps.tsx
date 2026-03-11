@@ -24,6 +24,7 @@ import {
 } from '../../lib/mapResources';
 import { processPdfMapFile, type ProcessedPdfMap } from '../../lib/pdfMapProcessor';
 import { getSemesterCollectionPath } from '../../lib/semesterScope';
+import { canWriteLessonManagement } from '../../lib/permissions';
 
 type StorageScope = 'semester' | 'legacy';
 
@@ -159,7 +160,7 @@ const blobToPdfFile = (blob: Blob, resourceId: string, fileName?: string, mimeTy
     );
 
 const ManageMaps: React.FC = () => {
-    const { config } = useAuth();
+    const { config, userData, currentUser } = useAuth();
     const [items, setItems] = useState<StoredMapResource[]>([]);
     const [selectedId, setSelectedId] = useState('');
     const [draft, setDraft] = useState<StoredMapResource>(createDraft());
@@ -179,6 +180,7 @@ const ManageMaps: React.FC = () => {
     const [tabRenameSourceKey, setTabRenameSourceKey] = useState('');
     const [tabRenameValue, setTabRenameValue] = useState('');
     const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const canEdit = canWriteLessonManagement(userData, currentUser?.email || '');
 
     const collectionPath = useMemo(() => getSemesterCollectionPath(config, 'map_resources'), [config]);
     const legacyCollectionPath = 'map_resources';
@@ -537,6 +539,7 @@ const ManageMaps: React.FC = () => {
     };
 
     const handleMoveItem = async (itemId: string, direction: 'up' | 'down') => {
+        if (!canEdit) return;
         const currentGroups = groupMapResourcesForDisplay(items);
         const currentGroupIndex = currentGroups.findIndex((group) =>
             group.key === itemId.replace(/^map-group:/u, '')
@@ -724,6 +727,7 @@ const ManageMaps: React.FC = () => {
     };
 
     const handleSave = async () => {
+        if (!canEdit) return;
         const resourceId = draft.id || `map-${Date.now()}`;
         const payloadBase = normalizeMapResource(resourceId, draft);
 
@@ -893,6 +897,7 @@ const ManageMaps: React.FC = () => {
     };
 
     const handleReprocessPdf = async () => {
+        if (!canEdit) return;
         if (draft.type !== 'pdf' || !draft.id) return;
 
         let sourceFile = selectedFile;
@@ -926,6 +931,7 @@ const ManageMaps: React.FC = () => {
     };
 
     const handleDelete = async () => {
+        if (!canEdit) return;
         if (!draft.id) return;
 
         if (draft.id === GOOGLE_MAP_RESOURCE_ID) {
@@ -967,6 +973,7 @@ const ManageMaps: React.FC = () => {
     };
 
     const handleSaveTabRename = async () => {
+        if (!canEdit) return;
         const nextTabGroup = tabRenameValue.trim();
         if (!tabRenameSourceKey || !nextTabGroup) {
             alert('지도 탭 이름을 입력해 주세요.');

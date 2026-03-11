@@ -4,6 +4,7 @@ import Footer from '../common/Footer';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { readStorage } from '../../lib/safeStorage';
+import { canAccessTeacherPath, canAccessTeacherPortal, getDefaultTeacherRoute } from '../../lib/permissions';
 
 const ROLE_SESSION_KEY = 'westoryPortalRole';
 
@@ -21,11 +22,18 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         if (!loading && currentUser) {
             const savedRole = readStorage(ROLE_SESSION_KEY);
             const sessionRole = savedRole === 'teacher' || savedRole === 'student' ? savedRole : null;
-            const inferredRole = sessionRole || userData?.role || 'student';
-            if (location.pathname.startsWith('/teacher') && inferredRole !== 'teacher') {
-                navigate('/student/dashboard', { replace: true });
-            } else if (location.pathname.startsWith('/student') && inferredRole === 'teacher') {
-                navigate('/teacher/dashboard', { replace: true });
+            const canUseTeacherPortal = canAccessTeacherPortal(userData, currentUser.email);
+            if (location.pathname.startsWith('/teacher')) {
+                if (!canUseTeacherPortal) {
+                    navigate('/student/dashboard', { replace: true });
+                    return;
+                }
+
+                if (!canAccessTeacherPath(location.pathname, userData, currentUser.email)) {
+                    navigate(getDefaultTeacherRoute(userData, currentUser.email), { replace: true });
+                }
+            } else if (location.pathname.startsWith('/student') && sessionRole === 'teacher' && canUseTeacherPortal) {
+                navigate(getDefaultTeacherRoute(userData, currentUser.email), { replace: true });
             }
         }
     }, [currentUser, userData, loading, location.pathname, navigate]);

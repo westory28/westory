@@ -5,23 +5,23 @@ service firebase.storage {
       return request.auth != null;
     }
 
-    function isTeacher() {
+    function isAdmin() {
       return isSignedIn() && request.auth.token.email == "westoria28@gmail.com";
     }
 
     match /map-resources/{resourceId}/{allPaths=**} {
       allow read: if isSignedIn();
-      allow write: if isTeacher();
+      allow write: if isAdmin();
     }
 
     match /lesson_pdfs/{unitId}/{allPaths=**} {
       allow read: if isSignedIn();
-      allow write: if isTeacher();
+      allow write: if isAdmin();
     }
 
     match /years/{year}/semesters/{semester}/lesson_pdfs/{unitId}/{allPaths=**} {
       allow read: if isSignedIn();
-      allow write: if isTeacher();
+      allow write: if isAdmin();
     }
   }
 }

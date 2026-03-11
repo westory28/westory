@@ -24,7 +24,8 @@ export interface UserData {
     grade?: string;
     class?: string;
     number?: string;
-    role: 'teacher' | 'student';
+    role: 'teacher' | 'student' | 'staff';
+    staffPermissions?: string[];
     privacyAgreed?: boolean;
     privacyAgreedAt?: any;
     consentAgreedItems?: string[];

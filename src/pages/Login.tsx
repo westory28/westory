@@ -25,6 +25,7 @@ import { auth, authPersistenceReady, db } from '../lib/firebase';
 import { readStorage, removeStorage, writeStorage } from '../lib/safeStorage';
 import { useAuth } from '../contexts/AuthContext';
 import type { UserData } from '../types';
+import { canAccessTeacherPortal, isAdminUser, normalizeStaffPermissions } from '../lib/permissions';
 
 const TEACHER_EMAIL = 'westoria28@gmail.com';
 const ROLE_SESSION_KEY = 'westoryPortalRole';
@@ -567,7 +568,17 @@ const Login: React.FC = () => {
 
     const finishLoginForRole = async (user: User, mode: LoginMode) => {
         const isTeacherEmail = user.email === TEACHER_EMAIL;
-        if (mode === 'teacher' && !isTeacherEmail) {
+        const userRef = doc(db, 'users', user.uid);
+        const userSnap = await getDoc(userRef);
+        const existing = userSnap.exists() ? (userSnap.data() as Partial<UserData>) : null;
+        const staffPermissions = normalizeStaffPermissions(existing?.staffPermissions);
+        const canUseTeacherMode = isTeacherEmail || canAccessTeacherPortal({
+            ...existing,
+            role: existing?.role,
+            email: user.email || existing?.email || '',
+            staffPermissions,
+        }, user.email || '');
+        if (mode === 'teacher' && !canUseTeacherMode) {
             alert('관리자 로그인은 관리자 계정으로만 가능합니다.');
             clearPendingLoginMode();
             clearRoleCache();
@@ -575,10 +586,9 @@ const Login: React.FC = () => {
             return;
         }
 
-        const userRef = doc(db, 'users', user.uid);
-        const userSnap = await getDoc(userRef);
-        const existing = userSnap.exists() ? (userSnap.data() as Partial<UserData>) : null;
-        const nextRole: UserData['role'] = mode === 'teacher' ? 'teacher' : 'student';
+        const nextRole: UserData['role'] = mode === 'teacher'
+            ? (isAdminUser(existing, user.email || '') ? 'teacher' : 'staff')
+            : 'student';
 
         const rosterProfile = nextRole === 'student'
             ? await pickStudentRosterProfile(user.email || '')
@@ -605,6 +615,7 @@ const Login: React.FC = () => {
             email: user.email || '',
             photoURL: user.photoURL || '',
             role: nextRole,
+            staffPermissions: nextRole === 'staff' ? staffPermissions : [],
             lastLogin: serverTimestamp(),
         };
 
@@ -662,8 +673,12 @@ const Login: React.FC = () => {
                 const savedMode = getPendingLoginMode();
                 const resolvedMode: LoginMode = savedMode
                     || (redirectedUser.email === TEACHER_EMAIL ? 'teacher' : 'student');
+                const redirectUserSnap = await getDoc(doc(db, 'users', redirectedUser.uid));
+                const redirectUserData = redirectUserSnap.exists() ? (redirectUserSnap.data() as Partial<UserData>) : null;
+                const resolvedTeacherMode = canAccessTeacherPortal(redirectUserData, redirectedUser.email || '');
+                const effectiveMode: LoginMode = savedMode || (resolvedTeacherMode ? 'teacher' : 'student');
 
-                await finishLoginForRole(redirectedUser, resolvedMode);
+                await finishLoginForRole(redirectedUser, effectiveMode);
             } catch (error) {
                 if (isIgnorableRedirectError(error)) {
                     console.warn('Redirect state unavailable, skipping redirect recovery', error);
@@ -675,9 +690,11 @@ const Login: React.FC = () => {
                 const recoveredUser = auth.currentUser;
                 if (recoveredUser) {
                     const savedMode = getPendingLoginMode();
-                    const resolvedMode: LoginMode = savedMode
-                        || (recoveredUser.email === TEACHER_EMAIL ? 'teacher' : 'student');
-                    await finishLoginForRole(recoveredUser, resolvedMode);
+                    const recoveredSnap = await getDoc(doc(db, 'users', recoveredUser.uid));
+                    const recoveredData = recoveredSnap.exists() ? (recoveredSnap.data() as Partial<UserData>) : null;
+                    const effectiveMode: LoginMode = savedMode
+                        || (canAccessTeacherPortal(recoveredData, recoveredUser.email || '') ? 'teacher' : 'student');
+                    await finishLoginForRole(recoveredUser, effectiveMode);
                     return;
                 }
                 clearPendingLoginMode();
@@ -702,9 +719,8 @@ const Login: React.FC = () => {
         autoResumeUidRef.current = currentUser.uid;
 
         const resumeAuthenticatedSession = async () => {
-            const resolvedRole: LoginMode = currentUser.email === TEACHER_EMAIL
+            const resolvedRole: LoginMode = canAccessTeacherPortal(userData, currentUser.email || '')
                 || preferredRole === 'teacher'
-                || userData?.role === 'teacher'
                 ? 'teacher'
                 : 'student';
 

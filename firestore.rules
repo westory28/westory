@@ -7,9 +7,18 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isTeacher() {
-      // 교사 계정 여부(관리자 권한)
+    function isAdmin() {
       return isSignedIn() && request.auth.token.email == "westoria28@gmail.com";
+    }
+
+    function userProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function hasPermission(permission) {
+      return hasUserProfile()
+        && userProfile().staffPermissions is list
+        && permission in userProfile().staffPermissions;
     }
 
     function hasUserProfile() {
@@ -25,7 +34,7 @@ service cloud.firestore {
     }
 
     function canAccessThinkCloudTarget(targetGrade, targetClass) {
-      return isTeacher()
+      return isAdmin()
         || (isSignedIn()
           && hasUserProfile()
           && targetGrade == userGrade()
@@ -35,17 +44,17 @@ service cloud.firestore {
     // 사용자 기본 문서 권한
     match /users/{userId} {
       // 본인/교사만 조회, 목록은 교사만
-      allow get: if isSignedIn() && (request.auth.uid == userId || isTeacher());
-      allow list: if isTeacher();
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin() || hasPermission('student_list_read'));
+      allow list: if isAdmin() || hasPermission('student_list_read');
       // 가입 초기 문서 생성 허용
       allow create: if isSignedIn();
       // 본인 또는 교사만 수정/삭제
-      allow update, delete: if isSignedIn() && (request.auth.uid == userId || isTeacher());
+      allow update, delete: if isSignedIn() && (request.auth.uid == userId || isAdmin());
 
       // 학생 개인 성적 데이터(민감정보)
       match /academic_records/{recordId} {
         // 본인/교사만 읽기 허용
-        allow read: if isSignedIn() && (request.auth.uid == userId || isTeacher());
+        allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
         // 본인만 저장 가능 + 허용 필드/구조 제한
         allow create, update: if isSignedIn()
           && request.auth.uid == userId
@@ -53,7 +62,7 @@ service cloud.firestore {
           && request.resource.data.scores is map
           && request.resource.data.scores.keys().size() <= 500;
         // 삭제는 본인/교사만 허용
-        allow delete: if isSignedIn() && (request.auth.uid == userId || isTeacher());
+        allow delete: if isSignedIn() && (request.auth.uid == userId || isAdmin());
       }
     }
 
@@ -62,12 +71,12 @@ service cloud.firestore {
       // 공개 설정 문서는 비로그인도 읽기, 그 외는 로그인 필요
       allow read: if docId in ['terms', 'privacy', 'school_config', 'interface_config'] || isSignedIn();
       // 설정 변경은 교사만
-      allow write: if isTeacher();
+      allow write: if isAdmin();
 
       // 설정 하위 항목 권한
       match /items/{itemId} {
         allow read: if isSignedIn();
-        allow write: if isTeacher();
+        allow write: if isAdmin();
       }
     }
 
@@ -79,80 +88,80 @@ service cloud.firestore {
     // 레거시 루트 컬렉션 권한(하위 호환)
     match /curriculum/{docId} {
       allow read: if isSignedIn();
-      allow write: if isTeacher();
+      allow write: if isAdmin();
     }
 
     match /lessons/{docId} {
       allow read: if isSignedIn();
-      allow write: if isTeacher();
+      allow write: if isAdmin();
     }
 
     match /map_resources/{docId} {
       allow read: if isSignedIn();
-      allow write: if isTeacher();
+      allow write: if isAdmin();
     }
 
     match /quiz_questions/{docId} {
       allow read: if isSignedIn();
-      allow write: if isTeacher();
+      allow write: if isAdmin();
     }
 
     match /history_classrooms/{docId} {
-      allow read: if isTeacher() || (isSignedIn() && resource.data.targetStudentUid == request.auth.uid);
-      allow write: if isTeacher();
+      allow read: if isAdmin() || (isSignedIn() && resource.data.targetStudentUid == request.auth.uid);
+      allow write: if isAdmin();
     }
 
     match /history_classroom_results/{docId} {
-      allow read: if isTeacher() || (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow read: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
       allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
-      allow update, delete: if isTeacher();
+      allow update, delete: if isAdmin();
     }
 
     match /assessment_config/{docId} {
       allow read: if isSignedIn();
-      allow write: if isTeacher();
+      allow write: if isAdmin();
     }
 
     match /grading_plans/{docId} {
       allow read: if isSignedIn();
-      allow write: if isTeacher();
+      allow write: if isAdmin();
     }
 
     match /exam_config/{docId} {
       allow read: if isSignedIn();
-      allow write: if isTeacher();
+      allow write: if isAdmin();
     }
 
     match /quiz_results/{resultId} {
       // 본인 결과 또는 교사만 조회
-      allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isTeacher());
+      allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin() || hasPermission('quiz_read'));
       // 결과 생성은 로그인 사용자
       allow create: if isSignedIn();
       // 수정/삭제는 교사만
-      allow update, delete: if isTeacher();
+      allow update, delete: if isAdmin();
     }
 
     match /quiz_submissions/{docId} {
       allow read: if isSignedIn();
-      allow write: if isTeacher();
+      allow write: if isAdmin();
     }
 
     match /think_cloud_state/{docId} {
       allow read: if isSignedIn();
-      allow write: if isTeacher();
+      allow write: if isAdmin();
     }
 
     match /lesson_progress/{userId} {
-      allow read, write: if isSignedIn() && (request.auth.uid == userId || isTeacher());
+      allow read, write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
 
       match /units/{unitId} {
-        allow read, write: if isSignedIn() && (request.auth.uid == userId || isTeacher());
+        allow read, write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
       }
     }
 
     match /think_cloud_sessions/{sessionId} {
-      allow read: if canAccessThinkCloudTarget(resource.data.targetGrade, resource.data.targetClass);
-      allow create, update, delete: if isTeacher();
+      allow read: if canAccessThinkCloudTarget(resource.data.targetGrade, resource.data.targetClass) || hasPermission('lesson_read');
+      allow create, update, delete: if isAdmin();
 
       match /responses/{responseId} {
         allow read: if canAccessThinkCloudTarget(
@@ -166,7 +175,7 @@ service cloud.firestore {
             get(/databases/$(database)/documents/think_cloud_sessions/$(sessionId)).data.targetClass
           )
           && get(/databases/$(database)/documents/think_cloud_sessions/$(sessionId)).data.status == 'active';
-        allow update, delete: if isTeacher();
+        allow update, delete: if isAdmin();
       }
     }
 
@@ -174,90 +183,90 @@ service cloud.firestore {
     match /years/{year}/semesters/{semester} {
       match /calendar/{docId} {
         allow read: if isSignedIn();
-        allow write: if isTeacher();
+        allow write: if isAdmin();
       }
 
       match /notices/{docId} {
         allow read: if isSignedIn();
-        allow write: if isTeacher();
+        allow write: if isAdmin();
       }
 
       match /curriculum/{docId} {
         allow read: if isSignedIn();
-        allow write: if isTeacher();
+        allow write: if isAdmin();
       }
 
       match /lessons/{docId} {
         allow read: if isSignedIn();
-        allow write: if isTeacher();
+        allow write: if isAdmin();
       }
 
       match /map_resources/{docId} {
         allow read: if isSignedIn();
-        allow write: if isTeacher();
+        allow write: if isAdmin();
       }
 
       match /quiz_questions/{docId} {
         allow read: if isSignedIn();
-        allow write: if isTeacher();
+        allow write: if isAdmin();
       }
 
       match /history_classrooms/{docId} {
-        allow read: if isTeacher() || (isSignedIn() && resource.data.targetStudentUid == request.auth.uid);
-        allow write: if isTeacher();
+        allow read: if isAdmin() || (isSignedIn() && resource.data.targetStudentUid == request.auth.uid);
+        allow write: if isAdmin();
       }
 
       match /history_classroom_results/{docId} {
-        allow read: if isTeacher() || (isSignedIn() && resource.data.uid == request.auth.uid);
+        allow read: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
         allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
-        allow update, delete: if isTeacher();
+        allow update, delete: if isAdmin();
       }
 
       match /assessment_config/{docId} {
         allow read: if isSignedIn();
-        allow write: if isTeacher();
+        allow write: if isAdmin();
       }
 
       match /grading_plans/{docId} {
         allow read: if isSignedIn();
-        allow write: if isTeacher();
+        allow write: if isAdmin();
       }
 
       match /exam_config/{docId} {
         allow read: if isSignedIn();
-        allow write: if isTeacher();
+        allow write: if isAdmin();
       }
 
       match /quiz_results/{resultId} {
         // 본인 결과 또는 교사만 조회
-        allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isTeacher());
+        allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin() || hasPermission('quiz_read'));
         // 결과 생성은 로그인 사용자
         allow create: if isSignedIn();
         // 수정/삭제는 교사만
-        allow update, delete: if isTeacher();
+        allow update, delete: if isAdmin();
       }
 
       match /quiz_submissions/{docId} {
         allow read: if isSignedIn();
-        allow write: if isTeacher();
+        allow write: if isAdmin();
       }
 
       match /think_cloud_state/{docId} {
         allow read: if isSignedIn();
-        allow write: if isTeacher();
+        allow write: if isAdmin();
       }
 
       match /lesson_progress/{userId} {
-        allow read, write: if isSignedIn() && (request.auth.uid == userId || isTeacher());
+        allow read, write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
 
         match /units/{unitId} {
-          allow read, write: if isSignedIn() && (request.auth.uid == userId || isTeacher());
+          allow read, write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
         }
       }
 
       match /think_cloud_sessions/{sessionId} {
         allow read: if canAccessThinkCloudTarget(resource.data.targetGrade, resource.data.targetClass);
-        allow create, update, delete: if isTeacher();
+        allow create, update, delete: if isAdmin();
 
         match /responses/{responseId} {
           allow read: if canAccessThinkCloudTarget(
@@ -271,7 +280,7 @@ service cloud.firestore {
               get(/databases/$(database)/documents/years/$(year)/semesters/$(semester)/think_cloud_sessions/$(sessionId)).data.targetClass
             )
             && get(/databases/$(database)/documents/years/$(year)/semesters/$(semester)/think_cloud_sessions/$(sessionId)).data.status == 'active';
-          allow update, delete: if isTeacher();
+          allow update, delete: if isAdmin();
         }
       }
     }

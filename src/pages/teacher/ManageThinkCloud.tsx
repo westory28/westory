@@ -29,6 +29,7 @@ import {
     type ThinkCloudResponse,
     type ThinkCloudSession,
 } from '../../lib/thinkCloud';
+import { canWriteLessonManagement } from '../../lib/permissions';
 
 type SessionWithId = ThinkCloudSession & { id: string };
 type SchoolOption = { value: string; label: string };
@@ -68,6 +69,7 @@ const ManageThinkCloud: React.FC = () => {
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [options, setOptions] = useState<ThinkCloudOptions>(DEFAULT_THINK_CLOUD_OPTIONS);
+    const canEdit = canWriteLessonManagement(userData, currentUser?.email || '');
 
     const selectedSession = useMemo(
         () => sessions.find((session) => session.id === selectedSessionId) || null,
@@ -280,6 +282,7 @@ const ManageThinkCloud: React.FC = () => {
     };
 
     const handleStartSession = async () => {
+        if (!canEdit) return;
         const safeTitle = title.trim();
         if (!safeTitle) {
             setMessage('주제를 입력해 주세요.');
@@ -338,6 +341,7 @@ const ManageThinkCloud: React.FC = () => {
     };
 
     const handleCloseSession = async () => {
+        if (!canEdit) return;
         if (!selectedSessionId) return;
         setLoadingAction(true);
         setMessage('');
@@ -364,6 +368,7 @@ const ManageThinkCloud: React.FC = () => {
     };
 
     const handlePauseSession = async () => {
+        if (!canEdit) return;
         if (!selectedSessionId) return;
         setLoadingAction(true);
         setMessage('');
@@ -386,6 +391,7 @@ const ManageThinkCloud: React.FC = () => {
     };
 
     const handleResumeSession = async () => {
+        if (!canEdit) return;
         if (!selectedSessionId) return;
         setLoadingAction(true);
         setMessage('');
@@ -414,6 +420,7 @@ const ManageThinkCloud: React.FC = () => {
     };
 
     const handleDeleteSession = async () => {
+        if (!canEdit) return;
         if (!selectedSessionId) return;
         const confirmed = window.confirm('선택한 주제를 삭제할까요? 해당 주제의 응답도 함께 삭제됩니다.');
         if (!confirmed) return;

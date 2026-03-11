@@ -55,7 +55,7 @@ const QUESTION_TYPE_LABEL: Record<string, string> = {
 
 const normalizeQuestionType = (type: string): QuestionType => (type === 'short' ? 'word' : ((type as QuestionType) || 'choice'));
 
-const QuizBankTab: React.FC = () => {
+const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     const { config } = useAuth();
     const [questions, setQuestions] = useState<Question[]>([]);
     const [questionStats, setQuestionStats] = useState<Record<string, QuestionStat>>({});
@@ -482,6 +482,7 @@ const QuizBankTab: React.FC = () => {
     };
 
     const openEditModal = (question: Question) => {
+        if (!canEdit) return;
         const normalizedType = normalizeQuestionType(question.type);
         setEditingQuestion(question);
         setEditCategory(question.category || 'diagnostic');
@@ -659,6 +660,7 @@ const QuizBankTab: React.FC = () => {
     };
 
     const saveEditedQuestion = async () => {
+        if (!canEdit) return;
         if (!editingQuestion) return;
         if (!editQuestionText.trim()) {
             alert('문제 내용을 입력하세요.');
@@ -747,6 +749,11 @@ const QuizBankTab: React.FC = () => {
 
     return (
         <div className="h-full flex flex-col bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            {!canEdit && (
+                <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
+                    읽기 전용 권한입니다. 문제 수정은 관리자만 가능합니다.
+                </div>
+            )}
             <div className="p-4 border-b bg-gray-50 flex flex-wrap gap-2 items-center shrink-0">
                 <select value={filters.big} onChange={(e) => handleBigChange(e.target.value)} className="border rounded px-2 py-1 text-sm bg-white">
                     <option value="">대단원 전체</option>
@@ -830,7 +837,7 @@ const QuizBankTab: React.FC = () => {
                         {!loading && filteredQuestions.map((q) => (
                             <tr
                                 key={`${q.docId}-${q.question.slice(0, 10)}`}
-                                className="hover:bg-blue-50 transition cursor-pointer"
+                                className={`transition ${canEdit ? 'cursor-pointer hover:bg-blue-50' : ''}`}
                                 onClick={() => openEditModal(q)}
                             >
                                 <td className="p-3 text-center text-gray-500 text-xs" title={`문항 ID: ${q.docId}`}>{questionDisplayCodes[q.docId] || '-'}</td>

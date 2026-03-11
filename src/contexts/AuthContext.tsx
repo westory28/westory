@@ -3,6 +3,7 @@ import { User, onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { auth, authPersistenceReady, db } from '../lib/firebase';
 import { SystemConfig, InterfaceConfig, UserData } from '../types';
+import { normalizeStaffPermissions } from '../lib/permissions';
 
 interface AuthContextType {
     // Backward-compatible alias for legacy pages.
@@ -77,7 +78,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                                 setUserData({
                                     ...raw,
                                     uid: user.uid,
-                                    role: raw.role === 'teacher' ? 'teacher' : normalizedRole,
+                                    role: raw.role === 'teacher'
+                                        ? 'teacher'
+                                        : raw.role === 'staff'
+                                            ? 'staff'
+                                            : normalizedRole,
+                                    staffPermissions: normalizeStaffPermissions(raw.staffPermissions),
                                 });
                             } else {
                                 const bootstrapUser: UserData = {
@@ -86,6 +92,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                                     name: '',
                                     customNameConfirmed: false,
                                     role: normalizedRole,
+                                    staffPermissions: [],
                                     grade: '',
                                     class: '',
                                     number: '',
