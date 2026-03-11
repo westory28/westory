@@ -33,31 +33,51 @@ const isLikelyRegionLabel = (value: string) => {
     return true;
 };
 
-const collapseRepeatedLabel = (value: string) => {
-    const text = value.trim();
-    if (!text) return text;
+const collapseRepeatedWordSequence = (words: string[]) => {
+    if (words.length < 2) return words;
 
-    const words = text.split(/\s+/u).filter(Boolean);
-    if (words.length >= 2 && words.length % 2 === 0) {
-        for (let size = 1; size <= Math.floor(words.length / 2); size += 1) {
-            if (words.length % size !== 0) continue;
-            const chunk = words.slice(0, size);
-            const repeated = Array.from({ length: words.length / size }, () => chunk).flat();
-            if (repeated.join(' ') === words.join(' ')) {
-                return chunk.join(' ');
+    for (let size = 1; size <= Math.floor(words.length / 2); size += 1) {
+        if (words.length % size !== 0) continue;
+        const chunk = words.slice(0, size);
+        let matches = true;
+
+        for (let index = 0; index < words.length; index += size) {
+            const nextChunk = words.slice(index, index + size);
+            if (nextChunk.join('\u0000') !== chunk.join('\u0000')) {
+                matches = false;
+                break;
             }
         }
-    }
 
-    for (let size = 1; size <= Math.floor(text.length / 2); size += 1) {
-        if (text.length % size !== 0) continue;
-        const token = text.slice(0, size);
-        if (token.repeat(text.length / size) === text) {
-            return token;
+        if (matches) {
+            return chunk;
         }
     }
 
-    return text.replace(/(.{2,12}?)\1+/gu, '$1');
+    return words;
+};
+
+const collapseRepeatedLabel = (value: string) => {
+    let text = value.replace(/\s+/gu, ' ').trim();
+    if (!text) return text;
+
+    let previous = '';
+    while (text && text !== previous) {
+        previous = text;
+
+        const words = text.split(' ').filter(Boolean);
+        const collapsedWords = collapseRepeatedWordSequence(words);
+        text = collapsedWords.join(' ');
+
+        // Also collapse duplicated leading phrase patterns such as
+        // "중원경 충주 중원경 충주", even when OCR adds slight spacing noise.
+        text = text.replace(/^(.{2,24}?)\s+\1$/u, '$1').trim();
+        text = text.replace(/^(.{2,24}?)\1$/u, '$1').trim();
+        text = text.replace(/(.{2,16}?)\s+\1(?=\s|$)/gu, '$1').trim();
+        text = text.replace(/(.{2,16}?)\1(?=\s|$)/gu, '$1').trim();
+    }
+
+    return text;
 };
 
 const normalizeSegmentText = (value: string) => value.replace(/\s+/g, ' ').trim();
