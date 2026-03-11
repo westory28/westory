@@ -6,7 +6,6 @@ import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import TeacherNoticeBoard from './components/TeacherNoticeBoard';
 import TeacherCalendarSection from './components/TeacherCalendarSection';
-import HistoryClassroomResultsPanel from './components/HistoryClassroomResultsPanel';
 import EventDetailPanel from '../student/components/EventDetailPanel'; // Reuse student panel for basic viewing
 import SearchModal from '../student/components/SearchModal'; // Reuse search modal
 import EventModal from './components/EventModal';
@@ -135,13 +134,8 @@ const TeacherDashboard: React.FC = () => {
 
                     {/* 3. Event Details (Mobile: Order 3 / Desktop: Order 3, Right Bottom) */}
                     <div className="order-3 md:order-3 md:col-span-2 md:row-span-1">
-                        <div className="flex h-full flex-col gap-4">
-                            <div className="min-h-[260px] flex-1">
-                                <EventDetailPanel selectedDate={selectedDate} events={dailyEvents} onEventClick={handleEventClick} />
-                            </div>
-                            <div className="min-h-[260px] flex-1">
-                                <HistoryClassroomResultsPanel />
-                            </div>
+                        <div className="min-h-[260px] h-full">
+                            <EventDetailPanel selectedDate={selectedDate} events={dailyEvents} onEventClick={handleEventClick} />
                         </div>
                     </div>
                 </div>
