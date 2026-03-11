@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { collection, doc, getDoc, getDocs, orderBy, query, serverTimestamp, setDoc } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
+import LessonWorksheetStage from '../../components/common/LessonWorksheetStage';
 import { useAuth } from '../../contexts/AuthContext';
 import { cloneDefaultMenus, sanitizeMenuConfig } from '../../constants/menus';
 import { db } from '../../lib/firebase';
@@ -10,6 +11,13 @@ import {
     type HistoryClassroomAssignment,
     type HistoryClassroomBlank,
 } from '../../lib/historyClassroom';
+import {
+    clampRatio,
+    getTightTextRegionBounds,
+    type LessonWorksheetBlank,
+    type LessonWorksheetPageImage,
+    type LessonWorksheetTextRegion,
+} from '../../lib/lessonWorksheet';
 import { normalizeMapResource, type MapResource } from '../../lib/mapResources';
 import { getSemesterCollectionPath } from '../../lib/semesterScope';
 
@@ -21,34 +29,120 @@ interface StudentOption {
     number: string;
 }
 
-interface DraftSelectionState {
-    page: number;
-    startX: number;
-    startY: number;
-    currentX: number;
-    currentY: number;
-}
-
-const MIN_BOX_SIZE = 16;
-const DEFAULT_BLANK_WIDTH = 140;
-const DEFAULT_BLANK_HEIGHT = 52;
-
-const createBlank = (
+const createWorksheetBlankFromRect = (
     page: number,
-    left: number,
-    top: number,
-    answer = '',
-    width = DEFAULT_BLANK_WIDTH,
-    height = DEFAULT_BLANK_HEIGHT,
-): HistoryClassroomBlank => ({
-    id: `blank-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    rect: {
+        leftRatio: number;
+        topRatio: number;
+        widthRatio: number;
+        heightRatio: number;
+    },
+    source: 'ocr' | 'manual' = 'manual',
+): LessonWorksheetBlank => ({
+    id: `blank-${page}-${Date.now()}`,
     page,
-    left,
-    top,
-    width,
-    height,
-    answer,
+    leftRatio: rect.leftRatio,
+    topRatio: rect.topRatio,
+    widthRatio: rect.widthRatio,
+    heightRatio: rect.heightRatio,
+    answer: '',
+    prompt: '',
+    source,
 });
+
+const getBlankAnswerFromRegions = (regions: LessonWorksheetTextRegion[]) => regions
+    .map((region) => String(region.label || '').trim())
+    .filter(Boolean)
+    .join(' ');
+
+const getBoundsFromRegions = (
+    regions: LessonWorksheetTextRegion[],
+    pageImage?: LessonWorksheetPageImage | null,
+) => {
+    if (!regions.length || !pageImage || pageImage.width <= 0 || pageImage.height <= 0) {
+        return null;
+    }
+
+    const tightened = regions
+        .map((region) => getTightTextRegionBounds(region, pageImage))
+        .filter((item): item is NonNullable<typeof item> => Boolean(item));
+
+    if (!tightened.length) {
+        return null;
+    }
+
+    const left = Math.min(...tightened.map((region) => region.left));
+    const top = Math.min(...tightened.map((region) => region.top));
+    const right = Math.max(...tightened.map((region) => region.left + region.width));
+    const bottom = Math.max(...tightened.map((region) => region.top + region.height));
+
+    return {
+        leftRatio: clampRatio(left / pageImage.width),
+        topRatio: clampRatio(top / pageImage.height),
+        widthRatio: clampRatio((right - left) / pageImage.width),
+        heightRatio: clampRatio((bottom - top) / pageImage.height),
+    };
+};
+
+const parseNumericLike = (value: string) => {
+    const normalized = String(value || '').trim();
+    if (!normalized) return Number.NaN;
+    const direct = Number(normalized);
+    if (Number.isFinite(direct)) return direct;
+    const matched = normalized.match(/\d+/);
+    return matched ? Number(matched[0]) : Number.NaN;
+};
+
+const compareSchoolValues = (a: string, b: string) => {
+    const aNumber = parseNumericLike(a);
+    const bNumber = parseNumericLike(b);
+    if (Number.isFinite(aNumber) && Number.isFinite(bNumber) && aNumber !== bNumber) {
+        return aNumber - bNumber;
+    }
+    if (Number.isFinite(aNumber) && !Number.isFinite(bNumber)) return -1;
+    if (!Number.isFinite(aNumber) && Number.isFinite(bNumber)) return 1;
+    return a.localeCompare(b, 'ko');
+};
+
+const historyBlankToWorksheetBlank = (
+    blank: HistoryClassroomBlank,
+    pageImage?: LessonWorksheetPageImage | null,
+): LessonWorksheetBlank | null => {
+    if (!pageImage || pageImage.width <= 0 || pageImage.height <= 0) {
+        return null;
+    }
+
+    return {
+        id: blank.id,
+        page: blank.page,
+        leftRatio: clampRatio(blank.left / pageImage.width),
+        topRatio: clampRatio(blank.top / pageImage.height),
+        widthRatio: clampRatio(blank.width / pageImage.width),
+        heightRatio: clampRatio(blank.height / pageImage.height),
+        answer: blank.answer,
+        prompt: '',
+        source: 'manual',
+    };
+};
+
+const worksheetBlankToHistoryBlank = (
+    blank: LessonWorksheetBlank,
+    pageImage?: LessonWorksheetPageImage | null,
+): HistoryClassroomBlank | null => {
+    if (!pageImage || pageImage.width <= 0 || pageImage.height <= 0) {
+        return null;
+    }
+
+    return {
+        id: blank.id,
+        page: blank.page,
+        left: Math.round(blank.leftRatio * pageImage.width),
+        top: Math.round(blank.topRatio * pageImage.height),
+        width: Math.max(1, Math.round(blank.widthRatio * pageImage.width)),
+        height: Math.max(1, Math.round(blank.heightRatio * pageImage.height)),
+        answer: blank.answer.trim(),
+    };
+};
 
 const ManageHistoryClassroom: React.FC = () => {
     const { config } = useAuth();
@@ -67,10 +161,12 @@ const ManageHistoryClassroom: React.FC = () => {
     const [targetNumber, setTargetNumber] = useState('');
     const [targetStudentUid, setTargetStudentUid] = useState('');
     const [blanks, setBlanks] = useState<HistoryClassroomBlank[]>([]);
-    const [currentPage, setCurrentPage] = useState(1);
     const [saving, setSaving] = useState(false);
     const [selectedBlankId, setSelectedBlankId] = useState('');
-    const [draftSelection, setDraftSelection] = useState<DraftSelectionState | null>(null);
+    const [draftBlank, setDraftBlank] = useState<LessonWorksheetBlank | null>(null);
+    const [draftBlankAnswer, setDraftBlankAnswer] = useState('');
+    const [worksheetTool, setWorksheetTool] = useState<'ocr' | 'box'>('box');
+    const [showAllBlankTags, setShowAllBlankTags] = useState(false);
     const [tabLabels, setTabLabels] = useState({
         manage: '문제 등록',
         log: '제출 현황',
@@ -91,7 +187,6 @@ const ManageHistoryClassroom: React.FC = () => {
             setMaps(loadedMaps);
             if (loadedMaps[0]) {
                 setSelectedMapId((prev) => prev || loadedMaps[0].id);
-                setCurrentPage(loadedMaps[0].pdfPageImages?.[0]?.page || 1);
             }
 
             const studentSnap = await getDocs(collection(db, 'users'));
@@ -107,7 +202,13 @@ const ManageHistoryClassroom: React.FC = () => {
                         number: String(data.number || '').trim(),
                     } as StudentOption;
                 })
-                .filter((item): item is StudentOption => !!item && !!item.uid);
+                .filter((item): item is StudentOption => !!item && !!item.uid)
+                .sort((a, b) => (
+                    compareSchoolValues(a.grade, b.grade)
+                    || compareSchoolValues(a.className, b.className)
+                    || compareSchoolValues(a.number, b.number)
+                    || a.name.localeCompare(b.name, 'ko')
+                ));
             setStudents(loadedStudents);
 
             const assignmentPath = getSemesterCollectionPath(config, 'history_classrooms');
@@ -141,19 +242,59 @@ const ManageHistoryClassroom: React.FC = () => {
         void resolveMenuLabels();
     }, []);
 
+    useEffect(() => {
+        setBlanks([]);
+        setSelectedBlankId('');
+        setDraftBlank(null);
+        setDraftBlankAnswer('');
+        setShowAllBlankTags(false);
+    }, [selectedMapId]);
+
     const selectedMap = useMemo(
         () => maps.find((item) => item.id === selectedMapId) || null,
         [maps, selectedMapId],
     );
 
-    const pageImage = useMemo(
-        () => selectedMap?.pdfPageImages?.find((page) => page.page === currentPage) || null,
-        [currentPage, selectedMap],
+    const worksheetPageImages = useMemo(
+        () => (selectedMap?.pdfPageImages || []).map((page) => ({
+            page: page.page,
+            imageUrl: page.imageUrl,
+            width: page.width,
+            height: page.height,
+        })),
+        [selectedMap],
     );
 
-    const currentPageBlanks = useMemo(
-        () => blanks.filter((blank) => blank.page === currentPage),
-        [blanks, currentPage],
+    const worksheetTextRegions = useMemo(
+        () => (selectedMap?.pdfRegions || []).map((region) => ({
+            label: region.label,
+            page: region.page,
+            left: region.left,
+            top: region.top,
+            width: region.width,
+            height: region.height,
+        })),
+        [selectedMap],
+    );
+
+    const worksheetBlanks = useMemo(
+        () => blanks
+            .map((blank) => {
+                const pageImage = worksheetPageImages.find((page) => page.page === blank.page) || null;
+                return historyBlankToWorksheetBlank(blank, pageImage);
+            })
+            .filter((item): item is LessonWorksheetBlank => Boolean(item)),
+        [blanks, worksheetPageImages],
+    );
+
+    const sortedBlanks = useMemo(
+        () => [...blanks].sort((a, b) => (a.page - b.page) || (a.top - b.top) || (a.left - b.left)),
+        [blanks],
+    );
+
+    const visibleBlankTags = useMemo(
+        () => (showAllBlankTags ? sortedBlanks : sortedBlanks.slice(0, 6)),
+        [showAllBlankTags, sortedBlanks],
     );
 
     const classFilteredStudents = useMemo(
@@ -166,50 +307,84 @@ const ManageHistoryClassroom: React.FC = () => {
         [classFilteredStudents, targetNumber],
     );
 
-    const handleCanvasPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-        if (!pageImage || event.button !== 0) return;
-        if ((event.target as HTMLElement).closest('[data-history-blank="true"]')) return;
-        const rect = event.currentTarget.getBoundingClientRect();
-        setDraftSelection({
-            page: currentPage,
-            startX: event.clientX - rect.left,
-            startY: event.clientY - rect.top,
-            currentX: event.clientX - rect.left,
-            currentY: event.clientY - rect.top,
-        });
+    const gradeOptions = useMemo(
+        () => Array.from(new Set(students.map((student) => student.grade).filter(Boolean))).sort(compareSchoolValues),
+        [students],
+    );
+
+    const classOptions = useMemo(
+        () => Array.from(new Set(
+            students
+                .filter((student) => !targetGrade || student.grade === targetGrade)
+                .map((student) => student.className)
+                .filter(Boolean),
+        )).sort(compareSchoolValues),
+        [students, targetGrade],
+    );
+
+    const numberOptions = useMemo(
+        () => Array.from(new Set(classFilteredStudents.map((student) => student.number).filter(Boolean))).sort(compareSchoolValues),
+        [classFilteredStudents],
+    );
+
+    const selectedBlank = useMemo(
+        () => blanks.find((blank) => blank.id === selectedBlankId) || null,
+        [blanks, selectedBlankId],
+    );
+
+    useEffect(() => {
+        if (sortedBlanks.length <= 6 && showAllBlankTags) {
+            setShowAllBlankTags(false);
+        }
+    }, [showAllBlankTags, sortedBlanks.length]);
+
+    const handleCreateBlankFromSelection = (
+        page: number,
+        rect: {
+            leftRatio: number;
+            topRatio: number;
+            widthRatio: number;
+            heightRatio: number;
+        },
+        matchedRegions: LessonWorksheetTextRegion[],
+        source: 'ocr' | 'manual',
+    ) => {
+        const pageImage = worksheetPageImages.find((item) => item.page === page) || null;
+        const regionBounds = getBoundsFromRegions(matchedRegions, pageImage);
+        const blank = createWorksheetBlankFromRect(page, regionBounds || rect, matchedRegions.length ? 'ocr' : source);
+        setDraftBlank(blank);
+        setDraftBlankAnswer(getBlankAnswerFromRegions(matchedRegions));
+        setSelectedBlankId('');
     };
 
-    const handleCanvasPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-        if (!draftSelection || draftSelection.page !== currentPage) return;
-        const rect = event.currentTarget.getBoundingClientRect();
-        setDraftSelection((prev) => prev ? {
-            ...prev,
-            currentX: event.clientX - rect.left,
-            currentY: event.clientY - rect.top,
-        } : null);
-    };
+    const handleConfirmDraftBlank = () => {
+        if (!draftBlank) return;
 
-    const handleCanvasPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
-        if (!pageImage || !draftSelection || draftSelection.page !== currentPage) return;
-        const rect = event.currentTarget.getBoundingClientRect();
-        const currentX = event.clientX - rect.left;
-        const currentY = event.clientY - rect.top;
-        const left = Math.min(draftSelection.startX, currentX);
-        const top = Math.min(draftSelection.startY, currentY);
-        const width = Math.abs(currentX - draftSelection.startX);
-        const height = Math.abs(currentY - draftSelection.startY);
-        setDraftSelection(null);
-
-        if (width < MIN_BOX_SIZE || height < MIN_BOX_SIZE) {
-            const created = createBlank(currentPage, left, top);
-            setBlanks((prev) => [...prev, created]);
-            setSelectedBlankId(created.id);
+        const answer = draftBlankAnswer.trim();
+        if (!answer) {
+            alert('빈칸 정답을 입력해 주세요.');
             return;
         }
 
-        const created = createBlank(currentPage, left, top, '', width, height);
-        setBlanks((prev) => [...prev, created]);
-        setSelectedBlankId(created.id);
+        const pageImage = worksheetPageImages.find((item) => item.page === draftBlank.page) || null;
+        const nextBlank = worksheetBlankToHistoryBlank({ ...draftBlank, answer }, pageImage);
+        if (!nextBlank) return;
+
+        setBlanks((prev) => [...prev, nextBlank]);
+        setSelectedBlankId(nextBlank.id);
+        setDraftBlank(null);
+        setDraftBlankAnswer('');
+    };
+
+    const handleCancelDraftBlank = () => {
+        setDraftBlank(null);
+        setDraftBlankAnswer('');
+    };
+
+    const handleSelectBlank = (blankId: string) => {
+        setSelectedBlankId(blankId);
+        setDraftBlank(null);
+        setDraftBlankAnswer('');
     };
 
     const handleBlankChange = (blankId: string, answer: string) => {
@@ -232,7 +407,7 @@ const ManageHistoryClassroom: React.FC = () => {
             return;
         }
         if (!blanks.length || blanks.some((blank) => !blank.answer.trim())) {
-            alert('모든 텍스트 박스에 정답을 입력해 주세요.');
+            alert('모든 빈칸의 정답을 입력해 주세요.');
             return;
         }
 
@@ -270,6 +445,9 @@ const ManageHistoryClassroom: React.FC = () => {
             setTargetStudentUid('');
             setBlanks([]);
             setSelectedBlankId('');
+            setDraftBlank(null);
+            setDraftBlankAnswer('');
+            setShowAllBlankTags(false);
             alert('역사교실 과제를 저장했습니다.');
         } catch (error) {
             console.error(error);
@@ -278,13 +456,6 @@ const ManageHistoryClassroom: React.FC = () => {
             setSaving(false);
         }
     };
-
-    const liveRect = draftSelection && draftSelection.page === currentPage ? {
-        left: Math.min(draftSelection.startX, draftSelection.currentX),
-        top: Math.min(draftSelection.startY, draftSelection.currentY),
-        width: Math.abs(draftSelection.currentX - draftSelection.startX),
-        height: Math.abs(draftSelection.currentY - draftSelection.startY),
-    } : null;
 
     return (
         <div className="mx-auto max-w-[96rem] px-4 py-8">
@@ -305,11 +476,11 @@ const ManageHistoryClassroom: React.FC = () => {
                 </div>
                 <div className="p-6">
                     <h1 className="text-3xl font-black text-gray-900">역사교실 제작</h1>
-                    <p className="mt-2 text-sm text-gray-600">지도를 직접 드래그해서 텍스트 박스를 만들고, 원하는 학생에게 개별 과제를 배정합니다.</p>
+                    <p className="mt-2 text-sm text-gray-600">텍스트 박스 또는 OCR 선택으로 빈칸을 만들고, 원하는 학생에게 개별 과제를 배정합니다.</p>
                 </div>
             </div>
 
-            <div className="grid gap-6 xl:grid-cols-[24rem_minmax(0,1fr)]">
+            <div className="grid gap-6 xl:grid-cols-[22rem_minmax(0,1fr)]">
                 <section className="space-y-4 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
                     <div>
                         <label className="mb-1 block text-xs font-bold text-gray-500">PDF 지도 선택</label>
@@ -317,9 +488,7 @@ const ManageHistoryClassroom: React.FC = () => {
                             value={selectedMapId}
                             onChange={(e) => {
                                 setSelectedMapId(e.target.value);
-                                setCurrentPage(1);
-                                setBlanks([]);
-                                setSelectedBlankId('');
+                                setTargetStudentUid('');
                             }}
                             className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm"
                         >
@@ -341,7 +510,7 @@ const ManageHistoryClassroom: React.FC = () => {
 
                     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1">
                         <div>
-                            <label className="mb-1 block text-xs font-bold text-gray-500">재응시 제한 시간(분)</label>
+                            <label className="mb-1 block text-xs font-bold text-gray-500">재도전 제한 시간(분)</label>
                             <input type="number" min={0} value={cooldownMinutes} onChange={(e) => setCooldownMinutes(Number(e.target.value) || 0)} className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm" />
                         </div>
                         <div>
@@ -350,26 +519,28 @@ const ManageHistoryClassroom: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="grid gap-3 md:grid-cols-4 xl:grid-cols-1">
-                        <select value={targetGrade} onChange={(e) => { setTargetGrade(e.target.value); setTargetClass(''); setTargetNumber(''); setTargetStudentUid(''); }} className="rounded-xl border border-gray-300 px-3 py-2 text-sm">
-                            <option value="">학년 선택</option>
-                            {Array.from(new Set(students.map((student) => student.grade).filter(Boolean))).map((grade) => (
-                                <option key={grade} value={grade}>{grade}</option>
-                            ))}
-                        </select>
-                        <select value={targetClass} onChange={(e) => { setTargetClass(e.target.value); setTargetNumber(''); setTargetStudentUid(''); }} className="rounded-xl border border-gray-300 px-3 py-2 text-sm">
-                            <option value="">반 선택</option>
-                            {Array.from(new Set(students.filter((student) => !targetGrade || student.grade === targetGrade).map((student) => student.className).filter(Boolean))).map((className) => (
-                                <option key={className} value={className}>{className}</option>
-                            ))}
-                        </select>
-                        <select value={targetNumber} onChange={(e) => { setTargetNumber(e.target.value); setTargetStudentUid(''); }} className="rounded-xl border border-gray-300 px-3 py-2 text-sm">
-                            <option value="">번호 선택</option>
-                            {Array.from(new Set(classFilteredStudents.map((student) => student.number).filter(Boolean))).map((number) => (
-                                <option key={number} value={number}>{number}</option>
-                            ))}
-                        </select>
-                        <select value={targetStudentUid} onChange={(e) => setTargetStudentUid(e.target.value)} className="rounded-xl border border-gray-300 px-3 py-2 text-sm">
+                    <div className="space-y-3">
+                        <div className="grid gap-3 lg:grid-cols-3">
+                            <select value={targetGrade} onChange={(e) => { setTargetGrade(e.target.value); setTargetClass(''); setTargetNumber(''); setTargetStudentUid(''); }} className="rounded-xl border border-gray-300 px-3 py-2 text-sm">
+                                <option value="">학년 선택</option>
+                                {gradeOptions.map((grade) => (
+                                    <option key={grade} value={grade}>{grade}</option>
+                                ))}
+                            </select>
+                            <select value={targetClass} onChange={(e) => { setTargetClass(e.target.value); setTargetNumber(''); setTargetStudentUid(''); }} className="rounded-xl border border-gray-300 px-3 py-2 text-sm">
+                                <option value="">학급 선택</option>
+                                {classOptions.map((className) => (
+                                    <option key={className} value={className}>{className}</option>
+                                ))}
+                            </select>
+                            <select value={targetNumber} onChange={(e) => { setTargetNumber(e.target.value); setTargetStudentUid(''); }} className="rounded-xl border border-gray-300 px-3 py-2 text-sm">
+                                <option value="">번호 선택</option>
+                                {numberOptions.map((number) => (
+                                    <option key={number} value={number}>{number}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <select value={targetStudentUid} onChange={(e) => setTargetStudentUid(e.target.value)} className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm">
                             <option value="">학생 선택</option>
                             {numberFilteredStudents.map((student) => (
                                 <option key={student.uid} value={student.uid}>{student.grade}-{student.className} {student.number}번 {student.name}</option>
@@ -380,20 +551,20 @@ const ManageHistoryClassroom: React.FC = () => {
                     <div className="rounded-2xl bg-gray-50 p-4">
                         <div className="mb-2 flex items-center justify-between gap-2">
                             <div>
-                                <div className="text-sm font-bold text-gray-700">텍스트 박스 목록</div>
-                                <div className="mt-1 text-xs text-gray-500">지도에서 드래그한 박스마다 정답을 입력하세요.</div>
+                                <div className="text-sm font-bold text-gray-700">빈칸 목록</div>
+                                <div className="mt-1 text-xs text-gray-500">추가한 단어는 우측 하단 패널에서도 빠르게 선택할 수 있습니다.</div>
                             </div>
                             <div className="rounded-full bg-white px-3 py-1 text-xs font-bold text-gray-600">{blanks.length}개</div>
                         </div>
                         <div className="space-y-2">
-                            {blanks.map((blank, index) => (
+                            {sortedBlanks.map((blank, index) => (
                                 <div
                                     key={blank.id}
                                     className={`rounded-2xl border bg-white p-3 transition ${blank.id === selectedBlankId ? 'border-blue-300 shadow-md shadow-blue-100' : 'border-gray-200'}`}
-                                    onClick={() => setSelectedBlankId(blank.id)}
+                                    onClick={() => handleSelectBlank(blank.id)}
                                 >
                                     <div className="mb-2 flex items-center justify-between gap-2 text-xs font-bold text-gray-500">
-                                        <span>박스 {index + 1} / p.{blank.page}</span>
+                                        <span>빈칸 {index + 1} / p.{blank.page}</span>
                                         <button type="button" onClick={() => removeBlank(blank.id)} className="text-red-500">삭제</button>
                                     </div>
                                     <input
@@ -404,7 +575,7 @@ const ManageHistoryClassroom: React.FC = () => {
                                     />
                                 </div>
                             ))}
-                            {!blanks.length && <div className="text-sm text-gray-400">지도를 드래그해서 텍스트 박스를 추가하세요.</div>}
+                            {!blanks.length && <div className="text-sm text-gray-400">지도에서 영역을 드래그하거나 OCR 단어를 선택해 빈칸을 추가하세요.</div>}
                         </div>
                     </div>
 
@@ -415,45 +586,27 @@ const ManageHistoryClassroom: React.FC = () => {
 
                 <section className="space-y-6">
                     <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
-                        <div className="mb-4 flex items-center justify-between gap-3">
+                        <div className="mb-4 flex items-start justify-between gap-3">
                             <div>
                                 <div className="text-sm font-bold text-gray-700">지도 선택 영역</div>
-                                <div className="mt-1 text-xs text-gray-500">원하는 위치를 드래그하면 형광 박스가 미리 보이고, 놓으면 텍스트 박스가 생성됩니다.</div>
-                            </div>
-                            <div className="flex gap-2">
-                                <button type="button" disabled={currentPage <= 1} onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 disabled:opacity-40">이전</button>
-                                <div className="rounded-xl bg-gray-100 px-3 py-2 text-sm font-bold text-gray-700">{currentPage} / {selectedMap?.pdfPageImages?.length || 1}</div>
-                                <button type="button" disabled={currentPage >= (selectedMap?.pdfPageImages?.length || 1)} onClick={() => setCurrentPage((prev) => Math.min(selectedMap?.pdfPageImages?.length || 1, prev + 1))} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 disabled:opacity-40">다음</button>
+                                <div className="mt-1 text-xs text-gray-500">텍스트 박스는 자유 드래그, OCR 선택은 글자를 따라 빈칸을 잡습니다.</div>
                             </div>
                         </div>
 
-                        {pageImage ? (
-                            <div className="overflow-auto rounded-3xl border border-gray-200 bg-gray-100 p-4">
-                                <div
-                                    className="relative inline-block select-none"
-                                    onPointerDown={handleCanvasPointerDown}
-                                    onPointerMove={handleCanvasPointerMove}
-                                    onPointerUp={handleCanvasPointerUp}
-                                    onPointerLeave={() => setDraftSelection(null)}
-                                >
-                                    <img src={pageImage.imageUrl} alt={selectedMap?.title || 'map'} style={{ width: `${pageImage.width}px`, maxWidth: 'none' }} />
-                                    {liveRect && (
-                                        <div
-                                            className="pointer-events-none absolute border-2 border-lime-500 bg-lime-300/25 shadow-[0_0_0_9999px_rgba(163,230,53,0.10)]"
-                                            style={{ left: liveRect.left, top: liveRect.top, width: liveRect.width, height: liveRect.height }}
-                                        />
-                                    )}
-                                    {currentPageBlanks.map((blank, index) => (
-                                        <div
-                                            key={blank.id}
-                                            data-history-blank="true"
-                                            className={`absolute rounded-xl border-2 border-dashed bg-white/95 px-3 py-2 text-sm font-bold text-gray-700 shadow-sm ${blank.id === selectedBlankId ? 'border-orange-600 ring-4 ring-orange-200' : 'border-orange-500'}`}
-                                            style={{ left: blank.left, top: blank.top, width: blank.width, height: blank.height }}
-                                        >
-                                            <div className="line-clamp-2">{blank.answer || `박스 ${index + 1}`}</div>
-                                        </div>
-                                    ))}
-                                </div>
+                        {worksheetPageImages.length > 0 ? (
+                            <div className="mx-auto max-w-[56rem]">
+                                <LessonWorksheetStage
+                                    pageImages={worksheetPageImages}
+                                    blanks={worksheetBlanks}
+                                    textRegions={worksheetTextRegions}
+                                    mode="teacher"
+                                    teacherTool={worksheetTool}
+                                    selectedBlankId={selectedBlankId || null}
+                                    pendingBlank={draftBlank}
+                                    onSelectBlank={handleSelectBlank}
+                                    onDeleteBlank={removeBlank}
+                                    onCreateBlankFromSelection={handleCreateBlankFromSelection}
+                                />
                             </div>
                         ) : (
                             <div className="rounded-3xl border border-dashed border-gray-300 bg-gray-50 p-12 text-center text-gray-400">PDF 지도를 먼저 선택해 주세요.</div>
@@ -469,7 +622,7 @@ const ManageHistoryClassroom: React.FC = () => {
                                         <div>
                                             <div className="text-xs font-bold text-orange-500">{assignment.mapTitle}</div>
                                             <div className="text-lg font-black text-gray-900">{assignment.title}</div>
-                                            <div className="mt-1 text-xs text-gray-500">통과 기준 {assignment.passThresholdPercent}% · 재응시 제한 {assignment.cooldownMinutes}분</div>
+                                            <div className="mt-1 text-xs text-gray-500">통과 기준 {assignment.passThresholdPercent}% · 재도전 제한 {assignment.cooldownMinutes}분</div>
                                         </div>
                                         <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-bold text-orange-700">
                                             {assignment.targetStudentName || '학생 미지정'}
@@ -482,6 +635,124 @@ const ManageHistoryClassroom: React.FC = () => {
                     </div>
                 </section>
             </div>
+
+            {(draftBlank || selectedBlank || sortedBlanks.length > 0) && (
+                <div className="fixed bottom-5 right-5 z-40 hidden w-[min(18rem,calc(100vw-2.5rem))] space-y-2.5 lg:block">
+                    <div className="rounded-2xl border border-gray-200 bg-white/96 p-3 shadow-2xl backdrop-blur">
+                        <div className="flex items-center justify-between gap-3">
+                            <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400">Tool</div>
+                            <div className="text-[11px] font-semibold text-gray-500">
+                                {worksheetTool === 'box' ? '텍스트 박스' : 'OCR 선택'}
+                            </div>
+                        </div>
+                        <div className="mt-2.5 flex flex-wrap gap-1.5">
+                            <button
+                                type="button"
+                                onClick={() => setWorksheetTool('box')}
+                                className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
+                                    worksheetTool === 'box'
+                                        ? 'bg-blue-600 text-white shadow-sm'
+                                        : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                                }`}
+                            >
+                                텍스트 박스
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setWorksheetTool('ocr')}
+                                className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
+                                    worksheetTool === 'ocr'
+                                        ? 'bg-blue-600 text-white shadow-sm'
+                                        : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                                }`}
+                            >
+                                OCR 선택
+                            </button>
+                        </div>
+                        <div className="mt-2 text-[11px] leading-4 text-gray-500">
+                            {worksheetTool === 'box'
+                                ? '드래그한 크기 그대로 빈칸 상자를 만듭니다.'
+                                : '글자 위를 클릭하거나 드래그하면 OCR 단어를 기준으로 빈칸이 잡힙니다.'}
+                        </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-gray-200 bg-white/96 p-3 shadow-2xl backdrop-blur">
+                        <div className="flex items-center justify-between gap-3">
+                            <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400">Words</div>
+                            <div className="text-[11px] font-semibold text-gray-500">{sortedBlanks.length}개</div>
+                        </div>
+                        <div className="mt-2.5 flex max-h-28 flex-wrap gap-1.5 overflow-hidden">
+                            {visibleBlankTags.map((blank, index) => (
+                                <button
+                                    key={blank.id}
+                                    type="button"
+                                    onClick={() => handleSelectBlank(blank.id)}
+                                    className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
+                                        selectedBlankId === blank.id
+                                            ? 'border-blue-300 bg-blue-50 text-blue-700'
+                                            : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    {blank.answer || `빈칸 ${index + 1}`}
+                                </button>
+                            ))}
+                            {sortedBlanks.length > 6 && (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowAllBlankTags((prev) => !prev)}
+                                    className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 transition hover:bg-blue-100"
+                                >
+                                    {showAllBlankTags ? '숨기기' : `더보기 +${sortedBlanks.length - visibleBlankTags.length}`}
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    {draftBlank ? (
+                        <div className="space-y-2.5 rounded-2xl border border-amber-200 bg-white/98 p-3 shadow-2xl backdrop-blur">
+                            <div className="flex items-center justify-between gap-2">
+                                <div className="text-sm font-bold text-amber-900">새 빈칸 초안</div>
+                                <button type="button" onClick={handleCancelDraftBlank} className="text-xs font-bold text-gray-500">
+                                    취소
+                                </button>
+                            </div>
+                            <div className="text-xs text-gray-500">p.{draftBlank.page} 영역을 선택했습니다.</div>
+                            <input
+                                type="text"
+                                value={draftBlankAnswer}
+                                onChange={(e) => setDraftBlankAnswer(e.target.value)}
+                                className="w-full rounded-lg border border-amber-300 px-2.5 py-1.5 text-sm"
+                                placeholder="정답을 입력해 주세요"
+                                autoFocus
+                            />
+                            <button
+                                type="button"
+                                onClick={handleConfirmDraftBlank}
+                                className="w-full rounded-lg bg-amber-500 px-3 py-1.5 text-sm font-bold text-white hover:bg-amber-600"
+                            >
+                                빈칸 추가
+                            </button>
+                        </div>
+                    ) : selectedBlank ? (
+                        <div className="space-y-2.5 rounded-2xl border border-blue-100 bg-white/98 p-3 shadow-2xl backdrop-blur">
+                            <div className="flex items-center justify-between gap-2">
+                                <div className="text-sm font-bold text-blue-900">선택한 빈칸</div>
+                                <button type="button" onClick={() => removeBlank(selectedBlank.id)} className="text-xs font-bold text-red-600">
+                                    삭제
+                                </button>
+                            </div>
+                            <div className="text-xs text-gray-500">p.{selectedBlank.page}</div>
+                            <input
+                                type="text"
+                                value={selectedBlank.answer}
+                                onChange={(e) => handleBlankChange(selectedBlank.id, e.target.value)}
+                                className="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
+                                placeholder="정답"
+                            />
+                        </div>
+                    ) : null}
+                </div>
+            )}
         </div>
     );
 };

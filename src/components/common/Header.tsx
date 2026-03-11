@@ -96,12 +96,7 @@ const Header: React.FC = () => {
         : baseMenuItems;
     const getVisibleChildren = (item: { children?: Array<{ hidden?: boolean; url: string; name: string }> }) => {
         if (!item.children?.length) return [];
-        const visible = isTeacherPortal ? item.children : item.children.filter((child) => child.hidden !== true);
-        if (!isTeacherPortal) return visible;
-        return visible.filter((child) => {
-            if (child.url === '/teacher/quiz/history-classroom') return false;
-            return true;
-        });
+        return isTeacherPortal ? item.children : item.children.filter((child) => child.hidden !== true);
     };
     const home = isTeacherPortal ? getDefaultTeacherRoute(userData, currentUser?.email || '') : `/${portal}/dashboard`;
     const profileTarget = isTeacherPortal
