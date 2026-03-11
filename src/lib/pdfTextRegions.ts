@@ -37,6 +37,18 @@ const collapseRepeatedLabel = (value: string) => {
     const text = value.trim();
     if (!text) return text;
 
+    const words = text.split(/\s+/u).filter(Boolean);
+    if (words.length >= 2 && words.length % 2 === 0) {
+        for (let size = 1; size <= Math.floor(words.length / 2); size += 1) {
+            if (words.length % size !== 0) continue;
+            const chunk = words.slice(0, size);
+            const repeated = Array.from({ length: words.length / size }, () => chunk).flat();
+            if (repeated.join(' ') === words.join(' ')) {
+                return chunk.join(' ');
+            }
+        }
+    }
+
     for (let size = 1; size <= Math.floor(text.length / 2); size += 1) {
         if (text.length % size !== 0) continue;
         const token = text.slice(0, size);
