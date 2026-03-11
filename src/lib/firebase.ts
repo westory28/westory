@@ -10,9 +10,11 @@ import {
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
+const configuredAuthDomain = import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "history-quiz-yongsin.firebaseapp.com";
+
 const firebaseConfig = {
     apiKey: "AIzaSyAOlPQ5PFmL0zxmGrGcuEBnqBXisph7kPU",
-    authDomain: "history-quiz-yongsin.firebaseapp.com",
+    authDomain: configuredAuthDomain,
     projectId: "history-quiz-yongsin",
     storageBucket: "history-quiz-yongsin.firebasestorage.app",
     messagingSenderId: "177587430482",
@@ -50,6 +52,25 @@ const authPersistenceReady = typeof window === 'undefined'
         }
     })();
 
+try {
+    const isBrowser = typeof window !== 'undefined';
+    if (isBrowser) {
+        const currentHost = window.location.hostname;
+        const authHost = firebaseConfig.authDomain;
+        const isLocalHost = /^(localhost|127\.0\.0\.1)$/.test(currentHost);
+        if (!isLocalHost && authHost && currentHost !== authHost) {
+            console.warn(
+                `[Auth] Current host (${currentHost}) differs from Firebase authDomain (${authHost}). ` +
+                'Safari-based browsers may fail redirect login unless the helper domain is configured for the same site.',
+            );
+        }
+    }
+    if (isBrowser && firebaseConfig.measurementId) {
+        analytics = getAnalytics(app);
+    }
+} catch (e) {
+    console.warn("Analytics not supported:", e);
+}
 if (typeof window !== 'undefined' && firebaseConfig.measurementId) {
     window.setTimeout(() => {
         void import('firebase/analytics')
@@ -62,4 +83,4 @@ if (typeof window !== 'undefined' && firebaseConfig.measurementId) {
     }, 0);
 }
 
-export { app, auth, db, storage, analytics, authPersistenceReady };
+export { app, auth, db, storage, analytics, authPersistenceReady, configuredAuthDomain };

@@ -21,7 +21,7 @@ import {
     where,
 } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
-import { auth, authPersistenceReady, db } from '../lib/firebase';
+import { auth, authPersistenceReady, configuredAuthDomain, db } from '../lib/firebase';
 import { readLocalOnly, readStorage, removeStorage, writeLocalOnly, writeStorage } from '../lib/safeStorage';
 import { useAuth } from '../contexts/AuthContext';
 import type { UserData } from '../types';
@@ -206,6 +206,10 @@ const clearRedirectAttempt = () => {
 const getLoginFailureMessage = (error?: unknown): string => {
     const code = (error as Partial<AuthError>)?.code || '';
 
+    if (isIOSDevice() && hasCrossOriginAuthDomain()) {
+        return '현재 서비스 도메인과 Firebase 인증 도메인이 달라 iPhone에서 로그인 세션이 복구되지 않고 있습니다. Firebase Authentication의 authDomain을 현재 도메인으로 맞추거나 동일 사이트 프록시 설정을 확인해주세요.';
+    }
+
     if (code === 'auth/unauthorized-domain') {
         return '현재 접속한 도메인이 로그인 허용 목록에 아직 반영되지 않았습니다. 잠시 후 다시 시도해주세요.';
     }
@@ -231,6 +235,14 @@ const getLoginFailureMessage = (error?: unknown): string => {
     }
 
     return '로그인에 실패했습니다. 브라우저를 새로고침한 뒤 다시 시도해주세요.';
+};
+
+const hasCrossOriginAuthDomain = (): boolean => {
+    if (typeof window === 'undefined') return false;
+    const currentHost = window.location.hostname;
+    if (!currentHost) return false;
+    if (/^(localhost|127\.0\.0\.1)$/.test(currentHost)) return false;
+    return currentHost !== configuredAuthDomain;
 };
 
 const isPopupFallbackError = (error: unknown): boolean => {
