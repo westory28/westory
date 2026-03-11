@@ -178,8 +178,14 @@ const isRestrictedInAppBrowser = (): boolean => {
     return /(NAVER|KAKAOTALK)/i.test(ua);
 };
 
+const isLocalDevelopmentHost = (): boolean => {
+    if (typeof window === 'undefined') return false;
+    const hostname = window.location.hostname;
+    return hostname === 'localhost' || hostname === '127.0.0.1';
+};
+
 const shouldPreferRedirectLogin = (): boolean => {
-    return isSafariBrowser() || isIOSDevice();
+    return !isLocalDevelopmentHost() || isSafariBrowser() || isIOSDevice();
 };
 
 const getLoginFailureMessage = (error?: unknown): string => {
@@ -205,7 +211,11 @@ const getLoginFailureMessage = (error?: unknown): string => {
         return 'iPhone 또는 iPad에서는 Chrome에서 직접 로그인해보시고, 계속 실패하면 Safari에서 다시 시도해주세요.';
     }
 
-    return '로그인에 실패했습니다.';
+    if (code) {
+        return `로그인에 실패했습니다. (${code})`;
+    }
+
+    return '로그인에 실패했습니다. 브라우저를 새로고침한 뒤 다시 시도해주세요.';
 };
 
 const isPopupFallbackError = (error: unknown): boolean => {
