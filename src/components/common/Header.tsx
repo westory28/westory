@@ -266,6 +266,7 @@ const Header: React.FC = () => {
     if (!isReady) return null;
 
     return (
+        <>
         <header>
             <div className="header-container">
                 <div className="flex items-center gap-4 h-full">
@@ -371,34 +372,6 @@ const Header: React.FC = () => {
                 </div>
             </div>
 
-            {activeDesktopSubmenu && (
-                <div className="hidden lg:block">
-                    <div className="mx-auto max-w-7xl px-4 pt-6 lg:px-6">
-                        <div className="mb-4 flex shrink-0 overflow-x-auto rounded-t-lg border-b border-gray-200 bg-white px-2">
-                            {activeDesktopSubmenu.resolvedChildren.map((child, childIdx) => {
-                                const childTarget = child.resolvedUrl;
-                                const active = isChildActive(child.resolvedUrl, activeDesktopSubmenu.resolvedChildren);
-
-                                return (
-                                    <Link
-                                        key={`${child.url}-desktop-submenu-${childIdx}`}
-                                        to={childTarget}
-                                        data-session-ignore="true"
-                                        className={`border-b-2 px-6 py-3 text-sm font-bold transition ${
-                                            active
-                                                ? 'border-blue-500 text-blue-600'
-                                                : 'border-transparent text-gray-600 hover:bg-gray-50'
-                                        }`}
-                                    >
-                                        {child.name}
-                                    </Link>
-                                );
-                            })}
-                        </div>
-                    </div>
-                </div>
-            )}
-
             {mobileMenuOpen && (
                 <div
                     className="fixed inset-0 top-16 z-40 lg:hidden bg-transparent"
@@ -444,6 +417,35 @@ const Header: React.FC = () => {
                 )})}
             </div>
         </header>
+
+        {activeDesktopSubmenu && (
+            <div className="hidden lg:block">
+                <div className="mx-auto max-w-7xl px-4 pt-6 lg:px-6">
+                    <div className="mb-4 flex shrink-0 overflow-x-auto rounded-t-lg border-b border-gray-200 bg-white px-2">
+                        {activeDesktopSubmenu.resolvedChildren.map((child, childIdx) => {
+                            const childTarget = child.resolvedUrl;
+                            const active = isChildActive(child.resolvedUrl, activeDesktopSubmenu.resolvedChildren);
+
+                            return (
+                                <Link
+                                    key={`${child.url}-desktop-submenu-${childIdx}`}
+                                    to={childTarget}
+                                    data-session-ignore="true"
+                                    className={`border-b-2 px-6 py-3 text-sm font-bold transition ${
+                                        active
+                                            ? 'border-blue-500 text-blue-600'
+                                            : 'border-transparent text-gray-600 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    {child.name}
+                                </Link>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+        )}
+        </>
     );
 };
 
