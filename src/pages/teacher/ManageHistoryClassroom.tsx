@@ -164,10 +164,11 @@ const ManageHistoryClassroom: React.FC = () => {
     const [blanks, setBlanks] = useState<HistoryClassroomBlank[]>([]);
     const [saving, setSaving] = useState(false);
     const [selectedBlankId, setSelectedBlankId] = useState('');
-    const [draftBlank, setDraftBlank] = useState<LessonWorksheetBlank | null>(null);
+    const [draftBlank, setDraftBlank] = useState<any>(null);
     const [draftBlankAnswer, setDraftBlankAnswer] = useState('');
     const [worksheetTool, setWorksheetTool] = useState<'ocr' | 'box'>('box');
     const [showAllBlankTags, setShowAllBlankTags] = useState(false);
+    const [floatingPanelOpen, setFloatingPanelOpen] = useState(false);
     const [tabLabels, setTabLabels] = useState({
         manage: '문제 등록',
         log: '제출 현황',
@@ -335,7 +336,7 @@ const ManageHistoryClassroom: React.FC = () => {
         [classFilteredStudents],
     );
 
-    const selectedBlank = useMemo(
+    const selectedBlank = useMemo<any>(
         () => blanks.find((blank) => blank.id === selectedBlankId) || null,
         [blanks, selectedBlankId],
     );
@@ -644,7 +645,7 @@ const ManageHistoryClassroom: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="mb-4 space-y-3 lg:hidden">
+                        {false && <div className="mb-4 space-y-3 lg:hidden">
                             <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
                                 <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400">Tool</div>
                                 <div className="mt-2 flex flex-wrap gap-2">
@@ -706,7 +707,7 @@ const ManageHistoryClassroom: React.FC = () => {
                                     </div>
                                 </div>
                             )}
-                        </div>
+                        </div>}
 
                         {worksheetPageImages.length > 0 ? (
                             <div className="mx-auto max-w-[56rem]">
@@ -753,7 +754,7 @@ const ManageHistoryClassroom: React.FC = () => {
                 </section>
             </div>
 
-            {(draftBlank || selectedBlank || sortedBlanks.length > 0) && (
+            {false && (draftBlank || selectedBlank || sortedBlanks.length > 0) && (
                 <div className="fixed bottom-5 right-5 z-40 hidden w-[min(18rem,calc(100vw-2.5rem))] space-y-2.5 lg:block">
                     <div className="rounded-2xl border border-gray-200 bg-white/96 p-3 shadow-2xl backdrop-blur">
                         <div className="flex items-center justify-between gap-3">
@@ -870,6 +871,137 @@ const ManageHistoryClassroom: React.FC = () => {
                     ) : null}
                 </div>
             )}
+
+            <div className="fixed bottom-5 right-5 z-40 flex max-w-[calc(100vw-2.5rem)] flex-col items-end gap-3">
+                {floatingPanelOpen && (
+                    <div className="w-[min(18rem,calc(100vw-2.5rem))] space-y-2.5">
+                        <div className="rounded-2xl border border-gray-200 bg-white/96 p-3 shadow-2xl backdrop-blur">
+                            <div className="flex items-center justify-between gap-3">
+                                <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400">Tool</div>
+                                <div className="text-[11px] font-semibold text-gray-500">
+                                    {worksheetTool === 'box' ? '텍스트 박스' : 'OCR 선택'}
+                                </div>
+                            </div>
+                            <div className="mt-2.5 flex flex-wrap gap-1.5">
+                                <button
+                                    type="button"
+                                    onClick={() => setWorksheetTool('box')}
+                                    className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
+                                        worksheetTool === 'box'
+                                            ? 'bg-blue-600 text-white shadow-sm'
+                                            : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    텍스트 박스
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setWorksheetTool('ocr')}
+                                    className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
+                                        worksheetTool === 'ocr'
+                                            ? 'bg-blue-600 text-white shadow-sm'
+                                            : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    OCR 선택
+                                </button>
+                            </div>
+                            <div className="mt-2 text-[11px] leading-4 text-gray-500">
+                                {worksheetTool === 'box'
+                                    ? '드래그한 크기 그대로 빈칸 상자를 만듭니다.'
+                                    : '글자를 클릭하거나 드래그하면 OCR 단어를 기준으로 빈칸을 잡습니다.'}
+                            </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-gray-200 bg-white/96 p-3 shadow-2xl backdrop-blur">
+                            <div className="flex items-center justify-between gap-3">
+                                <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400">Words</div>
+                                <div className="text-[11px] font-semibold text-gray-500">{sortedBlanks.length}개</div>
+                            </div>
+                            <div className="mt-2.5 flex max-h-28 flex-wrap gap-1.5 overflow-hidden">
+                                {visibleBlankTags.map((blank, index) => (
+                                    <button
+                                        key={blank.id}
+                                        type="button"
+                                        onClick={() => handleSelectBlank(blank.id)}
+                                        className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
+                                            selectedBlankId === blank.id
+                                                ? 'border-blue-300 bg-blue-50 text-blue-700'
+                                                : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        {blank.answer || `빈칸 ${index + 1}`}
+                                    </button>
+                                ))}
+                                {sortedBlanks.length > 6 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowAllBlankTags((prev) => !prev)}
+                                        className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 transition hover:bg-blue-100"
+                                    >
+                                        {showAllBlankTags ? '숨기기' : `더보기 +${sortedBlanks.length - visibleBlankTags.length}`}
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+
+                        {draftBlank ? (
+                            <div className="space-y-2.5 rounded-2xl border border-amber-200 bg-white/98 p-3 shadow-2xl backdrop-blur">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="text-sm font-bold text-amber-900">새 빈칸 초안</div>
+                                    <button type="button" onClick={handleCancelDraftBlank} className="text-xs font-bold text-gray-500">
+                                        취소
+                                    </button>
+                                </div>
+                                <div className="text-xs text-gray-500">p.{draftBlank!.page} 영역이 선택되었습니다.</div>
+                                <input
+                                    type="text"
+                                    value={draftBlankAnswer}
+                                    onChange={(e) => setDraftBlankAnswer(e.target.value)}
+                                    className="w-full rounded-lg border border-amber-300 px-2.5 py-1.5 text-sm"
+                                    placeholder="정답을 입력해 주세요."
+                                    autoFocus
+                                />
+                                <button
+                                    type="button"
+                                    onClick={handleConfirmDraftBlank}
+                                    className="w-full rounded-lg bg-amber-500 px-3 py-1.5 text-sm font-bold text-white hover:bg-amber-600"
+                                >
+                                    빈칸 추가
+                                </button>
+                            </div>
+                        ) : selectedBlank ? (
+                            <div className="space-y-2.5 rounded-2xl border border-blue-100 bg-white/98 p-3 shadow-2xl backdrop-blur">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="text-sm font-bold text-blue-900">선택한 빈칸</div>
+                                    <button type="button" onClick={() => removeBlank(selectedBlank!.id)} className="text-xs font-bold text-red-600">
+                                        삭제
+                                    </button>
+                                </div>
+                                <div className="text-xs text-gray-500">p.{selectedBlank!.page}</div>
+                                <input
+                                    type="text"
+                                    value={selectedBlank!.answer}
+                                    onChange={(e) => handleBlankChange(selectedBlank!.id, e.target.value)}
+                                    className="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
+                                    placeholder="정답"
+                                />
+                            </div>
+                        ) : null}
+                    </div>
+                )}
+
+                <button
+                    type="button"
+                    onClick={() => setFloatingPanelOpen((prev) => !prev)}
+                    aria-label={floatingPanelOpen ? '플로팅 도구 닫기' : '플로팅 도구 열기'}
+                    className={`flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-2xl transition duration-200 hover:bg-blue-700 ${
+                        floatingPanelOpen ? 'scale-90' : 'scale-100'
+                    }`}
+                >
+                    <i className={`fas ${floatingPanelOpen ? 'fa-times' : 'fa-layer-group'} text-lg`}></i>
+                </button>
+            </div>
         </div>
     );
 };
