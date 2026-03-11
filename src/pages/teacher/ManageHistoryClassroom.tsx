@@ -8,8 +8,10 @@ import { db } from '../../lib/firebase';
 import {
     buildAnswerOptions,
     normalizeHistoryClassroomAssignment,
+    normalizeHistoryClassroomResult,
     type HistoryClassroomAssignment,
     type HistoryClassroomBlank,
+    type HistoryClassroomResult,
 } from '../../lib/historyClassroom';
 import {
     clampRatio,
@@ -150,6 +152,7 @@ const ManageHistoryClassroom: React.FC = () => {
 
     const [maps, setMaps] = useState<MapResource[]>([]);
     const [assignments, setAssignments] = useState<HistoryClassroomAssignment[]>([]);
+    const [resultsByAssignment, setResultsByAssignment] = useState<Record<string, HistoryClassroomResult[]>>({});
     const [students, setStudents] = useState<StudentOption[]>([]);
     const [selectedMapId, setSelectedMapId] = useState('');
     const [title, setTitle] = useState('');
@@ -170,6 +173,14 @@ const ManageHistoryClassroom: React.FC = () => {
     const [worksheetTool, setWorksheetTool] = useState<'ocr' | 'box'>('box');
     const [showAllBlankTags, setShowAllBlankTags] = useState(false);
     const [floatingPanelOpen, setFloatingPanelOpen] = useState(false);
+    const [editingAssignmentId, setEditingAssignmentId] = useState('');
+    const [editingTitle, setEditingTitle] = useState('');
+    const [editingDescription, setEditingDescription] = useState('');
+    const [editingTimeLimitMinutes, setEditingTimeLimitMinutes] = useState(0);
+    const [editingCooldownMinutes, setEditingCooldownMinutes] = useState(0);
+    const [editingPassThresholdPercent, setEditingPassThresholdPercent] = useState(80);
+    const [editingStudentUids, setEditingStudentUids] = useState<string[]>([]);
+    const [savingEdit, setSavingEdit] = useState(false);
     const [tabLabels, setTabLabels] = useState({
         manage: '문제 등록',
         log: '제출 현황',
@@ -220,6 +231,18 @@ const ManageHistoryClassroom: React.FC = () => {
                 assignmentSnap = await getDocs(query(collection(db, 'history_classrooms'), orderBy('updatedAt', 'desc')));
             }
             setAssignments(assignmentSnap.docs.map((docSnap) => normalizeHistoryClassroomAssignment(docSnap.id, docSnap.data())));
+
+            const resultPath = getSemesterCollectionPath(config, 'history_classroom_results');
+            let resultSnap = await getDocs(query(collection(db, resultPath), orderBy('createdAt', 'desc')));
+            if (resultSnap.empty) {
+                resultSnap = await getDocs(query(collection(db, 'history_classroom_results'), orderBy('createdAt', 'desc')));
+            }
+            const groupedResults: Record<string, HistoryClassroomResult[]> = {};
+            resultSnap.docs.forEach((docSnap) => {
+                const result = normalizeHistoryClassroomResult(docSnap.id, docSnap.data());
+                groupedResults[result.assignmentId] = [...(groupedResults[result.assignmentId] || []), result];
+            });
+            setResultsByAssignment(groupedResults);
         };
 
         void loadData();
@@ -345,6 +368,23 @@ const ManageHistoryClassroom: React.FC = () => {
         [numberFilteredStudents, targetNumber, targetStudentUid],
     );
 
+    const editingAssignment = useMemo(
+        () => assignments.find((assignment) => assignment.id === editingAssignmentId) || null,
+        [assignments, editingAssignmentId],
+    );
+
+    const editingStudents = useMemo(
+        () => editingStudentUids
+            .map((uid) => students.find((student) => student.uid === uid))
+            .filter((student): student is StudentOption => !!student),
+        [editingStudentUids, students],
+    );
+
+    const editingResults = useMemo(
+        () => resultsByAssignment[editingAssignmentId] || [],
+        [editingAssignmentId, resultsByAssignment],
+    );
+
     const selectedBlank = useMemo<any>(
         () => blanks.find((blank) => blank.id === selectedBlankId) || null,
         [blanks, selectedBlankId],
@@ -430,6 +470,69 @@ const ManageHistoryClassroom: React.FC = () => {
     const removeBlank = (blankId: string) => {
         setBlanks((prev) => prev.filter((blank) => blank.id !== blankId));
         if (selectedBlankId === blankId) setSelectedBlankId('');
+    };
+
+    const openAssignmentEditor = (assignment: HistoryClassroomAssignment) => {
+        setEditingAssignmentId(assignment.id);
+        setEditingTitle(assignment.title);
+        setEditingDescription(assignment.description);
+        setEditingTimeLimitMinutes(assignment.timeLimitMinutes);
+        setEditingCooldownMinutes(assignment.cooldownMinutes);
+        setEditingPassThresholdPercent(assignment.passThresholdPercent);
+        setEditingStudentUids(assignment.targetStudentUids.length ? assignment.targetStudentUids : (assignment.targetStudentUid ? [assignment.targetStudentUid] : []));
+    };
+
+    const closeAssignmentEditor = () => {
+        setEditingAssignmentId('');
+        setEditingTitle('');
+        setEditingDescription('');
+        setEditingTimeLimitMinutes(0);
+        setEditingCooldownMinutes(0);
+        setEditingPassThresholdPercent(80);
+        setEditingStudentUids([]);
+        setSavingEdit(false);
+    };
+
+    const handleSaveAssignmentEdit = async () => {
+        const targetAssignment = assignments.find((assignment) => assignment.id === editingAssignmentId);
+        if (!targetAssignment) return;
+        const updatedStudents = students.filter((student) => editingStudentUids.includes(student.uid));
+        if (!editingTitle.trim() || !updatedStudents.length) {
+            alert('제목과 배정 학생을 확인해주세요.');
+            return;
+        }
+
+        setSavingEdit(true);
+        try {
+            const payload: Omit<HistoryClassroomAssignment, 'id'> = {
+                ...targetAssignment,
+                title: editingTitle.trim(),
+                description: editingDescription.trim(),
+                timeLimitMinutes: Math.max(0, editingTimeLimitMinutes),
+                cooldownMinutes: Math.max(0, editingCooldownMinutes),
+                passThresholdPercent: Math.min(100, Math.max(0, editingPassThresholdPercent)),
+                targetGrade: updatedStudents[0]?.grade || '',
+                targetClass: updatedStudents[0]?.className || '',
+                targetStudentUid: updatedStudents[0]?.uid || '',
+                targetStudentUids: updatedStudents.map((student) => student.uid),
+                targetStudentName: updatedStudents.map((student) => student.name).join(', '),
+                targetStudentNames: updatedStudents.map((student) => student.name),
+                targetStudentNumber: updatedStudents.map((student) => student.number).filter(Boolean).join(', '),
+                updatedAt: serverTimestamp(),
+            };
+
+            await setDoc(doc(db, getSemesterCollectionPath(config, 'history_classrooms'), targetAssignment.id), payload, { merge: true });
+            setAssignments((prev) => prev.map((assignment) => (
+                assignment.id === targetAssignment.id
+                    ? normalizeHistoryClassroomAssignment(targetAssignment.id, payload)
+                    : assignment
+            )));
+            closeAssignmentEditor();
+        } catch (error) {
+            console.error(error);
+            alert('역사교실 수정에 실패했습니다.');
+            setSavingEdit(false);
+        }
     };
 
     const handleSave = async () => {
@@ -651,20 +754,21 @@ const ManageHistoryClassroom: React.FC = () => {
                         </div>
                         <div className="space-y-3">
                             {assignments.slice(0, 5).map((assignment) => (
-                                <div key={assignment.id} className="rounded-2xl border border-gray-200 bg-white p-4">
-                                    <div className="flex items-center justify-between gap-3">
-                                        <div className="min-w-0">
-                                            <div className="text-xs font-bold text-orange-500">{assignment.mapTitle}</div>
-                                            <div className="truncate text-base font-black text-gray-900">{assignment.title}</div>
-                                            <div className="mt-1 text-xs text-gray-500">통과 기준 {assignment.passThresholdPercent}% · 제한 시간 {assignment.timeLimitMinutes > 0 ? `${assignment.timeLimitMinutes}분` : '없음'} · 재도전 제한 {assignment.cooldownMinutes}분</div>
-                                        </div>
-                                        <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-bold text-orange-700 whitespace-nowrap">
-                                            {(assignment.targetStudentNames.length
-                                                ? `${assignment.targetStudentNames[0]}${assignment.targetStudentNames.length > 1 ? ` 외 ${assignment.targetStudentNames.length - 1}명` : ''}`
-                                                : assignment.targetStudentName) || '학생 미지정'}
-                                        </span>
+                                <button
+                                    key={assignment.id}
+                                    type="button"
+                                    onClick={() => openAssignmentEditor(assignment)}
+                                    className="w-full rounded-2xl border border-gray-200 bg-white p-4 text-left transition hover:border-orange-200 hover:shadow-sm"
+                                >
+                                    <div className="text-xs font-bold text-orange-500">{assignment.mapTitle}</div>
+                                    <div className="mt-1 text-base font-black text-gray-900 break-words">{assignment.title}</div>
+                                    <div className="mt-2 inline-flex rounded-full bg-orange-50 px-3 py-1 text-xs font-bold text-orange-700 whitespace-nowrap">
+                                        {(assignment.targetStudentNames.length
+                                            ? `${assignment.targetStudentNames[0]}${assignment.targetStudentNames.length > 1 ? ` 외 ${assignment.targetStudentNames.length - 1}명` : ''}`
+                                            : assignment.targetStudentName) || '학생 미지정'}
                                     </div>
-                                </div>
+                                    <div className="mt-2 text-xs text-gray-500">통과 기준 {assignment.passThresholdPercent}% · 제한 시간 {assignment.timeLimitMinutes > 0 ? `${assignment.timeLimitMinutes}분` : '없음'} · 재도전 제한 {assignment.cooldownMinutes}분</div>
+                                </button>
                             ))}
                             {!assignments.length && <div className="text-sm text-gray-400">아직 생성된 역사교실 과제가 없습니다.</div>}
                         </div>
@@ -827,6 +931,116 @@ const ManageHistoryClassroom: React.FC = () => {
                     )}
                 </section>
             </div>
+
+            {editingAssignment && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4 py-6">
+                    <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-3xl bg-white shadow-2xl">
+                        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+                            <div>
+                                <div className="text-xs font-bold text-orange-500">{editingAssignment.mapTitle}</div>
+                                <div className="text-xl font-black text-gray-900">역사교실 설정 수정</div>
+                            </div>
+                            <button type="button" onClick={closeAssignmentEditor} className="text-sm font-bold text-gray-500 hover:text-gray-700">
+                                닫기
+                            </button>
+                        </div>
+
+                        <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_22rem]">
+                            <div className="max-h-[calc(90vh-73px)] overflow-y-auto px-6 py-5">
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="mb-1 block text-xs font-bold text-gray-500">제목</label>
+                                        <input value={editingTitle} onChange={(e) => setEditingTitle(e.target.value)} className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm" />
+                                    </div>
+                                    <div>
+                                        <label className="mb-1 block text-xs font-bold text-gray-500">설명</label>
+                                        <textarea value={editingDescription} onChange={(e) => setEditingDescription(e.target.value)} rows={3} className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm" />
+                                    </div>
+                                    <div className="grid gap-3 md:grid-cols-3">
+                                        <div>
+                                            <label className="mb-1 block text-xs font-bold text-gray-500">제한 시간(분)</label>
+                                            <input type="number" min={0} value={editingTimeLimitMinutes} onChange={(e) => setEditingTimeLimitMinutes(Number(e.target.value) || 0)} className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm" />
+                                        </div>
+                                        <div>
+                                            <label className="mb-1 block text-xs font-bold text-gray-500">재도전 제한(분)</label>
+                                            <input type="number" min={0} value={editingCooldownMinutes} onChange={(e) => setEditingCooldownMinutes(Number(e.target.value) || 0)} className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm" />
+                                        </div>
+                                        <div>
+                                            <label className="mb-1 block text-xs font-bold text-gray-500">통과 기준(%)</label>
+                                            <input type="number" min={0} max={100} value={editingPassThresholdPercent} onChange={(e) => setEditingPassThresholdPercent(Math.min(100, Math.max(0, Number(e.target.value) || 0)))} className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm" />
+                                        </div>
+                                    </div>
+
+                                    <div className="rounded-2xl bg-gray-50 p-4">
+                                        <div className="mb-3 flex items-center justify-between gap-2">
+                                            <div className="text-sm font-bold text-gray-700">배정 학생</div>
+                                            <div className="rounded-full bg-white px-3 py-1 text-xs font-bold text-gray-600">{editingStudents.length}명</div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            {editingStudents.map((student) => (
+                                                <div key={student.uid} className="flex items-center justify-between gap-3 rounded-xl bg-white px-3 py-2 text-sm">
+                                                    <div className="min-w-0 text-gray-700">
+                                                        <span className="font-bold">{student.grade}-{student.className}</span>{' '}
+                                                        <span>{student.number}번</span>{' '}
+                                                        <span className="font-bold text-gray-900">{student.name}</span>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setEditingStudentUids((prev) => prev.filter((uid) => uid !== student.uid))}
+                                                        className="shrink-0 text-xs font-bold text-red-500"
+                                                    >
+                                                        삭제
+                                                    </button>
+                                                </div>
+                                            ))}
+                                            {!editingStudents.length && <div className="text-sm text-gray-400">배정 학생이 없습니다.</div>}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="max-h-[calc(90vh-73px)] overflow-y-auto border-t border-gray-200 bg-gray-50 px-6 py-5 lg:border-l lg:border-t-0">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="text-sm font-bold text-gray-700">결과</div>
+                                    <div className="rounded-full bg-white px-3 py-1 text-xs font-bold text-gray-600">{editingResults.length}건</div>
+                                </div>
+                                <div className="mt-4 space-y-3">
+                                    {editingResults.map((result) => (
+                                        <div key={result.id} className="rounded-2xl border border-gray-200 bg-white p-3">
+                                            <div className="flex items-center justify-between gap-3">
+                                                <div className="min-w-0">
+                                                    <div className="truncate text-sm font-bold text-gray-900">{result.studentName}</div>
+                                                    <div className="text-xs text-gray-500">{[result.studentGrade, result.studentClass, result.studentNumber].filter(Boolean).join('-')}</div>
+                                                </div>
+                                                <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                                                    result.status === 'passed'
+                                                        ? 'bg-emerald-50 text-emerald-700'
+                                                        : result.status === 'failed'
+                                                            ? 'bg-rose-50 text-rose-700'
+                                                            : 'bg-amber-50 text-amber-700'
+                                                }`}>
+                                                    {result.status === 'passed' ? '통과' : result.status === 'failed' ? '미통과' : '취소'}
+                                                </span>
+                                            </div>
+                                            <div className="mt-2 text-xs text-gray-500">{result.score}/{result.total} · {result.percent}% · 기준 {result.passThresholdPercent}%</div>
+                                        </div>
+                                    ))}
+                                    {!editingResults.length && <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-4 py-6 text-center text-sm text-gray-400">아직 결과가 없습니다.</div>}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-3 border-t border-gray-200 px-6 py-4">
+                            <button type="button" onClick={closeAssignmentEditor} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50">
+                                취소
+                            </button>
+                            <button type="button" onClick={() => void handleSaveAssignmentEdit()} disabled={savingEdit} className="rounded-2xl bg-orange-500 px-4 py-3 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-60">
+                                {savingEdit ? '저장 중...' : '설정 저장'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {false && (draftBlank || selectedBlank || sortedBlanks.length > 0) && (
                 <div className="fixed bottom-5 right-5 z-40 hidden w-[min(18rem,calc(100vw-2.5rem))] space-y-2.5 lg:block">
