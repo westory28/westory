@@ -26,6 +26,7 @@ export interface UserData {
     number?: string;
     role: 'teacher' | 'student' | 'staff';
     staffPermissions?: string[];
+    teacherPortalEnabled?: boolean;
     privacyAgreed?: boolean;
     privacyAgreedAt?: any;
     consentAgreedItems?: string[];

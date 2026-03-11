@@ -31,7 +31,8 @@ export const hasStaffPermission = (
 ) => normalizeStaffPermissions(userData?.staffPermissions).includes(permission);
 
 export const canAccessTeacherPortal = (userData?: Partial<UserData> | null, email?: string | null) => {
-    return isAdminUser(userData, email) || normalizeStaffPermissions(userData?.staffPermissions).length > 0;
+    const enabled = userData?.teacherPortalEnabled === true;
+    return isAdminUser(userData, email) || (enabled && normalizeStaffPermissions(userData?.staffPermissions).length > 0);
 };
 
 export const canAccessTeacherDashboard = (userData?: Partial<UserData> | null, email?: string | null) =>

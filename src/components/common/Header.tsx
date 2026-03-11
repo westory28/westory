@@ -90,7 +90,7 @@ const Header: React.FC = () => {
             if (item.url === '/teacher/lesson') return canReadLessonManagement(userData, currentUser?.email || '');
             if (item.url === '/teacher/quiz') return canReadQuizManagement(userData, currentUser?.email || '');
             if (item.url === '/teacher/students') return canReadStudentList(userData, currentUser?.email || '');
-            if (item.url === '/teacher/exam') return false;
+            if (item.url === '/teacher/exam') return canManageSettings(userData, currentUser?.email || '');
             return false;
         })
         : baseMenuItems;

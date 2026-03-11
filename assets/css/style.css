@@ -19,7 +19,7 @@ header {
     position: sticky;
     top: 0;
     z-index: 50;
-    height: 64px;
+    min-height: 64px;
 }
 
 .header-container {
@@ -27,7 +27,7 @@ header {
     margin: 0 auto;
     padding: 0 1rem;
     /* Mobile default */
-    height: 100%;
+    min-height: 64px;
     display: flex;
     align-items: center;
     justify-content: space-between;

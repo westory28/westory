@@ -13,13 +13,14 @@ type UserRow = {
     email: string;
     name: string;
     role: string;
+    teacherPortalEnabled: boolean;
     staffPermissions: StaffPermission[];
 };
 
 const PERMISSION_LABELS: Record<StaffPermission, string> = {
-    lesson_read: '학습 자료 관리 읽기',
-    quiz_read: '평가 관리 읽기',
-    student_list_read: '학생 명단 읽기',
+    lesson_read: '학습 자료 관리',
+    quiz_read: '평가 관리',
+    student_list_read: '학생 명단 관리',
 };
 
 const SettingsAccess: React.FC = () => {
@@ -39,6 +40,7 @@ const SettingsAccess: React.FC = () => {
                     email: String(data.email || '').trim(),
                     name: String(data.name || '').trim(),
                     role: String(data.role || 'student').trim(),
+                    teacherPortalEnabled: data.teacherPortalEnabled === true,
                     staffPermissions: normalizeStaffPermissions(data.staffPermissions),
                 };
             });
@@ -69,19 +71,23 @@ const SettingsAccess: React.FC = () => {
         );
     }, [search, users]);
 
-    const togglePermission = async (user: UserRow, permission: StaffPermission) => {
-        if (user.email.toLowerCase() === ADMIN_EMAIL) return;
+    const saveUserAccess = async (user: UserRow, patch: Partial<UserRow>) => {
+        const isAdmin = user.email.toLowerCase() === ADMIN_EMAIL;
+        if (isAdmin) return;
 
-        const nextPermissions = user.staffPermissions.includes(permission)
-            ? user.staffPermissions.filter((item) => item !== permission)
-            : [...user.staffPermissions, permission];
+        const nextUser: UserRow = {
+            ...user,
+            ...patch,
+            staffPermissions: normalizeStaffPermissions(patch.staffPermissions ?? user.staffPermissions),
+            teacherPortalEnabled: patch.teacherPortalEnabled ?? user.teacherPortalEnabled,
+        };
 
-        const normalized = normalizeStaffPermissions(nextPermissions);
         setSavingId(user.id);
         try {
             await setDoc(doc(db, 'users', user.id), {
-                role: normalized.length > 0 ? 'staff' : 'student',
-                staffPermissions: normalized,
+                role: nextUser.staffPermissions.length > 0 ? 'staff' : 'student',
+                teacherPortalEnabled: nextUser.teacherPortalEnabled,
+                staffPermissions: nextUser.staffPermissions,
                 updatedAt: serverTimestamp(),
             }, { merge: true });
 
@@ -89,8 +95,9 @@ const SettingsAccess: React.FC = () => {
                 item.id === user.id
                     ? {
                         ...item,
-                        role: normalized.length > 0 ? 'staff' : 'student',
-                        staffPermissions: normalized,
+                        role: nextUser.staffPermissions.length > 0 ? 'staff' : 'student',
+                        teacherPortalEnabled: nextUser.teacherPortalEnabled,
+                        staffPermissions: nextUser.staffPermissions,
                     }
                     : item
             )));
@@ -102,13 +109,29 @@ const SettingsAccess: React.FC = () => {
         }
     };
 
+    const toggleLoginEnabled = async (user: UserRow) => {
+        await saveUserAccess(user, {
+            teacherPortalEnabled: !user.teacherPortalEnabled,
+        });
+    };
+
+    const togglePermission = async (user: UserRow, permission: StaffPermission) => {
+        const nextPermissions = user.staffPermissions.includes(permission)
+            ? user.staffPermissions.filter((item) => item !== permission)
+            : [...user.staffPermissions, permission];
+
+        await saveUserAccess(user, {
+            staffPermissions: nextPermissions,
+        });
+    };
+
     return (
         <div className="space-y-6">
             <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
                 <div className="border-b border-gray-100 pb-4">
                     <h3 className="text-lg font-bold text-gray-900">세부 권한 관리</h3>
                     <p className="mt-1 text-sm text-gray-500">
-                        동교과 선생님 계정에 읽기 전용 권한만 부여합니다. 등록, 수정, 삭제는 관리자만 가능합니다.
+                        로그인 허용 여부와 들어올 수 있는 메뉴를 직접 선택합니다. 등록, 수정, 삭제는 관리자만 가능합니다.
                     </p>
                 </div>
 
@@ -125,11 +148,12 @@ const SettingsAccess: React.FC = () => {
 
             <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                 <div className="overflow-x-auto">
-                    <table className="w-full min-w-[760px] text-sm">
+                    <table className="w-full min-w-[1040px] text-sm">
                         <thead className="bg-gray-50 text-left text-gray-600">
                             <tr>
                                 <th className="px-4 py-3 font-bold">사용자</th>
                                 <th className="px-4 py-3 font-bold">역할</th>
+                                <th className="px-4 py-3 font-bold">교사 포털 로그인</th>
                                 {STAFF_PERMISSION_KEYS.map((permission) => (
                                     <th key={permission} className="px-4 py-3 font-bold">
                                         {PERMISSION_LABELS[permission]}
@@ -140,15 +164,17 @@ const SettingsAccess: React.FC = () => {
                         <tbody className="divide-y divide-gray-100">
                             {loading ? (
                                 <tr>
-                                    <td colSpan={5} className="px-4 py-10 text-center text-gray-400">사용자 목록을 불러오는 중입니다.</td>
+                                    <td colSpan={6} className="px-4 py-10 text-center text-gray-400">사용자 목록을 불러오는 중입니다.</td>
                                 </tr>
                             ) : filteredUsers.length === 0 ? (
                                 <tr>
-                                    <td colSpan={5} className="px-4 py-10 text-center text-gray-400">표시할 사용자가 없습니다.</td>
+                                    <td colSpan={6} className="px-4 py-10 text-center text-gray-400">표시할 사용자가 없습니다.</td>
                                 </tr>
                             ) : (
                                 filteredUsers.map((user) => {
                                     const isAdmin = user.email.toLowerCase() === ADMIN_EMAIL;
+                                    const disabled = isAdmin || savingId === user.id;
+
                                     return (
                                         <tr key={user.id}>
                                             <td className="px-4 py-3">
@@ -166,13 +192,29 @@ const SettingsAccess: React.FC = () => {
                                                     {isAdmin ? '관리자' : user.role === 'staff' ? '세부권한' : '학생'}
                                                 </span>
                                             </td>
+                                            <td className="px-4 py-3">
+                                                <label className={`inline-flex items-center gap-2 ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isAdmin || user.teacherPortalEnabled}
+                                                        disabled={disabled}
+                                                        onChange={() => void toggleLoginEnabled(user)}
+                                                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                    />
+                                                    <span className="text-xs font-medium text-gray-600">
+                                                        {savingId === user.id ? '저장 중' : '허용'}
+                                                    </span>
+                                                </label>
+                                            </td>
                                             {STAFF_PERMISSION_KEYS.map((permission) => (
                                                 <td key={permission} className="px-4 py-3">
-                                                    <label className={`inline-flex items-center gap-2 ${isAdmin ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}>
+                                                    <label className={`inline-flex items-center gap-2 ${
+                                                        disabled || !user.teacherPortalEnabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+                                                    }`}>
                                                         <input
                                                             type="checkbox"
                                                             checked={isAdmin || user.staffPermissions.includes(permission)}
-                                                            disabled={isAdmin || savingId === user.id}
+                                                            disabled={disabled || (!isAdmin && !user.teacherPortalEnabled)}
                                                             onChange={() => void togglePermission(user, permission)}
                                                             className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                                         />

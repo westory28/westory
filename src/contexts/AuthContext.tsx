@@ -84,6 +84,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                                             ? 'staff'
                                             : normalizedRole,
                                     staffPermissions: normalizeStaffPermissions(raw.staffPermissions),
+                                    teacherPortalEnabled: raw.teacherPortalEnabled === true,
                                 });
                             } else {
                                 const bootstrapUser: UserData = {
@@ -93,6 +94,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                                     customNameConfirmed: false,
                                     role: normalizedRole,
                                     staffPermissions: [],
+                                    teacherPortalEnabled: false,
                                     grade: '',
                                     class: '',
                                     number: '',

@@ -577,6 +577,7 @@ const Login: React.FC = () => {
             role: existing?.role,
             email: user.email || existing?.email || '',
             staffPermissions,
+            teacherPortalEnabled: existing?.teacherPortalEnabled === true,
         }, user.email || '');
         if (mode === 'teacher' && !canUseTeacherMode) {
             alert('관리자 로그인은 관리자 계정으로만 가능합니다.');
@@ -616,6 +617,7 @@ const Login: React.FC = () => {
             photoURL: user.photoURL || '',
             role: nextRole,
             staffPermissions: nextRole === 'staff' ? staffPermissions : [],
+            teacherPortalEnabled: nextRole === 'staff' ? existing?.teacherPortalEnabled === true : true,
             lastLogin: serverTimestamp(),
         };
 

@@ -17,6 +17,7 @@ service cloud.firestore {
 
     function hasPermission(permission) {
       return hasUserProfile()
+        && userProfile().teacherPortalEnabled == true
         && userProfile().staffPermissions is list
         && permission in userProfile().staffPermissions;
     }
