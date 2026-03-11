@@ -36,19 +36,23 @@ const HistoryClassroomIndex: React.FC = () => {
                 const assignmentPath = getSemesterCollectionPath(config, 'history_classrooms');
                 let assignmentSnap = await getDocs(query(
                     collection(db, assignmentPath),
-                    where('targetStudentUid', '==', userData.uid),
                     where('isPublished', '==', true),
                 ));
                 if (assignmentSnap.empty) {
                     assignmentSnap = await getDocs(query(
                         collection(db, 'history_classrooms'),
-                        where('targetStudentUid', '==', userData.uid),
                         where('isPublished', '==', true),
                     ));
                 }
 
                 const loadedAssignments = assignmentSnap.docs
                     .map((docSnap) => normalizeHistoryClassroomAssignment(docSnap.id, docSnap.data()))
+                    .filter((assignment) => {
+                        const assignedStudentUids = assignment.targetStudentUids.length
+                            ? assignment.targetStudentUids
+                            : (assignment.targetStudentUid ? [assignment.targetStudentUid] : []);
+                        return assignedStudentUids.includes(userData.uid);
+                    })
                     .sort((a, b) => a.title.localeCompare(b.title, 'ko'));
                 setAssignments(loadedAssignments);
 
@@ -117,7 +121,7 @@ const HistoryClassroomIndex: React.FC = () => {
                         </div>
                         <p className="mt-3 line-clamp-3 text-sm leading-6 text-gray-600">{assignment.description || '설명 없음'}</p>
                         <div className="mt-4 space-y-1 text-xs text-gray-500">
-                            <div>배정 학생: {assignment.targetStudentName || '미지정'}</div>
+                            <div>배정 학생: {(assignment.targetStudentNames.length ? assignment.targetStudentNames.join(', ') : assignment.targetStudentName) || '미지정'}</div>
                             <div>통과 기준: {assignment.passThresholdPercent}% 이상</div>
                             <div>재응시 제한: {assignment.cooldownMinutes > 0 ? `${assignment.cooldownMinutes}분` : '없음'}</div>
                             <div>응시 기록: {attemptCount}회</div>

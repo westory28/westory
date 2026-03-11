@@ -160,6 +160,7 @@ const ManageHistoryClassroom: React.FC = () => {
     const [targetClass, setTargetClass] = useState('');
     const [targetNumber, setTargetNumber] = useState('');
     const [targetStudentUid, setTargetStudentUid] = useState('');
+    const [selectedStudentUids, setSelectedStudentUids] = useState<string[]>([]);
     const [blanks, setBlanks] = useState<HistoryClassroomBlank[]>([]);
     const [saving, setSaving] = useState(false);
     const [selectedBlankId, setSelectedBlankId] = useState('');
@@ -307,6 +308,13 @@ const ManageHistoryClassroom: React.FC = () => {
         [classFilteredStudents, targetNumber],
     );
 
+    const selectedStudents = useMemo(
+        () => selectedStudentUids
+            .map((uid) => students.find((student) => student.uid === uid))
+            .filter((student): student is StudentOption => !!student),
+        [selectedStudentUids, students],
+    );
+
     const gradeOptions = useMemo(
         () => Array.from(new Set(students.map((student) => student.grade).filter(Boolean))).sort(compareSchoolValues),
         [students],
@@ -397,12 +405,11 @@ const ManageHistoryClassroom: React.FC = () => {
     };
 
     const handleSave = async () => {
-        if (!selectedMap || !title.trim() || !targetStudentUid) {
+        if (!selectedMap || !title.trim() || !selectedStudentUids.length) {
             alert('지도, 제목, 대상 학생을 먼저 선택해 주세요.');
             return;
         }
-        const student = students.find((item) => item.uid === targetStudentUid);
-        if (!student) {
+        if (!selectedStudents.length) {
             alert('학생 정보를 찾을 수 없습니다.');
             return;
         }
@@ -424,11 +431,13 @@ const ManageHistoryClassroom: React.FC = () => {
                 answerOptions: buildAnswerOptions(blanks),
                 cooldownMinutes,
                 passThresholdPercent,
-                targetGrade: student.grade,
-                targetClass: student.className,
-                targetStudentUid: student.uid,
-                targetStudentName: student.name,
-                targetStudentNumber: student.number,
+                targetGrade: targetGrade || selectedStudents[0]?.grade || '',
+                targetClass: targetClass || selectedStudents[0]?.className || '',
+                targetStudentUid: selectedStudents[0]?.uid || '',
+                targetStudentUids: selectedStudents.map((student) => student.uid),
+                targetStudentName: selectedStudents.map((student) => student.name).join(', '),
+                targetStudentNames: selectedStudents.map((student) => student.name),
+                targetStudentNumber: selectedStudents.map((student) => student.number).filter(Boolean).join(', '),
                 isPublished: true,
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
@@ -443,6 +452,7 @@ const ManageHistoryClassroom: React.FC = () => {
             setTargetClass('');
             setTargetNumber('');
             setTargetStudentUid('');
+            setSelectedStudentUids([]);
             setBlanks([]);
             setSelectedBlankId('');
             setDraftBlank(null);
@@ -489,6 +499,7 @@ const ManageHistoryClassroom: React.FC = () => {
                             onChange={(e) => {
                                 setSelectedMapId(e.target.value);
                                 setTargetStudentUid('');
+                                setSelectedStudentUids([]);
                             }}
                             className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm"
                         >
@@ -521,19 +532,19 @@ const ManageHistoryClassroom: React.FC = () => {
 
                     <div className="space-y-3">
                         <div className="grid gap-3 lg:grid-cols-3">
-                            <select value={targetGrade} onChange={(e) => { setTargetGrade(e.target.value); setTargetClass(''); setTargetNumber(''); setTargetStudentUid(''); }} className="rounded-xl border border-gray-300 px-3 py-2 text-sm">
+                            <select value={targetGrade} onChange={(e) => { setTargetGrade(e.target.value); setTargetClass(''); setTargetNumber(''); setTargetStudentUid(''); setSelectedStudentUids([]); }} className="rounded-xl border border-gray-300 px-3 py-2 text-sm">
                                 <option value="">학년 선택</option>
                                 {gradeOptions.map((grade) => (
                                     <option key={grade} value={grade}>{grade}</option>
                                 ))}
                             </select>
-                            <select value={targetClass} onChange={(e) => { setTargetClass(e.target.value); setTargetNumber(''); setTargetStudentUid(''); }} className="rounded-xl border border-gray-300 px-3 py-2 text-sm">
+                            <select value={targetClass} onChange={(e) => { setTargetClass(e.target.value); setTargetNumber(''); setTargetStudentUid(''); setSelectedStudentUids([]); }} className="rounded-xl border border-gray-300 px-3 py-2 text-sm">
                                 <option value="">학급 선택</option>
                                 {classOptions.map((className) => (
                                     <option key={className} value={className}>{className}</option>
                                 ))}
                             </select>
-                            <select value={targetNumber} onChange={(e) => { setTargetNumber(e.target.value); setTargetStudentUid(''); }} className="rounded-xl border border-gray-300 px-3 py-2 text-sm">
+                            <select value={targetNumber} onChange={(e) => { setTargetNumber(e.target.value); setTargetStudentUid(''); setSelectedStudentUids([]); }} className="rounded-xl border border-gray-300 px-3 py-2 text-sm">
                                 <option value="">번호 선택</option>
                                 {numberOptions.map((number) => (
                                     <option key={number} value={number}>{number}</option>
@@ -546,6 +557,46 @@ const ManageHistoryClassroom: React.FC = () => {
                                 <option key={student.uid} value={student.uid}>{student.grade}-{student.className} {student.number}번 {student.name}</option>
                             ))}
                         </select>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                if (!targetStudentUid || selectedStudentUids.includes(targetStudentUid)) return;
+                                setSelectedStudentUids((prev) => [...prev, targetStudentUid]);
+                                setTargetStudentUid('');
+                            }}
+                            disabled={!targetStudentUid || selectedStudentUids.includes(targetStudentUid)}
+                            className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-bold text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            학생 추가
+                        </button>
+                    </div>
+
+                    <div className="rounded-2xl border border-gray-200 bg-white p-3">
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                            <div className="text-sm font-bold text-gray-700">배정 학생</div>
+                            <div className="inline-flex shrink-0 items-center rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 whitespace-nowrap">
+                                {selectedStudents.length}명
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            {selectedStudents.map((student) => (
+                                <div key={student.uid} className="flex items-center justify-between gap-3 rounded-xl bg-gray-50 px-3 py-2 text-sm">
+                                    <div className="min-w-0 text-gray-700">
+                                        <span className="font-bold">{student.grade}-{student.className}</span>{' '}
+                                        <span>{student.number}번</span>{' '}
+                                        <span className="font-bold text-gray-900">{student.name}</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSelectedStudentUids((prev) => prev.filter((uid) => uid !== student.uid))}
+                                        className="shrink-0 text-xs font-bold text-red-500"
+                                    >
+                                        제거
+                                    </button>
+                                </div>
+                            ))}
+                            {!selectedStudents.length && <div className="text-sm text-gray-400">학생을 선택해서 추가하면 여기에 여러 명이 목록으로 표시됩니다.</div>}
+                        </div>
                     </div>
 
                     <div className="rounded-2xl bg-gray-50 p-4">
@@ -554,7 +605,7 @@ const ManageHistoryClassroom: React.FC = () => {
                                 <div className="text-sm font-bold text-gray-700">빈칸 목록</div>
                                 <div className="mt-1 text-xs text-gray-500">추가한 단어는 우측 하단 패널에서도 빠르게 선택할 수 있습니다.</div>
                             </div>
-                            <div className="rounded-full bg-white px-3 py-1 text-xs font-bold text-gray-600">{blanks.length}개</div>
+                            <div className="inline-flex shrink-0 items-center rounded-full bg-white px-3 py-1 text-xs font-bold text-gray-600 whitespace-nowrap">{blanks.length}개</div>
                         </div>
                         <div className="space-y-2">
                             {sortedBlanks.map((blank, index) => (
@@ -688,8 +739,10 @@ const ManageHistoryClassroom: React.FC = () => {
                                             <div className="text-lg font-black text-gray-900">{assignment.title}</div>
                                             <div className="mt-1 text-xs text-gray-500">통과 기준 {assignment.passThresholdPercent}% · 재도전 제한 {assignment.cooldownMinutes}분</div>
                                         </div>
-                                        <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-bold text-orange-700">
-                                            {assignment.targetStudentName || '학생 미지정'}
+                                        <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-bold text-orange-700 whitespace-nowrap">
+                                            {(assignment.targetStudentNames.length
+                                                ? `${assignment.targetStudentNames[0]}${assignment.targetStudentNames.length > 1 ? ` 외 ${assignment.targetStudentNames.length - 1}명` : ''}`
+                                                : assignment.targetStudentName) || '학생 미지정'}
                                         </span>
                                     </div>
                                 </div>

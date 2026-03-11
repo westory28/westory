@@ -44,7 +44,10 @@ const HistoryClassroomRunner: React.FC = () => {
                 if (!snap.exists()) throw new Error('역사교실 자료를 찾을 수 없습니다.');
 
                 const loaded = normalizeHistoryClassroomAssignment(snap.id, snap.data());
-                if (loaded.targetStudentUid !== userData.uid) {
+                const assignedStudentUids = loaded.targetStudentUids.length
+                    ? loaded.targetStudentUids
+                    : (loaded.targetStudentUid ? [loaded.targetStudentUid] : []);
+                if (!assignedStudentUids.includes(userData.uid)) {
                     throw new Error('이 과제는 현재 계정에 배정되지 않았습니다.');
                 }
                 if (!loaded.isPublished) {

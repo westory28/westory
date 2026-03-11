@@ -24,7 +24,9 @@ export interface HistoryClassroomAssignment {
     targetGrade: string;
     targetClass: string;
     targetStudentUid: string;
+    targetStudentUids: string[];
     targetStudentName: string;
+    targetStudentNames: string[];
     targetStudentNumber: string;
     isPublished: boolean;
     createdAt?: unknown;
@@ -82,7 +84,13 @@ export const normalizeHistoryClassroomAssignment = (
     targetGrade: String(raw.targetGrade || '').trim(),
     targetClass: String(raw.targetClass || '').trim(),
     targetStudentUid: String(raw.targetStudentUid || '').trim(),
+    targetStudentUids: Array.isArray(raw.targetStudentUids)
+        ? raw.targetStudentUids.map((item) => String(item || '').trim()).filter(Boolean)
+        : (String(raw.targetStudentUid || '').trim() ? [String(raw.targetStudentUid || '').trim()] : []),
     targetStudentName: String(raw.targetStudentName || '').trim(),
+    targetStudentNames: Array.isArray(raw.targetStudentNames)
+        ? raw.targetStudentNames.map((item) => String(item || '').trim()).filter(Boolean)
+        : (String(raw.targetStudentName || '').trim() ? [String(raw.targetStudentName || '').trim()] : []),
     targetStudentNumber: String(raw.targetStudentNumber || '').trim(),
     isPublished: raw.isPublished === true,
     createdAt: raw.createdAt,
