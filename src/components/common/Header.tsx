@@ -302,8 +302,8 @@ const Header: React.FC = () => {
                                         {item.name}
                                         <i className="fas fa-chevron-down text-[10px] ml-1 opacity-50 group-hover:opacity-100 transition"></i>
                                     </Link>
-                                    <div className="absolute top-[calc(100%-8px)] left-0 w-[10.5rem] pt-0 invisible opacity-0 group-hover:visible group-hover:opacity-100 transition duration-150 transform translate-y-0 z-[100]">
-                                        <div className="bg-white border border-gray-200 shadow-xl rounded-xl overflow-hidden">
+                                    <div className="absolute top-[calc(100%-8px)] left-0 w-[11rem] pt-1 invisible opacity-0 group-hover:visible group-hover:opacity-100 transition duration-150 transform translate-y-0 z-[100]">
+                                        <div className="rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl">
                                             {resolvedChildren.map((child, childIdx) => {
                                                 const childTarget = child.resolvedUrl;
                                                 return (
@@ -311,7 +311,7 @@ const Header: React.FC = () => {
                                                     key={`${child.url}-${childIdx}`}
                                                     to={childTarget}
                                                     data-session-ignore="true"
-                                                    className={`block px-2.5 py-3 text-[13px] border-b border-gray-50 last:border-0 whitespace-nowrap font-bold ${isChildActive(child.resolvedUrl, resolvedChildren) ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'}`}
+                                                    className={`block rounded-lg px-3 py-3.5 text-[13px] whitespace-nowrap font-bold ${isChildActive(child.resolvedUrl, resolvedChildren) ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'}`}
                                                 >
                                                     {child.name}
                                                 </Link>

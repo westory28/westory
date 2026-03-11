@@ -73,11 +73,13 @@ const buildDedupKey = (log: Log): string => {
 };
 
 const QuizLogTab: React.FC = () => {
+    const LOGS_PER_PAGE = 30;
     const { config } = useAuth();
     const [logs, setLogs] = useState<Log[]>([]);
     const [loading, setLoading] = useState(false);
     const [classFilter, setClassFilter] = useState('');
     const [wrongNoteTarget, setWrongNoteTarget] = useState<{ uid: string; name: string } | null>(null);
+    const [currentPage, setCurrentPage] = useState(1);
 
     useEffect(() => {
         fetchLogs();
@@ -226,6 +228,7 @@ const QuizLogTab: React.FC = () => {
 
             list.sort((a, b) => getTimestampSeconds(b.timestamp) - getTimestampSeconds(a.timestamp));
             setLogs(list);
+            setCurrentPage(1);
         } catch (e) {
             console.error(e);
         } finally {
@@ -236,6 +239,18 @@ const QuizLogTab: React.FC = () => {
     const filteredLogs = classFilter
         ? logs.filter((l) => l.classOnly === classFilter || (l.gradeClass && l.gradeClass.includes(`${classFilter}반`)))
         : logs;
+    const totalPages = Math.max(1, Math.ceil(filteredLogs.length / LOGS_PER_PAGE));
+    const pagedLogs = filteredLogs.slice((currentPage - 1) * LOGS_PER_PAGE, currentPage * LOGS_PER_PAGE);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [classFilter, logs.length]);
+
+    useEffect(() => {
+        if (currentPage > totalPages) {
+            setCurrentPage(totalPages);
+        }
+    }, [currentPage, totalPages]);
 
     return (
         <div className="h-full overflow-y-auto bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -244,7 +259,10 @@ const QuizLogTab: React.FC = () => {
                 <div className="flex gap-2">
                     <select
                         value={classFilter}
-                        onChange={(e) => setClassFilter(e.target.value)}
+                        onChange={(e) => {
+                            setClassFilter(e.target.value);
+                            setCurrentPage(1);
+                        }}
                         className="border rounded px-3 py-2 text-sm font-bold"
                     >
                         <option value="">전체 (최대 100건)</option>
@@ -271,7 +289,7 @@ const QuizLogTab: React.FC = () => {
                     <tbody className="divide-y divide-gray-100">
                         {loading ? <tr><td colSpan={6} className="p-4 text-center">로딩 중...</td></tr> :
                             filteredLogs.length === 0 ? <tr><td colSpan={6} className="p-4 text-center text-gray-400">내역 없음</td></tr> :
-                                filteredLogs.map(log => (
+                                pagedLogs.map(log => (
                                     <tr key={log.id} className="hover:bg-gray-50 transition">
                                         <td className="p-4 text-gray-500">
                                             {log.timestamp?.seconds ? new Date(log.timestamp.seconds * 1000).toLocaleString() : '-'}
@@ -305,6 +323,24 @@ const QuizLogTab: React.FC = () => {
                     </tbody>
                 </table>
             </div>
+            {!loading && filteredLogs.length > LOGS_PER_PAGE && (
+                <div className="mt-4 flex items-center justify-center gap-1.5">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                        <button
+                            key={page}
+                            type="button"
+                            onClick={() => setCurrentPage(page)}
+                            className={`min-w-8 rounded-md px-3 py-2 text-xs font-bold transition ${
+                                currentPage === page
+                                    ? 'bg-blue-600 text-white shadow-sm'
+                                    : 'bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-blue-600'
+                            }`}
+                        >
+                            {page}
+                        </button>
+                    ))}
+                </div>
+            )}
             <StudentWrongNoteModal
                 isOpen={!!wrongNoteTarget}
                 onClose={() => setWrongNoteTarget(null)}

@@ -65,7 +65,7 @@ const SettingsAccess: React.FC = () => {
 
     const filteredUsers = useMemo(() => {
         const q = search.trim().toLowerCase();
-        if (!q) return users;
+        if (!q) return [];
         return users.filter((user) =>
             user.name.toLowerCase().includes(q) || user.email.toLowerCase().includes(q),
         );
@@ -168,7 +168,9 @@ const SettingsAccess: React.FC = () => {
                                 </tr>
                             ) : filteredUsers.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="px-4 py-10 text-center text-gray-400">표시할 사용자가 없습니다.</td>
+                                    <td colSpan={6} className="px-4 py-10 text-center text-gray-400">
+                                        {search.trim() ? '검색 결과가 없습니다.' : '이름 또는 이메일로 검색한 사용자만 표시됩니다.'}
+                                    </td>
                                 </tr>
                             ) : (
                                 filteredUsers.map((user) => {
