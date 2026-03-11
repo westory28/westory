@@ -372,28 +372,30 @@ const Header: React.FC = () => {
             </div>
 
             {activeDesktopSubmenu && (
-                <div className="hidden lg:block border-t border-gray-200 bg-white/95 backdrop-blur">
-                    <div className="mx-auto flex w-full max-w-7xl items-center gap-1 px-6">
-                        <div className="flex w-full items-center gap-1">
-                        {activeDesktopSubmenu.resolvedChildren.map((child, childIdx) => {
-                            const childTarget = child.resolvedUrl;
-                            const active = isChildActive(child.resolvedUrl, activeDesktopSubmenu.resolvedChildren);
+                <div className="hidden lg:block">
+                    <div className="mx-auto max-w-7xl px-6 pt-6">
+                        <div className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm">
+                            <div className="flex overflow-x-auto border-b border-gray-200 bg-white px-2">
+                            {activeDesktopSubmenu.resolvedChildren.map((child, childIdx) => {
+                                const childTarget = child.resolvedUrl;
+                                const active = isChildActive(child.resolvedUrl, activeDesktopSubmenu.resolvedChildren);
 
-                            return (
-                                <Link
-                                    key={`${child.url}-desktop-submenu-${childIdx}`}
-                                    to={childTarget}
-                                    data-session-ignore="true"
-                                    className={`inline-flex min-h-[46px] items-center border-b-2 px-5 text-sm font-bold transition ${
-                                        active
-                                            ? 'border-blue-500 text-blue-600'
-                                            : 'border-transparent text-gray-600 hover:border-blue-200 hover:text-blue-600'
-                                    }`}
-                                >
-                                    {child.name}
-                                </Link>
-                            );
-                        })}
+                                return (
+                                    <Link
+                                        key={`${child.url}-desktop-submenu-${childIdx}`}
+                                        to={childTarget}
+                                        data-session-ignore="true"
+                                        className={`inline-flex min-h-[46px] items-center border-b-2 px-6 py-3 text-sm font-bold transition ${
+                                            active
+                                                ? 'border-blue-500 text-blue-600'
+                                                : 'border-transparent text-gray-600 hover:bg-gray-50 hover:text-blue-600'
+                                        }`}
+                                    >
+                                        {child.name}
+                                    </Link>
+                                );
+                            })}
+                            </div>
                         </div>
                     </div>
                 </div>
