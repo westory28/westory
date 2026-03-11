@@ -19,6 +19,7 @@ export interface HistoryClassroomAssignment {
     pdfPageImages: MapResource['pdfPageImages'];
     blanks: HistoryClassroomBlank[];
     answerOptions: string[];
+    timeLimitMinutes: number;
     cooldownMinutes: number;
     passThresholdPercent: number;
     targetGrade: string;
@@ -79,6 +80,7 @@ export const normalizeHistoryClassroomAssignment = (
     answerOptions: Array.isArray(raw.answerOptions)
         ? raw.answerOptions.map((item) => String(item || '').trim()).filter(Boolean)
         : [],
+    timeLimitMinutes: Math.max(0, Number(raw.timeLimitMinutes) || 0),
     cooldownMinutes: Number(raw.cooldownMinutes) || 0,
     passThresholdPercent: Math.min(100, Math.max(0, Number(raw.passThresholdPercent) || 80)),
     targetGrade: String(raw.targetGrade || '').trim(),

@@ -154,6 +154,7 @@ const ManageHistoryClassroom: React.FC = () => {
     const [selectedMapId, setSelectedMapId] = useState('');
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
+    const [timeLimitMinutes, setTimeLimitMinutes] = useState(0);
     const [cooldownMinutes, setCooldownMinutes] = useState(0);
     const [passThresholdPercent, setPassThresholdPercent] = useState(80);
     const [targetGrade, setTargetGrade] = useState('');
@@ -456,6 +457,7 @@ const ManageHistoryClassroom: React.FC = () => {
                 pdfPageImages: selectedMap.pdfPageImages || [],
                 blanks,
                 answerOptions: buildAnswerOptions(blanks),
+                timeLimitMinutes,
                 cooldownMinutes,
                 passThresholdPercent,
                 targetGrade: targetGrade || selectedStudents[0]?.grade || '',
@@ -473,6 +475,7 @@ const ManageHistoryClassroom: React.FC = () => {
             setAssignments((prev) => [normalizeHistoryClassroomAssignment(assignmentId, payload), ...prev]);
             setTitle('');
             setDescription('');
+            setTimeLimitMinutes(0);
             setCooldownMinutes(0);
             setPassThresholdPercent(80);
             setTargetGrade('');
@@ -547,6 +550,10 @@ const ManageHistoryClassroom: React.FC = () => {
                     </div>
 
                     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1">
+                        <div>
+                            <label className="mb-1 block text-xs font-bold text-gray-500">제한 시간(분)</label>
+                            <input type="number" min={0} value={timeLimitMinutes} onChange={(e) => setTimeLimitMinutes(Number(e.target.value) || 0)} className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm" />
+                        </div>
                         <div>
                             <label className="mb-1 block text-xs font-bold text-gray-500">재도전 제한 시간(분)</label>
                             <input type="number" min={0} value={cooldownMinutes} onChange={(e) => setCooldownMinutes(Number(e.target.value) || 0)} className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm" />
@@ -649,7 +656,7 @@ const ManageHistoryClassroom: React.FC = () => {
                                         <div className="min-w-0">
                                             <div className="text-xs font-bold text-orange-500">{assignment.mapTitle}</div>
                                             <div className="truncate text-base font-black text-gray-900">{assignment.title}</div>
-                                            <div className="mt-1 text-xs text-gray-500">통과 기준 {assignment.passThresholdPercent}% · 재도전 제한 {assignment.cooldownMinutes}분</div>
+                                            <div className="mt-1 text-xs text-gray-500">통과 기준 {assignment.passThresholdPercent}% · 제한 시간 {assignment.timeLimitMinutes > 0 ? `${assignment.timeLimitMinutes}분` : '없음'} · 재도전 제한 {assignment.cooldownMinutes}분</div>
                                         </div>
                                         <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-bold text-orange-700 whitespace-nowrap">
                                             {(assignment.targetStudentNames.length

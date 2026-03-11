@@ -28,7 +28,9 @@ const HistoryClassroomRunner: React.FC = () => {
     const [completed, setCompleted] = useState(false);
     const [error, setError] = useState('');
     const [resultText, setResultText] = useState('');
+    const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
     const cancellationInFlightRef = useRef(false);
+    const timeoutHandledRef = useRef(false);
 
     useEffect(() => {
         const loadAssignment = async () => {
@@ -83,6 +85,8 @@ const HistoryClassroomRunner: React.FC = () => {
 
                 setAssignment(loaded);
                 setCurrentPage(loaded.pdfPageImages?.[0]?.page || 1);
+                setRemainingSeconds(loaded.timeLimitMinutes > 0 ? loaded.timeLimitMinutes * 60 : null);
+                timeoutHandledRef.current = false;
             } catch (loadError) {
                 console.error(loadError);
                 setError(loadError instanceof Error ? loadError.message : '과제를 불러오지 못했습니다.');
@@ -147,6 +151,24 @@ const HistoryClassroomRunner: React.FC = () => {
         }
     };
 
+    const handleTimeLimitExpired = async () => {
+        if (!assignment || !userData || completed || submitting || timeoutHandledRef.current) return;
+        timeoutHandledRef.current = true;
+        setSubmitting(true);
+        try {
+            const result = await saveResult({ status: 'failed' });
+            setCompleted(true);
+            if (!result) return;
+            const statusLabel = result.status === 'passed' ? '통과' : '미통과';
+            setResultText(`제한 시간이 종료되어 자동 제출되었습니다. ${result.score}/${result.total} (${result.percent}%) · ${statusLabel}`);
+        } catch (submitError) {
+            console.error(submitError);
+            setResultText('시간 초과 제출 처리에 실패했습니다.');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
     useEffect(() => {
         if (!assignment || completed) return undefined;
 
@@ -175,6 +197,32 @@ const HistoryClassroomRunner: React.FC = () => {
             window.removeEventListener('blur', handleBlur);
         };
     }, [assignment, completed, submitting]);
+
+    useEffect(() => {
+        if (!assignment?.timeLimitMinutes || completed || submitting) return undefined;
+
+        const timerId = window.setInterval(() => {
+            setRemainingSeconds((prev) => {
+                if (prev == null) return prev;
+                if (prev <= 1) {
+                    window.clearInterval(timerId);
+                    void handleTimeLimitExpired();
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+
+        return () => window.clearInterval(timerId);
+    }, [assignment?.timeLimitMinutes, completed, submitting]);
+
+    const totalTimeSeconds = assignment?.timeLimitMinutes ? assignment.timeLimitMinutes * 60 : 0;
+    const timeProgressPercent = totalTimeSeconds > 0 && remainingSeconds != null
+        ? Math.max(0, Math.min(100, (remainingSeconds / totalTimeSeconds) * 100))
+        : 100;
+    const countdownLabel = remainingSeconds == null
+        ? null
+        : `${String(Math.floor(remainingSeconds / 60)).padStart(2, '0')}:${String(remainingSeconds % 60).padStart(2, '0')}`;
 
     const placeAnswer = (blankId: string) => {
         if (!selectedAnswer) return;
@@ -222,6 +270,22 @@ const HistoryClassroomRunner: React.FC = () => {
                         <p className="mt-2 text-sm text-gray-600">{assignment.description}</p>
                         <p className="mt-2 text-xs font-bold text-gray-500">통과 기준: {assignment.passThresholdPercent}% 이상</p>
                     </div>
+                        {assignment.timeLimitMinutes > 0 && countdownLabel && (
+                            <div className="mt-4 max-w-md">
+                                <div className="mb-2 flex items-center justify-between gap-3 text-xs font-bold text-gray-500">
+                                    <span>제한 시간</span>
+                                    <span>{countdownLabel}</span>
+                                </div>
+                                <div className="h-3 overflow-hidden rounded-full bg-gray-200">
+                                    <div
+                                        className={`h-full rounded-full transition-[width] duration-1000 ${
+                                            timeProgressPercent <= 20 ? 'bg-red-500' : timeProgressPercent <= 50 ? 'bg-amber-500' : 'bg-blue-500'
+                                        }`}
+                                        style={{ width: `${timeProgressPercent}%` }}
+                                    />
+                                </div>
+                            </div>
+                        )}
                     <button
                         type="button"
                         onClick={() => navigate('/student/history-classroom')}
