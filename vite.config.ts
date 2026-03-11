@@ -4,8 +4,9 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
+  const isGitHubPagesBuild = process.env.GITHUB_ACTIONS === 'true';
   return {
-    base: mode === 'production' ? '/westory/' : '/',
+    base: isGitHubPagesBuild ? '/westory/' : '/',
     server: {
       port: 3000,
       host: '0.0.0.0',
