@@ -168,8 +168,8 @@ const isSafariBrowser = (): boolean => {
     if (typeof navigator === 'undefined') return false;
     const ua = navigator.userAgent || '';
     const isSafariEngine = /Safari/i.test(ua);
-    const isOtherIOSBrowser = /(CriOS|FxiOS|EdgiOS|OPT\/|OPiOS|DuckDuckGo|YaBrowser)/i.test(ua);
-    return isSafariEngine && !isOtherIOSBrowser;
+    const isNonSafariBrowser = /(Chrome|Chromium|CriOS|Edg|EdgiOS|OPR|OPT\/|OPiOS|SamsungBrowser|DuckDuckGo|YaBrowser|Whale|Firefox|FxiOS)/i.test(ua);
+    return isSafariEngine && !isNonSafariBrowser;
 };
 
 const isRestrictedInAppBrowser = (): boolean => {
