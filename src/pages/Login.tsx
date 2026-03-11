@@ -178,11 +178,21 @@ const isRestrictedInAppBrowser = (): boolean => {
     return /(NAVER|KAKAOTALK)/i.test(ua);
 };
 
-const canFallbackToRedirect = (): boolean => {
-    return isSafariBrowser();
+const shouldPreferRedirectLogin = (): boolean => {
+    return isSafariBrowser() || isIOSDevice();
 };
 
-const getLoginFailureMessage = (): string => {
+const getLoginFailureMessage = (error?: unknown): string => {
+    const code = (error as Partial<AuthError>)?.code || '';
+
+    if (code === 'auth/unauthorized-domain') {
+        return '현재 접속한 도메인이 로그인 허용 목록에 아직 반영되지 않았습니다. 잠시 후 다시 시도해주세요.';
+    }
+
+    if (code === 'auth/popup-blocked') {
+        return '브라우저가 로그인 팝업을 차단했습니다. 다시 시도하거나 리다이렉트 로그인을 사용해주세요.';
+    }
+
     if (isIOSDevice() && isLikelyInAppBrowser()) {
         return 'iPhone 앱 내부 브라우저에서는 구글 로그인이 정상 유지되지 않을 수 있습니다. Safari에서 위스토리를 연 뒤 다시 로그인해주세요.';
     }
@@ -205,6 +215,8 @@ const isPopupFallbackError = (error: unknown): boolean => {
         'auth/popup-closed-by-user',
         'auth/cancelled-popup-request',
         'auth/operation-not-supported-in-this-environment',
+        'auth/internal-error',
+        'auth/network-request-failed',
     ].includes(code);
 };
 
@@ -684,7 +696,6 @@ const Login: React.FC = () => {
             } catch (error) {
                 if (isIgnorableRedirectError(error)) {
                     console.warn('Redirect state unavailable, skipping redirect recovery', error);
-                    clearPendingLoginMode();
                     return;
                 }
 
@@ -809,10 +820,14 @@ const Login: React.FC = () => {
 
         try {
             await authPersistenceReady;
+            if (shouldPreferRedirectLogin()) {
+                await signInWithRedirect(auth, provider);
+                return;
+            }
             const result = await signInWithPopup(auth, provider);
             await finishLoginForRole(result.user, mode);
         } catch (error) {
-            if (isPopupFallbackError(error) && canFallbackToRedirect()) {
+            if (isPopupFallbackError(error)) {
                 try {
                     await signInWithRedirect(auth, provider);
                     return;
@@ -823,7 +838,7 @@ const Login: React.FC = () => {
 
             console.error('Login failed', error);
             clearPendingLoginMode();
-            alert(getLoginFailureMessage());
+            alert(getLoginFailureMessage(error));
         } finally {
             setAuthBusy(false);
         }
