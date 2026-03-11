@@ -26,6 +26,30 @@ interface SchoolGradeOption {
     label: string;
 }
 
+const normalizeOptionText = (value: unknown) => String(value ?? '').trim();
+
+const findMatchingOption = <T extends SchoolGradeOption | SchoolClassOption>(
+    rawValue: unknown,
+    options: T[],
+): T | undefined => {
+    const normalized = normalizeOptionText(rawValue);
+    if (!normalized) return undefined;
+
+    return options.find((option) => (
+        normalizeOptionText(option.value) === normalized ||
+        normalizeOptionText(option.label) === normalized
+    ));
+};
+
+const toCanonicalOptionValue = <T extends SchoolGradeOption | SchoolClassOption>(
+    rawValue: unknown,
+    options: T[],
+) => {
+    const normalized = normalizeOptionText(rawValue);
+    if (!normalized) return '';
+    return findMatchingOption(normalized, options)?.value ?? normalized;
+};
+
 const STUDENTS_PER_PAGE = 50;
 const ADMIN_EMAIL = 'westoria28@gmail.com';
 const KOREAN_NAME_PATTERN = /^[가-힣]{2,4}$/;
@@ -95,10 +119,6 @@ const StudentList: React.FC = () => {
         void loadSchoolConfig();
     }, []);
 
-    useEffect(() => {
-        applyFilters();
-    }, [students, gradeFilter, classFilter, searchQuery]);
-
     const totalPages = Math.max(1, Math.ceil(filteredStudents.length / STUDENTS_PER_PAGE));
     const pageStart = (currentPage - 1) * STUDENTS_PER_PAGE;
     const pagedStudents = filteredStudents.slice(pageStart, pageStart + STUDENTS_PER_PAGE);
@@ -113,6 +133,18 @@ const StudentList: React.FC = () => {
             return acc;
         }, {});
     }, [gradeOptions]);
+
+    const normalizedStudents = useMemo(() => {
+        return students.map((student) => ({
+            ...student,
+            canonicalGrade: toCanonicalOptionValue(student.grade, gradeOptions),
+            canonicalClass: toCanonicalOptionValue(student.class, classOptions),
+        }));
+    }, [students, gradeOptions, classOptions]);
+
+    useEffect(() => {
+        applyFilters();
+    }, [normalizedStudents, gradeFilter, classFilter, searchQuery]);
 
     const fetchStudents = async () => {
         setLoading(true);
@@ -173,19 +205,23 @@ const StudentList: React.FC = () => {
             });
 
             list.sort((a, b) => {
-                const aGradeOrder = gradeOrderMap[a.grade] ?? Number.MAX_SAFE_INTEGER;
-                const bGradeOrder = gradeOrderMap[b.grade] ?? Number.MAX_SAFE_INTEGER;
+                const aCanonicalGrade = toCanonicalOptionValue(a.grade, gradeOptions);
+                const bCanonicalGrade = toCanonicalOptionValue(b.grade, gradeOptions);
+                const aGradeOrder = gradeOrderMap[aCanonicalGrade] ?? Number.MAX_SAFE_INTEGER;
+                const bGradeOrder = gradeOrderMap[bCanonicalGrade] ?? Number.MAX_SAFE_INTEGER;
                 if (aGradeOrder !== bGradeOrder) return aGradeOrder - bGradeOrder;
 
-                if (a.grade !== b.grade) return a.grade.localeCompare(b.grade, 'ko');
+                if (aCanonicalGrade !== bCanonicalGrade) {
+                    return aCanonicalGrade.localeCompare(bCanonicalGrade, 'ko');
+                }
 
-                const aClass = classSortValue(a.class);
-                const bClass = classSortValue(b.class);
+                const aClass = classSortValue(toCanonicalOptionValue(a.class, classOptions));
+                const bClass = classSortValue(toCanonicalOptionValue(b.class, classOptions));
                 if (aClass.numeric && bClass.numeric) {
                     const classGap = Number(aClass.value) - Number(bClass.value);
                     if (classGap !== 0) return classGap;
                 } else {
-                    const classGap = String(a.class).localeCompare(String(b.class), 'ko');
+                    const classGap = String(aClass.value).localeCompare(String(bClass.value), 'ko');
                     if (classGap !== 0) return classGap;
                 }
 
@@ -232,19 +268,19 @@ const StudentList: React.FC = () => {
     const getGradeLabel = (gradeValue: string) => {
         const normalized = String(gradeValue || '').trim();
         if (!normalized) return '-';
-        return gradeOptions.find((opt) => opt.value === normalized)?.label || normalized;
+        return findMatchingOption(normalized, gradeOptions)?.label || normalized;
     };
 
     const getClassLabel = (classValue: string) => {
         const normalized = String(classValue || '').trim();
         if (!normalized) return '-';
-        return classOptions.find((opt) => opt.value === normalized)?.label || normalized;
+        return findMatchingOption(normalized, classOptions)?.label || normalized;
     };
 
     const applyFilters = () => {
-        let result = students;
-        if (gradeFilter !== 'all') result = result.filter((student) => String(student.grade) === gradeFilter);
-        if (classFilter !== 'all') result = result.filter((student) => String(student.class) === classFilter);
+        let result = normalizedStudents;
+        if (gradeFilter !== 'all') result = result.filter((student) => student.canonicalGrade === gradeFilter);
+        if (classFilter !== 'all') result = result.filter((student) => student.canonicalClass === classFilter);
 
         const q = searchQuery.trim().toLowerCase();
         if (q) {
@@ -336,7 +372,7 @@ const StudentList: React.FC = () => {
                 const student = students.find((item) => item.id === id);
                 if (!student) return;
 
-                const parsedGrade = parseInt(student.grade, 10);
+                const parsedGrade = parseInt(toCanonicalOptionValue(student.grade, gradeOptions), 10);
                 if (Number.isNaN(parsedGrade)) return;
 
                 batch.update(doc(db, 'users', student.userId), { grade: String(parsedGrade + 1) });
