@@ -177,6 +177,7 @@ const ManageMaps: React.FC = () => {
     const [isPreparingPdfUploads, setIsPreparingPdfUploads] = useState(false);
     const [customTagInputs, setCustomTagInputs] = useState<Record<number, string>>({});
     const [customTagSectionInputs, setCustomTagSectionInputs] = useState<Record<number, string>>({});
+    const [sectionTagInputs, setSectionTagInputs] = useState<Record<string, string>>({});
     const [tabRenameSourceKey, setTabRenameSourceKey] = useState('');
     const [tabRenameValue, setTabRenameValue] = useState('');
     const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -262,6 +263,7 @@ const ManageMaps: React.FC = () => {
         setDraft(next);
         setCustomTagInputs({});
         setCustomTagSectionInputs({});
+        setSectionTagInputs({});
         setIsPdfShortcutExpanded(false);
         resetFileInput();
     }, [items, selectedId]);
@@ -400,6 +402,68 @@ const ManageMaps: React.FC = () => {
                 pdfTagSections: [...existing, { id: nextId, label: nextLabel, tags: [] }],
             };
         });
+    };
+
+    const handleSectionTagInputChange = (sectionId: string, value: string) => {
+        setSectionTagInputs((prev) => ({
+            ...prev,
+            [sectionId]: value,
+        }));
+    };
+
+    const handleAddSectionTag = (sectionId: string) => {
+        const nextTag = String(sectionTagInputs[sectionId] || '').trim();
+        if (!nextTag) return;
+
+        setDraft((prev) => ({
+            ...prev,
+            pdfTagSections: clonePdfTagSections(prev.pdfTagSections || DEFAULT_PDF_TAG_SECTIONS).map((section) => (
+                section.id === sectionId
+                    ? { ...section, tags: normalizeRegionTags([...(section.tags || []), nextTag]) }
+                    : section
+            )),
+        }));
+        setSectionTagInputs((prev) => ({
+            ...prev,
+            [sectionId]: '',
+        }));
+    };
+
+    const handleMoveSectionTag = (sourceSectionId: string, tag: string, targetSectionId: string) => {
+        const normalizedTargetSectionId = String(targetSectionId || '').trim();
+        if (!normalizedTargetSectionId || normalizedTargetSectionId === sourceSectionId) return;
+
+        setDraft((prev) => ({
+            ...prev,
+            pdfTagSections: clonePdfTagSections(prev.pdfTagSections || DEFAULT_PDF_TAG_SECTIONS).map((section) => {
+                if (section.id === sourceSectionId) {
+                    return { ...section, tags: section.tags.filter((item) => item !== tag) };
+                }
+                if (section.id === normalizedTargetSectionId) {
+                    return { ...section, tags: normalizeRegionTags([...(section.tags || []), tag]) };
+                }
+                return section;
+            }),
+        }));
+    };
+
+    const handleDeleteSectionTag = (sectionId: string, tag: string) => {
+        if (!window.confirm(`'${tag}' 태그를 삭제하시겠습니까? 이 태그는 지역 태그 지정에서도 함께 제거됩니다.`)) {
+            return;
+        }
+
+        setDraft((prev) => ({
+            ...prev,
+            pdfTagSections: clonePdfTagSections(prev.pdfTagSections || DEFAULT_PDF_TAG_SECTIONS).map((section) => (
+                section.id === sectionId
+                    ? { ...section, tags: section.tags.filter((item) => item !== tag) }
+                    : section
+            )),
+            pdfRegions: (prev.pdfRegions || []).map((region) => ({
+                ...region,
+                tags: (region.tags || []).filter((item) => item !== tag),
+            })),
+        }));
     };
 
     const buildPendingPdfUpload = async (file: File): Promise<PendingPdfUpload> => {
@@ -1066,6 +1130,15 @@ const ManageMaps: React.FC = () => {
         () => new Set((draft.pdfRegions || []).flatMap((region) => region.tags || [])).size,
         [draft.pdfRegions],
     );
+    const pdfTagUsageMap = useMemo(
+        () => new Map(
+            allPdfTagOptions.map((tag) => [
+                tag,
+                (draft.pdfRegions || []).filter((region) => (region.tags || []).includes(tag)).length,
+            ]),
+        ),
+        [allPdfTagOptions, draft.pdfRegions],
+    );
     const activePendingPdfUpload = useMemo(
         () => pendingPdfUploads.find((upload) => upload.id === activePendingPdfId) || pendingPdfUploads[0] || null,
         [activePendingPdfId, pendingPdfUploads],
@@ -1447,6 +1520,119 @@ const ManageMaps: React.FC = () => {
                                                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                                                 placeholder="https://www.google.com/maps"
                                             />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {draft.type === 'pdf' && (draft.pdfRegions?.length || 0) > 0 && (
+                                    <div className="mt-6 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                                        <div className="mb-4 flex items-center justify-between gap-3">
+                                            <div>
+                                                <h3 className="text-sm font-bold text-gray-900">태그 범주 편집</h3>
+                                                <p className="mt-1 text-xs text-gray-500">
+                                                    범주별 태그를 추가하고, 삭제하거나 다른 범주로 이동할 수 있습니다.
+                                                </p>
+                                            </div>
+                                            <div className="text-xs font-medium text-gray-400">{currentPdfTagSections.length}개 범주</div>
+                                        </div>
+                                        <div className="space-y-3">
+                                            {currentPdfTagSections.map((section) => (
+                                                <div key={section.id} className="rounded-2xl border border-gray-200 bg-white p-4">
+                                                    <div className="flex items-center justify-between gap-3">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="text-sm font-bold text-gray-900">{section.label}</div>
+                                                            <div className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-bold text-gray-500">
+                                                                {section.tags.length}개
+                                                            </div>
+                                                        </div>
+                                                        {section.id !== 'uncategorized' && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleRenamePdfTagSection(section.id)}
+                                                                className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50"
+                                                            >
+                                                                이름 수정
+                                                            </button>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="mt-3 flex flex-col gap-2 md:flex-row">
+                                                        <input
+                                                            type="text"
+                                                            value={sectionTagInputs[section.id] || ''}
+                                                            onChange={(e) => handleSectionTagInputChange(section.id, e.target.value)}
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === 'Enter') {
+                                                                    e.preventDefault();
+                                                                    handleAddSectionTag(section.id);
+                                                                }
+                                                            }}
+                                                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                                                            placeholder={`${section.label} 범주에 태그 추가`}
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleAddSectionTag(section.id)}
+                                                            className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50 md:w-28"
+                                                        >
+                                                            태그 추가
+                                                        </button>
+                                                    </div>
+
+                                                    <div className="mt-3 space-y-2">
+                                                        {section.tags.length > 0 ? section.tags.map((tag) => (
+                                                            <div
+                                                                key={`${section.id}-${tag}`}
+                                                                className="flex flex-col gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 md:flex-row md:items-center"
+                                                            >
+                                                                <div className="flex min-w-0 items-center gap-2 md:flex-1">
+                                                                    <span className="truncate text-sm font-bold text-gray-800">{tag}</span>
+                                                                    <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-bold text-gray-500">
+                                                                        {pdfTagUsageMap.get(tag) || 0}곳
+                                                                    </span>
+                                                                </div>
+                                                                <div className="flex flex-col gap-2 sm:flex-row">
+                                                                    <select
+                                                                        defaultValue={section.id}
+                                                                        onChange={(e) => {
+                                                                            handleMoveSectionTag(section.id, tag, e.target.value);
+                                                                            e.currentTarget.value = section.id;
+                                                                        }}
+                                                                        className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm sm:min-w-[10rem]"
+                                                                    >
+                                                                        <option value={section.id}>다른 범주로 이동</option>
+                                                                        {currentPdfTagSections
+                                                                            .filter((item) => item.id !== section.id)
+                                                                            .map((item) => (
+                                                                                <option key={`${section.id}-${tag}-${item.id}`} value={item.id}>
+                                                                                    {item.label}
+                                                                                </option>
+                                                                            ))}
+                                                                    </select>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleDeleteSectionTag(section.id, tag)}
+                                                                        className="rounded-lg border border-red-200 px-3 py-2 text-sm font-bold text-red-600 hover:bg-red-50"
+                                                                    >
+                                                                        삭제
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        )) : (
+                                                            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-3 py-4 text-sm text-gray-400">
+                                                                아직 등록된 태그가 없습니다.
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            <button
+                                                type="button"
+                                                onClick={handleAddPdfTagSection}
+                                                className="inline-flex items-center justify-center rounded-xl border border-dashed border-gray-300 bg-white px-4 py-3 text-sm font-bold text-gray-600 hover:bg-gray-50"
+                                            >
+                                                범주 추가
+                                            </button>
                                         </div>
                                     </div>
                                 )}
