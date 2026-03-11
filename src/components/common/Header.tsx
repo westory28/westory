@@ -167,6 +167,7 @@ const Header: React.FC = () => {
             resolvedChildren.length > 0 &&
             desktopSubmenuParentUrls.has(item.url)
         ));
+    const isTeacherLessonDesktopSubmenu = activeDesktopSubmenu?.item.url === '/teacher/lesson';
 
     const performLogout = async (isTimeout: boolean) => {
         try {
@@ -372,8 +373,9 @@ const Header: React.FC = () => {
             </div>
 
             {activeDesktopSubmenu && (
-                <div className="hidden lg:block border-t border-gray-200 bg-white/95 backdrop-blur">
-                    <div className="mx-auto flex w-full max-w-7xl items-center gap-1 px-6">
+                <div className={`hidden lg:block ${isTeacherLessonDesktopSubmenu ? 'pt-6' : 'border-t border-gray-200 bg-white/95 backdrop-blur'}`}>
+                    <div className={`mx-auto max-w-7xl ${isTeacherLessonDesktopSubmenu ? 'px-6' : 'flex w-full items-center gap-1 px-6'}`}>
+                        <div className={isTeacherLessonDesktopSubmenu ? 'inline-flex overflow-x-auto rounded-3xl border border-gray-200 bg-white px-2 shadow-sm' : 'flex w-full items-center gap-1'}>
                         {activeDesktopSubmenu.resolvedChildren.map((child, childIdx) => {
                             const childTarget = child.resolvedUrl;
                             const active = isChildActive(child.resolvedUrl, activeDesktopSubmenu.resolvedChildren);
@@ -393,6 +395,7 @@ const Header: React.FC = () => {
                                 </Link>
                             );
                         })}
+                        </div>
                     </div>
                 </div>
             )}
