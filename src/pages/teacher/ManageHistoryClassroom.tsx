@@ -602,8 +602,7 @@ const ManageHistoryClassroom: React.FC = () => {
 
     return (
         <div className="mx-auto max-w-[96rem] px-4 py-5 sm:py-8">
-            <div className="mb-8 overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm">
-                <div className="flex overflow-x-auto border-b border-gray-200 bg-white px-2">
+            <div className="mb-4 flex shrink-0 overflow-x-auto rounded-t-lg border-b border-gray-200 bg-white px-2">
                     <button type="button" onClick={() => navigate('/teacher/quiz')} className="border-b-2 border-transparent px-6 py-3 text-sm font-bold text-gray-600 transition hover:bg-gray-50">
                         {tabLabels.manage}
                     </button>
@@ -613,10 +612,11 @@ const ManageHistoryClassroom: React.FC = () => {
                     <button type="button" onClick={() => navigate('/teacher/quiz?tab=bank')} className="border-b-2 border-transparent px-6 py-3 text-sm font-bold text-gray-600 transition hover:bg-gray-50">
                         {tabLabels.bank}
                     </button>
-                    <button type="button" className="border-b-2 border-blue-500 bg-blue-50 px-6 py-3 text-sm font-bold text-blue-600 transition">
+                    <button type="button" className="border-b-2 border-blue-500 px-6 py-3 text-sm font-bold text-blue-600 transition">
                         {tabLabels.historyClassroom}
                     </button>
-                </div>
+            </div>
+            <div className="mb-8 overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm">
                 <div className="p-4 sm:p-6">
                     <h1 className="text-2xl font-black text-gray-900 sm:text-3xl">역사교실 제작</h1>
                     <p className="mt-2 text-sm text-gray-600">텍스트 박스 또는 OCR 선택으로 빈칸을 만들고, 원하는 학생에게 개별 과제를 배정합니다.</p>
