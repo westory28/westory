@@ -22,7 +22,7 @@ import {
 } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { auth, authPersistenceReady, db } from '../lib/firebase';
-import { readStorage, removeStorage, writeStorage } from '../lib/safeStorage';
+import { readLocalOnly, readStorage, removeStorage, writeLocalOnly, writeStorage } from '../lib/safeStorage';
 import { useAuth } from '../contexts/AuthContext';
 import type { UserData } from '../types';
 import { canAccessTeacherPortal, isAdminUser, normalizeStaffPermissions } from '../lib/permissions';
@@ -30,6 +30,7 @@ import { canAccessTeacherPortal, isAdminUser, normalizeStaffPermissions } from '
 const TEACHER_EMAIL = 'westoria28@gmail.com';
 const ROLE_SESSION_KEY = 'westoryPortalRole';
 const PENDING_LOGIN_MODE_KEY = 'westoryPendingLoginMode';
+const REDIRECT_ATTEMPT_KEY = 'westoryRedirectAttempt';
 type LoginMode = 'student' | 'teacher';
 
 interface SchoolOption {
@@ -182,6 +183,26 @@ const shouldPreferRedirectLogin = (): boolean => {
     return isSafariBrowser() || isIOSDevice();
 };
 
+const markRedirectAttempt = (mode: LoginMode) => {
+    writeLocalOnly(REDIRECT_ATTEMPT_KEY, JSON.stringify({ mode, startedAt: Date.now() }));
+};
+
+const readRedirectAttemptMode = (): LoginMode | null => {
+    const raw = readLocalOnly(REDIRECT_ATTEMPT_KEY);
+    if (!raw) return null;
+
+    try {
+        const parsed = JSON.parse(raw) as { mode?: LoginMode; startedAt?: number };
+        return parsed.mode === 'teacher' || parsed.mode === 'student' ? parsed.mode : null;
+    } catch {
+        return null;
+    }
+};
+
+const clearRedirectAttempt = () => {
+    removeStorage(REDIRECT_ATTEMPT_KEY);
+};
+
 const getLoginFailureMessage = (error?: unknown): string => {
     const code = (error as Partial<AuthError>)?.code || '';
 
@@ -239,6 +260,7 @@ const Login: React.FC = () => {
     const restrictedInAppBrowser = isRestrictedInAppBrowser();
 
     const [authBusy, setAuthBusy] = useState(false);
+    const [loginNotice, setLoginNotice] = useState('');
 
     const [policyOpen, setPolicyOpen] = useState(false);
     const [policyTitle, setPolicyTitle] = useState('');
@@ -686,20 +708,31 @@ const Login: React.FC = () => {
                 await authPersistenceReady;
                 const result = await getRedirectResult(auth);
                 const redirectedUser = result?.user || auth.currentUser;
-                if (!redirectedUser) return;
+                if (!redirectedUser) {
+                    if (readRedirectAttemptMode()) {
+                        clearRedirectAttempt();
+                        clearPendingLoginMode();
+                        setLoginNotice('로그인이 취소되었거나 중간에 돌아왔습니다. 다시 로그인해주세요.');
+                    }
+                    return;
+                }
 
                 const savedMode = getPendingLoginMode();
+                const redirectMode = readRedirectAttemptMode();
                 const resolvedMode: LoginMode = savedMode
+                    || redirectMode
                     || (redirectedUser.email === TEACHER_EMAIL ? 'teacher' : 'student');
-                const redirectUserSnap = await getDoc(doc(db, 'users', redirectedUser.uid));
-                const redirectUserData = redirectUserSnap.exists() ? (redirectUserSnap.data() as Partial<UserData>) : null;
-                const resolvedTeacherMode = canAccessTeacherPortal(redirectUserData, redirectedUser.email || '');
-                const effectiveMode: LoginMode = savedMode || (resolvedTeacherMode ? 'teacher' : 'student');
-
-                await finishLoginForRole(redirectedUser, effectiveMode);
+                await finishLoginForRole(redirectedUser, resolvedMode);
+                clearRedirectAttempt();
+                setLoginNotice('');
             } catch (error) {
                 if (isIgnorableRedirectError(error)) {
                     console.warn('Redirect state unavailable, skipping redirect recovery', error);
+                    if (readRedirectAttemptMode()) {
+                        clearRedirectAttempt();
+                        clearPendingLoginMode();
+                        setLoginNotice('로그인 화면으로 다시 돌아왔습니다. 학생 로그인 버튼을 다시 눌러주세요.');
+                    }
                     return;
                 }
 
@@ -707,15 +740,17 @@ const Login: React.FC = () => {
                 const recoveredUser = auth.currentUser;
                 if (recoveredUser) {
                     const savedMode = getPendingLoginMode();
-                    const recoveredSnap = await getDoc(doc(db, 'users', recoveredUser.uid));
-                    const recoveredData = recoveredSnap.exists() ? (recoveredSnap.data() as Partial<UserData>) : null;
                     const effectiveMode: LoginMode = savedMode
-                        || (canAccessTeacherPortal(recoveredData, recoveredUser.email || '') ? 'teacher' : 'student');
+                        || readRedirectAttemptMode()
+                        || (recoveredUser.email === TEACHER_EMAIL ? 'teacher' : 'student');
                     await finishLoginForRole(recoveredUser, effectiveMode);
+                    clearRedirectAttempt();
+                    setLoginNotice('');
                     return;
                 }
+                clearRedirectAttempt();
                 clearPendingLoginMode();
-                alert('리다이렉트 로그인 처리 중 오류가 발생했습니다. 다시 시도해주세요.');
+                alert(`리다이렉트 로그인 처리 중 오류가 발생했습니다. 다시 시도해주세요. (${(error as Partial<AuthError>)?.code || 'unknown'})`);
             } finally {
                 setAuthBusy(false);
             }
@@ -820,11 +855,14 @@ const Login: React.FC = () => {
         const provider = new GoogleAuthProvider();
         provider.setCustomParameters({ prompt: 'select_account' });
         setPendingLoginMode(mode);
+        setLoginNotice('');
         setAuthBusy(true);
 
         try {
             await authPersistenceReady;
             if (shouldPreferRedirectLogin()) {
+                markRedirectAttempt(mode);
+                setLoginNotice('로그인 화면으로 이동 중입니다. iPhone에서는 화면이 바뀐 뒤 뒤로가기를 누르지 말고 잠시만 기다려주세요.');
                 await signInWithRedirect(auth, provider);
                 return;
             }
@@ -842,6 +880,7 @@ const Login: React.FC = () => {
 
             console.error('Login failed', error);
             clearPendingLoginMode();
+            clearRedirectAttempt();
             alert(getLoginFailureMessage(error));
         } finally {
             setAuthBusy(false);
@@ -854,6 +893,8 @@ const Login: React.FC = () => {
         setAuthBusy(true);
         clearRoleCache();
         clearPendingLoginMode();
+        clearRedirectAttempt();
+        setLoginNotice('');
         autoResumeUidRef.current = null;
 
         try {
@@ -907,6 +948,12 @@ const Login: React.FC = () => {
                         <p className="mt-2 text-sm leading-6 text-amber-800">
                             하단 메뉴에서 외부 브라우저로 열기를 선택한 뒤 Chrome 또는 Safari에서 다시 접속해주세요.
                         </p>
+                    </div>
+                )}
+
+                {!!loginNotice && (
+                    <div className="w-full max-w-sm mb-5 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-4 text-left shadow-sm">
+                        <p className="text-sm font-semibold leading-6 text-blue-900">{loginNotice}</p>
                     </div>
                 )}
 
