@@ -119,6 +119,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
     const modalRegionHighlightRef = useRef<HTMLDivElement | null>(null);
     const pinchStateRef = useRef<{ distance: number; zoom: number } | null>(null);
     const dragStateRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
+    const hasManualZoomRef = useRef(false);
 
     const usingPreprocessedPages = pageImages.length > 0;
     const allRegionHits = useMemo(() => (usingPreprocessedPages ? regions : regionHits), [regionHits, regions, usingPreprocessedPages]);
@@ -235,6 +236,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
             setSelectedTag('');
             setRegionHits([]);
             setNumPages(usingPreprocessedPages ? pageImages.length : 0);
+            hasManualZoomRef.current = false;
 
             if (usingPreprocessedPages) {
                 setLoadingPdf(false);
@@ -288,7 +290,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
             );
 
             setFitZoom(nextFitZoom);
-            if (!selectedRegion) {
+            if (!selectedRegion && !hasManualZoomRef.current) {
                 setZoom(nextFitZoom);
                 surface.scrollTo({ left: 0, top: 0 });
             }
@@ -402,16 +404,21 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
             setIsModalOpen(true);
             return;
         }
+        hasManualZoomRef.current = true;
         setZoom((prev) => Math.max(prev, fitZoom * 1.4, 1.1));
     };
 
     const openModal = () => {
         if (loadingPdf) return;
-        if (!selectedRegion) setZoom(fitZoom);
+        if (!selectedRegion) {
+            hasManualZoomRef.current = false;
+            setZoom(fitZoom);
+        }
         setIsModalOpen(true);
     };
 
     const changeZoom = (delta: number) => {
+        hasManualZoomRef.current = true;
         setZoom((prev) => clamp(Number((prev + delta).toFixed(2)), Math.max(0.25, fitZoom * 0.7), 4));
     };
 
@@ -719,6 +726,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                                     type="button"
                                     onClick={() => {
                                         setSelectedRegion(null);
+                                        hasManualZoomRef.current = false;
                                         setZoom(fitZoom);
                                         modalSurfaceRef.current?.scrollTo({ left: 0, top: 0, behavior: 'smooth' });
                                     }}
