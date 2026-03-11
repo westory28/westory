@@ -86,6 +86,7 @@ const Header: React.FC = () => {
     const profileLabel = `${displayName} ${isTeacherPortal ? '교사' : '학생'}`;
     const studentProfileIcon = userData?.profileIcon || '🧑‍🎓';
     const resolveTarget = (url: string) => resolveMenuTarget(url, portal);
+    const desktopSubmenuParentUrls = new Set(['/student/lesson/note', '/teacher/lesson']);
 
     const isActive = (url: string) => {
         const [targetPath, targetQuery] = resolveTarget(url).split('?');
@@ -130,6 +131,23 @@ const Header: React.FC = () => {
 
         return targetScore === bestScore;
     };
+
+    const activeDesktopSubmenu = menuItems
+        .map((item) => {
+            const visibleChildren = getVisibleChildren(item);
+            const resolvedChildren = getResolvedChildUrls(item.url, visibleChildren, portal);
+            const active = isActive(item.url) || resolvedChildren.some((child) => isChildActive(child.resolvedUrl, resolvedChildren));
+            return {
+                item,
+                resolvedChildren,
+                active,
+            };
+        })
+        .find(({ item, resolvedChildren, active }) => (
+            active &&
+            resolvedChildren.length > 0 &&
+            desktopSubmenuParentUrls.has(item.url)
+        ));
 
     const performLogout = async (isTimeout: boolean) => {
         try {
@@ -333,6 +351,32 @@ const Header: React.FC = () => {
                     </button>
                 </div>
             </div>
+
+            {activeDesktopSubmenu && (
+                <div className="hidden lg:block border-t border-gray-200 bg-white/95 backdrop-blur">
+                    <div className="mx-auto flex w-full max-w-7xl items-center gap-1 px-6">
+                        {activeDesktopSubmenu.resolvedChildren.map((child, childIdx) => {
+                            const childTarget = child.resolvedUrl;
+                            const active = isChildActive(child.resolvedUrl, activeDesktopSubmenu.resolvedChildren);
+
+                            return (
+                                <Link
+                                    key={`${child.url}-desktop-submenu-${childIdx}`}
+                                    to={childTarget}
+                                    data-session-ignore="true"
+                                    className={`inline-flex min-h-[46px] items-center border-b-2 px-5 text-sm font-bold transition ${
+                                        active
+                                            ? 'border-blue-500 text-blue-600'
+                                            : 'border-transparent text-gray-600 hover:border-blue-200 hover:text-blue-600'
+                                    }`}
+                                >
+                                    {child.name}
+                                </Link>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
 
             {mobileMenuOpen && (
                 <div
