@@ -346,12 +346,25 @@ input {
 
 .chart-wrap {
     position: relative;
-    min-height: 340px;
+    min-height: 420px;
+}
+
+.insight-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 18px;
+    margin-bottom: 18px;
+    align-items: stretch;
 }
 
 .analysis-grid {
-    grid-template-columns: 1.05fr 0.95fr;
+    grid-template-columns: 1fr;
     margin-bottom: 18px;
+}
+
+.insight-side-card,
+.detail-card-full {
+    height: 100%;
 }
 
 .competency-list {
@@ -453,6 +466,7 @@ input {
     .top-grid,
     .login-layout,
     .summary-grid,
+    .insight-grid,
     .analysis-grid,
     .roadmap-grid,
     .download-card {
