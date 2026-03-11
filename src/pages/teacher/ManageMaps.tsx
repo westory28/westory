@@ -1153,7 +1153,7 @@ const ManageMaps: React.FC = () => {
                     reorderMode={isReorderMode}
                 />
 
-                <section className="min-w-0 flex-1 space-y-6">
+                <section className="min-w-0 flex-1 space-y-5 sm:space-y-6">
                     {loading ? (
                         <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center text-gray-400 shadow-sm">
                             <i className="fas fa-spinner fa-spin text-2xl"></i>
@@ -1161,14 +1161,14 @@ const ManageMaps: React.FC = () => {
                         </div>
                     ) : currentPreviewItem ? (
                         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-                            <div className="border-b border-gray-100 p-8 pb-4">
+                            <div className="border-b border-gray-100 p-4 pb-4 sm:p-6 sm:pb-4 lg:p-8 lg:pb-4">
                                 <div className="flex flex-wrap items-start justify-between gap-4">
                                     <div>
                                         <div className="mb-3 inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
                                             {currentPreviewItem.category}
                                         </div>
                                         <div className="flex flex-wrap items-center gap-3">
-                                            <h1 className="text-2xl font-extrabold text-gray-900">
+                                            <h1 className="text-xl font-extrabold text-gray-900 sm:text-2xl">
                                                 {currentDisplayGroup?.title || currentPreviewItem.title}
                                             </h1>
                                             <button
@@ -1185,7 +1185,7 @@ const ManageMaps: React.FC = () => {
                                             href={previewExternalUrl}
                                             target="_blank"
                                             rel="noreferrer"
-                                            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50"
+                                            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50 sm:w-auto"
                                         >
                                             <i className="fas fa-up-right-from-square"></i>
                                             새 창에서 열기
@@ -1277,7 +1277,7 @@ const ManageMaps: React.FC = () => {
                             </div>
                         )}
 
-                        <div className="grid gap-6 p-6 md:p-8 lg:grid-cols-[minmax(0,30rem)_minmax(0,1fr)]">
+                        <div className="grid gap-6 p-4 sm:p-6 md:p-8 lg:grid-cols-[minmax(0,30rem)_minmax(0,1fr)]">
                             <div className="min-w-0">
                                 <div className="grid gap-4 md:grid-cols-2">
                                     <div>

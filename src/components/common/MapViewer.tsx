@@ -150,16 +150,16 @@ const MapViewer: React.FC<MapViewerProps> = ({
     const content = (
         <>
             {showShell && (
-                <div className="border-b border-gray-100 p-6">
+                <div className="border-b border-gray-100 p-4 sm:p-6">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                             <div className="mb-3 inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
                                 {item.category}
                             </div>
-                            <h1 className="text-2xl font-extrabold text-gray-900">{item.title}</h1>
+                            <h1 className="text-xl font-extrabold text-gray-900 sm:text-2xl">{item.title}</h1>
                         </div>
 
-                        <div className="flex w-full flex-col items-end gap-3 lg:w-auto lg:min-w-[20rem]">
+                        <div className="flex w-full flex-col items-stretch gap-3 lg:w-auto lg:min-w-[20rem] lg:items-end">
                             {renderGoogleSearchInput('map-google-search')}
 
                             {externalUrl && (
@@ -167,7 +167,7 @@ const MapViewer: React.FC<MapViewerProps> = ({
                                     href={externalUrl}
                                     target="_blank"
                                     rel="noreferrer"
-                                    className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
+                                    className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50 lg:w-auto"
                                 >
                                     <i className="fas fa-up-right-from-square"></i>
                                     새 창에서 열기
@@ -186,7 +186,7 @@ const MapViewer: React.FC<MapViewerProps> = ({
 
             <div className={showShell ? 'bg-gray-50 p-4 md:p-6' : 'space-y-4'}>
                 {!showShell && item.type === 'google' && onGoogleSearchQueryChange && (
-                    <div className="flex justify-end">{renderGoogleSearchInput('map-google-search-inline')}</div>
+                    <div className="flex justify-stretch sm:justify-end">{renderGoogleSearchInput('map-google-search-inline')}</div>
                 )}
 
                 {renderPrimarySurface()}
@@ -220,21 +220,21 @@ const MapViewer: React.FC<MapViewerProps> = ({
 
             {isModalOpen && (item.type === 'image' || item.type === 'iframe' || item.type === 'google') && (
                 <div
-                    className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/70 p-4"
+                    className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/70 p-2 sm:p-4"
                     onClick={() => setIsModalOpen(false)}
                 >
                     <div
-                        className="flex h-[84vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"
+                        className="flex h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:h-[84vh] sm:rounded-3xl"
                         onClick={(event) => event.stopPropagation()}
                     >
-                        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-5 py-4">
+                        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-4 py-3 sm:px-5 sm:py-4">
                             <div>
-                                <div className="text-lg font-extrabold text-gray-900">{item.title}</div>
+                                <div className="text-base font-extrabold text-gray-900 sm:text-lg">{item.title}</div>
                                 <div className="text-xs text-gray-500">바깥 클릭 또는 `Esc`로 닫습니다.</div>
                             </div>
-                            <div className="flex w-full items-center justify-end gap-2 lg:w-auto">
+                            <div className="flex w-full flex-wrap items-center justify-end gap-2 lg:w-auto">
                                 {item.type === 'google' && onGoogleSearchQueryChange && (
-                                    <div className="flex min-w-[18rem] max-w-[28rem] flex-1 items-center gap-2 lg:flex-none">
+                                    <div className="flex min-w-0 flex-1 items-center gap-2 lg:min-w-[18rem] lg:max-w-[28rem] lg:flex-none">
                                         {renderGoogleSearchInput('map-google-search-modal')}
                                     </div>
                                 )}
@@ -247,7 +247,7 @@ const MapViewer: React.FC<MapViewerProps> = ({
                                 </button>
                             </div>
                         </div>
-                        <div className="min-h-0 flex-1 overflow-auto bg-slate-100 p-4">
+                        <div className="min-h-0 flex-1 overflow-auto bg-slate-100 p-2 sm:p-4">
                             <div className="flex min-h-full items-center justify-center">
                                 {item.type === 'image' && item.imageUrl && (
                                     <div className="flex h-full w-full items-center justify-center">

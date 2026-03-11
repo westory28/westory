@@ -106,7 +106,7 @@ const StudentMaps: React.FC = () => {
 
     return (
         <div className="flex min-h-screen flex-col bg-gray-50">
-            <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 p-6 lg:flex-row lg:p-10">
+            <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-5 p-4 sm:gap-6 sm:p-6 lg:flex-row lg:gap-8 lg:p-10">
                 <MapSidebar
                     heading="지도"
                     items={sidebarItems}
@@ -127,13 +127,13 @@ const StudentMaps: React.FC = () => {
                         </div>
                     ) : selectedItem ? (
                         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-                            <div className="border-b border-gray-100 p-8 pb-4">
+                            <div className="border-b border-gray-100 p-4 pb-4 sm:p-6 sm:pb-4 lg:p-8 lg:pb-4">
                                 <div className="flex flex-wrap items-start justify-between gap-4">
                                     <div>
                                         <div className="mb-3 inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
                                             {selectedItem.category}
                                         </div>
-                                        <h1 className="text-2xl font-extrabold text-gray-900">
+                                        <h1 className="text-xl font-extrabold text-gray-900 sm:text-2xl">
                                             {currentGroup?.title || selectedItem.title}
                                         </h1>
                                     </div>
@@ -142,7 +142,7 @@ const StudentMaps: React.FC = () => {
                                             href={externalUrl}
                                             target="_blank"
                                             rel="noreferrer"
-                                            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50"
+                                            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50 sm:w-auto"
                                         >
                                             <i className="fas fa-up-right-from-square"></i>
                                             새 창에서 열기

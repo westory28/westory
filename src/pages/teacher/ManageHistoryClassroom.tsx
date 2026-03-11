@@ -458,7 +458,7 @@ const ManageHistoryClassroom: React.FC = () => {
     };
 
     return (
-        <div className="mx-auto max-w-[96rem] px-4 py-8">
+        <div className="mx-auto max-w-[96rem] px-4 py-5 sm:py-8">
             <div className="mb-8 overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm">
                 <div className="flex overflow-x-auto border-b border-gray-200 bg-white px-2">
                     <button type="button" onClick={() => navigate('/teacher/quiz')} className="border-b-2 border-transparent px-6 py-3 text-sm font-bold text-gray-600 transition hover:bg-gray-50">
@@ -474,8 +474,8 @@ const ManageHistoryClassroom: React.FC = () => {
                         {tabLabels.historyClassroom}
                     </button>
                 </div>
-                <div className="p-6">
-                    <h1 className="text-3xl font-black text-gray-900">역사교실 제작</h1>
+                <div className="p-4 sm:p-6">
+                    <h1 className="text-2xl font-black text-gray-900 sm:text-3xl">역사교실 제작</h1>
                     <p className="mt-2 text-sm text-gray-600">텍스트 박스 또는 OCR 선택으로 빈칸을 만들고, 원하는 학생에게 개별 과제를 배정합니다.</p>
                 </div>
             </div>
@@ -591,6 +591,70 @@ const ManageHistoryClassroom: React.FC = () => {
                                 <div className="text-sm font-bold text-gray-700">지도 선택 영역</div>
                                 <div className="mt-1 text-xs text-gray-500">텍스트 박스는 자유 드래그, OCR 선택은 글자를 따라 빈칸을 잡습니다.</div>
                             </div>
+                        </div>
+
+                        <div className="mb-4 space-y-3 lg:hidden">
+                            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
+                                <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400">Tool</div>
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setWorksheetTool('box')}
+                                        className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                                            worksheetTool === 'box'
+                                                ? 'bg-blue-600 text-white shadow-sm'
+                                                : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        텍스트 박스
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setWorksheetTool('ocr')}
+                                        className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                                            worksheetTool === 'ocr'
+                                                ? 'bg-blue-600 text-white shadow-sm'
+                                                : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        OCR 선택
+                                    </button>
+                                </div>
+                            </div>
+
+                            {(draftBlank || selectedBlank || sortedBlanks.length > 0) && (
+                                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400">Words</div>
+                                        <div className="text-[11px] font-semibold text-gray-500">{sortedBlanks.length}개</div>
+                                    </div>
+                                    <div className="mt-2 flex flex-wrap gap-1.5">
+                                        {visibleBlankTags.map((blank, index) => (
+                                            <button
+                                                key={blank.id}
+                                                type="button"
+                                                onClick={() => handleSelectBlank(blank.id)}
+                                                className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
+                                                    selectedBlankId === blank.id
+                                                        ? 'border-blue-300 bg-blue-50 text-blue-700'
+                                                        : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                                                }`}
+                                            >
+                                                {blank.answer || `빈칸 ${index + 1}`}
+                                            </button>
+                                        ))}
+                                        {sortedBlanks.length > 6 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowAllBlankTags((prev) => !prev)}
+                                                className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 transition hover:bg-blue-100"
+                                            >
+                                                {showAllBlankTags ? '숨기기' : `더보기 +${sortedBlanks.length - visibleBlankTags.length}`}
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {worksheetPageImages.length > 0 ? (

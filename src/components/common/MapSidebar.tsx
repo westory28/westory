@@ -25,9 +25,9 @@ const MapSidebar: React.FC<MapSidebarProps> = ({
     return (
         <aside className="w-full shrink-0 lg:w-72">
             <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm lg:sticky lg:top-8">
-                <div className="flex items-center justify-between gap-3 border-b border-gray-100 p-6">
+                <div className="flex items-center justify-between gap-3 border-b border-gray-100 p-4 sm:p-6">
                     <div className="flex items-center gap-2">
-                        <h2 className="flex items-center gap-2 text-xl font-extrabold text-gray-800">
+                        <h2 className="flex items-center gap-2 text-lg font-extrabold text-gray-800 sm:text-xl">
                             <i className="fas fa-map-marked-alt text-gray-400"></i>
                             {heading}
                         </h2>
@@ -35,16 +35,16 @@ const MapSidebar: React.FC<MapSidebarProps> = ({
                     </div>
                     {action}
                 </div>
-                <nav className="flex flex-col">
+                <nav className="flex gap-2 overflow-x-auto p-3 lg:flex-col lg:gap-0 lg:overflow-visible lg:p-0">
                     {items.map((item) => (
                         <button
                             key={item.id}
                             type="button"
                             onClick={() => onSelect(item.id)}
-                            className={`flex items-center gap-3 p-4 text-left transition-colors ${
+                            className={`flex min-w-[11rem] items-center gap-3 rounded-xl border p-3 text-left transition-colors lg:min-w-0 lg:rounded-none lg:border-0 lg:p-4 ${
                                 selectedId === item.id
-                                    ? 'border-l-4 border-blue-600 bg-blue-50 text-blue-600'
-                                    : 'border-l-4 border-transparent text-gray-600 hover:bg-gray-50'
+                                    ? 'border-blue-200 bg-blue-50 text-blue-600 lg:border-l-4 lg:border-blue-600'
+                                    : 'border-gray-200 text-gray-600 hover:bg-gray-50 lg:border-l-4 lg:border-transparent'
                             }`}
                         >
                             {reorderMode ? (

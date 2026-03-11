@@ -686,14 +686,14 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
 
     return (
         <div className="space-y-4">
-            <div className="rounded-2xl border border-gray-200 bg-white p-4">
-                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                    <h3 className="text-lg font-extrabold text-gray-900">{title || '지도'}</h3>
-                    <div className="flex items-center gap-2">
-                        <button type="button" onClick={openModal} disabled={loadingPdf} className="rounded-lg border border-blue-200 px-3 py-2 text-sm font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-40">확대 보기</button>
-                        <button type="button" onClick={() => changeZoom(-0.2)} className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50">축소</button>
-                        <span className="w-16 text-center text-sm font-bold text-gray-600">{Math.round(zoom * 100)}%</span>
-                        <button type="button" onClick={() => changeZoom(0.2)} className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50">확대</button>
+            <div className="rounded-2xl border border-gray-200 bg-white p-3 sm:p-4">
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+                    <h3 className="text-base font-extrabold text-gray-900 sm:text-lg">{title || '지도'}</h3>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <button type="button" onClick={openModal} disabled={loadingPdf} className="rounded-lg border border-blue-200 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-40 sm:text-sm">확대 보기</button>
+                        <button type="button" onClick={() => changeZoom(-0.2)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 sm:text-sm">축소</button>
+                        <span className="w-14 text-center text-xs font-bold text-gray-600 sm:w-16 sm:text-sm">{Math.round(zoom * 100)}%</span>
+                        <button type="button" onClick={() => changeZoom(0.2)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 sm:text-sm">확대</button>
                     </div>
                 </div>
                 {visibleRegionHits.length > 0 && <div className="mb-4">{renderTagFilters()}</div>}
@@ -703,18 +703,18 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                     </div>
                 )}
                 {renderPageSurface(true)}
-                <p className="mt-3 text-xs leading-6 text-gray-500">PDF 지도를 클릭하면 확대 모달이 열립니다. 모달에서는 휠로 확대하고 드래그로 이동할 수 있습니다.</p>
+                <p className="mt-3 text-xs leading-6 text-gray-500">PDF 지도를 클릭하면 확대 모달이 열립니다. 모바일에서는 핀치 확대와 스크롤 이동으로 볼 수 있습니다.</p>
                 <p className="mt-2 text-xs leading-6 text-gray-500">태그는 시대별, 지도 관련, 사용자 태그 목차로 정리됩니다.</p>
             </div>
             {isModalOpen && (
-                <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/70 p-4" onClick={() => setIsModalOpen(false)}>
-                    <div className="flex h-[90vh] w-full max-w-[96vw] flex-col overflow-hidden rounded-3xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
-                        <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+                <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/70 p-2 sm:p-4" onClick={() => setIsModalOpen(false)}>
+                    <div className="flex h-[94vh] w-full max-w-[96vw] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:h-[90vh] sm:rounded-3xl" onClick={(event) => event.stopPropagation()}>
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 px-3 py-3 sm:px-5 sm:py-4">
                             <div>
-                                <div className="text-lg font-extrabold text-gray-900">{title}</div>
+                                <div className="text-base font-extrabold text-gray-900 sm:text-lg">{title}</div>
                                 <div className="text-xs text-gray-500">바깥 클릭 또는 Esc로 닫습니다.</div>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center justify-end gap-2">
                                 <button
                                     type="button"
                                     onClick={() => {
@@ -722,32 +722,32 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                                         setZoom(fitZoom);
                                         modalSurfaceRef.current?.scrollTo({ left: 0, top: 0, behavior: 'smooth' });
                                     }}
-                                    className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
+                                    className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 sm:text-sm"
                                 >
                                     전체 보기
                                 </button>
-                                <button type="button" onClick={() => changeZoom(-0.2)} className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50">-</button>
-                                <div className="w-16 text-center text-sm font-bold text-gray-700">{Math.round(zoom * 100)}%</div>
-                                <button type="button" onClick={() => changeZoom(0.2)} className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50">+</button>
-                                <button type="button" onClick={() => setIsModalOpen(false)} className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50">닫기</button>
+                                <button type="button" onClick={() => changeZoom(-0.2)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 sm:text-sm">-</button>
+                                <div className="w-14 text-center text-xs font-bold text-gray-700 sm:w-16 sm:text-sm">{Math.round(zoom * 100)}%</div>
+                                <button type="button" onClick={() => changeZoom(0.2)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 sm:text-sm">+</button>
+                                <button type="button" onClick={() => setIsModalOpen(false)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 sm:text-sm">닫기</button>
                             </div>
                         </div>
                         <div className="grid min-h-0 flex-1 lg:grid-cols-[21rem_minmax(0,1fr)]">
-                            <aside className="min-h-0 border-r border-gray-200 bg-gray-50 p-4">
+                            <aside className="order-2 min-h-0 border-t border-gray-200 bg-gray-50 p-3 lg:order-1 lg:border-r lg:border-t-0 lg:p-4">
                                 {renderTagFilters()}
-                                <div className="max-h-[calc(90vh-12rem)] overflow-y-auto pr-1">
+                                <div className="max-h-52 overflow-y-auto pr-1 lg:max-h-[calc(90vh-12rem)]">
                                     {renderShortcutList('rounded-xl px-3 py-2 text-left text-xs font-bold transition')}
                                 </div>
                             </aside>
-                            <div className="flex min-h-0 flex-1 flex-col">
-                                <div className="flex items-center justify-center border-b border-gray-200 px-5 py-3">
+                            <div className="order-1 flex min-h-0 flex-1 flex-col lg:order-2">
+                                <div className="flex items-center justify-center border-b border-gray-200 px-3 py-2 sm:px-5 sm:py-3">
                                     <div className="text-sm font-bold text-gray-600">{currentPage} / {numPages || '-'}</div>
                                 </div>
-                                <div className="flex min-h-0 flex-1 items-center justify-center bg-slate-100 p-4">
+                                <div className="flex min-h-0 flex-1 items-center justify-center bg-slate-100 p-2 sm:p-4">
                                     <div className="flex h-full w-full flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
                                         <div
                                             ref={modalSurfaceRef}
-                                            className="min-h-0 flex-1 cursor-grab overflow-auto bg-slate-100 p-4 active:cursor-grabbing"
+                                            className="min-h-0 flex-1 cursor-grab overflow-auto bg-slate-100 p-2 active:cursor-grabbing sm:p-4"
                                             onWheel={handleWheelZoom}
                                             onTouchStart={handleTouchStart}
                                             onTouchMove={handleTouchMove}
