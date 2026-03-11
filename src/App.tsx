@@ -161,47 +161,25 @@ const App: React.FC = () => {
                     </article>
                 </section>
 
-                <section className="insight-grid">
-                    <article className="chart-card">
-                        <div className="card-header">
-                            <div>
-                                <span className="section-kicker">종합 레이더</span>
-                                <h2>
-                                    역량별 사전 · 사후 레이더 - {participant.name} vs 전체
-                                </h2>
-                                <p className="panel-copy">5점 리커트 척도 기준 · 개인과 전체 평균 비교</p>
-                            </div>
-                            <div className="profile-chip-group">
-                                <span className="profile-chip">{participant.trackLabel}</span>
-                                <span className="profile-chip">전체 {dataset.participants.length}명 비교</span>
-                            </div>
+                <section className="chart-card">
+                    <div className="card-header">
+                        <div>
+                            <span className="section-kicker">점수 비교</span>
+                            <h2>
+                                {participant.organization} · {participant.name} · {participant.traineeId}
+                            </h2>
                         </div>
-
-                        <ScoreComparisonChart participant={participant} />
-                    </article>
-
-                    <article className="detail-card advice-card insight-side-card">
-                        <div className="card-header">
-                            <div>
-                                <span className="section-kicker">고정 피드백</span>
-                                <h2>{advice?.title}</h2>
-                            </div>
+                        <div className="profile-chip-group">
+                            <span className="profile-chip">{participant.trackLabel}</span>
+                            <span className="profile-chip">전체 {dataset.participants.length}명 비교</span>
                         </div>
+                    </div>
 
-                        <p className="advice-lead">{advice?.summary}</p>
-                        <div className="advice-points">
-                            {advice?.points.map((point) => (
-                                <div key={point} className="advice-point">
-                                    {point}
-                                </div>
-                            ))}
-                        </div>
-                        <div className="advice-note">AI 호출 없이 점수 구간 조건문으로 생성된 안내입니다. 다시 조회하려면 아래 버튼으로 로그인 화면으로 돌아갈 수 있습니다.</div>
-                    </article>
+                    <ScoreComparisonChart participant={participant} />
                 </section>
 
                 <section className="analysis-grid">
-                    <article className="detail-card detail-card-full">
+                    <article className="detail-card">
                         <div className="card-header">
                             <div>
                                 <span className="section-kicker">영역 분석</span>
@@ -228,6 +206,25 @@ const App: React.FC = () => {
                                 </div>
                             ))}
                         </div>
+                    </article>
+
+                    <article className="detail-card advice-card">
+                        <div className="card-header">
+                            <div>
+                                <span className="section-kicker">고정 피드백</span>
+                                <h2>{advice?.title}</h2>
+                            </div>
+                        </div>
+
+                        <p className="advice-lead">{advice?.summary}</p>
+                        <div className="advice-points">
+                            {advice?.points.map((point) => (
+                                <div key={point} className="advice-point">
+                                    {point}
+                                </div>
+                            ))}
+                        </div>
+                        <div className="advice-note">AI 호출 없이 점수 구간 조건문으로 생성된 안내입니다. 다시 조회하려면 아래 버튼으로 로그인 화면으로 돌아갈 수 있습니다.</div>
                     </article>
                 </section>
 

@@ -1,79 +1,53 @@
 import React from 'react';
 import {
+    BarElement,
+    CategoryScale,
     Chart as ChartJS,
-    Filler,
     Legend,
-    LineElement,
-    PointElement,
-    RadialLinearScale,
-    RadarController,
+    LinearScale,
     Tooltip,
 } from 'chart.js';
-import { Radar } from 'react-chartjs-2';
+import { Bar } from 'react-chartjs-2';
 import type { ParticipantRecord } from '../types';
 
-ChartJS.register(RadarController, RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend);
+ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
 
 interface ScoreComparisonChartProps {
     participant: ParticipantRecord;
 }
 
 export const ScoreComparisonChart: React.FC<ScoreComparisonChartProps> = ({ participant }) => {
-    const labels = participant.competencies.map((competency) => competency.label);
-    const preAverageSeries = participant.competencies.map((competency) => competency.preAverage);
-    const postAverageSeries = participant.competencies.map((competency) => competency.postAverage);
-    const myPreSeries = participant.competencies.map((competency) => competency.pre);
-    const myPostSeries = participant.competencies.map((competency) => competency.post);
+    const labels = ['사전', '사후'];
+    const competencyPostAverage = participant.competencies.length
+        ? participant.competencies.reduce((sum, competency) => sum + competency.postAverage, 0) / participant.competencies.length
+        : participant.postOverall;
+    const competencyPreAverage = participant.competencies.length
+        ? participant.competencies.reduce((sum, competency) => sum + competency.preAverage, 0) / participant.competencies.length
+        : participant.preOverall;
 
     return (
         <div className="chart-wrap">
-            <Radar
+            <Bar
                 data={{
                     labels,
                     datasets: [
                         {
-                            label: '전체 사전',
-                            data: preAverageSeries,
-                            backgroundColor: 'rgba(99, 102, 241, 0.12)',
-                            borderColor: '#6366f1',
-                            pointBackgroundColor: '#6366f1',
-                            pointBorderColor: '#ffffff',
-                            pointRadius: 3,
-                            borderWidth: 2,
-                            fill: true,
+                            label: '개인 점수',
+                            data: [participant.preOverall, participant.postOverall],
+                            backgroundColor: ['#bfdbfe', '#3b82f6'],
+                            borderColor: ['#93c5fd', '#2563eb'],
+                            borderWidth: 1,
+                            borderRadius: 18,
+                            borderSkipped: false,
                         },
                         {
                             label: '전체 평균',
-                            data: postAverageSeries,
-                            backgroundColor: 'rgba(45, 212, 191, 0.12)',
-                            borderColor: '#14b8a6',
-                            pointBackgroundColor: '#14b8a6',
-                            pointBorderColor: '#ffffff',
-                            pointRadius: 3,
-                            borderWidth: 2,
-                            fill: true,
-                        },
-                        {
-                            label: '나의 사전',
-                            data: myPreSeries,
-                            backgroundColor: 'rgba(245, 158, 11, 0.1)',
-                            borderColor: '#f59e0b',
-                            pointBackgroundColor: '#f59e0b',
-                            pointBorderColor: '#ffffff',
-                            pointRadius: 3,
-                            borderWidth: 2,
-                            fill: true,
-                        },
-                        {
-                            label: '나의 사후',
-                            data: myPostSeries,
-                            backgroundColor: 'rgba(236, 72, 153, 0.1)',
-                            borderColor: '#ec4899',
-                            pointBackgroundColor: '#ec4899',
-                            pointBorderColor: '#ffffff',
-                            pointRadius: 3,
-                            borderWidth: 2,
-                            fill: true,
+                            data: [competencyPreAverage, competencyPostAverage],
+                            backgroundColor: ['#d1fae5', '#6ee7b7'],
+                            borderColor: ['#a7f3d0', '#10b981'],
+                            borderWidth: 1,
+                            borderRadius: 18,
+                            borderSkipped: false,
                         },
                     ],
                 }}
@@ -82,7 +56,7 @@ export const ScoreComparisonChart: React.FC<ScoreComparisonChartProps> = ({ part
                     maintainAspectRatio: false,
                     plugins: {
                         legend: {
-                            position: 'bottom',
+                            position: 'top',
                             labels: {
                                 usePointStyle: true,
                                 boxWidth: 10,
@@ -91,26 +65,23 @@ export const ScoreComparisonChart: React.FC<ScoreComparisonChartProps> = ({ part
                         },
                     },
                     scales: {
-                        r: {
+                        y: {
                             min: 0,
                             max: 5,
                             ticks: {
                                 stepSize: 1,
-                                color: '#334155',
-                                backdropColor: 'rgba(255, 255, 255, 0.78)',
+                                color: '#64748b',
                             },
                             grid: {
-                                color: 'rgba(148, 163, 184, 0.28)',
+                                color: 'rgba(148, 163, 184, 0.18)',
                             },
-                            angleLines: {
-                                color: 'rgba(148, 163, 184, 0.22)',
+                        },
+                        x: {
+                            ticks: {
+                                color: '#334155',
                             },
-                            pointLabels: {
-                                color: '#64748b',
-                                font: {
-                                    size: 13,
-                                    weight: 600,
-                                },
+                            grid: {
+                                display: false,
                             },
                         },
                     },
