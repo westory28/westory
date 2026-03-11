@@ -8,10 +8,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import { db, storage } from '../../lib/firebase';
 import {
     DEFAULT_GOOGLE_MAP_RESOURCE,
-    DEFAULT_PDF_ERA_TAGS,
-    DEFAULT_PDF_REGION_TAGS,
     DEFAULT_PDF_TAG_SECTIONS,
     GOOGLE_MAP_RESOURCE_ID,
+    getPdfSectionTagOptions,
     groupMapResourcesForDisplay,
     mergeMapResources,
     normalizeMapResource,
@@ -60,8 +59,6 @@ const createDraft = (): StoredMapResource => ({
     sortOrder: 99,
     storageScope: 'semester',
 });
-
-const DEFAULT_PDF_TAG_OPTIONS = [...DEFAULT_PDF_REGION_TAGS, ...DEFAULT_PDF_ERA_TAGS];
 
 const normalizeRegionTags = (tags: string[]) => Array.from(new Set(
     tags
@@ -1135,11 +1132,10 @@ const ManageMaps: React.FC = () => {
         () => clonePdfTagSections(draft.pdfTagSections || DEFAULT_PDF_TAG_SECTIONS),
         [draft.pdfTagSections],
     );
-    const allPdfTagOptions = useMemo(() => normalizeRegionTags([
-        ...DEFAULT_PDF_TAG_OPTIONS,
-        ...currentPdfTagSections.flatMap((section) => section.tags || []),
-        ...(draft.pdfRegions || []).flatMap((region) => region.tags || []),
-    ]), [currentPdfTagSections, draft.pdfRegions]);
+    const allPdfTagOptions = useMemo(
+        () => getPdfSectionTagOptions(currentPdfTagSections),
+        [currentPdfTagSections],
+    );
     const displayedPdfRegions = useMemo(
         () => isPdfShortcutExpanded ? (draft.pdfRegions || []) : (draft.pdfRegions || []).slice(0, 12),
         [draft.pdfRegions, isPdfShortcutExpanded],

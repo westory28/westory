@@ -118,6 +118,10 @@ const normalizeRegionTags = (tags: unknown) => {
     )).sort((a, b) => a.localeCompare(b, 'ko'));
 };
 
+export const getPdfSectionTagOptions = (sections: PdfTagSection[]) => normalizeRegionTags(
+    sections.flatMap((section) => section.tags || []),
+);
+
 const normalizePdfTagSections = (sections: unknown): PdfTagSection[] => {
     const defaults = DEFAULT_PDF_TAG_SECTIONS.map((section) => ({ ...section, tags: [...section.tags] }));
     if (!Array.isArray(sections)) return defaults;
@@ -130,68 +134,59 @@ const normalizePdfTagSections = (sections: unknown): PdfTagSection[] => {
         }))
         .filter((section) => section.label);
 
-    const merged = [...defaults];
-    parsed.forEach((section) => {
-        const existingIndex = merged.findIndex((item) => item.id === section.id);
-        if (existingIndex >= 0) {
-            merged[existingIndex] = {
-                ...merged[existingIndex],
-                label: section.label,
-                tags: section.tags.length > 0 ? section.tags : merged[existingIndex].tags,
-            };
-            return;
-        }
-        merged.push(section);
-    });
-
-    return merged;
+    return parsed.length > 0 ? parsed : defaults;
 };
 
-export const normalizeMapResource = (id: string, raw: Partial<MapResource>): MapResource => ({
-    id,
-    title: String(raw.title || '').trim() || '지도 자료',
-    category: String(raw.category || '').trim() || '기타 지도',
-    tabGroup: String(raw.tabGroup || raw.category || '').trim() || '기타 지도',
-    description: String(raw.description || '').trim(),
-    type: raw.type === 'image' || raw.type === 'iframe' || raw.type === 'google' || raw.type === 'pdf'
-        ? raw.type
-        : 'image',
-    imageUrl: String(raw.imageUrl || '').trim(),
-    fileUrl: String(raw.fileUrl || '').trim(),
-    storagePath: String(raw.storagePath || '').trim() || deriveStoragePathFromUrl(raw.fileUrl),
-    fileName: String(raw.fileName || '').trim(),
-    mimeType: String(raw.mimeType || '').trim(),
-    embedUrl: String(raw.embedUrl || '').trim(),
-    googleQuery: String(raw.googleQuery || '').trim(),
-    externalUrl: String(raw.externalUrl || '').trim(),
-    pdfPageImages: Array.isArray(raw.pdfPageImages)
-        ? raw.pdfPageImages
-            .map((page) => ({
-                page: Number(page?.page) || 1,
-                imageUrl: String(page?.imageUrl || '').trim(),
-                width: Number(page?.width) || 0,
-                height: Number(page?.height) || 0,
-            }))
-            .filter((page) => page.imageUrl)
-            .sort((a, b) => a.page - b.page)
-        : [],
-    pdfRegions: Array.isArray(raw.pdfRegions)
-        ? raw.pdfRegions
-            .map((region) => ({
-                label: String(region?.label || '').trim(),
-                page: Number(region?.page) || 1,
-                left: Number(region?.left) || 0,
-                top: Number(region?.top) || 0,
-                width: Number(region?.width) || 0,
-                height: Number(region?.height) || 0,
-                shortcutEnabled: region?.shortcutEnabled !== false,
-                tags: normalizeRegionTags(region?.tags),
-            }))
-            .filter((region) => region.label)
-        : [],
-    pdfTagSections: normalizePdfTagSections(raw.pdfTagSections),
-    sortOrder: Number.isFinite(Number(raw.sortOrder)) ? Number(raw.sortOrder) : 999,
-});
+export const normalizeMapResource = (id: string, raw: Partial<MapResource>): MapResource => {
+    const pdfTagSections = normalizePdfTagSections(raw.pdfTagSections);
+    const allowedTagSet = new Set(getPdfSectionTagOptions(pdfTagSections));
+
+    return {
+        id,
+        title: String(raw.title || '').trim() || '지도 자료',
+        category: String(raw.category || '').trim() || '기타 지도',
+        tabGroup: String(raw.tabGroup || raw.category || '').trim() || '기타 지도',
+        description: String(raw.description || '').trim(),
+        type: raw.type === 'image' || raw.type === 'iframe' || raw.type === 'google' || raw.type === 'pdf'
+            ? raw.type
+            : 'image',
+        imageUrl: String(raw.imageUrl || '').trim(),
+        fileUrl: String(raw.fileUrl || '').trim(),
+        storagePath: String(raw.storagePath || '').trim() || deriveStoragePathFromUrl(raw.fileUrl),
+        fileName: String(raw.fileName || '').trim(),
+        mimeType: String(raw.mimeType || '').trim(),
+        embedUrl: String(raw.embedUrl || '').trim(),
+        googleQuery: String(raw.googleQuery || '').trim(),
+        externalUrl: String(raw.externalUrl || '').trim(),
+        pdfPageImages: Array.isArray(raw.pdfPageImages)
+            ? raw.pdfPageImages
+                .map((page) => ({
+                    page: Number(page?.page) || 1,
+                    imageUrl: String(page?.imageUrl || '').trim(),
+                    width: Number(page?.width) || 0,
+                    height: Number(page?.height) || 0,
+                }))
+                .filter((page) => page.imageUrl)
+                .sort((a, b) => a.page - b.page)
+            : [],
+        pdfRegions: Array.isArray(raw.pdfRegions)
+            ? raw.pdfRegions
+                .map((region) => ({
+                    label: String(region?.label || '').trim(),
+                    page: Number(region?.page) || 1,
+                    left: Number(region?.left) || 0,
+                    top: Number(region?.top) || 0,
+                    width: Number(region?.width) || 0,
+                    height: Number(region?.height) || 0,
+                    shortcutEnabled: region?.shortcutEnabled !== false,
+                    tags: normalizeRegionTags(region?.tags).filter((tag) => allowedTagSet.has(tag)),
+                }))
+                .filter((region) => region.label)
+            : [],
+        pdfTagSections,
+        sortOrder: Number.isFinite(Number(raw.sortOrder)) ? Number(raw.sortOrder) : 999,
+    };
+};
 
 export const mergeMapResources = (resources: MapResource[]) => {
     const deduped = new Map<string, MapResource>();

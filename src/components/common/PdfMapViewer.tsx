@@ -105,6 +105,8 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
     const [selectedRegion, setSelectedRegion] = useState<RegionHit | null>(null);
     const [selectedTag, setSelectedTag] = useState('');
     const [showAllShortcuts, setShowAllShortcuts] = useState(false);
+    const [isInlineTagCatalogOpen, setIsInlineTagCatalogOpen] = useState(false);
+    const [isModalTagCatalogOpen, setIsModalTagCatalogOpen] = useState(false);
     const [expandedTagSections, setExpandedTagSections] = useState<Record<string, boolean>>({});
     const [pdfSourceUrl, setPdfSourceUrl] = useState('');
     const [loadingPdf, setLoadingPdf] = useState(true);
@@ -346,6 +348,8 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
 
     useEffect(() => {
         setExpandedTagSections({});
+        setIsInlineTagCatalogOpen(false);
+        setIsModalTagCatalogOpen(false);
     }, [title]);
 
     useEffect(() => {
@@ -469,82 +473,103 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
         pinchStateRef.current = null;
     };
 
-    const renderTagFilters = () => resolvedTagSections.length > 0 && (
+    const renderTagFilters = (
+        isOpen: boolean,
+        setIsOpen: React.Dispatch<React.SetStateAction<boolean>>,
+    ) => resolvedTagSections.length > 0 && (
         <div className="mb-4 space-y-3">
-            <div className="flex items-center justify-between gap-3">
-                <div className="text-xs font-bold text-gray-500">태그 목차</div>
-                {onAddTagSection && (
-                    <button
-                        type="button"
-                        onClick={onAddTagSection}
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700"
-                        aria-label="태그 범주 추가"
-                        title="태그 범주 추가"
-                    >
-                        <i className="fas fa-plus text-xs"></i>
-                    </button>
-                )}
-            </div>
-            <button
-                type="button"
-                onClick={() => setSelectedTag('')}
-                className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${!selectedTag ? 'bg-slate-800 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
-            >
-                전체
-            </button>
-            {resolvedTagSections.map((section) => (
-                <div key={section.heading} className="rounded-2xl border border-gray-200 bg-white/80 px-3 py-2">
-                    <div className="flex items-start gap-3 text-sm">
-                        <div className="shrink-0 pt-1 text-xs font-bold text-gray-400">
-                            <div className="inline-flex items-center gap-1.5">
-                                <span>{section.heading}</span>
-                                {onRenameTagSection && section.id !== 'uncategorized' && (
-                                    <button
-                                        type="button"
-                                        onClick={() => onRenameTagSection(section.id)}
-                                        className="inline-flex h-5 w-5 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-                                        aria-label={`${section.heading} 이름 수정`}
-                                        title="범주 이름 수정"
-                                    >
-                                        <i className="fas fa-pen text-[10px]"></i>
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                        <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                                {(expandedTagSections[section.heading] ? section.tags : section.tags.slice(0, TAG_ROW_LIMIT)).map((tag) => (
-                            <button
-                                key={tag}
-                                type="button"
-                                onClick={() => setSelectedTag((prev) => (prev === tag ? '' : tag))}
-                                className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold transition ${selectedTag === tag ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
-                            >
-                                <span>{tag}</span>
-                                <span className="rounded-full bg-white/80 px-1.5 py-0.5 text-[10px] text-gray-700">
-                                    {visibleRegionHits.filter((region) => (region.tags || []).includes(tag)).length}
-                                </span>
-                            </button>
-                                ))}
-                                {section.tags.length > TAG_ROW_LIMIT && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setExpandedTagSections((prev) => ({
-                                            ...prev,
-                                            [section.heading]: !prev[section.heading],
-                                        }))}
-                                        className="inline-flex items-center rounded-full px-2 py-1 text-xs font-bold text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-                                        aria-label={`${section.heading} 태그 ${expandedTagSections[section.heading] ? '접기' : '펼치기'}`}
-                                        title={expandedTagSections[section.heading] ? '접기' : '펼치기'}
-                                    >
-                                        ...
-                                    </button>
-                                )}
-                            </div>
-                        </div>
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white/80 px-3 py-3">
+                <div>
+                    <div className="text-xs font-bold text-gray-500">태그 목차</div>
+                    <div className="mt-1 text-[11px] text-gray-400">
+                        {resolvedTagSections.length}개 범주, {availableTags.length}개 태그
                     </div>
                 </div>
-            ))}
+                <div className="flex items-center gap-2">
+                    {onAddTagSection && isOpen && (
+                        <button
+                            type="button"
+                            onClick={onAddTagSection}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                            aria-label="태그 범주 추가"
+                            title="태그 범주 추가"
+                        >
+                            <i className="fas fa-plus text-xs"></i>
+                        </button>
+                    )}
+                    <button
+                        type="button"
+                        onClick={() => setIsOpen((prev) => !prev)}
+                        className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-700 transition hover:bg-gray-50"
+                    >
+                        {isOpen ? '목차 접기' : '목차 펼치기'}
+                    </button>
+                </div>
+            </div>
+            {isOpen && (
+                <>
+                    <button
+                        type="button"
+                        onClick={() => setSelectedTag('')}
+                        className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${!selectedTag ? 'bg-slate-800 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                    >
+                        전체
+                    </button>
+                    {resolvedTagSections.map((section) => (
+                        <div key={section.heading} className="rounded-2xl border border-gray-200 bg-white/80 px-3 py-2">
+                            <div className="flex items-start gap-3 text-sm">
+                                <div className="shrink-0 pt-1 text-xs font-bold text-gray-400">
+                                    <div className="inline-flex items-center gap-1.5">
+                                        <span>{section.heading}</span>
+                                        {onRenameTagSection && section.id !== 'uncategorized' && (
+                                            <button
+                                                type="button"
+                                                onClick={() => onRenameTagSection(section.id)}
+                                                className="inline-flex h-5 w-5 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                                                aria-label={`${section.heading} 이름 수정`}
+                                                title="범주 이름 수정"
+                                            >
+                                                <i className="fas fa-pen text-[10px]"></i>
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        {(expandedTagSections[section.heading] ? section.tags : section.tags.slice(0, TAG_ROW_LIMIT)).map((tag) => (
+                                            <button
+                                                key={tag}
+                                                type="button"
+                                                onClick={() => setSelectedTag((prev) => (prev === tag ? '' : tag))}
+                                                className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold transition ${selectedTag === tag ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
+                                            >
+                                                <span>{tag}</span>
+                                                <span className="rounded-full bg-white/80 px-1.5 py-0.5 text-[10px] text-gray-700">
+                                                    {visibleRegionHits.filter((region) => (region.tags || []).includes(tag)).length}
+                                                </span>
+                                            </button>
+                                        ))}
+                                        {section.tags.length > TAG_ROW_LIMIT && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setExpandedTagSections((prev) => ({
+                                                    ...prev,
+                                                    [section.heading]: !prev[section.heading],
+                                                }))}
+                                                className="inline-flex items-center rounded-full px-2 py-1 text-xs font-bold text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                                                aria-label={`${section.heading} 태그 ${expandedTagSections[section.heading] ? '접기' : '펼치기'}`}
+                                                title={expandedTagSections[section.heading] ? '접기' : '펼치기'}
+                                            >
+                                                ...
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </>
+            )}
         </div>
     );
 
@@ -703,7 +728,11 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                         <button type="button" onClick={() => changeZoom(0.2)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 sm:text-sm">확대</button>
                     </div>
                 </div>
-                {visibleRegionHits.length > 0 && <div className="mb-4">{renderTagFilters()}</div>}
+                {visibleRegionHits.length > 0 && (
+                    <div className="mb-4">
+                        {renderTagFilters(isInlineTagCatalogOpen, setIsInlineTagCatalogOpen)}
+                    </div>
+                )}
                 {selectedTag && (
                     <div ref={inlineShortcutRef} className="mb-4 rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
                         {renderShortcutList('rounded-xl px-3 py-2 text-left text-xs font-bold transition')}
@@ -711,7 +740,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                 )}
                 {renderPageSurface(true)}
                 <p className="mt-3 text-xs leading-6 text-gray-500">PDF 지도를 클릭하면 확대 모달이 열립니다. 모바일에서는 핀치 확대와 스크롤 이동으로 볼 수 있습니다.</p>
-                <p className="mt-2 text-xs leading-6 text-gray-500">태그는 시대별, 지도 관련, 사용자 태그 목차로 정리됩니다.</p>
+                <p className="mt-2 text-xs leading-6 text-gray-500">태그 목차는 기본으로 접혀 있으며, 필요할 때 펼쳐서 범주별로 볼 수 있습니다.</p>
             </div>
             {isModalOpen && (
                 <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/70 p-2 sm:p-4" onClick={() => setIsModalOpen(false)}>
@@ -742,7 +771,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                         </div>
                         <div className="grid min-h-0 flex-1 lg:grid-cols-[21rem_minmax(0,1fr)]">
                             <aside className="order-2 min-h-0 border-t border-gray-200 bg-gray-50 p-3 lg:order-1 lg:border-r lg:border-t-0 lg:p-4">
-                                {renderTagFilters()}
+                                {renderTagFilters(isModalTagCatalogOpen, setIsModalTagCatalogOpen)}
                                 <div className="max-h-52 overflow-y-auto pr-1 lg:max-h-[calc(90vh-12rem)]">
                                     {renderShortcutList('rounded-xl px-3 py-2 text-left text-xs font-bold transition')}
                                 </div>
