@@ -9,7 +9,6 @@ import {
 } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
-import { getAnalytics } from 'firebase/analytics';
 
 const firebaseConfig = {
     apiKey: "AIzaSyAOlPQ5PFmL0zxmGrGcuEBnqBXisph7kPU",
@@ -27,37 +26,40 @@ const db = getFirestore(app);
 const storage = getStorage(app, `gs://${firebaseConfig.storageBucket}`);
 let analytics = null;
 
+const isMobileBrowser = (): boolean => {
+    if (typeof navigator === 'undefined') return false;
+    return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+};
+
 const authPersistenceReady = typeof window === 'undefined'
     ? Promise.resolve()
     : (async () => {
-        // Some mobile browsers may delay or reject IndexedDB-backed persistence
-        // during redirect recovery. Ensure one persistence is fully settled
-        // before auth listeners and redirect handling begin.
-        try {
-            await setPersistence(auth, indexedDBLocalPersistence);
-            return;
-        } catch {
+        // Old mobile browsers often stall on IndexedDB-backed persistence.
+        // Prefer lighter storage first on phones to shorten login startup time.
+        const persistenceOrder = isMobileBrowser()
+            ? [browserLocalPersistence, browserSessionPersistence, indexedDBLocalPersistence, inMemoryPersistence]
+            : [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence];
+
+        for (const persistence of persistenceOrder) {
             try {
-                await setPersistence(auth, browserLocalPersistence);
+                await setPersistence(auth, persistence);
                 return;
             } catch {
-                try {
-                    await setPersistence(auth, browserSessionPersistence);
-                    return;
-                } catch {
-                    await setPersistence(auth, inMemoryPersistence);
-                }
+                continue;
             }
         }
     })();
 
-try {
-    const isBrowser = typeof window !== 'undefined';
-    if (isBrowser && firebaseConfig.measurementId) {
-        analytics = getAnalytics(app);
-    }
-} catch (e) {
-    console.warn("Analytics not supported:", e);
+if (typeof window !== 'undefined' && firebaseConfig.measurementId) {
+    window.setTimeout(() => {
+        void import('firebase/analytics')
+            .then(({ getAnalytics }) => {
+                analytics = getAnalytics(app);
+            })
+            .catch((e) => {
+                console.warn("Analytics not supported:", e);
+            });
+    }, 0);
 }
 
 export { app, auth, db, storage, analytics, authPersistenceReady };
