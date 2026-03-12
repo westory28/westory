@@ -203,6 +203,10 @@ const clearRedirectAttempt = () => {
     removeStorage(REDIRECT_ATTEMPT_KEY);
 };
 
+const shouldResolveRedirectOnBoot = (): boolean => {
+    return isIOSDevice() || !!readRedirectAttemptMode() || !!getPendingLoginMode();
+};
+
 const getLoginFailureMessage = (error?: unknown): string => {
     const code = (error as Partial<AuthError>)?.code || '';
 
@@ -713,6 +717,7 @@ const Login: React.FC = () => {
     useEffect(() => {
         if (redirectHandledRef.current) return;
         redirectHandledRef.current = true;
+        if (!shouldResolveRedirectOnBoot()) return;
 
         const resolveRedirect = async () => {
             setAuthBusy(true);
@@ -883,6 +888,8 @@ const Login: React.FC = () => {
         } catch (error) {
             if (isPopupFallbackError(error)) {
                 try {
+                    markRedirectAttempt(mode);
+                    setLoginNotice('브라우저 로그인 화면으로 이동 중입니다. 화면 전환 후 잠시만 기다려주세요.');
                     await signInWithRedirect(auth, provider);
                     return;
                 } catch (redirectError) {
