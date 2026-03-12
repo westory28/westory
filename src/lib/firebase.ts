@@ -10,7 +10,19 @@ import {
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
-const configuredAuthDomain = import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "history-quiz-yongsin.firebaseapp.com";
+const configuredAuthDomain = (() => {
+    const envDomain = import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "history-quiz-yongsin.firebaseapp.com";
+    if (typeof window === 'undefined') return envDomain;
+
+    const runtimeHost = window.location.hostname;
+    if (/^(localhost|127\.0\.0\.1)$/.test(runtimeHost)) return envDomain;
+
+    if (/^(?:www\.)?westory\.kr$/i.test(runtimeHost)) {
+        return runtimeHost;
+    }
+
+    return envDomain;
+})();
 
 const firebaseConfig = {
     apiKey: "AIzaSyAOlPQ5PFmL0zxmGrGcuEBnqBXisph7kPU",
