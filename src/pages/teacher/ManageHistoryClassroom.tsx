@@ -31,6 +31,15 @@ interface StudentOption {
     number: string;
 }
 
+const formatStudentBadgeLabel = (student: Pick<StudentOption, 'grade' | 'className' | 'number' | 'name'>) => {
+    const parts = [
+        student.grade && student.className ? `${student.grade}-${student.className}` : '',
+        student.number ? `${student.number}번` : '',
+        student.name,
+    ].filter(Boolean);
+    return parts.join(' ');
+};
+
 const createWorksheetBlankFromRect = (
     page: number,
     rect: {
@@ -338,6 +347,11 @@ const ManageHistoryClassroom: React.FC = () => {
             .map((uid) => students.find((student) => student.uid === uid))
             .filter((student): student is StudentOption => !!student),
         [selectedStudentUids, students],
+    );
+
+    const studentByUid = useMemo(
+        () => new Map(students.map((student) => [student.uid, student])),
+        [students],
     );
 
     const gradeOptions = useMemo(
@@ -723,18 +737,18 @@ const ManageHistoryClassroom: React.FC = () => {
                                 {selectedStudents.length}명
                             </div>
                         </div>
-                        <div className="space-y-2">
+                        <div className="flex flex-wrap gap-2">
                             {selectedStudents.map((student) => (
-                                <div key={student.uid} className="flex items-center justify-between gap-3 rounded-xl bg-gray-50 px-3 py-2 text-sm">
-                                    <div className="min-w-0 text-gray-700">
+                                <div key={student.uid} className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-700">
+                                    <span className="max-w-[10rem] truncate">
                                         <span className="font-bold">{student.grade}-{student.className}</span>{' '}
                                         <span>{student.number}번</span>{' '}
                                         <span className="font-bold text-gray-900">{student.name}</span>
-                                    </div>
+                                    </span>
                                     <button
                                         type="button"
                                         onClick={() => setSelectedStudentUids((prev) => prev.filter((uid) => uid !== student.uid))}
-                                        className="shrink-0 text-xs font-bold text-red-500"
+                                        className="shrink-0 text-[11px] font-bold text-red-500"
                                     >
                                         제거
                                     </button>
@@ -758,11 +772,30 @@ const ManageHistoryClassroom: React.FC = () => {
                                     key={assignment.id}
                                     type="button"
                                     onClick={() => openAssignmentEditor(assignment)}
-                                    className="w-full rounded-2xl border border-gray-200 bg-white p-4 text-left transition hover:border-orange-200 hover:shadow-sm"
+                                    className="history-assignment-card w-full rounded-2xl border border-gray-200 bg-white p-4 text-left transition hover:border-orange-200 hover:shadow-sm"
                                 >
                                     <div className="text-xs font-bold text-orange-500">{assignment.mapTitle}</div>
                                     <div className="mt-1 text-base font-black text-gray-900 break-words">{assignment.title}</div>
-                                    <div className="mt-2 inline-flex rounded-full bg-orange-50 px-3 py-1 text-xs font-bold text-orange-700 whitespace-nowrap">
+                                    <div className="mt-3 flex flex-wrap gap-1.5">
+                                        {(
+                                            assignment.targetStudentUids.length
+                                                ? assignment.targetStudentUids
+                                                    .map((uid) => studentByUid.get(uid))
+                                                    .filter((student): student is StudentOption => Boolean(student))
+                                                    .map((student) => formatStudentBadgeLabel(student))
+                                                : assignment.targetStudentNames
+                                        ).filter(Boolean).map((label) => (
+                                            <span key={`${assignment.id}-${label}`} className="rounded-full border border-orange-100 bg-orange-50 px-2.5 py-1 text-[11px] font-semibold text-orange-700">
+                                                {label}
+                                            </span>
+                                        ))}
+                                        {!assignment.targetStudentUids.length && !assignment.targetStudentNames.length && !assignment.targetStudentName && (
+                                            <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-semibold text-gray-500">
+                                                배정 학생 없음
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="hidden mt-2 inline-flex rounded-full bg-orange-50 px-3 py-1 text-xs font-bold text-orange-700 whitespace-nowrap">
                                         {(assignment.targetStudentNames.length
                                             ? `${assignment.targetStudentNames[0]}${assignment.targetStudentNames.length > 1 ? ` 외 ${assignment.targetStudentNames.length - 1}명` : ''}`
                                             : assignment.targetStudentName) || '학생 미지정'}
@@ -1290,6 +1323,11 @@ const ManageHistoryClassroom: React.FC = () => {
                     <i className={`fas ${floatingPanelOpen ? 'fa-times' : 'fa-layer-group'} text-lg`}></i>
                 </button>
             </div>
+            <style>{`
+                .history-assignment-card > div:last-child {
+                    display: none;
+                }
+            `}</style>
         </div>
     );
 };

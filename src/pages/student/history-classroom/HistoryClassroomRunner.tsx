@@ -3,6 +3,7 @@ import { addDoc, collection, doc, getDoc, getDocs, query, serverTimestamp, where
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../contexts/AuthContext';
 import { db } from '../../../lib/firebase';
+import { readLocalOnly, removeStorage, writeLocalOnly } from '../../../lib/safeStorage';
 import {
     normalizeHistoryClassroomAssignment,
     normalizeHistoryClassroomResult,
@@ -11,6 +12,37 @@ import {
 import { getSemesterCollectionPath, getSemesterDocPath } from '../../../lib/semesterScope';
 
 const BLANK_SCALE = 1;
+const HISTORY_CLASSROOM_LOCK_PREFIX = 'westoryHistoryClassroomLock';
+
+const getCooldownLockKey = (assignmentId: string, uid: string) => `${HISTORY_CLASSROOM_LOCK_PREFIX}:${assignmentId}:${uid}`;
+
+const readCooldownLockUntil = (assignmentId: string, uid: string): number => {
+    const raw = readLocalOnly(getCooldownLockKey(assignmentId, uid));
+    if (!raw) return 0;
+
+    try {
+        const parsed = JSON.parse(raw) as { blockedUntil?: number };
+        const blockedUntil = Number(parsed.blockedUntil) || 0;
+        if (blockedUntil > Date.now()) return blockedUntil;
+    } catch (error) {
+        console.warn('Failed to read history classroom cooldown lock', error);
+    }
+
+    removeStorage(getCooldownLockKey(assignmentId, uid));
+    return 0;
+};
+
+const writeCooldownLock = (assignmentId: string, uid: string, blockedUntil: number, reason: string) => {
+    writeLocalOnly(getCooldownLockKey(assignmentId, uid), JSON.stringify({
+        blockedUntil,
+        reason,
+        savedAt: Date.now(),
+    }));
+};
+
+const clearCooldownLock = (assignmentId: string, uid: string) => {
+    removeStorage(getCooldownLockKey(assignmentId, uid));
+};
 
 const HistoryClassroomRunner: React.FC = () => {
     const [searchParams] = useSearchParams();
@@ -83,6 +115,15 @@ const HistoryClassroomRunner: React.FC = () => {
                     }
                 }
 
+                const localAvailableAt = readCooldownLockUntil(loaded.id, userData.uid);
+                if (localAvailableAt > Date.now()) {
+                    const remain = Math.ceil((localAvailableAt - Date.now()) / 60000);
+                    throw new Error(`${remain}분 후 다시 응시할 수 있습니다.`);
+                }
+                if (localAvailableAt) {
+                    clearCooldownLock(loaded.id, userData.uid);
+                }
+
                 setAssignment(loaded);
                 setCurrentPage(loaded.pdfPageImages?.[0]?.page || 1);
                 setRemainingSeconds(loaded.timeLimitMinutes > 0 ? loaded.timeLimitMinutes * 60 : null);
@@ -141,6 +182,14 @@ const HistoryClassroomRunner: React.FC = () => {
     const handleForcedCancel = async (reason: string) => {
         if (!assignment || !userData || completed || submitting || cancellationInFlightRef.current) return;
         cancellationInFlightRef.current = true;
+        if (assignment.cooldownMinutes > 0) {
+            writeCooldownLock(
+                assignment.id,
+                userData.uid,
+                Date.now() + assignment.cooldownMinutes * 60 * 1000,
+                reason,
+            );
+        }
         try {
             await saveResult({ status: 'cancelled', cancellationReason: reason });
             setCompleted(true);
