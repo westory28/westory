@@ -809,7 +809,7 @@ const ManageThinkCloud: React.FC = () => {
                         <div className="flex-1 flex items-start justify-center px-0 pt-0 pb-8 md:px-1 md:pt-0 md:pb-10">
                             <div
                                 className="w-full"
-                                style={{ width: 'min(100%, calc((92vh - 225px) * 21 / 9))', transform: 'translateY(-28px)' }}
+                                style={{ width: 'min(100%, calc((92vh - 215px) * 21 / 9))', transform: 'translateY(-10px)' }}
                             >
                                 <WordCloudView
                                     entries={cloudEntries}
