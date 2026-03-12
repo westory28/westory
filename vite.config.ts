@@ -5,8 +5,10 @@ import react from '@vitejs/plugin-react';
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
   const isGitHubPagesBuild = process.env.GITHUB_ACTIONS === 'true';
+  const publicBase = env.VITE_PUBLIC_BASE || (isGitHubPagesBuild ? '/westory/' : '/');
+
   return {
-    base: isGitHubPagesBuild ? '/westory/' : '/',
+    base: publicBase,
     server: {
       port: 3000,
       host: '0.0.0.0',
