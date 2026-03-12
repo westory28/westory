@@ -28,6 +28,7 @@ import type { UserData } from '../types';
 import { canAccessTeacherPortal, isAdminUser, normalizeStaffPermissions } from '../lib/permissions';
 
 const TEACHER_EMAIL = 'westoria28@gmail.com';
+const ALLOWED_SCHOOL_EMAIL_DOMAIN = 'yongshin-ms.ms.kr';
 const ROLE_SESSION_KEY = 'westoryPortalRole';
 const PENDING_LOGIN_MODE_KEY = 'westoryPendingLoginMode';
 const REDIRECT_ATTEMPT_KEY = 'westoryRedirectAttempt';
@@ -88,7 +89,15 @@ const readPendingLoginMode = (): LoginMode | null => {
     const saved = readStorage(PENDING_LOGIN_MODE_KEY);
     return saved === 'teacher' || saved === 'student' ? saved : null;
 };
+const normalizeEmail = (value: unknown): string => String(value || '').trim().toLowerCase();
 
+const isAllowedLoginEmail = (email: unknown): boolean => {
+    const normalizedEmail = normalizeEmail(email);
+    if (!normalizedEmail) return false;
+    return normalizedEmail === TEACHER_EMAIL || normalizedEmail.endsWith(`@${ALLOWED_SCHOOL_EMAIL_DOMAIN}`);
+};
+
+const getSchoolEmailBlockMessage = () => `@${ALLOWED_SCHOOL_EMAIL_DOMAIN} 이메일로만 가입할 수 있습니다.`;
 const normalizeSchoolField = (value: unknown): string => {
     const raw = String(value ?? '').trim();
     if (!raw) return '';
@@ -342,6 +351,16 @@ const Login: React.FC = () => {
 
     const clearPendingLoginMode = () => {
         removeStorage(PENDING_LOGIN_MODE_KEY);
+    };
+
+    const rejectUnauthorizedEmailLogin = async () => {
+        clearPendingLoginMode();
+        clearRoleCache();
+        clearRedirectAttempt();
+        autoResumeUidRef.current = null;
+        setLoginNotice('');
+        alert(getSchoolEmailBlockMessage());
+        await signOut(auth);
     };
 
     useEffect(() => {
@@ -623,6 +642,11 @@ const Login: React.FC = () => {
     };
 
     const finishLoginForRole = async (user: User, mode: LoginMode) => {
+        if (!isAllowedLoginEmail(user.email)) {
+            await rejectUnauthorizedEmailLogin();
+            return;
+        }
+
         const isTeacherEmail = user.email === TEACHER_EMAIL;
         const userRef = doc(db, 'users', user.uid);
         const userSnap = await getDoc(userRef);
@@ -785,6 +809,10 @@ const Login: React.FC = () => {
         }
 
         if (loading || authBusy) return;
+        if (!isAllowedLoginEmail(currentUser.email)) {
+            void rejectUnauthorizedEmailLogin();
+            return;
+        }
         if (autoResumeUidRef.current === currentUser.uid) return;
 
         autoResumeUidRef.current = currentUser.uid;
@@ -810,6 +838,10 @@ const Login: React.FC = () => {
 
     const goToDashboard = async () => {
         if (!currentUser) return;
+        if (!isAllowedLoginEmail(currentUser.email)) {
+            await rejectUnauthorizedEmailLogin();
+            return;
+        }
         if (isTeacherUser) {
             forceRoute('/teacher/dashboard');
             return;
