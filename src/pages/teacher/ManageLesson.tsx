@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { db, storage } from '../../lib/firebase';
 import {
@@ -168,6 +168,7 @@ const ManageLesson: React.FC = () => {
     const [previewOpen, setPreviewOpen] = useState(false);
     const [showAllBlankTags, setShowAllBlankTags] = useState(false);
     const [floatingPanelOpen, setFloatingPanelOpen] = useState(false);
+    const pdfInputRef = useRef<HTMLInputElement | null>(null);
     const canEdit = canWriteLessonManagement(userData, currentUser?.email || '');
 
     const selectedBlank = useMemo<any>(
@@ -475,6 +476,9 @@ const ManageLesson: React.FC = () => {
         if (!file) {
             setSelectedPdfFile(null);
             setPreparedPdf(null);
+            if (pdfInputRef.current) {
+                pdfInputRef.current.value = '';
+            }
             return;
         }
 
@@ -484,10 +488,12 @@ const ManageLesson: React.FC = () => {
         }
 
         setSelectedPdfFile(file);
+        void handlePreparePdf(file);
     };
 
-    const handlePreparePdf = async () => {
-        if (!selectedPdfFile) {
+    const handlePreparePdf = async (fileOverride?: File | null) => {
+        const targetFile = fileOverride ?? selectedPdfFile;
+        if (!targetFile) {
             alert('먼저 PDF 파일을 선택해 주세요.');
             return;
         }
@@ -495,7 +501,7 @@ const ManageLesson: React.FC = () => {
         setPdfBusy(true);
         setScreenBusyMessage('PDF 레이아웃을 준비하는 중입니다...');
         try {
-            const processed = await processPdfMapFile(selectedPdfFile);
+            const processed = await processPdfMapFile(targetFile);
             const nextPageImages = processed.pageImages.map((page) => ({
                 page: page.page,
                 imageUrl: URL.createObjectURL(page.blob),
@@ -505,7 +511,8 @@ const ManageLesson: React.FC = () => {
 
             revokeBlobUrls(worksheetPageImages);
             setPreparedPdf(processed);
-            setLessonPdfName(selectedPdfFile.name);
+            setSelectedPdfFile(targetFile);
+            setLessonPdfName(targetFile.name);
             setWorksheetPageImages(nextPageImages);
             setWorksheetTextRegions(processed.regions);
             setWorksheetBlanks([]);
@@ -604,6 +611,9 @@ const ManageLesson: React.FC = () => {
         }
 
         resetWorksheetState(true);
+        if (pdfInputRef.current) {
+            pdfInputRef.current.value = '';
+        }
     };
 
     const uploadWorksheetAssets = async (unitId: string) => {
@@ -649,6 +659,10 @@ const ManageLesson: React.FC = () => {
     const saveLesson = async () => {
         if (!canEdit) return;
         if (!selectedNodeId) return;
+        if (selectedPdfFile && !preparedPdf) {
+            alert('PDF 추출이 끝난 뒤 저장해 주세요.');
+            return;
+        }
 
         setScreenBusyMessage('수업 자료를 저장하는 중입니다...');
         try {
@@ -822,7 +836,7 @@ const ManageLesson: React.FC = () => {
                                             <div className="flex flex-wrap gap-2">
                                                 <label className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-white border border-gray-300 text-sm font-bold text-gray-700 cursor-pointer hover:bg-gray-100">
                                                     <i className="fas fa-file-pdf mr-2 text-red-500"></i>PDF 선택
-                                                    <input type="file" accept="application/pdf,.pdf" className="hidden" onChange={(e) => handlePdfFileChange(e.target.files?.[0] || null)} />
+                                                    <input ref={pdfInputRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={(e) => handlePdfFileChange(e.target.files?.[0] || null)} />
                                                 </label>
                                                 <button
                                                     type="button"

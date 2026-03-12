@@ -84,6 +84,11 @@ const getSavedRole = (): UserData['role'] | null => {
     return saved === 'teacher' || saved === 'student' ? saved : null;
 };
 
+const readPendingLoginMode = (): LoginMode | null => {
+    const saved = readStorage(PENDING_LOGIN_MODE_KEY);
+    return saved === 'teacher' || saved === 'student' ? saved : null;
+};
+
 const normalizeSchoolField = (value: unknown): string => {
     const raw = String(value ?? '').trim();
     if (!raw) return '';
@@ -204,7 +209,7 @@ const clearRedirectAttempt = () => {
 };
 
 const shouldResolveRedirectOnBoot = (): boolean => {
-    return isIOSDevice() || !!readRedirectAttemptMode() || !!getPendingLoginMode();
+    return isIOSDevice() || !!readRedirectAttemptMode() || !!readPendingLoginMode();
 };
 
 const getLoginFailureMessage = (error?: unknown): string => {
@@ -333,10 +338,7 @@ const Login: React.FC = () => {
         writeStorage(PENDING_LOGIN_MODE_KEY, mode);
     };
 
-    const getPendingLoginMode = (): LoginMode | null => {
-        const saved = readStorage(PENDING_LOGIN_MODE_KEY);
-        return saved === 'teacher' || saved === 'student' ? saved : null;
-    };
+    const getPendingLoginMode = (): LoginMode | null => readPendingLoginMode();
 
     const clearPendingLoginMode = () => {
         removeStorage(PENDING_LOGIN_MODE_KEY);

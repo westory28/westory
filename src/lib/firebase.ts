@@ -7,7 +7,7 @@ import {
     inMemoryPersistence,
     setPersistence,
 } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
 const configuredAuthDomain = (() => {
@@ -39,6 +39,7 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app, `gs://${firebaseConfig.storageBucket}`);
 let analytics = null;
+let firestoreEmulatorConnected = false;
 
 const isMobileBrowser = (): boolean => {
     if (typeof navigator === 'undefined') return false;
@@ -66,6 +67,15 @@ const authPersistenceReady = typeof window === 'undefined'
 
 try {
     const isBrowser = typeof window !== 'undefined';
+    const emulatorHost = import.meta.env.VITE_FIRESTORE_EMULATOR_HOST || '127.0.0.1';
+    const emulatorPort = Number(import.meta.env.VITE_FIRESTORE_EMULATOR_PORT || 8080);
+
+    if (import.meta.env.DEV && !firestoreEmulatorConnected) {
+        connectFirestoreEmulator(db, emulatorHost, emulatorPort);
+        firestoreEmulatorConnected = true;
+        console.info(`[Firebase] Connected Firestore emulator at ${emulatorHost}:${emulatorPort}`);
+    }
+
     if (isBrowser) {
         const currentHost = window.location.hostname;
         const authHost = firebaseConfig.authDomain;
