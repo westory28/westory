@@ -24,14 +24,22 @@ interface PositionedWord extends WordCloudEntry {
     tooltip: string;
 }
 
-const WIDTH = 1600;
+const WIDTH = 2100;
 const HEIGHT = 900;
 const CENTER_X = WIDTH / 2;
-const CENTER_Y = HEIGHT / 2;
-const RADIUS_X = 650;
-const RADIUS_Y = 360;
+const CENTER_Y = HEIGHT / 2 - 38;
+const RADIUS_X = 930;
+const RADIUS_Y = 332;
 const MAX_WORDS = 80;
-const COLORS = ['#2563eb', '#059669', '#7c3aed', '#ea580c', '#0f766e', '#dc2626', '#0891b2', '#334155'];
+const COLORS = ['#2563eb', '#0f766e', '#7c3aed', '#ea580c', '#0891b2', '#db2777', '#65a30d', '#64748b'];
+const PRIMARY_ANCHORS = [
+    { x: 0, y: 0 },
+    { x: -170, y: -54 },
+    { x: 170, y: -46 },
+    { x: -150, y: 82 },
+    { x: 150, y: 88 },
+    { x: 0, y: -124 },
+];
 
 const hashCode = (value: string) => {
     let hash = 0;
@@ -65,9 +73,11 @@ const estimateWordWidth = (text: string, fontSize: number) => {
     return Math.max(fontSize * 2.4, fontSize * (units + 1.2));
 };
 
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
 const getPadding = (fontSize: number, variant: 'default' | 'modal') => ({
-    x: Math.max(8, fontSize * (variant === 'modal' ? 0.11 : 0.09)),
-    y: Math.max(6, fontSize * (variant === 'modal' ? 0.08 : 0.07)),
+    x: Math.max(6, fontSize * (variant === 'modal' ? 0.075 : 0.07)),
+    y: Math.max(4, fontSize * (variant === 'modal' ? 0.055 : 0.05)),
 });
 
 const isInsideEllipse = (x: number, y: number, width: number, height: number) => {
@@ -118,13 +128,14 @@ const getNeighborGapScore = (candidate: PositionedWord, placed: PositionedWord[]
 const getPlacementScore = (candidate: PositionedWord, placed: PositionedWord[], variant: 'default' | 'modal') => {
     const dx = candidate.x - CENTER_X;
     const dy = candidate.y - CENTER_Y;
-    const centerDistance = Math.hypot(dx, dy * 1.12);
+    const centerDistance = Math.hypot(dx * 0.72, dy * 1.22);
     const neighborGap = getNeighborGapScore(candidate, placed, variant);
-    const preferredGap = variant === 'modal' ? 15 : 13;
-    const gapPenalty = Math.abs(neighborGap - preferredGap) * 9;
-    const verticalPenalty = candidate.rotate === 90 ? 18 : 0;
+    const preferredGap = variant === 'modal' ? 7 : 6;
+    const gapPenalty = Math.abs(neighborGap - preferredGap) * 8.5;
+    const verticalPenalty = candidate.rotate === 90 ? 12 : 0;
+    const bandPenalty = Math.abs(dy) * 0.09;
 
-    return centerDistance + gapPenalty + verticalPenalty;
+    return centerDistance + gapPenalty + verticalPenalty + bandPenalty;
 };
 
 const WordCloudView: React.FC<WordCloudViewProps> = ({
@@ -144,34 +155,66 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({
         const minCount = Math.min(...source.map((item) => item.count));
         const maxCount = Math.max(...source.map((item) => item.count));
         const fontRange = variant === 'modal'
-            ? { min: 38, max: 122, fallback: 28 }
-            : { min: 28, max: 92, fallback: 22 };
+            ? { min: 30, max: 178, fallback: 24 }
+            : { min: 24, max: 118, fallback: 20 };
+        const secondCount = source[1]?.count ?? maxCount;
 
         const placed: PositionedWord[] = [];
 
         source.forEach((item, index) => {
             const ratio = maxCount === minCount ? 0.55 : (item.count - minCount) / (maxCount - minCount);
-            const easedRatio = Math.pow(ratio, 0.7);
-            const baseSize = Math.round(fontRange.min + easedRatio * (fontRange.max - fontRange.min));
+            const easedRatio = Math.pow(ratio, 0.45);
+            const dominance = maxCount > 0 ? item.count / maxCount : 0;
+            const rankFalloff = Math.max(0, 1 - index / Math.max(source.length - 1, 1));
+            const leaderBoost = index === 0 && maxCount > secondCount
+                ? Math.min(1.22, 1 + (maxCount - secondCount) / Math.max(secondCount, 1) * 0.56)
+                : 1;
+            const emphasisBoost = 1 + dominance * 0.2 + rankFalloff * 0.08;
+            const baseSize = Math.round((fontRange.min + easedRatio * (fontRange.max - fontRange.min)) * emphasisBoost * leaderBoost);
 
             let fontSize = baseSize;
             let bestCandidate: PositionedWord | null = null;
 
-            for (let shrink = 0; shrink < 7 && !bestCandidate; shrink += 1) {
-                const rotate: 0 | 90 = index > 5 && fontSize < 58 && hashCode(item.text) % 9 === 0 ? 90 : 0;
+            for (let shrink = 0; shrink < 8 && !bestCandidate; shrink += 1) {
+                const rotate: 0 | 90 = index > 9 && fontSize < 54 && hashCode(item.text) % 13 === 0 ? 90 : 0;
                 const baseWidth = estimateWordWidth(item.text, fontSize);
-                const baseHeight = Math.max(30, fontSize * 1.02);
+                const baseHeight = Math.max(28, fontSize * 0.94);
                 const width = rotate === 90 ? baseHeight : baseWidth;
                 const height = rotate === 90 ? baseWidth : baseHeight;
                 const angleSeed = hashCode(item.text) % 360;
                 let bestScore = Number.POSITIVE_INFINITY;
 
-                for (let step = 0; step < 2600; step += 1) {
-                    const angle = ((angleSeed + step * 17) * Math.PI) / 180;
-                    const radius = 2 + step * (variant === 'modal' ? 0.58 : 0.5);
-                    const wobble = 1 + ((hashCode(`${item.text}-${step}`) % 5) - 2) * 0.018;
-                    const x = CENTER_X + Math.cos(angle) * radius * wobble;
-                    const y = CENTER_Y + Math.sin(angle) * radius * 0.74 * wobble;
+                if (index < PRIMARY_ANCHORS.length) {
+                    const anchor = PRIMARY_ANCHORS[index];
+                    const anchorX = clamp(CENTER_X + anchor.x, width / 2 + 14, WIDTH - width / 2 - 14);
+                    const anchorY = clamp(CENTER_Y + anchor.y, height / 2 + 14, HEIGHT - height / 2 - 14);
+                    const anchoredCandidate: PositionedWord = {
+                        ...item,
+                        x: anchorX,
+                        y: anchorY,
+                        fontSize,
+                        width,
+                        height,
+                        color: COLORS[hashCode(item.text) % COLORS.length],
+                        rotate,
+                        tooltip: buildTooltip(item, showSubmitters),
+                    };
+
+                    if (isInsideEllipse(anchorX, anchorY, width, height) && !overlaps(anchoredCandidate, placed, variant)) {
+                        bestCandidate = anchoredCandidate;
+                    }
+                }
+
+                if (bestCandidate) break;
+
+                for (let step = 0; step < 3200; step += 1) {
+                    const angle = ((angleSeed + step * 13) * Math.PI) / 180;
+                    const radius = index === 0 ? 0 : 4 + step * (variant === 'modal' ? 0.62 : 0.54);
+                    const wobble = 1 + ((hashCode(`${item.text}-${step}`) % 5) - 2) * 0.014;
+                    const horizontalBias = index < 10 ? 1.08 : 1;
+                    const verticalBias = index < 10 ? 0.5 : 0.56;
+                    const x = CENTER_X + Math.cos(angle) * radius * horizontalBias * wobble;
+                    const y = CENTER_Y + Math.sin(angle) * radius * verticalBias * wobble;
 
                     const candidate: PositionedWord = {
                         ...item,
@@ -194,10 +237,10 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({
                         bestCandidate = candidate;
                     }
 
-                    if (bestScore < 55) break;
+                    if (bestScore < 28) break;
                 }
 
-                fontSize = Math.max(fontRange.fallback, Math.floor(fontSize * 0.92));
+                fontSize = Math.max(fontRange.fallback, Math.floor(fontSize * 0.9));
             }
 
             if (bestCandidate) {
@@ -232,7 +275,7 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({
             <div
                 ref={containerRef}
                 className={`relative w-full overflow-hidden rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-cyan-50 ${
-                    variant === 'modal' ? 'aspect-[16/10] min-h-[72vh]' : 'max-w-[1600px] aspect-video'
+                    variant === 'modal' ? 'aspect-[21/9] min-h-[62vh] max-h-[82vh]' : 'max-w-[2100px] min-h-[320px] aspect-[21/9]'
                 }`}
             >
                 <svg
@@ -242,7 +285,14 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({
                     role="img"
                     aria-label="word cloud"
                 >
-                    <ellipse cx={CENTER_X} cy={CENTER_Y} rx={RADIUS_X} ry={RADIUS_Y} fill="rgba(255,255,255,0.72)" />
+                    <defs>
+                        <radialGradient id={`cloudGlow-${variant}`} cx="50%" cy="50%" r="65%">
+                            <stop offset="0%" stopColor="rgba(255,255,255,0.96)" />
+                            <stop offset="68%" stopColor="rgba(255,255,255,0.82)" />
+                            <stop offset="100%" stopColor="rgba(255,255,255,0.38)" />
+                        </radialGradient>
+                    </defs>
+                    <ellipse cx={CENTER_X} cy={CENTER_Y} rx={RADIUS_X} ry={RADIUS_Y} fill={`url(#cloudGlow-${variant})`} />
                     {positioned.map((item) => (
                         <text
                             key={item.text}

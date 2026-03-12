@@ -806,10 +806,10 @@ const ManageThinkCloud: React.FC = () => {
                         <div className="text-sm font-bold text-gray-600 mb-3">
                             TV 출력용 모드입니다. 응답 {responses.length}개
                         </div>
-                        <div className="flex-1 flex items-center justify-center">
+                        <div className="flex-1 flex items-start justify-center px-0 pt-0 pb-8 md:px-1 md:pt-0 md:pb-10">
                             <div
                                 className="w-full"
-                                style={{ width: 'min(100%, calc((92vh - 180px) * 16 / 9))' }}
+                                style={{ width: 'min(100%, calc((92vh - 225px) * 21 / 9))', transform: 'translateY(-28px)' }}
                             >
                                 <WordCloudView
                                     entries={cloudEntries}

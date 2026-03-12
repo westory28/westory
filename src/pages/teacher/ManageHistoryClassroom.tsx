@@ -189,6 +189,7 @@ const ManageHistoryClassroom: React.FC = () => {
     const [editingCooldownMinutes, setEditingCooldownMinutes] = useState(0);
     const [editingPassThresholdPercent, setEditingPassThresholdPercent] = useState(80);
     const [editingStudentUids, setEditingStudentUids] = useState<string[]>([]);
+    const [editingIsPublished, setEditingIsPublished] = useState(true);
     const [savingEdit, setSavingEdit] = useState(false);
     const [tabLabels, setTabLabels] = useState({
         manage: '문제 등록',
@@ -494,6 +495,7 @@ const ManageHistoryClassroom: React.FC = () => {
         setEditingCooldownMinutes(assignment.cooldownMinutes);
         setEditingPassThresholdPercent(assignment.passThresholdPercent);
         setEditingStudentUids(assignment.targetStudentUids.length ? assignment.targetStudentUids : (assignment.targetStudentUid ? [assignment.targetStudentUid] : []));
+        setEditingIsPublished(assignment.isPublished);
     };
 
     const closeAssignmentEditor = () => {
@@ -504,6 +506,7 @@ const ManageHistoryClassroom: React.FC = () => {
         setEditingCooldownMinutes(0);
         setEditingPassThresholdPercent(80);
         setEditingStudentUids([]);
+        setEditingIsPublished(true);
         setSavingEdit(false);
     };
 
@@ -532,6 +535,7 @@ const ManageHistoryClassroom: React.FC = () => {
                 targetStudentName: updatedStudents.map((student) => student.name).join(', '),
                 targetStudentNames: updatedStudents.map((student) => student.name),
                 targetStudentNumber: updatedStudents.map((student) => student.number).filter(Boolean).join(', '),
+                isPublished: editingIsPublished,
                 updatedAt: serverTimestamp(),
             };
 
@@ -775,7 +779,18 @@ const ManageHistoryClassroom: React.FC = () => {
                                     className="history-assignment-card w-full rounded-2xl border border-gray-200 bg-white p-4 text-left transition hover:border-orange-200 hover:shadow-sm"
                                 >
                                     <div className="text-xs font-bold text-orange-500">{assignment.mapTitle}</div>
-                                    <div className="mt-1 text-base font-black text-gray-900 break-words">{assignment.title}</div>
+                                    <div className="mt-1 flex items-start justify-between gap-3">
+                                        <div className="text-base font-black text-gray-900 break-words">{assignment.title}</div>
+                                        <span
+                                            className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold whitespace-nowrap ${
+                                                assignment.isPublished
+                                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                                    : 'bg-gray-100 text-gray-600 border border-gray-200'
+                                            }`}
+                                        >
+                                            {assignment.isPublished ? '공개' : '비공개'}
+                                        </span>
+                                    </div>
                                     <div className="mt-3 flex flex-wrap gap-1.5">
                                         {(
                                             assignment.targetStudentUids.length
@@ -1063,7 +1078,30 @@ const ManageHistoryClassroom: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="flex items-center justify-end gap-3 border-t border-gray-200 px-6 py-4">
+                        <div className="flex items-center justify-between gap-3 border-t border-gray-200 px-6 py-4">
+                            <label className="inline-flex items-center gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2.5">
+                                <button
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={editingIsPublished}
+                                    onClick={() => setEditingIsPublished((prev) => !prev)}
+                                    className={`relative h-7 w-12 rounded-full transition ${
+                                        editingIsPublished ? 'bg-emerald-500' : 'bg-gray-300'
+                                    }`}
+                                >
+                                    <span
+                                        className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition ${
+                                            editingIsPublished ? 'left-6' : 'left-1'
+                                        }`}
+                                    />
+                                </button>
+                                <div className="leading-tight">
+                                    <div className="text-sm font-bold text-gray-800">학생들에게 공개</div>
+                                    <div className={`text-xs font-bold ${editingIsPublished ? 'text-emerald-600' : 'text-gray-500'}`}>
+                                        {editingIsPublished ? '현재 공개됨' : '현재 비공개'}
+                                    </div>
+                                </div>
+                            </label>
                             <button type="button" onClick={closeAssignmentEditor} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50">
                                 취소
                             </button>
