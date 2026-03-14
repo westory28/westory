@@ -78,8 +78,13 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             .fc-list-event.holiday-text-event { background-color: transparent !important; border: none !important; }
             .fc-list-event.holiday-text-event .fc-list-event-title a { color: #ef4444 !important; font-weight: 800 !important; }
             .fc-segment-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; padding: 0 2px; }
-            .fc-list table { table-layout: fixed; }
+            .fc-list table,
+            .fc-list-table {
+                table-layout: fixed !important;
+                width: 100% !important;
+            }
             .fc-list-event-graphic {
+                display: none !important;
                 width: 0 !important;
                 padding: 0 !important;
             }
@@ -111,6 +116,10 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                 display: block !important;
                 width: 100% !important;
                 text-align: left !important;
+            }
+            .fc-list-event-title .fc-event-main {
+                display: block !important;
+                width: 100% !important;
             }
             .fc-list-row-grid {
                 display: grid !important;
