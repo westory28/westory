@@ -391,21 +391,20 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
         if (!isModalOpen || !selectedRegion || !modalSurfaceRef.current || selectedRegion.page !== currentPage) return undefined;
 
         const surface = modalSurfaceRef.current;
-        const focusPaddingX = isMobileViewport ? 72 : 140;
-        const focusPaddingY = isMobileViewport ? 96 : 160;
-        const targetZoom = isMobileViewport
-            ? clamp(Math.max(fitZoom * 1.18, 1), 1, 2)
-            : clamp(
-                Math.min(
-                    (surface.clientWidth - focusPaddingX) / Math.max(selectedRegion.width, 24),
-                    (surface.clientHeight - focusPaddingY) / Math.max(selectedRegion.height, 24),
-                ),
-                Math.max(fitZoom * 1.2, 0.95),
-                4,
-            );
+        const horizontalPadding = isMobileViewport ? 56 : 160;
+        const verticalPadding = isMobileViewport ? 96 : 180;
+        const focusWidth = Math.max(selectedRegion.width, 56);
+        const focusHeight = Math.max(selectedRegion.height, 56);
+        const targetZoom = clamp(
+            Math.min(
+                Math.max(1, (surface.clientWidth - horizontalPadding) / focusWidth),
+                Math.max(1, (surface.clientHeight - verticalPadding) / focusHeight),
+            ),
+            Math.max(fitZoom, 1),
+            isMobileViewport ? 2.2 : 4,
+        );
 
         if (Math.abs(zoom - targetZoom) > 0.02) {
-            hasManualZoomRef.current = true;
             setZoom(Number(targetZoom.toFixed(2)));
             return undefined;
         }
@@ -450,12 +449,11 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
         setIsMobileTagPanelOpen(false);
         setCurrentPage(region.page);
         setSelectedRegion(region);
+        hasManualZoomRef.current = false;
         if (!isModalOpen) {
             setIsModalOpen(true);
             return;
         }
-        hasManualZoomRef.current = true;
-        setZoom((prev) => Math.max(prev, fitZoom * 1.4, 1.1));
     };
 
     const openModal = () => {
@@ -726,12 +724,12 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                             {selectedRegion && selectedRegion.page === currentPage && (
                                 <div
                                     ref={interactive ? undefined : modalRegionHighlightRef}
-                                    className="pointer-events-none absolute rounded border-4 border-red-500 bg-red-200/30"
+                                    className="pointer-events-none absolute rounded border-[3px] border-red-500 bg-red-200/15 shadow-[0_0_0_2px_rgba(255,255,255,0.9)]"
                                     style={{
-                                        left: `${selectedRegion.left * surfaceScale - 16}px`,
-                                        top: `${selectedRegion.top * surfaceScale - 16}px`,
-                                        width: `${selectedRegion.width * surfaceScale + 32}px`,
-                                        height: `${selectedRegion.height * surfaceScale + 24}px`,
+                                        left: `${selectedRegion.left * surfaceScale}px`,
+                                        top: `${selectedRegion.top * surfaceScale}px`,
+                                        width: `${selectedRegion.width * surfaceScale}px`,
+                                        height: `${selectedRegion.height * surfaceScale}px`,
                                     }}
                                 />
                             )}
@@ -750,12 +748,12 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                             {selectedRegion && selectedRegion.page === currentPage && (
                                 <div
                                     ref={interactive ? undefined : modalRegionHighlightRef}
-                                    className="pointer-events-none absolute rounded border-4 border-red-500 bg-red-200/30"
+                                    className="pointer-events-none absolute rounded border-[3px] border-red-500 bg-red-200/15 shadow-[0_0_0_2px_rgba(255,255,255,0.9)]"
                                     style={{
-                                        left: `${selectedRegion.left * zoom - 16}px`,
-                                        top: `${selectedRegion.top * zoom - 16}px`,
-                                        width: `${selectedRegion.width * zoom + 32}px`,
-                                        height: `${selectedRegion.height * zoom + 24}px`,
+                                        left: `${selectedRegion.left * zoom}px`,
+                                        top: `${selectedRegion.top * zoom}px`,
+                                        width: `${selectedRegion.width * zoom}px`,
+                                        height: `${selectedRegion.height * zoom}px`,
                                     }}
                                 />
                             )}
