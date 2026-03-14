@@ -345,6 +345,11 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                     width: auto;
                     padding-left: 0 !important;
                 }
+                .fc-list-event-title a {
+                    display: block !important;
+                    width: 100% !important;
+                    text-align: left !important;
+                }
                 .fc-list-row-grid {
                     display: grid;
                     grid-template-columns: minmax(0, 1fr) auto;
@@ -362,6 +367,7 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                     font-weight: 700;
                     color: #111827;
                     text-align: left;
+                    justify-self: stretch;
                 }
                 .fc-list-target-cell {
                     min-width: 68px;
