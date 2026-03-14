@@ -27,6 +27,7 @@ interface LessonContentProps {
     disablePersistence?: boolean;
     fullscreenPreview?: boolean;
     onClosePreview?: () => void;
+    annotationUiMode?: 'always' | 'onDemand';
 }
 
 const EMPTY_BLANK_LABEL = '빈칸';
@@ -52,6 +53,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
     disablePersistence = false,
     fullscreenPreview = false,
     onClosePreview,
+    annotationUiMode = 'always',
 }) => {
     const { config, currentUser } = useAuth();
     const [lesson, setLesson] = useState<LessonData | null>(lessonOverride);
@@ -394,6 +396,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
                             studentAnswers={studentAnswers}
                             onStudentAnswerChange={handleWorksheetAnswerChange}
                             annotationEnabled
+                            annotationUiMode={annotationUiMode}
                         />
                     )}
 

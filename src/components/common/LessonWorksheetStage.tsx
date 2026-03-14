@@ -37,6 +37,7 @@ interface LessonWorksheetStageProps {
     onStudentAnswerChange?: (blankId: string, value: string, answer: string) => void;
     pendingBlank?: LessonWorksheetBlank | null;
     annotationEnabled?: boolean;
+    annotationUiMode?: 'always' | 'onDemand';
 }
 
 interface DraftRect {
@@ -90,7 +91,7 @@ interface PinchState {
 
 interface PressHoldState {
     timeoutId: number | null;
-    startedAt: number;
+    page: number | null;
 }
 
 interface AnnotationSnapshot {
@@ -126,7 +127,8 @@ const PEN_CURSOR = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000
 const HIGHLIGHTER_CURSOR = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cpath fill='%23FACC15' d='M18.5 4l5.5 5.5-10.9 10.9-6.2.8.8-6.2z'/%3E%3Cpath fill='%23924100' d='M18.5 4l5.5 5.5 1.1-1.1c.7-.7.7-1.8 0-2.5l-3-3c-.7-.7-1.8-.7-2.5 0z'/%3E%3Cpath stroke='%23111827' stroke-width='1.2' d='M7.2 21.1l-1.9 1.9h7.3'/%3E%3C/g%3E%3C/svg%3E") 5 23, crosshair`;
 const ERASER_CURSOR = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cpath fill='%23F59E0B' d='M10.3 5.3l12.4 12.4-5.3 5.3H8.6L3 17.4z'/%3E%3Cpath fill='%23FFF7ED' d='M10.3 5.3l6.1 6.1-8 8L3 17.4z'/%3E%3Cpath stroke='%23111827' stroke-width='1.4' d='M3.5 17.4l6.8 6.8m12.1-6.5l-5.1 5.1m-8.7 1h13.2'/%3E%3C/g%3E%3C/svg%3E") 6 22, cell`;
 const RECTANGLE_CURSOR = 'crosshair';
-const STRAIGHT_LINE_HOLD_MS = 350;
+const STRAIGHT_LINE_HOLD_MS = 650;
+const STRAIGHT_LINE_MOVE_THRESHOLD = 0.002;
 
 const toPercent = (value: number) => `${value * 100}%`;
 const clampZoom = (value: number) => Math.min(MAX_STUDENT_ZOOM, Math.max(MIN_STUDENT_ZOOM, value));
@@ -390,6 +392,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     onStudentAnswerChange,
     pendingBlank = null,
     annotationEnabled = false,
+    annotationUiMode = 'always',
 }) => {
     const pageRefs = useRef<Record<number, HTMLDivElement | null>>({});
     const [draftRect, setDraftRect] = useState<DraftRect | null>(null);
@@ -399,6 +402,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     const [penColorKey, setPenColorKey] = useState<DrawingColor>('blue');
     const [highlighterColorKey, setHighlighterColorKey] = useState<DrawingColor>('yellow');
     const [studentZoom, setStudentZoom] = useState(1);
+    const [toolbarVisible, setToolbarVisible] = useState(annotationUiMode === 'always');
     const [strokes, setStrokes] = useState<AnnotationStroke[]>([]);
     const [draftStroke, setDraftStroke] = useState<AnnotationStroke | null>(null);
     const [boxes, setBoxes] = useState<AnnotationBox[]>([]);
@@ -408,7 +412,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     const [undoStack, setUndoStack] = useState<AnnotationSnapshot[]>([]);
     const [redoStack, setRedoStack] = useState<AnnotationSnapshot[]>([]);
     const pinchRef = useRef<PinchState | null>(null);
-    const holdRef = useRef<PressHoldState>({ timeoutId: null, startedAt: 0 });
+    const holdRef = useRef<PressHoldState>({ timeoutId: null, page: null });
 
     const regionsByPage = useMemo(() => {
         const grouped = new Map<number, LessonWorksheetTextRegion[]>();
@@ -445,6 +449,10 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
             return pageImages[0].page;
         });
     }, [pageImages]);
+
+    useEffect(() => {
+        setToolbarVisible(annotationUiMode === 'always');
+    }, [annotationUiMode]);
 
     const visiblePageImages = useMemo(() => {
         if (mode === 'teacher') {
@@ -581,6 +589,19 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
             window.clearTimeout(holdRef.current.timeoutId);
             holdRef.current.timeoutId = null;
         }
+        holdRef.current.page = null;
+    };
+
+    const armStraightLineTimer = (page: number) => {
+        clearHoldTimer();
+        holdRef.current.page = page;
+        holdRef.current.timeoutId = window.setTimeout(() => {
+            setDraftStroke((prev) => {
+                if (!prev || prev.page !== page || prev.points.length < 2) return prev;
+                const lastPoint = prev.points[prev.points.length - 1];
+                return { ...prev, straight: true, points: [prev.points[0], lastPoint] };
+            });
+        }, STRAIGHT_LINE_HOLD_MS);
     };
 
     const handlePointerDown = (page: number, event: React.PointerEvent<HTMLDivElement>) => {
@@ -603,6 +624,10 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         }
 
         if (!annotationEnabled) return;
+        if (annotationUiMode === 'onDemand' && !toolbarVisible) {
+            setToolbarVisible(true);
+            return;
+        }
         const target = event.target as HTMLElement;
         if (target.closest('[data-blank-box]') || target.closest('[data-annotation-note]')) return;
         if (annotationTool === 'move') return;
@@ -635,14 +660,6 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         nextStroke.color = annotationTool === 'pen' ? selectedPenColor.pen : selectedHighlighterColor.highlighter;
         nextStroke.width = annotationTool === 'pen' ? 4 : 18;
         setDraftStroke(nextStroke);
-        holdRef.current.startedAt = Date.now();
-        holdRef.current.timeoutId = window.setTimeout(() => {
-            setDraftStroke((prev) => {
-                if (!prev || prev.page !== page || prev.points.length < 2) return prev;
-                const lastPoint = prev.points[prev.points.length - 1];
-                return { ...prev, straight: true, points: [prev.points[0], lastPoint] };
-            });
-        }, STRAIGHT_LINE_HOLD_MS);
     };
 
     const updateDraftPoint = (page: number, clientX: number, clientY: number) => {
@@ -678,7 +695,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         setDraftStroke((prev) => {
             if (!prev) return null;
             const lastPoint = prev.points[prev.points.length - 1];
-            if (lastPoint && Math.hypot(lastPoint.x - point.x, lastPoint.y - point.y) < 0.002) return prev;
+            if (lastPoint && Math.hypot(lastPoint.x - point.x, lastPoint.y - point.y) < STRAIGHT_LINE_MOVE_THRESHOLD) return prev;
+            if (!prev.straight) armStraightLineTimer(page);
             if (prev.straight) {
                 return { ...prev, points: [prev.points[0], point] };
             }
@@ -791,9 +809,9 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
 
     return (
         <div className="space-y-6">
-            {mode === 'student' && annotationEnabled && (
+            {mode === 'student' && annotationEnabled && toolbarVisible && (
                 <div className="sticky top-3 z-40 flex justify-center">
-                    <div className="flex w-full max-w-[min(96vw,1180px)] flex-wrap items-center justify-center gap-2 rounded-full border border-blue-100 bg-white/92 px-3 py-3 shadow-[0_18px_48px_rgba(37,99,235,0.16)] backdrop-blur-xl md:px-4">
+                    <div className="flex w-full max-w-[min(96vw,1180px)] flex-nowrap items-center justify-center gap-2 overflow-x-auto rounded-full border border-blue-100 bg-white/92 px-3 py-3 shadow-[0_18px_48px_rgba(37,99,235,0.16)] backdrop-blur-xl md:px-4">
                         {[
                             ['move', '이동', 'fa-up-down-left-right'],
                             ['undo', '이전', 'fa-arrow-rotate-left'],
@@ -807,6 +825,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                             <button
                                 key={tool}
                                 type="button"
+                                aria-label={label}
+                                title={label}
                                 onClick={() => {
                                     if (tool === 'undo') {
                                         setUndoStack((prev) => {
@@ -831,18 +851,17 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                     setAnnotationTool(tool as StudentTool);
                                 }}
                                 disabled={(tool === 'undo' && undoStack.length === 0) || (tool === 'redo' && redoStack.length === 0)}
-                                className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition ${
+                                className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold transition ${
                                     annotationTool === tool
                                         ? 'bg-blue-600 text-white shadow-sm'
                                         : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40'
                                 }`}
                             >
                                 <i className={`fas ${icon} text-xs`}></i>
-                                {label}
                             </button>
                         ))}
                         {(annotationTool === 'pen' || annotationTool === 'highlighter' || annotationTool === 'rectangle') && (
-                            <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">
+                            <div className="flex shrink-0 items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">
                                 {TOOL_COLORS.map((color) => {
                                     const usesPenPalette = annotationTool === 'pen' || annotationTool === 'rectangle';
                                     const selected = usesPenPalette ? penColorKey === color.key : highlighterColorKey === color.key;
@@ -862,7 +881,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                 })}
                             </div>
                         )}
-                        <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2 py-1.5 shadow-sm">
+                        <div className="flex shrink-0 items-center gap-2 rounded-full border border-slate-200 bg-white px-2 py-1.5 shadow-sm">
                             <button
                                 type="button"
                                 onClick={() => applyStudentZoom(studentZoom - 0.1)}
@@ -896,10 +915,11 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                 setTextNotes([]);
                                 setActiveTextNoteId(null);
                             }}
-                            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+                            aria-label="Clear all annotations"
+                            title="Clear all annotations"
+                            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-[0px] font-semibold leading-none text-slate-600 transition hover:bg-slate-50"
                         >
                             <i className="fas fa-trash-alt text-xs"></i>
-                            전체 지우기
                         </button>
                     </div>
                 </div>

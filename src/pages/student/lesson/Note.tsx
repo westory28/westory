@@ -26,7 +26,7 @@ const Note: React.FC = () => {
 
             <main className="flex-1 w-full relative flex flex-col h-[calc(100vh-64px)] overflow-hidden">
                 <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scroll">
-                    <LessonContent unitId={unitId} fallbackTitle={title} />
+                    <LessonContent unitId={unitId} fallbackTitle={title} annotationUiMode="onDemand" />
                 </div>
 
                 {/* Mobile FAB to toggle sidebar */}
