@@ -368,9 +368,9 @@ const getStudentBlankRect = (
 
 const getStudentBlankFontSize = (pixelWidth: number, pixelHeight: number, contentLength: number) => {
     const safeLength = Math.max(1, contentLength);
-    const widthBased = Math.max(1, pixelWidth - 4) / (safeLength * 0.8);
-    const heightBased = Math.max(1, pixelHeight - 2) * 0.84;
-    return Math.max(7, Math.min(19, widthBased, heightBased));
+    const widthBased = Math.max(1, pixelWidth - 6) / Math.max(1.2, safeLength * 1.05);
+    const heightBased = Math.max(1, pixelHeight - 4) * 0.72;
+    return Math.max(5.5, Math.min(18, widthBased, heightBased));
 };
 
 const buildStrokePath = (points: RatioPoint[], pageImage: LessonWorksheetPageImage) => {
@@ -1302,7 +1302,11 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                         </div>
                     )}
                 </div>
-                <div className="fixed bottom-5 right-5 z-40 flex flex-col items-end gap-3 md:hidden">
+                <div
+                    className="pointer-events-none fixed inset-x-0 z-40 flex justify-end md:hidden"
+                    style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}
+                >
+                    <div className="pointer-events-auto mr-4 flex flex-col items-end gap-3">
                     {toolbarSubmenu && isMobileToolMenuOpen && (
                         <div className="max-w-[calc(100vw-2.5rem)]">{renderToolbarSubmenu()}</div>
                     )}
@@ -1378,6 +1382,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     >
                         <i className={`fas ${isMobileToolMenuOpen ? 'fa-xmark' : 'fa-wand-magic-sparkles'} text-lg`}></i>
                     </button>
+                    </div>
                 </div>
                 </>
             )}
@@ -1829,8 +1834,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                 const activeValue = (studentAnswer?.value || '').trim();
                                 const sizingText = activeValue || placeholder || blank.answer || EMPTY_BLANK_LABEL;
                                 const fontSize = getStudentBlankFontSize(pixelWidth, pixelHeight, sizingText.length);
-                                const horizontalPadding = pixelWidth < 52 ? 1 : pixelWidth < 80 ? 1.5 : 2;
-                                const verticalPadding = pixelHeight < 24 ? 0.5 : 1;
+                                const horizontalPadding = pixelWidth < 42 ? 0.2 : pixelWidth < 52 ? 0.5 : pixelWidth < 80 ? 1 : 1.5;
+                                const verticalPadding = pixelHeight < 18 ? 0 : pixelHeight < 24 ? 0.2 : 0.5;
 
                                 return (
                                     <div
@@ -1868,7 +1873,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                             style={{
                                                 fontSize: `${fontSize}px`,
                                                 lineHeight: 1,
-                                                letterSpacing: '-0.02em',
+                                                letterSpacing: pixelWidth < 46 ? '-0.06em' : '-0.02em',
                                                 paddingLeft: `${horizontalPadding}px`,
                                                 paddingRight: `${horizontalPadding}px`,
                                                 paddingTop: `${verticalPadding}px`,
