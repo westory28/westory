@@ -84,6 +84,7 @@ interface AnnotationTextNote {
     widthRatio: number;
     heightRatio: number;
     text: string;
+    fontSize?: number;
 }
 
 interface TextNoteTransformState {
@@ -377,7 +378,7 @@ const createStroke = (page: number, tool: 'pen' | 'highlighter', point: RatioPoi
     points: [point],
 });
 
-const createTextNote = (page: number, point: RatioPoint): AnnotationTextNote => ({
+const createTextNote = (page: number, point: RatioPoint, fontSize = 20): AnnotationTextNote => ({
     id: `note-${page}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     page,
     leftRatio: Math.min(0.82, point.x),
@@ -385,6 +386,7 @@ const createTextNote = (page: number, point: RatioPoint): AnnotationTextNote => 
     widthRatio: 0.22,
     heightRatio: 0.06,
     text: '',
+    fontSize,
 });
 
 const createBox = (page: number, point: RatioPoint, color: string): AnnotationBox => ({
@@ -425,6 +427,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     const [highlighterColorKey, setHighlighterColorKey] = useState<DrawingColor>('yellow');
     const [studentZoom, setStudentZoom] = useState(1);
     const [toolbarVisible, setToolbarVisible] = useState(annotationUiMode === 'always');
+    const [toolbarSubmenu, setToolbarSubmenu] = useState<'colors' | 'text' | null>(null);
+    const [textFontSize, setTextFontSize] = useState(20);
     const [strokes, setStrokes] = useState<AnnotationStroke[]>(annotationState?.strokes || []);
     const [draftStroke, setDraftStroke] = useState<AnnotationStroke | null>(null);
     const [boxes, setBoxes] = useState<AnnotationBox[]>(annotationState?.boxes || []);
@@ -482,6 +486,18 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         if (annotationTool !== 'text') {
             setEditingTextNoteId(null);
         }
+    }, [annotationTool]);
+
+    useEffect(() => {
+        if (annotationTool === 'pen' || annotationTool === 'highlighter' || annotationTool === 'rectangle') {
+            setToolbarSubmenu('colors');
+            return;
+        }
+        if (annotationTool === 'text') {
+            setToolbarSubmenu('text');
+            return;
+        }
+        setToolbarSubmenu(null);
     }, [annotationTool]);
 
     useEffect(() => {
@@ -629,6 +645,15 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         )));
     };
 
+    const applyTextFontSize = (nextFontSize: number) => {
+        const clamped = Math.max(12, Math.min(40, nextFontSize));
+        setTextFontSize(clamped);
+        if (!activeTextNoteId) return;
+        setTextNotes((prev) => prev.map((note) => (
+            note.id === activeTextNoteId ? { ...note, fontSize: clamped } : note
+        )));
+    };
+
     const captureSnapshot = (): AnnotationSnapshot => ({
         strokes: strokes.map((stroke) => ({ ...stroke, points: stroke.points.map((point) => ({ ...point })) })),
         boxes: boxes.map((box) => ({ ...box })),
@@ -691,6 +716,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
             setToolbarVisible(true);
             return;
         }
+        setToolbarSubmenu(null);
         const target = event.target as HTMLElement;
         if (target.closest('[data-blank-box]') || target.closest('[data-annotation-note]')) return;
         if (activeTextNoteId && annotationTool === 'text') {
@@ -708,7 +734,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         event.preventDefault();
         if (annotationTool === 'text') {
             pushUndoSnapshot();
-            const nextNote = createTextNote(page, point);
+            const nextNote = createTextNote(page, point, textFontSize);
             setTextNotes((prev) => [...prev, nextNote]);
             setActiveTextNoteId(nextNote.id);
             setEditingTextNoteId(nextNote.id);
@@ -920,7 +946,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     return (
         <div className="space-y-6">
             {mode === 'student' && annotationEnabled && toolbarVisible && (
-                <div className="sticky top-3 z-40 flex justify-center">
+                <div className="sticky top-3 z-40 flex flex-col items-center gap-2">
                     <div className="flex w-full max-w-[min(96vw,1180px)] flex-nowrap items-center justify-center gap-2 overflow-x-auto rounded-full border border-blue-100 bg-white/92 px-3 py-3 shadow-[0_18px_48px_rgba(37,99,235,0.16)] backdrop-blur-xl md:px-4">
                         {[
                             ['move', '이동', 'fa-up-down-left-right'],
@@ -958,7 +984,17 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                         });
                                         return;
                                     }
-                                    setAnnotationTool(tool as StudentTool);
+                                    const nextTool = tool as StudentTool;
+                                    setAnnotationTool(nextTool);
+                                    if (nextTool === 'pen' || nextTool === 'highlighter' || nextTool === 'rectangle') {
+                                        setToolbarSubmenu((prev) => (annotationTool === nextTool && prev === 'colors' ? null : 'colors'));
+                                        return;
+                                    }
+                                    if (nextTool === 'text') {
+                                        setToolbarSubmenu((prev) => (annotationTool === nextTool && prev === 'text' ? null : 'text'));
+                                        return;
+                                    }
+                                    setToolbarSubmenu(null);
                                 }}
                                 disabled={(tool === 'undo' && undoStack.length === 0) || (tool === 'redo' && redoStack.length === 0)}
                                 className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold transition ${
@@ -971,7 +1007,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                             </button>
                         ))}
                         {(annotationTool === 'pen' || annotationTool === 'highlighter' || annotationTool === 'rectangle') && (
-                            <div className="flex shrink-0 items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">
+                            <div className="hidden shrink-0 items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">
                                 {TOOL_COLORS.map((color) => {
                                     const usesPenPalette = annotationTool === 'pen' || annotationTool === 'rectangle';
                                     const selected = usesPenPalette ? penColorKey === color.key : highlighterColorKey === color.key;
@@ -1024,6 +1060,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                 setBoxes([]);
                                 setTextNotes([]);
                                 setActiveTextNoteId(null);
+                                setToolbarSubmenu(null);
                             }}
                             aria-label="Clear all annotations"
                             title="Clear all annotations"
@@ -1032,6 +1069,59 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                             <i className="fas fa-trash-alt text-xs"></i>
                         </button>
                     </div>
+                    {toolbarSubmenu === 'colors' && (annotationTool === 'pen' || annotationTool === 'highlighter' || annotationTool === 'rectangle') && (
+                        <div className="flex w-fit max-w-[min(90vw,720px)] flex-wrap items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white/96 px-4 py-3 shadow-[0_14px_32px_rgba(15,23,42,0.14)] backdrop-blur-xl">
+                            {TOOL_COLORS.map((color) => {
+                                const usesPenPalette = annotationTool === 'pen' || annotationTool === 'rectangle';
+                                const selected = usesPenPalette ? penColorKey === color.key : highlighterColorKey === color.key;
+                                return (
+                                    <button
+                                        key={`submenu-${annotationTool}-${color.key}`}
+                                        type="button"
+                                        aria-label={`${usesPenPalette ? (annotationTool === 'rectangle' ? '네모' : '펜') : '형광펜'} ${color.label}`}
+                                        onClick={() => {
+                                            if (usesPenPalette) setPenColorKey(color.key);
+                                            else setHighlighterColorKey(color.key);
+                                        }}
+                                        className={`h-9 w-9 rounded-full border-2 transition ${selected ? 'scale-110 border-slate-900' : 'border-white/80 hover:scale-105'}`}
+                                        style={{ background: usesPenPalette ? color.pen : color.highlighter }}
+                                    />
+                                );
+                            })}
+                        </div>
+                    )}
+                    {toolbarSubmenu === 'text' && annotationTool === 'text' && (
+                        <div className="flex w-fit max-w-[min(90vw,720px)] flex-wrap items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white/96 px-4 py-3 shadow-[0_14px_32px_rgba(15,23,42,0.14)] backdrop-blur-xl">
+                            <button
+                                type="button"
+                                onClick={() => applyTextFontSize(textFontSize - 2)}
+                                className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-700 transition hover:bg-slate-50"
+                                aria-label="폰트 작게"
+                            >
+                                <i className="fas fa-minus text-xs"></i>
+                            </button>
+                            {[14, 18, 24, 32].map((size) => (
+                                <button
+                                    key={size}
+                                    type="button"
+                                    onClick={() => applyTextFontSize(size)}
+                                    className={`rounded-full px-3 py-1.5 text-sm font-bold transition ${
+                                        textFontSize === size ? 'bg-blue-600 text-white' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                                    }`}
+                                >
+                                    {size}px
+                                </button>
+                            ))}
+                            <button
+                                type="button"
+                                onClick={() => applyTextFontSize(textFontSize + 2)}
+                                className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-700 transition hover:bg-slate-50"
+                                aria-label="폰트 크게"
+                            >
+                                <i className="fas fa-plus text-xs"></i>
+                            </button>
+                        </div>
+                    )}
                 </div>
             )}
             {mode === 'student' && pageImages.length > 1 && activeStudentPageIndex >= 0 && (
@@ -1295,7 +1385,9 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                     onPointerDown={(event) => {
                                         const target = event.target as HTMLElement;
                                         event.stopPropagation();
+                                        setToolbarSubmenu(null);
                                         setActiveTextNoteId(note.id);
+                                        setTextFontSize(note.fontSize || 20);
                                         if (target.closest('[data-note-delete]')) return;
                                         if (target.closest('[data-note-resize]')) {
                                             event.preventDefault();
@@ -1360,6 +1452,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                             setActiveTextNoteId(note.id);
                                             setEditingTextNoteId(note.id);
                                             autoSizeTextNote(note.id, note.page, event.currentTarget);
+                                            setToolbarSubmenu(annotationTool === 'text' ? 'text' : null);
                                         }}
                                         onChange={(event) => {
                                             const value = event.target.value;
@@ -1378,6 +1471,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                                         : 'cursor-text border-transparent'
                                         }`}
                                         placeholder="메모"
+                                        style={{ fontSize: `${note.fontSize || textFontSize}px` }}
                                     />
                                     {activeTextNoteId === note.id && (
                                         <>
