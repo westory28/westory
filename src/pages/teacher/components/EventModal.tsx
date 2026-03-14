@@ -7,6 +7,7 @@ import {
     DEFAULT_SCHEDULE_CATEGORIES,
     ScheduleCategory,
     createScheduleCategoryKey,
+    getColorForEmoji,
     resolveScheduleCategories,
     useScheduleCategories,
 } from '../../../lib/scheduleCategories';
@@ -47,8 +48,7 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
     const [savingCategories, setSavingCategories] = useState(false);
     const [categoryDrafts, setCategoryDrafts] = useState<ScheduleCategory[]>(DEFAULT_SCHEDULE_CATEGORIES);
     const [newCategoryLabel, setNewCategoryLabel] = useState('');
-    const [newCategoryColor, setNewCategoryColor] = useState('#0ea5e9');
-    const [newCategoryEmoji, setNewCategoryEmoji] = useState('🔵');
+    const [newCategoryEmoji, setNewCategoryEmoji] = useState(DEFAULT_SCHEDULE_CATEGORIES[3]?.emoji || COLOR_EMOJI_OPTIONS[0]);
 
     useEffect(() => {
         const loadSchoolConfig = async () => {
@@ -130,7 +130,7 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
     const handleAddCategory = () => {
         const label = newCategoryLabel.trim();
         if (!label) {
-            alert('새 일정 분류 이름을 입력해주세요.');
+            alert('일정 분류 이름을 입력해 주세요.');
             return;
         }
 
@@ -138,7 +138,7 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
         const nextCategory: ScheduleCategory = {
             key: nextKey,
             label,
-            color: newCategoryColor,
+            color: getColorForEmoji(newCategoryEmoji, '#0ea5e9'),
             emoji: newCategoryEmoji,
             order: categoryDrafts.length,
         };
@@ -146,8 +146,7 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
         setCategoryDrafts((prev) => [...prev, nextCategory]);
         setEventType(nextKey);
         setNewCategoryLabel('');
-        setNewCategoryColor('#0ea5e9');
-        setNewCategoryEmoji('🔵');
+        setNewCategoryEmoji(DEFAULT_SCHEDULE_CATEGORIES[3]?.emoji || COLOR_EMOJI_OPTIONS[0]);
     };
 
     const persistCategoryDrafts = async () => {
@@ -235,19 +234,25 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
     };
 
     return (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50" onClick={onClose}>
-            <div className="m-4 w-full max-w-2xl rounded-xl bg-white p-4 shadow-2xl md:p-6" onClick={(e) => e.stopPropagation()}>
+        <div
+            className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/50 p-4 md:items-center"
+            onClick={onClose}
+        >
+            <div
+                className="my-auto flex max-h-[calc(100vh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-white p-4 shadow-2xl md:p-6"
+                onClick={(e) => e.stopPropagation()}
+            >
                 <div className="mb-6 flex items-center justify-between">
                     <h3 className="text-xl font-bold text-gray-800">
                         <i className="fas fa-edit mr-2 text-blue-500"></i>
                         {eventData ? '일정 수정' : '일정 등록'}
                     </h3>
-                    <button onClick={onClose} className="text-gray-400 transition hover:text-gray-600">
+                    <button type="button" onClick={onClose} className="text-gray-400 transition hover:text-gray-600">
                         <i className="fas fa-times fa-lg"></i>
                     </button>
                 </div>
 
-                <div className="space-y-4">
+                <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
                     <div>
                         <label className="mb-1 block text-sm font-bold text-gray-700">일정 제목</label>
                         <input
@@ -255,11 +260,11 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
                             className="w-full rounded-lg border border-gray-300 p-2.5 outline-none focus:ring-2 focus:ring-blue-500"
-                            placeholder="예: 국사 수행평가"
+                            placeholder="예: 1차 수행평가"
                         />
                     </div>
 
-                    <div className={`grid ${endEnabled ? 'grid-cols-2' : 'grid-cols-[minmax(0,1fr)_64px]'} gap-1.5 items-end overflow-hidden`}>
+                    <div className={`grid ${endEnabled ? 'grid-cols-2' : 'grid-cols-[minmax(0,1fr)_64px]'} items-end gap-1.5 overflow-hidden`}>
                         <div className="min-w-0 overflow-hidden">
                             <label className="mb-1 block text-[11px] font-bold text-gray-700 md:text-sm">시작 날짜</label>
                             <input
@@ -331,7 +336,7 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
                         <div className="flex items-center justify-between gap-3">
                             <div>
                                 <p className="text-sm font-bold text-gray-800">분류 편집</p>
-                                <p className="text-xs text-gray-500">새 분류를 추가하고, 이름/색상/동그라미 이모지를 바로 수정할 수 있습니다.</p>
+                                <p className="text-xs text-gray-500">새 분류를 추가하고, 이름과 색 이모지만 바로 수정할 수 있습니다.</p>
                             </div>
                             <button
                                 type="button"
@@ -345,7 +350,7 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
 
                         <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
                             {categoryDrafts.map((category) => (
-                                <div key={category.key} className="grid grid-cols-[minmax(0,1fr)_74px_92px] items-center gap-2 rounded-lg border border-blue-100 bg-white p-2">
+                                <div key={category.key} className="grid grid-cols-[minmax(0,1fr)_74px] items-center gap-2 rounded-lg border border-blue-100 bg-white p-2">
                                     <input
                                         type="text"
                                         value={category.label}
@@ -354,24 +359,21 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
                                     />
                                     <select
                                         value={category.emoji}
-                                        onChange={(e) => handleCategoryDraftChange(category.key, { emoji: e.target.value })}
+                                        onChange={(e) => handleCategoryDraftChange(category.key, {
+                                            emoji: e.target.value,
+                                            color: getColorForEmoji(e.target.value, category.color),
+                                        })}
                                         className="rounded-lg border border-gray-300 px-2 py-2 text-sm outline-none"
                                     >
                                         {COLOR_EMOJI_OPTIONS.map((emoji) => (
                                             <option key={emoji} value={emoji}>{emoji}</option>
                                         ))}
                                     </select>
-                                    <input
-                                        type="color"
-                                        value={category.color}
-                                        onChange={(e) => handleCategoryDraftChange(category.key, { color: e.target.value })}
-                                        className="h-10 w-full cursor-pointer rounded-lg border border-gray-300 bg-white p-1"
-                                    />
                                 </div>
                             ))}
                         </div>
 
-                        <div className="grid grid-cols-[minmax(0,1fr)_74px_92px_auto] items-center gap-2">
+                        <div className="grid grid-cols-[minmax(0,1fr)_74px_auto] items-center gap-2">
                             <input
                                 type="text"
                                 value={newCategoryLabel}
@@ -388,12 +390,6 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
                                     <option key={emoji} value={emoji}>{emoji}</option>
                                 ))}
                             </select>
-                            <input
-                                type="color"
-                                value={newCategoryColor}
-                                onChange={(e) => setNewCategoryColor(e.target.value)}
-                                className="h-10 w-full cursor-pointer rounded-lg border border-gray-300 bg-white p-1"
-                            />
                             <button
                                 type="button"
                                 onClick={handleAddCategory}

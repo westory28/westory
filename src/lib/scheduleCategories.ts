@@ -13,7 +13,19 @@ export interface ScheduleCategory {
 
 type RawScheduleCategory = Partial<ScheduleCategory> & { id?: string };
 
-export const COLOR_EMOJI_OPTIONS = ['🔴', '🟠', '🟡', '🟢', '🔵', '🟣', '🟤', '⚫', '⚪'];
+export const CATEGORY_COLOR_PRESETS = [
+    { emoji: '🔴', color: '#ef4444' },
+    { emoji: '🟠', color: '#f97316' },
+    { emoji: '🟡', color: '#eab308' },
+    { emoji: '🟢', color: '#22c55e' },
+    { emoji: '🔵', color: '#3b82f6' },
+    { emoji: '🟣', color: '#8b5cf6' },
+    { emoji: '🟤', color: '#8b5e3c' },
+    { emoji: '⚫', color: '#4b5563' },
+    { emoji: '⚪', color: '#c4b5fd' },
+] as const;
+
+export const COLOR_EMOJI_OPTIONS = CATEGORY_COLOR_PRESETS.map((preset) => preset.emoji);
 
 export const DEFAULT_SCHEDULE_CATEGORIES: ScheduleCategory[] = [
     { key: 'exam', label: '정기 시험', color: '#ef4444', emoji: '🔴', order: 0, locked: true },
@@ -42,6 +54,9 @@ const sanitizeKey = (value: unknown) =>
         .replace(/[^a-z0-9_-]+/g, '-')
         .replace(/^-+|-+$/g, '');
 
+export const getColorForEmoji = (emoji: string, fallback = '#6b7280') =>
+    CATEGORY_COLOR_PRESETS.find((preset) => preset.emoji === emoji)?.color || fallback;
+
 export const createScheduleCategoryKey = (label: string) => {
     const base = sanitizeKey(label) || 'category';
     return `${base}-${Date.now().toString(36)}`;
@@ -58,11 +73,12 @@ export const resolveScheduleCategories = (items?: RawScheduleCategory[]): Schedu
         const key = sanitizeKey(item?.key || item?.id);
         if (!key) return;
         const fallback = DEFAULT_CATEGORY_MAP.get(key);
+        const emoji = normalizeEmoji(item?.emoji, fallback?.emoji || '🔹');
         normalized.set(key, {
             key,
             label: String(item?.label || fallback?.label || '일정').trim() || fallback?.label || '일정',
-            color: normalizeColor(item?.color, fallback?.color || '#6b7280'),
-            emoji: normalizeEmoji(item?.emoji, fallback?.emoji || '🔹'),
+            color: normalizeColor(item?.color, getColorForEmoji(emoji, fallback?.color || '#6b7280')),
+            emoji,
             order: typeof item?.order === 'number' ? item.order : fallback?.order ?? DEFAULT_SCHEDULE_CATEGORIES.length + index,
             locked: fallback?.locked || false,
         });
