@@ -104,6 +104,14 @@ interface PinchState {
     startZoom: number;
 }
 
+interface PanState {
+    page: number;
+    startClientX: number;
+    startClientY: number;
+    startScrollLeft: number;
+    startScrollTop: number;
+}
+
 interface PressHoldState {
     timeoutId: number | null;
     page: number | null;
@@ -431,6 +439,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     const [studentZoom, setStudentZoom] = useState(1);
     const [toolbarVisible, setToolbarVisible] = useState(annotationUiMode === 'always');
     const [toolbarSubmenu, setToolbarSubmenu] = useState<'colors' | 'text' | null>(null);
+    const [isMobileViewport, setIsMobileViewport] = useState(false);
+    const [isMobileToolMenuOpen, setIsMobileToolMenuOpen] = useState(false);
     const [textFontSize, setTextFontSize] = useState(20);
     const [strokes, setStrokes] = useState<AnnotationStroke[]>(annotationState?.strokes || []);
     const [draftStroke, setDraftStroke] = useState<AnnotationStroke | null>(null);
@@ -443,6 +453,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     const [undoStack, setUndoStack] = useState<AnnotationSnapshot[]>([]);
     const [redoStack, setRedoStack] = useState<AnnotationSnapshot[]>([]);
     const pinchRef = useRef<PinchState | null>(null);
+    const panRef = useRef<PanState | null>(null);
+    const scrollHostRefs = useRef<Record<number, HTMLDivElement | null>>({});
     const holdRef = useRef<PressHoldState>({ timeoutId: null, page: null });
     const externalAnnotationKeyRef = useRef(getAnnotationStateKey(annotationState || EMPTY_ANNOTATION_STATE));
 
@@ -485,6 +497,19 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     useEffect(() => {
         setToolbarVisible(annotationUiMode === 'always');
     }, [annotationUiMode]);
+
+    useEffect(() => {
+        const updateViewportMode = () => setIsMobileViewport(window.innerWidth < 768);
+        updateViewportMode();
+        window.addEventListener('resize', updateViewportMode);
+        return () => window.removeEventListener('resize', updateViewportMode);
+    }, []);
+
+    useEffect(() => {
+        if (!isMobileViewport) {
+            setIsMobileToolMenuOpen(false);
+        }
+    }, [isMobileViewport]);
 
     useEffect(() => {
         if (annotationTool !== 'text') {
@@ -623,6 +648,16 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     const selectedPenColor = TOOL_COLORS.find((color) => color.key === penColorKey) || TOOL_COLORS[0];
     const selectedHighlighterColor = TOOL_COLORS.find((color) => color.key === highlighterColorKey) || TOOL_COLORS[3];
     const zoomPercent = Math.round(studentZoom * 100);
+    const toolEntries: Array<[StudentTool | 'undo' | 'redo', string, string]> = [
+        ['move', '이동', 'fa-up-down-left-right'],
+        ['undo', '이전', 'fa-arrow-rotate-left'],
+        ['redo', '다음', 'fa-arrow-rotate-right'],
+        ['pen', '펜', 'fa-pen'],
+        ['highlighter', '형광펜', 'fa-highlighter'],
+        ['rectangle', '네모', 'fa-square'],
+        ['eraser', '지우개', 'fa-eraser'],
+        ['text', '텍스트', 'fa-font'],
+    ];
     const stageCursor = mode === 'student' && annotationEnabled
         ? annotationTool === 'move'
             ? MOVE_CURSOR
@@ -639,6 +674,18 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
 
     const applyStudentZoom = (nextZoom: number) => {
         setStudentZoom(clampZoom(nextZoom));
+    };
+
+    const beginMovePan = (page: number, clientX: number, clientY: number) => {
+        const host = scrollHostRefs.current[page];
+        if (!host) return;
+        panRef.current = {
+            page,
+            startClientX: clientX,
+            startClientY: clientY,
+            startScrollLeft: host.scrollLeft,
+            startScrollTop: host.scrollTop,
+        };
     };
 
     const autoSizeTextNote = (noteId: string, page: number, textarea: HTMLTextAreaElement) => {
@@ -664,6 +711,39 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         setTextNotes((prev) => prev.map((note) => (
             note.id === activeTextNoteId ? { ...note, fontSize: clamped } : note
         )));
+    };
+
+    const handleToolSelect = (tool: StudentTool | 'undo' | 'redo') => {
+        if (tool === 'undo') {
+            setUndoStack((prev) => {
+                const snapshot = prev[prev.length - 1];
+                if (!snapshot) return prev;
+                setRedoStack((redoPrev) => [...redoPrev, captureSnapshot()]);
+                restoreSnapshot(snapshot);
+                return prev.slice(0, -1);
+            });
+            return;
+        }
+        if (tool === 'redo') {
+            setRedoStack((prev) => {
+                const snapshot = prev[prev.length - 1];
+                if (!snapshot) return prev;
+                setUndoStack((undoPrev) => [...undoPrev, captureSnapshot()]);
+                restoreSnapshot(snapshot);
+                return prev.slice(0, -1);
+            });
+            return;
+        }
+        setAnnotationTool(tool);
+        if (tool === 'pen' || tool === 'highlighter' || tool === 'rectangle') {
+            setToolbarSubmenu((prev) => (annotationTool === tool && prev === 'colors' ? null : 'colors'));
+            return;
+        }
+        if (tool === 'text') {
+            setToolbarSubmenu((prev) => (annotationTool === tool && prev === 'text' ? null : 'text'));
+            return;
+        }
+        setToolbarSubmenu(null);
     };
 
     const captureSnapshot = (): AnnotationSnapshot => ({
@@ -738,7 +818,12 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                 return;
             }
         }
-        if (annotationTool === 'move') return;
+        if (annotationTool === 'move') {
+            event.preventDefault();
+            event.currentTarget.setPointerCapture(event.pointerId);
+            beginMovePan(page, event.clientX, event.clientY);
+            return;
+        }
         const point = resolveRatioPoint(page, event.clientX, event.clientY);
         const pageImage = pageImages.find((item) => item.page === page);
         if (!point || !pageImage) return;
@@ -917,6 +1002,29 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     }, []);
 
     useEffect(() => {
+        if (!panRef.current) return undefined;
+        const handleWindowPointerMove = (event: PointerEvent) => {
+            const currentPan = panRef.current;
+            if (!currentPan) return;
+            const host = scrollHostRefs.current[currentPan.page];
+            if (!host) return;
+            host.scrollLeft = currentPan.startScrollLeft - (event.clientX - currentPan.startClientX);
+            host.scrollTop = currentPan.startScrollTop - (event.clientY - currentPan.startClientY);
+        };
+        const handleWindowPointerUp = () => {
+            panRef.current = null;
+        };
+        window.addEventListener('pointermove', handleWindowPointerMove);
+        window.addEventListener('pointerup', handleWindowPointerUp);
+        window.addEventListener('pointercancel', handleWindowPointerUp);
+        return () => {
+            window.removeEventListener('pointermove', handleWindowPointerMove);
+            window.removeEventListener('pointerup', handleWindowPointerUp);
+            window.removeEventListener('pointercancel', handleWindowPointerUp);
+        };
+    }, [annotationTool, studentZoom]);
+
+    useEffect(() => {
         if (!textNoteTransform) return undefined;
         const handleWindowPointerMove = (event: PointerEvent) => {
             const host = pageRefs.current[textNoteTransform.page];
@@ -955,10 +1063,69 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         };
     }, [textNoteTransform]);
 
+    const renderToolbarSubmenu = () => (
+        <>
+            {toolbarSubmenu === 'colors' && (annotationTool === 'pen' || annotationTool === 'highlighter' || annotationTool === 'rectangle') && (
+                <div className="flex w-fit max-w-[min(90vw,720px)] flex-wrap items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white/96 px-4 py-3 shadow-[0_14px_32px_rgba(15,23,42,0.14)] backdrop-blur-xl">
+                    {TOOL_COLORS.map((color) => {
+                        const usesPenPalette = annotationTool === 'pen' || annotationTool === 'rectangle';
+                        const selected = usesPenPalette ? penColorKey === color.key : highlighterColorKey === color.key;
+                        return (
+                            <button
+                                key={`submenu-${annotationTool}-${color.key}`}
+                                type="button"
+                                aria-label={`${usesPenPalette ? (annotationTool === 'rectangle' ? '네모' : '펜') : '형광펜'} ${color.label}`}
+                                onClick={() => {
+                                    if (usesPenPalette) setPenColorKey(color.key);
+                                    else setHighlighterColorKey(color.key);
+                                }}
+                                className={`h-9 w-9 rounded-full border-2 transition ${selected ? 'scale-110 border-slate-900' : 'border-white/80 hover:scale-105'}`}
+                                style={{ background: usesPenPalette ? color.pen : color.highlighter }}
+                            />
+                        );
+                    })}
+                </div>
+            )}
+            {toolbarSubmenu === 'text' && annotationTool === 'text' && (
+                <div className="flex w-fit max-w-[min(90vw,720px)] flex-wrap items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white/96 px-4 py-3 shadow-[0_14px_32px_rgba(15,23,42,0.14)] backdrop-blur-xl">
+                    <button
+                        type="button"
+                        onClick={() => applyTextFontSize(textFontSize - 2)}
+                        className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-700 transition hover:bg-slate-50"
+                        aria-label="글자 작게"
+                    >
+                        <i className="fas fa-minus text-xs"></i>
+                    </button>
+                    {[14, 18, 24, 32].map((size) => (
+                        <button
+                            key={size}
+                            type="button"
+                            onClick={() => applyTextFontSize(size)}
+                            className={`rounded-full px-3 py-1.5 text-sm font-bold transition ${
+                                textFontSize === size ? 'bg-blue-600 text-white' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                            }`}
+                        >
+                            {size}px
+                        </button>
+                    ))}
+                    <button
+                        type="button"
+                        onClick={() => applyTextFontSize(textFontSize + 2)}
+                        className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-700 transition hover:bg-slate-50"
+                        aria-label="글자 크게"
+                    >
+                        <i className="fas fa-plus text-xs"></i>
+                    </button>
+                </div>
+            )}
+        </>
+    );
+
     return (
         <div className="space-y-6">
             {mode === 'student' && annotationEnabled && toolbarVisible && (
-                <div className="sticky top-3 z-40 flex flex-col items-center gap-2">
+                <>
+                    <div className="sticky top-3 z-40 hidden flex-col items-center gap-2 md:flex">
                     <div className="inline-flex max-w-[min(96vw,1180px)] flex-nowrap items-center justify-center gap-2 overflow-x-auto rounded-full border border-blue-100 bg-white/92 px-3 py-3 shadow-[0_18px_48px_rgba(37,99,235,0.16)] backdrop-blur-xl md:px-4">
                         {[
                             ['move', '이동', 'fa-up-down-left-right'],
@@ -1135,6 +1302,84 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                         </div>
                     )}
                 </div>
+                <div className="fixed bottom-5 right-5 z-40 flex flex-col items-end gap-3 md:hidden">
+                    {toolbarSubmenu && isMobileToolMenuOpen && (
+                        <div className="max-w-[calc(100vw-2.5rem)]">{renderToolbarSubmenu()}</div>
+                    )}
+                    {isMobileToolMenuOpen && (
+                        <div className="flex flex-col items-end gap-2">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    pushUndoSnapshot();
+                                    setStrokes([]);
+                                    setBoxes([]);
+                                    setTextNotes([]);
+                                    setActiveTextNoteId(null);
+                                    setToolbarSubmenu(null);
+                                    setIsMobileToolMenuOpen(false);
+                                }}
+                                className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-lg shadow-slate-300/30 transition hover:bg-slate-50"
+                                aria-label="전체 지우기"
+                            >
+                                <i className="fas fa-trash-alt text-sm"></i>
+                            </button>
+                            <div className="flex flex-col items-center gap-2 rounded-3xl border border-blue-100 bg-white/96 px-2 py-3 shadow-[0_18px_48px_rgba(37,99,235,0.16)] backdrop-blur-xl">
+                                {toolEntries.map(([tool, label, icon]) => (
+                                    <button
+                                        key={`mobile-${tool}`}
+                                        type="button"
+                                        aria-label={label}
+                                        title={label}
+                                        onClick={() => handleToolSelect(tool)}
+                                        disabled={(tool === 'undo' && undoStack.length === 0) || (tool === 'redo' && redoStack.length === 0)}
+                                        className={`inline-flex h-11 w-11 items-center justify-center rounded-full text-sm font-semibold transition ${
+                                            annotationTool === tool
+                                                ? 'bg-blue-600 text-white shadow-sm'
+                                                : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40'
+                                        }`}
+                                    >
+                                        <i className={`fas ${icon} text-sm`}></i>
+                                    </button>
+                                ))}
+                                <div className="flex flex-col items-center gap-2 rounded-2xl border border-slate-200 bg-white px-2 py-2 shadow-sm">
+                                    <button
+                                        type="button"
+                                        onClick={() => applyStudentZoom(studentZoom + 0.1)}
+                                        className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 transition hover:bg-slate-50"
+                                        aria-label="확대"
+                                    >
+                                        <i className="fas fa-plus text-xs"></i>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => applyStudentZoom(1)}
+                                        className="min-w-[52px] rounded-full bg-slate-50 px-2 py-1 text-center text-xs font-bold text-slate-700 transition hover:bg-slate-100"
+                                    >
+                                        {zoomPercent}%
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => applyStudentZoom(studentZoom - 0.1)}
+                                        className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 transition hover:bg-slate-50"
+                                        aria-label="축소"
+                                    >
+                                        <i className="fas fa-minus text-xs"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    <button
+                        type="button"
+                        onClick={() => setIsMobileToolMenuOpen((prev) => !prev)}
+                        className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-[0_18px_48px_rgba(37,99,235,0.32)] transition hover:bg-blue-700"
+                        aria-label="도구 모음 열기"
+                    >
+                        <i className={`fas ${isMobileToolMenuOpen ? 'fa-xmark' : 'fa-wand-magic-sparkles'} text-lg`}></i>
+                    </button>
+                </div>
+                </>
             )}
             {mode === 'student' && pageImages.length > 1 && activeStudentPageIndex >= 0 && (
                 <div className="flex items-center justify-between rounded-3xl border border-slate-200 bg-white/88 px-4 py-3 shadow-sm backdrop-blur">
@@ -1242,6 +1487,9 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                         </div>
 
                         <div
+                            ref={(node) => {
+                                scrollHostRefs.current[pageImage.page] = node;
+                            }}
                             className="overflow-auto rounded-2xl border border-gray-200 bg-gray-50"
                             onWheel={(event) => {
                                 if (mode !== 'student' || !annotationEnabled) return;
@@ -1278,7 +1526,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                     mode === 'teacher'
                                         ? `touch-none ${teacherTool === 'box' ? 'cursor-default' : 'cursor-text'}`
                                         : annotationEnabled
-                                            ? `touch-none ${annotationTool === 'move' ? 'cursor-grab' : annotationTool === 'eraser' ? 'cursor-not-allowed' : annotationTool === 'text' ? 'cursor-text' : 'cursor-crosshair'}`
+                                            ? `${annotationTool === 'move' ? (panRef.current?.page === pageImage.page ? 'cursor-grabbing' : 'cursor-grab') : `touch-none ${annotationTool === 'eraser' ? 'cursor-not-allowed' : annotationTool === 'text' ? 'cursor-text' : 'cursor-crosshair'}`}`
                                             : ''
                                 }`}
                                 style={{
