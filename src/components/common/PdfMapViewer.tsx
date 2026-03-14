@@ -74,6 +74,15 @@ const getRegionOverlayStyle = (
     };
 };
 
+const getRegionFocusZoom = (
+    fitZoom: number,
+    isMobileViewport: boolean,
+) => clamp(
+    Math.max(fitZoom * (isMobileViewport ? 1.45 : 1.7), isMobileViewport ? 1.1 : 1.25),
+    Math.max(fitZoom, 1),
+    isMobileViewport ? 1.85 : 2.35,
+);
+
 const sanitizeRegionLabel = (value: string) => value
     .replace(/\s*[→].*$/u, '')
     .replace(/\([^)]*\)/gu, '')
@@ -412,19 +421,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
     useEffect(() => {
         if (!isModalOpen || !selectedRegion || !modalSurfaceRef.current || selectedRegion.page !== currentPage) return undefined;
 
-        const surface = modalSurfaceRef.current;
-        const horizontalPadding = isMobileViewport ? 56 : 160;
-        const verticalPadding = isMobileViewport ? 96 : 180;
-        const focusWidth = Math.max(selectedRegion.width, 56);
-        const focusHeight = Math.max(selectedRegion.height, 56);
-        const targetZoom = clamp(
-            Math.min(
-                Math.max(1, (surface.clientWidth - horizontalPadding) / focusWidth),
-                Math.max(1, (surface.clientHeight - verticalPadding) / focusHeight),
-            ),
-            Math.max(fitZoom, 1),
-            isMobileViewport ? 2.2 : 4,
-        );
+        const targetZoom = getRegionFocusZoom(fitZoom, isMobileViewport);
 
         if (Math.abs(zoom - targetZoom) > 0.02) {
             setZoom(Number(targetZoom.toFixed(2)));
@@ -437,18 +434,10 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
             const pageFrame = modalPageFrameRef.current;
             if (!currentSurface || !highlight || !pageFrame) return;
 
-            const surfaceRect = currentSurface.getBoundingClientRect();
-            const frameRect = pageFrame.getBoundingClientRect();
-            const highlightRect = highlight.getBoundingClientRect();
-
-            const targetLeft = currentSurface.scrollLeft
-                + (highlightRect.left - frameRect.left)
-                + (highlightRect.width / 2)
-                - (surfaceRect.width / 2);
-            const targetTop = currentSurface.scrollTop
-                + (highlightRect.top - frameRect.top)
-                + (highlightRect.height / 2)
-                - (surfaceRect.height / 2);
+            const centerX = (selectedRegion.left + (selectedRegion.width / 2)) * zoom;
+            const centerY = (selectedRegion.top + (selectedRegion.height / 2)) * zoom;
+            const targetLeft = pageFrame.offsetLeft + centerX - (currentSurface.clientWidth / 2);
+            const targetTop = pageFrame.offsetTop + centerY - (currentSurface.clientHeight / 2);
 
             currentSurface.scrollTo({
                 left: Math.max(0, targetLeft),
@@ -758,10 +747,10 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                                 <div
                                     ref={interactive ? undefined : modalRegionHighlightRef}
                                     className="pointer-events-none absolute"
-                                    style={getRegionOverlayStyle(selectedRegion, surfaceScale, 56, 36, 12, 10)}
+                                    style={getRegionOverlayStyle(selectedRegion, surfaceScale, 72, 30, 8, 6)}
                                 >
                                     <div className="relative h-full w-full rounded-md border-[3px] border-red-500 bg-red-200/12 shadow-[0_0_0_2px_rgba(255,255,255,0.92)]">
-                                        <div className="absolute -top-8 left-0 rounded-full border border-red-200 bg-white/95 px-2.5 py-1 text-[11px] font-extrabold leading-none text-red-600 shadow-sm">
+                                        <div className="absolute left-1 top-1 max-w-[calc(100%-8px)] whitespace-nowrap rounded-full border border-red-200 bg-white/95 px-2 py-0.5 text-[10px] font-extrabold leading-none text-red-600 shadow-sm">
                                             {selectedRegion.label}
                                         </div>
                                     </div>
@@ -786,12 +775,10 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                                 <div
                                     ref={interactive ? undefined : modalRegionHighlightRef}
                                     className="pointer-events-none absolute"
-                                    style={getRegionOverlayStyle(selectedRegion, zoom, isMobileViewport ? 72 : 96, isMobileViewport ? 48 : 58, 14, 12)}
+                                    style={getRegionOverlayStyle(selectedRegion, zoom, isMobileViewport ? 84 : 112, isMobileViewport ? 34 : 42, 10, 8)}
                                 >
                                     <div className="relative h-full w-full rounded-md border-[3px] border-red-500 bg-red-200/12 shadow-[0_0_0_2px_rgba(255,255,255,0.92)]">
-                                        <div className={`absolute left-0 rounded-full border border-red-200 bg-white/95 px-3 py-1 text-xs font-extrabold leading-none text-red-600 shadow-sm ${
-                                            isMobileViewport ? '-top-9' : '-top-10'
-                                        }`}>
+                                        <div className="absolute left-1 top-1 max-w-[calc(100%-10px)] whitespace-nowrap rounded-full border border-red-200 bg-white/95 px-2.5 py-1 text-[11px] font-extrabold leading-none text-red-600 shadow-sm">
                                             {selectedRegion.label}
                                         </div>
                                     </div>
