@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
     clampRatio,
     getTightTextRegionBounds,
@@ -1121,7 +1122,93 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         </>
     );
 
+    const mobileToolbarFloating = mode === 'student' && annotationEnabled && toolbarVisible && isMobileViewport ? (
+        <div
+            className="pointer-events-none fixed inset-x-0 z-[95] flex justify-end md:hidden"
+            style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}
+        >
+            <div className="pointer-events-auto mr-4 flex flex-col items-end gap-3">
+                {toolbarSubmenu && isMobileToolMenuOpen && (
+                    <div className="max-w-[calc(100vw-2.5rem)]">{renderToolbarSubmenu()}</div>
+                )}
+                {isMobileToolMenuOpen && (
+                    <div className="flex flex-col items-end gap-2">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                pushUndoSnapshot();
+                                setStrokes([]);
+                                setBoxes([]);
+                                setTextNotes([]);
+                                setActiveTextNoteId(null);
+                                setToolbarSubmenu(null);
+                                setIsMobileToolMenuOpen(false);
+                            }}
+                            className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-lg shadow-slate-300/30 transition hover:bg-slate-50"
+                            aria-label="전체 지우기"
+                        >
+                            <i className="fas fa-trash-alt text-sm"></i>
+                        </button>
+                        <div className="flex flex-col items-center gap-2 rounded-3xl border border-blue-100 bg-white/96 px-2 py-3 shadow-[0_18px_48px_rgba(37,99,235,0.16)] backdrop-blur-xl">
+                            {toolEntries.map(([tool, label, icon]) => (
+                                <button
+                                    key={`mobile-${tool}`}
+                                    type="button"
+                                    aria-label={label}
+                                    title={label}
+                                    onClick={() => handleToolSelect(tool)}
+                                    disabled={(tool === 'undo' && undoStack.length === 0) || (tool === 'redo' && redoStack.length === 0)}
+                                    className={`inline-flex h-11 w-11 items-center justify-center rounded-full text-sm font-semibold transition ${
+                                        annotationTool === tool
+                                            ? 'bg-blue-600 text-white shadow-sm'
+                                            : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40'
+                                    }`}
+                                >
+                                    <i className={`fas ${icon} text-sm`}></i>
+                                </button>
+                            ))}
+                            <div className="flex flex-col items-center gap-2 rounded-2xl border border-slate-200 bg-white px-2 py-2 shadow-sm">
+                                <button
+                                    type="button"
+                                    onClick={() => applyStudentZoom(studentZoom + 0.1)}
+                                    className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 transition hover:bg-slate-50"
+                                    aria-label="확대"
+                                >
+                                    <i className="fas fa-plus text-xs"></i>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => applyStudentZoom(1)}
+                                    className="min-w-[52px] rounded-full bg-slate-50 px-2 py-1 text-center text-xs font-bold text-slate-700 transition hover:bg-slate-100"
+                                >
+                                    {zoomPercent}%
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => applyStudentZoom(studentZoom - 0.1)}
+                                    className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 transition hover:bg-slate-50"
+                                    aria-label="축소"
+                                >
+                                    <i className="fas fa-minus text-xs"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                <button
+                    type="button"
+                    onClick={() => setIsMobileToolMenuOpen((prev) => !prev)}
+                    className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-[0_18px_48px_rgba(37,99,235,0.32)] transition hover:bg-blue-700"
+                    aria-label="도구 모음 열기"
+                >
+                    <i className={`fas ${isMobileToolMenuOpen ? 'fa-xmark' : 'fa-wand-magic-sparkles'} text-lg`}></i>
+                </button>
+            </div>
+        </div>
+    ) : null;
+
     return (
+        <>
         <div className="space-y-6">
             {mode === 'student' && annotationEnabled && toolbarVisible && (
                 <>
@@ -1301,88 +1388,6 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                             </button>
                         </div>
                     )}
-                </div>
-                <div
-                    className="pointer-events-none fixed inset-x-0 z-40 flex justify-end md:hidden"
-                    style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}
-                >
-                    <div className="pointer-events-auto mr-4 flex flex-col items-end gap-3">
-                    {toolbarSubmenu && isMobileToolMenuOpen && (
-                        <div className="max-w-[calc(100vw-2.5rem)]">{renderToolbarSubmenu()}</div>
-                    )}
-                    {isMobileToolMenuOpen && (
-                        <div className="flex flex-col items-end gap-2">
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    pushUndoSnapshot();
-                                    setStrokes([]);
-                                    setBoxes([]);
-                                    setTextNotes([]);
-                                    setActiveTextNoteId(null);
-                                    setToolbarSubmenu(null);
-                                    setIsMobileToolMenuOpen(false);
-                                }}
-                                className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-lg shadow-slate-300/30 transition hover:bg-slate-50"
-                                aria-label="전체 지우기"
-                            >
-                                <i className="fas fa-trash-alt text-sm"></i>
-                            </button>
-                            <div className="flex flex-col items-center gap-2 rounded-3xl border border-blue-100 bg-white/96 px-2 py-3 shadow-[0_18px_48px_rgba(37,99,235,0.16)] backdrop-blur-xl">
-                                {toolEntries.map(([tool, label, icon]) => (
-                                    <button
-                                        key={`mobile-${tool}`}
-                                        type="button"
-                                        aria-label={label}
-                                        title={label}
-                                        onClick={() => handleToolSelect(tool)}
-                                        disabled={(tool === 'undo' && undoStack.length === 0) || (tool === 'redo' && redoStack.length === 0)}
-                                        className={`inline-flex h-11 w-11 items-center justify-center rounded-full text-sm font-semibold transition ${
-                                            annotationTool === tool
-                                                ? 'bg-blue-600 text-white shadow-sm'
-                                                : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40'
-                                        }`}
-                                    >
-                                        <i className={`fas ${icon} text-sm`}></i>
-                                    </button>
-                                ))}
-                                <div className="flex flex-col items-center gap-2 rounded-2xl border border-slate-200 bg-white px-2 py-2 shadow-sm">
-                                    <button
-                                        type="button"
-                                        onClick={() => applyStudentZoom(studentZoom + 0.1)}
-                                        className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 transition hover:bg-slate-50"
-                                        aria-label="확대"
-                                    >
-                                        <i className="fas fa-plus text-xs"></i>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => applyStudentZoom(1)}
-                                        className="min-w-[52px] rounded-full bg-slate-50 px-2 py-1 text-center text-xs font-bold text-slate-700 transition hover:bg-slate-100"
-                                    >
-                                        {zoomPercent}%
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => applyStudentZoom(studentZoom - 0.1)}
-                                        className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 transition hover:bg-slate-50"
-                                        aria-label="축소"
-                                    >
-                                        <i className="fas fa-minus text-xs"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                    <button
-                        type="button"
-                        onClick={() => setIsMobileToolMenuOpen((prev) => !prev)}
-                        className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-[0_18px_48px_rgba(37,99,235,0.32)] transition hover:bg-blue-700"
-                        aria-label="도구 모음 열기"
-                    >
-                        <i className={`fas ${isMobileToolMenuOpen ? 'fa-xmark' : 'fa-wand-magic-sparkles'} text-lg`}></i>
-                    </button>
-                    </div>
                 </div>
                 </>
             )}
@@ -1965,6 +1970,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                 );
             })}
         </div>
+        {typeof document !== 'undefined' && mobileToolbarFloating ? createPortal(mobileToolbarFloating, document.body) : null}
+        </>
     );
 };
 
