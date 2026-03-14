@@ -390,7 +390,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
         <div className={fullscreenPreview ? 'mx-auto w-full max-w-[min(100vw-1.5rem,1600px)] animate-fadeIn' : 'mx-auto max-w-4xl animate-fadeIn'}>
             <div className={`rounded-[28px] border border-white/70 bg-white/95 shadow-[0_24px_60px_rgba(15,23,42,0.08)] backdrop-blur ${fullscreenPreview ? 'p-4 md:p-5' : 'mb-6 p-5 md:p-7'}`}>
                 <div className="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-4">
-                    <div>
+                    <div className="min-w-0 flex-1 order-1">
                         <span className="inline-block rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-600">
                             학생 수업 화면
                         </span>
@@ -404,8 +404,8 @@ const LessonContent: React.FC<LessonContentProps> = ({
                         )}
                     </div>
                     {canPersist && (
-                        <div className="flex flex-wrap items-center gap-2">
-                            <span className={`rounded-full px-3 py-1 text-xs font-bold ${
+                        <div className="order-3 flex basis-full flex-wrap items-center justify-end gap-3 md:-mt-1">
+                            <span className={`rounded-full px-4 py-2 text-sm font-bold ${
                                 hasUnsavedChanges
                                     ? 'bg-amber-50 text-amber-700'
                                     : saveMessage === '저장됨'
@@ -418,13 +418,13 @@ const LessonContent: React.FC<LessonContentProps> = ({
                                 type="button"
                                 onClick={handleSaveClick}
                                 disabled={isSaving || !hasUnsavedChanges}
-                                className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition ${
+                                className={`inline-flex items-center gap-2 rounded-full px-6 py-3 text-base font-bold transition ${
                                     isSaving || !hasUnsavedChanges
                                         ? 'cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400'
                                         : 'border border-blue-600 bg-blue-600 text-white hover:bg-blue-700'
                                 }`}
                             >
-                                <i className="fas fa-save text-xs"></i>
+                                <i className="fas fa-save text-sm"></i>
                                 저장
                             </button>
                         </div>
@@ -433,7 +433,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
                         <button
                             type="button"
                             onClick={onClosePreview}
-                            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                            className="order-2 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                         >
                             <i className="fas fa-times text-xs"></i>
                             닫기
