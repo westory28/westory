@@ -111,6 +111,8 @@ interface PanState {
     startClientY: number;
     startScrollLeft: number;
     startScrollTop: number;
+    horizontalHost: HTMLDivElement;
+    verticalHost: HTMLElement | null;
 }
 
 interface PressHoldState {
@@ -163,6 +165,17 @@ const EMPTY_ANNOTATION_STATE: LessonWorksheetAnnotationState = { strokes: [], bo
 
 const toPercent = (value: number) => `${value * 100}%`;
 const clampZoom = (value: number) => Math.min(MAX_STUDENT_ZOOM, Math.max(MIN_STUDENT_ZOOM, value));
+
+const findScrollableAncestor = (element: HTMLElement | null) => {
+    let current = element?.parentElement || null;
+    while (current) {
+        const style = window.getComputedStyle(current);
+        const canScrollY = /(auto|scroll)/.test(style.overflowY) && current.scrollHeight > current.clientHeight;
+        if (canScrollY) return current;
+        current = current.parentElement;
+    }
+    return null;
+};
 
 const getIntersectionArea = (
     leftA: number,
@@ -680,12 +693,15 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     const beginMovePan = (page: number, clientX: number, clientY: number) => {
         const host = scrollHostRefs.current[page];
         if (!host) return;
+        const verticalHost = host.scrollHeight > host.clientHeight ? host : findScrollableAncestor(host);
         panRef.current = {
             page,
             startClientX: clientX,
             startClientY: clientY,
             startScrollLeft: host.scrollLeft,
-            startScrollTop: host.scrollTop,
+            startScrollTop: verticalHost?.scrollTop ?? host.scrollTop,
+            horizontalHost: host,
+            verticalHost,
         };
     };
 
@@ -1007,10 +1023,12 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         const handleWindowPointerMove = (event: PointerEvent) => {
             const currentPan = panRef.current;
             if (!currentPan) return;
-            const host = scrollHostRefs.current[currentPan.page];
-            if (!host) return;
-            host.scrollLeft = currentPan.startScrollLeft - (event.clientX - currentPan.startClientX);
-            host.scrollTop = currentPan.startScrollTop - (event.clientY - currentPan.startClientY);
+            currentPan.horizontalHost.scrollLeft = currentPan.startScrollLeft - (event.clientX - currentPan.startClientX);
+            if (currentPan.verticalHost) {
+                currentPan.verticalHost.scrollTop = currentPan.startScrollTop - (event.clientY - currentPan.startClientY);
+            } else {
+                currentPan.horizontalHost.scrollTop = currentPan.startScrollTop - (event.clientY - currentPan.startClientY);
+            }
         };
         const handleWindowPointerUp = () => {
             panRef.current = null;

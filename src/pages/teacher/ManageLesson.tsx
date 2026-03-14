@@ -1054,7 +1054,7 @@ const ManageLesson: React.FC = () => {
                     </div>
                 </div>
 
-                <button className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-blue-600 text-white shadow-lg z-30 lg:hidden" onClick={() => setSidebarOpen(true)}>
+                <button className="fixed bottom-6 right-5 z-30 h-14 w-14 rounded-full bg-blue-600 text-white shadow-lg lg:hidden" onClick={() => setSidebarOpen(true)}>
                     <i className="fas fa-list text-lg"></i>
                 </button>
             </main>
