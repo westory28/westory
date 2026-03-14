@@ -63,14 +63,14 @@ const ManageExam: React.FC = () => {
                         className={`flex-1 py-3 px-6 font-bold text-sm border-b-2 transition text-center ${activeTab === 'preview' ? 'border-blue-500 text-blue-600 bg-blue-50' : 'border-transparent text-gray-600 hover:bg-gray-50'
                             }`}
                     >
-                        1. {tabLabels.preview}
+                        {tabLabels.preview}
                     </button>
                     <button
                         onClick={() => setActiveTab('omr')}
                         className={`flex-1 py-3 px-6 font-bold text-sm border-b-2 transition text-center ${activeTab === 'omr' ? 'border-blue-500 text-blue-600 bg-blue-50' : 'border-transparent text-gray-600 hover:bg-gray-50'
                             }`}
                     >
-                        2. {tabLabels.omr}
+                        {tabLabels.omr}
                     </button>
                 </div>
 
