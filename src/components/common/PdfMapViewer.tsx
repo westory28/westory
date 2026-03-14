@@ -389,20 +389,45 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
 
     useEffect(() => {
         if (!isModalOpen || !selectedRegion || !modalSurfaceRef.current || selectedRegion.page !== currentPage) return undefined;
+
+        const surface = modalSurfaceRef.current;
+        const focusPaddingX = isMobileViewport ? 72 : 140;
+        const focusPaddingY = isMobileViewport ? 96 : 160;
+        const minFocusZoom = isMobileViewport ? Math.max(fitZoom * 1.35, 1.1) : Math.max(fitZoom * 1.2, 0.95);
+        const targetZoom = clamp(
+            Math.min(
+                (surface.clientWidth - focusPaddingX) / Math.max(selectedRegion.width, 24),
+                (surface.clientHeight - focusPaddingY) / Math.max(selectedRegion.height, 24),
+            ),
+            minFocusZoom,
+            4,
+        );
+
+        if (Math.abs(zoom - targetZoom) > 0.02) {
+            hasManualZoomRef.current = true;
+            setZoom(Number(targetZoom.toFixed(2)));
+            return undefined;
+        }
+
         const frameId = window.requestAnimationFrame(() => {
-            const surface = modalSurfaceRef.current;
-            const highlight = modalRegionHighlightRef.current;
-            if (!surface || !highlight) return;
-            const surfaceRect = surface.getBoundingClientRect();
-            const highlightRect = highlight.getBoundingClientRect();
-            surface.scrollTo({
-                left: Math.max(0, surface.scrollLeft + (highlightRect.left - surfaceRect.left) - ((surface.clientWidth - highlightRect.width) / 2)),
-                top: Math.max(0, surface.scrollTop + (highlightRect.top - surfaceRect.top) - ((surface.clientHeight - highlightRect.height) / 2)),
+            const currentSurface = modalSurfaceRef.current;
+            if (!currentSurface) return;
+
+            const scaledWidth = currentPageWidth * zoom;
+            const scaledHeight = currentPageHeight * zoom;
+            const offsetX = Math.max(0, (currentSurface.clientWidth - scaledWidth) / 2);
+            const offsetY = Math.max(0, (currentSurface.clientHeight - scaledHeight) / 2);
+            const centerX = offsetX + (selectedRegion.left + selectedRegion.width / 2) * zoom;
+            const centerY = offsetY + (selectedRegion.top + selectedRegion.height / 2) * zoom;
+
+            currentSurface.scrollTo({
+                left: Math.max(0, centerX - currentSurface.clientWidth / 2),
+                top: Math.max(0, centerY - currentSurface.clientHeight / 2),
                 behavior: 'smooth',
             });
         });
         return () => window.cancelAnimationFrame(frameId);
-    }, [currentPage, isModalOpen, selectedRegion, zoom]);
+    }, [currentPage, currentPageHeight, currentPageWidth, fitZoom, isMobileViewport, isModalOpen, selectedRegion, zoom]);
 
     const handleLoadSuccess = async (pdf: PDFDocumentProxy) => {
         setNumPages(pdf.numPages);
