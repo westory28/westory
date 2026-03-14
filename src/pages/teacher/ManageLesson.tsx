@@ -17,6 +17,7 @@ import {
 import { deleteObject, getDownloadURL, listAll, ref, uploadBytes } from 'firebase/storage';
 import QuillEditor from '../../components/common/QuillEditor';
 import LessonWorksheetStage from '../../components/common/LessonWorksheetStage';
+import LessonContent, { type LessonData as StudentLessonData } from '../student/lesson/components/LessonContent';
 import { getSemesterCollectionPath, getSemesterDocPath } from '../../lib/semesterScope';
 import { processPdfMapFile, type ProcessedPdfMap } from '../../lib/pdfMapProcessor';
 import {
@@ -796,7 +797,7 @@ const ManageLesson: React.FC = () => {
                                             </button>
                                         </label>
                                         <button onClick={() => setPreviewOpen(true)} className="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg font-bold hover:bg-gray-50 text-xs md:text-sm">
-                                            <i className="fas fa-eye mr-2"></i><span>미리보기</span>
+                                            <i className="fas fa-expand mr-2"></i><span>수업 화면</span>
                                         </button>
                                         <button onClick={() => void saveLesson()} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700 shadow-md text-xs md:text-sm">
                                             <i className="fas fa-save mr-2"></i><span>저장</span>
@@ -1359,45 +1360,27 @@ const ManageLesson: React.FC = () => {
             )}
 
             {previewOpen && (
-                <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setPreviewOpen(false)}>
-                    <div className="bg-white w-full max-w-6xl h-[88vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden relative" onClick={(e) => e.stopPropagation()}>
-                        <div className="p-4 border-b flex justify-between items-center bg-gray-50">
-                            <h3 className="font-bold text-lg"><i className="fas fa-mobile-alt mr-2"></i>학생 화면 미리보기</h3>
-                            <button onClick={() => setPreviewOpen(false)} className="text-gray-500 hover:text-gray-800"><i className="fas fa-times text-xl"></i></button>
-                        </div>
-                        <div className="flex-1 overflow-y-auto p-4 lg:p-8 bg-gray-50">
-                            <div className="max-w-4xl mx-auto bg-white p-6 lg:p-8 rounded-xl shadow-sm border border-gray-200 min-h-full">
-                                <h1 className="text-2xl font-bold mb-4 text-gray-900 border-b pb-4">{lessonTitle}</h1>
-
-                                {false ? (
-                                    <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-10 text-center text-amber-800">
-                                        <div className="text-4xl mb-3">🔒</div>
-                                        <h2 className="text-xl font-bold">수업 자료가 공개되지 않았습니다</h2>
-                                        <p className="mt-2 text-sm">학생은 교사가 공개한 자료만 확인할 수 있습니다.</p>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-6">
-                                        {lessonVideo && getEmbedUrl(lessonVideo) && (
-                                            <div className="relative pb-[56.25%] h-0 overflow-hidden rounded-xl bg-black">
-                                                <iframe src={getEmbedUrl(lessonVideo)!} className="absolute top-0 left-0 w-full h-full" frameBorder="0" allowFullScreen></iframe>
-                                            </div>
-                                        )}
-
-                                        {worksheetPageImages.length > 0 && (
-                                            <LessonWorksheetStage pageImages={worksheetPageImages} blanks={worksheetBlanks} mode="student" studentAnswers={{}} />
-                                        )}
-
-                                        {lessonContent && (
-                                            <div className="prose max-w-none text-gray-800 leading-loose" dangerouslySetInnerHTML={{ __html: lessonContent }} />
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
+                <div className="fixed inset-0 z-[70] bg-slate-950/80 backdrop-blur-sm">
+                    <div className="h-full overflow-y-auto">
+                        <LessonContent
+                            unitId={null}
+                            fallbackTitle={selectedNodeTitle}
+                            lessonOverride={{
+                                title: lessonTitle || selectedNodeTitle,
+                                videoUrl: lessonVideo,
+                                contentHtml: lessonContent,
+                                isVisibleToStudents: lessonVisibleToStudents,
+                                worksheetPageImages,
+                                worksheetTextRegions,
+                                worksheetBlanks,
+                            } satisfies StudentLessonData}
+                            disablePersistence
+                            fullscreenPreview
+                            onClosePreview={() => setPreviewOpen(false)}
+                        />
                     </div>
                 </div>
             )}
-
             {screenBusyMessage && (
                 <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/30 backdrop-blur-sm">
                     <div className="rounded-2xl bg-white px-6 py-5 text-center shadow-2xl">

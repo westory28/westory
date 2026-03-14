@@ -1,17 +1,14 @@
-﻿import React, { useEffect, useState, useRef } from 'react';
-import { db } from '../../../../lib/firebase';
-import { collection, query, where, getDocs, limit, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { useAuth } from '../../../../contexts/AuthContext';
-import { getSemesterCollectionPath } from '../../../../lib/semesterScope';
+import React, { useEffect, useRef, useState } from 'react';
+import { collection, doc, getDoc, getDocs, limit, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import LessonWorksheetStage from '../../../../components/common/LessonWorksheetStage';
+import { useAuth } from '../../../../contexts/AuthContext';
+import { db } from '../../../../lib/firebase';
+import { getSemesterCollectionPath } from '../../../../lib/semesterScope';
 import type { LessonWorksheetBlank, LessonWorksheetPageImage, LessonWorksheetTextRegion } from '../../../../lib/lessonWorksheet';
 
-interface LessonContentProps {
-    unitId: string | null;
-    fallbackTitle?: string | null;
-}
+type AnswerStatus = '' | 'correct' | 'wrong';
 
-interface LessonData {
+export interface LessonData {
     title: string;
     videoUrl?: string;
     contentHtml?: string;
@@ -23,23 +20,65 @@ interface LessonData {
     worksheetBlanks?: LessonWorksheetBlank[];
 }
 
-const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) => {
+interface LessonContentProps {
+    unitId: string | null;
+    fallbackTitle?: string | null;
+    lessonOverride?: LessonData | null;
+    disablePersistence?: boolean;
+    fullscreenPreview?: boolean;
+    onClosePreview?: () => void;
+}
+
+const EMPTY_BLANK_LABEL = '빈칸';
+
+const normalizeAnswer = (value: string) => String(value || '').trim().replace(/\s+/g, '');
+
+const getInputStatus = (value: string, answer: string): AnswerStatus => {
+    if (!normalizeAnswer(value)) return '';
+    return normalizeAnswer(value) === normalizeAnswer(answer) ? 'correct' : 'wrong';
+};
+
+const getInlineBlankWidth = (answer: string) => Math.min(220, Math.max(76, answer.length * 14 + 24));
+
+const getInlineBlankFontSize = (width: number, textLength: number) => {
+    const safeLength = Math.max(1, textLength);
+    return Math.max(11, Math.min(19, (width - 12) / (safeLength * 0.92)));
+};
+
+const LessonContent: React.FC<LessonContentProps> = ({
+    unitId,
+    fallbackTitle,
+    lessonOverride = null,
+    disablePersistence = false,
+    fullscreenPreview = false,
+    onClosePreview,
+}) => {
     const { config, currentUser } = useAuth();
-    const [lesson, setLesson] = useState<LessonData | null>(null);
+    const [lesson, setLesson] = useState<LessonData | null>(lessonOverride);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(false);
     const [isBlocked, setIsBlocked] = useState(false);
-    const [studentAnswers, setStudentAnswers] = useState<Record<string, { value?: string; status?: '' | 'correct' | 'wrong' }>>({});
+    const [studentAnswers, setStudentAnswers] = useState<Record<string, { value?: string; status?: AnswerStatus }>>({});
 
-    // Check Answers State
     const contentRef = useRef<HTMLDivElement>(null);
     const saveTimerRef = useRef<number | null>(null);
+    const canPersist = Boolean(!lessonOverride && !disablePersistence && currentUser?.uid && unitId);
 
     useEffect(() => {
-        if (!unitId) {
-            setLesson(null);
-            setIsBlocked(false);
-            setStudentAnswers({});
+        setLesson(lessonOverride);
+        setIsBlocked(Boolean(lessonOverride && lessonOverride.isVisibleToStudents === false));
+        setError(false);
+        setLoading(false);
+        setStudentAnswers({});
+    }, [lessonOverride]);
+
+    useEffect(() => {
+        if (lessonOverride || !unitId) {
+            if (!lessonOverride) {
+                setLesson(null);
+                setIsBlocked(false);
+                setStudentAnswers({});
+            }
             return;
         }
 
@@ -51,7 +90,7 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
                 const semesterQuery = query(
                     collection(db, getSemesterCollectionPath(config, 'lessons')),
                     where('unitId', '==', unitId),
-                    limit(1)
+                    limit(1),
                 );
                 let snap = await getDocs(semesterQuery);
 
@@ -69,19 +108,19 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
                     setLesson(null);
                     setStudentAnswers({});
                 }
-            } catch (err) {
-                console.error("Error fetching lesson:", err);
+            } catch (fetchError) {
+                console.error('Error fetching lesson:', fetchError);
                 setError(true);
             } finally {
                 setLoading(false);
             }
         };
 
-        fetchLesson();
-    }, [config, unitId]);
+        void fetchLesson();
+    }, [config, lessonOverride, unitId]);
 
     const getProgressRef = () => {
-        if (!currentUser?.uid || !unitId) return null;
+        if (!canPersist || !currentUser?.uid || !unitId) return null;
         return doc(
             db,
             `${getSemesterCollectionPath(config, 'lesson_progress')}/${currentUser.uid}/units/${unitId}`,
@@ -92,10 +131,10 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
         const container = contentRef.current;
         if (!container) return {};
         const inputs = container.querySelectorAll('.cloze-input, .worksheet-blank-input') as NodeListOf<HTMLInputElement>;
-        const answers: Record<string, { value: string; status: '' | 'correct' | 'wrong' }> = {};
+        const answers: Record<string, { value: string; status: AnswerStatus }> = {};
         inputs.forEach((input, index) => {
             const key = input.dataset.blankId || input.dataset.blankIndex || String(index);
-            const status: '' | 'correct' | 'wrong' = input.classList.contains('correct')
+            const status: AnswerStatus = input.classList.contains('correct')
                 ? 'correct'
                 : input.classList.contains('wrong')
                     ? 'wrong'
@@ -108,12 +147,11 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
     const saveProgressToFirestore = async () => {
         const progressRef = getProgressRef();
         if (!progressRef || !currentUser?.uid || !unitId) return;
-        const answers = serializeAnswers();
         try {
             await setDoc(progressRef, {
                 userId: currentUser.uid,
                 unitId,
-                answers,
+                answers: serializeAnswers(),
                 updatedAt: serverTimestamp(),
             }, { merge: true });
         } catch (saveError) {
@@ -122,10 +160,11 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
     };
 
     const scheduleProgressSave = () => {
+        if (!canPersist) return;
         if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
         saveTimerRef.current = window.setTimeout(() => {
             void saveProgressToFirestore();
-        }, 450);
+        }, 350);
     };
 
     const applyHierarchySpacing = (html: string) => {
@@ -155,34 +194,40 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
         });
     };
 
-    // Parse HTML and inject inputs
     const renderContent = (html: string) => {
         let blankIndex = 0;
         const hierarchyHtml = applyHierarchySpacing(html);
-        return hierarchyHtml.replace(/\[(.*?)\]/g, (_match, p1) => {
-            const answer = String(p1 || '').trim();
-            const width = Math.min(220, Math.max(76, answer.length * 14 + 24));
+        return hierarchyHtml.replace(/\[(.*?)\]/g, (_match, rawAnswer) => {
+            const answer = String(rawAnswer || '').trim();
+            const width = getInlineBlankWidth(answer);
+            const fontSize = getInlineBlankFontSize(width, EMPTY_BLANK_LABEL.length);
             const index = blankIndex++;
-            return `<input type="text" class="cloze-input" data-answer="${answer}" data-blank-index="${index}" placeholder="빈칸" autocomplete="off" style="width:${width}px;" />`;
+            return `<input type="text" class="cloze-input" data-answer="${answer}" data-blank-index="${index}" placeholder="${EMPTY_BLANK_LABEL}" autocomplete="off" style="width:${width}px; --blank-font-size:${fontSize}px;" />`;
         });
     };
 
     useEffect(() => {
         const container = contentRef.current;
         if (!container) return;
+
         const handleInput = (event: Event) => {
-            const target = event.target as HTMLElement | null;
+            const target = event.target as HTMLInputElement | null;
             if (!target || (!target.classList.contains('cloze-input') && !target.classList.contains('worksheet-blank-input'))) return;
-            target.classList.remove('correct', 'wrong');
+            const status = getInputStatus(target.value, target.dataset.answer || '');
+            target.classList.toggle('correct', status === 'correct');
+            target.classList.toggle('wrong', status === 'wrong');
             scheduleProgressSave();
         };
+
         container.addEventListener('input', handleInput);
         return () => {
             container.removeEventListener('input', handleInput);
         };
-    }, [unitId, lesson?.contentHtml, lesson?.worksheetBlanks, currentUser?.uid]);
+    }, [canPersist, unitId, lesson?.contentHtml, lesson?.worksheetBlanks]);
 
     useEffect(() => {
+        if (!canPersist) return;
+
         const restoreProgress = async () => {
             const progressRef = getProgressRef();
             const container = contentRef.current;
@@ -191,10 +236,11 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
                 const snap = await getDoc(progressRef);
                 if (!snap.exists()) return;
                 const data = snap.data() as {
-                    answers?: Record<string, { value?: string; status?: '' | 'correct' | 'wrong' }>;
+                    answers?: Record<string, { value?: string; status?: AnswerStatus }>;
                 };
                 const answers = data.answers || {};
                 setStudentAnswers(answers);
+
                 const inputs = container.querySelectorAll('.cloze-input, .worksheet-blank-input') as NodeListOf<HTMLInputElement>;
                 inputs.forEach((input, index) => {
                     const key = input.dataset.blankId || input.dataset.blankIndex || String(index);
@@ -202,9 +248,7 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
                     if (!saved) return;
                     input.value = saved.value || '';
                     input.classList.remove('correct', 'wrong');
-                    if (saved.status === 'correct' || saved.status === 'wrong') {
-                        input.classList.add(saved.status);
-                    }
+                    if (saved.status) input.classList.add(saved.status);
                 });
             } catch (restoreError) {
                 console.error('Failed to restore lesson progress:', restoreError);
@@ -213,85 +257,34 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
 
         if ((!lesson?.contentHtml && !(lesson?.worksheetBlanks || []).length) || !unitId || !currentUser?.uid) return;
         void restoreProgress();
-    }, [config, lesson?.contentHtml, lesson?.worksheetBlanks, unitId, currentUser?.uid]);
+    }, [canPersist, config, currentUser?.uid, lesson?.contentHtml, lesson?.worksheetBlanks, unitId]);
 
-    useEffect(() => {
-        return () => {
-            if (saveTimerRef.current) {
-                window.clearTimeout(saveTimerRef.current);
-            }
-        };
+    useEffect(() => () => {
+        if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
     }, []);
-
-    const handleCheckAnswers = () => {
-        if (!contentRef.current) return;
-        const inputs = contentRef.current.querySelectorAll('.cloze-input, .worksheet-blank-input') as NodeListOf<HTMLInputElement>;
-
-        if (inputs.length === 0) {
-            alert("채점할 빈칸이 없습니다.");
-            return;
-        }
-
-        let correctCount = 0;
-        const nextWorksheetAnswers: Record<string, { value?: string; status?: '' | 'correct' | 'wrong' }> = {};
-        inputs.forEach(input => {
-            const userAnswer = input.value.trim().replace(/\s+/g, '');
-            const correctAnswer = (input.dataset.answer || '').replace(/\s+/g, '');
-            const key = input.dataset.blankId || input.dataset.blankIndex || '';
-            const status: '' | 'correct' | 'wrong' = userAnswer === correctAnswer ? 'correct' : 'wrong';
-
-            if (status === 'correct') {
-                input.classList.add('correct');
-                input.classList.remove('wrong');
-                correctCount++;
-            } else {
-                input.classList.add('wrong');
-                input.classList.remove('correct');
-            }
-
-            if (key) {
-                nextWorksheetAnswers[key] = {
-                    value: input.value || '',
-                    status,
-                };
-            }
-        });
-
-        setStudentAnswers((prev) => ({
-            ...prev,
-            ...nextWorksheetAnswers,
-        }));
-
-        if (correctCount === inputs.length) {
-            alert("🎉 훌륭합니다! 모든 빈칸을 완벽하게 채웠습니다.");
-        }
-        void saveProgressToFirestore();
-    };
 
     const handleReset = () => {
         if (!contentRef.current) return;
-        if (!confirm("입력한 내용을 모두 지우시겠습니까?")) return;
+        if (!window.confirm('입력한 내용을 모두 지우시겠습니까?')) return;
 
         const inputs = contentRef.current.querySelectorAll('.cloze-input, .worksheet-blank-input') as NodeListOf<HTMLInputElement>;
-        const nextAnswers: Record<string, { value?: string; status?: '' | 'correct' | 'wrong' }> = {};
-        inputs.forEach(input => {
-            const key = input.dataset.blankId || input.dataset.blankIndex || '';
+        const nextAnswers: Record<string, { value?: string; status?: AnswerStatus }> = {};
+        inputs.forEach((input, index) => {
+            const key = input.dataset.blankId || input.dataset.blankIndex || String(index);
             input.value = '';
             input.classList.remove('correct', 'wrong');
-            if (key) {
-                nextAnswers[key] = { value: '', status: '' };
-            }
+            nextAnswers[key] = { value: '', status: '' };
         });
         setStudentAnswers(nextAnswers);
         void saveProgressToFirestore();
     };
 
-    const handleWorksheetAnswerChange = (blankId: string, value: string) => {
+    const handleWorksheetAnswerChange = (blankId: string, value: string, answer: string) => {
         setStudentAnswers((prev) => ({
             ...prev,
             [blankId]: {
                 value,
-                status: '',
+                status: getInputStatus(value, answer),
             },
         }));
         scheduleProgressSave();
@@ -304,12 +297,12 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
         return (match && match[2].length === 11) ? `https://www.youtube.com/embed/${match[2]}` : null;
     };
 
-    if (!unitId) {
+    if (!unitId && !lessonOverride) {
         return (
-            <div className="flex flex-col items-center justify-center h-full text-center py-32 animate-fadeIn">
-                <div className="text-6xl mb-4">📋</div>
+            <div className="flex h-full flex-col items-center justify-center py-32 text-center animate-fadeIn">
+                <div className="mb-4 text-6xl">📋</div>
                 <h2 className="text-xl font-bold text-gray-700">학습할 단원을 선택하세요</h2>
-                <p className="text-gray-500 mt-2">수업 목차의 단원에서 수업 자료를 클릭하면 내용이 표시됩니다.</p>
+                <p className="mt-2 text-gray-500">수업 목차의 단원에서 수업 자료를 클릭하면 내용이 표시됩니다.</p>
             </div>
         );
     }
@@ -330,98 +323,121 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
 
     if (error || !lesson) {
         return (
-            <div className="flex flex-col items-center justify-center h-full text-center py-32 animate-fadeIn">
-                <div className="text-6xl mb-4 text-gray-200">📭</div>
+            <div className="flex h-full flex-col items-center justify-center py-32 text-center animate-fadeIn">
+                <div className="mb-4 text-6xl text-gray-200">📭</div>
                 <h2 className="text-xl font-bold text-gray-500">수업 자료를 찾을 수 없습니다</h2>
-                <p className="text-gray-400 mt-2 text-sm">등록된 자료가 없거나 불러오지 못했습니다.</p>
+                <p className="mt-2 text-sm text-gray-400">등록된 자료가 없거나 불러오지 못했습니다.</p>
             </div>
         );
     }
 
     if (isBlocked) {
         return (
-            <div className="flex flex-col items-center justify-center h-full text-center py-32 animate-fadeIn">
-                <div className="text-6xl mb-4 text-amber-400">🔒</div>
+            <div className="flex h-full flex-col items-center justify-center py-32 text-center animate-fadeIn">
+                <div className="mb-4 text-6xl text-amber-400">🔒</div>
                 <h2 className="text-xl font-bold text-gray-700">수업 자료가 공개되지 않았습니다</h2>
-                <p className="text-gray-500 mt-2 text-sm">교사가 학생 수업에 활성화한 뒤에만 확인할 수 있습니다.</p>
+                <p className="mt-2 text-sm text-gray-500">교사가 학생 수업에 활성화한 뒤에만 확인할 수 있습니다.</p>
             </div>
         );
     }
 
     const embedUrl = getVideoEmbedUrl(lesson.videoUrl);
-
-    return (
-        <div className="max-w-4xl mx-auto animate-fadeIn">
-            {/* Title */}
-            <div className="mb-6">
-                <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded mb-2 inline-block">
-                    학습 자료
-                </span>
-                <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 leading-tight">
-                    {lesson.title || fallbackTitle || '제목 없음'}
-                </h1>
-            </div>
-
-            {/* Video */}
-            {embedUrl && (
-                <div className="relative pb-[56.25%] h-0 overflow-hidden rounded-xl shadow-md mb-8 bg-black">
-                    <iframe
-                        className="absolute top-0 left-0 w-full h-full"
-                        src={embedUrl}
-                        frameBorder="0"
-                        allowFullScreen
-                        title="Lesson Video"
-                    ></iframe>
+    const hasInteractiveBlanks = Boolean((lesson.worksheetBlanks || []).length || lesson.contentHtml?.includes('['));
+    const content = (
+        <div className={fullscreenPreview ? 'mx-auto max-w-6xl animate-fadeIn' : 'mx-auto max-w-4xl animate-fadeIn'}>
+            <div className="mb-6 rounded-[28px] border border-white/70 bg-white/95 p-5 shadow-[0_24px_60px_rgba(15,23,42,0.08)] backdrop-blur md:p-7">
+                <div className="mb-6 flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-5">
+                    <div>
+                        <span className="inline-block rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-600">
+                            학생 수업 화면
+                        </span>
+                        <h1 className="mt-3 text-2xl font-extrabold leading-tight text-slate-900 md:text-3xl">
+                            {lesson.title || fallbackTitle || '제목 없음'}
+                        </h1>
+                        {hasInteractiveBlanks && (
+                            <p className="mt-2 text-sm text-slate-500">
+                                빈칸은 입력 즉시 정답 여부가 표시됩니다. 워크시트 상단 도구로 필기와 메모를 할 수 있습니다.
+                            </p>
+                        )}
+                    </div>
+                    {fullscreenPreview && onClosePreview && (
+                        <button
+                            type="button"
+                            onClick={onClosePreview}
+                            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                        >
+                            <i className="fas fa-times text-xs"></i>
+                            닫기
+                        </button>
+                    )}
                 </div>
-            )}
 
-            <div ref={contentRef} className="space-y-8">
-                {(lesson.worksheetPageImages || []).length > 0 && (
-                    <LessonWorksheetStage
-                        pageImages={lesson.worksheetPageImages || []}
-                        blanks={lesson.worksheetBlanks || []}
-                        textRegions={lesson.worksheetTextRegions || []}
-                        mode="student"
-                        studentAnswers={studentAnswers}
-                        onStudentAnswerChange={handleWorksheetAnswerChange}
-                    />
+                {embedUrl && (
+                    <div className="relative mb-8 h-0 overflow-hidden rounded-2xl bg-black shadow-md" style={{ paddingBottom: '56.25%' }}>
+                        <iframe
+                            className="absolute left-0 top-0 h-full w-full"
+                            src={embedUrl}
+                            frameBorder="0"
+                            allowFullScreen
+                            title="Lesson Video"
+                        />
+                    </div>
                 )}
 
-                {!!lesson.contentHtml && (
-                    <div
-                        className="prose prose-blue max-w-none bg-white p-6 md:p-10 rounded-2xl shadow-sm border border-gray-100 leading-loose text-gray-700 font-medium note-content"
-                        dangerouslySetInnerHTML={{ __html: renderContent(lesson.contentHtml || '') }}
-                    />
-                )}
-            </div>
+                <div ref={contentRef} className="space-y-8">
+                    {(lesson.worksheetPageImages || []).length > 0 && (
+                        <LessonWorksheetStage
+                            pageImages={lesson.worksheetPageImages || []}
+                            blanks={lesson.worksheetBlanks || []}
+                            textRegions={lesson.worksheetTextRegions || []}
+                            mode="student"
+                            studentAnswers={studentAnswers}
+                            onStudentAnswerChange={handleWorksheetAnswerChange}
+                            annotationEnabled
+                        />
+                    )}
 
-            {/* Actions */}
-            <div className="mt-8 flex justify-center gap-4 py-8">
-                <button
-                    onClick={handleReset}
-                    className="px-6 py-3 bg-white border-2 border-gray-200 text-gray-600 font-bold rounded-xl shadow-sm hover:bg-gray-50 transition"
-                >
-                    <i className="fas fa-undo mr-2"></i>다시 풀기
-                </button>
-                <button
-                    onClick={handleCheckAnswers}
-                    className="px-8 py-3 bg-blue-600 text-white font-bold rounded-xl shadow-lg hover:bg-blue-700 transition transform active:scale-95"
-                >
-                    <i className="fas fa-check mr-2"></i>정답 확인
-                </button>
+                    {!!lesson.contentHtml && (
+                        <div
+                            className="note-content prose prose-blue max-w-none rounded-3xl border border-slate-200 bg-white p-6 leading-loose text-slate-700 shadow-sm md:p-10"
+                            dangerouslySetInnerHTML={{ __html: renderContent(lesson.contentHtml || '') }}
+                        />
+                    )}
+                </div>
+
+                <div className="mt-8 flex flex-wrap items-center justify-center gap-3 border-t border-slate-200 pt-6">
+                    <button
+                        type="button"
+                        onClick={handleReset}
+                        className="rounded-xl border-2 border-slate-200 bg-white px-6 py-3 font-bold text-slate-600 shadow-sm transition hover:bg-slate-50"
+                    >
+                        <i className="fas fa-undo mr-2"></i>다시 풀기
+                    </button>
+                    {hasInteractiveBlanks && (
+                        <span className="rounded-full bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
+                            입력하면 바로 정답/오답이 반영됩니다.
+                        </span>
+                    )}
+                </div>
             </div>
 
             <style>{`
                 .cloze-input {
                     border: none;
-                    border-bottom: 2px solid #374151;
+                    border-bottom: 2px solid #334155;
                     text-align: center;
-                    font-weight: bold;
+                    font-weight: 700;
                     color: #2563eb;
                     background: transparent;
                     padding: 0 4px;
-                    transition: all 0.2s;
                     margin: 0 4px;
+                    transition: all 0.2s ease;
+                    font-size: var(--blank-font-size, 1rem);
+                    line-height: 1.2;
+                }
+                .cloze-input::placeholder {
+                    color: #94a3b8;
+                    opacity: 1;
                 }
                 .cloze-input:focus {
                     outline: none;
@@ -442,10 +458,28 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
                     border-radius: 0;
                 }
                 .worksheet-blank-input:focus {
-                    box-shadow: inset 0 0 0 2px rgba(37, 99, 235, 0.22);
+                    box-shadow: inset 0 0 0 2px rgba(37, 99, 235, 0.2);
                 }
-                .note-content h1 { font-size: 1.5em; font-weight: bold; margin-top: 1em; margin-bottom: 0.5em; color: #111827; }
-                .note-content h2 { font-size: 1.25em; font-weight: bold; margin-top: 1em; margin-bottom: 0.5em; border-left: 4px solid #2563eb; padding-left: 10px; color: #374151; }
+                .worksheet-blank-input::placeholder {
+                    color: #94a3b8;
+                    opacity: 1;
+                }
+                .note-content h1 {
+                    margin-top: 1em;
+                    margin-bottom: 0.5em;
+                    color: #111827;
+                    font-size: 1.5em;
+                    font-weight: 700;
+                }
+                .note-content h2 {
+                    margin-top: 1em;
+                    margin-bottom: 0.5em;
+                    border-left: 4px solid #2563eb;
+                    padding-left: 10px;
+                    color: #374151;
+                    font-size: 1.25em;
+                    font-weight: 700;
+                }
                 .note-content p {
                     margin-bottom: 1em;
                     white-space: pre-wrap;
@@ -466,11 +500,24 @@ const LessonContent: React.FC<LessonContentProps> = ({ unitId, fallbackTitle }) 
                     padding-left: 4.8rem;
                     text-indent: -1.2rem;
                 }
-                .note-content img { max-width: 100%; border-radius: 8px; margin: 10px 0; }
+                .note-content img {
+                    margin: 10px 0;
+                    max-width: 100%;
+                    border-radius: 8px;
+                }
             `}</style>
+        </div>
+    );
+
+    if (!fullscreenPreview) {
+        return content;
+    }
+
+    return (
+        <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(219,234,254,0.9),_rgba(241,245,249,0.96)_38%,_rgba(226,232,240,1)_100%)] p-4 md:p-6">
+            {content}
         </div>
     );
 };
 
 export default LessonContent;
-
