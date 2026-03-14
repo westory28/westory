@@ -93,6 +93,12 @@ interface PressHoldState {
     startedAt: number;
 }
 
+interface AnnotationSnapshot {
+    strokes: AnnotationStroke[];
+    boxes: AnnotationBox[];
+    textNotes: AnnotationTextNote[];
+}
+
 interface ToolColorOption {
     key: DrawingColor;
     label: string;
@@ -399,6 +405,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     const [draftBox, setDraftBox] = useState<AnnotationBox | null>(null);
     const [textNotes, setTextNotes] = useState<AnnotationTextNote[]>([]);
     const [activeTextNoteId, setActiveTextNoteId] = useState<string | null>(null);
+    const [undoStack, setUndoStack] = useState<AnnotationSnapshot[]>([]);
+    const [redoStack, setRedoStack] = useState<AnnotationSnapshot[]>([]);
     const pinchRef = useRef<PinchState | null>(null);
     const holdRef = useRef<PressHoldState>({ timeoutId: null, startedAt: 0 });
 
@@ -500,6 +508,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
             && point.y <= note.topRatio + note.heightRatio
         ));
         if (noteHit) {
+            pushUndoSnapshot();
             setTextNotes((prev) => prev.filter((note) => note.id !== noteHit.id));
             if (activeTextNoteId === noteHit.id) setActiveTextNoteId(null);
             return;
@@ -514,6 +523,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
             && point.y <= box.topRatio + box.heightRatio
         ));
         if (hitBox) {
+            pushUndoSnapshot();
             setBoxes((prev) => prev.filter((box) => box.id !== hitBox.id));
             return;
         }
@@ -522,6 +532,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
             && stroke.points.some((strokePoint) => Math.hypot(strokePoint.x - point.x, strokePoint.y - point.y) <= threshold)
         ));
         if (hitStroke) {
+            pushUndoSnapshot();
             setStrokes((prev) => prev.filter((stroke) => stroke.id !== hitStroke.id));
         }
     };
@@ -545,6 +556,24 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
 
     const applyStudentZoom = (nextZoom: number) => {
         setStudentZoom(clampZoom(nextZoom));
+    };
+
+    const captureSnapshot = (): AnnotationSnapshot => ({
+        strokes: strokes.map((stroke) => ({ ...stroke, points: stroke.points.map((point) => ({ ...point })) })),
+        boxes: boxes.map((box) => ({ ...box })),
+        textNotes: textNotes.map((note) => ({ ...note })),
+    });
+
+    const restoreSnapshot = (snapshot: AnnotationSnapshot) => {
+        setStrokes(snapshot.strokes.map((stroke) => ({ ...stroke, points: stroke.points.map((point) => ({ ...point })) })));
+        setBoxes(snapshot.boxes.map((box) => ({ ...box })));
+        setTextNotes(snapshot.textNotes.map((note) => ({ ...note })));
+        setActiveTextNoteId(null);
+    };
+
+    const pushUndoSnapshot = () => {
+        setUndoStack((prev) => [...prev, captureSnapshot()]);
+        setRedoStack([]);
     };
 
     const clearHoldTimer = () => {
@@ -583,6 +612,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
 
         event.preventDefault();
         if (annotationTool === 'text') {
+            pushUndoSnapshot();
             const nextNote = createTextNote(page, point);
             setTextNotes((prev) => [...prev, nextNote]);
             setActiveTextNoteId(nextNote.id);
@@ -593,11 +623,13 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
             return;
         }
         if (annotationTool === 'rectangle') {
+            pushUndoSnapshot();
             event.currentTarget.setPointerCapture(event.pointerId);
             setDraftBox(createBox(page, point, selectedPenColor.pen));
             return;
         }
 
+        pushUndoSnapshot();
         event.currentTarget.setPointerCapture(event.pointerId);
         const nextStroke = createStroke(page, annotationTool, point);
         nextStroke.color = annotationTool === 'pen' ? selectedPenColor.pen : selectedHighlighterColor.highlighter;
@@ -764,6 +796,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     <div className="flex w-full max-w-[min(96vw,1180px)] flex-wrap items-center justify-center gap-2 rounded-full border border-blue-100 bg-white/92 px-3 py-3 shadow-[0_18px_48px_rgba(37,99,235,0.16)] backdrop-blur-xl md:px-4">
                         {[
                             ['move', '이동', 'fa-up-down-left-right'],
+                            ['undo', '이전', 'fa-arrow-rotate-left'],
+                            ['redo', '다음', 'fa-arrow-rotate-right'],
                             ['pen', '펜', 'fa-pen'],
                             ['highlighter', '형광펜', 'fa-highlighter'],
                             ['rectangle', '네모', 'fa-square'],
@@ -773,11 +807,34 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                             <button
                                 key={tool}
                                 type="button"
-                                onClick={() => setAnnotationTool(tool as StudentTool)}
+                                onClick={() => {
+                                    if (tool === 'undo') {
+                                        setUndoStack((prev) => {
+                                            const snapshot = prev[prev.length - 1];
+                                            if (!snapshot) return prev;
+                                            setRedoStack((redoPrev) => [...redoPrev, captureSnapshot()]);
+                                            restoreSnapshot(snapshot);
+                                            return prev.slice(0, -1);
+                                        });
+                                        return;
+                                    }
+                                    if (tool === 'redo') {
+                                        setRedoStack((prev) => {
+                                            const snapshot = prev[prev.length - 1];
+                                            if (!snapshot) return prev;
+                                            setUndoStack((undoPrev) => [...undoPrev, captureSnapshot()]);
+                                            restoreSnapshot(snapshot);
+                                            return prev.slice(0, -1);
+                                        });
+                                        return;
+                                    }
+                                    setAnnotationTool(tool as StudentTool);
+                                }}
+                                disabled={(tool === 'undo' && undoStack.length === 0) || (tool === 'redo' && redoStack.length === 0)}
                                 className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition ${
                                     annotationTool === tool
                                         ? 'bg-blue-600 text-white shadow-sm'
-                                        : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                                        : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40'
                                 }`}
                             >
                                 <i className={`fas ${icon} text-xs`}></i>
@@ -833,6 +890,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                         <button
                             type="button"
                             onClick={() => {
+                                pushUndoSnapshot();
                                 setStrokes([]);
                                 setBoxes([]);
                                 setTextNotes([]);
