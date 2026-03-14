@@ -247,7 +247,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
     }, [currentViewType, visibleRange.end, visibleRange.start]);
 
     return (
-        <div className="flex h-full min-h-[500px] flex-col rounded-xl bg-white p-4 shadow-sm md:min-h-0">
+        <div className="flex h-full min-h-[500px] flex-col overflow-hidden rounded-xl bg-white p-4 shadow-sm md:min-h-0">
             <div className="mb-2 flex flex-col items-start justify-between gap-2 md:flex-row md:items-center">
                 <h2 className="whitespace-nowrap text-lg font-bold text-gray-800">
                     <i className="far fa-calendar-alt mr-2 text-blue-600"></i>학사 일정
@@ -262,7 +262,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             </div>
             <div
                 ref={calendarWrapperRef}
-                className={`calendar-wrapper relative flex-1 min-h-0 ${currentViewType === 'listMonth' ? 'custom-list-active' : ''}`}
+                className={`calendar-wrapper relative flex-1 min-h-0 overflow-hidden ${currentViewType === 'listMonth' ? 'custom-list-active' : ''}`}
             >
                 <FullCalendar
                     ref={calendarRef}
@@ -352,17 +352,10 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                                     const targetLabel = formatEventTargetLabel(event);
 
                                     return (
-                                        <div
+                                        <button
                                             key={event.id}
-                                            role="button"
-                                            tabIndex={0}
+                                            type="button"
                                             onClick={() => onEventClick(event)}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter' || e.key === ' ') {
-                                                    e.preventDefault();
-                                                    onEventClick(event);
-                                                }
-                                            }}
                                             className="grid w-full cursor-pointer grid-cols-[170px_minmax(0,1fr)_116px] items-center gap-5 px-4 py-3 text-left transition hover:bg-slate-50"
                                         >
                                             <div className="flex min-w-0 items-center gap-2 font-bold text-gray-700">
@@ -380,7 +373,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                                             <div className="truncate text-sm font-semibold text-gray-600" title={targetLabel}>
                                                 {targetLabel}
                                             </div>
-                                        </div>
+                                        </button>
                                     );
                                 })}
                             </div>

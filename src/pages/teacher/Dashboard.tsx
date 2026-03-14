@@ -74,8 +74,6 @@ const TeacherDashboard: React.FC = () => {
     };
 
     const handleEventClick = (event: CalendarEvent) => {
-        // Teacher clicks event -> Edit Mode
-        if (event.eventType === 'holiday') return; // Holidays might be editable, but let's restrict for now or handle separate
         setSelectedEvent(event);
         setIsEventModalOpen(true);
     };
