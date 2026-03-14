@@ -97,12 +97,12 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                 float: none !important;
             }
             .fc-list-event-time {
-                width: 156px !important;
+                width: 118px !important;
                 white-space: nowrap;
                 font-weight: 700;
                 color: #374151;
                 vertical-align: middle;
-                padding-right: 12px !important;
+                padding-right: 6px !important;
             }
             .fc-list-event-title {
                 width: auto;

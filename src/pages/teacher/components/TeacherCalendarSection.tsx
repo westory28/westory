@@ -334,12 +334,12 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                     float: none !important;
                 }
                 .fc-list-event-time {
-                    width: 112px !important;
+                    width: 92px !important;
                     white-space: nowrap;
                     font-weight: 700;
                     color: #374151;
                     vertical-align: middle;
-                    padding-right: 8px !important;
+                    padding-right: 6px !important;
                 }
                 .fc-list-event-title {
                     width: auto;
@@ -347,9 +347,9 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                 }
                 .fc-list-row-grid {
                     display: grid;
-                    grid-template-columns: minmax(0, 3.2fr) minmax(78px, 0.65fr);
+                    grid-template-columns: minmax(0, 1fr) auto;
                     align-items: center;
-                    gap: 8px;
+                    gap: 6px;
                     width: 100%;
                 }
                 .fc-list-title-cell,
@@ -361,9 +361,12 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                 .fc-list-title-cell {
                     font-weight: 700;
                     color: #111827;
+                    text-align: left;
                 }
                 .fc-list-target-cell {
-                    font-size: 0.9rem;
+                    min-width: 68px;
+                    max-width: 86px;
+                    font-size: 0.86rem;
                     font-weight: 600;
                     color: #4b5563;
                     text-align: left;
