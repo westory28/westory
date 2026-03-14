@@ -84,6 +84,18 @@ interface AnnotationTextNote {
     text: string;
 }
 
+interface TextNoteTransformState {
+    noteId: string;
+    page: number;
+    mode: 'move' | 'resize';
+    startClientX: number;
+    startClientY: number;
+    initialLeftRatio: number;
+    initialTopRatio: number;
+    initialWidthRatio: number;
+    initialHeightRatio: number;
+}
+
 interface PinchState {
     startDistance: number;
     startZoom: number;
@@ -362,8 +374,8 @@ const createTextNote = (page: number, point: RatioPoint): AnnotationTextNote => 
     page,
     leftRatio: Math.min(0.82, point.x),
     topRatio: Math.min(0.9, point.y),
-    widthRatio: 0.18,
-    heightRatio: 0.08,
+    widthRatio: 0.22,
+    heightRatio: 0.06,
     text: '',
 });
 
@@ -409,6 +421,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     const [draftBox, setDraftBox] = useState<AnnotationBox | null>(null);
     const [textNotes, setTextNotes] = useState<AnnotationTextNote[]>([]);
     const [activeTextNoteId, setActiveTextNoteId] = useState<string | null>(null);
+    const [editingTextNoteId, setEditingTextNoteId] = useState<string | null>(null);
+    const [textNoteTransform, setTextNoteTransform] = useState<TextNoteTransformState | null>(null);
     const [undoStack, setUndoStack] = useState<AnnotationSnapshot[]>([]);
     const [redoStack, setRedoStack] = useState<AnnotationSnapshot[]>([]);
     const pinchRef = useRef<PinchState | null>(null);
@@ -454,6 +468,12 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         setToolbarVisible(annotationUiMode === 'always');
     }, [annotationUiMode]);
 
+    useEffect(() => {
+        if (annotationTool !== 'text') {
+            setEditingTextNoteId(null);
+        }
+    }, [annotationTool]);
+
     const visiblePageImages = useMemo(() => {
         if (mode === 'teacher') {
             if (activeTeacherPage == null) return pageImages;
@@ -486,6 +506,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         if (!nextPage) return;
         setDraftStroke(null);
         setActiveTextNoteId(null);
+        setEditingTextNoteId(null);
+        setTextNoteTransform(null);
         setActiveStudentPage(nextPage.page);
     };
 
@@ -566,6 +588,22 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         setStudentZoom(clampZoom(nextZoom));
     };
 
+    const autoSizeTextNote = (noteId: string, page: number, textarea: HTMLTextAreaElement) => {
+        const host = pageRefs.current[page];
+        if (!host) return;
+        textarea.style.height = '0px';
+        const nextHeightRatio = clampRatio((textarea.scrollHeight + 6) / host.clientHeight);
+        textarea.style.height = '';
+        setTextNotes((prev) => prev.map((item) => (
+            item.id === noteId
+                ? {
+                    ...item,
+                    heightRatio: Math.max(0.04, nextHeightRatio),
+                }
+                : item
+        )));
+    };
+
     const captureSnapshot = (): AnnotationSnapshot => ({
         strokes: strokes.map((stroke) => ({ ...stroke, points: stroke.points.map((point) => ({ ...point })) })),
         boxes: boxes.map((box) => ({ ...box })),
@@ -630,6 +668,13 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         }
         const target = event.target as HTMLElement;
         if (target.closest('[data-blank-box]') || target.closest('[data-annotation-note]')) return;
+        if (activeTextNoteId && annotationTool === 'text') {
+            event.preventDefault();
+            if (editingTextNoteId === activeTextNoteId) {
+                setEditingTextNoteId(null);
+                return;
+            }
+        }
         if (annotationTool === 'move') return;
         const point = resolveRatioPoint(page, event.clientX, event.clientY);
         const pageImage = pageImages.find((item) => item.page === page);
@@ -641,6 +686,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
             const nextNote = createTextNote(page, point);
             setTextNotes((prev) => [...prev, nextNote]);
             setActiveTextNoteId(nextNote.id);
+            setEditingTextNoteId(nextNote.id);
             return;
         }
         if (annotationTool === 'eraser') {
@@ -806,6 +852,45 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     useEffect(() => () => {
         clearHoldTimer();
     }, []);
+
+    useEffect(() => {
+        if (!textNoteTransform) return undefined;
+        const handleWindowPointerMove = (event: PointerEvent) => {
+            const host = pageRefs.current[textNoteTransform.page];
+            if (!host) return;
+            const width = Math.max(host.clientWidth, 1);
+            const height = Math.max(host.clientHeight, 1);
+            const deltaXRatio = (event.clientX - textNoteTransform.startClientX) / width;
+            const deltaYRatio = (event.clientY - textNoteTransform.startClientY) / height;
+
+            setTextNotes((prev) => prev.map((note) => {
+                if (note.id !== textNoteTransform.noteId) return note;
+                if (textNoteTransform.mode === 'move') {
+                    return {
+                        ...note,
+                        leftRatio: clampRatio(Math.min(1 - note.widthRatio, textNoteTransform.initialLeftRatio + deltaXRatio)),
+                        topRatio: clampRatio(Math.min(1 - note.heightRatio, textNoteTransform.initialTopRatio + deltaYRatio)),
+                    };
+                }
+                return {
+                    ...note,
+                    widthRatio: Math.max(0.06, Math.min(1 - note.leftRatio, textNoteTransform.initialWidthRatio + deltaXRatio)),
+                    heightRatio: Math.max(0.035, Math.min(1 - note.topRatio, textNoteTransform.initialHeightRatio + deltaYRatio)),
+                };
+            }));
+        };
+        const handleWindowPointerUp = () => {
+            setTextNoteTransform(null);
+        };
+        window.addEventListener('pointermove', handleWindowPointerMove);
+        window.addEventListener('pointerup', handleWindowPointerUp);
+        window.addEventListener('pointercancel', handleWindowPointerUp);
+        return () => {
+            window.removeEventListener('pointermove', handleWindowPointerMove);
+            window.removeEventListener('pointerup', handleWindowPointerUp);
+            window.removeEventListener('pointercancel', handleWindowPointerUp);
+        };
+    }, [textNoteTransform]);
 
     return (
         <div className="space-y-6">
@@ -1171,20 +1256,61 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                 <div
                                     key={note.id}
                                     data-annotation-note="true"
-                                    className={`absolute z-[12] overflow-hidden rounded-xl border shadow-lg ${
-                                        activeTextNoteId === note.id
-                                            ? 'border-blue-400 bg-white'
-                                            : 'border-amber-200 bg-white/95'
-                                    }`}
+                                    className="absolute z-[12] rounded-md"
                                     style={{
                                         left: toPercent(note.leftRatio),
                                         top: toPercent(note.topRatio),
                                         width: toPercent(note.widthRatio),
                                         height: toPercent(note.heightRatio),
                                     }}
-                                    onClick={() => setActiveTextNoteId(note.id)}
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        setActiveTextNoteId(note.id);
+                                    }}
+                                    onPointerDown={(event) => {
+                                        const target = event.target as HTMLElement;
+                                        event.stopPropagation();
+                                        setActiveTextNoteId(note.id);
+                                        if (target.closest('[data-note-delete]')) return;
+                                        if (target.closest('[data-note-resize]')) {
+                                            event.preventDefault();
+                                            pushUndoSnapshot();
+                                            setEditingTextNoteId(null);
+                                            setTextNoteTransform({
+                                                noteId: note.id,
+                                                page: note.page,
+                                                mode: 'resize',
+                                                startClientX: event.clientX,
+                                                startClientY: event.clientY,
+                                                initialLeftRatio: note.leftRatio,
+                                                initialTopRatio: note.topRatio,
+                                                initialWidthRatio: note.widthRatio,
+                                                initialHeightRatio: note.heightRatio,
+                                            });
+                                            return;
+                                        }
+                                        if (target.tagName === 'TEXTAREA' && editingTextNoteId === note.id) return;
+                                        if (activeTextNoteId === note.id) {
+                                            event.preventDefault();
+                                            pushUndoSnapshot();
+                                            setEditingTextNoteId(null);
+                                            setTextNoteTransform({
+                                                noteId: note.id,
+                                                page: note.page,
+                                                mode: 'move',
+                                                startClientX: event.clientX,
+                                                startClientY: event.clientY,
+                                                initialLeftRatio: note.leftRatio,
+                                                initialTopRatio: note.topRatio,
+                                                initialWidthRatio: note.widthRatio,
+                                                initialHeightRatio: note.heightRatio,
+                                            });
+                                        } else {
+                                            setEditingTextNoteId(null);
+                                        }
+                                    }}
                                 >
-                                    <div className="flex items-center justify-between border-b border-slate-200 bg-amber-50 px-2 py-1 text-[10px] font-bold text-amber-700">
+                                    <div className="hidden">
                                         <span>텍스트</span>
                                         <button
                                             type="button"
@@ -1200,15 +1326,59 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                     </div>
                                     <textarea
                                         value={note.text}
+                                        readOnly={editingTextNoteId !== note.id}
+                                        onClick={(event) => {
+                                            event.stopPropagation();
+                                            setActiveTextNoteId(note.id);
+                                        }}
+                                        onFocus={(event) => {
+                                            setActiveTextNoteId(note.id);
+                                            setEditingTextNoteId(note.id);
+                                            autoSizeTextNote(note.id, note.page, event.currentTarget);
+                                        }}
                                         onChange={(event) => {
                                             const value = event.target.value;
                                             setTextNotes((prev) => prev.map((item) => (
                                                 item.id === note.id ? { ...item, text: value } : item
                                             )));
+                                            autoSizeTextNote(note.id, note.page, event.currentTarget);
                                         }}
-                                        className="h-[calc(100%-22px)] w-full resize-none border-0 bg-transparent px-2 py-1.5 text-[11px] leading-4 text-slate-700 outline-none"
+                                        className={`h-full w-full resize-none overflow-hidden border bg-transparent px-1.5 py-0.5 text-[11px] font-medium leading-4 text-slate-800 outline-none ${
+                                            editingTextNoteId === note.id
+                                                ? 'cursor-text border-blue-400'
+                                                : textNoteTransform?.noteId === note.id
+                                                    ? 'cursor-grabbing border-blue-400'
+                                                    : activeTextNoteId === note.id
+                                                        ? 'cursor-grab border-blue-400'
+                                                        : 'cursor-text border-transparent'
+                                        }`}
                                         placeholder="메모"
                                     />
+                                    {activeTextNoteId === note.id && (
+                                        <>
+                                            <div className="pointer-events-none absolute inset-0 rounded-md border border-blue-400"></div>
+                                            <button
+                                                type="button"
+                                                data-note-delete="true"
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    setTextNotes((prev) => prev.filter((item) => item.id !== note.id));
+                                                    if (activeTextNoteId === note.id) setActiveTextNoteId(null);
+                                                    if (editingTextNoteId === note.id) setEditingTextNoteId(null);
+                                                    if (textNoteTransform?.noteId === note.id) setTextNoteTransform(null);
+                                                }}
+                                                className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 bg-white text-[10px] text-slate-500 shadow-sm transition hover:text-red-500"
+                                            >
+                                                <i className="fas fa-times"></i>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                data-note-resize="true"
+                                                aria-label="Resize text box"
+                                                className="absolute -bottom-1 -right-1 h-3.5 w-3.5 rounded-sm border border-blue-500 bg-white shadow-sm"
+                                            />
+                                        </>
+                                    )}
                                 </div>
                             ))}
 
