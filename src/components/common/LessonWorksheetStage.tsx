@@ -10,7 +10,7 @@ import {
 } from '../../lib/lessonWorksheet';
 
 type AnswerStatus = '' | 'correct' | 'wrong';
-type StudentTool = 'pen' | 'highlighter' | 'eraser' | 'text';
+type StudentTool = 'move' | 'pen' | 'highlighter' | 'eraser' | 'text';
 type DrawingColor = 'blue' | 'red' | 'green' | 'yellow' | 'black';
 
 interface LessonWorksheetStageProps {
@@ -91,7 +91,9 @@ const TOOL_COLORS: ToolColorOption[] = [
     { key: 'black', label: '검정', pen: '#111827', highlighter: 'rgba(148, 163, 184, 0.34)' },
 ];
 
+const MOVE_CURSOR = 'grab';
 const PEN_CURSOR = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cpath fill='%23111827' d='M20.8 4.2l3 3c.8.8.8 2 0 2.8L12 21.9l-5.1 1.3L8.2 18 20 6.2c.8-.8 2-.8 2.8 0z'/%3E%3Cpath fill='%2360A5FA' d='M6.9 23.2l1.3-5 3.7 3.7z'/%3E%3C/g%3E%3C/svg%3E") 4 24, crosshair`;
+const HIGHLIGHTER_CURSOR = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cpath fill='%23FACC15' d='M18.5 4l5.5 5.5-10.9 10.9-6.2.8.8-6.2z'/%3E%3Cpath fill='%23924100' d='M18.5 4l5.5 5.5 1.1-1.1c.7-.7.7-1.8 0-2.5l-3-3c-.7-.7-1.8-.7-2.5 0z'/%3E%3Cpath stroke='%23111827' stroke-width='1.2' d='M7.2 21.1l-1.9 1.9h7.3'/%3E%3C/g%3E%3C/svg%3E") 5 23, crosshair`;
 const ERASER_CURSOR = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cpath fill='%23F59E0B' d='M10.3 5.3l12.4 12.4-5.3 5.3H8.6L3 17.4z'/%3E%3Cpath fill='%23FFF7ED' d='M10.3 5.3l6.1 6.1-8 8L3 17.4z'/%3E%3Cpath stroke='%23111827' stroke-width='1.4' d='M3.5 17.4l6.8 6.8m12.1-6.5l-5.1 5.1m-8.7 1h13.2'/%3E%3C/g%3E%3C/svg%3E") 6 22, cell`;
 
 const toPercent = (value: number) => `${value * 100}%`;
@@ -349,7 +351,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     const [draftRect, setDraftRect] = useState<DraftRect | null>(null);
     const [activeTeacherPage, setActiveTeacherPage] = useState<number | null>(pageImages[0]?.page ?? null);
     const [activeStudentPage, setActiveStudentPage] = useState<number | null>(pageImages[0]?.page ?? null);
-    const [annotationTool, setAnnotationTool] = useState<StudentTool>('pen');
+    const [annotationTool, setAnnotationTool] = useState<StudentTool>('move');
     const [penColorKey, setPenColorKey] = useState<DrawingColor>('blue');
     const [highlighterColorKey, setHighlighterColorKey] = useState<DrawingColor>('yellow');
     const [strokes, setStrokes] = useState<AnnotationStroke[]>([]);
@@ -466,11 +468,15 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     const selectedPenColor = TOOL_COLORS.find((color) => color.key === penColorKey) || TOOL_COLORS[0];
     const selectedHighlighterColor = TOOL_COLORS.find((color) => color.key === highlighterColorKey) || TOOL_COLORS[3];
     const stageCursor = mode === 'student' && annotationEnabled
-        ? annotationTool === 'eraser'
+        ? annotationTool === 'move'
+            ? MOVE_CURSOR
+            : annotationTool === 'eraser'
             ? ERASER_CURSOR
             : annotationTool === 'text'
                 ? 'text'
-                : PEN_CURSOR
+                : annotationTool === 'highlighter'
+                    ? HIGHLIGHTER_CURSOR
+                    : PEN_CURSOR
         : undefined;
 
     const handlePointerDown = (page: number, event: React.PointerEvent<HTMLDivElement>) => {
@@ -495,6 +501,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         if (!annotationEnabled) return;
         const target = event.target as HTMLElement;
         if (target.closest('[data-blank-box]') || target.closest('[data-annotation-note]')) return;
+        if (annotationTool === 'move') return;
         const point = resolveRatioPoint(page, event.clientX, event.clientY);
         const pageImage = pageImages.find((item) => item.page === page);
         if (!point || !pageImage) return;
@@ -636,6 +643,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                 <div className="sticky top-3 z-40 flex justify-center">
                     <div className="flex w-full max-w-[min(96vw,1180px)] flex-wrap items-center justify-center gap-2 rounded-full border border-blue-100 bg-white/92 px-3 py-3 shadow-[0_18px_48px_rgba(37,99,235,0.16)] backdrop-blur-xl md:px-4">
                         {[
+                            ['move', '이동', 'fa-up-down-left-right'],
                             ['pen', '펜', 'fa-pen'],
                             ['highlighter', '형광펜', 'fa-highlighter'],
                             ['eraser', '지우개', 'fa-eraser'],
@@ -806,12 +814,12 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                     mode === 'teacher'
                                         ? `touch-none ${teacherTool === 'box' ? 'cursor-default' : 'cursor-text'}`
                                         : annotationEnabled
-                                            ? `touch-none ${annotationTool === 'eraser' ? 'cursor-not-allowed' : annotationTool === 'text' ? 'cursor-text' : 'cursor-crosshair'}`
+                                            ? `touch-none ${annotationTool === 'move' ? 'cursor-grab' : annotationTool === 'eraser' ? 'cursor-not-allowed' : annotationTool === 'text' ? 'cursor-text' : 'cursor-crosshair'}`
                                             : ''
                                 }`}
                                 style={{
                                     cursor: stageCursor,
-                                    width: 'min(100%, calc((100vh - 17rem) * 0.707))',
+                                    width: 'min(100%, calc((100vh - 9.5rem) * 0.707))',
                                     maxWidth: '100%',
                                 }}
                                 onDragStart={(event) => event.preventDefault()}
