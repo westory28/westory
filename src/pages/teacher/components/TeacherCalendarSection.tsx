@@ -135,6 +135,17 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
         }))
     );
 
+    const formatEventTargetLabel = (event?: CalendarEvent) => {
+        if (!event || event.eventType === 'holiday' || event.targetType === 'all' || event.targetType === 'common') {
+            return '전체';
+        }
+
+        const [gradeValue, classValue] = String(event.targetClass || '').split('-');
+        const gradeLabel = gradeOptions.find((item) => item.value === gradeValue)?.label || (gradeValue ? `${gradeValue}학년` : '');
+        const classLabel = classOptions.find((item) => item.value === classValue)?.label || (classValue ? `${classValue}반` : '');
+        return `${gradeLabel} ${classLabel}`.trim() || '전체';
+    };
+
     const toLocalYmd = (date: Date) => {
         const offset = date.getTimezoneOffset() * 60000;
         return new Date(date.getTime() - offset).toISOString().split('T')[0];
@@ -196,7 +207,11 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                 </h2>
 
                 <div className="flex w-full flex-wrap items-center gap-2 md:w-auto">
-                    <button onClick={onSearchClick} className="shrink-0 rounded-lg border border-gray-200 bg-gray-50 p-1.5 text-gray-600 transition hover:text-blue-600" title="검색">
+                    <button
+                        onClick={onSearchClick}
+                        className="shrink-0 rounded-lg border border-gray-200 bg-gray-50 p-1.5 text-gray-600 transition hover:text-blue-600"
+                        title="검색"
+                    >
                         <i className="fas fa-search"></i>
                     </button>
 
@@ -243,20 +258,28 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                     eventClick={(arg) => onEventClick(arg.event.extendedProps as CalendarEvent)}
                     eventDidMount={(arg) => {
                         if (arg.view.type !== 'listMonth') return;
-                        const meta = getScheduleCategoryMeta(arg.event.extendedProps?.eventType, categories);
-                        const label = arg.event.extendedProps?.eventType === 'holiday' ? '공휴일' : `${meta.emoji} ${meta.label}`;
+                        const event = arg.event.extendedProps as CalendarEvent;
+                        const meta = getScheduleCategoryMeta(event?.eventType, categories);
+                        const label = event?.eventType === 'holiday' ? '공휴일' : `${meta.emoji} ${meta.label}`;
                         const timeCell = arg.el.querySelector('.fc-list-event-time');
-                        if (timeCell) timeCell.textContent = `${label} |`;
+                        if (timeCell) timeCell.textContent = label;
                     }}
                     eventContent={(arg) => {
-                        const isHoliday = arg.event.extendedProps?.eventType === 'holiday';
+                        const event = arg.event.extendedProps as CalendarEvent;
+                        const isHoliday = event?.eventType === 'holiday';
                         const eventTitle = String(arg.event.title || '').trim();
                         const safeTitle = eventTitle || (isHoliday ? '공휴일' : '일정');
+                        const targetLabel = formatEventTargetLabel(event);
 
                         if (arg.view.type === 'listMonth') {
                             return (
-                                <div className={`fc-segment-title ${isHoliday ? 'holiday-segment-title' : ''}`} title={safeTitle}>
-                                    {safeTitle}
+                                <div className={`fc-list-row-grid ${isHoliday ? 'holiday-list-row-grid' : ''}`} title={`${safeTitle} | ${targetLabel}`}>
+                                    <div className={`fc-list-title-cell ${isHoliday ? 'holiday-segment-title' : ''}`}>
+                                        {safeTitle}
+                                    </div>
+                                    <div className="fc-list-target-cell">
+                                        {targetLabel}
+                                    </div>
                                 </div>
                             );
                         }
@@ -292,6 +315,38 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                 .fc-list-event.holiday-text-event { background-color: transparent !important; border: none !important; }
                 .fc-list-event.holiday-text-event .fc-list-event-title a { color: #ef4444 !important; font-weight: 800 !important; }
                 .fc-segment-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; padding: 0 2px; }
+                .fc-list table { table-layout: fixed; }
+                .fc-list-event-time {
+                    width: 156px !important;
+                    white-space: nowrap;
+                    font-weight: 700;
+                    color: #374151;
+                    vertical-align: middle;
+                }
+                .fc-list-event-title { width: auto; }
+                .fc-list-row-grid {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1.7fr) minmax(110px, 0.9fr);
+                    align-items: center;
+                    gap: 16px;
+                    width: 100%;
+                }
+                .fc-list-title-cell,
+                .fc-list-target-cell {
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+                .fc-list-title-cell {
+                    font-weight: 700;
+                    color: #111827;
+                }
+                .fc-list-target-cell {
+                    font-size: 0.9rem;
+                    font-weight: 600;
+                    color: #4b5563;
+                    text-align: left;
+                }
                 .fc-daygrid-event .holiday-segment-title { color: #ffffff !important; font-weight: 800 !important; }
                 .fc-list-event .holiday-segment-title { color: #ef4444 !important; font-weight: 800 !important; }
                 .fc-day-selected { background-color: #eff6ff !important; outline: 2px solid #3b82f6 !important; outline-offset: -2px !important; }
