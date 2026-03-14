@@ -797,65 +797,70 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                             )}
                         </div>
 
-                        <div
-                            ref={(node) => {
-                                pageRefs.current[pageImage.page] = node;
-                            }}
-                            className={`relative overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 ${
-                                mode === 'teacher'
-                                    ? `touch-none ${teacherTool === 'box' ? 'cursor-default' : 'cursor-text'}`
-                                    : annotationEnabled
-                                        ? `touch-none ${annotationTool === 'eraser' ? 'cursor-not-allowed' : annotationTool === 'text' ? 'cursor-text' : 'cursor-crosshair'}`
-                                        : ''
-                            }`}
-                            style={{ cursor: stageCursor }}
-                            onDragStart={(event) => event.preventDefault()}
-                            onPointerDown={(event) => handlePointerDown(pageImage.page, event)}
-                            onPointerMove={(event) => updateDraftPoint(pageImage.page, event.clientX, event.clientY)}
-                            onPointerUp={() => {
-                                if (mode === 'teacher') handleTeacherPointerUp(pageImage);
-                                else finishStudentStroke();
-                            }}
-                            onPointerCancel={() => {
-                                setDraftRect(null);
-                                setDraftStroke(null);
-                            }}
-                        >
-                            <img
-                                src={pageImage.imageUrl}
-                                alt={`학습지 ${pageImage.page}페이지`}
-                                className={`block select-none ${mode === 'student' ? 'mx-auto h-auto max-h-[calc(100vh-17rem)] w-auto max-w-full' : 'h-auto w-full'}`}
-                                draggable={false}
+                        <div className="flex justify-center overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">
+                            <div
+                                ref={(node) => {
+                                    pageRefs.current[pageImage.page] = node;
+                                }}
+                                className={`relative ${
+                                    mode === 'teacher'
+                                        ? `touch-none ${teacherTool === 'box' ? 'cursor-default' : 'cursor-text'}`
+                                        : annotationEnabled
+                                            ? `touch-none ${annotationTool === 'eraser' ? 'cursor-not-allowed' : annotationTool === 'text' ? 'cursor-text' : 'cursor-crosshair'}`
+                                            : ''
+                                }`}
+                                style={{
+                                    cursor: stageCursor,
+                                    width: 'min(100%, calc((100vh - 17rem) * 0.707))',
+                                    maxWidth: '100%',
+                                }}
                                 onDragStart={(event) => event.preventDefault()}
-                            />
+                                onPointerDown={(event) => handlePointerDown(pageImage.page, event)}
+                                onPointerMove={(event) => updateDraftPoint(pageImage.page, event.clientX, event.clientY)}
+                                onPointerUp={() => {
+                                    if (mode === 'teacher') handleTeacherPointerUp(pageImage);
+                                    else finishStudentStroke();
+                                }}
+                                onPointerCancel={() => {
+                                    setDraftRect(null);
+                                    setDraftStroke(null);
+                                }}
+                            >
+                                <img
+                                    src={pageImage.imageUrl}
+                                    alt={`학습지 ${pageImage.page}페이지`}
+                                    className="block h-auto w-full select-none"
+                                    draggable={false}
+                                    onDragStart={(event) => event.preventDefault()}
+                                />
 
-                            {(pageStrokes.length > 0 || currentDraftStroke) && (
-                                <svg className="pointer-events-none absolute inset-0 z-[5] h-full w-full">
-                                    {pageStrokes.map((stroke) => (
-                                        <polyline
-                                            key={stroke.id}
-                                            fill="none"
-                                            points={buildStrokePath(stroke.points, pageImage)}
-                                            stroke={stroke.color}
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={stroke.width}
-                                            strokeOpacity={1}
-                                        />
-                                    ))}
-                                    {currentDraftStroke && (
-                                        <polyline
-                                            fill="none"
-                                            points={buildStrokePath(currentDraftStroke.points, pageImage)}
-                                            stroke={currentDraftStroke.color}
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={currentDraftStroke.width}
-                                            strokeOpacity={1}
-                                        />
-                                    )}
-                                </svg>
-                            )}
+                                {(pageStrokes.length > 0 || currentDraftStroke) && (
+                                    <svg className="pointer-events-none absolute inset-0 z-[5] h-full w-full">
+                                        {pageStrokes.map((stroke) => (
+                                            <polyline
+                                                key={stroke.id}
+                                                fill="none"
+                                                points={buildStrokePath(stroke.points, pageImage)}
+                                                stroke={stroke.color}
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                strokeWidth={stroke.width}
+                                                strokeOpacity={1}
+                                            />
+                                        ))}
+                                        {currentDraftStroke && (
+                                            <polyline
+                                                fill="none"
+                                                points={buildStrokePath(currentDraftStroke.points, pageImage)}
+                                                stroke={currentDraftStroke.color}
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                strokeWidth={currentDraftStroke.width}
+                                                strokeOpacity={1}
+                                            />
+                                        )}
+                                    </svg>
+                                )}
 
                             {pageTextNotes.map((note) => (
                                 <div
@@ -1086,17 +1091,18 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                 );
                             })}
 
-                            {showDraftRect && liveDraft && (
-                                <div
-                                    className="pointer-events-none absolute z-30 bg-sky-500/38"
-                                    style={{
-                                        left: toPercent(liveDraft.leftRatio),
-                                        top: toPercent(liveDraft.topRatio),
-                                        width: toPercent(liveDraft.widthRatio),
-                                        height: toPercent(liveDraft.heightRatio),
-                                    }}
-                                />
-                            )}
+                                {showDraftRect && liveDraft && (
+                                    <div
+                                        className="pointer-events-none absolute z-30 bg-sky-500/38"
+                                        style={{
+                                            left: toPercent(liveDraft.leftRatio),
+                                            top: toPercent(liveDraft.topRatio),
+                                            width: toPercent(liveDraft.widthRatio),
+                                            height: toPercent(liveDraft.heightRatio),
+                                        }}
+                                    />
+                                )}
+                            </div>
                         </div>
                     </section>
                 );
