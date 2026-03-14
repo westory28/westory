@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
@@ -32,6 +32,8 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
     selectedDate,
 }) => {
     const { categories } = useScheduleCategories();
+    const [currentViewType, setCurrentViewType] = useState('dayGridMonth');
+    const [visibleRange, setVisibleRange] = useState<{ start: string; end: string }>({ start: '', end: '' });
 
     const formatEventTargetLabel = (event?: CalendarEvent) => {
         if (!event || event.eventType === 'holiday' || event.targetType === 'all' || event.targetType === 'common') {
@@ -71,6 +73,49 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
         const offset = date.getTimezoneOffset() * 60000;
         return new Date(date.getTime() - offset).toISOString().split('T')[0];
     };
+
+    const formatDayHeading = (dateText: string) => {
+        const parsed = new Date(`${dateText}T00:00:00`);
+        return new Intl.DateTimeFormat('ko-KR', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            weekday: 'long',
+        }).format(parsed);
+    };
+
+    const formatEventTitle = (event: CalendarEvent) => {
+        const rawTitle = String(event.title || '').trim();
+        if (rawTitle) return rawTitle;
+        if (event.eventType === 'holiday') return '공휴일';
+        return getScheduleCategoryMeta(event.eventType, categories).label || '일정';
+    };
+
+    const listRows = useMemo(() => {
+        if (currentViewType !== 'listMonth' || !visibleRange.start || !visibleRange.end) return [];
+
+        const filtered = events
+            .filter((event) => String(event.start).split('T')[0] >= visibleRange.start && String(event.start).split('T')[0] < visibleRange.end)
+            .sort((a, b) => {
+                const aDate = String(a.start).split('T')[0];
+                const bDate = String(b.start).split('T')[0];
+                if (aDate !== bDate) return aDate.localeCompare(bDate);
+                return a.title.localeCompare(b.title);
+            });
+
+        const grouped = new Map<string, CalendarEvent[]>();
+        filtered.forEach((event) => {
+            const key = String(event.start).split('T')[0];
+            const current = grouped.get(key) || [];
+            current.push(event);
+            grouped.set(key, current);
+        });
+
+        return Array.from(grouped.entries()).map(([date, dateEvents]) => ({
+            date,
+            events: dateEvents,
+        }));
+    }, [currentViewType, events, visibleRange.end, visibleRange.start]);
 
     useEffect(() => {
         const style = document.createElement('style');
@@ -168,6 +213,12 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             }
             .fc-daygrid-event .holiday-segment-title { color: #ffffff !important; font-weight: 800 !important; }
             .fc-list-event .holiday-segment-title { color: #ef4444 !important; font-weight: 800 !important; }
+            .custom-list-active .fc-view-harness {
+                display: none !important;
+            }
+            .custom-schedule-list {
+                height: calc(100% - 1px);
+            }
         `;
         document.head.appendChild(style);
         return () => { document.head.removeChild(style); };
@@ -187,7 +238,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                     <i className="fas fa-search"></i>
                 </button>
             </div>
-            <div className="calendar-wrapper flex-1">
+            <div className={`calendar-wrapper relative flex-1 ${currentViewType === 'listMonth' ? 'custom-list-active' : ''}`}>
                 <FullCalendar
                     ref={calendarRef}
                     plugins={[dayGridPlugin, interactionPlugin, listPlugin]}
@@ -205,6 +256,13 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                         listMonth: '목록',
                     }}
                     events={fcEvents}
+                    datesSet={(arg) => {
+                        setCurrentViewType(arg.view.type);
+                        setVisibleRange({
+                            start: toLocalYmd(arg.start),
+                            end: toLocalYmd(arg.end),
+                        });
+                    }}
                     dateClick={(arg) => onDateClick(arg.dateStr)}
                     eventClick={(arg) => onEventClick(arg.event.extendedProps as CalendarEvent)}
                     eventContent={(arg) => {
@@ -250,6 +308,57 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                         return classes;
                     }}
                 />
+                {currentViewType === 'listMonth' && (
+                    <div className="custom-schedule-list overflow-y-auto rounded-b-xl border border-t-0 border-gray-200 bg-white">
+                        {listRows.map((group) => (
+                            <div key={group.date}>
+                                <div className="border-t border-gray-200 bg-gray-50 px-4 py-3 text-lg font-extrabold text-gray-900 first:border-t-0">
+                                    {formatDayHeading(group.date)}
+                                </div>
+                                {group.events.map((event) => {
+                                    const isHoliday = event.eventType === 'holiday';
+                                    const meta = getScheduleCategoryMeta(event.eventType, categories);
+                                    const categoryLabel = isHoliday ? '공휴일' : meta.label;
+                                    const categoryColor = isHoliday ? '#ef4444' : meta.color;
+                                    const eventTitle = formatEventTitle(event);
+                                    const targetLabel = formatEventTargetLabel(event);
+
+                                    return (
+                                        <div
+                                            key={event.id}
+                                            role="button"
+                                            tabIndex={0}
+                                            onClick={() => onEventClick(event)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' || e.key === ' ') {
+                                                    e.preventDefault();
+                                                    onEventClick(event);
+                                                }
+                                            }}
+                                            className="grid w-full cursor-pointer grid-cols-[170px_minmax(0,1fr)_116px] items-center gap-5 px-4 py-3 text-left transition hover:bg-slate-50"
+                                        >
+                                            <div className="flex min-w-0 items-center gap-2 font-bold text-gray-700">
+                                                <span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ backgroundColor: categoryColor }}></span>
+                                                <span className="truncate">{categoryLabel}</span>
+                                            </div>
+                                            <div
+                                                className={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-bold ${
+                                                    isHoliday ? 'text-red-500' : 'text-gray-900'
+                                                }`}
+                                                title={eventTitle}
+                                            >
+                                                {eventTitle}
+                                            </div>
+                                            <div className="truncate text-sm font-semibold text-gray-600" title={targetLabel}>
+                                                {targetLabel}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
         </div>
     );

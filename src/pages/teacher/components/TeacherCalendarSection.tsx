@@ -79,6 +79,8 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
     const [classOptions, setClassOptions] = useState<SchoolOption[]>(
         Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}반` })),
     );
+    const [currentViewType, setCurrentViewType] = useState('dayGridMonth');
+    const [visibleRange, setVisibleRange] = useState<{ start: string; end: string }>({ start: '', end: '' });
 
     const fcEvents = events.map((event) => {
         const meta = getScheduleCategoryMeta(event.eventType, categories);
@@ -150,6 +152,47 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
         const offset = date.getTimezoneOffset() * 60000;
         return new Date(date.getTime() - offset).toISOString().split('T')[0];
     };
+
+    const formatDayHeading = (dateText: string) => {
+        const parsed = new Date(`${dateText}T00:00:00`);
+        return new Intl.DateTimeFormat('ko-KR', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            weekday: 'long',
+        }).format(parsed);
+    };
+
+    const formatEventTitle = (event: CalendarEvent) => {
+        const rawTitle = String(event.title || '').trim();
+        if (rawTitle) return rawTitle;
+        if (event.eventType === 'holiday') return '공휴일';
+        return getScheduleCategoryMeta(event.eventType, categories).label || '일정';
+    };
+
+    const listRows = useMemo(() => {
+        if (currentViewType !== 'listMonth' || !visibleRange.start || !visibleRange.end) return [];
+
+        const filtered = events
+            .filter((event) => event.start >= visibleRange.start && event.start < visibleRange.end)
+            .sort((a, b) => {
+                if (a.start !== b.start) return a.start.localeCompare(b.start);
+                return a.title.localeCompare(b.title);
+            });
+
+        const grouped = new Map<string, CalendarEvent[]>();
+        filtered.forEach((event) => {
+            const key = event.start;
+            const current = grouped.get(key) || [];
+            current.push(event);
+            grouped.set(key, current);
+        });
+
+        return Array.from(grouped.entries()).map(([date, dateEvents]) => ({
+            date,
+            events: dateEvents,
+        }));
+    }, [currentViewType, events, visibleRange.end, visibleRange.start]);
 
     const loadHolidaySource = async (): Promise<HolidayItem[]> => {
         const byConfig = await getDoc(doc(db, 'site_settings', 'holidays_2026'));
@@ -238,7 +281,7 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                 </div>
             </div>
 
-            <div className="calendar-wrapper flex-1">
+            <div className={`calendar-wrapper relative flex-1 ${currentViewType === 'listMonth' ? 'custom-list-active' : ''}`}>
                 <FullCalendar
                     ref={calendarRef}
                     plugins={[dayGridPlugin, interactionPlugin, listPlugin]}
@@ -249,6 +292,13 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                     headerToolbar={{ left: 'prev,next today', center: 'title', right: 'dayGridMonth,listMonth' }}
                     buttonText={{ dayGridMonth: '달력', listMonth: '목록' }}
                     events={fcEvents}
+                    datesSet={(arg) => {
+                        setCurrentViewType(arg.view.type);
+                        setVisibleRange({
+                            start: toLocalYmd(arg.start),
+                            end: toLocalYmd(arg.end),
+                        });
+                    }}
                     dateClick={(arg) => onDateClick(arg.dateStr)}
                     dayCellDidMount={(arg) => {
                         arg.el.ondblclick = () => {
@@ -304,6 +354,57 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                         return classes;
                     }}
                 />
+                {currentViewType === 'listMonth' && (
+                    <div className="custom-schedule-list overflow-y-auto rounded-b-xl border border-t-0 border-gray-200 bg-white">
+                        {listRows.map((group) => (
+                            <div key={group.date}>
+                                <div className="border-t border-gray-200 bg-gray-50 px-4 py-3 text-lg font-extrabold text-gray-900 first:border-t-0">
+                                    {formatDayHeading(group.date)}
+                                </div>
+                                {group.events.map((event) => {
+                                    const isHoliday = event.eventType === 'holiday';
+                                    const meta = getScheduleCategoryMeta(event.eventType, categories);
+                                    const categoryLabel = isHoliday ? '공휴일' : meta.label;
+                                    const categoryColor = isHoliday ? '#ef4444' : meta.color;
+                                    const eventTitle = formatEventTitle(event);
+                                    const targetLabel = formatEventTargetLabel(event);
+
+                                    return (
+                                        <div
+                                            key={event.id}
+                                            role="button"
+                                            tabIndex={0}
+                                            onClick={() => onEventClick(event)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' || e.key === ' ') {
+                                                    e.preventDefault();
+                                                    onEventClick(event);
+                                                }
+                                            }}
+                                            className="grid w-full cursor-pointer grid-cols-[170px_minmax(0,1fr)_116px] items-center gap-5 px-4 py-3 text-left transition hover:bg-slate-50"
+                                        >
+                                            <div className="flex min-w-0 items-center gap-2 font-bold text-gray-700">
+                                                <span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ backgroundColor: categoryColor }}></span>
+                                                <span className="truncate">{categoryLabel}</span>
+                                            </div>
+                                            <div
+                                                className={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-bold ${
+                                                    isHoliday ? 'text-red-500' : 'text-gray-900'
+                                                }`}
+                                                title={eventTitle}
+                                            >
+                                                {eventTitle}
+                                            </div>
+                                            <div className="truncate text-sm font-semibold text-gray-600" title={targetLabel}>
+                                                {targetLabel}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
 
             <style>{`
@@ -397,6 +498,12 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                 .fc-daygrid-event .holiday-segment-title { color: #ffffff !important; font-weight: 800 !important; }
                 .fc-list-event .holiday-segment-title { color: #ef4444 !important; font-weight: 800 !important; }
                 .fc-day-selected { background-color: #eff6ff !important; outline: 2px solid #3b82f6 !important; outline-offset: -2px !important; }
+                .custom-list-active .fc-view-harness {
+                    display: none !important;
+                }
+                .custom-schedule-list {
+                    height: calc(100% - 1px);
+                }
             `}</style>
         </div>
     );
