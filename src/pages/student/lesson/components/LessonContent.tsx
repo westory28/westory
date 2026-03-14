@@ -305,15 +305,17 @@ const LessonContent: React.FC<LessonContentProps> = ({
     };
 
     const handleAnnotationChange = (nextState: LessonWorksheetAnnotationState) => {
+        let changed = false;
         setAnnotationState((prev) => {
             const same =
                 JSON.stringify(prev.strokes) === JSON.stringify(nextState.strokes)
                 && JSON.stringify(prev.boxes) === JSON.stringify(nextState.boxes)
                 && JSON.stringify(prev.textNotes) === JSON.stringify(nextState.textNotes);
             if (same) return prev;
+            changed = true;
             return nextState;
         });
-        scheduleProgressSave();
+        if (changed) scheduleProgressSave();
     };
 
     const getVideoEmbedUrl = (url?: string) => {

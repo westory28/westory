@@ -400,6 +400,8 @@ const createBox = (page: number, point: RatioPoint, color: string): AnnotationBo
     heightRatio: 0,
 });
 
+const getAnnotationStateKey = (state: LessonWorksheetAnnotationState) => JSON.stringify(state);
+
 const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     pageImages,
     blanks,
@@ -502,10 +504,13 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
 
     useEffect(() => {
         if (!annotationState) return;
+        const incomingKey = getAnnotationStateKey(annotationState);
+        const currentKey = getAnnotationStateKey({ strokes, boxes, textNotes });
+        if (incomingKey === currentKey) return;
         setStrokes(annotationState.strokes || []);
         setBoxes(annotationState.boxes || []);
         setTextNotes(annotationState.textNotes || []);
-    }, [annotationState]);
+    }, [annotationState, boxes, strokes, textNotes]);
 
     useEffect(() => {
         onAnnotationChange?.({
