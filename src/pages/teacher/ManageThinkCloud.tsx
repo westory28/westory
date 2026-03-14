@@ -882,7 +882,7 @@ const ManageThinkCloud: React.FC = () => {
                                 <WordCloudView
                                     entries={cloudEntries}
                                     showSubmitters={!!selectedSession && !selectedSession.options.anonymous}
-                                    variant="modal"
+                                    variant="default"
                                     className="h-full"
                                 />
                             </div>
