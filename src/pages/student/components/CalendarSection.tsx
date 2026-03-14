@@ -33,6 +33,15 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
 }) => {
     const { categories } = useScheduleCategories();
 
+    const formatEventTargetLabel = (event?: CalendarEvent) => {
+        if (!event || event.eventType === 'holiday' || event.targetType === 'all' || event.targetType === 'common') {
+            return '전체';
+        }
+        const [gradeValue, classValue] = String(event.targetClass || '').split('-');
+        if (!gradeValue || !classValue) return '전체';
+        return `${gradeValue}학년 ${classValue}반`;
+    };
+
     const fcEvents = events.map((event) => {
         const meta = getScheduleCategoryMeta(event.eventType, categories);
         const isHoliday = event.eventType === 'holiday';
@@ -83,13 +92,12 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                 table-layout: fixed !important;
                 width: 100% !important;
             }
-            .fc-list-event-graphic {
+            .fc-list-event-graphic,
+            .fc-list-event-time,
+            .fc-list-event-dot {
                 display: none !important;
                 width: 0 !important;
                 padding: 0 !important;
-            }
-            .fc-list-event-dot {
-                display: none !important;
             }
             .fc-list-day-cushion {
                 display: flex !important;
@@ -101,47 +109,62 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             .fc-list-day-side-text {
                 float: none !important;
             }
-            .fc-list-event-time {
-                display: none !important;
-            }
-            .fc-list-event-title {
-                width: auto;
-                padding: 0 !important;
-                text-align: left !important;
-            }
             .fc-list-event td {
                 text-align: left !important;
             }
-            .fc-list-event-title > a {
+            .fc-list-event-title {
+                width: 100% !important;
+                padding: 0 !important;
+                text-align: left !important;
+            }
+            .fc-list-event-title > a,
+            .fc-list-event-title .fc-event-main {
                 display: block !important;
                 width: 100% !important;
                 text-align: left !important;
             }
-            .fc-list-event-title .fc-event-main {
-                display: block !important;
-                width: 100% !important;
-            }
             .fc-list-row-grid {
                 display: grid !important;
-                grid-template-columns: 92px minmax(0, 1fr);
-                gap: 8px;
+                grid-template-columns: 140px minmax(0, 1fr) 92px;
+                align-items: center;
+                gap: 12px;
                 width: 100%;
                 min-width: 0;
-                align-items: center;
             }
             .fc-list-category-cell,
-            .fc-list-title-cell {
+            .fc-list-title-cell,
+            .fc-list-target-cell {
                 overflow: hidden;
                 text-overflow: ellipsis;
                 white-space: nowrap;
             }
             .fc-list-category-cell {
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
                 font-weight: 700;
                 color: #374151;
             }
+            .fc-list-category-dot {
+                display: inline-block;
+                width: 14px;
+                height: 14px;
+                border-radius: 9999px;
+                flex: 0 0 auto;
+            }
+            .fc-list-category-label {
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
             .fc-list-title-cell {
                 font-weight: 700;
-                text-align: left;
+                color: #111827;
+            }
+            .fc-list-target-cell {
+                font-size: 0.86rem;
+                font-weight: 600;
+                color: #4b5563;
             }
             .fc-daygrid-event .holiday-segment-title { color: #ffffff !important; font-weight: 800 !important; }
             .fc-list-event .holiday-segment-title { color: #ef4444 !important; font-weight: 800 !important; }
@@ -184,25 +207,25 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                     events={fcEvents}
                     dateClick={(arg) => onDateClick(arg.dateStr)}
                     eventClick={(arg) => onEventClick(arg.event.extendedProps as CalendarEvent)}
-                    eventDidMount={(arg) => {
-                        if (arg.view.type !== 'listMonth') return;
-                        const meta = getScheduleCategoryMeta(arg.event.extendedProps?.eventType, categories);
-                        const label = arg.event.extendedProps?.eventType === 'holiday' ? '공휴일' : `${meta.emoji} ${meta.label}`;
-                        const timeCell = arg.el.querySelector('.fc-list-event-time');
-                        if (timeCell) timeCell.textContent = `${label} |`;
-                    }}
                     eventContent={(arg) => {
-                        const isHoliday = arg.event.extendedProps?.eventType === 'holiday';
+                        const event = arg.event.extendedProps as CalendarEvent;
+                        const isHoliday = event?.eventType === 'holiday';
                         const eventTitle = String(arg.event.title || '').trim();
-                        const meta = getScheduleCategoryMeta(arg.event.extendedProps?.eventType, categories);
-                        const categoryLabel = arg.event.extendedProps?.eventType === 'holiday' ? '공휴일' : `${meta.emoji} ${meta.label}`;
+                        const meta = getScheduleCategoryMeta(event?.eventType, categories);
+                        const categoryLabel = isHoliday ? '공휴일' : meta.label;
+                        const categoryColor = isHoliday ? '#ef4444' : meta.color;
+                        const targetLabel = formatEventTargetLabel(event);
                         const safeTitle = eventTitle || (isHoliday ? '공휴일' : '일정');
 
                         if (arg.view.type === 'listMonth') {
                             return (
-                                <div className="fc-list-row-grid" title={safeTitle}>
-                                    <div className="fc-list-category-cell">{categoryLabel}</div>
+                                <div className="fc-list-row-grid" title={`${categoryLabel} | ${safeTitle} | ${targetLabel}`}>
+                                    <div className="fc-list-category-cell">
+                                        <span className="fc-list-category-dot" style={{ backgroundColor: categoryColor }}></span>
+                                        <span className="fc-list-category-label">{categoryLabel}</span>
+                                    </div>
                                     <div className={`fc-list-title-cell ${isHoliday ? 'holiday-segment-title' : ''}`}>{safeTitle}</div>
+                                    <div className="fc-list-target-cell">{targetLabel}</div>
                                 </div>
                             );
                         }
