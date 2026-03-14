@@ -108,14 +108,12 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                 text-align: left !important;
             }
             .fc-list-event-title > a {
-                display: flex !important;
+                display: block !important;
                 width: 100% !important;
-                justify-content: flex-start !important;
-                align-items: center !important;
                 text-align: left !important;
             }
             .fc-list-row-grid {
-                display: grid;
+                display: grid !important;
                 grid-template-columns: 92px minmax(0, 1fr);
                 gap: 8px;
                 width: 100%;

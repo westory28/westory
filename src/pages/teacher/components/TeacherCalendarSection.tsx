@@ -352,21 +352,18 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                     text-align: left !important;
                 }
                 .fc-list-event-title > a {
-                    display: flex !important;
+                    display: block !important;
                     width: 100% !important;
-                    justify-content: flex-start !important;
-                    align-items: center !important;
                     text-align: left !important;
                 }
                 .fc-list-row-grid {
-                    display: grid;
+                    display: grid !important;
                     grid-template-columns: 92px minmax(0, 1fr) 78px;
                     align-items: center;
                     gap: 6px;
                     width: 100%;
                     min-width: 0;
                     justify-items: start;
-                    flex: 1 1 auto;
                 }
                 .fc-list-category-cell,
                 .fc-list-title-cell,
