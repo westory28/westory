@@ -71,6 +71,11 @@ interface AnnotationTextNote {
     text: string;
 }
 
+interface PinchState {
+    startDistance: number;
+    startZoom: number;
+}
+
 interface ToolColorOption {
     key: DrawingColor;
     label: string;
@@ -83,6 +88,8 @@ const MIN_BOX_DRAG_SIZE = 0.003;
 const LIVE_REGION_INTERSECTION_RATIO = 0.04;
 const FINAL_REGION_INTERSECTION_RATIO = 0.12;
 const EMPTY_BLANK_LABEL = '빈칸';
+const MIN_STUDENT_ZOOM = 0.7;
+const MAX_STUDENT_ZOOM = 2.4;
 const TOOL_COLORS: ToolColorOption[] = [
     { key: 'blue', label: '파랑', pen: '#2563eb', highlighter: 'rgba(59, 130, 246, 0.28)' },
     { key: 'red', label: '빨강', pen: '#dc2626', highlighter: 'rgba(248, 113, 113, 0.3)' },
@@ -97,6 +104,7 @@ const HIGHLIGHTER_CURSOR = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.
 const ERASER_CURSOR = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cpath fill='%23F59E0B' d='M10.3 5.3l12.4 12.4-5.3 5.3H8.6L3 17.4z'/%3E%3Cpath fill='%23FFF7ED' d='M10.3 5.3l6.1 6.1-8 8L3 17.4z'/%3E%3Cpath stroke='%23111827' stroke-width='1.4' d='M3.5 17.4l6.8 6.8m12.1-6.5l-5.1 5.1m-8.7 1h13.2'/%3E%3C/g%3E%3C/svg%3E") 6 22, cell`;
 
 const toPercent = (value: number) => `${value * 100}%`;
+const clampZoom = (value: number) => Math.min(MAX_STUDENT_ZOOM, Math.max(MIN_STUDENT_ZOOM, value));
 
 const getIntersectionArea = (
     leftA: number,
@@ -354,10 +362,12 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     const [annotationTool, setAnnotationTool] = useState<StudentTool>('move');
     const [penColorKey, setPenColorKey] = useState<DrawingColor>('blue');
     const [highlighterColorKey, setHighlighterColorKey] = useState<DrawingColor>('yellow');
+    const [studentZoom, setStudentZoom] = useState(1);
     const [strokes, setStrokes] = useState<AnnotationStroke[]>([]);
     const [draftStroke, setDraftStroke] = useState<AnnotationStroke | null>(null);
     const [textNotes, setTextNotes] = useState<AnnotationTextNote[]>([]);
     const [activeTextNoteId, setActiveTextNoteId] = useState<string | null>(null);
+    const pinchRef = useRef<PinchState | null>(null);
 
     const regionsByPage = useMemo(() => {
         const grouped = new Map<number, LessonWorksheetTextRegion[]>();
@@ -430,6 +440,13 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         setActiveStudentPage(nextPage.page);
     };
 
+    const getTouchDistance = (touches: React.TouchList) => {
+        if (touches.length < 2) return null;
+        const first = touches[0];
+        const second = touches[1];
+        return Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY);
+    };
+
     const resolveRatioPoint = (page: number, clientX: number, clientY: number) => {
         const host = pageRefs.current[page];
         if (!host) return null;
@@ -467,6 +484,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
 
     const selectedPenColor = TOOL_COLORS.find((color) => color.key === penColorKey) || TOOL_COLORS[0];
     const selectedHighlighterColor = TOOL_COLORS.find((color) => color.key === highlighterColorKey) || TOOL_COLORS[3];
+    const zoomPercent = Math.round(studentZoom * 100);
     const stageCursor = mode === 'student' && annotationEnabled
         ? annotationTool === 'move'
             ? MOVE_CURSOR
@@ -478,6 +496,10 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     ? HIGHLIGHTER_CURSOR
                     : PEN_CURSOR
         : undefined;
+
+    const applyStudentZoom = (nextZoom: number) => {
+        setStudentZoom(clampZoom(nextZoom));
+    };
 
     const handlePointerDown = (page: number, event: React.PointerEvent<HTMLDivElement>) => {
         if (event.button !== 0) return;
@@ -755,6 +777,35 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     </button>
                 </div>
             )}
+            {mode === 'student' && annotationEnabled && (
+                <div className="pointer-events-none fixed bottom-5 right-5 z-40">
+                    <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-slate-200 bg-white/92 px-3 py-2 text-sm font-semibold text-slate-700 shadow-xl backdrop-blur">
+                        <button
+                            type="button"
+                            onClick={() => applyStudentZoom(studentZoom - 0.1)}
+                            className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 transition hover:bg-slate-50"
+                            aria-label="축소"
+                        >
+                            <i className="fas fa-minus text-xs"></i>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => applyStudentZoom(1)}
+                            className="min-w-[56px] rounded-full bg-slate-50 px-3 py-1 text-center text-xs font-bold text-slate-700 transition hover:bg-slate-100"
+                        >
+                            {zoomPercent}%
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => applyStudentZoom(studentZoom + 0.1)}
+                            className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 transition hover:bg-slate-50"
+                            aria-label="확대"
+                        >
+                            <i className="fas fa-plus text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {visiblePageImages.map((pageImage) => {
                 const pageBlanks = blanksByPage.get(pageImage.page) || [];
@@ -805,7 +856,35 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                             )}
                         </div>
 
-                        <div className="flex justify-center overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">
+                        <div
+                            className="overflow-auto rounded-2xl border border-gray-200 bg-gray-50"
+                            onWheel={(event) => {
+                                if (mode !== 'student' || !annotationEnabled) return;
+                                event.preventDefault();
+                                const delta = event.deltaY < 0 ? 0.08 : -0.08;
+                                applyStudentZoom(studentZoom + delta);
+                            }}
+                            onTouchStart={(event) => {
+                                if (mode !== 'student' || !annotationEnabled) return;
+                                const distance = getTouchDistance(event.touches);
+                                if (!distance) return;
+                                pinchRef.current = {
+                                    startDistance: distance,
+                                    startZoom: studentZoom,
+                                };
+                            }}
+                            onTouchMove={(event) => {
+                                if (mode !== 'student' || !annotationEnabled) return;
+                                if (!pinchRef.current) return;
+                                const distance = getTouchDistance(event.touches);
+                                if (!distance) return;
+                                event.preventDefault();
+                                applyStudentZoom(pinchRef.current.startZoom * (distance / pinchRef.current.startDistance));
+                            }}
+                            onTouchEnd={() => {
+                                pinchRef.current = null;
+                            }}
+                        >
                             <div
                                 ref={(node) => {
                                     pageRefs.current[pageImage.page] = node;
@@ -819,8 +898,10 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                 }`}
                                 style={{
                                     cursor: stageCursor,
-                                    width: 'min(100%, calc((100vh - 9.5rem) * 0.707))',
-                                    maxWidth: '100%',
+                                    width: mode === 'student' ? `${studentZoom * 100}%` : '100%',
+                                    minWidth: mode === 'student' ? `${studentZoom * 100}%` : '100%',
+                                    maxWidth: mode === 'student' ? 'none' : '100%',
+                                    margin: mode === 'student' && studentZoom <= 1 ? '0 auto' : undefined,
                                 }}
                                 onDragStart={(event) => event.preventDefault()}
                                 onPointerDown={(event) => handlePointerDown(pageImage.page, event)}
