@@ -706,6 +706,31 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                 })}
                             </div>
                         )}
+                        <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2 py-1.5 shadow-sm">
+                            <button
+                                type="button"
+                                onClick={() => applyStudentZoom(studentZoom - 0.1)}
+                                className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 transition hover:bg-slate-50"
+                                aria-label="축소"
+                            >
+                                <i className="fas fa-minus text-xs"></i>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => applyStudentZoom(1)}
+                                className="min-w-[58px] rounded-full bg-slate-50 px-3 py-1 text-center text-xs font-bold text-slate-700 transition hover:bg-slate-100"
+                            >
+                                {zoomPercent}%
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => applyStudentZoom(studentZoom + 0.1)}
+                                className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 transition hover:bg-slate-50"
+                                aria-label="확대"
+                            >
+                                <i className="fas fa-plus text-xs"></i>
+                            </button>
+                        </div>
                         <button
                             type="button"
                             onClick={() => {
@@ -777,36 +802,6 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     </button>
                 </div>
             )}
-            {mode === 'student' && annotationEnabled && (
-                <div className="pointer-events-none fixed bottom-5 right-5 z-40">
-                    <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-slate-200 bg-white/92 px-3 py-2 text-sm font-semibold text-slate-700 shadow-xl backdrop-blur">
-                        <button
-                            type="button"
-                            onClick={() => applyStudentZoom(studentZoom - 0.1)}
-                            className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 transition hover:bg-slate-50"
-                            aria-label="축소"
-                        >
-                            <i className="fas fa-minus text-xs"></i>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => applyStudentZoom(1)}
-                            className="min-w-[56px] rounded-full bg-slate-50 px-3 py-1 text-center text-xs font-bold text-slate-700 transition hover:bg-slate-100"
-                        >
-                            {zoomPercent}%
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => applyStudentZoom(studentZoom + 0.1)}
-                            className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 transition hover:bg-slate-50"
-                            aria-label="확대"
-                        >
-                            <i className="fas fa-plus text-xs"></i>
-                        </button>
-                    </div>
-                </div>
-            )}
-
             {visiblePageImages.map((pageImage) => {
                 const pageBlanks = blanksByPage.get(pageImage.page) || [];
                 const pageRegions = regionsByPage.get(pageImage.page) || [];
