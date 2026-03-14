@@ -947,7 +947,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         <div className="space-y-6">
             {mode === 'student' && annotationEnabled && toolbarVisible && (
                 <div className="sticky top-3 z-40 flex flex-col items-center gap-2">
-                    <div className="flex w-full max-w-[min(96vw,1180px)] flex-nowrap items-center justify-center gap-2 overflow-x-auto rounded-full border border-blue-100 bg-white/92 px-3 py-3 shadow-[0_18px_48px_rgba(37,99,235,0.16)] backdrop-blur-xl md:px-4">
+                    <div className="inline-flex max-w-[min(96vw,1180px)] flex-nowrap items-center justify-center gap-2 overflow-x-auto rounded-full border border-blue-100 bg-white/92 px-3 py-3 shadow-[0_18px_48px_rgba(37,99,235,0.16)] backdrop-blur-xl md:px-4">
                         {[
                             ['move', '이동', 'fa-up-down-left-right'],
                             ['undo', '이전', 'fa-arrow-rotate-left'],
