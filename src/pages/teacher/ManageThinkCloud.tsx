@@ -65,6 +65,8 @@ const ManageThinkCloud: React.FC = () => {
     const [classOptions, setClassOptions] = useState<SchoolOption[]>(defaultClassOptions);
     const [targetGrade, setTargetGrade] = useState(defaultGradeOptions[0].value);
     const [targetClass, setTargetClass] = useState(defaultClassOptions[0].value);
+    const [filterGrade, setFilterGrade] = useState('all');
+    const [filterClass, setFilterClass] = useState('all');
 
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
@@ -74,6 +76,15 @@ const ManageThinkCloud: React.FC = () => {
     const selectedSession = useMemo(
         () => sessions.find((session) => session.id === selectedSessionId) || null,
         [sessions, selectedSessionId],
+    );
+
+    const filteredSessions = useMemo(
+        () => sessions.filter((session) => {
+            if (filterGrade !== 'all' && session.targetGrade !== filterGrade) return false;
+            if (filterClass !== 'all' && session.targetClass !== filterClass) return false;
+            return true;
+        }),
+        [sessions, filterGrade, filterClass],
     );
 
     useEffect(() => {
@@ -267,6 +278,29 @@ const ManageThinkCloud: React.FC = () => {
             setTargetClass(classOptions[0]?.value || '1');
         }
     }, [classOptions, targetClass]);
+
+    useEffect(() => {
+        if (filterGrade !== 'all' && !gradeOptions.some((item) => item.value === filterGrade)) {
+            setFilterGrade('all');
+        }
+    }, [filterGrade, gradeOptions]);
+
+    useEffect(() => {
+        if (filterClass !== 'all' && !classOptions.some((item) => item.value === filterClass)) {
+            setFilterClass('all');
+        }
+    }, [filterClass, classOptions]);
+
+    useEffect(() => {
+        if (isCreateMode) return;
+        if (!selectedSessionId && filteredSessions.length > 0) {
+            setSelectedSessionId(filteredSessions[0].id);
+            return;
+        }
+        if (selectedSessionId && !filteredSessions.some((session) => session.id === selectedSessionId)) {
+            setSelectedSessionId(filteredSessions[0]?.id || '');
+        }
+    }, [filteredSessions, isCreateMode, selectedSessionId]);
 
     const selectSession = (id: string) => {
         setIsCreateMode(false);
@@ -724,11 +758,36 @@ const ManageThinkCloud: React.FC = () => {
                             </h1>
                         </div>
 
+                        <div className="border-b border-gray-100 p-4">
+                            <div className="grid grid-cols-2 gap-2">
+                                <select
+                                    value={filterGrade}
+                                    onChange={(e) => setFilterGrade(e.target.value)}
+                                    className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-bold text-gray-700 outline-none"
+                                >
+                                    <option value="all">전체 학년</option>
+                                    {gradeOptions.map((grade) => (
+                                        <option key={grade.value} value={grade.value}>{grade.label}</option>
+                                    ))}
+                                </select>
+                                <select
+                                    value={filterClass}
+                                    onChange={(e) => setFilterClass(e.target.value)}
+                                    className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-bold text-gray-700 outline-none"
+                                >
+                                    <option value="all">전체 반</option>
+                                    {classOptions.map((cls) => (
+                                        <option key={cls.value} value={cls.value}>{cls.label}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+
                         <nav className="max-h-[60vh] overflow-y-auto">
-                            {sessions.length === 0 && (
+                            {filteredSessions.length === 0 && (
                                 <p className="p-4 text-sm font-bold text-gray-500">저장된 주제가 없습니다.</p>
                             )}
-                            {sessions.map((session) => {
+                            {filteredSessions.map((session) => {
                                 const isSelected = !isCreateMode && selectedSessionId === session.id;
                                 const isActive = session.id === activeSessionId && session.status === 'active';
                                 return (
