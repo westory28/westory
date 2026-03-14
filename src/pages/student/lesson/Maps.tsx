@@ -13,6 +13,12 @@ import {
 } from '../../../lib/mapResources';
 import { getSemesterCollectionPath } from '../../../lib/semesterScope';
 
+const getPreferredMapGroup = <T extends { key: string; title: string; items: Array<{ id: string }> }>(groups: T[]) => (
+    groups.find((group) => group.title.includes('한국사'))
+    || groups[0]
+    || null
+);
+
 const StudentMaps: React.FC = () => {
     const { config } = useAuth();
     const [items, setItems] = useState<MapResource[]>([]);
@@ -44,7 +50,7 @@ const StudentMaps: React.FC = () => {
 
                 const resources = snap.docs.map((docSnap) => normalizeMapResource(docSnap.id, docSnap.data()));
                 const merged = mergeMapResources(resources);
-                const firstGroup = groupMapResourcesForDisplay(merged)[0] || null;
+                const firstGroup = getPreferredMapGroup(groupMapResourcesForDisplay(merged));
 
                 setItems(merged);
                 setSelectedGroupKey((prev) => prev || firstGroup?.key || '');
@@ -52,7 +58,7 @@ const StudentMaps: React.FC = () => {
             } catch (error) {
                 console.error('Failed to load map resources:', error);
                 const fallback = mergeMapResources([]);
-                const firstGroup = groupMapResourcesForDisplay(fallback)[0] || null;
+                const firstGroup = getPreferredMapGroup(groupMapResourcesForDisplay(fallback));
                 setItems(fallback);
                 setSelectedGroupKey((prev) => prev || firstGroup?.key || '');
                 setSelectedId((prev) => prev || firstGroup?.items[0]?.id || '');

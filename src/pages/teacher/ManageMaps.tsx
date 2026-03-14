@@ -73,6 +73,12 @@ const clonePdfTagSections = (sections: PdfTagSection[]) => sections.map((section
 
 const fileNameWithoutExtension = (value: string) => value.replace(/\.[^.]+$/u, '').trim();
 
+const getPreferredMapGroup = <T extends { key: string; title: string; items: Array<{ id: string }> }>(groups: T[]) => (
+    groups.find((group) => group.title.includes('한국사'))
+    || groups[0]
+    || null
+);
+
 const normalizeErrorMessage = (error: unknown) => {
     const code = typeof error === 'object' && error && 'code' in error
         ? String((error as { code?: string }).code || '')
@@ -232,17 +238,21 @@ const ManageMaps: React.FC = () => {
                         storageScope: existing?.storageScope || baseScope,
                     };
                 });
-
-                const initial = merged[0] || { ...DEFAULT_GOOGLE_MAP_RESOURCE, storageScope: baseScope };
+                const firstGroup = getPreferredMapGroup(groupMapResourcesForDisplay(merged));
+                const initial = firstGroup?.items[0]
+                    || merged[0]
+                    || { ...DEFAULT_GOOGLE_MAP_RESOURCE, storageScope: baseScope };
                 setItems(merged);
                 setSelectedId(initial.id);
                 setDraft(initial);
             } catch (error) {
                 console.error('Failed to load teacher map resources:', error);
                 const fallback = [{ ...DEFAULT_GOOGLE_MAP_RESOURCE, storageScope: 'semester' as const }];
+                const firstGroup = getPreferredMapGroup(groupMapResourcesForDisplay(fallback));
+                const initial = firstGroup?.items[0] || fallback[0];
                 setItems(fallback);
-                setSelectedId(fallback[0].id);
-                setDraft(fallback[0]);
+                setSelectedId(initial.id);
+                setDraft(initial);
             } finally {
                 setLoading(false);
             }
