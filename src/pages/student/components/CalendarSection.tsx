@@ -107,10 +107,16 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             .fc-list-event-title {
                 width: auto;
                 padding-left: 0 !important;
+                text-align: left !important;
             }
-            .fc-list-event-title a {
-                display: block !important;
+            .fc-list-event td {
+                text-align: left !important;
+            }
+            .fc-list-event-title > a {
+                display: flex !important;
                 width: 100% !important;
+                justify-content: flex-start !important;
+                align-items: center !important;
                 text-align: left !important;
             }
             .fc-daygrid-event .holiday-segment-title { color: #ffffff !important; font-weight: 800 !important; }

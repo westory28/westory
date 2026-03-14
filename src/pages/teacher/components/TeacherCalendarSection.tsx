@@ -345,10 +345,16 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                 .fc-list-event-title {
                     width: auto;
                     padding-left: 0 !important;
+                    text-align: left !important;
                 }
-                .fc-list-event-title a {
-                    display: block !important;
+                .fc-list-event td {
+                    text-align: left !important;
+                }
+                .fc-list-event-title > a {
+                    display: flex !important;
                     width: 100% !important;
+                    justify-content: flex-start !important;
+                    align-items: center !important;
                     text-align: left !important;
                 }
                 .fc-list-row-grid {
@@ -357,6 +363,9 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                     align-items: center;
                     gap: 6px;
                     width: 100%;
+                    min-width: 0;
+                    justify-items: start;
+                    flex: 1 1 auto;
                 }
                 .fc-list-title-cell,
                 .fc-list-target-cell {
