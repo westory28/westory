@@ -1212,9 +1212,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                 const showDraftRect = Boolean(
                     mode === 'teacher'
                     && liveDraft
-                    && (teacherTool === 'box' || draftRegions.length === 0)
-                    && liveDraft.widthRatio >= (teacherTool === 'box' ? MIN_BOX_DRAG_SIZE : MIN_DRAG_SIZE)
-                    && liveDraft.heightRatio >= (teacherTool === 'box' ? MIN_BOX_DRAG_SIZE : MIN_DRAG_SIZE),
+                    && (liveDraft.widthRatio > 0.0001 || liveDraft.heightRatio > 0.0001),
                 );
 
                 const pageStrokes = strokes.filter((stroke) => stroke.page === pageImage.page);
@@ -1692,7 +1690,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
 
                                 {showDraftRect && liveDraft && (
                                     <div
-                                        className="pointer-events-none absolute z-30 bg-sky-500/38"
+                                        className="pointer-events-none absolute z-30 border-2 border-sky-500 bg-sky-500/20"
                                         style={{
                                             left: toPercent(liveDraft.leftRatio),
                                             top: toPercent(liveDraft.topRatio),
