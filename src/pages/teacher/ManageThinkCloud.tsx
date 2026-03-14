@@ -796,8 +796,27 @@ const ManageThinkCloud: React.FC = () => {
                                 <i className="fas fa-times"></i>
                             </button>
                         </div>
-                        <div className="text-sm font-bold text-gray-600 mb-3">
-                            TV 출력용 모드입니다. 응답 {responses.length}개
+                        <div className="mb-3 flex flex-col gap-2">
+                            <div className="text-sm font-bold text-gray-600">
+                                TV 출력용 모드입니다. 응답 {responses.length}개
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                {pendingStudents.length > 0 ? (
+                                    pendingStudents.map((student) => (
+                                        <span
+                                            key={student.uid}
+                                            className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700"
+                                            title={student.name}
+                                        >
+                                            {student.name}
+                                        </span>
+                                    ))
+                                ) : (
+                                    <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+                                        전원 제출 완료
+                                    </span>
+                                )}
+                            </div>
                         </div>
                         <div className="flex-1 flex items-start justify-center px-0 pt-4 pb-8 md:px-1 md:pt-6 md:pb-10">
                             <div
