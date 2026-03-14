@@ -140,6 +140,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                     plugins={[dayGridPlugin, interactionPlugin, listPlugin]}
                     initialView="dayGridMonth"
                     locale="ko"
+                    allDayText=""
                     headerToolbar={{
                         left: 'prev,next today',
                         center: 'title',

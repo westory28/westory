@@ -244,6 +244,7 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                     plugins={[dayGridPlugin, interactionPlugin, listPlugin]}
                     initialView="dayGridMonth"
                     locale="ko"
+                    allDayText=""
                     headerToolbar={{ left: 'prev,next today', center: 'title', right: 'dayGridMonth,listMonth' }}
                     buttonText={{ dayGridMonth: '달력', listMonth: '목록' }}
                     events={fcEvents}
