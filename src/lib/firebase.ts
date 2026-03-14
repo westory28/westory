@@ -7,6 +7,7 @@ import {
     inMemoryPersistence,
     setPersistence,
 } from 'firebase/auth';
+import type { Analytics } from 'firebase/analytics';
 import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
@@ -38,7 +39,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app, `gs://${firebaseConfig.storageBucket}`);
-let analytics = null;
+let analytics: Analytics | null = null;
 let firestoreEmulatorConnected = false;
 
 const isMobileBrowser = (): boolean => {
@@ -87,16 +88,14 @@ try {
             );
         }
     }
-    if (isBrowser && firebaseConfig.measurementId) {
-        analytics = getAnalytics(app);
-    }
 } catch (e) {
     console.warn("Analytics not supported:", e);
 }
 if (typeof window !== 'undefined' && firebaseConfig.measurementId) {
     window.setTimeout(() => {
         void import('firebase/analytics')
-            .then(({ getAnalytics }) => {
+            .then(async ({ getAnalytics, isSupported }) => {
+                if (!(await isSupported())) return;
                 analytics = getAnalytics(app);
             })
             .catch((e) => {
