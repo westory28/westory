@@ -114,6 +114,8 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
     const [nativeViewerFallback, setNativeViewerFallback] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [previewScale, setPreviewScale] = useState(1);
+    const [isMobileViewport, setIsMobileViewport] = useState(false);
+    const [isMobileTagPanelOpen, setIsMobileTagPanelOpen] = useState(false);
 
     const previewSurfaceRef = useRef<HTMLDivElement | null>(null);
     const inlineShortcutRef = useRef<HTMLDivElement | null>(null);
@@ -279,8 +281,9 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
 
         const surface = modalSurfaceRef.current;
         const updateModalFitZoom = () => {
-            const frameWidth = Math.max(0, surface.clientWidth - 48);
-            const frameHeight = Math.max(0, surface.clientHeight - 48);
+            const insetPadding = isMobileViewport ? 8 : 48;
+            const frameWidth = Math.max(0, surface.clientWidth - insetPadding);
+            const frameHeight = Math.max(0, surface.clientHeight - insetPadding);
             if (!frameWidth || !frameHeight) return;
 
             const nextFitZoom = clamp(
@@ -309,7 +312,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
             observer.disconnect();
             window.removeEventListener('resize', updateModalFitZoom);
         };
-    }, [currentPageHeight, currentPageWidth, isModalOpen, selectedRegion]);
+    }, [currentPageHeight, currentPageWidth, isMobileViewport, isModalOpen, selectedRegion]);
 
     useEffect(() => {
         if (!usingPreprocessedPages || currentPageWidth <= 0 || !previewSurfaceRef.current) return;
@@ -351,6 +354,22 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
         setIsInlineTagCatalogOpen(false);
         setIsModalTagCatalogOpen(false);
     }, [title]);
+
+    useEffect(() => {
+        const updateViewportMode = () => {
+            setIsMobileViewport(window.innerWidth < 768);
+        };
+
+        updateViewportMode();
+        window.addEventListener('resize', updateViewportMode);
+        return () => window.removeEventListener('resize', updateViewportMode);
+    }, []);
+
+    useEffect(() => {
+        if (!isModalOpen) {
+            setIsMobileTagPanelOpen(false);
+        }
+    }, [isModalOpen]);
 
     useEffect(() => {
         setShowAllShortcuts(false);
@@ -402,6 +421,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
     };
 
     const handleSelectRegion = (region: RegionHit) => {
+        setIsMobileTagPanelOpen(false);
         setCurrentPage(region.page);
         setSelectedRegion(region);
         if (!isModalOpen) {
@@ -633,14 +653,18 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
         </>
     );
 
-    const renderPageSurface = (interactive: boolean) => {
+    const renderPageSurface = (interactive: boolean, compact = false) => {
         const surfaceScale = interactive && usingPreprocessedPages ? previewScale || 1 : zoom;
         const isPortrait = currentPageHeight > currentPageWidth;
 
         return (
             <div
                 ref={interactive ? previewSurfaceRef : undefined}
-                className={`rounded-2xl border border-gray-200 bg-gray-100 p-3 ${interactive ? 'cursor-zoom-in overflow-auto' : 'overflow-visible'}`}
+                className={`${
+                    compact
+                        ? 'h-full rounded-none border-0 bg-transparent p-0'
+                        : 'rounded-2xl border border-gray-200 bg-gray-100 p-3'
+                } ${interactive ? 'cursor-zoom-in overflow-auto' : 'overflow-visible'}`}
                 onClick={interactive ? openModal : undefined}
             >
                 {loadingPdf && <div className="rounded-xl bg-white px-4 py-6 text-sm text-gray-500">PDF 파일을 준비하고 있습니다.</div>}
@@ -662,14 +686,14 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                     </div>
                 )}
                 {!loadingPdf && usingPreprocessedPages && currentPageImage && (
-                    <div className={`relative flex ${isPortrait ? 'justify-center' : 'justify-start'}`}>
+                    <div className={`relative flex ${compact || isPortrait ? 'justify-center' : 'justify-start'}`}>
                         <div className="relative inline-block">
                             <img
                                 src={currentPageImage.imageUrl}
                                 alt={`${title} ${currentPage}페이지`}
                                 style={{
                                     width: `${currentPageImage.width * surfaceScale}px`,
-                                    maxWidth: interactive ? '100%' : 'none',
+                                    maxWidth: interactive || compact ? '100%' : 'none',
                                     height: 'auto',
                                 }}
                             />
@@ -743,12 +767,12 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                 <p className="mt-2 text-xs leading-6 text-gray-500">태그 목차는 기본으로 접혀 있으며, 필요할 때 펼쳐서 범주별로 볼 수 있습니다.</p>
             </div>
             {isModalOpen && (
-                <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/70 p-2 sm:p-4" onClick={() => setIsModalOpen(false)}>
-                    <div className="flex h-[94vh] w-full max-w-[96vw] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:h-[90vh] sm:rounded-3xl" onClick={(event) => event.stopPropagation()}>
+                <div className={`fixed inset-0 z-[70] flex bg-slate-950/70 ${isMobileViewport ? 'items-stretch justify-stretch p-0' : 'items-center justify-center p-2 sm:p-4'}`} onClick={() => setIsModalOpen(false)}>
+                    <div className={`relative flex w-full flex-col overflow-hidden bg-white shadow-2xl ${isMobileViewport ? 'h-screen max-w-none rounded-none' : 'h-[94vh] max-w-[96vw] rounded-2xl sm:h-[90vh] sm:rounded-3xl'}`} onClick={(event) => event.stopPropagation()}>
                         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 px-3 py-3 sm:px-5 sm:py-4">
                             <div>
                                 <div className="text-base font-extrabold text-gray-900 sm:text-lg">{title}</div>
-                                <div className="text-xs text-gray-500">바깥 클릭 또는 Esc로 닫습니다.</div>
+                                {!isMobileViewport && <div className="text-xs text-gray-500">바깥 클릭 또는 Esc로 닫습니다.</div>}
                             </div>
                             <div className="flex flex-wrap items-center justify-end gap-2">
                                 <button
@@ -769,22 +793,24 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                                 <button type="button" onClick={() => setIsModalOpen(false)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 sm:text-sm">닫기</button>
                             </div>
                         </div>
-                        <div className="grid min-h-0 flex-1 lg:grid-cols-[21rem_minmax(0,1fr)]">
+                        <div className={`grid min-h-0 flex-1 ${isMobileViewport ? 'grid-cols-1' : 'lg:grid-cols-[21rem_minmax(0,1fr)]'}`}>
+                            {!isMobileViewport && (
                             <aside className="order-2 min-h-0 border-t border-gray-200 bg-gray-50 p-3 lg:order-1 lg:border-r lg:border-t-0 lg:p-4">
                                 {renderTagFilters(isModalTagCatalogOpen, setIsModalTagCatalogOpen)}
                                 <div className="max-h-52 overflow-y-auto pr-1 lg:max-h-[calc(90vh-12rem)]">
                                     {renderShortcutList('rounded-xl px-3 py-2 text-left text-xs font-bold transition')}
                                 </div>
                             </aside>
+                            )}
                             <div className="order-1 flex min-h-0 flex-1 flex-col lg:order-2">
                                 <div className="flex items-center justify-center border-b border-gray-200 px-3 py-2 sm:px-5 sm:py-3">
                                     <div className="text-sm font-bold text-gray-600">{currentPage} / {numPages || '-'}</div>
                                 </div>
-                                <div className="flex min-h-0 flex-1 items-center justify-center bg-slate-100 p-2 sm:p-4">
-                                    <div className="flex h-full w-full flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+                                <div className={`flex min-h-0 flex-1 items-center justify-center bg-slate-100 ${isMobileViewport ? 'p-0' : 'p-2 sm:p-4'}`}>
+                                    <div className={`flex h-full w-full flex-col overflow-hidden bg-white shadow-sm ${isMobileViewport ? 'rounded-none border-0' : 'rounded-2xl border border-gray-200'}`}>
                                         <div
                                             ref={modalSurfaceRef}
-                                            className="min-h-0 flex-1 cursor-grab overflow-auto bg-slate-100 p-2 active:cursor-grabbing sm:p-4"
+                                            className={`min-h-0 flex-1 cursor-grab overflow-auto bg-slate-100 active:cursor-grabbing ${isMobileViewport ? 'p-0' : 'p-2 sm:p-4'}`}
                                             onWheel={handleWheelZoom}
                                             onTouchStart={handleTouchStart}
                                             onTouchMove={handleTouchMove}
@@ -795,13 +821,46 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                                             onMouseLeave={handleDragEnd}
                                         >
                                             <div className="flex min-h-full items-start justify-center">
-                                                {renderPageSurface(false)}
+                                                {renderPageSurface(false, isMobileViewport)}
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
+                        {isMobileViewport && visibleRegionHits.length > 0 && (
+                            <>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsMobileTagPanelOpen((prev) => !prev)}
+                                    className="absolute bottom-5 right-5 z-20 inline-flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-2xl transition hover:bg-blue-700"
+                                    aria-label="태그 목록 열기"
+                                >
+                                    <i className="fas fa-tags text-lg"></i>
+                                </button>
+                                {isMobileTagPanelOpen && (
+                                    <div className="absolute inset-x-0 bottom-0 z-30 max-h-[58vh] rounded-t-[28px] border-t border-gray-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.2)]">
+                                        <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3">
+                                            <div>
+                                                <div className="text-sm font-extrabold text-gray-900">태그 목록</div>
+                                                <div className="text-xs text-gray-500">태그를 누르면 지도 위치로 이동합니다.</div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsMobileTagPanelOpen(false)}
+                                                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 text-gray-500"
+                                                aria-label="태그 목록 닫기"
+                                            >
+                                                <i className="fas fa-times text-xs"></i>
+                                            </button>
+                                        </div>
+                                        <div className="max-h-[calc(58vh-4.5rem)] overflow-y-auto p-4">
+                                            {renderShortcutList('rounded-xl px-3 py-2 text-left text-sm font-bold transition')}
+                                        </div>
+                                    </div>
+                                )}
+                            </>
+                        )}
                     </div>
                 </div>
             )}
