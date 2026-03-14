@@ -11,6 +11,7 @@ import {
 
 type AnswerStatus = '' | 'correct' | 'wrong';
 type StudentTool = 'pen' | 'highlighter' | 'eraser' | 'text';
+type DrawingColor = 'blue' | 'red' | 'green' | 'yellow' | 'black';
 
 interface LessonWorksheetStageProps {
     pageImages: LessonWorksheetPageImage[];
@@ -70,11 +71,28 @@ interface AnnotationTextNote {
     text: string;
 }
 
+interface ToolColorOption {
+    key: DrawingColor;
+    label: string;
+    pen: string;
+    highlighter: string;
+}
+
 const MIN_DRAG_SIZE = 0.0012;
 const MIN_BOX_DRAG_SIZE = 0.003;
 const LIVE_REGION_INTERSECTION_RATIO = 0.04;
 const FINAL_REGION_INTERSECTION_RATIO = 0.12;
 const EMPTY_BLANK_LABEL = '빈칸';
+const TOOL_COLORS: ToolColorOption[] = [
+    { key: 'blue', label: '파랑', pen: '#2563eb', highlighter: 'rgba(59, 130, 246, 0.28)' },
+    { key: 'red', label: '빨강', pen: '#dc2626', highlighter: 'rgba(248, 113, 113, 0.3)' },
+    { key: 'green', label: '초록', pen: '#16a34a', highlighter: 'rgba(74, 222, 128, 0.28)' },
+    { key: 'yellow', label: '노랑', pen: '#ca8a04', highlighter: 'rgba(250, 204, 21, 0.34)' },
+    { key: 'black', label: '검정', pen: '#111827', highlighter: 'rgba(148, 163, 184, 0.34)' },
+];
+
+const PEN_CURSOR = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cpath fill='%23111827' d='M20.8 4.2l3 3c.8.8.8 2 0 2.8L12 21.9l-5.1 1.3L8.2 18 20 6.2c.8-.8 2-.8 2.8 0z'/%3E%3Cpath fill='%2360A5FA' d='M6.9 23.2l1.3-5 3.7 3.7z'/%3E%3C/g%3E%3C/svg%3E") 4 24, crosshair`;
+const ERASER_CURSOR = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cpath fill='%23F59E0B' d='M10.3 5.3l12.4 12.4-5.3 5.3H8.6L3 17.4z'/%3E%3Cpath fill='%23FFF7ED' d='M10.3 5.3l6.1 6.1-8 8L3 17.4z'/%3E%3Cpath stroke='%23111827' stroke-width='1.4' d='M3.5 17.4l6.8 6.8m12.1-6.5l-5.1 5.1m-8.7 1h13.2'/%3E%3C/g%3E%3C/svg%3E") 6 22, cell`;
 
 const toPercent = (value: number) => `${value * 100}%`;
 
@@ -297,7 +315,7 @@ const createStroke = (page: number, tool: 'pen' | 'highlighter', point: RatioPoi
     id: `stroke-${page}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     page,
     tool,
-    color: tool === 'pen' ? '#2563eb' : '#facc15',
+    color: tool === 'pen' ? TOOL_COLORS[0].pen : TOOL_COLORS[0].highlighter,
     width: tool === 'pen' ? 4 : 15,
     points: [point],
 });
@@ -330,7 +348,10 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     const pageRefs = useRef<Record<number, HTMLDivElement | null>>({});
     const [draftRect, setDraftRect] = useState<DraftRect | null>(null);
     const [activeTeacherPage, setActiveTeacherPage] = useState<number | null>(pageImages[0]?.page ?? null);
+    const [activeStudentPage, setActiveStudentPage] = useState<number | null>(pageImages[0]?.page ?? null);
     const [annotationTool, setAnnotationTool] = useState<StudentTool>('pen');
+    const [penColorKey, setPenColorKey] = useState<DrawingColor>('blue');
+    const [highlighterColorKey, setHighlighterColorKey] = useState<DrawingColor>('yellow');
     const [strokes, setStrokes] = useState<AnnotationStroke[]>([]);
     const [draftStroke, setDraftStroke] = useState<AnnotationStroke | null>(null);
     const [textNotes, setTextNotes] = useState<AnnotationTextNote[]>([]);
@@ -359,21 +380,35 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     useEffect(() => {
         if (!pageImages.length) {
             setActiveTeacherPage(null);
+            setActiveStudentPage(null);
             return;
         }
         setActiveTeacherPage((current) => {
             if (current && pageImages.some((page) => page.page === current)) return current;
             return pageImages[0].page;
         });
+        setActiveStudentPage((current) => {
+            if (current && pageImages.some((page) => page.page === current)) return current;
+            return pageImages[0].page;
+        });
     }, [pageImages]);
 
     const visiblePageImages = useMemo(() => {
-        if (mode !== 'teacher' || activeTeacherPage == null) return pageImages;
-        return pageImages.filter((pageImage) => pageImage.page === activeTeacherPage);
-    }, [activeTeacherPage, mode, pageImages]);
+        if (mode === 'teacher') {
+            if (activeTeacherPage == null) return pageImages;
+            return pageImages.filter((pageImage) => pageImage.page === activeTeacherPage);
+        }
+        if (mode === 'student' && activeStudentPage != null) {
+            return pageImages.filter((pageImage) => pageImage.page === activeStudentPage);
+        }
+        return pageImages;
+    }, [activeStudentPage, activeTeacherPage, mode, pageImages]);
 
     const activeTeacherPageIndex = mode === 'teacher' && activeTeacherPage != null
         ? pageImages.findIndex((pageImage) => pageImage.page === activeTeacherPage)
+        : -1;
+    const activeStudentPageIndex = mode === 'student' && activeStudentPage != null
+        ? pageImages.findIndex((pageImage) => pageImage.page === activeStudentPage)
         : -1;
 
     const handleTeacherPageChange = (direction: -1 | 1) => {
@@ -382,6 +417,15 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         if (!nextPage) return;
         setDraftRect(null);
         setActiveTeacherPage(nextPage.page);
+    };
+
+    const handleStudentPageChange = (direction: -1 | 1) => {
+        if (mode !== 'student' || activeStudentPageIndex < 0) return;
+        const nextPage = pageImages[activeStudentPageIndex + direction];
+        if (!nextPage) return;
+        setDraftStroke(null);
+        setActiveTextNoteId(null);
+        setActiveStudentPage(nextPage.page);
     };
 
     const resolveRatioPoint = (page: number, clientX: number, clientY: number) => {
@@ -418,6 +462,16 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
             setStrokes((prev) => prev.filter((stroke) => stroke.id !== hitStroke.id));
         }
     };
+
+    const selectedPenColor = TOOL_COLORS.find((color) => color.key === penColorKey) || TOOL_COLORS[0];
+    const selectedHighlighterColor = TOOL_COLORS.find((color) => color.key === highlighterColorKey) || TOOL_COLORS[3];
+    const stageCursor = mode === 'student' && annotationEnabled
+        ? annotationTool === 'eraser'
+            ? ERASER_CURSOR
+            : annotationTool === 'text'
+                ? 'text'
+                : PEN_CURSOR
+        : undefined;
 
     const handlePointerDown = (page: number, event: React.PointerEvent<HTMLDivElement>) => {
         if (event.button !== 0) return;
@@ -458,7 +512,10 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         }
 
         event.currentTarget.setPointerCapture(event.pointerId);
-        setDraftStroke(createStroke(page, annotationTool, point));
+        const nextStroke = createStroke(page, annotationTool, point);
+        nextStroke.color = annotationTool === 'pen' ? selectedPenColor.pen : selectedHighlighterColor.highlighter;
+        nextStroke.width = annotationTool === 'pen' ? 4 : 18;
+        setDraftStroke(nextStroke);
     };
 
     const updateDraftPoint = (page: number, clientX: number, clientY: number) => {
@@ -576,25 +633,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     return (
         <div className="space-y-6">
             {mode === 'student' && annotationEnabled && (
-                <div className="sticky top-3 z-30 rounded-3xl border border-blue-100 bg-white/95 p-3 shadow-[0_16px_36px_rgba(37,99,235,0.12)] backdrop-blur">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                            <div className="text-xs font-bold uppercase tracking-[0.22em] text-blue-400">Worksheet Tools</div>
-                            <div className="mt-1 text-sm font-semibold text-slate-600">태블릿에서도 바로 필기하고 메모할 수 있습니다.</div>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setStrokes([]);
-                                setTextNotes([]);
-                                setActiveTextNoteId(null);
-                            }}
-                            className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
-                        >
-                            전체 지우기
-                        </button>
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
+                <div className="sticky top-3 z-40 flex justify-center">
+                    <div className="flex w-full max-w-[min(96vw,1180px)] flex-wrap items-center justify-center gap-2 rounded-full border border-blue-100 bg-white/92 px-3 py-3 shadow-[0_18px_48px_rgba(37,99,235,0.16)] backdrop-blur-xl md:px-4">
                         {[
                             ['pen', '펜', 'fa-pen'],
                             ['highlighter', '형광펜', 'fa-highlighter'],
@@ -615,7 +655,68 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                 {label}
                             </button>
                         ))}
+                        {(annotationTool === 'pen' || annotationTool === 'highlighter') && (
+                            <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">
+                                {TOOL_COLORS.map((color) => {
+                                    const isPen = annotationTool === 'pen';
+                                    const selected = isPen ? penColorKey === color.key : highlighterColorKey === color.key;
+                                    return (
+                                        <button
+                                            key={`${annotationTool}-${color.key}`}
+                                            type="button"
+                                            aria-label={`${annotationTool === 'pen' ? '펜' : '형광펜'} ${color.label}`}
+                                            onClick={() => {
+                                                if (isPen) setPenColorKey(color.key);
+                                                else setHighlighterColorKey(color.key);
+                                            }}
+                                            className={`h-7 w-7 rounded-full border-2 transition ${selected ? 'border-slate-900 scale-110' : 'border-white/80 hover:scale-105'}`}
+                                            style={{ background: isPen ? color.pen : color.highlighter }}
+                                        />
+                                    );
+                                })}
+                            </div>
+                        )}
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setStrokes([]);
+                                setTextNotes([]);
+                                setActiveTextNoteId(null);
+                            }}
+                            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+                        >
+                            <i className="fas fa-trash-alt text-xs"></i>
+                            전체 지우기
+                        </button>
                     </div>
+                </div>
+            )}
+            {mode === 'student' && pageImages.length > 1 && activeStudentPageIndex >= 0 && (
+                <div className="flex items-center justify-between rounded-3xl border border-slate-200 bg-white/88 px-4 py-3 shadow-sm backdrop-blur">
+                    <button
+                        type="button"
+                        onClick={() => handleStudentPageChange(-1)}
+                        disabled={activeStudentPageIndex === 0}
+                        className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                        <i className="fas fa-chevron-left text-xs"></i>
+                        이전 페이지
+                    </button>
+                    <div className="text-center">
+                        <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-400">Page</div>
+                        <div className="text-sm font-bold text-slate-800">
+                            {activeStudentPageIndex + 1} / {pageImages.length}
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => handleStudentPageChange(1)}
+                        disabled={activeStudentPageIndex === pageImages.length - 1}
+                        className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                        다음 페이지
+                        <i className="fas fa-chevron-right text-xs"></i>
+                    </button>
                 </div>
             )}
             {mode === 'teacher' && pageImages.length > 1 && activeTeacherPageIndex >= 0 && (
@@ -684,7 +785,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                 const currentDraftStroke = draftStroke?.page === pageImage.page ? draftStroke : null;
 
                 return (
-                    <section key={pageImage.page} className="rounded-3xl border border-gray-200 bg-white p-3 shadow-sm md:p-4">
+                    <section key={pageImage.page} className={`rounded-[2rem] border border-gray-200 bg-white shadow-sm ${mode === 'student' ? 'p-2 md:p-3' : 'p-3 md:p-4'}`}>
                         <div className="mb-3 flex items-center justify-between gap-2">
                             <div className="text-xs font-bold uppercase tracking-[0.18em] text-gray-400">
                                 Page {pageImage.page}
@@ -707,6 +808,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                         ? `touch-none ${annotationTool === 'eraser' ? 'cursor-not-allowed' : annotationTool === 'text' ? 'cursor-text' : 'cursor-crosshair'}`
                                         : ''
                             }`}
+                            style={{ cursor: stageCursor }}
                             onDragStart={(event) => event.preventDefault()}
                             onPointerDown={(event) => handlePointerDown(pageImage.page, event)}
                             onPointerMove={(event) => updateDraftPoint(pageImage.page, event.clientX, event.clientY)}
@@ -722,7 +824,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                             <img
                                 src={pageImage.imageUrl}
                                 alt={`학습지 ${pageImage.page}페이지`}
-                                className="block h-auto w-full select-none"
+                                className={`block select-none ${mode === 'student' ? 'mx-auto h-auto max-h-[calc(100vh-17rem)] w-auto max-w-full' : 'h-auto w-full'}`}
                                 draggable={false}
                                 onDragStart={(event) => event.preventDefault()}
                             />
@@ -738,7 +840,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                             strokeLinecap="round"
                                             strokeLinejoin="round"
                                             strokeWidth={stroke.width}
-                                            strokeOpacity={stroke.tool === 'highlighter' ? 0.35 : 0.95}
+                                            strokeOpacity={1}
                                         />
                                     ))}
                                     {currentDraftStroke && (
@@ -749,7 +851,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                             strokeLinecap="round"
                                             strokeLinejoin="round"
                                             strokeWidth={currentDraftStroke.width}
-                                            strokeOpacity={currentDraftStroke.tool === 'highlighter' ? 0.35 : 0.95}
+                                            strokeOpacity={1}
                                         />
                                     )}
                                 </svg>

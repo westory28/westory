@@ -344,9 +344,9 @@ const LessonContent: React.FC<LessonContentProps> = ({
     const embedUrl = getVideoEmbedUrl(lesson.videoUrl);
     const hasInteractiveBlanks = Boolean((lesson.worksheetBlanks || []).length || lesson.contentHtml?.includes('['));
     const content = (
-        <div className={fullscreenPreview ? 'mx-auto max-w-6xl animate-fadeIn' : 'mx-auto max-w-4xl animate-fadeIn'}>
-            <div className="mb-6 rounded-[28px] border border-white/70 bg-white/95 p-5 shadow-[0_24px_60px_rgba(15,23,42,0.08)] backdrop-blur md:p-7">
-                <div className="mb-6 flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-5">
+        <div className={fullscreenPreview ? 'mx-auto w-full max-w-[min(100vw-1.5rem,1600px)] animate-fadeIn' : 'mx-auto max-w-4xl animate-fadeIn'}>
+            <div className={`rounded-[28px] border border-white/70 bg-white/95 shadow-[0_24px_60px_rgba(15,23,42,0.08)] backdrop-blur ${fullscreenPreview ? 'p-4 md:p-5' : 'mb-6 p-5 md:p-7'}`}>
+                <div className="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-4">
                     <div>
                         <span className="inline-block rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-600">
                             학생 수업 화면
@@ -356,7 +356,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
                         </h1>
                         {hasInteractiveBlanks && (
                             <p className="mt-2 text-sm text-slate-500">
-                                빈칸은 입력 즉시 정답 여부가 표시됩니다. 워크시트 상단 도구로 필기와 메모를 할 수 있습니다.
+                                빈칸은 입력 즉시 정답 여부가 표시됩니다. 상단 플로팅 도구로 필기와 메모를 할 수 있습니다.
                             </p>
                         )}
                     </div>
@@ -373,7 +373,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
                 </div>
 
                 {embedUrl && (
-                    <div className="relative mb-8 h-0 overflow-hidden rounded-2xl bg-black shadow-md" style={{ paddingBottom: '56.25%' }}>
+                    <div className="relative mb-6 h-0 overflow-hidden rounded-2xl bg-black shadow-md" style={{ paddingBottom: '56.25%' }}>
                         <iframe
                             className="absolute left-0 top-0 h-full w-full"
                             src={embedUrl}
@@ -384,7 +384,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
                     </div>
                 )}
 
-                <div ref={contentRef} className="space-y-8">
+                <div ref={contentRef} className="space-y-6">
                     {(lesson.worksheetPageImages || []).length > 0 && (
                         <LessonWorksheetStage
                             pageImages={lesson.worksheetPageImages || []}
@@ -405,7 +405,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
                     )}
                 </div>
 
-                <div className="mt-8 flex flex-wrap items-center justify-center gap-3 border-t border-slate-200 pt-6">
+                <div className="mt-6 flex flex-wrap items-center justify-center gap-3 border-t border-slate-200 pt-5">
                     <button
                         type="button"
                         onClick={handleReset}
@@ -514,7 +514,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
     }
 
     return (
-        <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(219,234,254,0.9),_rgba(241,245,249,0.96)_38%,_rgba(226,232,240,1)_100%)] p-4 md:p-6">
+        <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(219,234,254,0.9),_rgba(241,245,249,0.96)_38%,_rgba(226,232,240,1)_100%)] p-2 md:p-4">
             {content}
         </div>
     );
