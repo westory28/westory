@@ -1363,7 +1363,7 @@ const ManageLesson: React.FC = () => {
                 <div className="fixed inset-0 z-[70] bg-slate-950/80 backdrop-blur-sm">
                     <div className="h-full overflow-y-auto">
                         <LessonContent
-                            unitId={null}
+                            unitId={selectedNodeId}
                             fallbackTitle={selectedNodeTitle}
                             lessonOverride={{
                                 title: lessonTitle || selectedNodeTitle,
@@ -1374,9 +1374,9 @@ const ManageLesson: React.FC = () => {
                                 worksheetTextRegions,
                                 worksheetBlanks,
                             } satisfies StudentLessonData}
-                            disablePersistence
                             fullscreenPreview
                             onClosePreview={() => setPreviewOpen(false)}
+                            allowHiddenAccess
                         />
                     </div>
                 </div>

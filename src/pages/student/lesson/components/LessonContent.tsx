@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { collection, doc, getDoc, getDocs, limit, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
-import LessonWorksheetStage from '../../../../components/common/LessonWorksheetStage';
+import LessonWorksheetStage, { type LessonWorksheetAnnotationState } from '../../../../components/common/LessonWorksheetStage';
 import { useAuth } from '../../../../contexts/AuthContext';
 import { db } from '../../../../lib/firebase';
 import { getSemesterCollectionPath } from '../../../../lib/semesterScope';
@@ -28,9 +28,12 @@ interface LessonContentProps {
     fullscreenPreview?: boolean;
     onClosePreview?: () => void;
     annotationUiMode?: 'always' | 'onDemand';
+    allowHiddenAccess?: boolean;
 }
 
 const EMPTY_BLANK_LABEL = '빈칸';
+
+const EMPTY_ANNOTATION_STATE: LessonWorksheetAnnotationState = { strokes: [], boxes: [], textNotes: [] };
 
 const normalizeAnswer = (value: string) => String(value || '').trim().replace(/\s+/g, '');
 
@@ -54,6 +57,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
     fullscreenPreview = false,
     onClosePreview,
     annotationUiMode = 'always',
+    allowHiddenAccess = false,
 }) => {
     const { config, currentUser } = useAuth();
     const [lesson, setLesson] = useState<LessonData | null>(lessonOverride);
@@ -61,18 +65,21 @@ const LessonContent: React.FC<LessonContentProps> = ({
     const [error, setError] = useState(false);
     const [isBlocked, setIsBlocked] = useState(false);
     const [studentAnswers, setStudentAnswers] = useState<Record<string, { value?: string; status?: AnswerStatus }>>({});
+    const [annotationState, setAnnotationState] = useState<LessonWorksheetAnnotationState>(EMPTY_ANNOTATION_STATE);
+    const [worksheetScreenOpen, setWorksheetScreenOpen] = useState(false);
 
     const contentRef = useRef<HTMLDivElement>(null);
     const saveTimerRef = useRef<number | null>(null);
-    const canPersist = Boolean(!lessonOverride && !disablePersistence && currentUser?.uid && unitId);
+    const canPersist = Boolean(!disablePersistence && currentUser?.uid && unitId);
 
     useEffect(() => {
         setLesson(lessonOverride);
-        setIsBlocked(Boolean(lessonOverride && lessonOverride.isVisibleToStudents === false));
+        setIsBlocked(Boolean(!allowHiddenAccess && lessonOverride && lessonOverride.isVisibleToStudents === false));
         setError(false);
         setLoading(false);
         setStudentAnswers({});
-    }, [lessonOverride]);
+        setAnnotationState(EMPTY_ANNOTATION_STATE);
+    }, [allowHiddenAccess, lessonOverride]);
 
     useEffect(() => {
         if (lessonOverride || !unitId) {
@@ -104,11 +111,13 @@ const LessonContent: React.FC<LessonContentProps> = ({
                 if (!snap.empty) {
                     const data = snap.docs[0].data() as LessonData;
                     setLesson(data);
-                    setIsBlocked(data.isVisibleToStudents === false);
+                    setIsBlocked(!allowHiddenAccess && data.isVisibleToStudents === false);
                     setStudentAnswers({});
+                    setAnnotationState(EMPTY_ANNOTATION_STATE);
                 } else {
                     setLesson(null);
                     setStudentAnswers({});
+                    setAnnotationState(EMPTY_ANNOTATION_STATE);
                 }
             } catch (fetchError) {
                 console.error('Error fetching lesson:', fetchError);
@@ -119,7 +128,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
         };
 
         void fetchLesson();
-    }, [config, lessonOverride, unitId]);
+    }, [allowHiddenAccess, config, lessonOverride, unitId]);
 
     const getProgressRef = () => {
         if (!canPersist || !currentUser?.uid || !unitId) return null;
@@ -154,6 +163,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
                 userId: currentUser.uid,
                 unitId,
                 answers: serializeAnswers(),
+                annotations: annotationState,
                 updatedAt: serverTimestamp(),
             }, { merge: true });
         } catch (saveError) {
@@ -239,9 +249,11 @@ const LessonContent: React.FC<LessonContentProps> = ({
                 if (!snap.exists()) return;
                 const data = snap.data() as {
                     answers?: Record<string, { value?: string; status?: AnswerStatus }>;
+                    annotations?: LessonWorksheetAnnotationState;
                 };
                 const answers = data.answers || {};
                 setStudentAnswers(answers);
+                setAnnotationState(data.annotations || EMPTY_ANNOTATION_STATE);
 
                 const inputs = container.querySelectorAll('.cloze-input, .worksheet-blank-input') as NodeListOf<HTMLInputElement>;
                 inputs.forEach((input, index) => {
@@ -289,6 +301,18 @@ const LessonContent: React.FC<LessonContentProps> = ({
                 status: getInputStatus(value, answer),
             },
         }));
+        scheduleProgressSave();
+    };
+
+    const handleAnnotationChange = (nextState: LessonWorksheetAnnotationState) => {
+        setAnnotationState((prev) => {
+            const same =
+                JSON.stringify(prev.strokes) === JSON.stringify(nextState.strokes)
+                && JSON.stringify(prev.boxes) === JSON.stringify(nextState.boxes)
+                && JSON.stringify(prev.textNotes) === JSON.stringify(nextState.textNotes);
+            if (same) return prev;
+            return nextState;
+        });
         scheduleProgressSave();
     };
 
@@ -388,16 +412,44 @@ const LessonContent: React.FC<LessonContentProps> = ({
 
                 <div ref={contentRef} className="space-y-6">
                     {(lesson.worksheetPageImages || []).length > 0 && (
-                        <LessonWorksheetStage
-                            pageImages={lesson.worksheetPageImages || []}
-                            blanks={lesson.worksheetBlanks || []}
-                            textRegions={lesson.worksheetTextRegions || []}
-                            mode="student"
-                            studentAnswers={studentAnswers}
-                            onStudentAnswerChange={handleWorksheetAnswerChange}
-                            annotationEnabled
-                            annotationUiMode={annotationUiMode}
-                        />
+                        fullscreenPreview ? (
+                            <LessonWorksheetStage
+                                pageImages={lesson.worksheetPageImages || []}
+                                blanks={lesson.worksheetBlanks || []}
+                                textRegions={lesson.worksheetTextRegions || []}
+                                mode="student"
+                                studentAnswers={studentAnswers}
+                                onStudentAnswerChange={handleWorksheetAnswerChange}
+                                annotationEnabled
+                                annotationUiMode={annotationUiMode}
+                                annotationState={annotationState}
+                                onAnnotationChange={handleAnnotationChange}
+                            />
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => setWorksheetScreenOpen(true)}
+                                className="group block w-full overflow-hidden rounded-[28px] border border-slate-200 bg-white text-left shadow-sm transition hover:border-blue-300 hover:shadow-lg"
+                            >
+                                <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+                                    <div>
+                                        <div className="text-sm font-bold text-slate-800">학습지 수업 화면 열기</div>
+                                        <div className="mt-1 text-xs text-slate-500">학습지 컨테이너를 클릭하면 전체 화면에서 필기할 수 있습니다.</div>
+                                    </div>
+                                    <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-600">
+                                        <i className="fas fa-expand text-[11px]"></i>
+                                        {(lesson.worksheetPageImages || []).length} page
+                                    </div>
+                                </div>
+                                <div className="bg-[radial-gradient(circle_at_top,_rgba(239,246,255,0.96),_rgba(248,250,252,0.98)_58%,_rgba(241,245,249,1)_100%)] p-4">
+                                    <img
+                                        src={lesson.worksheetPageImages?.[0]?.imageUrl}
+                                        alt="학습지 미리보기"
+                                        className="mx-auto max-h-[26rem] w-auto rounded-2xl border border-slate-200 bg-white shadow-sm transition group-hover:scale-[1.01]"
+                                    />
+                                </div>
+                            </button>
+                        )
                     )}
 
                     {!!lesson.contentHtml && (
@@ -422,6 +474,23 @@ const LessonContent: React.FC<LessonContentProps> = ({
                         </span>
                     )}
                 </div>
+
+                {worksheetScreenOpen && !fullscreenPreview && (
+                    <div className="fixed inset-0 z-[80] bg-slate-950/80 backdrop-blur-sm">
+                        <div className="h-full overflow-y-auto">
+                            <LessonContent
+                                unitId={unitId}
+                                fallbackTitle={fallbackTitle}
+                                lessonOverride={lesson}
+                                disablePersistence={disablePersistence}
+                                fullscreenPreview
+                                onClosePreview={() => setWorksheetScreenOpen(false)}
+                                annotationUiMode="always"
+                                allowHiddenAccess={allowHiddenAccess}
+                            />
+                        </div>
+                    </div>
+                )}
             </div>
 
             <style>{`

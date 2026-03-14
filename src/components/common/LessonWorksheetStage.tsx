@@ -38,6 +38,8 @@ interface LessonWorksheetStageProps {
     pendingBlank?: LessonWorksheetBlank | null;
     annotationEnabled?: boolean;
     annotationUiMode?: 'always' | 'onDemand';
+    annotationState?: LessonWorksheetAnnotationState;
+    onAnnotationChange?: (nextState: LessonWorksheetAnnotationState) => void;
 }
 
 interface DraftRect {
@@ -107,6 +109,12 @@ interface PressHoldState {
 }
 
 interface AnnotationSnapshot {
+    strokes: AnnotationStroke[];
+    boxes: AnnotationBox[];
+    textNotes: AnnotationTextNote[];
+}
+
+export interface LessonWorksheetAnnotationState {
     strokes: AnnotationStroke[];
     boxes: AnnotationBox[];
     textNotes: AnnotationTextNote[];
@@ -405,6 +413,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     pendingBlank = null,
     annotationEnabled = false,
     annotationUiMode = 'always',
+    annotationState,
+    onAnnotationChange,
 }) => {
     const pageRefs = useRef<Record<number, HTMLDivElement | null>>({});
     const [draftRect, setDraftRect] = useState<DraftRect | null>(null);
@@ -415,11 +425,11 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     const [highlighterColorKey, setHighlighterColorKey] = useState<DrawingColor>('yellow');
     const [studentZoom, setStudentZoom] = useState(1);
     const [toolbarVisible, setToolbarVisible] = useState(annotationUiMode === 'always');
-    const [strokes, setStrokes] = useState<AnnotationStroke[]>([]);
+    const [strokes, setStrokes] = useState<AnnotationStroke[]>(annotationState?.strokes || []);
     const [draftStroke, setDraftStroke] = useState<AnnotationStroke | null>(null);
-    const [boxes, setBoxes] = useState<AnnotationBox[]>([]);
+    const [boxes, setBoxes] = useState<AnnotationBox[]>(annotationState?.boxes || []);
     const [draftBox, setDraftBox] = useState<AnnotationBox | null>(null);
-    const [textNotes, setTextNotes] = useState<AnnotationTextNote[]>([]);
+    const [textNotes, setTextNotes] = useState<AnnotationTextNote[]>(annotationState?.textNotes || []);
     const [activeTextNoteId, setActiveTextNoteId] = useState<string | null>(null);
     const [editingTextNoteId, setEditingTextNoteId] = useState<string | null>(null);
     const [textNoteTransform, setTextNoteTransform] = useState<TextNoteTransformState | null>(null);
@@ -473,6 +483,21 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
             setEditingTextNoteId(null);
         }
     }, [annotationTool]);
+
+    useEffect(() => {
+        if (!annotationState) return;
+        setStrokes(annotationState.strokes || []);
+        setBoxes(annotationState.boxes || []);
+        setTextNotes(annotationState.textNotes || []);
+    }, [annotationState]);
+
+    useEffect(() => {
+        onAnnotationChange?.({
+            strokes,
+            boxes,
+            textNotes,
+        });
+    }, [boxes, onAnnotationChange, strokes, textNotes]);
 
     const visiblePageImages = useMemo(() => {
         if (mode === 'teacher') {
