@@ -10,8 +10,8 @@ import { cloneDefaultMenus, sanitizeMenuConfig } from '../../constants/menus';
 const ManageExam: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'preview' | 'omr'>('preview');
     const [tabLabels, setTabLabels] = useState({
-        preview: '성적 산출 관리',
-        omr: '정기 시험 답안',
+        preview: '평가 반영 비율',
+        omr: '정기시험 답안',
     });
     const [searchParams] = useSearchParams();
     const { userConfig } = useAuth();
@@ -31,12 +31,12 @@ const ManageExam: React.FC = () => {
                     : cloneDefaultMenus();
                 const teacherExamMenu = (menuConfig.teacher || []).find((menu) => menu.url === '/teacher/exam');
                 const children = teacherExamMenu?.children || [];
-                const previewLabel = children.find((child) => child.url === '/teacher/exam')?.name || '성적 산출 관리';
-                const omrLabel = children.find((child) => child.url === '/teacher/exam?tab=omr')?.name || '정기 시험 답안';
+                const previewLabel = children.find((child) => child.url === '/teacher/exam')?.name || '평가 반영 비율';
+                const omrLabel = children.find((child) => child.url === '/teacher/exam?tab=omr')?.name || '정기시험 답안';
                 setTabLabels({ preview: previewLabel, omr: omrLabel });
             } catch (error) {
                 console.error('Failed to load exam menu labels:', error);
-                setTabLabels({ preview: '성적 산출 관리', omr: '정기 시험 답안' });
+                setTabLabels({ preview: '평가 반영 비율', omr: '정기시험 답안' });
             }
         };
 

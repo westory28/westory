@@ -71,8 +71,8 @@ export const MENUS: MenuConfig = {
             url: '/teacher/exam',
             icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
             children: [
-                { name: '성적 산출 기준', url: '/teacher/exam' },
-                { name: '학기 시험 답안', url: '/teacher/exam?tab=omr' },
+                { name: '평가 반영 비율', url: '/teacher/exam' },
+                { name: '정기시험 답안', url: '/teacher/exam?tab=omr' },
             ],
         },
         {
