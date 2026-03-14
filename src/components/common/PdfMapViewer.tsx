@@ -393,15 +393,16 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
         const surface = modalSurfaceRef.current;
         const focusPaddingX = isMobileViewport ? 72 : 140;
         const focusPaddingY = isMobileViewport ? 96 : 160;
-        const minFocusZoom = isMobileViewport ? Math.max(fitZoom * 1.35, 1.1) : Math.max(fitZoom * 1.2, 0.95);
-        const targetZoom = clamp(
-            Math.min(
-                (surface.clientWidth - focusPaddingX) / Math.max(selectedRegion.width, 24),
-                (surface.clientHeight - focusPaddingY) / Math.max(selectedRegion.height, 24),
-            ),
-            minFocusZoom,
-            4,
-        );
+        const targetZoom = isMobileViewport
+            ? clamp(Math.max(fitZoom * 1.18, 1), 1, 2)
+            : clamp(
+                Math.min(
+                    (surface.clientWidth - focusPaddingX) / Math.max(selectedRegion.width, 24),
+                    (surface.clientHeight - focusPaddingY) / Math.max(selectedRegion.height, 24),
+                ),
+                Math.max(fitZoom * 1.2, 0.95),
+                4,
+            );
 
         if (Math.abs(zoom - targetZoom) > 0.02) {
             hasManualZoomRef.current = true;
