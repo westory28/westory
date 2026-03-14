@@ -878,14 +878,11 @@ const ManageThinkCloud: React.FC = () => {
                             </div>
                         </div>
                         <div className="flex-1 flex items-start justify-center px-0 pt-4 pb-8 md:px-1 md:pt-6 md:pb-10">
-                            <div
-                                className="w-full"
-                                style={{ width: 'min(100%, calc((92vh - 215px) * 21 / 9))' }}
-                            >
+                            <div className="w-full max-w-[2100px]">
                                 <WordCloudView
                                     entries={cloudEntries}
                                     showSubmitters={!!selectedSession && !selectedSession.options.anonymous}
-                                    variant="modal"
+                                    variant="default"
                                 />
                             </div>
                         </div>
