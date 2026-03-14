@@ -10,7 +10,7 @@ import {
 } from '../../lib/lessonWorksheet';
 
 type AnswerStatus = '' | 'correct' | 'wrong';
-type StudentTool = 'move' | 'pen' | 'highlighter' | 'eraser' | 'text';
+type StudentTool = 'move' | 'pen' | 'highlighter' | 'rectangle' | 'eraser' | 'text';
 type DrawingColor = 'blue' | 'red' | 'green' | 'yellow' | 'black';
 
 interface LessonWorksheetStageProps {
@@ -59,6 +59,18 @@ interface AnnotationStroke {
     color: string;
     width: number;
     points: RatioPoint[];
+    straight?: boolean;
+}
+
+interface AnnotationBox {
+    id: string;
+    page: number;
+    color: string;
+    width: number;
+    leftRatio: number;
+    topRatio: number;
+    widthRatio: number;
+    heightRatio: number;
 }
 
 interface AnnotationTextNote {
@@ -74,6 +86,11 @@ interface AnnotationTextNote {
 interface PinchState {
     startDistance: number;
     startZoom: number;
+}
+
+interface PressHoldState {
+    timeoutId: number | null;
+    startedAt: number;
 }
 
 interface ToolColorOption {
@@ -102,6 +119,8 @@ const MOVE_CURSOR = 'grab';
 const PEN_CURSOR = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cpath fill='%23111827' d='M20.8 4.2l3 3c.8.8.8 2 0 2.8L12 21.9l-5.1 1.3L8.2 18 20 6.2c.8-.8 2-.8 2.8 0z'/%3E%3Cpath fill='%2360A5FA' d='M6.9 23.2l1.3-5 3.7 3.7z'/%3E%3C/g%3E%3C/svg%3E") 4 24, crosshair`;
 const HIGHLIGHTER_CURSOR = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cpath fill='%23FACC15' d='M18.5 4l5.5 5.5-10.9 10.9-6.2.8.8-6.2z'/%3E%3Cpath fill='%23924100' d='M18.5 4l5.5 5.5 1.1-1.1c.7-.7.7-1.8 0-2.5l-3-3c-.7-.7-1.8-.7-2.5 0z'/%3E%3Cpath stroke='%23111827' stroke-width='1.2' d='M7.2 21.1l-1.9 1.9h7.3'/%3E%3C/g%3E%3C/svg%3E") 5 23, crosshair`;
 const ERASER_CURSOR = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cpath fill='%23F59E0B' d='M10.3 5.3l12.4 12.4-5.3 5.3H8.6L3 17.4z'/%3E%3Cpath fill='%23FFF7ED' d='M10.3 5.3l6.1 6.1-8 8L3 17.4z'/%3E%3Cpath stroke='%23111827' stroke-width='1.4' d='M3.5 17.4l6.8 6.8m12.1-6.5l-5.1 5.1m-8.7 1h13.2'/%3E%3C/g%3E%3C/svg%3E") 6 22, cell`;
+const RECTANGLE_CURSOR = 'crosshair';
+const STRAIGHT_LINE_HOLD_MS = 350;
 
 const toPercent = (value: number) => `${value * 100}%`;
 const clampZoom = (value: number) => Math.min(MAX_STUDENT_ZOOM, Math.max(MIN_STUDENT_ZOOM, value));
@@ -340,6 +359,17 @@ const createTextNote = (page: number, point: RatioPoint): AnnotationTextNote => 
     text: '',
 });
 
+const createBox = (page: number, point: RatioPoint, color: string): AnnotationBox => ({
+    id: `box-${page}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    page,
+    color,
+    width: 3,
+    leftRatio: point.x,
+    topRatio: point.y,
+    widthRatio: 0,
+    heightRatio: 0,
+});
+
 const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     pageImages,
     blanks,
@@ -365,9 +395,12 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     const [studentZoom, setStudentZoom] = useState(1);
     const [strokes, setStrokes] = useState<AnnotationStroke[]>([]);
     const [draftStroke, setDraftStroke] = useState<AnnotationStroke | null>(null);
+    const [boxes, setBoxes] = useState<AnnotationBox[]>([]);
+    const [draftBox, setDraftBox] = useState<AnnotationBox | null>(null);
     const [textNotes, setTextNotes] = useState<AnnotationTextNote[]>([]);
     const [activeTextNoteId, setActiveTextNoteId] = useState<string | null>(null);
     const pinchRef = useRef<PinchState | null>(null);
+    const holdRef = useRef<PressHoldState>({ timeoutId: null, startedAt: 0 });
 
     const regionsByPage = useMemo(() => {
         const grouped = new Map<number, LessonWorksheetTextRegion[]>();
@@ -473,6 +506,17 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         }
 
         const threshold = Math.max(0.012, 22 / Math.max(pageImage.width, 1));
+        const hitBox = boxes.find((box) => (
+            box.page === page
+            && point.x >= box.leftRatio
+            && point.x <= box.leftRatio + box.widthRatio
+            && point.y >= box.topRatio
+            && point.y <= box.topRatio + box.heightRatio
+        ));
+        if (hitBox) {
+            setBoxes((prev) => prev.filter((box) => box.id !== hitBox.id));
+            return;
+        }
         const hitStroke = strokes.find((stroke) => (
             stroke.page === page
             && stroke.points.some((strokePoint) => Math.hypot(strokePoint.x - point.x, strokePoint.y - point.y) <= threshold)
@@ -492,6 +536,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
             ? ERASER_CURSOR
             : annotationTool === 'text'
                 ? 'text'
+                : annotationTool === 'rectangle'
+                    ? RECTANGLE_CURSOR
                 : annotationTool === 'highlighter'
                     ? HIGHLIGHTER_CURSOR
                     : PEN_CURSOR
@@ -499,6 +545,13 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
 
     const applyStudentZoom = (nextZoom: number) => {
         setStudentZoom(clampZoom(nextZoom));
+    };
+
+    const clearHoldTimer = () => {
+        if (holdRef.current.timeoutId) {
+            window.clearTimeout(holdRef.current.timeoutId);
+            holdRef.current.timeoutId = null;
+        }
     };
 
     const handlePointerDown = (page: number, event: React.PointerEvent<HTMLDivElement>) => {
@@ -539,12 +592,25 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
             eraseAnnotationAtPoint(page, point, pageImage);
             return;
         }
+        if (annotationTool === 'rectangle') {
+            event.currentTarget.setPointerCapture(event.pointerId);
+            setDraftBox(createBox(page, point, selectedPenColor.pen));
+            return;
+        }
 
         event.currentTarget.setPointerCapture(event.pointerId);
         const nextStroke = createStroke(page, annotationTool, point);
         nextStroke.color = annotationTool === 'pen' ? selectedPenColor.pen : selectedHighlighterColor.highlighter;
         nextStroke.width = annotationTool === 'pen' ? 4 : 18;
         setDraftStroke(nextStroke);
+        holdRef.current.startedAt = Date.now();
+        holdRef.current.timeoutId = window.setTimeout(() => {
+            setDraftStroke((prev) => {
+                if (!prev || prev.page !== page || prev.points.length < 2) return prev;
+                const lastPoint = prev.points[prev.points.length - 1];
+                return { ...prev, straight: true, points: [prev.points[0], lastPoint] };
+            });
+        }, STRAIGHT_LINE_HOLD_MS);
     };
 
     const updateDraftPoint = (page: number, clientX: number, clientY: number) => {
@@ -556,6 +622,24 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
             return;
         }
 
+        if (draftBox && draftBox.page === page) {
+            const point = resolveRatioPoint(page, clientX, clientY);
+            if (!point) return;
+            setDraftBox((prev) => {
+                if (!prev) return null;
+                const left = Math.min(prev.leftRatio, point.x);
+                const top = Math.min(prev.topRatio, point.y);
+                return {
+                    ...prev,
+                    leftRatio: left,
+                    topRatio: top,
+                    widthRatio: Math.abs(point.x - prev.leftRatio),
+                    heightRatio: Math.abs(point.y - prev.topRatio),
+                };
+            });
+            return;
+        }
+
         if (!draftStroke || draftStroke.page !== page) return;
         const point = resolveRatioPoint(page, clientX, clientY);
         if (!point) return;
@@ -563,6 +647,9 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
             if (!prev) return null;
             const lastPoint = prev.points[prev.points.length - 1];
             if (lastPoint && Math.hypot(lastPoint.x - point.x, lastPoint.y - point.y) < 0.002) return prev;
+            if (prev.straight) {
+                return { ...prev, points: [prev.points[0], point] };
+            }
             return { ...prev, points: [...prev.points, point] };
         });
     };
@@ -608,12 +695,19 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     };
 
     const finishStudentStroke = () => {
+        clearHoldTimer();
         setDraftStroke((prev) => {
             if (!prev) return null;
             const finalized = prev.points.length === 1
                 ? { ...prev, points: [...prev.points, prev.points[0]] }
                 : prev;
             setStrokes((existing) => [...existing, finalized]);
+            return null;
+        });
+        setDraftBox((prev) => {
+            if (!prev) return null;
+            if (prev.widthRatio < 0.003 || prev.heightRatio < 0.003) return null;
+            setBoxes((existing) => [...existing, prev]);
             return null;
         });
     };
@@ -659,6 +753,10 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         };
     }, [draftStroke]);
 
+    useEffect(() => () => {
+        clearHoldTimer();
+    }, []);
+
     return (
         <div className="space-y-6">
             {mode === 'student' && annotationEnabled && (
@@ -668,6 +766,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                             ['move', '이동', 'fa-up-down-left-right'],
                             ['pen', '펜', 'fa-pen'],
                             ['highlighter', '형광펜', 'fa-highlighter'],
+                            ['rectangle', '네모', 'fa-square'],
                             ['eraser', '지우개', 'fa-eraser'],
                             ['text', '텍스트', 'fa-font'],
                         ].map(([tool, label, icon]) => (
@@ -685,22 +784,22 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                 {label}
                             </button>
                         ))}
-                        {(annotationTool === 'pen' || annotationTool === 'highlighter') && (
+                        {(annotationTool === 'pen' || annotationTool === 'highlighter' || annotationTool === 'rectangle') && (
                             <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">
                                 {TOOL_COLORS.map((color) => {
-                                    const isPen = annotationTool === 'pen';
-                                    const selected = isPen ? penColorKey === color.key : highlighterColorKey === color.key;
+                                    const usesPenPalette = annotationTool === 'pen' || annotationTool === 'rectangle';
+                                    const selected = usesPenPalette ? penColorKey === color.key : highlighterColorKey === color.key;
                                     return (
                                         <button
                                             key={`${annotationTool}-${color.key}`}
                                             type="button"
-                                            aria-label={`${annotationTool === 'pen' ? '펜' : '형광펜'} ${color.label}`}
+                                            aria-label={`${usesPenPalette ? (annotationTool === 'rectangle' ? '네모' : '펜') : '형광펜'} ${color.label}`}
                                             onClick={() => {
-                                                if (isPen) setPenColorKey(color.key);
+                                                if (usesPenPalette) setPenColorKey(color.key);
                                                 else setHighlighterColorKey(color.key);
                                             }}
                                             className={`h-7 w-7 rounded-full border-2 transition ${selected ? 'border-slate-900 scale-110' : 'border-white/80 hover:scale-105'}`}
-                                            style={{ background: isPen ? color.pen : color.highlighter }}
+                                            style={{ background: usesPenPalette ? color.pen : color.highlighter }}
                                         />
                                     );
                                 })}
@@ -735,6 +834,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                             type="button"
                             onClick={() => {
                                 setStrokes([]);
+                                setBoxes([]);
                                 setTextNotes([]);
                                 setActiveTextNoteId(null);
                             }}
@@ -835,8 +935,10 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                 );
 
                 const pageStrokes = strokes.filter((stroke) => stroke.page === pageImage.page);
+                const pageBoxes = boxes.filter((box) => box.page === pageImage.page);
                 const pageTextNotes = textNotes.filter((note) => note.page === pageImage.page);
                 const currentDraftStroke = draftStroke?.page === pageImage.page ? draftStroke : null;
+                const currentDraftBox = draftBox?.page === pageImage.page ? draftBox : null;
 
                 return (
                     <section key={pageImage.page} className={`rounded-[2rem] border border-gray-200 bg-white shadow-sm ${mode === 'student' ? 'p-2 md:p-3' : 'p-3 md:p-4'}`}>
@@ -906,8 +1008,10 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                     else finishStudentStroke();
                                 }}
                                 onPointerCancel={() => {
+                                    clearHoldTimer();
                                     setDraftRect(null);
                                     setDraftStroke(null);
+                                    setDraftBox(null);
                                 }}
                             >
                                 <img
@@ -947,8 +1051,43 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                                 strokeOpacity={1}
                                             />
                                         )}
-                                    </svg>
-                                )}
+                                </svg>
+                            )}
+
+                            {(pageBoxes.length > 0 || currentDraftBox) && (
+                                <svg
+                                    className="pointer-events-none absolute inset-0 z-[6] h-full w-full"
+                                    viewBox={`0 0 ${pageImage.width} ${pageImage.height}`}
+                                    preserveAspectRatio="none"
+                                >
+                                    {pageBoxes.map((box) => (
+                                        <rect
+                                            key={box.id}
+                                            x={box.leftRatio * pageImage.width}
+                                            y={box.topRatio * pageImage.height}
+                                            width={box.widthRatio * pageImage.width}
+                                            height={box.heightRatio * pageImage.height}
+                                            fill="none"
+                                            stroke={box.color}
+                                            strokeWidth={box.width}
+                                            rx="4"
+                                        />
+                                    ))}
+                                    {currentDraftBox && (
+                                        <rect
+                                            x={currentDraftBox.leftRatio * pageImage.width}
+                                            y={currentDraftBox.topRatio * pageImage.height}
+                                            width={currentDraftBox.widthRatio * pageImage.width}
+                                            height={currentDraftBox.heightRatio * pageImage.height}
+                                            fill="none"
+                                            stroke={currentDraftBox.color}
+                                            strokeWidth={currentDraftBox.width}
+                                            strokeDasharray="8 4"
+                                            rx="4"
+                                        />
+                                    )}
+                                </svg>
+                            )}
 
                             {pageTextNotes.map((note) => (
                                 <div
