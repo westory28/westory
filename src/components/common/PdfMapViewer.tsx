@@ -142,6 +142,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
     const inlineShortcutRef = useRef<HTMLDivElement | null>(null);
     const modalSurfaceRef = useRef<HTMLDivElement | null>(null);
     const modalRegionHighlightRef = useRef<HTMLDivElement | null>(null);
+    const modalPageFrameRef = useRef<HTMLDivElement | null>(null);
     const pinchStateRef = useRef<{ distance: number; zoom: number } | null>(null);
     const dragStateRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
     const hasManualZoomRef = useRef(false);
@@ -431,9 +432,27 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
         }
 
         const frameId = window.requestAnimationFrame(() => {
-            modalRegionHighlightRef.current?.scrollIntoView({
-                block: 'center',
-                inline: 'center',
+            const currentSurface = modalSurfaceRef.current;
+            const highlight = modalRegionHighlightRef.current;
+            const pageFrame = modalPageFrameRef.current;
+            if (!currentSurface || !highlight || !pageFrame) return;
+
+            const surfaceRect = currentSurface.getBoundingClientRect();
+            const frameRect = pageFrame.getBoundingClientRect();
+            const highlightRect = highlight.getBoundingClientRect();
+
+            const targetLeft = currentSurface.scrollLeft
+                + (highlightRect.left - frameRect.left)
+                + (highlightRect.width / 2)
+                - (surfaceRect.width / 2);
+            const targetTop = currentSurface.scrollTop
+                + (highlightRect.top - frameRect.top)
+                + (highlightRect.height / 2)
+                - (surfaceRect.height / 2);
+
+            currentSurface.scrollTo({
+                left: Math.max(0, targetLeft),
+                top: Math.max(0, targetTop),
                 behavior: 'smooth',
             });
         });
@@ -722,7 +741,10 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                 )}
                 {!loadingPdf && usingPreprocessedPages && currentPageImage && (
                     <div className={`relative flex ${compact || isPortrait ? 'justify-center' : 'justify-start'}`}>
-                        <div className="relative inline-block">
+                        <div
+                            ref={interactive ? undefined : modalPageFrameRef}
+                            className="relative inline-block"
+                        >
                             <img
                                 src={currentPageImage.imageUrl}
                                 alt={`${title} ${currentPage}페이지`}
@@ -735,9 +757,15 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                             {selectedRegion && selectedRegion.page === currentPage && (
                                 <div
                                     ref={interactive ? undefined : modalRegionHighlightRef}
-                                    className="pointer-events-none absolute rounded border-[3px] border-red-500 bg-red-200/15 shadow-[0_0_0_2px_rgba(255,255,255,0.9)]"
-                                    style={getRegionOverlayStyle(selectedRegion, surfaceScale, 26, 26, 4, 4)}
-                                />
+                                    className="pointer-events-none absolute"
+                                    style={getRegionOverlayStyle(selectedRegion, surfaceScale, 56, 36, 12, 10)}
+                                >
+                                    <div className="relative h-full w-full rounded-md border-[3px] border-red-500 bg-red-200/12 shadow-[0_0_0_2px_rgba(255,255,255,0.92)]">
+                                        <div className="absolute -top-8 left-0 rounded-full border border-red-200 bg-white/95 px-2.5 py-1 text-[11px] font-extrabold leading-none text-red-600 shadow-sm">
+                                            {selectedRegion.label}
+                                        </div>
+                                    </div>
+                                </div>
                             )}
                         </div>
                     </div>
@@ -749,14 +777,25 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                         onLoadError={(error) => setLoadError(error.message || 'pdf-render-failed')}
                         loading="PDF를 불러오는 중입니다."
                     >
-                        <div className="relative inline-block">
+                        <div
+                            ref={interactive ? undefined : modalPageFrameRef}
+                            className="relative inline-block"
+                        >
                             <Page pageNumber={currentPage} scale={zoom} renderTextLayer renderAnnotationLayer loading="페이지를 불러오는 중입니다." />
                             {selectedRegion && selectedRegion.page === currentPage && (
                                 <div
                                     ref={interactive ? undefined : modalRegionHighlightRef}
-                                    className="pointer-events-none absolute rounded border-[3px] border-red-500 bg-red-200/15 shadow-[0_0_0_2px_rgba(255,255,255,0.9)]"
-                                    style={getRegionOverlayStyle(selectedRegion, zoom, isMobileViewport ? 38 : 46, isMobileViewport ? 38 : 46, 6, 6)}
-                                />
+                                    className="pointer-events-none absolute"
+                                    style={getRegionOverlayStyle(selectedRegion, zoom, isMobileViewport ? 72 : 96, isMobileViewport ? 48 : 58, 14, 12)}
+                                >
+                                    <div className="relative h-full w-full rounded-md border-[3px] border-red-500 bg-red-200/12 shadow-[0_0_0_2px_rgba(255,255,255,0.92)]">
+                                        <div className={`absolute left-0 rounded-full border border-red-200 bg-white/95 px-3 py-1 text-xs font-extrabold leading-none text-red-600 shadow-sm ${
+                                            isMobileViewport ? '-top-9' : '-top-10'
+                                        }`}>
+                                            {selectedRegion.label}
+                                        </div>
+                                    </div>
+                                </div>
                             )}
                         </div>
                     </Document>
