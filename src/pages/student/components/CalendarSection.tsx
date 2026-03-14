@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
@@ -34,6 +34,8 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
     const { categories } = useScheduleCategories();
     const [currentViewType, setCurrentViewType] = useState('dayGridMonth');
     const [visibleRange, setVisibleRange] = useState<{ start: string; end: string }>({ start: '', end: '' });
+    const [listTopOffset, setListTopOffset] = useState(88);
+    const calendarWrapperRef = useRef<HTMLDivElement | null>(null);
 
     const formatEventTargetLabel = (event?: CalendarEvent) => {
         if (!event || event.eventType === 'holiday' || event.targetType === 'all' || event.targetType === 'common') {
@@ -224,6 +226,26 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
         return () => { document.head.removeChild(style); };
     }, []);
 
+    useEffect(() => {
+        const updateListTopOffset = () => {
+            const wrapper = calendarWrapperRef.current;
+            if (!wrapper) return;
+            const toolbar = wrapper.querySelector('.fc-header-toolbar') as HTMLElement | null;
+            if (!toolbar) return;
+            const wrapperRect = wrapper.getBoundingClientRect();
+            const toolbarRect = toolbar.getBoundingClientRect();
+            const nextOffset = Math.max(72, Math.round(toolbarRect.bottom - wrapperRect.top + 8));
+            setListTopOffset(nextOffset);
+        };
+
+        const frameId = window.requestAnimationFrame(updateListTopOffset);
+        window.addEventListener('resize', updateListTopOffset);
+        return () => {
+            window.cancelAnimationFrame(frameId);
+            window.removeEventListener('resize', updateListTopOffset);
+        };
+    }, [currentViewType, visibleRange.end, visibleRange.start]);
+
     return (
         <div className="flex h-full min-h-[500px] flex-col rounded-xl bg-white p-4 shadow-sm md:min-h-0">
             <div className="mb-2 flex flex-col items-start justify-between gap-2 md:flex-row md:items-center">
@@ -238,7 +260,10 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                     <i className="fas fa-search"></i>
                 </button>
             </div>
-            <div className={`calendar-wrapper relative flex-1 ${currentViewType === 'listMonth' ? 'custom-list-active' : ''}`}>
+            <div
+                ref={calendarWrapperRef}
+                className={`calendar-wrapper relative flex-1 min-h-0 ${currentViewType === 'listMonth' ? 'custom-list-active' : ''}`}
+            >
                 <FullCalendar
                     ref={calendarRef}
                     plugins={[dayGridPlugin, interactionPlugin, listPlugin]}
@@ -309,7 +334,10 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                     }}
                 />
                 {currentViewType === 'listMonth' && (
-                    <div className="custom-schedule-list overflow-y-auto rounded-b-xl border border-t-0 border-gray-200 bg-white">
+                    <div
+                        className="custom-schedule-list absolute inset-x-0 bottom-0 overflow-y-auto rounded-b-xl border border-t-0 border-gray-200 bg-white"
+                        style={{ top: `${listTopOffset}px` }}
+                    >
                         {listRows.map((group) => (
                             <div key={group.date}>
                                 <div className="border-t border-gray-200 bg-gray-50 px-4 py-3 text-lg font-extrabold text-gray-900 first:border-t-0">

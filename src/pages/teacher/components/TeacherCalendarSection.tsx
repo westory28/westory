@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
@@ -81,6 +81,8 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
     );
     const [currentViewType, setCurrentViewType] = useState('dayGridMonth');
     const [visibleRange, setVisibleRange] = useState<{ start: string; end: string }>({ start: '', end: '' });
+    const [listTopOffset, setListTopOffset] = useState(88);
+    const calendarWrapperRef = useRef<HTMLDivElement | null>(null);
 
     const fcEvents = events.map((event) => {
         const meta = getScheduleCategoryMeta(event.eventType, categories);
@@ -129,6 +131,26 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
         };
         void loadSchoolConfig();
     }, []);
+
+    useEffect(() => {
+        const updateListTopOffset = () => {
+            const wrapper = calendarWrapperRef.current;
+            if (!wrapper) return;
+            const toolbar = wrapper.querySelector('.fc-header-toolbar') as HTMLElement | null;
+            if (!toolbar) return;
+            const wrapperRect = wrapper.getBoundingClientRect();
+            const toolbarRect = toolbar.getBoundingClientRect();
+            const nextOffset = Math.max(72, Math.round(toolbarRect.bottom - wrapperRect.top + 8));
+            setListTopOffset(nextOffset);
+        };
+
+        const frameId = window.requestAnimationFrame(updateListTopOffset);
+        window.addEventListener('resize', updateListTopOffset);
+        return () => {
+            window.cancelAnimationFrame(frameId);
+            window.removeEventListener('resize', updateListTopOffset);
+        };
+    }, [currentViewType, visibleRange.end, visibleRange.start]);
 
     const classTargets = gradeOptions.flatMap((gradeOpt) =>
         classOptions.map((classOpt) => ({
@@ -281,7 +303,10 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                 </div>
             </div>
 
-            <div className={`calendar-wrapper relative flex-1 ${currentViewType === 'listMonth' ? 'custom-list-active' : ''}`}>
+            <div
+                ref={calendarWrapperRef}
+                className={`calendar-wrapper relative flex-1 min-h-0 ${currentViewType === 'listMonth' ? 'custom-list-active' : ''}`}
+            >
                 <FullCalendar
                     ref={calendarRef}
                     plugins={[dayGridPlugin, interactionPlugin, listPlugin]}
@@ -355,7 +380,10 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                     }}
                 />
                 {currentViewType === 'listMonth' && (
-                    <div className="custom-schedule-list overflow-y-auto rounded-b-xl border border-t-0 border-gray-200 bg-white">
+                    <div
+                        className="custom-schedule-list absolute inset-x-0 bottom-0 overflow-y-auto rounded-b-xl border border-t-0 border-gray-200 bg-white"
+                        style={{ top: `${listTopOffset}px` }}
+                    >
                         {listRows.map((group) => (
                             <div key={group.date}>
                                 <div className="border-t border-gray-200 bg-gray-50 px-4 py-3 text-lg font-extrabold text-gray-900 first:border-t-0">
