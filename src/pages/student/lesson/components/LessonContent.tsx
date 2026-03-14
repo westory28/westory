@@ -67,9 +67,11 @@ const LessonContent: React.FC<LessonContentProps> = ({
     const [studentAnswers, setStudentAnswers] = useState<Record<string, { value?: string; status?: AnswerStatus }>>({});
     const [annotationState, setAnnotationState] = useState<LessonWorksheetAnnotationState>(EMPTY_ANNOTATION_STATE);
     const [worksheetScreenOpen, setWorksheetScreenOpen] = useState(false);
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const [saveMessage, setSaveMessage] = useState('');
 
     const contentRef = useRef<HTMLDivElement>(null);
-    const saveTimerRef = useRef<number | null>(null);
     const canPersist = Boolean(!disablePersistence && currentUser?.uid && unitId);
 
     useEffect(() => {
@@ -79,6 +81,8 @@ const LessonContent: React.FC<LessonContentProps> = ({
         setLoading(false);
         setStudentAnswers({});
         setAnnotationState(EMPTY_ANNOTATION_STATE);
+        setHasUnsavedChanges(false);
+        setSaveMessage('');
     }, [allowHiddenAccess, lessonOverride]);
 
     useEffect(() => {
@@ -114,10 +118,14 @@ const LessonContent: React.FC<LessonContentProps> = ({
                     setIsBlocked(!allowHiddenAccess && data.isVisibleToStudents === false);
                     setStudentAnswers({});
                     setAnnotationState(EMPTY_ANNOTATION_STATE);
+                    setHasUnsavedChanges(false);
+                    setSaveMessage('');
                 } else {
                     setLesson(null);
                     setStudentAnswers({});
                     setAnnotationState(EMPTY_ANNOTATION_STATE);
+                    setHasUnsavedChanges(false);
+                    setSaveMessage('');
                 }
             } catch (fetchError) {
                 console.error('Error fetching lesson:', fetchError);
@@ -159,6 +167,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
         const progressRef = getProgressRef();
         if (!progressRef || !currentUser?.uid || !unitId) return;
         try {
+            setIsSaving(true);
             await setDoc(progressRef, {
                 userId: currentUser.uid,
                 unitId,
@@ -166,17 +175,14 @@ const LessonContent: React.FC<LessonContentProps> = ({
                 annotations: annotationState,
                 updatedAt: serverTimestamp(),
             }, { merge: true });
+            setHasUnsavedChanges(false);
+            setSaveMessage('저장됨');
         } catch (saveError) {
             console.error('Failed to save lesson progress:', saveError);
+            setSaveMessage('저장 실패');
+        } finally {
+            setIsSaving(false);
         }
-    };
-
-    const scheduleProgressSave = () => {
-        if (!canPersist) return;
-        if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
-        saveTimerRef.current = window.setTimeout(() => {
-            void saveProgressToFirestore();
-        }, 350);
     };
 
     const applyHierarchySpacing = (html: string) => {
@@ -228,14 +234,15 @@ const LessonContent: React.FC<LessonContentProps> = ({
             const status = getInputStatus(target.value, target.dataset.answer || '');
             target.classList.toggle('correct', status === 'correct');
             target.classList.toggle('wrong', status === 'wrong');
-            scheduleProgressSave();
+            setHasUnsavedChanges(true);
+            setSaveMessage('저장 필요');
         };
 
         container.addEventListener('input', handleInput);
         return () => {
             container.removeEventListener('input', handleInput);
         };
-    }, [canPersist, unitId, lesson?.contentHtml, lesson?.worksheetBlanks]);
+    }, [lesson?.contentHtml, lesson?.worksheetBlanks]);
 
     useEffect(() => {
         if (!canPersist) return;
@@ -254,6 +261,8 @@ const LessonContent: React.FC<LessonContentProps> = ({
                 const answers = data.answers || {};
                 setStudentAnswers(answers);
                 setAnnotationState(data.annotations || EMPTY_ANNOTATION_STATE);
+                setHasUnsavedChanges(false);
+                setSaveMessage('');
 
                 const inputs = container.querySelectorAll('.cloze-input, .worksheet-blank-input') as NodeListOf<HTMLInputElement>;
                 inputs.forEach((input, index) => {
@@ -273,10 +282,6 @@ const LessonContent: React.FC<LessonContentProps> = ({
         void restoreProgress();
     }, [canPersist, config, currentUser?.uid, lesson?.contentHtml, lesson?.worksheetBlanks, unitId]);
 
-    useEffect(() => () => {
-        if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
-    }, []);
-
     const handleReset = () => {
         if (!contentRef.current) return;
         if (!window.confirm('입력한 내용을 모두 지우시겠습니까?')) return;
@@ -290,7 +295,8 @@ const LessonContent: React.FC<LessonContentProps> = ({
             nextAnswers[key] = { value: '', status: '' };
         });
         setStudentAnswers(nextAnswers);
-        void saveProgressToFirestore();
+        setHasUnsavedChanges(true);
+        setSaveMessage('저장 필요');
     };
 
     const handleWorksheetAnswerChange = (blankId: string, value: string, answer: string) => {
@@ -301,7 +307,8 @@ const LessonContent: React.FC<LessonContentProps> = ({
                 status: getInputStatus(value, answer),
             },
         }));
-        scheduleProgressSave();
+        setHasUnsavedChanges(true);
+        setSaveMessage('저장 필요');
     };
 
     const handleAnnotationChange = (nextState: LessonWorksheetAnnotationState) => {
@@ -315,7 +322,15 @@ const LessonContent: React.FC<LessonContentProps> = ({
             changed = true;
             return nextState;
         });
-        if (changed) scheduleProgressSave();
+        if (changed) {
+            setHasUnsavedChanges(true);
+            setSaveMessage('저장 필요');
+        }
+    };
+
+    const handleSaveClick = () => {
+        if (!canPersist || isSaving || !hasUnsavedChanges) return;
+        void saveProgressToFirestore();
     };
 
     const getVideoEmbedUrl = (url?: string) => {
@@ -388,6 +403,32 @@ const LessonContent: React.FC<LessonContentProps> = ({
                             </p>
                         )}
                     </div>
+                    {canPersist && (
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span className={`rounded-full px-3 py-1 text-xs font-bold ${
+                                hasUnsavedChanges
+                                    ? 'bg-amber-50 text-amber-700'
+                                    : saveMessage === '저장됨'
+                                        ? 'bg-emerald-50 text-emerald-700'
+                                        : 'bg-slate-100 text-slate-500'
+                            }`}>
+                                {isSaving ? '저장 중...' : saveMessage || '저장 대기'}
+                            </span>
+                            <button
+                                type="button"
+                                onClick={handleSaveClick}
+                                disabled={isSaving || !hasUnsavedChanges}
+                                className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition ${
+                                    isSaving || !hasUnsavedChanges
+                                        ? 'cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400'
+                                        : 'border border-blue-600 bg-blue-600 text-white hover:bg-blue-700'
+                                }`}
+                            >
+                                <i className="fas fa-save text-xs"></i>
+                                저장
+                            </button>
+                        </div>
+                    )}
                     {fullscreenPreview && onClosePreview && (
                         <button
                             type="button"

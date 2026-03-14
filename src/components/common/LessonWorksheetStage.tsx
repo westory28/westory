@@ -150,6 +150,7 @@ const ERASER_CURSOR = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
 const RECTANGLE_CURSOR = 'crosshair';
 const STRAIGHT_LINE_HOLD_MS = 650;
 const STRAIGHT_LINE_MOVE_THRESHOLD = 0.002;
+const EMPTY_ANNOTATION_STATE: LessonWorksheetAnnotationState = { strokes: [], boxes: [], textNotes: [] };
 
 const toPercent = (value: number) => `${value * 100}%`;
 const clampZoom = (value: number) => Math.min(MAX_STUDENT_ZOOM, Math.max(MIN_STUDENT_ZOOM, value));
@@ -443,6 +444,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     const [redoStack, setRedoStack] = useState<AnnotationSnapshot[]>([]);
     const pinchRef = useRef<PinchState | null>(null);
     const holdRef = useRef<PressHoldState>({ timeoutId: null, page: null });
+    const externalAnnotationKeyRef = useRef(getAnnotationStateKey(annotationState || EMPTY_ANNOTATION_STATE));
 
     const regionsByPage = useMemo(() => {
         const grouped = new Map<number, LessonWorksheetTextRegion[]>();
@@ -505,14 +507,19 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     useEffect(() => {
         if (!annotationState) return;
         const incomingKey = getAnnotationStateKey(annotationState);
-        const currentKey = getAnnotationStateKey({ strokes, boxes, textNotes });
-        if (incomingKey === currentKey) return;
+        if (incomingKey === externalAnnotationKeyRef.current) return;
+        externalAnnotationKeyRef.current = incomingKey;
         setStrokes(annotationState.strokes || []);
         setBoxes(annotationState.boxes || []);
         setTextNotes(annotationState.textNotes || []);
-    }, [annotationState, boxes, strokes, textNotes]);
+    }, [annotationState]);
 
     useEffect(() => {
+        externalAnnotationKeyRef.current = getAnnotationStateKey({
+            strokes,
+            boxes,
+            textNotes,
+        });
         onAnnotationChange?.({
             strokes,
             boxes,
