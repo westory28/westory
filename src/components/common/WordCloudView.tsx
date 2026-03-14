@@ -346,11 +346,13 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({
     };
 
     return (
-        <div className={`flex w-full justify-center ${className}`}>
+        <div className={`flex h-full w-full justify-center ${className}`}>
             <div
                 ref={containerRef}
                 className={`relative w-full overflow-hidden rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-cyan-50 ${
-                    variant === 'modal' ? 'aspect-[21/9] min-h-[62vh] max-h-[82vh]' : 'max-w-[2100px] min-h-[320px] aspect-[21/9]'
+                    variant === 'modal'
+                        ? 'h-full min-h-0 rounded-[28px] border-blue-200 shadow-inner'
+                        : 'max-w-[2100px] min-h-[320px] aspect-[21/9]'
                 }`}
             >
                 <svg

@@ -835,54 +835,55 @@ const ManageThinkCloud: React.FC = () => {
 
             {cloudModalOpen && (
                 <div
-                    className="fixed inset-0 z-[70] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
+                    className="fixed inset-0 z-[70] bg-white"
                     onClick={() => setCloudModalOpen(false)}
                 >
                     <div
-                        className="w-full max-w-[96vw] h-[92vh] bg-white rounded-2xl shadow-2xl border border-gray-200 p-4 md:p-6 flex flex-col overflow-hidden"
+                        className="flex h-full w-full flex-col overflow-hidden"
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <div className="flex items-center justify-between mb-3">
-                            <h3 className="text-lg md:text-xl font-extrabold text-gray-900">
-                                생각모아 워드클라우드 대형 보기
-                            </h3>
+                        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 md:px-8 md:py-5">
+                            <div className="min-w-0">
+                                <h3 className="text-xl font-extrabold text-gray-900 md:text-2xl">
+                                    생각모아 워드클라우드 대형 보기
+                                </h3>
+                                <div className="mt-2 text-sm font-bold text-gray-600 md:text-base">
+                                    TV 출력용 모드입니다. 응답 {responses.length}개
+                                </div>
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                    {pendingStudents.length > 0 ? (
+                                        pendingStudents.map((student) => (
+                                            <span
+                                                key={student.uid}
+                                                className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700 md:text-sm"
+                                                title={student.name}
+                                            >
+                                                {student.name}
+                                            </span>
+                                        ))
+                                    ) : (
+                                        <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 md:text-sm">
+                                            전원 제출 완료
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
                             <button
                                 type="button"
                                 onClick={() => setCloudModalOpen(false)}
-                                className="w-10 h-10 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-500 transition hover:bg-gray-100 hover:text-gray-800"
                                 aria-label="닫기"
                             >
-                                <i className="fas fa-times"></i>
+                                <i className="fas fa-times text-lg"></i>
                             </button>
                         </div>
-                        <div className="mb-3 flex flex-col gap-2">
-                            <div className="text-sm font-bold text-gray-600">
-                                TV 출력용 모드입니다. 응답 {responses.length}개
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                                {pendingStudents.length > 0 ? (
-                                    pendingStudents.map((student) => (
-                                        <span
-                                            key={student.uid}
-                                            className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700"
-                                            title={student.name}
-                                        >
-                                            {student.name}
-                                        </span>
-                                    ))
-                                ) : (
-                                    <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
-                                        전원 제출 완료
-                                    </span>
-                                )}
-                            </div>
-                        </div>
-                        <div className="flex-1 flex items-start justify-center px-0 pt-4 pb-8 md:px-1 md:pt-6 md:pb-10">
-                            <div className="w-full max-w-[2100px]">
+                        <div className="flex-1 overflow-hidden px-4 pb-4 pt-4 md:px-8 md:pb-8 md:pt-6">
+                            <div className="flex h-full w-full items-center justify-center">
                                 <WordCloudView
                                     entries={cloudEntries}
                                     showSubmitters={!!selectedSession && !selectedSession.options.anonymous}
-                                    variant="default"
+                                    variant="modal"
+                                    className="h-full"
                                 />
                             </div>
                         </div>
