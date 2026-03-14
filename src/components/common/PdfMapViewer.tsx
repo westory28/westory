@@ -53,6 +53,27 @@ const TAG_ROW_LIMIT = 5;
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const createRegionKey = (region: RegionHit) => `${region.label}-${region.page}-${region.left}-${region.top}`;
 
+const getRegionOverlayStyle = (
+    region: RegionHit,
+    scale: number,
+    minWidthPx: number,
+    minHeightPx: number,
+    padXPx: number,
+    padYPx: number,
+) => {
+    const centerX = (region.left + (region.width / 2)) * scale;
+    const centerY = (region.top + (region.height / 2)) * scale;
+    const width = Math.max((region.width * scale) + (padXPx * 2), minWidthPx);
+    const height = Math.max((region.height * scale) + (padYPx * 2), minHeightPx);
+
+    return {
+        left: `${centerX - (width / 2)}px`,
+        top: `${centerY - (height / 2)}px`,
+        width: `${width}px`,
+        height: `${height}px`,
+    };
+};
+
 const sanitizeRegionLabel = (value: string) => value
     .replace(/\s*[→].*$/u, '')
     .replace(/\([^)]*\)/gu, '')
@@ -410,24 +431,14 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
         }
 
         const frameId = window.requestAnimationFrame(() => {
-            const currentSurface = modalSurfaceRef.current;
-            if (!currentSurface) return;
-
-            const scaledWidth = currentPageWidth * zoom;
-            const scaledHeight = currentPageHeight * zoom;
-            const offsetX = Math.max(0, (currentSurface.clientWidth - scaledWidth) / 2);
-            const offsetY = Math.max(0, (currentSurface.clientHeight - scaledHeight) / 2);
-            const centerX = offsetX + (selectedRegion.left + selectedRegion.width / 2) * zoom;
-            const centerY = offsetY + (selectedRegion.top + selectedRegion.height / 2) * zoom;
-
-            currentSurface.scrollTo({
-                left: Math.max(0, centerX - currentSurface.clientWidth / 2),
-                top: Math.max(0, centerY - currentSurface.clientHeight / 2),
+            modalRegionHighlightRef.current?.scrollIntoView({
+                block: 'center',
+                inline: 'center',
                 behavior: 'smooth',
             });
         });
         return () => window.cancelAnimationFrame(frameId);
-    }, [currentPage, currentPageHeight, currentPageWidth, fitZoom, isMobileViewport, isModalOpen, selectedRegion, zoom]);
+    }, [currentPage, fitZoom, isMobileViewport, isModalOpen, selectedRegion, zoom]);
 
     const handleLoadSuccess = async (pdf: PDFDocumentProxy) => {
         setNumPages(pdf.numPages);
@@ -725,12 +736,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                                 <div
                                     ref={interactive ? undefined : modalRegionHighlightRef}
                                     className="pointer-events-none absolute rounded border-[3px] border-red-500 bg-red-200/15 shadow-[0_0_0_2px_rgba(255,255,255,0.9)]"
-                                    style={{
-                                        left: `${selectedRegion.left * surfaceScale}px`,
-                                        top: `${selectedRegion.top * surfaceScale}px`,
-                                        width: `${selectedRegion.width * surfaceScale}px`,
-                                        height: `${selectedRegion.height * surfaceScale}px`,
-                                    }}
+                                    style={getRegionOverlayStyle(selectedRegion, surfaceScale, 26, 26, 4, 4)}
                                 />
                             )}
                         </div>
@@ -749,12 +755,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                                 <div
                                     ref={interactive ? undefined : modalRegionHighlightRef}
                                     className="pointer-events-none absolute rounded border-[3px] border-red-500 bg-red-200/15 shadow-[0_0_0_2px_rgba(255,255,255,0.9)]"
-                                    style={{
-                                        left: `${selectedRegion.left * zoom}px`,
-                                        top: `${selectedRegion.top * zoom}px`,
-                                        width: `${selectedRegion.width * zoom}px`,
-                                        height: `${selectedRegion.height * zoom}px`,
-                                    }}
+                                    style={getRegionOverlayStyle(selectedRegion, zoom, isMobileViewport ? 38 : 46, isMobileViewport ? 38 : 46, 6, 6)}
                                 />
                             )}
                         </div>
