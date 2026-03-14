@@ -97,16 +97,11 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                 float: none !important;
             }
             .fc-list-event-time {
-                width: 118px !important;
-                white-space: nowrap;
-                font-weight: 700;
-                color: #374151;
-                vertical-align: middle;
-                padding-right: 6px !important;
+                display: none !important;
             }
             .fc-list-event-title {
                 width: auto;
-                padding-left: 0 !important;
+                padding: 0 !important;
                 text-align: left !important;
             }
             .fc-list-event td {
@@ -118,6 +113,28 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                 justify-content: flex-start !important;
                 align-items: center !important;
                 text-align: left !important;
+            }
+            .fc-list-row-grid {
+                display: grid;
+                grid-template-columns: 92px minmax(0, 1fr);
+                gap: 8px;
+                width: 100%;
+                min-width: 0;
+                align-items: center;
+            }
+            .fc-list-category-cell,
+            .fc-list-title-cell {
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            .fc-list-category-cell {
+                font-weight: 700;
+                color: #374151;
+            }
+            .fc-list-title-cell {
+                font-weight: 700;
+                text-align: left;
             }
             .fc-daygrid-event .holiday-segment-title { color: #ffffff !important; font-weight: 800 !important; }
             .fc-list-event .holiday-segment-title { color: #ef4444 !important; font-weight: 800 !important; }
@@ -147,6 +164,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                     initialView="dayGridMonth"
                     locale="ko"
                     allDayText=""
+                    displayEventTime={false}
                     headerToolbar={{
                         left: 'prev,next today',
                         center: 'title',
@@ -169,12 +187,15 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                     eventContent={(arg) => {
                         const isHoliday = arg.event.extendedProps?.eventType === 'holiday';
                         const eventTitle = String(arg.event.title || '').trim();
+                        const meta = getScheduleCategoryMeta(arg.event.extendedProps?.eventType, categories);
+                        const categoryLabel = arg.event.extendedProps?.eventType === 'holiday' ? '공휴일' : `${meta.emoji} ${meta.label}`;
                         const safeTitle = eventTitle || (isHoliday ? '공휴일' : '일정');
 
                         if (arg.view.type === 'listMonth') {
                             return (
-                                <div className={`fc-segment-title ${isHoliday ? 'holiday-segment-title' : ''}`} title={safeTitle}>
-                                    {safeTitle}
+                                <div className="fc-list-row-grid" title={safeTitle}>
+                                    <div className="fc-list-category-cell">{categoryLabel}</div>
+                                    <div className={`fc-list-title-cell ${isHoliday ? 'holiday-segment-title' : ''}`}>{safeTitle}</div>
                                 </div>
                             );
                         }

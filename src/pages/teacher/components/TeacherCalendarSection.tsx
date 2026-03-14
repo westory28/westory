@@ -245,6 +245,7 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                     initialView="dayGridMonth"
                     locale="ko"
                     allDayText=""
+                    displayEventTime={false}
                     headerToolbar={{ left: 'prev,next today', center: 'title', right: 'dayGridMonth,listMonth' }}
                     buttonText={{ dayGridMonth: '달력', listMonth: '목록' }}
                     events={fcEvents}
@@ -271,10 +272,15 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                         const eventTitle = String(arg.event.title || '').trim();
                         const safeTitle = eventTitle || (isHoliday ? '공휴일' : '일정');
                         const targetLabel = formatEventTargetLabel(event);
+                        const meta = getScheduleCategoryMeta(event?.eventType, categories);
+                        const categoryLabel = event?.eventType === 'holiday' ? '공휴일' : `${meta.emoji} ${meta.label}`;
 
                         if (arg.view.type === 'listMonth') {
                             return (
                                 <div className={`fc-list-row-grid ${isHoliday ? 'holiday-list-row-grid' : ''}`} title={`${safeTitle} | ${targetLabel}`}>
+                                    <div className="fc-list-category-cell">
+                                        {categoryLabel}
+                                    </div>
                                     <div className={`fc-list-title-cell ${isHoliday ? 'holiday-segment-title' : ''}`}>
                                         {safeTitle}
                                     </div>
@@ -335,16 +341,11 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                     float: none !important;
                 }
                 .fc-list-event-time {
-                    width: 92px !important;
-                    white-space: nowrap;
-                    font-weight: 700;
-                    color: #374151;
-                    vertical-align: middle;
-                    padding-right: 6px !important;
+                    display: none !important;
                 }
                 .fc-list-event-title {
                     width: auto;
-                    padding-left: 0 !important;
+                    padding: 0 !important;
                     text-align: left !important;
                 }
                 .fc-list-event td {
@@ -359,7 +360,7 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                 }
                 .fc-list-row-grid {
                     display: grid;
-                    grid-template-columns: minmax(0, 1fr) auto;
+                    grid-template-columns: 92px minmax(0, 1fr) 78px;
                     align-items: center;
                     gap: 6px;
                     width: 100%;
@@ -367,11 +368,16 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                     justify-items: start;
                     flex: 1 1 auto;
                 }
+                .fc-list-category-cell,
                 .fc-list-title-cell,
                 .fc-list-target-cell {
                     overflow: hidden;
                     text-overflow: ellipsis;
                     white-space: nowrap;
+                }
+                .fc-list-category-cell {
+                    font-weight: 700;
+                    color: #374151;
                 }
                 .fc-list-title-cell {
                     font-weight: 700;
