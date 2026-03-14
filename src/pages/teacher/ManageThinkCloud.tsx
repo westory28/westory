@@ -641,9 +641,28 @@ const ManageThinkCloud: React.FC = () => {
                     </span>
                 </div>
 
-                <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-bold text-gray-800">실시간 집계</h3>
-                    <span className="text-sm font-bold text-gray-500">응답 {responses.length}개</span>
+                <div className="mb-3 flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                    <h3 className="font-bold text-gray-800">{'\uC2E4\uC2DC\uAC04 \uC9D1\uACC4'}</h3>
+                    <div className="flex flex-1 flex-col gap-2 lg:items-end">
+                        <span className="text-sm font-bold text-gray-500">{'\uC751\uB2F5 '}{responses.length}{'\uAC1C'}</span>
+                        {pendingStudents.length > 0 ? (
+                            <div className="flex flex-wrap gap-2 lg:justify-end">
+                                {pendingStudents.map((student) => (
+                                    <span
+                                        key={student.uid}
+                                        className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700"
+                                        title={student.name}
+                                    >
+                                        {student.name}
+                                    </span>
+                                ))}
+                            </div>
+                        ) : (
+                            <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+                                {'\uC804\uC6D0 \uC81C\uCD9C \uC644\uB8CC'}
+                            </span>
+                        )}
+                    </div>
                 </div>
 
                 {cloudEntries.length === 0 ? (
@@ -690,32 +709,6 @@ const ManageThinkCloud: React.FC = () => {
                     </button>
                 </div>
 
-                <div className="mt-5 border-t border-gray-100 pt-4">
-                    <div className="flex items-center justify-between gap-3 mb-2">
-                        <h4 className="text-sm font-extrabold text-gray-800">미제출 학생</h4>
-                        <span className="text-xs font-bold text-gray-500">
-                            {pendingStudents.length}명
-                        </span>
-                    </div>
-                    {pendingStudents.length === 0 ? (
-                        <p className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 inline-block">
-                            현재 학급 학생이 모두 제출했습니다.
-                        </p>
-                    ) : (
-                        <div className="flex flex-wrap gap-2">
-                            {pendingStudents.map((student) => (
-                                <span
-                                    key={student.uid}
-                                    className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 border border-rose-200 text-rose-700 px-3 py-1 text-xs font-bold"
-                                    title={`${student.name}${student.number ? ` (${student.number}번)` : ''}`}
-                                >
-                                    <i className="fas fa-user-clock text-[10px]"></i>
-                                    {student.number ? `${student.number}번 ` : ''}{student.name}
-                                </span>
-                            ))}
-                        </div>
-                    )}
-                </div>
             </section>
         );
     };
@@ -806,10 +799,10 @@ const ManageThinkCloud: React.FC = () => {
                         <div className="text-sm font-bold text-gray-600 mb-3">
                             TV 출력용 모드입니다. 응답 {responses.length}개
                         </div>
-                        <div className="flex-1 flex items-start justify-center px-0 pt-0 pb-8 md:px-1 md:pt-0 md:pb-10">
+                        <div className="flex-1 flex items-start justify-center px-0 pt-4 pb-8 md:px-1 md:pt-6 md:pb-10">
                             <div
                                 className="w-full"
-                                style={{ width: 'min(100%, calc((92vh - 215px) * 21 / 9))', transform: 'translateY(-10px)' }}
+                                style={{ width: 'min(100%, calc((92vh - 215px) * 21 / 9))' }}
                             >
                                 <WordCloudView
                                     entries={cloudEntries}
