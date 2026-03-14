@@ -918,8 +918,12 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                     onDragStart={(event) => event.preventDefault()}
                                 />
 
-                                {(pageStrokes.length > 0 || currentDraftStroke) && (
-                                    <svg className="pointer-events-none absolute inset-0 z-[5] h-full w-full">
+                            {(pageStrokes.length > 0 || currentDraftStroke) && (
+                                <svg
+                                    className="pointer-events-none absolute inset-0 z-[5] h-full w-full"
+                                    viewBox={`0 0 ${pageImage.width} ${pageImage.height}`}
+                                    preserveAspectRatio="none"
+                                >
                                         {pageStrokes.map((stroke) => (
                                             <polyline
                                                 key={stroke.id}
