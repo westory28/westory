@@ -67,13 +67,15 @@ const getRegionOverlayMetrics = (
     const rawWidth = region.width * scale;
     const rawHeight = region.height * scale;
     const extraScale = Math.max(0, scale - 1);
-    const verticalBiasRatio = Math.min(0.68, 0.38 + (extraScale * 0.24));
-    const heightTrimRatio = Math.min(0.3, 0.08 + (extraScale * 0.14));
-    const verticalBias = Math.min(Math.max(rawHeight * verticalBiasRatio, 4), 18);
+    const effectivePadY = padYPx + Math.min(extraScale * 3.5, 8);
+    const effectiveMinHeight = Math.max(minHeightPx, rawHeight * Math.min(1.2, 0.82 + (extraScale * 0.24)));
+    const verticalBiasRatio = Math.min(0.52, 0.22 + (extraScale * 0.12));
+    const heightTrimRatio = Math.min(0.12, 0.02 + (extraScale * 0.03));
+    const verticalBias = Math.min(Math.max(rawHeight * verticalBiasRatio, 3), 14);
     const width = Math.max(rawWidth + (padXPx * 2), minWidthPx, estimatedLabelWidth);
-    const height = Math.max(rawHeight + (padYPx * 2) - verticalBias - (rawHeight * heightTrimRatio), minHeightPx);
+    const height = Math.max(rawHeight + (effectivePadY * 2) - verticalBias - (rawHeight * heightTrimRatio), effectiveMinHeight);
     const left = Math.max(0, (region.left * scale) - padXPx);
-    const top = Math.max(0, (region.top * scale) - padYPx + verticalBias);
+    const top = Math.max(0, (region.top * scale) - effectivePadY + verticalBias);
 
     return {
         width,
