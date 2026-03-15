@@ -76,6 +76,23 @@ const getRegionOverlayStyle = (
     };
 };
 
+const getRegionLabelStyle = (
+    region: RegionHit,
+    scale: number,
+    minWidthPx: number,
+    padXPx: number,
+    padYPx: number,
+) => {
+    const estimatedLabelWidth = Math.max(0, region.label.length) * 11 + 24;
+    const width = Math.max((region.width * scale) + (padXPx * 2), minWidthPx, estimatedLabelWidth);
+    const top = Math.max(0, (region.top * scale) - padYPx);
+
+    return {
+        maxWidth: `${Math.max(width, 88)}px`,
+        top: top > 34 ? '-26px' : 'calc(100% + 6px)',
+    };
+};
+
 const getRegionFocusZoom = (
     fitZoom: number,
     isMobileViewport: boolean,
@@ -741,7 +758,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                                 alt={`${title} ${currentPage}페이지`}
                                 style={{
                                     width: `${currentPageImage.width * surfaceScale}px`,
-                                    maxWidth: interactive || compact ? '100%' : 'none',
+                                    maxWidth: interactive ? '100%' : 'none',
                                     height: 'auto',
                                 }}
                             />
@@ -749,10 +766,27 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                                 <div
                                     ref={interactive ? undefined : modalRegionHighlightRef}
                                     className="pointer-events-none absolute"
-                                    style={getRegionOverlayStyle(selectedRegion, selectedRegion.label, surfaceScale, 72, 30, 8, 6)}
+                                    style={getRegionOverlayStyle(
+                                        selectedRegion,
+                                        selectedRegion.label,
+                                        surfaceScale,
+                                        interactive ? 96 : 108,
+                                        interactive ? 42 : 48,
+                                        interactive ? 12 : 16,
+                                        interactive ? 10 : 12,
+                                    )}
                                 >
-                                    <div className="relative h-full w-full rounded-md border-[3px] border-red-500 bg-red-200/12 shadow-[0_0_0_2px_rgba(255,255,255,0.92)]">
-                                        <div className="absolute left-1 top-1 max-w-[calc(100%-8px)] whitespace-nowrap rounded-full border border-red-200 bg-white/95 px-2 py-0.5 text-[10px] font-extrabold leading-none text-red-600 shadow-sm">
+                                    <div className="relative h-full w-full rounded-lg border-[3px] border-red-500 bg-red-200/10 shadow-[0_0_0_2px_rgba(255,255,255,0.92)]">
+                                        <div
+                                            className="absolute left-0 whitespace-nowrap rounded-full border border-red-200 bg-white/97 px-2 py-0.5 text-[10px] font-extrabold leading-none text-red-600 shadow-sm"
+                                            style={getRegionLabelStyle(
+                                                selectedRegion,
+                                                surfaceScale,
+                                                interactive ? 96 : 108,
+                                                interactive ? 12 : 16,
+                                                interactive ? 10 : 12,
+                                            )}
+                                        >
                                             {selectedRegion.label}
                                         </div>
                                     </div>
@@ -777,10 +811,27 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                                 <div
                                     ref={interactive ? undefined : modalRegionHighlightRef}
                                     className="pointer-events-none absolute"
-                                    style={getRegionOverlayStyle(selectedRegion, selectedRegion.label, zoom, isMobileViewport ? 84 : 112, isMobileViewport ? 34 : 42, 10, 8)}
+                                    style={getRegionOverlayStyle(
+                                        selectedRegion,
+                                        selectedRegion.label,
+                                        zoom,
+                                        isMobileViewport ? 96 : 136,
+                                        isMobileViewport ? 40 : 56,
+                                        isMobileViewport ? 12 : 18,
+                                        isMobileViewport ? 10 : 14,
+                                    )}
                                 >
-                                    <div className="relative h-full w-full rounded-md border-[3px] border-red-500 bg-red-200/12 shadow-[0_0_0_2px_rgba(255,255,255,0.92)]">
-                                        <div className="absolute left-1 top-1 max-w-[calc(100%-10px)] whitespace-nowrap rounded-full border border-red-200 bg-white/95 px-2.5 py-1 text-[11px] font-extrabold leading-none text-red-600 shadow-sm">
+                                    <div className="relative h-full w-full rounded-lg border-[3px] border-red-500 bg-red-200/10 shadow-[0_0_0_2px_rgba(255,255,255,0.92)]">
+                                        <div
+                                            className="absolute left-0 whitespace-nowrap rounded-full border border-red-200 bg-white/97 px-2.5 py-1 text-[11px] font-extrabold leading-none text-red-600 shadow-sm"
+                                            style={getRegionLabelStyle(
+                                                selectedRegion,
+                                                zoom,
+                                                isMobileViewport ? 96 : 136,
+                                                isMobileViewport ? 12 : 18,
+                                                isMobileViewport ? 10 : 14,
+                                            )}
+                                        >
                                             {selectedRegion.label}
                                         </div>
                                     </div>
