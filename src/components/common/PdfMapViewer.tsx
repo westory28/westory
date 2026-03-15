@@ -174,6 +174,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
     const pinchStateRef = useRef<{ distance: number; zoom: number } | null>(null);
     const dragStateRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
     const hasManualZoomRef = useRef(false);
+    const pendingAutoFocusRegionKeyRef = useRef('');
 
     const usingPreprocessedPages = pageImages.length > 0;
     const allRegionHits = useMemo(() => (usingPreprocessedPages ? regions : regionHits), [regionHits, regions, usingPreprocessedPages]);
@@ -418,6 +419,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
     useEffect(() => {
         if (!isModalOpen) {
             setIsMobileTagPanelOpen(false);
+            pendingAutoFocusRegionKeyRef.current = '';
         }
     }, [isModalOpen]);
 
@@ -439,6 +441,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
 
     useEffect(() => {
         if (!isModalOpen || !selectedRegion || !modalSurfaceRef.current || selectedRegion.page !== currentPage) return undefined;
+        if (pendingAutoFocusRegionKeyRef.current !== createRegionKey(selectedRegion)) return undefined;
 
         const targetZoom = getRegionFocusZoom(fitZoom, isMobileViewport);
 
@@ -460,13 +463,15 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
             const frameOffsetLeft = currentSurface.scrollLeft + (frameRect.left - surfaceRect.left);
             const frameOffsetTop = currentSurface.scrollTop + (frameRect.top - surfaceRect.top);
             const targetLeft = frameOffsetLeft + centerX - (currentSurface.clientWidth / 2);
-            const targetTop = frameOffsetTop + centerY - (currentSurface.clientHeight / 2);
+            const focusTopRatio = isMobileViewport ? 0.32 : 0.38;
+            const targetTop = frameOffsetTop + centerY - (currentSurface.clientHeight * focusTopRatio);
 
             currentSurface.scrollTo({
                 left: Math.max(0, targetLeft),
                 top: Math.max(0, targetTop),
                 behavior: 'smooth',
             });
+            pendingAutoFocusRegionKeyRef.current = '';
         });
         return () => window.cancelAnimationFrame(frameId);
     }, [currentPage, fitZoom, isMobileViewport, isModalOpen, selectedRegion, zoom]);
@@ -492,6 +497,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
         setCurrentPage(region.page);
         setSelectedRegion(region);
         hasManualZoomRef.current = false;
+        pendingAutoFocusRegionKeyRef.current = createRegionKey(region);
         if (!isModalOpen) {
             setIsModalOpen(true);
             return;
