@@ -810,9 +810,9 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                                         selectedRegion.label,
                                         surfaceScale,
                                         interactive ? 96 : 108,
-                                        interactive ? 42 : 48,
+                                        interactive ? 28 : 32,
                                         interactive ? 12 : 16,
-                                        interactive ? 10 : 12,
+                                        interactive ? 4 : 5,
                                     )}
                                 >
                                     <div className="relative h-full w-full rounded-lg border-[3px] border-red-500 bg-red-200/10 shadow-[0_0_0_2px_rgba(255,255,255,0.92)]">
@@ -823,7 +823,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                                                 surfaceScale,
                                                 interactive ? 96 : 108,
                                                 interactive ? 12 : 16,
-                                                interactive ? 10 : 12,
+                                                interactive ? 4 : 5,
                                             )}
                                         >
                                             {selectedRegion.label}
@@ -855,9 +855,9 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                                         selectedRegion.label,
                                         zoom,
                                         isMobileViewport ? 96 : 136,
-                                        isMobileViewport ? 40 : 56,
+                                        isMobileViewport ? 28 : 34,
                                         isMobileViewport ? 12 : 18,
-                                        isMobileViewport ? 10 : 14,
+                                        isMobileViewport ? 4 : 6,
                                     )}
                                 >
                                     <div className="relative h-full w-full rounded-lg border-[3px] border-red-500 bg-red-200/10 shadow-[0_0_0_2px_rgba(255,255,255,0.92)]">
@@ -868,7 +868,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                                                 zoom,
                                                 isMobileViewport ? 96 : 136,
                                                 isMobileViewport ? 12 : 18,
-                                                isMobileViewport ? 10 : 14,
+                                                isMobileViewport ? 4 : 6,
                                             )}
                                         >
                                             {selectedRegion.label}
@@ -950,10 +950,10 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                                     <div className="text-sm font-bold text-gray-600">{currentPage} / {numPages || '-'}</div>
                                 </div>
                                 <div className={`flex min-h-0 flex-1 items-center justify-center bg-slate-100 ${isMobileViewport ? 'p-0' : 'p-2 sm:p-4'}`}>
-                                    <div className={`flex h-full w-full flex-col overflow-hidden bg-white shadow-sm ${isMobileViewport ? 'rounded-none border-0' : 'rounded-2xl border border-gray-200'}`}>
+                                    <div className={`flex h-full w-full flex-col overflow-hidden bg-slate-100 ${isMobileViewport ? 'rounded-none border-0' : 'rounded-2xl border border-gray-200 shadow-sm'}`}>
                                         <div
                                             ref={modalSurfaceRef}
-                                            className={`min-h-0 flex-1 cursor-grab overflow-auto bg-slate-100 active:cursor-grabbing ${isMobileViewport ? 'p-0' : 'p-2 sm:p-4'}`}
+                                            className={`min-h-0 flex-1 cursor-grab overflow-auto bg-slate-100 active:cursor-grabbing ${isMobileViewport ? 'p-0' : 'p-0'}`}
                                             style={isMobileViewport ? { touchAction: 'none' } : undefined}
                                             onWheel={handleWheelZoom}
                                             onTouchStart={handleTouchStart}
