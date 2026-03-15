@@ -66,7 +66,7 @@ const getRegionOverlayMetrics = (
     const estimatedLabelWidth = Math.max(0, label.length) * 11 + 24;
     const rawWidth = region.width * scale;
     const rawHeight = region.height * scale;
-    const verticalBias = Math.min(Math.max(rawHeight * 0.22, 2), 8);
+    const verticalBias = Math.min(Math.max(rawHeight * 0.42, 5), 14);
     const width = Math.max(rawWidth + (padXPx * 2), minWidthPx, estimatedLabelWidth);
     const height = Math.max(rawHeight + (padYPx * 2) - verticalBias, minHeightPx);
     const left = Math.max(0, (region.left * scale) - padXPx);
@@ -838,7 +838,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                                 >
                                     <div className="relative h-full w-full rounded-lg border-[3px] border-red-500 bg-red-200/10 shadow-[0_0_0_2px_rgba(255,255,255,0.92)]">
                                         <div
-                                            className="absolute left-0 whitespace-nowrap rounded-full border border-red-200 bg-white/97 px-2 py-0.5 text-[10px] font-extrabold leading-none text-red-600 shadow-sm"
+                                            className="absolute left-0 whitespace-nowrap rounded-full border border-red-300 bg-white px-2 py-0.5 text-[10px] font-extrabold leading-none text-red-600 shadow-sm"
                                             style={getRegionLabelStyle(
                                                 selectedRegion,
                                                 surfaceScale,
@@ -883,7 +883,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                                 >
                                     <div className="relative h-full w-full rounded-lg border-[3px] border-red-500 bg-red-200/10 shadow-[0_0_0_2px_rgba(255,255,255,0.92)]">
                                         <div
-                                            className="absolute left-0 whitespace-nowrap rounded-full border border-red-200 bg-white/97 px-2.5 py-1 text-[11px] font-extrabold leading-none text-red-600 shadow-sm"
+                                            className="absolute left-0 whitespace-nowrap rounded-full border border-red-300 bg-white px-2.5 py-1 text-[11px] font-extrabold leading-none text-red-600 shadow-sm"
                                             style={getRegionLabelStyle(
                                                 selectedRegion,
                                                 zoom,
