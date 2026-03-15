@@ -1,51 +1,83 @@
 # Point System Operations Checklist
 
-## 1. 배포 전 준비
+## Verification status
 
-- `functions` 디렉터리에서 의존성이 설치되어 있는지 확인
-- `firebase.json`의 Functions/Firestore 대상이 올바른지 확인
-- `firestore.rules`가 이번 배포 대상에 포함되는지 확인
-- 대상 학기의 `point_policies/current` 문서가 존재하는지 확인
-- 교사 계정의 `point_read`, `point_manage` 권한이 사용자 문서에 반영되어 있는지 확인
+Verified on March 16, 2026 with local Firebase emulators.
 
-## 2. 권장 배포 순서
+Completed:
+- `npm exec tsc -- --noEmit`
+- `npm run build`
+- `node --check functions/index.js`
+- `firebase emulators:exec --project demo-westory-points --only auth,firestore,functions "node scripts/verify-point-system.mjs"`
 
-1. Firestore Rules 검토
-2. Functions 코드 검토
-3. `point_policies/current` 초기값 준비
-4. Functions + Firestore Rules 배포
-5. 프런트엔드 배포
-6. 운영 점검 시나리오 실행
+The emulator run passed the core point scenarios for rewards, purchases, teacher adjustments, and order reviews.
 
-## 3. 운영 점검 시나리오
+## Pre-deploy checklist
 
-### 자동 적립
+- Confirm `firestore.rules` in the deploy target matches the current repository version.
+- Confirm Functions source in `functions/index.js` is the current repository version.
+- Confirm `point_policies/current` exists for the target year and semester.
+- Confirm teacher test or production accounts have `point_read` and `point_manage` as intended.
+- Confirm at least one active product exists if student purchase flow will be enabled immediately.
 
-- 학생 출석 체크가 같은 날 1회만 적립되는지 확인
-- 학생 문제 풀이 완료 시 제출 기준 1회만 적립되는지 확인
-- 학생 수업 자료 확인이 최소 조건 충족 후 1회만 적립되는지 확인
+## Recommended deployment order
 
-### 학생 구매 요청
+1. Deploy Firestore Rules.
+2. Deploy Functions.
+3. Verify `point_policies/current` and teacher permissions in the target project.
+4. Deploy frontend.
+5. Run a short smoke test:
+   - attendance reward
+   - quiz reward
+   - lesson reward
+   - purchase request
+   - teacher approve and fulfill
 
-- 포인트 부족 시 요청이 실패하는지 확인
-- 재고 부족 시 요청이 실패하는지 확인
-- 정상 요청 시 주문, 재고, 거래 원장, 지갑이 함께 반영되는지 확인
+## Emulator verification summary
 
-### 교사 관리
+- Rules:
+  - student own wallet read: pass
+  - student direct wallet write: blocked
+  - teacher direct order write: blocked
+- Reward flows:
+  - attendance first claim: pass
+  - attendance duplicate: pass
+  - quiz first claim: pass
+  - quiz duplicate: pass
+  - lesson first claim: pass
+  - lesson duplicate: pass
+- Purchase flows:
+  - insufficient balance: pass
+  - sold-out product: pass
+  - normal purchase request: pass
+- Teacher flows:
+  - point manager required: pass
+  - manual adjust reason required: pass
+  - manual adjust success: pass
+  - direct fulfill from requested blocked: pass
+  - approve: pass
+  - fulfill after approve: pass
+  - reject: pass
+  - cancel: pass
 
-- 수동 지급/차감이 `reason` 없이 실패하는지 확인
-- 수동 지급/차감 성공 시 거래 원장과 지갑 잔액이 함께 반영되는지 확인
-- 주문 승인, 거절, 지급 완료, 취소 처리 시 상태 전이와 지갑/재고/원장이 모순 없이 유지되는지 확인
+## Data integrity notes from emulator run
 
-## 4. 롤백 주의사항
+- Final student wallet balance after the full scenario set: `29`
+- Reward transaction counts:
+  - attendance: `1`
+  - quiz: `1`
+  - lesson: `1`
+- Manual adjust transaction count: `2`
+  - one bootstrap adjust used by the verification script
+  - one explicit teacher manual adjust test
+- Final order states:
+  - approved flow order: `fulfilled`
+  - rejection flow order: `rejected`
+  - cancel flow order: `cancelled`
+- Final `gift` product stock after purchase, reject, and cancel flows: `4`
 
-- 포인트 화면만 롤백하지 말고, Functions와 Rules 버전도 함께 맞춰야 합니다.
-- 현재 `point_wallets`, `point_transactions`, `point_orders`는 클라이언트 직접 쓰기를 막아 둔 상태이므로, 예전 프런트만 단독 롤백하면 관리자 쓰기가 실패할 수 있습니다.
+## Remaining operational risks
 
-## 5. 수동 검증 결과 기록 권장
-
-- 검증 날짜
-- 검증한 학기 범위
-- 사용한 학생 계정 / 교사 계정
-- 통과한 시나리오
-- 실패 또는 보류된 시나리오
+- Emulator showed a warning that `firebase-functions` is not on the latest version.
+- Emulator used host Node 24 while `functions/package.json` targets Node 20.
+- Production should still be smoke-tested once after deploy because emulator verification does not replace real project config checks.
