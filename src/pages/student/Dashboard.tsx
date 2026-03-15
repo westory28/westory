@@ -1,15 +1,15 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import FullCalendar from '@fullcalendar/react';
+import { collection, doc, getDoc, onSnapshot, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import { useAuth } from '../../contexts/AuthContext';
-import { CalendarEvent } from '../../types';
-import { collection, doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import NoticeBoard from './components/NoticeBoard';
+import { buildAttendanceSourceId, claimPointActivityReward, getPointActivityTransaction } from '../../lib/points';
+import { getYearSemester } from '../../lib/semesterScope';
+import { CalendarEvent } from '../../types';
 import CalendarSection from './components/CalendarSection';
 import EventDetailPanel from './components/EventDetailPanel';
+import NoticeBoard from './components/NoticeBoard';
 import SearchModal from './components/SearchModal';
-import { getYearSemester } from '../../lib/semesterScope';
-import { buildAttendanceSourceId, claimPointActivityReward, getPointActivityTransaction } from '../../lib/points';
 
 const normalizeClassValue = (value: unknown): string => {
     const normalized = String(value ?? '').trim();
@@ -27,20 +27,30 @@ const withSuffix = (label: string, suffix: string) => {
 };
 
 const StudentDashboard: React.FC = () => {
-    const { userData, config } = useAuth();
+    const { user, userData, config } = useAuth();
     const [events, setEvents] = useState<CalendarEvent[]>([]);
     const [selectedDate, setSelectedDate] = useState<string | null>(null);
     const [dailyEvents, setDailyEvents] = useState<CalendarEvent[]>([]);
-    const [welcomeText, setWelcomeText] = useState('학년/반 정보를 불러오는 중...');
+    const [welcomeText, setWelcomeText] = useState('?숇뀈/諛??뺣낫瑜?遺덈윭?ㅻ뒗 以?..');
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [gradeLabelMap, setGradeLabelMap] = useState<Record<string, string>>({});
     const [classLabelMap, setClassLabelMap] = useState<Record<string, string>>({});
     const [attendanceLoading, setAttendanceLoading] = useState(false);
     const [attendanceChecked, setAttendanceChecked] = useState(false);
     const [attendanceMessage, setAttendanceMessage] = useState('');
+    const [attendanceDates, setAttendanceDates] = useState<string[]>([]);
 
     const calendarRef = useRef<FullCalendar>(null);
+    const { year, semester } = getYearSemester(config);
+    const todayDate = new Date().toLocaleDateString('en-CA');
+    const attendanceScope = `${year}_${semester}`;
     const todayAttendanceSourceId = buildAttendanceSourceId();
+
+    const visibleAttendanceDates = useMemo(() => {
+        const set = new Set(attendanceDates);
+        if (attendanceChecked) set.add(todayDate);
+        return Array.from(set).sort();
+    }, [attendanceChecked, attendanceDates, todayDate]);
 
     useEffect(() => {
         const loadSchoolConfig = async () => {
@@ -79,15 +89,15 @@ const StudentDashboard: React.FC = () => {
         const gradeLabel = gradeLabelMap[gradeValue] || gradeValue;
         const classLabel = classLabelMap[classValue] || classValue;
         if (gradeLabel && classLabel) {
-            setWelcomeText(`${withSuffix(gradeLabel, '학년')} ${withSuffix(classLabel, '반')}의 대시보드`);
+            setWelcomeText(`${withSuffix(gradeLabel, '?숇뀈')} ${withSuffix(classLabel, '諛?)}????쒕낫??);
         } else {
-            setWelcomeText(`${(userData.name || '학생').trim()}의 대시보드`);
+            setWelcomeText(`${(userData.name || '?숈깮').trim()}????쒕낫??);
         }
     }, [userData, gradeLabelMap, classLabelMap]);
 
     useEffect(() => {
-        const { year, semester } = getYearSemester(config);
-        const path = `years/${year}/semesters/${semester}/calendar`;
+        const { year: currentYear, semester: currentSemester } = getYearSemester(config);
+        const path = `years/${currentYear}/semesters/${currentSemester}/calendar`;
         const unsubscribe = onSnapshot(collection(db, path), (snapshot) => {
             const gradeLabel = normalizeClassValue(userData?.grade);
             const classLabel = normalizeClassValue(userData?.class);
@@ -117,7 +127,7 @@ const StudentDashboard: React.FC = () => {
                 const attendanceTx = await getPointActivityTransaction(config, userData.uid, 'attendance', todayAttendanceSourceId);
                 if (attendanceTx) {
                     setAttendanceChecked(true);
-                    setAttendanceMessage(`오늘 출석이 완료되었습니다. +${attendanceTx.delta}포인트`);
+                    setAttendanceMessage(`?ㅻ뒛 異쒖꽍???꾨즺?섏뿀?듬땲?? +${attendanceTx.delta}?ъ씤??);
                 } else {
                     setAttendanceChecked(false);
                     setAttendanceMessage('');
@@ -129,30 +139,27 @@ const StudentDashboard: React.FC = () => {
         void loadAttendanceStatus();
     }, [config, todayAttendanceSourceId, userData?.uid]);
 
-    const handleAttendanceCheck = async () => {
-        if (!userData?.uid || attendanceLoading || attendanceChecked) return;
-        setAttendanceLoading(true);
-        setAttendanceMessage('');
-        try {
-            const result = await claimPointActivityReward({
-                config,
-                activityType: 'attendance',
-                sourceId: todayAttendanceSourceId,
-                sourceLabel: `${todayAttendanceSourceId.replace('attendance-', '')} 출석 체크`,
-            });
-            setAttendanceChecked(true);
-            if (result.awarded && result.amount > 0) {
-                setAttendanceMessage(`출석 체크가 완료되었습니다. +${result.amount}포인트`);
-            } else {
-                setAttendanceMessage('오늘 출석은 이미 반영되었습니다.');
-            }
-        } catch (error) {
-            console.error('Failed to apply attendance point reward:', error);
-            setAttendanceMessage('출석 체크 처리 중 오류가 발생했습니다.');
-        } finally {
-            setAttendanceLoading(false);
+    useEffect(() => {
+        if (!user) {
+            setAttendanceDates([]);
+            return;
         }
-    };
+
+        const attendanceQuery = query(
+            collection(db, 'users', user.uid, 'attendance'),
+            where('scope', '==', attendanceScope),
+        );
+
+        const unsubscribe = onSnapshot(attendanceQuery, (snapshot) => {
+            const nextDates = snapshot.docs
+                .map((item) => String(item.data().date || '').trim())
+                .filter(Boolean)
+                .sort();
+            setAttendanceDates(nextDates);
+        });
+
+        return () => unsubscribe();
+    }, [attendanceScope, user]);
 
     const handleDateClick = (dateStr: string) => {
         setSelectedDate(dateStr);
@@ -179,6 +186,48 @@ const StudentDashboard: React.FC = () => {
         }
     };
 
+    const handleAttendanceCheck = async () => {
+        if (!userData?.uid || attendanceLoading || attendanceChecked) return;
+        setAttendanceLoading(true);
+        setAttendanceMessage('');
+        try {
+            const result = await claimPointActivityReward({
+                config,
+                activityType: 'attendance',
+                sourceId: todayAttendanceSourceId,
+                sourceLabel: `${todayAttendanceSourceId.replace('attendance-', '')} 異쒖꽍 泥댄겕`,
+            });
+
+            await setDoc(
+                doc(db, 'users', userData.uid, 'attendance', `${attendanceScope}_${todayDate}`),
+                {
+                    uid: userData.uid,
+                    scope: attendanceScope,
+                    year,
+                    semester,
+                    date: todayDate,
+                    checkedAt: serverTimestamp(),
+                },
+                { merge: true },
+            );
+
+            setAttendanceChecked(true);
+            setSelectedDate(todayDate);
+            handleDateClick(todayDate);
+
+            if (result.awarded && result.amount > 0) {
+                setAttendanceMessage(`異쒖꽍 泥댄겕媛 ?꾨즺?섏뿀?듬땲?? +${result.amount}?ъ씤??);
+            } else {
+                setAttendanceMessage('?ㅻ뒛 異쒖꽍? ?대? 諛섏쁺?섏뿀?듬땲??');
+            }
+        } catch (error) {
+            console.error('Failed to apply attendance point reward:', error);
+            setAttendanceMessage('異쒖꽍 泥댄겕 泥섎━ 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.');
+        } finally {
+            setAttendanceLoading(false);
+        }
+    };
+
     return (
         <div className="dashboard-container mx-auto w-full max-w-7xl px-4 py-6">
             <div className="mb-6 flex shrink-0 flex-col items-center justify-between gap-3 md:flex-row">
@@ -188,7 +237,7 @@ const StudentDashboard: React.FC = () => {
                     </h1>
                     {config && (
                         <span className="shrink-0 rounded-full bg-blue-600 px-3 py-1 text-xs font-bold text-white shadow-md md:text-sm">
-                            {config.year}학년도 {config.semester}학기
+                            {config.year}?숇뀈??{config.semester}?숆린
                         </span>
                     )}
                 </div>
@@ -205,12 +254,13 @@ const StudentDashboard: React.FC = () => {
                         onDateClick={handleDateClick}
                         onEventClick={handleEventClick}
                         onSearchClick={() => setIsSearchOpen(true)}
+                        onAttendanceCheck={() => void handleAttendanceCheck()}
                         calendarRef={calendarRef}
                         selectedDate={selectedDate}
                         attendanceLoading={attendanceLoading}
                         attendanceChecked={attendanceChecked}
                         attendanceMessage={attendanceMessage}
-                        onAttendanceCheck={() => void handleAttendanceCheck()}
+                        attendanceDates={visibleAttendanceDates}
                     />
                 </div>
 

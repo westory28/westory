@@ -319,6 +319,19 @@ service cloud.firestore {
           && request.resource.data.scores.keys().size() <= 500;
         allow delete: if canUseWestory() && (isOwnUser(userId) || isAdmin());
       }
+
+      match /attendance/{recordId} {
+        allow read: if canUseWestory() && (isOwnUser(userId) || isAdmin());
+        allow create, update: if canUseWestory()
+          && isOwnUser(userId)
+          && request.resource.data.keys().hasOnly(['uid', 'scope', 'year', 'semester', 'date', 'checkedAt'])
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.scope is string
+          && request.resource.data.year is string
+          && request.resource.data.semester is string
+          && request.resource.data.date is string;
+        allow delete: if isAdmin();
+      }
     }
 
     match /site_settings/{docId} {
