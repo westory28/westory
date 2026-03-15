@@ -115,6 +115,14 @@ const ensureStudentProfile = async (uid) => {
   return { ref, profile };
 };
 
+const buildWalletBase = (uid, profile) => ({
+  uid,
+  studentName: String(profile.name || '').trim(),
+  grade: String(profile.grade || '').trim(),
+  class: String(profile.class || '').trim(),
+  number: String(profile.number || '').trim(),
+});
+
 const ensureWallet = async (transaction, year, semester, uid, profile) => {
   const walletRef = db.doc(getPointWalletPath(year, semester, uid));
   const walletSnap = await transaction.get(walletRef);
@@ -126,18 +134,13 @@ const ensureWallet = async (transaction, year, semester, uid, profile) => {
   }
 
   const wallet = {
-    uid,
-    studentName: String(profile.name || '').trim(),
-    grade: String(profile.grade || '').trim(),
-    class: String(profile.class || '').trim(),
-    number: String(profile.number || '').trim(),
+    ...buildWalletBase(uid, profile),
     balance: 0,
     earnedTotal: 0,
     spentTotal: 0,
     adjustedTotal: 0,
     lastTransactionAt: null,
   };
-  transaction.set(walletRef, wallet, { merge: true });
   return {
     ref: walletRef,
     wallet,
@@ -229,8 +232,11 @@ exports.applyPointActivityReward = onCall({ region: REGION }, async (request) =>
 
     const nextBalance = Number(wallet.balance || 0) + rewardAmount;
     transaction.set(walletRef, {
+      ...buildWalletBase(uid, profile),
       balance: nextBalance,
       earnedTotal: Number(wallet.earnedTotal || 0) + rewardAmount,
+      spentTotal: Number(wallet.spentTotal || 0),
+      adjustedTotal: Number(wallet.adjustedTotal || 0),
       lastTransactionAt: FieldValue.serverTimestamp(),
     }, { merge: true });
 
@@ -309,8 +315,11 @@ exports.createPointPurchaseRequest = onCall({ region: REGION }, async (request) 
 
     const nextBalance = Number(wallet.balance || 0) - Number(product.price || 0);
     transaction.set(walletRef, {
+      ...buildWalletBase(uid, profile),
       balance: nextBalance,
+      earnedTotal: Number(wallet.earnedTotal || 0),
       spentTotal: Number(wallet.spentTotal || 0) + Number(product.price || 0),
+      adjustedTotal: Number(wallet.adjustedTotal || 0),
       lastTransactionAt: FieldValue.serverTimestamp(),
     }, { merge: true });
 
@@ -386,7 +395,10 @@ exports.adjustTeacherPoints = onCall({ region: REGION }, async (request) => {
     }
 
     transaction.set(walletRef, {
+      ...buildWalletBase(targetUid, profile),
       balance: nextBalance,
+      earnedTotal: Number(wallet.earnedTotal || 0),
+      spentTotal: Number(wallet.spentTotal || 0),
       adjustedTotal: Number(wallet.adjustedTotal || 0) + delta,
       lastTransactionAt: FieldValue.serverTimestamp(),
     }, { merge: true });
@@ -442,12 +454,19 @@ exports.reviewTeacherPointOrder = onCall({ region: REGION }, async (request) => 
       };
     }
 
-    if (order.status !== 'requested' && !(order.status === 'approved' && nextStatus === 'fulfilled')) {
+    const canTransition = (
+      (order.status === 'requested' && ['approved', 'rejected', 'cancelled'].includes(nextStatus))
+      || (order.status === 'approved' && nextStatus === 'fulfilled')
+    );
+
+    if (!canTransition) {
       throw new HttpsError('failed-precondition', 'Point order is not in a reviewable state.');
     }
 
     const { profile } = await ensureStudentProfile(order.uid);
     const { ref: walletRef, wallet } = await ensureWallet(transaction, year, semester, order.uid, profile);
+    const productRef = db.doc(`${getPointCollectionPath(year, semester, 'point_products')}/${order.productId}`);
+    const productSnap = await transaction.get(productRef);
 
     transaction.set(orderRef, {
       status: nextStatus,
@@ -456,19 +475,20 @@ exports.reviewTeacherPointOrder = onCall({ region: REGION }, async (request) => 
       memo: memo || String(order.memo || '').trim(),
     }, { merge: true });
 
-    const productRef = db.doc(`${getPointCollectionPath(year, semester, 'point_products')}/${order.productId}`);
     const transactionId = buildOrderReviewTransactionId(order.id, nextStatus);
     const txRef = db.doc(`${getPointCollectionPath(year, semester, 'point_transactions')}/${transactionId}`);
 
     if (nextStatus === 'rejected' || nextStatus === 'cancelled') {
       const restoredBalance = Number(wallet.balance || 0) + Number(order.priceSnapshot || 0);
       transaction.set(walletRef, {
+        ...buildWalletBase(order.uid, profile),
         balance: restoredBalance,
+        earnedTotal: Number(wallet.earnedTotal || 0),
         spentTotal: Math.max(0, Number(wallet.spentTotal || 0) - Number(order.priceSnapshot || 0)),
+        adjustedTotal: Number(wallet.adjustedTotal || 0),
         lastTransactionAt: FieldValue.serverTimestamp(),
       }, { merge: true });
 
-      const productSnap = await transaction.get(productRef);
       if (productSnap.exists) {
         transaction.set(productRef, {
           stock: Number(productSnap.data().stock || 0) + 1,
