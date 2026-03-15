@@ -844,7 +844,7 @@ const ManageHistoryClassroom: React.FC = () => {
                                                     onClick={() => setSelectedStudentUids((prev) => prev.filter((uid) => uid !== student.uid))}
                                                     className="shrink-0 text-[10px] font-bold text-red-500"
                                                 >
-                                                    ?쒓굅
+                                                    삭제
                                                 </button>
                                             </div>
                                         ))}
