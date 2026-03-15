@@ -774,33 +774,35 @@ const ManageHistoryClassroom: React.FC = () => {
                     </div>
 
                     <div className="space-y-3">
-                        <div className="grid gap-3 lg:grid-cols-4">
-                            <select value={targetGrade} onChange={(e) => { setTargetGrade(e.target.value); setTargetClass(''); setTargetNumber(''); setTargetStudentUid(''); }} className="w-full min-w-0 rounded-xl border border-gray-300 px-3 py-2 text-sm">
+                        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(5.75rem,1.2fr)] gap-2 lg:grid-cols-4 lg:gap-3">
+                            <select value={targetGrade} onChange={(e) => { setTargetGrade(e.target.value); setTargetClass(''); setTargetNumber(''); setTargetStudentUid(''); }} className="h-11 w-full min-w-0 rounded-xl border border-gray-300 px-3 text-sm">
                                 <option value="">학년 선택</option>
                                 {gradeOptions.map((grade) => (
                                     <option key={grade} value={grade}>{grade}</option>
                                 ))}
                             </select>
-                            <select value={targetClass} onChange={(e) => { setTargetClass(e.target.value); setTargetNumber(''); setTargetStudentUid(''); }} className="w-full min-w-0 rounded-xl border border-gray-300 px-3 py-2 text-sm">
+                            <select value={targetClass} onChange={(e) => { setTargetClass(e.target.value); setTargetNumber(''); setTargetStudentUid(''); }} className="h-11 w-full min-w-0 rounded-xl border border-gray-300 px-3 text-sm">
                                 <option value="">학급 선택</option>
                                 {classOptions.map((className) => (
                                     <option key={className} value={className}>{className}</option>
                                 ))}
                             </select>
-                            <select value={targetNumber} onChange={(e) => { setTargetNumber(e.target.value); setTargetStudentUid(''); }} className="w-full min-w-0 rounded-xl border border-gray-300 px-3 py-2 text-sm">
+                            <select value={targetNumber} onChange={(e) => { setTargetNumber(e.target.value); setTargetStudentUid(''); }} className="h-11 w-full min-w-0 rounded-xl border border-gray-300 px-3 text-sm">
                                 <option value="">번호 선택</option>
                                 {numberOptions.map((number) => (
                                     <option key={number} value={number}>{number}</option>
                                 ))}
                             </select>
-                            <div className="flex min-h-[42px] items-center rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-bold text-gray-700">
+                            <div className="flex h-11 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 px-3 text-center text-sm font-bold text-gray-700">
+                                <span className="block w-full truncate whitespace-nowrap">
                                 {targetStudentPreview?.name || '학생 이름'}
+                                </span>
                             </div>
                         </div>
                         <select
                             value={targetStudentUid}
                             onChange={(e) => setTargetStudentUid(e.target.value)}
-                            className="w-full min-w-0 rounded-xl border border-gray-300 px-3 py-2 text-sm"
+                            className="h-11 w-full min-w-0 rounded-xl border border-gray-300 px-3 text-sm"
                             title={targetStudentPreview ? `${targetStudentPreview.grade}-${targetStudentPreview.className} ${targetStudentPreview.number}번 ${targetStudentPreview.name}` : '학생 선택'}
                         >
                             <option value="">학생 선택</option>
@@ -816,7 +818,7 @@ const ManageHistoryClassroom: React.FC = () => {
                                 setTargetStudentUid('');
                             }}
                             disabled={!targetStudentUid || selectedStudentUids.includes(targetStudentUid)}
-                            className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-bold text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="h-11 rounded-xl border border-blue-200 bg-blue-50 px-3 text-sm font-bold text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             학생 추가
                         </button>
