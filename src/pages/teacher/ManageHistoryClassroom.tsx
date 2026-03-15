@@ -40,6 +40,26 @@ const formatStudentBadgeLabel = (student: Pick<StudentOption, 'grade' | 'classNa
     return parts.join(' ');
 };
 
+const formatClassGroupLabel = (student: Pick<StudentOption, 'grade' | 'className'>) => (
+    student.grade && student.className ? `${student.grade}-${student.className}` : '미지정 반'
+);
+
+const groupStudentsByClass = <T extends Pick<StudentOption, 'uid' | 'name' | 'grade' | 'className'>>(
+    items: T[],
+) => {
+    const grouped = new Map<string, T[]>();
+    items.forEach((student) => {
+        const key = formatClassGroupLabel(student);
+        const current = grouped.get(key) || [];
+        current.push(student);
+        grouped.set(key, current);
+    });
+    return Array.from(grouped.entries()).map(([classLabel, students]) => ({
+        classLabel,
+        students: students.sort((a, b) => a.name.localeCompare(b.name, 'ko')),
+    }));
+};
+
 const createWorksheetBlankFromRect = (
     page: number,
     rect: {
@@ -182,15 +202,19 @@ const ManageHistoryClassroom: React.FC = () => {
     const [worksheetTool, setWorksheetTool] = useState<'ocr' | 'box'>('box');
     const [showAllBlankTags, setShowAllBlankTags] = useState(false);
     const [floatingPanelOpen, setFloatingPanelOpen] = useState(false);
+    const [worksheetEditingAssignmentId, setWorksheetEditingAssignmentId] = useState('');
+    const [worksheetEditingIsPublished, setWorksheetEditingIsPublished] = useState(true);
     const [editingAssignmentId, setEditingAssignmentId] = useState('');
     const [editingTitle, setEditingTitle] = useState('');
     const [editingDescription, setEditingDescription] = useState('');
     const [editingTimeLimitMinutes, setEditingTimeLimitMinutes] = useState(0);
     const [editingCooldownMinutes, setEditingCooldownMinutes] = useState(0);
     const [editingPassThresholdPercent, setEditingPassThresholdPercent] = useState(80);
+    const [editingMapResourceId, setEditingMapResourceId] = useState('');
     const [editingStudentUids, setEditingStudentUids] = useState<string[]>([]);
     const [editingIsPublished, setEditingIsPublished] = useState(true);
     const [savingEdit, setSavingEdit] = useState(false);
+    const preserveBlankResetRef = React.useRef(false);
     const [tabLabels, setTabLabels] = useState({
         manage: '문제 등록',
         log: '제출 현황',
@@ -279,6 +303,10 @@ const ManageHistoryClassroom: React.FC = () => {
     }, []);
 
     useEffect(() => {
+        if (preserveBlankResetRef.current) {
+            preserveBlankResetRef.current = false;
+            return;
+        }
         setBlanks([]);
         setSelectedBlankId('');
         setDraftBlank(null);
@@ -395,6 +423,24 @@ const ManageHistoryClassroom: React.FC = () => {
         [editingStudentUids, students],
     );
 
+    const assignmentStudentsById = useMemo(() => {
+        const resolved = new Map<string, StudentOption[]>();
+        assignments.forEach((assignment) => {
+            const matched = assignment.targetStudentUids.length
+                ? assignment.targetStudentUids
+                    .map((uid) => studentByUid.get(uid))
+                    .filter((student): student is StudentOption => Boolean(student))
+                : [];
+            resolved.set(assignment.id, matched);
+        });
+        return resolved;
+    }, [assignments, studentByUid]);
+
+    const editingStudentGroups = useMemo(
+        () => groupStudentsByClass(editingStudents),
+        [editingStudents],
+    );
+
     const editingResults = useMemo(
         () => resultsByAssignment[editingAssignmentId] || [],
         [editingAssignmentId, resultsByAssignment],
@@ -494,8 +540,38 @@ const ManageHistoryClassroom: React.FC = () => {
         setEditingTimeLimitMinutes(assignment.timeLimitMinutes);
         setEditingCooldownMinutes(assignment.cooldownMinutes);
         setEditingPassThresholdPercent(assignment.passThresholdPercent);
+        setEditingMapResourceId(assignment.mapResourceId);
         setEditingStudentUids(assignment.targetStudentUids.length ? assignment.targetStudentUids : (assignment.targetStudentUid ? [assignment.targetStudentUid] : []));
         setEditingIsPublished(assignment.isPublished);
+    };
+
+    const loadAssignmentIntoWorksheetEditor = (
+        assignment: HistoryClassroomAssignment,
+        nextMapId: string,
+    ) => {
+        const mapIdToUse = nextMapId || assignment.mapResourceId;
+        const sameMap = mapIdToUse === assignment.mapResourceId;
+        preserveBlankResetRef.current = sameMap;
+        setSelectedMapId(mapIdToUse);
+        setWorksheetEditingAssignmentId(assignment.id);
+        setWorksheetEditingIsPublished(assignment.isPublished);
+        setTitle(assignment.title);
+        setDescription(assignment.description);
+        setTimeLimitMinutes(assignment.timeLimitMinutes);
+        setCooldownMinutes(assignment.cooldownMinutes);
+        setPassThresholdPercent(assignment.passThresholdPercent);
+        setTargetGrade(assignment.targetGrade);
+        setTargetClass(assignment.targetClass);
+        setTargetNumber('');
+        setTargetStudentUid('');
+        setSelectedStudentUids(assignment.targetStudentUids.length ? assignment.targetStudentUids : (assignment.targetStudentUid ? [assignment.targetStudentUid] : []));
+        setBlanks(sameMap ? assignment.blanks : []);
+        setSelectedBlankId('');
+        setDraftBlank(null);
+        setDraftBlankAnswer('');
+        setShowAllBlankTags(false);
+        closeAssignmentEditor();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const closeAssignmentEditor = () => {
@@ -505,6 +581,7 @@ const ManageHistoryClassroom: React.FC = () => {
         setEditingTimeLimitMinutes(0);
         setEditingCooldownMinutes(0);
         setEditingPassThresholdPercent(80);
+        setEditingMapResourceId('');
         setEditingStudentUids([]);
         setEditingIsPublished(true);
         setSavingEdit(false);
@@ -546,6 +623,8 @@ const ManageHistoryClassroom: React.FC = () => {
                     : assignment
             )));
             closeAssignmentEditor();
+            setWorksheetEditingAssignmentId('');
+            setWorksheetEditingIsPublished(true);
         } catch (error) {
             console.error(error);
             alert('역사교실 수정에 실패했습니다.');
@@ -569,7 +648,10 @@ const ManageHistoryClassroom: React.FC = () => {
 
         setSaving(true);
         try {
-            const assignmentId = `history-classroom-${Date.now()}`;
+            const existingAssignment = worksheetEditingAssignmentId
+                ? assignments.find((assignment) => assignment.id === worksheetEditingAssignmentId) || null
+                : null;
+            const assignmentId = existingAssignment?.id || `history-classroom-${Date.now()}`;
             const payload: Omit<HistoryClassroomAssignment, 'id'> = {
                 title: title.trim(),
                 description: description.trim(),
@@ -588,12 +670,18 @@ const ManageHistoryClassroom: React.FC = () => {
                 targetStudentName: selectedStudents.map((student) => student.name).join(', '),
                 targetStudentNames: selectedStudents.map((student) => student.name),
                 targetStudentNumber: selectedStudents.map((student) => student.number).filter(Boolean).join(', '),
-                isPublished: true,
-                createdAt: serverTimestamp(),
+                isPublished: existingAssignment ? worksheetEditingIsPublished : true,
+                createdAt: existingAssignment?.createdAt || serverTimestamp(),
                 updatedAt: serverTimestamp(),
             };
-            await setDoc(doc(db, getSemesterCollectionPath(config, 'history_classrooms'), assignmentId), payload);
-            setAssignments((prev) => [normalizeHistoryClassroomAssignment(assignmentId, payload), ...prev]);
+            await setDoc(doc(db, getSemesterCollectionPath(config, 'history_classrooms'), assignmentId), payload, { merge: !!existingAssignment });
+            setAssignments((prev) => {
+                const normalized = normalizeHistoryClassroomAssignment(assignmentId, payload);
+                if (existingAssignment) {
+                    return prev.map((assignment) => (assignment.id === assignmentId ? normalized : assignment));
+                }
+                return [normalized, ...prev];
+            });
             setTitle('');
             setDescription('');
             setTimeLimitMinutes(0);
@@ -741,7 +829,33 @@ const ManageHistoryClassroom: React.FC = () => {
                                 {selectedStudents.length}명
                             </div>
                         </div>
-                        <div className="flex flex-wrap gap-2">
+                        <div className="max-h-32 space-y-2 overflow-y-auto pr-1">
+                            {groupStudentsByClass(selectedStudents).map((group) => (
+                                <div key={group.classLabel} className="flex items-center gap-2">
+                                    <span className="shrink-0 rounded-full bg-gray-100 px-2 py-1 text-[11px] font-bold text-gray-600">
+                                        {group.classLabel}
+                                    </span>
+                                    <div className="flex min-w-0 flex-wrap gap-1">
+                                        {group.students.map((student) => (
+                                            <div key={student.uid} className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] font-semibold text-gray-700">
+                                                <span className="font-bold text-gray-900">{student.name}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSelectedStudentUids((prev) => prev.filter((uid) => uid !== student.uid))}
+                                                    className="shrink-0 text-[10px] font-bold text-red-500"
+                                                >
+                                                    ?쒓굅
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                            {!selectedStudents.length && (
+                                <div className="text-sm text-gray-400">학생을 선택해서 추가하면 여기에 반별로 묶여 표시됩니다.</div>
+                            )}
+                        </div>
+                        <div className="hidden flex flex-wrap gap-2">
                             {selectedStudents.map((student) => (
                                 <div key={student.uid} className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-700">
                                     <span className="max-w-[10rem] truncate">
@@ -770,16 +884,56 @@ const ManageHistoryClassroom: React.FC = () => {
                             </div>
                             <div className="inline-flex shrink-0 items-center rounded-full bg-white px-3 py-1 text-xs font-bold text-gray-600 whitespace-nowrap">{assignments.length}개</div>
                         </div>
-                        <div className="space-y-3">
-                            {assignments.slice(0, 5).map((assignment) => (
+                        <div className="max-h-[24rem] space-y-2 overflow-y-auto pr-1">
+                            {assignments.map((assignment) => (
                                 <button
                                     key={assignment.id}
                                     type="button"
                                     onClick={() => openAssignmentEditor(assignment)}
-                                    className="history-assignment-card w-full rounded-2xl border border-gray-200 bg-white p-4 text-left transition hover:border-orange-200 hover:shadow-sm"
+                                    className="history-assignment-card w-full rounded-2xl border border-gray-200 bg-white p-3 text-left transition hover:border-orange-200 hover:shadow-sm"
                                 >
-                                    <div className="text-xs font-bold text-orange-500">{assignment.mapTitle}</div>
-                                    <div className="mt-1 flex items-start justify-between gap-3">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <div className="truncate text-[11px] font-bold text-orange-500">{assignment.mapTitle}</div>
+                                            <div className="mt-0.5 text-sm font-black text-gray-900 break-words">{assignment.title}</div>
+                                        </div>
+                                        <span
+                                            className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold whitespace-nowrap ${
+                                                assignment.isPublished
+                                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                                    : 'bg-gray-100 text-gray-600 border border-gray-200'
+                                            }`}
+                                        >
+                                            {assignment.isPublished ? '공개' : '비공개'}
+                                        </span>
+                                    </div>
+                                    <div className="mt-2 space-y-1.5">
+                                        {groupStudentsByClass(assignmentStudentsById.get(assignment.id) || []).map((group) => (
+                                            <div key={`${assignment.id}-${group.classLabel}`} className="flex items-center gap-2">
+                                                <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-bold text-gray-600">
+                                                    {group.classLabel}
+                                                </span>
+                                                <div className="flex min-w-0 flex-wrap gap-1">
+                                                    {group.students.map((student) => (
+                                                        <span key={`${assignment.id}-${student.uid}`} className="rounded-full border border-orange-100 bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-orange-700">
+                                                            {student.name}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ))}
+                                        {!(assignmentStudentsById.get(assignment.id) || []).length && assignment.targetStudentNames.length > 0 && (
+                                            <div className="flex flex-wrap gap-1">
+                                                {assignment.targetStudentNames.map((name) => (
+                                                    <span key={`${assignment.id}-${name}`} className="rounded-full border border-orange-100 bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-orange-700">
+                                                        {name}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="hidden text-xs font-bold text-orange-500">{assignment.mapTitle}</div>
+                                    <div className="hidden mt-1 flex items-start justify-between gap-3">
                                         <div className="text-base font-black text-gray-900 break-words">{assignment.title}</div>
                                         <span
                                             className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold whitespace-nowrap ${
@@ -791,7 +945,7 @@ const ManageHistoryClassroom: React.FC = () => {
                                             {assignment.isPublished ? '공개' : '비공개'}
                                         </span>
                                     </div>
-                                    <div className="mt-3 flex flex-wrap gap-1.5">
+                                    <div className="hidden mt-3 flex flex-wrap gap-1.5">
                                         {(
                                             assignment.targetStudentUids.length
                                                 ? assignment.targetStudentUids
@@ -855,9 +1009,38 @@ const ManageHistoryClassroom: React.FC = () => {
                     </div>
                     )}
 
-                    <button type="button" onClick={() => void handleSave()} disabled={saving} className="w-full rounded-2xl bg-orange-500 px-4 py-3 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-60">
-                        {saving ? '저장 중...' : '역사교실 저장'}
-                    </button>
+                    <div className="space-y-2">
+                        {worksheetEditingAssignmentId && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setWorksheetEditingAssignmentId('');
+                                    setWorksheetEditingIsPublished(true);
+                                    setTitle('');
+                                    setDescription('');
+                                    setTimeLimitMinutes(0);
+                                    setCooldownMinutes(0);
+                                    setPassThresholdPercent(80);
+                                    setTargetGrade('');
+                                    setTargetClass('');
+                                    setTargetNumber('');
+                                    setTargetStudentUid('');
+                                    setSelectedStudentUids([]);
+                                    setBlanks([]);
+                                    setSelectedBlankId('');
+                                    setDraftBlank(null);
+                                    setDraftBlankAnswer('');
+                                    setShowAllBlankTags(false);
+                                }}
+                                className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50"
+                            >
+                                수정 취소
+                            </button>
+                        )}
+                        <button type="button" onClick={() => void handleSave()} disabled={saving} className="w-full rounded-2xl bg-orange-500 px-4 py-3 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-60">
+                            {saving ? '저장 중...' : worksheetEditingAssignmentId ? '역사교실 수정 저장' : '역사교실 저장'}
+                        </button>
+                    </div>
                 </section>
 
                 <section className="space-y-6">
@@ -1019,13 +1202,61 @@ const ManageHistoryClassroom: React.FC = () => {
                                         </div>
                                     </div>
 
+                                    <div className="rounded-2xl border border-orange-100 bg-orange-50/60 p-4">
+                                        <div className="flex flex-wrap items-center justify-between gap-3">
+                                            <div>
+                                                <div className="text-sm font-bold text-gray-700">배포 지도</div>
+                                                <div className="mt-1 text-xs text-gray-500">지도를 바꾸거나 빈칸을 수정하려면 편집 화면으로 불러오세요.</div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => loadAssignmentIntoWorksheetEditor(editingAssignment, editingMapResourceId)}
+                                                className="rounded-xl border border-orange-200 bg-white px-3 py-2 text-xs font-bold text-orange-700 hover:bg-orange-50"
+                                            >
+                                                지도/빈칸 수정
+                                            </button>
+                                        </div>
+                                        <select
+                                            value={editingMapResourceId}
+                                            onChange={(e) => setEditingMapResourceId(e.target.value)}
+                                            className="mt-3 w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+                                        >
+                                            {maps.map((map) => (
+                                                <option key={map.id} value={map.id}>{map.title}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
                                     <div className="rounded-2xl bg-gray-50 p-4">
                                         <div className="mb-3 flex items-center justify-between gap-2">
                                             <div className="text-sm font-bold text-gray-700">배정 학생</div>
                                             <div className="rounded-full bg-white px-3 py-1 text-xs font-bold text-gray-600">{editingStudents.length}명</div>
                                         </div>
-                                        <div className="space-y-2">
-                                            {editingStudents.map((student) => (
+                                        <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+                                            {editingStudentGroups.map((group) => (
+                                                <div key={group.classLabel} className="rounded-xl bg-white px-3 py-2">
+                                                    <div className="flex items-start gap-2">
+                                                        <span className="mt-0.5 shrink-0 rounded-full bg-gray-100 px-2 py-1 text-[11px] font-bold text-gray-600">
+                                                            {group.classLabel}
+                                                        </span>
+                                                        <div className="flex min-w-0 flex-wrap gap-1">
+                                                            {group.students.map((student) => (
+                                                                <span key={student.uid} className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] font-semibold text-gray-700">
+                                                                    <span className="font-bold text-gray-900">{student.name}</span>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setEditingStudentUids((prev) => prev.filter((uid) => uid !== student.uid))}
+                                                                        className="shrink-0 text-[10px] font-bold text-red-500"
+                                                                    >
+                                                                        삭제
+                                                                    </button>
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            {false && editingStudents.map((student) => (
                                                 <div key={student.uid} className="flex items-center justify-between gap-3 rounded-xl bg-white px-3 py-2 text-sm">
                                                     <div className="min-w-0 text-gray-700">
                                                         <span className="font-bold">{student.grade}-{student.className}</span>{' '}
@@ -1102,6 +1333,7 @@ const ManageHistoryClassroom: React.FC = () => {
                                     </div>
                                 </div>
                             </label>
+                            <div className="flex items-center gap-2">
                             <button type="button" onClick={closeAssignmentEditor} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50">
                                 취소
                             </button>
@@ -1111,6 +1343,7 @@ const ManageHistoryClassroom: React.FC = () => {
                         </div>
                     </div>
                 </div>
+            </div>
             )}
 
             {false && (draftBlank || selectedBlank || sortedBlanks.length > 0) && (
