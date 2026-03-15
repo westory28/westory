@@ -1,5 +1,6 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
+import { createPortal } from 'react-dom';
 import type { PDFDocumentProxy, TextItem } from 'pdfjs-dist/types/src/display/api';
 import { getDownloadURL, ref } from 'firebase/storage';
 import { storage } from '../../lib/firebase';
@@ -53,7 +54,7 @@ const TAG_ROW_LIMIT = 5;
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const createRegionKey = (region: RegionHit) => `${region.label}-${region.page}-${region.left}-${region.top}`;
 
-const getRegionOverlayStyle = (
+const getRegionOverlayMetrics = (
     region: RegionHit,
     label: string,
     scale: number,
@@ -63,16 +64,38 @@ const getRegionOverlayStyle = (
     padYPx: number,
 ) => {
     const estimatedLabelWidth = Math.max(0, label.length) * 11 + 24;
-    const width = Math.max((region.width * scale) + (padXPx * 2), minWidthPx, estimatedLabelWidth);
-    const height = Math.max((region.height * scale) + (padYPx * 2), minHeightPx);
+    const rawWidth = region.width * scale;
+    const rawHeight = region.height * scale;
+    const verticalBias = Math.min(Math.max(rawHeight * 0.22, 2), 8);
+    const width = Math.max(rawWidth + (padXPx * 2), minWidthPx, estimatedLabelWidth);
+    const height = Math.max(rawHeight + (padYPx * 2) - verticalBias, minHeightPx);
     const left = Math.max(0, (region.left * scale) - padXPx);
-    const top = Math.max(0, (region.top * scale) - padYPx);
+    const top = Math.max(0, (region.top * scale) - padYPx + verticalBias);
 
     return {
-        left: `${left}px`,
-        top: `${top}px`,
-        width: `${width}px`,
-        height: `${height}px`,
+        width,
+        height,
+        left,
+        top,
+    };
+};
+
+const getRegionOverlayStyle = (
+    region: RegionHit,
+    label: string,
+    scale: number,
+    minWidthPx: number,
+    minHeightPx: number,
+    padXPx: number,
+    padYPx: number,
+) => {
+    const metrics = getRegionOverlayMetrics(region, label, scale, minWidthPx, minHeightPx, padXPx, padYPx);
+
+    return {
+        left: `${metrics.left}px`,
+        top: `${metrics.top}px`,
+        width: `${metrics.width}px`,
+        height: `${metrics.height}px`,
     };
 };
 
@@ -83,13 +106,11 @@ const getRegionLabelStyle = (
     padXPx: number,
     padYPx: number,
 ) => {
-    const estimatedLabelWidth = Math.max(0, region.label.length) * 11 + 24;
-    const width = Math.max((region.width * scale) + (padXPx * 2), minWidthPx, estimatedLabelWidth);
-    const top = Math.max(0, (region.top * scale) - padYPx);
+    const metrics = getRegionOverlayMetrics(region, region.label, scale, minWidthPx, 0, padXPx, padYPx);
 
     return {
-        maxWidth: `${Math.max(width, 88)}px`,
-        top: top > 34 ? '-26px' : 'calc(100% + 6px)',
+        maxWidth: `${Math.max(metrics.width, 88)}px`,
+        top: metrics.top > 34 ? '-26px' : 'calc(100% + 6px)',
     };
 };
 
@@ -883,35 +904,9 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
         );
     };
 
-    return (
-        <div className="space-y-4">
-            <div className="rounded-2xl border border-gray-200 bg-white p-3 sm:p-4">
-                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-                    <h3 className="text-base font-extrabold text-gray-900 sm:text-lg">{title || '지도'}</h3>
-                    <div className="flex flex-wrap items-center gap-2">
-                        <button type="button" onClick={openModal} disabled={loadingPdf} className="rounded-lg border border-blue-200 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-40 sm:text-sm">확대 보기</button>
-                        <button type="button" onClick={() => changeZoom(-0.2)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 sm:text-sm">축소</button>
-                        <span className="w-14 text-center text-xs font-bold text-gray-600 sm:w-16 sm:text-sm">{Math.round(zoom * 100)}%</span>
-                        <button type="button" onClick={() => changeZoom(0.2)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 sm:text-sm">확대</button>
-                    </div>
-                </div>
-                {visibleRegionHits.length > 0 && (
-                    <div className="mb-4">
-                        {renderTagFilters(isInlineTagCatalogOpen, setIsInlineTagCatalogOpen)}
-                    </div>
-                )}
-                {selectedTag && (
-                    <div ref={inlineShortcutRef} className="mb-4 rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
-                        {renderShortcutList('rounded-xl px-3 py-2 text-left text-xs font-bold transition')}
-                    </div>
-                )}
-                {renderPageSurface(true)}
-                <p className="mt-3 text-xs leading-6 text-gray-500">PDF 지도를 클릭하면 확대 모달이 열립니다. 모바일에서는 핀치 확대와 스크롤 이동으로 볼 수 있습니다.</p>
-                <p className="mt-2 text-xs leading-6 text-gray-500">태그 목차는 기본으로 접혀 있으며, 필요할 때 펼쳐서 범주별로 볼 수 있습니다.</p>
-            </div>
-            {isModalOpen && (
-                <div className={`fixed inset-0 z-[70] flex bg-slate-950/70 ${isMobileViewport ? 'items-stretch justify-stretch p-0' : 'items-center justify-center p-2 sm:p-4'}`} onClick={() => setIsModalOpen(false)}>
-                    <div className={`relative flex w-full flex-col overflow-hidden bg-white shadow-2xl ${isMobileViewport ? 'h-screen max-w-none rounded-none' : 'h-[94vh] max-w-[96vw] rounded-2xl sm:h-[90vh] sm:rounded-3xl'}`} onClick={(event) => event.stopPropagation()}>
+    const modalContent = isModalOpen ? (
+        <div className={`fixed inset-0 z-[70] flex bg-slate-950/70 ${isMobileViewport ? 'items-stretch justify-stretch p-0' : 'items-center justify-center p-2 sm:p-4'}`} onClick={() => setIsModalOpen(false)}>
+            <div className={`relative flex w-full flex-col overflow-hidden bg-white shadow-2xl ${isMobileViewport ? 'h-screen max-w-none rounded-none' : 'h-[94vh] max-w-[96vw] rounded-2xl sm:h-[90vh] sm:rounded-3xl'}`} onClick={(event) => event.stopPropagation()}>
                         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 px-3 py-3 sm:px-5 sm:py-4">
                             <div>
                                 <div className="text-base font-extrabold text-gray-900 sm:text-lg">{title}</div>
@@ -1006,9 +1001,37 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                                 )}
                             </>
                         )}
+            </div>
+        </div>
+    ) : null;
+
+    return (
+        <div className="space-y-4">
+            <div className="rounded-2xl border border-gray-200 bg-white p-3 sm:p-4">
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+                    <h3 className="text-base font-extrabold text-gray-900 sm:text-lg">{title || '지도'}</h3>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <button type="button" onClick={openModal} disabled={loadingPdf} className="rounded-lg border border-blue-200 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-40 sm:text-sm">확대 보기</button>
+                        <button type="button" onClick={() => changeZoom(-0.2)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 sm:text-sm">축소</button>
+                        <span className="w-14 text-center text-xs font-bold text-gray-600 sm:w-16 sm:text-sm">{Math.round(zoom * 100)}%</span>
+                        <button type="button" onClick={() => changeZoom(0.2)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 sm:text-sm">확대</button>
                     </div>
                 </div>
-            )}
+                {visibleRegionHits.length > 0 && (
+                    <div className="mb-4">
+                        {renderTagFilters(isInlineTagCatalogOpen, setIsInlineTagCatalogOpen)}
+                    </div>
+                )}
+                {selectedTag && (
+                    <div ref={inlineShortcutRef} className="mb-4 rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
+                        {renderShortcutList('rounded-xl px-3 py-2 text-left text-xs font-bold transition')}
+                    </div>
+                )}
+                {renderPageSurface(true)}
+                <p className="mt-3 text-xs leading-6 text-gray-500">PDF 지도를 클릭하면 확대 모달이 열립니다. 모바일에서는 핀치 확대와 스크롤 이동으로 볼 수 있습니다.</p>
+                <p className="mt-2 text-xs leading-6 text-gray-500">태그 목차는 기본으로 접혀 있으며, 필요할 때 펼쳐서 범주별로 볼 수 있습니다.</p>
+            </div>
+            {modalContent && typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent}
         </div>
     );
 };
