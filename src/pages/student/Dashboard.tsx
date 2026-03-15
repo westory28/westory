@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import { useAuth } from '../../contexts/AuthContext';
 import { CalendarEvent } from '../../types';
@@ -72,7 +72,6 @@ const StudentDashboard: React.FC = () => {
         void loadSchoolConfig();
     }, []);
 
-    // Initial welcome text
     useEffect(() => {
         if (!userData) return;
         const gradeValue = normalizeClassValue(userData.grade);
@@ -82,14 +81,12 @@ const StudentDashboard: React.FC = () => {
         if (gradeLabel && classLabel) {
             setWelcomeText(`${withSuffix(gradeLabel, '학년')} ${withSuffix(classLabel, '반')}의 대시보드`);
         } else {
-            setWelcomeText(`${(userData.name || '이름 미설정').trim()}님의 대시보드`);
+            setWelcomeText(`${(userData.name || '학생').trim()}의 대시보드`);
         }
     }, [userData, gradeLabelMap, classLabelMap]);
 
-    // Fetch Events real-time
     useEffect(() => {
         const { year, semester } = getYearSemester(config);
-
         const path = `years/${year}/semesters/${semester}/calendar`;
         const unsubscribe = onSnapshot(collection(db, path), (snapshot) => {
             const gradeLabel = normalizeClassValue(userData?.grade);
@@ -97,16 +94,14 @@ const StudentDashboard: React.FC = () => {
             const userClassStr = gradeLabel && classLabel ? `${gradeLabel}-${classLabel}` : null;
             const loadedEvents: CalendarEvent[] = [];
 
-            snapshot.forEach(doc => {
-                const d = doc.data();
-                // Filter
-                const isCommon = d.targetType === 'common';
-                const isHoliday = d.eventType === 'holiday';
-                const isMyClass = d.targetType === 'class' && d.targetClass === userClassStr;
+            snapshot.forEach((entry) => {
+                const data = entry.data();
+                const isCommon = data.targetType === 'common';
+                const isHoliday = data.eventType === 'holiday';
+                const isMyClass = data.targetType === 'class' && data.targetClass === userClassStr;
 
                 if (isCommon || isHoliday || isMyClass) {
-                    loadedEvents.push({ id: doc.id, ...d } as CalendarEvent);
-                    // Add color mapping here if needed, but handled in CalendarSection
+                    loadedEvents.push({ id: entry.id, ...data } as CalendarEvent);
                 }
             });
             setEvents(loadedEvents);
@@ -161,9 +156,9 @@ const StudentDashboard: React.FC = () => {
 
     const handleDateClick = (dateStr: string) => {
         setSelectedDate(dateStr);
-        const filtered = events.filter(e => {
-            const start = new Date(e.start);
-            const end = new Date(e.end || e.start);
+        const filtered = events.filter((event) => {
+            const start = new Date(event.start);
+            const end = new Date(event.end || event.start);
             const target = new Date(dateStr);
             start.setHours(0, 0, 0, 0);
             end.setHours(0, 0, 0, 0);
@@ -174,10 +169,6 @@ const StudentDashboard: React.FC = () => {
     };
 
     const handleEventClick = (event: CalendarEvent) => {
-        // Logic to highlight date or open details?
-        // Current dashboard opens detail modal for single event
-        // But dashboard also has a side panel.
-        // Let's reuse side panel.
         handleDateClick(event.start);
     };
 
@@ -189,57 +180,25 @@ const StudentDashboard: React.FC = () => {
     };
 
     return (
-        <div className="dashboard-container w-full max-w-7xl mx-auto px-4 py-6">
-            <div className="mb-6 flex flex-col md:flex-row justify-between items-center gap-3 shrink-0">
+        <div className="dashboard-container mx-auto w-full max-w-7xl px-4 py-6">
+            <div className="mb-6 flex shrink-0 flex-col items-center justify-between gap-3 md:flex-row">
                 <div className="flex items-center gap-3">
-                    <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">
+                    <h1 className="text-2xl font-extrabold tracking-tight text-gray-900 md:text-3xl">
                         {welcomeText}
                     </h1>
                     {config && (
-                        <span className="bg-blue-600 text-white font-bold px-3 py-1 rounded-full text-xs md:text-sm shadow-md shrink-0">
+                        <span className="shrink-0 rounded-full bg-blue-600 px-3 py-1 text-xs font-bold text-white shadow-md md:text-sm">
                             {config.year}학년도 {config.semester}학기
                         </span>
                     )}
                 </div>
             </div>
 
-            <div className="mb-4 rounded-2xl border border-blue-100 bg-blue-50 px-5 py-4 shadow-sm">
-                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <div>
-                        <div className="text-sm font-bold text-blue-700">오늘의 출석 체크</div>
-                        <div className="mt-1 text-sm text-blue-900">
-                            하루 1번 출석 체크를 완료하면 포인트가 자동으로 반영됩니다.
-                        </div>
-                        {!!attendanceMessage && (
-                            <div className={`mt-2 text-sm font-bold ${attendanceMessage.includes('오류') ? 'text-red-600' : 'text-blue-700'}`}>
-                                {attendanceMessage}
-                            </div>
-                        )}
-                    </div>
-                    <button
-                        type="button"
-                        onClick={() => void handleAttendanceCheck()}
-                        disabled={attendanceLoading || attendanceChecked}
-                        className={`rounded-xl px-5 py-3 text-sm font-bold transition ${
-                            attendanceChecked
-                                ? 'bg-white text-blue-700 border border-blue-200'
-                                : 'bg-blue-600 text-white hover:bg-blue-700'
-                        } disabled:cursor-not-allowed disabled:opacity-70`}
-                    >
-                        {attendanceLoading ? '처리 중...' : attendanceChecked ? '오늘 출석 완료' : '출석 체크하기'}
-                    </button>
-                </div>
-            </div>
-
-            {/* Main Content Grid */}
-            <div className="flex flex-col md:grid md:grid-cols-5 md:grid-rows-2 gap-4 h-auto md:h-[calc(100vh-140px)] min-h-[500px]">
-
-                {/* 1. Notice Board (Mobile: Order 1 / Desktop: Order 2, Right Top) */}
+            <div className="flex h-auto min-h-[500px] flex-col gap-4 md:grid md:h-[calc(100vh-140px)] md:grid-cols-5 md:grid-rows-2">
                 <div className="order-1 md:order-2 md:col-span-2 md:row-span-1">
                     <NoticeBoard />
                 </div>
 
-                {/* 2. Calendar (Mobile: Order 2 / Desktop: Order 1, Left Full Height) */}
                 <div className="order-2 md:order-1 md:col-span-3 md:row-span-2">
                     <CalendarSection
                         events={events}
@@ -248,10 +207,13 @@ const StudentDashboard: React.FC = () => {
                         onSearchClick={() => setIsSearchOpen(true)}
                         calendarRef={calendarRef}
                         selectedDate={selectedDate}
+                        attendanceLoading={attendanceLoading}
+                        attendanceChecked={attendanceChecked}
+                        attendanceMessage={attendanceMessage}
+                        onAttendanceCheck={() => void handleAttendanceCheck()}
                     />
                 </div>
 
-                {/* 3. Event Details (Mobile: Order 3 / Desktop: Order 3, Right Bottom) */}
                 <div className="order-3 md:order-3 md:col-span-2 md:row-span-1">
                     <EventDetailPanel selectedDate={selectedDate} events={dailyEvents} />
                 </div>

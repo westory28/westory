@@ -21,6 +21,10 @@ interface CalendarSectionProps {
     onSearchClick: () => void;
     calendarRef: React.RefObject<FullCalendar>;
     selectedDate?: string | null;
+    attendanceLoading?: boolean;
+    attendanceChecked?: boolean;
+    attendanceMessage?: string;
+    onAttendanceCheck?: () => void;
 }
 
 const CalendarSection: React.FC<CalendarSectionProps> = ({
@@ -30,6 +34,10 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
     onSearchClick,
     calendarRef,
     selectedDate,
+    attendanceLoading = false,
+    attendanceChecked = false,
+    attendanceMessage = '',
+    onAttendanceCheck,
 }) => {
     const { categories } = useScheduleCategories();
     const [currentViewType, setCurrentViewType] = useState('dayGridMonth');
@@ -252,6 +260,21 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                 <h2 className="whitespace-nowrap text-lg font-bold text-gray-800">
                     <i className="far fa-calendar-alt mr-2 text-blue-600"></i>학사 일정
                 </h2>
+                <div className="flex items-center gap-2 self-end md:self-auto">
+                    <button
+                        type="button"
+                        onClick={onAttendanceCheck}
+                        disabled={!onAttendanceCheck || attendanceLoading || attendanceChecked}
+                        title={attendanceMessage || '출석 체크'}
+                        className={`rounded-lg px-4 py-2 text-sm font-bold transition ${
+                            attendanceChecked
+                                ? 'border border-blue-200 bg-blue-50 text-blue-700'
+                                : 'bg-blue-600 text-white hover:bg-blue-700'
+                        } disabled:cursor-not-allowed disabled:opacity-70`}
+                    >
+                        {attendanceLoading ? '처리 중...' : attendanceChecked ? '오늘 출석 완료' : '출석 체크'}
+                    </button>
+                </div>
                 <button
                     onClick={onSearchClick}
                     className="rounded-lg border border-gray-200 bg-gray-50 p-1.5 text-gray-600 transition hover:text-blue-600"
