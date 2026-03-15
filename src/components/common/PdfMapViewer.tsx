@@ -173,6 +173,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
     const modalPageFrameRef = useRef<HTMLDivElement | null>(null);
     const pinchStateRef = useRef<{ distance: number; zoom: number } | null>(null);
     const dragStateRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
+    const touchDragStateRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
     const hasManualZoomRef = useRef(false);
     const pendingAutoFocusRegionKeyRef = useRef('');
 
@@ -463,7 +464,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
             const frameOffsetLeft = currentSurface.scrollLeft + (frameRect.left - surfaceRect.left);
             const frameOffsetTop = currentSurface.scrollTop + (frameRect.top - surfaceRect.top);
             const targetLeft = frameOffsetLeft + centerX - (currentSurface.clientWidth / 2);
-            const focusTopRatio = isMobileViewport ? 0.32 : 0.38;
+            const focusTopRatio = isMobileViewport ? 0.22 : 0.28;
             const targetTop = frameOffsetTop + centerY - (currentSurface.clientHeight * focusTopRatio);
 
             currentSurface.scrollTo({
@@ -515,6 +516,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
 
     const changeZoom = (delta: number) => {
         hasManualZoomRef.current = true;
+        pendingAutoFocusRegionKeyRef.current = '';
         setZoom((prev) => clamp(Number((prev + delta).toFixed(2)), Math.max(0.25, fitZoom * 0.7), 4));
     };
 
@@ -530,21 +532,47 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
     );
 
     const handleTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
-        if (event.touches.length !== 2) return;
-        pinchStateRef.current = { distance: distanceBetweenTouches(event.touches), zoom };
+        if (!modalSurfaceRef.current) return;
+        if (event.touches.length === 2) {
+            event.preventDefault();
+            hasManualZoomRef.current = true;
+            pendingAutoFocusRegionKeyRef.current = '';
+            pinchStateRef.current = { distance: distanceBetweenTouches(event.touches), zoom };
+            touchDragStateRef.current = null;
+            return;
+        }
+        if (event.touches.length === 1) {
+            const touch = event.touches[0];
+            touchDragStateRef.current = {
+                x: touch.clientX,
+                y: touch.clientY,
+                left: modalSurfaceRef.current.scrollLeft,
+                top: modalSurfaceRef.current.scrollTop,
+            };
+        }
     };
 
     const handleTouchMove = (event: React.TouchEvent<HTMLDivElement>) => {
-        if (event.touches.length !== 2 || !pinchStateRef.current) return;
-        event.preventDefault();
-        const nextDistance = distanceBetweenTouches(event.touches);
-        const ratio = nextDistance / pinchStateRef.current.distance;
-        setZoom(clamp(Number((pinchStateRef.current.zoom * ratio).toFixed(2)), Math.max(0.25, fitZoom * 0.7), 4));
+        if (!modalSurfaceRef.current) return;
+        if (event.touches.length === 2 && pinchStateRef.current) {
+            event.preventDefault();
+            const nextDistance = distanceBetweenTouches(event.touches);
+            const ratio = nextDistance / pinchStateRef.current.distance;
+            setZoom(clamp(Number((pinchStateRef.current.zoom * ratio).toFixed(2)), Math.max(0.25, fitZoom * 0.7), 4));
+            return;
+        }
+        if (event.touches.length === 1 && touchDragStateRef.current) {
+            event.preventDefault();
+            const touch = event.touches[0];
+            modalSurfaceRef.current.scrollLeft = touchDragStateRef.current.left - (touch.clientX - touchDragStateRef.current.x);
+            modalSurfaceRef.current.scrollTop = touchDragStateRef.current.top - (touch.clientY - touchDragStateRef.current.y);
+        }
     };
 
     const handleDragStart = (event: React.MouseEvent<HTMLDivElement>) => {
         if (event.button !== 0 || !modalSurfaceRef.current) return;
         event.preventDefault();
+        pendingAutoFocusRegionKeyRef.current = '';
         dragStateRef.current = {
             x: event.clientX,
             y: event.clientY,
@@ -563,6 +591,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
     const handleDragEnd = () => {
         dragStateRef.current = null;
         pinchStateRef.current = null;
+        touchDragStateRef.current = null;
     };
 
     const renderTagFilters = (
@@ -925,16 +954,18 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                                         <div
                                             ref={modalSurfaceRef}
                                             className={`min-h-0 flex-1 cursor-grab overflow-auto bg-slate-100 active:cursor-grabbing ${isMobileViewport ? 'p-0' : 'p-2 sm:p-4'}`}
+                                            style={isMobileViewport ? { touchAction: 'none' } : undefined}
                                             onWheel={handleWheelZoom}
                                             onTouchStart={handleTouchStart}
                                             onTouchMove={handleTouchMove}
                                             onTouchEnd={handleDragEnd}
+                                            onTouchCancel={handleDragEnd}
                                             onMouseDown={handleDragStart}
                                             onMouseMove={handleDragMove}
                                             onMouseUp={handleDragEnd}
                                             onMouseLeave={handleDragEnd}
                                         >
-                                            <div className="flex min-h-full items-start justify-center">
+                                            <div className={`flex min-h-full items-start ${zoom > (fitZoom + 0.01) ? 'justify-start' : 'justify-center'}`}>
                                                 {renderPageSurface(false, isMobileViewport)}
                                             </div>
                                         </div>
