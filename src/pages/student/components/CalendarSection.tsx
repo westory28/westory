@@ -335,8 +335,8 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                 />
                 {currentViewType === 'listMonth' && (
                     <div
-                        className="custom-schedule-list absolute inset-x-0 bottom-0 overflow-y-auto rounded-b-xl border border-t-0 border-gray-200 bg-white"
-                        style={{ top: `${listTopOffset}px` }}
+                        className="custom-schedule-list absolute inset-x-0 overflow-y-auto rounded-b-xl border border-t-0 border-gray-200 bg-white"
+                        style={{ top: `${listTopOffset}px`, height: `calc(100% - ${listTopOffset}px)` }}
                     >
                         {listRows.map((group) => (
                             <div key={group.date}>
