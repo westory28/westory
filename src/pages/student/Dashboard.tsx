@@ -31,7 +31,7 @@ const StudentDashboard: React.FC = () => {
     const [events, setEvents] = useState<CalendarEvent[]>([]);
     const [selectedDate, setSelectedDate] = useState<string | null>(null);
     const [dailyEvents, setDailyEvents] = useState<CalendarEvent[]>([]);
-    const [welcomeText, setWelcomeText] = useState('?숇뀈/諛??뺣낫瑜?遺덈윭?ㅻ뒗 以?..');
+    const [welcomeText, setWelcomeText] = useState('학년/반 정보를 불러오는 중..');
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [gradeLabelMap, setGradeLabelMap] = useState<Record<string, string>>({});
     const [classLabelMap, setClassLabelMap] = useState<Record<string, string>>({});
@@ -89,9 +89,9 @@ const StudentDashboard: React.FC = () => {
         const gradeLabel = gradeLabelMap[gradeValue] || gradeValue;
         const classLabel = classLabelMap[classValue] || classValue;
         if (gradeLabel && classLabel) {
-            setWelcomeText(`${withSuffix(gradeLabel, '?숇뀈')} ${withSuffix(classLabel, '諛?)}????쒕낫??);
+            setWelcomeText(`${withSuffix(gradeLabel, '학년')} ${withSuffix(classLabel, '반')}의 대시보드`);
         } else {
-            setWelcomeText(`${(userData.name || '?숈깮').trim()}????쒕낫??);
+            setWelcomeText(`${(userData.name || '학생').trim()}의 대시보드`);
         }
     }, [userData, gradeLabelMap, classLabelMap]);
 
@@ -127,7 +127,7 @@ const StudentDashboard: React.FC = () => {
                 const attendanceTx = await getPointActivityTransaction(config, userData.uid, 'attendance', todayAttendanceSourceId);
                 if (attendanceTx) {
                     setAttendanceChecked(true);
-                    setAttendanceMessage(`?ㅻ뒛 異쒖꽍???꾨즺?섏뿀?듬땲?? +${attendanceTx.delta}?ъ씤??);
+                    setAttendanceMessage(`오늘 출석이 완료되었습니다. +${attendanceTx.delta}포인트`);
                 } else {
                     setAttendanceChecked(false);
                     setAttendanceMessage('');
@@ -195,7 +195,7 @@ const StudentDashboard: React.FC = () => {
                 config,
                 activityType: 'attendance',
                 sourceId: todayAttendanceSourceId,
-                sourceLabel: `${todayAttendanceSourceId.replace('attendance-', '')} 異쒖꽍 泥댄겕`,
+                sourceLabel: `${todayAttendanceSourceId.replace('attendance-', '')} 출석 체크`,
             });
 
             await setDoc(
@@ -216,13 +216,13 @@ const StudentDashboard: React.FC = () => {
             handleDateClick(todayDate);
 
             if (result.awarded && result.amount > 0) {
-                setAttendanceMessage(`異쒖꽍 泥댄겕媛 ?꾨즺?섏뿀?듬땲?? +${result.amount}?ъ씤??);
+                setAttendanceMessage(`출석 체크가 완료되었습니다. +${result.amount}포인트`);
             } else {
-                setAttendanceMessage('?ㅻ뒛 異쒖꽍? ?대? 諛섏쁺?섏뿀?듬땲??');
+                setAttendanceMessage('오늘 출석은 이미 반영되었습니다.');
             }
         } catch (error) {
             console.error('Failed to apply attendance point reward:', error);
-            setAttendanceMessage('異쒖꽍 泥댄겕 泥섎━ 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.');
+            setAttendanceMessage('출석 체크 처리 중 오류가 발생했습니다.');
         } finally {
             setAttendanceLoading(false);
         }
@@ -237,7 +237,7 @@ const StudentDashboard: React.FC = () => {
                     </h1>
                     {config && (
                         <span className="shrink-0 rounded-full bg-blue-600 px-3 py-1 text-xs font-bold text-white shadow-md md:text-sm">
-                            {config.year}?숇뀈??{config.semester}?숆린
+                            {config.year}학년도 {config.semester}학기
                         </span>
                     )}
                 </div>
