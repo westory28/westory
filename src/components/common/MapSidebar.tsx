@@ -12,6 +12,30 @@ interface MapSidebarProps {
     reorderMode?: boolean;
 }
 
+const getMapSidebarIcon = (item: MapResource) => {
+    const normalizedTitle = String(item.title || '').trim();
+    const normalizedGroup = String(item.tabGroup || '').trim();
+    const normalizedCategory = String(item.category || '').trim();
+    const source = `${normalizedTitle} ${normalizedGroup} ${normalizedCategory}`;
+
+    if (source.includes('한국사')) {
+        return <span className="text-base leading-none" aria-hidden="true">🇰🇷</span>;
+    }
+    if (source.includes('세계사')) {
+        return <span className="text-base leading-none" aria-hidden="true">🌐</span>;
+    }
+    if (item.type === 'google' || source.includes('구글')) {
+        return <span className="text-sm font-extrabold leading-none text-blue-600" aria-hidden="true">🅖</span>;
+    }
+    if (item.type === 'iframe') {
+        return <i className="fas fa-window-maximize text-sm"></i>;
+    }
+    if (item.type === 'pdf') {
+        return <i className="fas fa-file-pdf text-sm"></i>;
+    }
+    return <i className="fas fa-map text-sm"></i>;
+};
+
 const MapSidebar: React.FC<MapSidebarProps> = ({
     heading,
     items,
@@ -53,22 +77,11 @@ const MapSidebar: React.FC<MapSidebarProps> = ({
                                 </div>
                             ) : (
                                 <div className="w-6 text-center">
-                                    <i
-                                        className={`fas ${
-                                            item.type === 'google'
-                                                ? 'fa-globe-asia'
-                                                : item.type === 'iframe'
-                                                    ? 'fa-window-maximize'
-                                                    : item.type === 'pdf'
-                                                        ? 'fa-file-pdf'
-                                                        : 'fa-map'
-                                        } text-sm`}
-                                    ></i>
+                                    {getMapSidebarIcon(item)}
                                 </div>
                             )}
                             <div className="min-w-0 flex-1">
                                 <div className="truncate text-sm font-bold">{item.title}</div>
-                                <div className="truncate text-[11px] text-gray-400">{item.category}</div>
                             </div>
                             {renderItemAction && (
                                 <div className="ml-auto shrink-0">

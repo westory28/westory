@@ -453,10 +453,14 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
             const pageFrame = modalPageFrameRef.current;
             if (!currentSurface || !highlight || !pageFrame) return;
 
+            const surfaceRect = currentSurface.getBoundingClientRect();
+            const frameRect = pageFrame.getBoundingClientRect();
             const centerX = (selectedRegion.left + (selectedRegion.width / 2)) * zoom;
             const centerY = (selectedRegion.top + (selectedRegion.height / 2)) * zoom;
-            const targetLeft = pageFrame.offsetLeft + centerX - (currentSurface.clientWidth / 2);
-            const targetTop = pageFrame.offsetTop + centerY - (currentSurface.clientHeight / 2);
+            const frameOffsetLeft = currentSurface.scrollLeft + (frameRect.left - surfaceRect.left);
+            const frameOffsetTop = currentSurface.scrollTop + (frameRect.top - surfaceRect.top);
+            const targetLeft = frameOffsetLeft + centerX - (currentSurface.clientWidth / 2);
+            const targetTop = frameOffsetTop + centerY - (currentSurface.clientHeight / 2);
 
             currentSurface.scrollTo({
                 left: Math.max(0, targetLeft),
