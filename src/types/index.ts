@@ -43,3 +43,82 @@ export interface CalendarEvent {
     targetClass?: string;
     dDay?: number;
 }
+
+export type PointTransactionType =
+    | 'attendance'
+    | 'quiz'
+    | 'lesson'
+    | 'manual_adjust'
+    | 'purchase_hold'
+    | 'purchase_confirm'
+    | 'purchase_cancel';
+
+export type PointOrderStatus =
+    | 'requested'
+    | 'approved'
+    | 'rejected'
+    | 'fulfilled'
+    | 'cancelled';
+
+export interface PointWallet {
+    uid: string;
+    studentName: string;
+    grade: string;
+    class: string;
+    number: string;
+    balance: number;
+    earnedTotal: number;
+    spentTotal: number;
+    adjustedTotal: number;
+    lastTransactionAt?: any;
+}
+
+export interface PointTransaction {
+    id: string;
+    uid: string;
+    type: PointTransactionType;
+    delta: number;
+    balanceAfter: number;
+    sourceId: string;
+    sourceLabel: string;
+    policyId: string;
+    createdBy: string;
+    createdAt?: any;
+}
+
+export interface PointProduct {
+    id: string;
+    name: string;
+    description: string;
+    price: number;
+    stock: number;
+    isActive: boolean;
+    sortOrder: number;
+    imageUrl: string;
+    createdAt?: any;
+    updatedAt?: any;
+}
+
+export interface PointOrder {
+    id: string;
+    uid: string;
+    studentName: string;
+    productId: string;
+    productName: string;
+    priceSnapshot: number;
+    status: PointOrderStatus;
+    requestedAt?: any;
+    reviewedAt?: any;
+    reviewedBy: string;
+    memo: string;
+}
+
+export interface PointPolicy {
+    attendanceDaily: number;
+    lessonView: number;
+    quizSolve: number;
+    manualAdjustEnabled: boolean;
+    allowNegativeBalance: boolean;
+    updatedAt?: any;
+    updatedBy: string;
+}

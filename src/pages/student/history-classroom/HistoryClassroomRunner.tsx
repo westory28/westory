@@ -10,6 +10,7 @@ import {
     type HistoryClassroomAssignment,
 } from '../../../lib/historyClassroom';
 import { getSemesterCollectionPath, getSemesterDocPath } from '../../../lib/semesterScope';
+import { claimPointActivityReward } from '../../../lib/points';
 
 const BLANK_SCALE = 1;
 const HISTORY_CLASSROOM_LOCK_PREFIX = 'westoryHistoryClassroomLock';
@@ -60,6 +61,7 @@ const HistoryClassroomRunner: React.FC = () => {
     const [completed, setCompleted] = useState(false);
     const [error, setError] = useState('');
     const [resultText, setResultText] = useState('');
+    const [pointNotice, setPointNotice] = useState('');
     const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
     const cancellationInFlightRef = useRef(false);
     const timeoutHandledRef = useRef(false);
@@ -157,7 +159,7 @@ const HistoryClassroomRunner: React.FC = () => {
         const passed = options.status === 'cancelled' ? false : percent >= assignment.passThresholdPercent;
         const status = options.status === 'cancelled' ? 'cancelled' : (passed ? 'passed' : 'failed');
 
-        await addDoc(collection(db, getSemesterCollectionPath(config, 'history_classroom_results')), {
+        const resultRef = await addDoc(collection(db, getSemesterCollectionPath(config, 'history_classroom_results')), {
             assignmentId: assignment.id,
             assignmentTitle: assignment.title,
             uid: userData.uid,
@@ -176,7 +178,28 @@ const HistoryClassroomRunner: React.FC = () => {
             createdAt: serverTimestamp(),
         });
 
-        return { score, total, percent, status, passed };
+        return { score, total, percent, status, passed, resultId: resultRef.id };
+    };
+
+    const applyQuizPointReward = async (resultId: string) => {
+        try {
+            const pointResult = await claimPointActivityReward({
+                config,
+                activityType: 'quiz',
+                sourceId: `history-classroom-${resultId}`,
+                sourceLabel: assignment?.title || '역사교실 제출 완료',
+            });
+            if (pointResult.awarded && pointResult.amount > 0) {
+                setPointNotice(`문제 풀이 포인트가 적립되었습니다. +${pointResult.amount}포인트`);
+            } else if (pointResult.duplicate) {
+                setPointNotice('이번 제출 포인트는 이미 반영되었습니다.');
+            } else {
+                setPointNotice('');
+            }
+        } catch (pointError) {
+            console.error('Failed to claim history classroom point reward:', pointError);
+            setPointNotice('문제 풀이 포인트를 바로 반영하지 못했습니다.');
+        }
     };
 
     const handleForcedCancel = async (reason: string) => {
@@ -210,6 +233,7 @@ const HistoryClassroomRunner: React.FC = () => {
             if (!result) return;
             const statusLabel = result.status === 'passed' ? '통과' : '미통과';
             setResultText(`제한 시간이 종료되어 자동 제출되었습니다. ${result.score}/${result.total} (${result.percent}%) · ${statusLabel}`);
+            await applyQuizPointReward(result.resultId);
         } catch (submitError) {
             console.error(submitError);
             setResultText('시간 초과 제출 처리에 실패했습니다.');
@@ -287,6 +311,7 @@ const HistoryClassroomRunner: React.FC = () => {
             if (!result) return;
             const statusLabel = result.status === 'passed' ? '통과' : '미통과';
             setResultText(`제출 완료: ${result.score}/${result.total} (${result.percent}%) · ${statusLabel}`);
+            await applyQuizPointReward(result.resultId);
         } catch (submitError) {
             console.error(submitError);
             setResultText('제출에 실패했습니다.');
@@ -442,6 +467,11 @@ const HistoryClassroomRunner: React.FC = () => {
                             {submitting ? '제출 중...' : completed ? '제출 완료' : '제출하기'}
                         </button>
                         {resultText && <div className="mt-3 text-sm font-bold text-blue-700">{resultText}</div>}
+                        {pointNotice && (
+                            <div className={`mt-3 text-sm font-bold ${pointNotice.includes('못했습니다') ? 'text-amber-700' : 'text-emerald-700'}`}>
+                                {pointNotice}
+                            </div>
+                        )}
                     </div>
                 </aside>
             </div>

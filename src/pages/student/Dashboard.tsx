@@ -9,6 +9,7 @@ import CalendarSection from './components/CalendarSection';
 import EventDetailPanel from './components/EventDetailPanel';
 import SearchModal from './components/SearchModal';
 import { getYearSemester } from '../../lib/semesterScope';
+import { buildAttendanceSourceId, claimPointActivityReward, getPointActivityTransaction } from '../../lib/points';
 
 const normalizeClassValue = (value: unknown): string => {
     const normalized = String(value ?? '').trim();
@@ -34,8 +35,12 @@ const StudentDashboard: React.FC = () => {
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [gradeLabelMap, setGradeLabelMap] = useState<Record<string, string>>({});
     const [classLabelMap, setClassLabelMap] = useState<Record<string, string>>({});
+    const [attendanceLoading, setAttendanceLoading] = useState(false);
+    const [attendanceChecked, setAttendanceChecked] = useState(false);
+    const [attendanceMessage, setAttendanceMessage] = useState('');
 
     const calendarRef = useRef<FullCalendar>(null);
+    const todayAttendanceSourceId = buildAttendanceSourceId();
 
     useEffect(() => {
         const loadSchoolConfig = async () => {
@@ -110,6 +115,50 @@ const StudentDashboard: React.FC = () => {
         return () => unsubscribe();
     }, [config, userData]);
 
+    useEffect(() => {
+        if (!userData?.uid) return;
+        const loadAttendanceStatus = async () => {
+            try {
+                const attendanceTx = await getPointActivityTransaction(config, userData.uid, 'attendance', todayAttendanceSourceId);
+                if (attendanceTx) {
+                    setAttendanceChecked(true);
+                    setAttendanceMessage(`오늘 출석이 완료되었습니다. +${attendanceTx.delta}포인트`);
+                } else {
+                    setAttendanceChecked(false);
+                    setAttendanceMessage('');
+                }
+            } catch (error) {
+                console.error('Failed to load attendance point status:', error);
+            }
+        };
+        void loadAttendanceStatus();
+    }, [config, todayAttendanceSourceId, userData?.uid]);
+
+    const handleAttendanceCheck = async () => {
+        if (!userData?.uid || attendanceLoading || attendanceChecked) return;
+        setAttendanceLoading(true);
+        setAttendanceMessage('');
+        try {
+            const result = await claimPointActivityReward({
+                config,
+                activityType: 'attendance',
+                sourceId: todayAttendanceSourceId,
+                sourceLabel: `${todayAttendanceSourceId.replace('attendance-', '')} 출석 체크`,
+            });
+            setAttendanceChecked(true);
+            if (result.awarded && result.amount > 0) {
+                setAttendanceMessage(`출석 체크가 완료되었습니다. +${result.amount}포인트`);
+            } else {
+                setAttendanceMessage('오늘 출석은 이미 반영되었습니다.');
+            }
+        } catch (error) {
+            console.error('Failed to apply attendance point reward:', error);
+            setAttendanceMessage('출석 체크 처리 중 오류가 발생했습니다.');
+        } finally {
+            setAttendanceLoading(false);
+        }
+    };
+
     const handleDateClick = (dateStr: string) => {
         setSelectedDate(dateStr);
         const filtered = events.filter(e => {
@@ -151,6 +200,34 @@ const StudentDashboard: React.FC = () => {
                             {config.year}학년도 {config.semester}학기
                         </span>
                     )}
+                </div>
+            </div>
+
+            <div className="mb-4 rounded-2xl border border-blue-100 bg-blue-50 px-5 py-4 shadow-sm">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                        <div className="text-sm font-bold text-blue-700">오늘의 출석 체크</div>
+                        <div className="mt-1 text-sm text-blue-900">
+                            하루 1번 출석 체크를 완료하면 포인트가 자동으로 반영됩니다.
+                        </div>
+                        {!!attendanceMessage && (
+                            <div className={`mt-2 text-sm font-bold ${attendanceMessage.includes('오류') ? 'text-red-600' : 'text-blue-700'}`}>
+                                {attendanceMessage}
+                            </div>
+                        )}
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => void handleAttendanceCheck()}
+                        disabled={attendanceLoading || attendanceChecked}
+                        className={`rounded-xl px-5 py-3 text-sm font-bold transition ${
+                            attendanceChecked
+                                ? 'bg-white text-blue-700 border border-blue-200'
+                                : 'bg-blue-600 text-white hover:bg-blue-700'
+                        } disabled:cursor-not-allowed disabled:opacity-70`}
+                    >
+                        {attendanceLoading ? '처리 중...' : attendanceChecked ? '오늘 출석 완료' : '출석 체크하기'}
+                    </button>
                 </div>
             </div>
 

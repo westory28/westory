@@ -55,6 +55,18 @@ service cloud.firestore {
           && targetClass == userClass());
     }
 
+    function canReadPointData() {
+      return isAdmin() || hasPermission('point_read') || hasPermission('point_manage');
+    }
+
+    function canManagePointData() {
+      return isAdmin() || hasPermission('point_manage');
+    }
+
+    function canReadOwnPointResource(targetUid) {
+      return canUseWestory() && targetUid == request.auth.uid;
+    }
+
     function changedUserKeys() {
       return request.resource.data.diff(resource.data).affectedKeys();
     }
@@ -409,6 +421,31 @@ service cloud.firestore {
 
     // 학년도/학기 범위 컬렉션 권한
     match /years/{year}/semesters/{semester} {
+      match /point_wallets/{userId} {
+        allow read: if canReadOwnPointResource(userId) || canReadPointData();
+        allow create, update, delete: if false;
+      }
+
+      match /point_transactions/{txId} {
+        allow read: if canReadOwnPointResource(resource.data.uid) || canReadPointData();
+        allow create, update, delete: if false;
+      }
+
+      match /point_products/{productId} {
+        allow read: if canUseWestory();
+        allow create, update, delete: if canManagePointData();
+      }
+
+      match /point_orders/{orderId} {
+        allow read: if canReadOwnPointResource(resource.data.uid) || canReadPointData();
+        allow create, update, delete: if false;
+      }
+
+      match /point_policies/{policyId} {
+        allow read: if canUseWestory();
+        allow create, update, delete: if canManagePointData();
+      }
+
       match /calendar/{docId} {
         allow read: if canUseWestory();
         allow write: if isAdmin();

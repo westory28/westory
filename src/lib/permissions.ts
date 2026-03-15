@@ -6,6 +6,8 @@ export const STAFF_PERMISSION_KEYS = [
     'lesson_read',
     'quiz_read',
     'student_list_read',
+    'point_read',
+    'point_manage',
 ] as const;
 
 export type StaffPermission = (typeof STAFF_PERMISSION_KEYS)[number];
@@ -59,11 +61,20 @@ export const canReadStudentList = (userData?: Partial<UserData> | null, email?: 
 export const canEditStudentList = (userData?: Partial<UserData> | null, email?: string | null) =>
     isAdminUser(userData, email);
 
+export const canReadPoints = (userData?: Partial<UserData> | null, email?: string | null) =>
+    isAdminUser(userData, email)
+    || hasStaffPermission(userData, 'point_read')
+    || hasStaffPermission(userData, 'point_manage');
+
+export const canManagePoints = (userData?: Partial<UserData> | null, email?: string | null) =>
+    isAdminUser(userData, email) || hasStaffPermission(userData, 'point_manage');
+
 export const getDefaultTeacherRoute = (userData?: Partial<UserData> | null, email?: string | null) => {
     if (canAccessTeacherDashboard(userData, email)) return '/teacher/dashboard';
     if (canReadLessonManagement(userData, email)) return '/teacher/lesson';
     if (canReadQuizManagement(userData, email)) return '/teacher/quiz?tab=log';
     if (canReadStudentList(userData, email)) return '/teacher/students';
+    if (canReadPoints(userData, email)) return '/teacher/points';
     return '/student/dashboard';
 };
 
@@ -77,6 +88,7 @@ export const canAccessTeacherPath = (
     if (pathname.startsWith('/teacher/lesson')) return canReadLessonManagement(userData, email);
     if (pathname.startsWith('/teacher/quiz')) return canReadQuizManagement(userData, email);
     if (pathname.startsWith('/teacher/students')) return canReadStudentList(userData, email);
+    if (pathname.startsWith('/teacher/points')) return canReadPoints(userData, email);
     if (pathname.startsWith('/teacher/exam')) return isAdminUser(userData, email);
     if (pathname.startsWith('/teacher/schedule')) return isAdminUser(userData, email);
     return canAccessTeacherPortal(userData, email);

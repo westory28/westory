@@ -5,6 +5,7 @@ import { collection, query, where, getDocs, doc, getDoc, addDoc, serverTimestamp
 import { useAuth } from '../../../contexts/AuthContext';
 import Chart from 'chart.js/auto';
 import { getSemesterCollectionPath, getSemesterDocPath } from '../../../lib/semesterScope';
+import { claimPointActivityReward } from '../../../lib/points';
 
 // Interfaces
 interface Question {
@@ -64,6 +65,8 @@ const QuizRunner: React.FC = () => {
     // Result States
     const [score, setScore] = useState(0);
     const [results, setResults] = useState<any[]>([]);
+    const [pointNotice, setPointNotice] = useState('');
+    const [finishSubmitting, setFinishSubmitting] = useState(false);
     const maxHintUses = quizConfig?.hintLimit ?? 2;
 
     useEffect(() => {
@@ -208,6 +211,8 @@ const QuizRunner: React.FC = () => {
         setTimeLeft(quizConfig?.timeLimit || 60);
         setHintUsedCount(0);
         setRevealedHints({});
+        setFinishSubmitting(false);
+        setPointNotice('');
         setView('quiz');
 
         // Start Timer
@@ -272,6 +277,8 @@ const QuizRunner: React.FC = () => {
     };
 
     const finishQuiz = async (isTimeout = false) => {
+        if (finishSubmitting) return;
+        setFinishSubmitting(true);
         if (timerRef.current) clearInterval(timerRef.current);
         if (isTimeout) alert('제한 시간이 종료되었습니다.');
 
@@ -303,7 +310,7 @@ const QuizRunner: React.FC = () => {
         // Save to Firestore
         if (userData) {
             try {
-                await addDoc(collection(db, getSemesterCollectionPath(config, 'quiz_results')), {
+                const resultRef = await addDoc(collection(db, getSemesterCollectionPath(config, 'quiz_results')), {
                     uid: userData.uid,
                     name: userData.name || 'Student',
                     email: userData.email || '',
@@ -318,12 +325,31 @@ const QuizRunner: React.FC = () => {
                     timestamp: serverTimestamp(),
                     timeString: new Date().toLocaleString()
                 });
+                try {
+                    const pointResult = await claimPointActivityReward({
+                        config,
+                        activityType: 'quiz',
+                        sourceId: `quiz-result-${resultRef.id}`,
+                        sourceLabel: title || '문제 풀이 완료',
+                    });
+                    if (pointResult.awarded && pointResult.amount > 0) {
+                        setPointNotice(`문제 풀이 포인트가 적립되었습니다. +${pointResult.amount}포인트`);
+                    } else if (pointResult.duplicate) {
+                        setPointNotice('이번 문제 풀이 포인트는 이미 반영되었습니다.');
+                    } else {
+                        setPointNotice('');
+                    }
+                } catch (pointError) {
+                    console.error('Failed to claim quiz point reward', pointError);
+                    setPointNotice('문제 풀이 포인트를 바로 반영하지 못했습니다.');
+                }
             } catch (e) {
                 console.error("Failed to save result", e);
             }
         }
 
         setView('result');
+        setFinishSubmitting(false);
     };
 
     // Render Views
@@ -532,9 +558,10 @@ const QuizRunner: React.FC = () => {
                         </button>
                         <button
                             onClick={nextQuestion}
+                            disabled={finishSubmitting}
                             className="bg-gray-800 text-white px-8 py-3 rounded-xl font-bold hover:bg-gray-900 transition shadow-lg flex items-center"
                         >
-                            {currentIndex === selectedQuestions.length - 1 ? '제출하기' : '다음 문제'}
+                            {currentIndex === selectedQuestions.length - 1 ? (finishSubmitting ? '제출 중...' : '제출하기') : '다음 문제'}
                             {currentIndex === selectedQuestions.length - 1 ? <i className="fas fa-check ml-2"></i> : <i className="fas fa-arrow-right ml-2"></i>}
                         </button>
                     </div>
@@ -549,6 +576,13 @@ const QuizRunner: React.FC = () => {
                 <div className="bg-white p-8 rounded-2xl shadow-xl border-t-8 border-blue-500 mb-8">
                     <h2 className="text-3xl font-black text-gray-800 mb-2">평가 종료</h2>
                     <p className="text-gray-500 mb-8">수고하셨습니다. 결과를 확인하세요.</p>
+                    {!!pointNotice && (
+                        <div className={`mb-6 rounded-xl px-4 py-3 text-sm font-bold ${
+                            pointNotice.includes('못했습니다') ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'
+                        }`}>
+                            {pointNotice}
+                        </div>
+                    )}
 
                     <div className="relative w-48 h-48 mx-auto mb-6 flex items-center justify-center rounded-full border-8 border-blue-50">
                         {/* Simple Score Display instead of Chart.js for simplicity/speed in this component, or we can add Chart later */}

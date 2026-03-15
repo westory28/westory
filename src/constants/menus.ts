@@ -23,7 +23,7 @@ export const MENUS: MenuConfig = {
             children: [
                 { name: '수업 자료', url: '/student/lesson/note' },
                 { name: '지도', url: '/student/lesson/maps' },
-                { name: '생각모아', url: '/student/lesson/think-cloud' },
+                { name: '싱크 클라우드', url: '/student/lesson/think-cloud' },
             ],
         },
         {
@@ -39,20 +39,36 @@ export const MENUS: MenuConfig = {
             url: '/student/score',
             icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
             children: [
-                { name: '나의 성적표', url: '/student/score' },
+                { name: '내 성적', url: '/student/score' },
                 { name: '정기 시험 답안', url: '/student/history' },
             ],
+        },
+        {
+            name: '포인트',
+            url: '/student/points',
+            icon: 'M12 8c-2.761 0-5 1.567-5 3.5S9.239 15 12 15s5-1.567 5-3.5S14.761 8 12 8zm0 0V5m0 10v4m-7-7H3m18 0h-2',
+            children: [
+                { name: '내 포인트', url: '/student/points' },
+                { name: '포인트 내역', url: '/student/points?tab=history' },
+                { name: '포인트 상점', url: '/student/points?tab=shop' },
+                { name: '구매 내역', url: '/student/points?tab=orders' },
+            ],
+        },
+        {
+            name: '마이페이지',
+            url: '/student/mypage',
+            icon: 'M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-4.418 0-8 1.79-8 4v1h16v-1c0-2.21-3.582-4-8-4z',
         },
     ],
     teacher: [
         {
-            name: '수업 자료 관리',
+            name: '학습 자료 관리',
             url: '/teacher/lesson',
             icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253',
             children: [
                 { name: '수업 자료', url: '/teacher/lesson' },
                 { name: '지도', url: '/teacher/lesson/maps' },
-                { name: '생각모아 관리', url: '/teacher/lesson/think-cloud' },
+                { name: '싱크 클라우드 관리', url: '/teacher/lesson/think-cloud' },
             ],
         },
         {
@@ -61,7 +77,7 @@ export const MENUS: MenuConfig = {
             icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z',
             children: [
                 { name: '문제 등록', url: '/teacher/quiz' },
-                { name: '제출 현황', url: '/teacher/quiz?tab=log' },
+                { name: '응시 현황', url: '/teacher/quiz?tab=log' },
                 { name: '문제 은행', url: '/teacher/quiz?tab=bank' },
                 { name: '역사교실', url: '/teacher/quiz/history-classroom' },
             ],
@@ -76,9 +92,20 @@ export const MENUS: MenuConfig = {
             ],
         },
         {
-            name: '학생 명단 관리',
+            name: '학생 관리',
             url: '/teacher/students',
             icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z',
+        },
+        {
+            name: '포인트 관리',
+            url: '/teacher/points',
+            icon: 'M12 8c-2.761 0-5 1.567-5 3.5S9.239 15 12 15s5-1.567 5-3.5S14.761 8 12 8zm0 0V5m0 10v4m-7-7H3m18 0h-2',
+            children: [
+                { name: '포인트 현황', url: '/teacher/points' },
+                { name: '포인트 정책', url: '/teacher/points?tab=policy' },
+                { name: '상품 관리', url: '/teacher/points?tab=products' },
+                { name: '구매 요청 관리', url: '/teacher/points?tab=requests' },
+            ],
         },
     ],
 };

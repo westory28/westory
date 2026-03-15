@@ -3,6 +3,7 @@ import { collection, doc, getDoc, getDocs, limit, query, serverTimestamp, setDoc
 import LessonWorksheetStage, { type LessonWorksheetAnnotationState } from '../../../../components/common/LessonWorksheetStage';
 import { useAuth } from '../../../../contexts/AuthContext';
 import { db } from '../../../../lib/firebase';
+import { claimPointActivityReward } from '../../../../lib/points';
 import { getSemesterCollectionPath } from '../../../../lib/semesterScope';
 import type { LessonWorksheetBlank, LessonWorksheetPageImage, LessonWorksheetTextRegion } from '../../../../lib/lessonWorksheet';
 
@@ -70,8 +71,11 @@ const LessonContent: React.FC<LessonContentProps> = ({
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [saveMessage, setSaveMessage] = useState('');
+    const [pointMessage, setPointMessage] = useState('');
 
     const contentRef = useRef<HTMLDivElement>(null);
+    const viewStartedAtRef = useRef(Date.now());
+    const interactedRef = useRef(false);
     const canPersist = Boolean(!disablePersistence && currentUser?.uid && unitId);
 
     useEffect(() => {
@@ -83,6 +87,9 @@ const LessonContent: React.FC<LessonContentProps> = ({
         setAnnotationState(EMPTY_ANNOTATION_STATE);
         setHasUnsavedChanges(false);
         setSaveMessage('');
+        setPointMessage('');
+        viewStartedAtRef.current = Date.now();
+        interactedRef.current = false;
     }, [allowHiddenAccess, lessonOverride]);
 
     useEffect(() => {
@@ -120,12 +127,18 @@ const LessonContent: React.FC<LessonContentProps> = ({
                     setAnnotationState(EMPTY_ANNOTATION_STATE);
                     setHasUnsavedChanges(false);
                     setSaveMessage('');
+                    setPointMessage('');
+                    viewStartedAtRef.current = Date.now();
+                    interactedRef.current = false;
                 } else {
                     setLesson(null);
                     setStudentAnswers({});
                     setAnnotationState(EMPTY_ANNOTATION_STATE);
                     setHasUnsavedChanges(false);
                     setSaveMessage('');
+                    setPointMessage('');
+                    viewStartedAtRef.current = Date.now();
+                    interactedRef.current = false;
                 }
             } catch (fetchError) {
                 console.error('Error fetching lesson:', fetchError);
@@ -177,6 +190,31 @@ const LessonContent: React.FC<LessonContentProps> = ({
             }, { merge: true });
             setHasUnsavedChanges(false);
             setSaveMessage('저장됨');
+            if (lesson && interactedRef.current && unitId) {
+                const elapsedMs = Date.now() - viewStartedAtRef.current;
+                if (elapsedMs >= 30000) {
+                    try {
+                        const pointResult = await claimPointActivityReward({
+                            config,
+                            activityType: 'lesson',
+                            sourceId: `lesson-${unitId}`,
+                            sourceLabel: lesson.title || '수업 자료 확인',
+                        });
+                        if (pointResult.awarded && pointResult.amount > 0) {
+                            setPointMessage(`수업 자료 확인 포인트가 적립되었습니다. +${pointResult.amount}포인트`);
+                        } else if (pointResult.duplicate) {
+                            setPointMessage('이 수업 자료 포인트는 이미 반영되었습니다.');
+                        } else {
+                            setPointMessage('');
+                        }
+                    } catch (pointError) {
+                        console.error('Failed to claim lesson point reward:', pointError);
+                        setPointMessage('수업 자료 포인트를 바로 반영하지 못했습니다.');
+                    }
+                } else {
+                    setPointMessage('포인트 적립은 30초 이상 학습 후 저장하면 반영됩니다.');
+                }
+            }
         } catch (saveError) {
             console.error('Failed to save lesson progress:', saveError);
             setSaveMessage('저장 실패');
@@ -234,6 +272,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
             const status = getInputStatus(target.value, target.dataset.answer || '');
             target.classList.toggle('correct', status === 'correct');
             target.classList.toggle('wrong', status === 'wrong');
+            interactedRef.current = true;
             setHasUnsavedChanges(true);
             setSaveMessage('저장 필요');
         };
@@ -307,6 +346,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
                 status: getInputStatus(value, answer),
             },
         }));
+        interactedRef.current = true;
         setHasUnsavedChanges(true);
         setSaveMessage('저장 필요');
     };
@@ -323,6 +363,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
             return nextState;
         });
         if (changed) {
+            interactedRef.current = true;
             setHasUnsavedChanges(true);
             setSaveMessage('저장 필요');
         }
@@ -414,6 +455,17 @@ const LessonContent: React.FC<LessonContentProps> = ({
                             }`}>
                                 {isSaving ? '저장 중...' : saveMessage || '저장 대기'}
                             </span>
+                            {!!pointMessage && (
+                                <span className={`rounded-full px-4 py-2 text-sm font-bold ${
+                                    pointMessage.includes('못했습니다')
+                                        ? 'bg-amber-50 text-amber-700'
+                                        : pointMessage.includes('이미')
+                                            ? 'bg-slate-100 text-slate-600'
+                                            : 'bg-emerald-50 text-emerald-700'
+                                }`}>
+                                    {pointMessage}
+                                </span>
+                            )}
                             <button
                                 type="button"
                                 onClick={handleSaveClick}

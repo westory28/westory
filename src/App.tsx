@@ -27,6 +27,8 @@ const ManageThinkCloud = lazyWithRetry(() => import('./pages/teacher/ManageThink
 const MyPage = lazyWithRetry(() => import('./pages/student/MyPage'), 'my-page');
 const StudentHistory = lazyWithRetry(() => import('./pages/student/History'), 'student-history');
 const Calendar = lazyWithRetry(() => import('./pages/student/Calendar'), 'student-calendar');
+const ManagePoints = lazyWithRetry(() => import('./pages/teacher/ManagePoints'), 'manage-points');
+const StudentPoints = lazyWithRetry(() => import('./pages/student/Points'), 'student-points');
 
 const getBootRedirectHash = () => {
     if (typeof window === 'undefined') return '';
@@ -153,6 +155,11 @@ const App: React.FC = () => {
                                     <Settings />
                                 </MainLayout>
                             } />
+                            <Route path="/teacher/points" element={
+                                <MainLayout>
+                                    <ManagePoints />
+                                </MainLayout>
+                            } />
                             <Route path="/teacher/schedule" element={
                                 <MainLayout>
                                     <ManageSchedule />
@@ -181,6 +188,11 @@ const App: React.FC = () => {
                             <Route path="/student/history" element={
                                 <MainLayout>
                                     <StudentHistory />
+                                </MainLayout>
+                            } />
+                            <Route path="/student/points" element={
+                                <MainLayout>
+                                    <StudentPoints />
                                 </MainLayout>
                             } />
                             <Route path="/student/calendar" element={

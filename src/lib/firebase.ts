@@ -9,6 +9,7 @@ import {
 } from 'firebase/auth';
 import type { Analytics } from 'firebase/analytics';
 import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore';
+import { connectFunctionsEmulator, getFunctions } from 'firebase/functions';
 import { getStorage } from 'firebase/storage';
 
 const configuredAuthDomain = (() => {
@@ -38,9 +39,11 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const functions = getFunctions(app, 'asia-northeast3');
 const storage = getStorage(app, `gs://${firebaseConfig.storageBucket}`);
 let analytics: Analytics | null = null;
 let firestoreEmulatorConnected = false;
+let functionsEmulatorConnected = false;
 
 const isMobileBrowser = (): boolean => {
     if (typeof navigator === 'undefined') return false;
@@ -70,11 +73,18 @@ try {
     const isBrowser = typeof window !== 'undefined';
     const emulatorHost = import.meta.env.VITE_FIRESTORE_EMULATOR_HOST || '127.0.0.1';
     const emulatorPort = Number(import.meta.env.VITE_FIRESTORE_EMULATOR_PORT || 8080);
+    const functionsEmulatorHost = import.meta.env.VITE_FUNCTIONS_EMULATOR_HOST || emulatorHost;
+    const functionsEmulatorPort = Number(import.meta.env.VITE_FUNCTIONS_EMULATOR_PORT || 5001);
 
     if (import.meta.env.DEV && !firestoreEmulatorConnected) {
         connectFirestoreEmulator(db, emulatorHost, emulatorPort);
         firestoreEmulatorConnected = true;
         console.info(`[Firebase] Connected Firestore emulator at ${emulatorHost}:${emulatorPort}`);
+    }
+    if (import.meta.env.DEV && !functionsEmulatorConnected) {
+        connectFunctionsEmulator(functions, functionsEmulatorHost, functionsEmulatorPort);
+        functionsEmulatorConnected = true;
+        console.info(`[Firebase] Connected Functions emulator at ${functionsEmulatorHost}:${functionsEmulatorPort}`);
     }
 
     if (isBrowser) {
@@ -104,4 +114,4 @@ if (typeof window !== 'undefined' && firebaseConfig.measurementId) {
     }, 0);
 }
 
-export { app, auth, db, storage, analytics, authPersistenceReady, configuredAuthDomain };
+export { app, auth, db, functions, storage, analytics, authPersistenceReady, configuredAuthDomain };

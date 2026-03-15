@@ -21,6 +21,8 @@ const PERMISSION_LABELS: Record<StaffPermission, string> = {
     lesson_read: '학습 자료 관리',
     quiz_read: '평가 관리',
     student_list_read: '학생 명단 관리',
+    point_read: '포인트 조회',
+    point_manage: '포인트 관리',
 };
 
 const SettingsAccess: React.FC = () => {

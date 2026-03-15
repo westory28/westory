@@ -1,0 +1,32 @@
+{
+  "adjustTeacherPoints": {
+    "year": "2026",
+    "semester": "1",
+    "uid": "student_uid",
+    "delta": 10,
+    "sourceId": "manual_2026-03-16_001",
+    "sourceLabel": "과제 참여 보너스",
+    "policyId": "manual"
+  },
+  "reviewTeacherPointOrder": {
+    "year": "2026",
+    "semester": "1",
+    "orderId": "order_student_uid_sample",
+    "nextStatus": "approved",
+    "memo": "담임 확인 완료"
+  },
+  "applyPointActivityReward": {
+    "year": "2026",
+    "semester": "1",
+    "activityType": "quiz",
+    "sourceId": "quiz_result_abc123",
+    "sourceLabel": "중단원 퀴즈 완료"
+  },
+  "createPointPurchaseRequest": {
+    "year": "2026",
+    "semester": "1",
+    "productId": "snack-box",
+    "memo": "간식 교환 요청",
+    "requestKey": "req_20260316_sample"
+  }
+}

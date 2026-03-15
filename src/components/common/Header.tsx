@@ -9,6 +9,7 @@ import {
     canAccessTeacherPortal,
     canManageSettings,
     canReadLessonManagement,
+    canReadPoints,
     canReadQuizManagement,
     canReadStudentList,
     getDefaultTeacherRoute,
@@ -90,6 +91,7 @@ const Header: React.FC = () => {
             if (item.url === '/teacher/lesson') return canReadLessonManagement(userData, currentUser?.email || '');
             if (item.url === '/teacher/quiz') return canReadQuizManagement(userData, currentUser?.email || '');
             if (item.url === '/teacher/students') return canReadStudentList(userData, currentUser?.email || '');
+            if (item.url === '/teacher/points') return canReadPoints(userData, currentUser?.email || '');
             if (item.url === '/teacher/exam') return canManageSettings(userData, currentUser?.email || '');
             return false;
         })
@@ -105,7 +107,12 @@ const Header: React.FC = () => {
     const profileLabel = `${displayName} ${isTeacherPortal ? '교사' : '학생'}`;
     const studentProfileIcon = userData?.profileIcon || '🧑‍🎓';
     const resolveTarget = (url: string) => resolveMenuTarget(url, portal);
-    const desktopSubmenuParentUrls = new Set(['/student/lesson/note', '/teacher/lesson']);
+    const desktopSubmenuParentUrls = new Set([
+        '/student/lesson/note',
+        '/teacher/lesson',
+        '/student/points',
+        '/teacher/points',
+    ]);
 
     const isActive = (url: string) => {
         const [targetPath, targetQuery] = resolveTarget(url).split('?');
