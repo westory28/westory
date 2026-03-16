@@ -108,6 +108,9 @@ export interface PointProduct {
     isActive: boolean;
     sortOrder: number;
     imageUrl: string;
+    previewImageUrl?: string;
+    imageStoragePath?: string;
+    previewStoragePath?: string;
     createdAt?: any;
     updatedAt?: any;
 }

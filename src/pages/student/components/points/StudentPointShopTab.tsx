@@ -61,9 +61,9 @@ const StudentPointShopTab: React.FC<StudentPointShopTabProps> = ({
 
                     return (
                         <article key={product.id} className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-                            {product.imageUrl ? (
+                            {(product.previewImageUrl || product.imageUrl) ? (
                                 <div className="aspect-[4/3] bg-gray-100">
-                                    <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
+                                    <img src={product.previewImageUrl || product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
                                 </div>
                             ) : (
                                 <div className="flex aspect-[4/3] items-center justify-center bg-gray-100 text-4xl text-gray-300">

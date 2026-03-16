@@ -23,5 +23,10 @@ service firebase.storage {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }
+
+    match /years/{year}/semesters/{semester}/point_products/{productId}/{allPaths=**} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
   }
 }

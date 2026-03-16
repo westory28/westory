@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { storage } from '../../lib/firebase';
 import { useSearchParams } from 'react-router-dom';
 import { TEACHER_POINT_TAB_LABELS } from '../../constants/pointLabels';
 import { useAuth } from '../../contexts/AuthContext';
@@ -16,6 +18,7 @@ import {
     upsertPointProduct,
 } from '../../lib/points';
 import { canManagePoints, canReadPoints } from '../../lib/permissions';
+import { getYearSemester } from '../../lib/semesterScope';
 import type { PointOrder, PointOrderStatus, PointPolicy, PointProduct, PointStudentTarget, PointTransaction, PointWallet } from '../../types';
 import PointGrantTab from './components/points/PointGrantTab';
 import PointPolicyTab from './components/points/PointPolicyTab';
@@ -33,6 +36,9 @@ type ProductFormState = {
     price: string;
     stock: string;
     imageUrl: string;
+    previewImageUrl: string;
+    imageStoragePath: string;
+    previewStoragePath: string;
     sortOrder: string;
     isActive: boolean;
 };
@@ -54,11 +60,52 @@ const EMPTY_PRODUCT_FORM: ProductFormState = {
     price: '0',
     stock: '0',
     imageUrl: '',
+    previewImageUrl: '',
+    imageStoragePath: '',
+    previewStoragePath: '',
     sortOrder: '0',
     isActive: true,
 };
 
 const normalizeValue = (value: unknown) => String(value || '').trim();
+
+const loadImageElement = (file: File) => new Promise<HTMLImageElement>((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        resolve(image);
+    };
+    image.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error('상품 이미지를 읽지 못했습니다.'));
+    };
+    image.src = objectUrl;
+});
+
+const canvasToBlob = (canvas: HTMLCanvasElement, quality: number) => new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((blob) => {
+        if (!blob) {
+            reject(new Error('상품 이미지를 압축하지 못했습니다.'));
+            return;
+        }
+        resolve(blob);
+    }, 'image/jpeg', quality);
+});
+
+const buildResizedImageBlob = async (file: File, maxSize: number, quality: number) => {
+    const image = await loadImageElement(file);
+    const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(image.width * scale));
+    canvas.height = Math.max(1, Math.round(image.height * scale));
+    const context = canvas.getContext('2d');
+    if (!context) {
+        throw new Error('상품 이미지 캔버스를 준비하지 못했습니다.');
+    }
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    return canvasToBlob(canvas, quality);
+};
 
 const ManagePoints: React.FC = () => {
     const { config, currentUser, userData } = useAuth();
@@ -98,6 +145,9 @@ const ManagePoints: React.FC = () => {
         Array.from({ length: 12 }, (_, index) => ({ value: String(index + 1), label: `${index + 1}반` })),
     );
     const [productForm, setProductForm] = useState<ProductFormState>(EMPTY_PRODUCT_FORM);
+    const [productImageFile, setProductImageFile] = useState<File | null>(null);
+    const [productImagePreviewUrl, setProductImagePreviewUrl] = useState('');
+    const [productImageUploading, setProductImageUploading] = useState(false);
     const [productFeedback, setProductFeedback] = useState('');
     const [orderFilter, setOrderFilter] = useState<OrderFilter>('all');
     const [selectedOrderId, setSelectedOrderId] = useState('');
@@ -325,6 +375,12 @@ const ManagePoints: React.FC = () => {
         setOrderMemo(selectedOrder?.memo || '');
     }, [selectedOrder?.id, selectedOrder?.memo]);
 
+    useEffect(() => () => {
+        if (productImagePreviewUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(productImagePreviewUrl);
+        }
+    }, [productImagePreviewUrl]);
+
     const handleTabChange = (tab: TeacherPointTab) => {
         setGrantFeedback('');
         setProductFeedback('');
@@ -385,6 +441,17 @@ const ManagePoints: React.FC = () => {
         }
     };
 
+    const handleProductImageChange = (file: File | null) => {
+        setProductFeedback('');
+        setProductImageFile(file);
+        setProductImagePreviewUrl((prev) => {
+            if (prev.startsWith('blob:')) {
+                URL.revokeObjectURL(prev);
+            }
+            return file ? URL.createObjectURL(file) : (productForm.previewImageUrl || productForm.imageUrl || '');
+        });
+    };
+
     const handleSaveProduct = async (event: React.FormEvent) => {
         event.preventDefault();
         if (!canManage) return;
@@ -410,6 +477,69 @@ const ManagePoints: React.FC = () => {
         } catch (error: any) {
             console.error('Failed to save point product:', error);
             setProductFeedback(error?.message || '상품 저장에 실패했습니다.');
+        }
+    };
+
+    const handleSaveProductWithUpload = async (event: React.FormEvent) => {
+        event.preventDefault();
+        if (!canManage) return;
+        if (!productForm.name.trim()) {
+            setProductFeedback('상품명을 입력해 주세요.');
+            return;
+        }
+
+        try {
+            const productId = productForm.id || crypto.randomUUID();
+            let imagePayload = {
+                imageUrl: productForm.imageUrl.trim(),
+                previewImageUrl: productForm.previewImageUrl.trim(),
+                imageStoragePath: productForm.imageStoragePath.trim(),
+                previewStoragePath: productForm.previewStoragePath.trim(),
+            };
+
+            if (productImageFile) {
+                setProductImageUploading(true);
+                const { year, semester } = getYearSemester(config);
+                const basePath = `years/${year}/semesters/${semester}/point_products/${productId}`;
+                const compressedBlob = await buildResizedImageBlob(productImageFile, 960, 0.82);
+                const previewBlob = await buildResizedImageBlob(productImageFile, 320, 0.62);
+                const imageRef = ref(storage, `${basePath}/image.jpg`);
+                const previewRef = ref(storage, `${basePath}/preview.jpg`);
+
+                await uploadBytes(imageRef, compressedBlob, { contentType: 'image/jpeg', cacheControl: 'public,max-age=86400' });
+                await uploadBytes(previewRef, previewBlob, { contentType: 'image/jpeg', cacheControl: 'public,max-age=86400' });
+
+                imagePayload = {
+                    imageUrl: await getDownloadURL(imageRef),
+                    previewImageUrl: await getDownloadURL(previewRef),
+                    imageStoragePath: imageRef.fullPath,
+                    previewStoragePath: previewRef.fullPath,
+                };
+            }
+
+            await upsertPointProduct(config, {
+                id: productId,
+                name: productForm.name.trim(),
+                description: productForm.description.trim(),
+                price: Number(productForm.price || 0),
+                stock: Number(productForm.stock || 0),
+                imageUrl: imagePayload.imageUrl,
+                previewImageUrl: imagePayload.previewImageUrl,
+                imageStoragePath: imagePayload.imageStoragePath,
+                previewStoragePath: imagePayload.previewStoragePath,
+                sortOrder: Number(productForm.sortOrder || 0),
+                isActive: productForm.isActive,
+            }, actor);
+            setProductForm(EMPTY_PRODUCT_FORM);
+            setProductImageFile(null);
+            setProductImagePreviewUrl('');
+            setProductFeedback('상품 정보를 저장했습니다.');
+            setProducts(await listPointProducts(config, false));
+        } catch (error: any) {
+            console.error('Failed to save point product with upload:', error);
+            setProductFeedback(error?.message || '상품 저장에 실패했습니다.');
+        } finally {
+            setProductImageUploading(false);
         }
     };
 
@@ -571,7 +701,10 @@ const ManagePoints: React.FC = () => {
                             productForm={productForm}
                             productFeedback={productFeedback}
                             canManage={canManage}
+                            productImagePreviewUrl={productImagePreviewUrl}
+                            productImageUploading={productImageUploading}
                             onProductFormChange={(updater) => setProductForm((prev) => updater(prev))}
+                            onProductImageChange={handleProductImageChange}
                             onEditProduct={(product) => {
                                 setProductForm({
                                     id: product.id,
@@ -580,17 +713,24 @@ const ManagePoints: React.FC = () => {
                                     price: String(product.price || 0),
                                     stock: String(product.stock || 0),
                                     imageUrl: product.imageUrl || '',
+                                    previewImageUrl: product.previewImageUrl || '',
+                                    imageStoragePath: product.imageStoragePath || '',
+                                    previewStoragePath: product.previewStoragePath || '',
                                     sortOrder: String(product.sortOrder || 0),
                                     isActive: product.isActive !== false,
                                 });
+                                setProductImageFile(null);
+                                setProductImagePreviewUrl(product.previewImageUrl || product.imageUrl || '');
                                 setProductFeedback('');
                             }}
                             onResetForm={() => {
                                 setProductForm(EMPTY_PRODUCT_FORM);
+                                setProductImageFile(null);
+                                setProductImagePreviewUrl('');
                                 setProductFeedback('');
                             }}
                             onToggleProduct={(product) => void handleToggleProduct(product)}
-                            onSubmit={handleSaveProduct}
+                            onSubmit={handleSaveProductWithUpload}
                         />
                     )}
 
