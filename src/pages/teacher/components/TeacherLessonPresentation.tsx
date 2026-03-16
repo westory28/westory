@@ -96,6 +96,7 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
   const latestAnnotationRef = useRef(EMPTY_ANNOTATION_STATE);
   const latestPageRef = useRef<number | null>(null);
   const lastSavedAtRef = useRef<Date | null>(null);
+  const localInteractionSinceRestoreRef = useRef(false);
   const lastSavedSnapshotRef = useRef(
     serializePresentationSnapshot(EMPTY_ANNOTATION_STATE, null),
   );
@@ -301,6 +302,7 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
         window.clearTimeout(saveTimerRef.current);
         saveTimerRef.current = null;
       }
+      localInteractionSinceRestoreRef.current = false;
 
       if (!presentationDocPath) {
         const fallbackPage = worksheet.pageImages[0]?.page ?? null;
@@ -325,6 +327,7 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
       try {
         const snapshot = await getDoc(doc(db, presentationDocPath));
         if (cancelled) return;
+        if (localInteractionSinceRestoreRef.current) return;
 
         if (snapshot.exists()) {
           const data = snapshot.data() as {
@@ -372,6 +375,7 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
             doc(db, legacyPresentationDocPath),
           );
           if (cancelled) return;
+          if (localInteractionSinceRestoreRef.current) return;
           if (legacySnapshot.exists()) {
             const legacyData = legacySnapshot.data() as {
               annotations?: LessonWorksheetAnnotationState;
@@ -510,6 +514,7 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
     if (nextSnapshot === currentSnapshot) return;
 
     latestAnnotationRef.current = nextState;
+    localInteractionSinceRestoreRef.current = true;
     setAnnotationState(nextState);
     setRestoreMessage("");
     scheduleAutosave(nextState, latestPageRef.current);
@@ -517,6 +522,7 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
 
   const handleTeacherCurrentPageChange = (page: number) => {
     latestPageRef.current = page;
+    localInteractionSinceRestoreRef.current = true;
     setCurrentPage((prev) => (prev === page ? prev : page));
     const nextSnapshot = serializePresentationSnapshot(
       latestAnnotationRef.current,

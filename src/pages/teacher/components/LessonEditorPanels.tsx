@@ -140,9 +140,17 @@ function usageBadgeClass(usage?: LessonFootnoteUsage) {
 }
 
 function usageBadgeLabel(usage?: LessonFootnoteUsage) {
-  if (!usage || usage.count === 0) return "미연결";
+  if (!usage || usage.count === 0) return "아직 연결 안 됨";
   if (usage.count === 1) return "본문 연결됨";
-  return `본문 ${usage.count}곳`;
+  return `본문 ${usage.count}곳 연결`;
+}
+
+function blankBadgeLabel(blank: LessonWorksheetBlank) {
+  return (
+    blank.answer?.trim() ||
+    blank.prompt?.trim() ||
+    `p.${blank.page + 1} 빈칸`
+  );
 }
 
 export function LessonTreePanel({
@@ -333,23 +341,23 @@ function FootnoteCard({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <strong className="text-base text-slate-900">
-              {footnote.title?.trim() || `각주 ${index + 1}`}
+              {footnote.title?.trim() || `참고자료 ${index + 1}`}
             </strong>
             <span className={usageBadgeClass(usage)}>
               {usageBadgeLabel(usage)}
             </span>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <code className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
-              [fn:{footnote.anchorKey}]
-            </code>
+            <span className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
+              연결 코드 [fn:{footnote.anchorKey}]
+            </span>
             <button
               type="button"
               onClick={() => onCopyFootnoteToken?.(footnote.anchorKey)}
               className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
             >
               <i className="fas fa-copy text-[11px]"></i>
-              토큰 복사
+              코드 복사
             </button>
           </div>
         </div>
@@ -382,7 +390,7 @@ function FootnoteCard({
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <label className="block">
           <span className="mb-2 block text-sm font-semibold text-slate-700">
-            anchorKey
+            연결 코드
           </span>
           <input
             value={footnote.anchorKey}
@@ -394,7 +402,7 @@ function FootnoteCard({
         </label>
         <label className="block">
           <span className="mb-2 block text-sm font-semibold text-slate-700">
-            라벨
+            버튼 이름
           </span>
           <input
             value={footnote.label ?? ""}
@@ -406,7 +414,7 @@ function FootnoteCard({
         </label>
         <label className="block">
           <span className="mb-2 block text-sm font-semibold text-slate-700">
-            제목
+            참고자료 제목
           </span>
           <input
             value={footnote.title ?? ""}
@@ -439,7 +447,7 @@ function FootnoteCard({
       </div>
       <label className="mt-4 block">
         <span className="mb-2 block text-sm font-semibold text-slate-700">
-          설명 HTML
+          참고 설명
         </span>
         <textarea
           value={footnote.bodyHtml ?? ""}
@@ -536,16 +544,16 @@ export function LessonBodyEditor({
 
   return (
     <section className="space-y-8">
-      <div>
+      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
-          본문
+          본문 작성
         </div>
         <h3 className="mt-2 text-xl font-bold text-slate-900">
-          본문과 참고자료 연결
+          학생에게 보여줄 수업 내용을 적어 주세요
         </h3>
         <p className="mt-2 text-sm text-slate-500">
-          본문에 <code>[fn:anchorKey]</code> 토큰을 넣으면 학생 화면에서
-          참고자료 버튼으로 바뀝니다.
+          본문을 먼저 작성한 뒤, 필요한 곳에 참고자료를 연결하면 학생 화면에서
+          참고 버튼으로 안내됩니다.
         </p>
       </div>
       <textarea
@@ -562,11 +570,11 @@ export function LessonBodyEditor({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="text-sm font-bold text-slate-900">
-              각주 토큰 넣기
+              본문에 참고자료 연결
             </div>
             <p className="mt-1 text-sm text-slate-600">
-              커서 위치에 선택한 각주 토큰을 바로 넣습니다. 커서를 두지 않으면
-              본문 끝에 추가됩니다.
+              아래 버튼으로 참고자료 연결 코드를 넣을 수 있습니다. 커서를 두면
+              그 위치에, 선택하지 않으면 본문 끝에 들어갑니다.
             </p>
           </div>
           <button
@@ -574,7 +582,7 @@ export function LessonBodyEditor({
             onClick={onAddFootnoteAndInsert}
             className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
           >
-            <i className="fas fa-magic text-xs"></i>새 각주 만들고 넣기
+            <i className="fas fa-magic text-xs"></i>참고자료 만들고 본문에 연결
           </button>
         </div>
         {!!bodyInsertMessage && (
@@ -588,10 +596,10 @@ export function LessonBodyEditor({
           <div>
             <div className="flex items-center gap-2 text-base font-bold text-slate-900">
               <i className="fas fa-link text-sm"></i>
-              각주 / 참고자료
+              참고자료 목록
             </div>
             <p className="mt-1 text-sm text-slate-500">
-              등록된 각주 {footnotes.length}개 중 {connectedCount}개가 본문과
+              등록된 참고자료 {footnotes.length}개 중 {connectedCount}개가 본문에
               연결되어 있습니다.
             </p>
           </div>
@@ -601,15 +609,14 @@ export function LessonBodyEditor({
             className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
           >
             <i className="fas fa-plus text-xs"></i>
-            각주 추가
+            참고자료 추가
           </button>
         </div>
         <div className="mt-5 space-y-4">
           {footnotes.length === 0 ? (
             <div className="flex items-center gap-3 rounded-2xl bg-white px-4 py-5 text-sm text-slate-500">
               <i className="fas fa-file-alt text-sm"></i>
-              아직 각주가 없습니다. 먼저 추가한 뒤 본문에 토큰을 넣어 연결해
-              보세요.
+              아직 참고자료가 없습니다. 먼저 참고자료를 추가해 보세요.
             </div>
           ) : (
             footnotes.map((footnote, index) => (
@@ -635,8 +642,11 @@ export function LessonBodyEditor({
         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex items-center gap-2 text-base font-bold text-slate-900">
             <i className="fas fa-pen-nib text-sm"></i>
-            본문에 넣을 각주 선택
+            본문에 연결할 참고자료
           </div>
+          <p className="mt-1 text-sm text-slate-500">
+            참고자료를 누르면 본문에 연결 코드가 들어갑니다.
+          </p>
           <div className="mt-4 flex flex-wrap gap-2">
             {footnotes.map((footnote) => {
               const usage = footnoteUsageMap.get(footnote.anchorKey);
@@ -647,7 +657,11 @@ export function LessonBodyEditor({
                   onClick={() => onInsertFootnoteToken?.(footnote.anchorKey)}
                   className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
                 >
-                  <span>[fn:{footnote.anchorKey}]</span>
+                  <span>
+                    {footnote.title?.trim() ||
+                      footnote.label?.trim() ||
+                      `참고자료 ${footnote.anchorKey}`}
+                  </span>
                   <span
                     className={
                       usage && usage.count > 0
@@ -655,7 +669,7 @@ export function LessonBodyEditor({
                         : "rounded-full bg-slate-200 px-2 py-0.5 text-[11px] text-slate-500"
                     }
                   >
-                    {usage && usage.count > 0 ? "사용 중" : "미사용"}
+                    {usage && usage.count > 0 ? "본문 연결됨" : "아직 연결 안 됨"}
                   </span>
                 </button>
               );
@@ -693,8 +707,14 @@ export function LessonPdfSection({
   onDraftBlankPromptChange,
   onConfirmDraftBlank,
   onCancelDraftBlank,
-  onUpdateBlank,
+  onUpdateBlank: _onUpdateBlank,
 }: LessonPdfSectionProps) {
+  const [isBlankManagerOpen, setIsBlankManagerOpen] = React.useState(false);
+  const activeBlank = React.useMemo(
+    () => sortedBlanks.find((blank) => blank.id === activeBlankId) || null,
+    [activeBlankId, sortedBlanks],
+  );
+
   return (
     <section className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -703,8 +723,12 @@ export function LessonPdfSection({
             PDF 학습지
           </div>
           <h3 className="mt-2 text-xl font-bold text-slate-900">
-            빈칸 제작 편집
+            PDF 위에서 바로 빈칸 만들기
           </h3>
+          <p className="mt-2 text-sm text-slate-500">
+            PDF를 준비한 뒤, 화면 위 아이콘으로 OCR 선택과 박스 생성을 바로
+            진행하세요.
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
@@ -739,30 +763,20 @@ export function LessonPdfSection({
           )}
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white p-3">
-        <button
-          type="button"
-          onClick={() => onWorksheetToolChange("box")}
-          className={`rounded-xl px-4 py-2 text-sm font-semibold ${worksheetTool === "box" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"}`}
-        >
-          박스 생성
-        </button>
-        <button
-          type="button"
-          onClick={() => onWorksheetToolChange("ocr")}
-          className={`rounded-xl px-4 py-2 text-sm font-semibold ${worksheetTool === "ocr" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"}`}
-        >
-          OCR 기반
-        </button>
-        <div className="text-sm text-slate-500">
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-600">
+        <span className="rounded-full bg-white px-3 py-1 font-semibold text-slate-700">
           현재 파일: {selectedPdfFile?.name || lessonPdfName || "없음"}
-        </div>
+        </span>
+        <span>오른쪽 플로팅 아이콘으로 제작 도구와 키워드 목록을 확인할 수 있습니다.</span>
       </div>
       {draftBlank && (
-        <div className="rounded-3xl border border-blue-200 bg-blue-50/80 p-5">
+        <div className="rounded-3xl border border-blue-200 bg-blue-50/80 p-4">
           <div className="flex items-center gap-2 text-base font-bold text-slate-900">
-            <i className="fas fa-pencil-alt text-sm"></i>새 빈칸 확인
+            <i className="fas fa-pencil-alt text-sm"></i>새 키워드 확인
           </div>
+          <p className="mt-1 text-sm text-slate-600">
+            방금 만든 영역의 정답과 학생 안내 문구를 간단히 확인해 주세요.
+          </p>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <label className="block">
               <span className="mb-2 block text-sm font-semibold text-slate-700">
@@ -808,8 +822,115 @@ export function LessonPdfSection({
         </div>
       )}
       {!!worksheetPageImages.length ? (
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-50 p-3">
+        <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-slate-50">
+          <div className="pointer-events-none absolute right-4 top-4 z-30 flex flex-col items-end gap-3">
+            <div className="pointer-events-auto inline-flex flex-col gap-2 rounded-[28px] border border-slate-200 bg-white/96 p-2 shadow-[0_18px_40px_rgba(15,23,42,0.14)] backdrop-blur">
+              <button
+                type="button"
+                onClick={() => onWorksheetToolChange("ocr")}
+                className={`inline-flex h-11 w-11 items-center justify-center rounded-full text-sm transition ${
+                  worksheetTool === "ocr"
+                    ? "bg-slate-900 text-white shadow-sm"
+                    : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+                aria-label="OCR 기반 선택"
+                title="OCR 기반 선택"
+              >
+                <i className="fas fa-wand-magic-sparkles"></i>
+              </button>
+              <button
+                type="button"
+                onClick={() => onWorksheetToolChange("box")}
+                className={`inline-flex h-11 w-11 items-center justify-center rounded-full text-sm transition ${
+                  worksheetTool === "box"
+                    ? "bg-slate-900 text-white shadow-sm"
+                    : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+                aria-label="박스 생성"
+                title="박스 생성"
+              >
+                <i className="fas fa-vector-square"></i>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsBlankManagerOpen((prev) => !prev)}
+                className={`inline-flex h-11 w-11 items-center justify-center rounded-full text-sm transition ${
+                  isBlankManagerOpen
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+                aria-label="키워드 목록"
+                title="키워드 목록"
+              >
+                <i className="fas fa-tags"></i>
+              </button>
+            </div>
+            {isBlankManagerOpen && (
+              <div className="pointer-events-auto w-[min(320px,calc(100vw-3rem))] rounded-3xl border border-slate-200 bg-white/97 p-4 shadow-[0_18px_40px_rgba(15,23,42,0.14)] backdrop-blur">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-bold text-slate-900">
+                      키워드 목록
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">
+                      만든 키워드를 빠르게 확인하고 선택하거나 지울 수 있습니다.
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                    {sortedBlanks.length}개
+                  </span>
+                </div>
+                {sortedBlanks.length === 0 ? (
+                  <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-500">
+                    아직 만든 키워드가 없습니다.
+                  </div>
+                ) : (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {sortedBlanks.map((blank) => (
+                      <div
+                        key={blank.id}
+                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 ${
+                          activeBlankId === blank.id
+                            ? "border-blue-300 bg-blue-50 text-blue-700"
+                            : "border-slate-200 bg-slate-50 text-slate-700"
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => onSelectBlank(blank.id)}
+                          className="max-w-[180px] truncate px-1 text-sm font-semibold"
+                          title={blankBadgeLabel(blank)}
+                        >
+                          {blankBadgeLabel(blank)}
+                        </button>
+                        <span className="rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-semibold text-slate-500">
+                          p.{blank.page + 1}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => onDeleteBlank(blank.id)}
+                          className="inline-flex h-5 w-5 items-center justify-center rounded-full text-rose-500 hover:bg-rose-50"
+                          aria-label="키워드 삭제"
+                          title="키워드 삭제"
+                        >
+                          <i className="fas fa-times text-[10px]"></i>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {activeBlank && (
+                  <div className="mt-4 rounded-2xl bg-slate-50 px-3 py-3 text-sm text-slate-600">
+                    선택한 키워드:{" "}
+                    <span className="font-semibold text-slate-800">
+                      {blankBadgeLabel(activeBlank)}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="p-3 md:p-4">
             <LessonWorksheetStage
               mode="teacher-edit"
               pageImages={worksheetPageImages}
@@ -822,73 +943,6 @@ export function LessonPdfSection({
               onDeleteBlank={onDeleteBlank}
               onCreateBlankFromSelection={onCreateBlankFromSelection}
             />
-          </div>
-          <div className="space-y-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="text-base font-bold text-slate-900">빈칸 목록</div>
-            {sortedBlanks.length === 0 ? (
-              <div className="rounded-2xl bg-slate-50 px-4 py-5 text-sm text-slate-500">
-                아직 빈칸이 없습니다.
-              </div>
-            ) : (
-              sortedBlanks.map((blank) => (
-                <div
-                  key={blank.id}
-                  className={`rounded-2xl border p-3 ${activeBlankId === blank.id ? "border-blue-300 bg-blue-50/70" : "border-slate-200 bg-slate-50/70"}`}
-                >
-                  <button
-                    type="button"
-                    onClick={() => onSelectBlank(blank.id)}
-                    className="w-full text-left"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="text-sm font-bold text-slate-800">
-                        p.{blank.page + 1}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onDeleteBlank(blank.id);
-                        }}
-                        className="rounded-lg p-1.5 text-rose-500 hover:bg-rose-50"
-                      >
-                        <i className="fas fa-trash text-[11px]"></i>
-                      </button>
-                    </div>
-                  </button>
-                  <div className="mt-3 space-y-3">
-                    <label className="block">
-                      <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
-                        정답
-                      </span>
-                      <input
-                        value={blank.answer}
-                        onChange={(event) =>
-                          onUpdateBlank(blank.id, {
-                            answer: event.target.value,
-                          })
-                        }
-                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
-                      />
-                    </label>
-                    <label className="block">
-                      <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
-                        학생 안내 문구
-                      </span>
-                      <input
-                        value={blank.prompt || ""}
-                        onChange={(event) =>
-                          onUpdateBlank(blank.id, {
-                            prompt: event.target.value,
-                          })
-                        }
-                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
-                      />
-                    </label>
-                  </div>
-                </div>
-              ))
-            )}
           </div>
         </div>
       ) : (

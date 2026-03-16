@@ -1245,7 +1245,7 @@ const ManageLesson: React.FC = () => {
       await navigator.clipboard.writeText(token);
     } catch (error) {
       console.error("Failed to copy footnote token:", error);
-      window.prompt("토큰을 복사해 주세요.", token);
+      window.prompt("연결 코드를 복사해 주세요.", token);
     }
   };
 
@@ -1316,7 +1316,7 @@ const ManageLesson: React.FC = () => {
         insertMode: bodySelection ? "cursor" : "end",
       }),
     );
-    setBodyInsertMessage("각주 토큰을 본문에 넣었습니다.");
+    setBodyInsertMessage("본문에 참고자료 연결 코드를 넣었습니다.");
     void handleCopyFootnoteToken(anchorKey);
   };
 
