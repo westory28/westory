@@ -1015,7 +1015,26 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     );
   };
 
-  const handleToolSelect = (tool: StudentTool | "undo" | "redo") => {
+  const releaseToolbarFocus = (target?: EventTarget | null) => {
+    const nextTarget =
+      target instanceof HTMLElement ? target : document.activeElement;
+    window.requestAnimationFrame(() => {
+      if (nextTarget instanceof HTMLElement) {
+        nextTarget.blur();
+      }
+      if (
+        document.activeElement instanceof HTMLElement &&
+        document.activeElement !== document.body
+      ) {
+        document.activeElement.blur();
+      }
+    });
+  };
+
+  const handleToolSelect = (
+    tool: StudentTool | "undo" | "redo",
+    target?: EventTarget | null,
+  ) => {
     cancelStudentInteraction();
     if (tool === "undo") {
       setUndoStack((prev) => {
@@ -1025,6 +1044,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         restoreSnapshot(snapshot);
         return prev.slice(0, -1);
       });
+      releaseToolbarFocus(target);
       return;
     }
     if (tool === "redo") {
@@ -1035,6 +1055,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         restoreSnapshot(snapshot);
         return prev.slice(0, -1);
       });
+      releaseToolbarFocus(target);
       return;
     }
     setAnnotationTool(tool);
@@ -1042,15 +1063,18 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
       setToolbarSubmenu((prev) =>
         annotationTool === tool && prev === "colors" ? null : "colors",
       );
+      releaseToolbarFocus(target);
       return;
     }
     if (tool === "text") {
       setToolbarSubmenu((prev) =>
         annotationTool === tool && prev === "text" ? null : "text",
       );
+      releaseToolbarFocus(target);
       return;
     }
     setToolbarSubmenu(null);
+    releaseToolbarFocus(target);
   };
 
   const captureSnapshot = (): AnnotationSnapshot => ({
@@ -1593,7 +1617,13 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     type="button"
                     aria-label={label}
                     title={label}
-                    onClick={() => handleToolSelect(tool)}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={(event) =>
+                      handleToolSelect(
+                        tool as StudentTool | "undo" | "redo",
+                        event.currentTarget,
+                      )
+                    }
                     disabled={
                       (tool === "undo" && undoStack.length === 0) ||
                       (tool === "redo" && redoStack.length === 0)
@@ -1610,6 +1640,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                 <div className="flex flex-col items-center gap-2 rounded-2xl border border-slate-200 bg-white px-2 py-2 shadow-sm">
                   <button
                     type="button"
+                    onMouseDown={(event) => event.preventDefault()}
                     onClick={() =>
                       applyViewportZoom(studentZoom + 0.1, {
                         page: pageImages[0]?.page ?? activeTeacherPage ?? activeStudentPage ?? undefined,
@@ -1622,17 +1653,21 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                   </button>
                   <button
                     type="button"
-                    onClick={() =>
+                    tabIndex={-1}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={(event) => {
                       applyViewportZoom(1, {
                         page: pageImages[0]?.page ?? activeTeacherPage ?? activeStudentPage ?? undefined,
-                      })
-                    }
-                    className="min-w-[52px] rounded-full bg-slate-50 px-2 py-1 text-center text-xs font-bold text-slate-700 transition hover:bg-slate-100"
+                      });
+                      releaseToolbarFocus(event.currentTarget);
+                    }}
+                    className="min-w-[52px] select-none rounded-full bg-slate-50 px-2 py-1 text-center text-xs font-bold text-slate-700 transition hover:bg-slate-100"
                   >
                     {zoomPercent}%
                   </button>
                   <button
                     type="button"
+                    onMouseDown={(event) => event.preventDefault()}
                     onClick={() =>
                       applyViewportZoom(studentZoom - 0.1, {
                         page: pageImages[0]?.page ?? activeTeacherPage ?? activeStudentPage ?? undefined,
@@ -1689,57 +1724,13 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     type="button"
                     aria-label={label}
                     title={label}
-                    onClick={() => {
-                      if (tool === "undo") {
-                        setUndoStack((prev) => {
-                          const snapshot = prev[prev.length - 1];
-                          if (!snapshot) return prev;
-                          setRedoStack((redoPrev) => [
-                            ...redoPrev,
-                            captureSnapshot(),
-                          ]);
-                          restoreSnapshot(snapshot);
-                          return prev.slice(0, -1);
-                        });
-                        return;
-                      }
-                      if (tool === "redo") {
-                        setRedoStack((prev) => {
-                          const snapshot = prev[prev.length - 1];
-                          if (!snapshot) return prev;
-                          setUndoStack((undoPrev) => [
-                            ...undoPrev,
-                            captureSnapshot(),
-                          ]);
-                          restoreSnapshot(snapshot);
-                          return prev.slice(0, -1);
-                        });
-                        return;
-                      }
-                      const nextTool = tool as StudentTool;
-                      setAnnotationTool(nextTool);
-                      if (
-                        nextTool === "pen" ||
-                        nextTool === "highlighter" ||
-                        nextTool === "rectangle"
-                      ) {
-                        setToolbarSubmenu((prev) =>
-                          annotationTool === nextTool && prev === "colors"
-                            ? null
-                            : "colors",
-                        );
-                        return;
-                      }
-                      if (nextTool === "text") {
-                        setToolbarSubmenu((prev) =>
-                          annotationTool === nextTool && prev === "text"
-                            ? null
-                            : "text",
-                        );
-                        return;
-                      }
-                      setToolbarSubmenu(null);
-                    }}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={(event) =>
+                      handleToolSelect(
+                        tool as StudentTool | "undo" | "redo",
+                        event.currentTarget,
+                      )
+                    }
                     disabled={
                       (tool === "undo" && undoStack.length === 0) ||
                       (tool === "redo" && redoStack.length === 0)
@@ -1787,6 +1778,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                 <div className="flex shrink-0 items-center gap-2 rounded-full border border-slate-200 bg-white px-2 py-1.5 shadow-sm">
                   <button
                     type="button"
+                    onMouseDown={(event) => event.preventDefault()}
                     onClick={() =>
                       applyViewportZoom(studentZoom - 0.1, {
                         page: activeTeacherPage ?? activeStudentPage ?? pageImages[0]?.page ?? undefined,
@@ -1799,17 +1791,21 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                   </button>
                   <button
                     type="button"
-                    onClick={() =>
+                    tabIndex={-1}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={(event) => {
                       applyViewportZoom(1, {
                         page: activeTeacherPage ?? activeStudentPage ?? pageImages[0]?.page ?? undefined,
-                      })
-                    }
-                    className="min-w-[58px] rounded-full bg-slate-50 px-3 py-1 text-center text-xs font-bold text-slate-700 transition hover:bg-slate-100"
+                      });
+                      releaseToolbarFocus(event.currentTarget);
+                    }}
+                    className="min-w-[58px] select-none rounded-full bg-slate-50 px-3 py-1 text-center text-xs font-bold text-slate-700 transition hover:bg-slate-100"
                   >
                     {zoomPercent}%
                   </button>
                   <button
                     type="button"
+                    onMouseDown={(event) => event.preventDefault()}
                     onClick={() =>
                       applyViewportZoom(studentZoom + 0.1, {
                         page: activeTeacherPage ?? activeStudentPage ?? pageImages[0]?.page ?? undefined,

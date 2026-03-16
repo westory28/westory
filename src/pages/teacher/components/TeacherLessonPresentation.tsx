@@ -95,6 +95,7 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
   const saveTimerRef = useRef<number | null>(null);
   const latestAnnotationRef = useRef(EMPTY_ANNOTATION_STATE);
   const latestPageRef = useRef<number | null>(null);
+  const lastSavedAtRef = useRef<Date | null>(null);
   const lastSavedSnapshotRef = useRef(
     serializePresentationSnapshot(EMPTY_ANNOTATION_STATE, null),
   );
@@ -154,11 +155,11 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
         getTeacherPresentationStatusText({
           state: nextState,
           classLabel: nextClassLabel,
-          savedAt: savedAt ?? lastSavedAt,
+          savedAt: savedAt ?? lastSavedAtRef.current,
         }),
       );
     },
-    [lastSavedAt, presentationDocPath],
+    [presentationDocPath],
   );
 
   const persistPresentation = useCallback(
@@ -184,9 +185,9 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
 
       if (nextSnapshot === lastSavedSnapshotRef.current) {
         updateStatus(
-          lastSavedAt ? "saved" : "idle",
+          lastSavedAtRef.current ? "saved" : "idle",
           currentClassLabelRef.current,
-          lastSavedAt,
+          lastSavedAtRef.current,
         );
         return true;
       }
@@ -213,6 +214,7 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
 
         const savedAt = new Date();
         lastSavedSnapshotRef.current = nextSnapshot;
+        lastSavedAtRef.current = savedAt;
         setLastSavedAt(savedAt);
         writeRecentTeacherPresentationClass({
           teacherUid: currentUser.uid,
@@ -248,7 +250,6 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
       classContext.classId,
       classContext.classLabel,
       currentUser?.uid,
-      lastSavedAt,
       lesson.unitId,
       presentationDocPath,
       updateStatus,
@@ -285,6 +286,10 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
   }, [currentPage]);
 
   useEffect(() => {
+    lastSavedAtRef.current = lastSavedAt;
+  }, [lastSavedAt]);
+
+  useEffect(() => {
     currentClassLabelRef.current = classContext.classLabel;
   }, [classContext.classLabel]);
 
@@ -303,6 +308,7 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
         latestAnnotationRef.current = EMPTY_ANNOTATION_STATE;
         setCurrentPage(fallbackPage);
         latestPageRef.current = fallbackPage;
+        lastSavedAtRef.current = null;
         setLastSavedAt(null);
         setRestoreMessage("");
         lastSavedSnapshotRef.current = serializePresentationSnapshot(
@@ -339,6 +345,7 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
           latestAnnotationRef.current = restoredAnnotations;
           setCurrentPage(restoredPage);
           latestPageRef.current = restoredPage;
+          lastSavedAtRef.current = restoredAt;
           setLastSavedAt(restoredAt);
           lastSavedSnapshotRef.current = serializePresentationSnapshot(
             restoredAnnotations,
@@ -386,6 +393,7 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
             latestAnnotationRef.current = restoredAnnotations;
             setCurrentPage(restoredPage);
             latestPageRef.current = restoredPage;
+            lastSavedAtRef.current = restoredAt;
             setLastSavedAt(restoredAt);
             lastSavedSnapshotRef.current = serializePresentationSnapshot(
               restoredAnnotations,
@@ -404,6 +412,7 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
         latestAnnotationRef.current = EMPTY_ANNOTATION_STATE;
         setCurrentPage(emptyPage);
         latestPageRef.current = emptyPage;
+        lastSavedAtRef.current = null;
         setLastSavedAt(null);
         lastSavedSnapshotRef.current = serializePresentationSnapshot(
           EMPTY_ANNOTATION_STATE,
@@ -561,6 +570,7 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
         EMPTY_ANNOTATION_STATE,
         resetPage,
       );
+      lastSavedAtRef.current = null;
       setLastSavedAt(null);
       updateStatus("idle", classContext.classLabel);
       return;
@@ -590,6 +600,7 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
         EMPTY_ANNOTATION_STATE,
         resetPage,
       );
+      lastSavedAtRef.current = savedAt;
       setLastSavedAt(savedAt);
       writeRecentTeacherPresentationClass({
         teacherUid: currentUser.uid,
@@ -631,6 +642,10 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
   };
 
   const embedUrl = getVideoEmbedUrl(lesson.videoUrl);
+  const lastSavedAtLabel = useMemo(
+    () => formatTeacherPresentationSavedAt(lastSavedAt),
+    [lastSavedAt],
+  );
   const statusBadge = getTeacherPresentationRuntimeBadge({
     runtimeState: saveState,
     hasUnsavedChanges,
@@ -676,7 +691,7 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
               </div>
               {lastSavedAt && (
                 <div className="inline-flex rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-500 ring-1 ring-slate-200">
-                  마지막 저장 {formatTeacherPresentationSavedAt(lastSavedAt)}
+                  마지막 저장 {lastSavedAtLabel}
                 </div>
               )}
             </div>
