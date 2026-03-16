@@ -126,6 +126,12 @@ interface PressHoldState {
     page: number | null;
 }
 
+interface EraserSessionState {
+    page: number;
+    pointerId: number;
+    hasRecordedUndo: boolean;
+}
+
 interface AnnotationSnapshot {
     strokes: AnnotationStroke[];
     boxes: AnnotationBox[];
@@ -388,9 +394,9 @@ const getStudentBlankRect = (
 
 const getStudentBlankFontSize = (pixelWidth: number, pixelHeight: number, contentLength: number) => {
     const safeLength = Math.max(1, contentLength);
-    const widthBased = Math.max(1, pixelWidth - 6) / Math.max(1.2, safeLength * 1.05);
-    const heightBased = Math.max(1, pixelHeight - 4) * 0.72;
-    return Math.max(5.5, Math.min(18, widthBased, heightBased));
+    const widthBased = Math.max(1, pixelWidth - 2) / Math.max(0.82, safeLength * 0.82);
+    const heightBased = Math.max(1, pixelHeight - 1) * 0.9;
+    return Math.max(8, Math.min(24, widthBased, heightBased));
 };
 
 const buildStrokePath = (points: RatioPoint[], pageImage: LessonWorksheetPageImage) => {
@@ -475,6 +481,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     const touchGestureRef = useRef<TouchGestureState | null>(null);
     const activeTouchPointerIdsRef = useRef<Set<number>>(new Set());
     const panRef = useRef<PanState | null>(null);
+    const eraserSessionRef = useRef<EraserSessionState | null>(null);
     const scrollHostRefs = useRef<Record<number, HTMLDivElement | null>>({});
     const holdRef = useRef<PressHoldState>({ timeoutId: null, page: null });
     const externalAnnotationKeyRef = useRef(getAnnotationStateKey(annotationState || EMPTY_ANNOTATION_STATE));
@@ -639,6 +646,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         setDraftStroke(null);
         setDraftBox(null);
         panRef.current = null;
+        eraserSessionRef.current = null;
     };
 
     const resolveRatioPoint = (page: number, clientX: number, clientY: number) => {
@@ -652,7 +660,12 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         };
     };
 
-    const eraseAnnotationAtPoint = (page: number, point: RatioPoint, pageImage: LessonWorksheetPageImage) => {
+    const eraseAnnotationAtPoint = (
+        page: number,
+        point: RatioPoint,
+        pageImage: LessonWorksheetPageImage,
+        recordUndo = true,
+    ) => {
         const noteHit = textNotes.find((note) => (
             note.page === page
             && point.x >= note.leftRatio
@@ -661,10 +674,12 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
             && point.y <= note.topRatio + note.heightRatio
         ));
         if (noteHit) {
-            pushUndoSnapshot();
+            if (recordUndo) {
+                pushUndoSnapshot();
+            }
             setTextNotes((prev) => prev.filter((note) => note.id !== noteHit.id));
             if (activeTextNoteId === noteHit.id) setActiveTextNoteId(null);
-            return;
+            return true;
         }
 
         const threshold = Math.max(0.012, 22 / Math.max(pageImage.width, 1));
@@ -676,18 +691,24 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
             && point.y <= box.topRatio + box.heightRatio
         ));
         if (hitBox) {
-            pushUndoSnapshot();
+            if (recordUndo) {
+                pushUndoSnapshot();
+            }
             setBoxes((prev) => prev.filter((box) => box.id !== hitBox.id));
-            return;
+            return true;
         }
         const hitStroke = strokes.find((stroke) => (
             stroke.page === page
             && stroke.points.some((strokePoint) => Math.hypot(strokePoint.x - point.x, strokePoint.y - point.y) <= threshold)
         ));
         if (hitStroke) {
-            pushUndoSnapshot();
+            if (recordUndo) {
+                pushUndoSnapshot();
+            }
             setStrokes((prev) => prev.filter((stroke) => stroke.id !== hitStroke.id));
+            return true;
         }
+        return false;
     };
 
     const selectedPenColor = TOOL_COLORS.find((color) => color.key === penColorKey) || TOOL_COLORS[0];
@@ -893,7 +914,13 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
             return;
         }
         if (annotationTool === 'eraser') {
-            eraseAnnotationAtPoint(page, point, pageImage);
+            event.currentTarget.setPointerCapture(event.pointerId);
+            const erased = eraseAnnotationAtPoint(page, point, pageImage);
+            eraserSessionRef.current = {
+                page,
+                pointerId: event.pointerId,
+                hasRecordedUndo: erased,
+            };
             return;
         }
         if (annotationTool === 'rectangle') {
@@ -911,12 +938,31 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         setDraftStroke(nextStroke);
     };
 
-    const updateDraftPoint = (page: number, clientX: number, clientY: number) => {
+    const updateDraftPoint = (page: number, clientX: number, clientY: number, pointerId?: number) => {
         if (mode === 'teacher') {
             if (!draftRect || draftRect.page !== page) return;
             const point = resolveRatioPoint(page, clientX, clientY);
             if (!point) return;
             setDraftRect((prev) => (prev ? { ...prev, currentX: point.x, currentY: point.y } : null));
+            return;
+        }
+
+        const eraserSession = eraserSessionRef.current;
+        if (
+            annotationTool === 'eraser'
+            && eraserSession?.page === page
+            && (pointerId === undefined || eraserSession.pointerId === pointerId)
+        ) {
+            const point = resolveRatioPoint(page, clientX, clientY);
+            const pageImage = pageImages.find((item) => item.page === page);
+            if (!point || !pageImage) return;
+            const erased = eraseAnnotationAtPoint(page, point, pageImage, !eraserSession.hasRecordedUndo);
+            if (erased && !eraserSession.hasRecordedUndo) {
+                eraserSessionRef.current = {
+                    ...eraserSession,
+                    hasRecordedUndo: true,
+                };
+            }
             return;
         }
 
@@ -995,6 +1041,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
 
     const finishStudentStroke = () => {
         clearHoldTimer();
+        eraserSessionRef.current = null;
         setDraftStroke((prev) => {
             if (!prev) return null;
             const finalized = prev.points.length === 1
@@ -1056,6 +1103,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         clearHoldTimer();
         activeTouchPointerIdsRef.current.clear();
         touchGestureRef.current = null;
+        eraserSessionRef.current = null;
     }, []);
 
     useEffect(() => {
@@ -1559,6 +1607,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                 scrollHostRefs.current[pageImage.page] = node;
                             }}
                             className="overflow-auto rounded-2xl border border-gray-200 bg-gray-50"
+                            style={mode === 'student' && annotationEnabled ? { touchAction: 'none', overscrollBehavior: 'contain' } : undefined}
                             onWheel={(event) => {
                                 if (mode !== 'student' || !annotationEnabled) return;
                                 event.preventDefault();
@@ -1605,6 +1654,11 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                     touchGestureRef.current = null;
                                 }
                             }}
+                            onTouchCancel={() => {
+                                if (touchGestureRef.current?.page === pageImage.page) {
+                                    touchGestureRef.current = null;
+                                }
+                            }}
                         >
                             <div
                                 ref={(node) => {
@@ -1619,6 +1673,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                 }`}
                                 style={{
                                     cursor: stageCursor,
+                                    touchAction: mode === 'student' && annotationEnabled ? 'none' : undefined,
                                     width: mode === 'student' ? `${studentZoom * 100}%` : '100%',
                                     minWidth: mode === 'student' ? `${studentZoom * 100}%` : '100%',
                                     maxWidth: mode === 'student' ? 'none' : '100%',
@@ -1626,7 +1681,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                 }}
                                 onDragStart={(event) => event.preventDefault()}
                                 onPointerDown={(event) => handlePointerDown(pageImage.page, event)}
-                                onPointerMove={(event) => updateDraftPoint(pageImage.page, event.clientX, event.clientY)}
+                                onPointerMove={(event) => updateDraftPoint(pageImage.page, event.clientX, event.clientY, event.pointerId)}
                                 onPointerUp={(event) => {
                                     if (event.pointerType === 'touch') {
                                         clearTouchPointer(event.pointerId);
@@ -1643,6 +1698,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                     setDraftStroke(null);
                                     setDraftBox(null);
                                     panRef.current = null;
+                                    eraserSessionRef.current = null;
                                 }}
                                 onPointerLeave={(event) => {
                                     if (event.pointerType === 'touch') {
