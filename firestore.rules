@@ -538,6 +538,14 @@ service cloud.firestore {
         }
       }
 
+      match /lesson_presentations/{unitId}/teachers/{userId} {
+        allow read, write: if isAdmin() || (canUseWestory() && request.auth.uid == userId && hasPermission('lesson_read'));
+
+        match /classes/{classId} {
+          allow read, write: if isAdmin() || (canUseWestory() && request.auth.uid == userId && hasPermission('lesson_read'));
+        }
+      }
+
       match /think_cloud_sessions/{sessionId} {
         allow read: if canAccessThinkCloudTarget(resource.data.targetGrade, resource.data.targetClass);
         allow create, update, delete: if isAdmin();

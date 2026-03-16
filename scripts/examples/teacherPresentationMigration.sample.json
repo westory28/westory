@@ -1,0 +1,19 @@
+[
+  {
+    "year": "2026",
+    "semester": "1",
+    "lessonId": "lesson-goguryeo-01",
+    "teacherUid": "teacher_uid_123",
+    "classId": "3-2",
+    "classLabel": "3학년 2반"
+  },
+  {
+    "year": "2026",
+    "semester": "1",
+    "lessonId": "lesson-goguryeo-01",
+    "teacherUid": "teacher_uid_123",
+    "classId": "3-3",
+    "classLabel": "3학년 3반",
+    "overwrite": false
+  }
+]
