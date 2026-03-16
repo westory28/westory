@@ -784,6 +784,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     };
 
     const handleToolSelect = (tool: StudentTool | 'undo' | 'redo') => {
+        cancelStudentInteraction();
         if (tool === 'undo') {
             setUndoStack((prev) => {
                 const snapshot = prev[prev.length - 1];
@@ -948,6 +949,17 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
             return;
         }
 
+        const currentPan = panRef.current;
+        if (annotationTool === 'move' && currentPan?.page === page) {
+            currentPan.horizontalHost.scrollLeft = currentPan.startScrollLeft - (clientX - currentPan.startClientX);
+            if (currentPan.verticalHost) {
+                currentPan.verticalHost.scrollTop = currentPan.startScrollTop - (clientY - currentPan.startClientY);
+            } else {
+                currentPan.horizontalHost.scrollTop = currentPan.startScrollTop - (clientY - currentPan.startClientY);
+            }
+            return;
+        }
+
         const eraserSession = eraserSessionRef.current;
         if (
             annotationTool === 'eraser'
@@ -1103,29 +1115,16 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     }, []);
 
     useEffect(() => {
-        if (!panRef.current) return undefined;
-        const handleWindowPointerMove = (event: PointerEvent) => {
-            const currentPan = panRef.current;
-            if (!currentPan) return;
-            currentPan.horizontalHost.scrollLeft = currentPan.startScrollLeft - (event.clientX - currentPan.startClientX);
-            if (currentPan.verticalHost) {
-                currentPan.verticalHost.scrollTop = currentPan.startScrollTop - (event.clientY - currentPan.startClientY);
-            } else {
-                currentPan.horizontalHost.scrollTop = currentPan.startScrollTop - (event.clientY - currentPan.startClientY);
-            }
-        };
         const handleWindowPointerUp = () => {
             panRef.current = null;
         };
-        window.addEventListener('pointermove', handleWindowPointerMove);
         window.addEventListener('pointerup', handleWindowPointerUp);
         window.addEventListener('pointercancel', handleWindowPointerUp);
         return () => {
-            window.removeEventListener('pointermove', handleWindowPointerMove);
             window.removeEventListener('pointerup', handleWindowPointerUp);
             window.removeEventListener('pointercancel', handleWindowPointerUp);
         };
-    }, [annotationTool, studentZoom]);
+    }, []);
 
     useEffect(() => {
         if (!textNoteTransform) return undefined;
@@ -1721,7 +1720,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
 
                             {(pageStrokes.length > 0 || currentDraftStroke) && (
                                 <svg
-                                    className="pointer-events-none absolute inset-0 z-[5] h-full w-full"
+                                    className="pointer-events-none absolute inset-0 z-[24] h-full w-full"
                                     viewBox={`0 0 ${pageImage.width} ${pageImage.height}`}
                                     preserveAspectRatio="none"
                                 >
@@ -1753,7 +1752,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
 
                             {(pageBoxes.length > 0 || currentDraftBox) && (
                                 <svg
-                                    className="pointer-events-none absolute inset-0 z-[6] h-full w-full"
+                                    className="pointer-events-none absolute inset-0 z-[24] h-full w-full"
                                     viewBox={`0 0 ${pageImage.width} ${pageImage.height}`}
                                     preserveAspectRatio="none"
                                 >
@@ -1992,6 +1991,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                 const fontSize = getStudentBlankFontSize(pixelWidth, pixelHeight, sizingText.length);
                                 const horizontalPadding = pixelWidth < 42 ? 0.2 : pixelWidth < 52 ? 0.5 : pixelWidth < 80 ? 1 : 1.5;
                                 const verticalPadding = pixelHeight < 18 ? 0 : pixelHeight < 24 ? 0.2 : 0.5;
+                                const allowBlankPointerInteraction = !annotationEnabled || annotationTool === 'text';
 
                                 return (
                                     <div
@@ -2010,6 +2010,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                             width: toPercent(renderRect.widthRatio),
                                             height: toPercent(renderRect.heightRatio),
                                             zIndex: 18,
+                                            pointerEvents: allowBlankPointerInteraction ? 'auto' : 'none',
                                         }}
                                     >
                                         <input
