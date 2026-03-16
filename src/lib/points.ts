@@ -17,6 +17,7 @@ import type {
     PointOrderStatus,
     PointPolicy,
     PointProduct,
+    PointStudentTarget,
     PointTransaction,
     PointTransactionType,
     PointWallet,
@@ -139,6 +140,52 @@ export const listPointWallets = async (config: ConfigLike) => {
     return [...items].sort((a, b) => {
         const balanceGap = Number(b.balance || 0) - Number(a.balance || 0);
         if (balanceGap !== 0) return balanceGap;
+        return String(a.studentName || '').localeCompare(String(b.studentName || ''), 'ko');
+    });
+};
+
+const resolveStudentField = (data: Record<string, any>, keys: string[]) => {
+    for (const key of keys) {
+        const value = String(data[key] || '').trim();
+        if (value) return value;
+    }
+    return '';
+};
+
+export const listPointStudentTargets = async () => {
+    const snapshot = await getDocs(collection(db, 'users'));
+    const items: PointStudentTarget[] = [];
+
+    snapshot.forEach((item) => {
+        const data = item.data() as Record<string, any>;
+        const email = String(data.email || '').trim();
+        const role = String(data.role || '').trim();
+        if (role === 'teacher') return;
+
+        const studentName = resolveStudentField(data, ['studentName', 'name', 'displayName', 'nickname', 'customName']);
+        const grade = resolveStudentField(data, ['studentGrade', 'grade']);
+        const className = resolveStudentField(data, ['studentClass', 'class']);
+        const number = resolveStudentField(data, ['studentNumber', 'number']);
+
+        if (!studentName || (!grade && !className && !number)) return;
+
+        items.push({
+            uid: item.id,
+            studentName,
+            grade,
+            class: className,
+            number,
+            email,
+        });
+    });
+
+    return items.sort((a, b) => {
+        const gradeGap = Number(a.grade || 0) - Number(b.grade || 0);
+        if (gradeGap !== 0) return gradeGap;
+        const classGap = Number(a.class || 0) - Number(b.class || 0);
+        if (classGap !== 0) return classGap;
+        const numberGap = Number(a.number || 0) - Number(b.number || 0);
+        if (numberGap !== 0) return numberGap;
         return String(a.studentName || '').localeCompare(String(b.studentName || ''), 'ko');
     });
 };

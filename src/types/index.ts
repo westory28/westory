@@ -32,6 +32,15 @@ export interface UserData {
     consentAgreedItems?: string[];
 }
 
+export interface PointStudentTarget {
+    uid: string;
+    studentName: string;
+    grade: string;
+    class: string;
+    number: string;
+    email?: string;
+}
+
 export interface CalendarEvent {
     id: string;
     title: string;

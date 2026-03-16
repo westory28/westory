@@ -7,6 +7,7 @@ import {
     getPointPolicy,
     listPointOrders,
     listPointProducts,
+    listPointStudentTargets,
     listPointTransactionsByUid,
     listPointWallets,
     reviewPointOrder,
@@ -14,7 +15,8 @@ import {
     upsertPointProduct,
 } from '../../lib/points';
 import { canManagePoints, canReadPoints } from '../../lib/permissions';
-import type { PointOrder, PointOrderStatus, PointPolicy, PointProduct, PointTransaction, PointWallet } from '../../types';
+import type { PointOrder, PointOrderStatus, PointPolicy, PointProduct, PointStudentTarget, PointTransaction, PointWallet } from '../../types';
+import PointGrantTab from './components/points/PointGrantTab';
 import PointPolicyTab from './components/points/PointPolicyTab';
 import PointProductsTab from './components/points/PointProductsTab';
 import PointRequestsTab from './components/points/PointRequestsTab';
@@ -66,6 +68,7 @@ const ManagePoints: React.FC = () => {
     const [activeTab, setActiveTab] = useState<TeacherPointTab>('overview');
     const [loading, setLoading] = useState(true);
     const [wallets, setWallets] = useState<PointWallet[]>([]);
+    const [students, setStudents] = useState<PointStudentTarget[]>([]);
     const [selectedUid, setSelectedUid] = useState('');
     const [transactions, setTransactions] = useState<PointTransaction[]>([]);
     const [policy, setPolicy] = useState<PointPolicy>(EMPTY_POLICY);
@@ -75,10 +78,14 @@ const ManagePoints: React.FC = () => {
     const [classFilter, setClassFilter] = useState('all');
     const [numberFilter, setNumberFilter] = useState('all');
     const [nameSearch, setNameSearch] = useState('');
-    const [amount, setAmount] = useState('');
-    const [reason, setReason] = useState('');
-    const [action, setAction] = useState<'grant' | 'deduct'>('grant');
-    const [feedback, setFeedback] = useState('');
+    const [grantGradeFilter, setGrantGradeFilter] = useState('all');
+    const [grantClassFilter, setGrantClassFilter] = useState('all');
+    const [grantNumberFilter, setGrantNumberFilter] = useState('all');
+    const [grantNameSearch, setGrantNameSearch] = useState('');
+    const [grantSelectedUid, setGrantSelectedUid] = useState('');
+    const [grantAmount, setGrantAmount] = useState('');
+    const [grantReason, setGrantReason] = useState('');
+    const [grantFeedback, setGrantFeedback] = useState('');
     const [productForm, setProductForm] = useState<ProductFormState>(EMPTY_PRODUCT_FORM);
     const [productFeedback, setProductFeedback] = useState('');
     const [orderFilter, setOrderFilter] = useState<OrderFilter>('all');
@@ -131,6 +138,62 @@ const ManagePoints: React.FC = () => {
         [selectedUid, wallets],
     );
 
+    const walletMap = useMemo(
+        () => new Map(wallets.map((wallet) => [wallet.uid, wallet])),
+        [wallets],
+    );
+
+    const grantGradeOptions = useMemo(
+        () => Array.from(new Set(students.map((student) => normalizeValue(student.grade)).filter(Boolean))).sort((a, b) => Number(a) - Number(b)),
+        [students],
+    );
+
+    const grantClassOptions = useMemo(
+        () => Array.from(new Set(
+            students
+                .filter((student) => grantGradeFilter === 'all' || normalizeValue(student.grade) === grantGradeFilter)
+                .map((student) => normalizeValue(student.class))
+                .filter(Boolean),
+        )).sort((a, b) => Number(a) - Number(b)),
+        [grantGradeFilter, students],
+    );
+
+    const grantNumberOptions = useMemo(
+        () => Array.from(new Set(
+            students
+                .filter((student) => grantGradeFilter === 'all' || normalizeValue(student.grade) === grantGradeFilter)
+                .filter((student) => grantClassFilter === 'all' || normalizeValue(student.class) === grantClassFilter)
+                .map((student) => normalizeValue(student.number))
+                .filter(Boolean),
+        )).sort((a, b) => Number(a) - Number(b)),
+        [grantClassFilter, grantGradeFilter, students],
+    );
+
+    const filteredGrantStudents = useMemo(() => students
+        .filter((student) => {
+            const matchesGrade = grantGradeFilter === 'all' || normalizeValue(student.grade) === grantGradeFilter;
+            const matchesClass = grantClassFilter === 'all' || normalizeValue(student.class) === grantClassFilter;
+            const matchesNumber = grantNumberFilter === 'all' || normalizeValue(student.number) === grantNumberFilter;
+            const keyword = grantNameSearch.trim();
+            const matchesName = !keyword || normalizeValue(student.studentName).includes(keyword);
+            return matchesGrade && matchesClass && matchesNumber && matchesName;
+        })
+        .map((student) => ({
+            ...student,
+            wallet: walletMap.get(student.uid) || null,
+        })), [grantClassFilter, grantGradeFilter, grantNameSearch, grantNumberFilter, students, walletMap]);
+
+    const selectedGrantStudent = useMemo(() => {
+        const matchedFilteredStudent = filteredGrantStudents.find((student) => student.uid === grantSelectedUid);
+        if (matchedFilteredStudent) return matchedFilteredStudent;
+        const matchedStudent = students.find((student) => student.uid === grantSelectedUid);
+        if (!matchedStudent) return null;
+        return {
+            ...matchedStudent,
+            wallet: walletMap.get(grantSelectedUid) || null,
+        };
+    }, [filteredGrantStudents, grantSelectedUid, students, walletMap]);
+
     const filteredOrders = useMemo(() => (
         orderFilter === 'all' ? orders : orders.filter((order) => order.status === orderFilter)
     ), [orderFilter, orders]);
@@ -150,14 +213,16 @@ const ManagePoints: React.FC = () => {
 
         setLoading(true);
         try {
-            const [nextWallets, nextPolicy, nextProducts, nextOrders] = await Promise.all([
+            const [nextWallets, nextStudents, nextPolicy, nextProducts, nextOrders] = await Promise.all([
                 listPointWallets(config),
+                listPointStudentTargets(),
                 getPointPolicy(config),
                 listPointProducts(config, false),
                 listPointOrders(config),
             ]);
 
             setWallets(nextWallets);
+            setStudents(nextStudents);
             setPolicy(nextPolicy);
             setProducts(nextProducts);
             setOrders(nextOrders);
@@ -166,6 +231,11 @@ const ManagePoints: React.FC = () => {
                 ? selectedUid
                 : nextWallets[0]?.uid || '';
             setSelectedUid(nextSelectedUid);
+
+            const nextGrantSelectedUid = grantSelectedUid && nextStudents.some((student) => student.uid === grantSelectedUid)
+                ? grantSelectedUid
+                : nextStudents[0]?.uid || '';
+            setGrantSelectedUid(nextGrantSelectedUid);
         } finally {
             setLoading(false);
         }
@@ -173,7 +243,7 @@ const ManagePoints: React.FC = () => {
 
     useEffect(() => {
         const requestedTab = searchParams.get('tab');
-        if (requestedTab === 'policy' || requestedTab === 'products' || requestedTab === 'requests') {
+        if (requestedTab === 'grant' || requestedTab === 'policy' || requestedTab === 'products' || requestedTab === 'requests') {
             setActiveTab(requestedTab);
             return;
         }
@@ -217,47 +287,60 @@ const ManagePoints: React.FC = () => {
     }, [filteredWallets, selectedUid]);
 
     useEffect(() => {
+        if (grantClassFilter !== 'all' && !grantClassOptions.includes(grantClassFilter)) setGrantClassFilter('all');
+    }, [grantClassFilter, grantClassOptions]);
+
+    useEffect(() => {
+        if (grantNumberFilter !== 'all' && !grantNumberOptions.includes(grantNumberFilter)) setGrantNumberFilter('all');
+    }, [grantNumberFilter, grantNumberOptions]);
+
+    useEffect(() => {
+        if (grantSelectedUid && !filteredGrantStudents.some((student) => student.uid === grantSelectedUid)) {
+            setGrantSelectedUid(filteredGrantStudents[0]?.uid || '');
+        }
+    }, [filteredGrantStudents, grantSelectedUid]);
+
+    useEffect(() => {
         setOrderMemo(selectedOrder?.memo || '');
     }, [selectedOrder?.id, selectedOrder?.memo]);
 
     const handleTabChange = (tab: TeacherPointTab) => {
-        setFeedback('');
+        setGrantFeedback('');
         setProductFeedback('');
         setOrderFeedback('');
         setSearchParams(tab === 'overview' ? {} : { tab });
     };
 
-    const handleSaveAdjust = async (event: React.FormEvent) => {
+    const handleSaveGrant = async (event: React.FormEvent) => {
         event.preventDefault();
-        if (!selectedWallet || !canManage) return;
+        if (!selectedGrantStudent || !canManage) return;
 
-        const numericAmount = Number(amount);
+        const numericAmount = Number(grantAmount);
         if (!numericAmount || numericAmount < 1) {
-            setFeedback('포인트 수량은 1 이상으로 입력해 주세요.');
+            setGrantFeedback('포인트 수량은 1 이상으로 입력해 주세요.');
             return;
         }
-        if (!reason.trim()) {
-            setFeedback('지급 또는 차감 사유를 입력해 주세요.');
+        if (!grantReason.trim()) {
+            setGrantFeedback('포인트 부여 사유를 입력해 주세요.');
             return;
         }
 
         try {
-            const delta = action === 'grant' ? numericAmount : -numericAmount;
             await adjustPoints({
                 config,
-                uid: selectedWallet.uid,
-                delta,
+                uid: selectedGrantStudent.uid,
+                delta: numericAmount,
                 sourceId: `manual_${Date.now()}`,
-                sourceLabel: reason.trim(),
+                sourceLabel: grantReason.trim(),
                 actor,
             });
-            setAmount('');
-            setReason('');
-            setFeedback('학생 포인트를 반영했습니다.');
+            setGrantAmount('');
+            setGrantReason('');
+            setGrantFeedback('학생 포인트를 반영했습니다.');
             await loadAll();
         } catch (error: any) {
             console.error('Failed to adjust points:', error);
-            setFeedback(error?.message || '포인트 조정에 실패했습니다.');
+            setGrantFeedback(error?.message || '포인트 부여에 실패했습니다.');
         }
     };
 
@@ -415,20 +498,39 @@ const ManagePoints: React.FC = () => {
                             classOptions={classOptions}
                             numberOptions={numberOptions}
                             transactions={transactions}
-                            canManage={canManage}
-                            amount={amount}
-                            reason={reason}
-                            action={action}
-                            feedback={feedback}
                             onGradeFilterChange={setGradeFilter}
                             onClassFilterChange={setClassFilter}
                             onNumberFilterChange={setNumberFilter}
                             onNameSearchChange={setNameSearch}
                             onSelectWallet={setSelectedUid}
-                            onAmountChange={setAmount}
-                            onReasonChange={setReason}
-                            onActionChange={setAction}
-                            onSubmitAdjust={handleSaveAdjust}
+                        />
+                    )}
+
+                    {!loading && activeTab === 'grant' && (
+                        <PointGrantTab
+                            students={filteredGrantStudents}
+                            selectedStudent={selectedGrantStudent}
+                            selectedUid={grantSelectedUid}
+                            canManage={canManage}
+                            manualAdjustEnabled={policy.manualAdjustEnabled}
+                            gradeFilter={grantGradeFilter}
+                            classFilter={grantClassFilter}
+                            numberFilter={grantNumberFilter}
+                            nameSearch={grantNameSearch}
+                            gradeOptions={grantGradeOptions}
+                            classOptions={grantClassOptions}
+                            numberOptions={grantNumberOptions}
+                            amount={grantAmount}
+                            reason={grantReason}
+                            feedback={grantFeedback}
+                            onGradeFilterChange={setGrantGradeFilter}
+                            onClassFilterChange={setGrantClassFilter}
+                            onNumberFilterChange={setGrantNumberFilter}
+                            onNameSearchChange={setGrantNameSearch}
+                            onSelectStudent={setGrantSelectedUid}
+                            onAmountChange={setGrantAmount}
+                            onReasonChange={setGrantReason}
+                            onSubmit={handleSaveGrant}
                         />
                     )}
 

@@ -4,6 +4,18 @@ export const formatPointDateTime = (value: any) => (
     value?.seconds ? new Date(value.seconds * 1000).toLocaleString('ko-KR') : '-'
 );
 
+export const formatPointDateShortTime = (value: any) => (
+    value?.seconds
+        ? new Date(value.seconds * 1000).toLocaleString('ko-KR', {
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+        })
+        : '-'
+);
+
 export const formatPointDateOnly = (value: any) => (
     value?.seconds ? new Date(value.seconds * 1000).toLocaleDateString('ko-KR') : '-'
 );

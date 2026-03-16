@@ -1,6 +1,6 @@
 import React from 'react';
-import { POINT_TRANSACTION_TYPE_LABELS, getPointDeltaToneClass, getPointFeedbackToneClass } from '../../../../constants/pointLabels';
-import { formatPointDateOnly, formatPointDateTime, formatPointStudentLabel } from '../../../../lib/pointFormatters';
+import { POINT_TRANSACTION_TYPE_LABELS, getPointDeltaToneClass } from '../../../../constants/pointLabels';
+import { formatPointDateShortTime, formatPointDateTime, formatPointStudentLabel } from '../../../../lib/pointFormatters';
 import type { PointTransaction, PointWallet } from '../../../../types';
 
 interface PointsOverviewTabProps {
@@ -15,20 +15,11 @@ interface PointsOverviewTabProps {
     classOptions: string[];
     numberOptions: string[];
     transactions: PointTransaction[];
-    canManage: boolean;
-    amount: string;
-    reason: string;
-    action: 'grant' | 'deduct';
-    feedback: string;
     onGradeFilterChange: (value: string) => void;
     onClassFilterChange: (value: string) => void;
     onNumberFilterChange: (value: string) => void;
     onNameSearchChange: (value: string) => void;
     onSelectWallet: (uid: string) => void;
-    onAmountChange: (value: string) => void;
-    onReasonChange: (value: string) => void;
-    onActionChange: (value: 'grant' | 'deduct') => void;
-    onSubmitAdjust: (event: React.FormEvent) => void;
 }
 
 const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
@@ -43,20 +34,11 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
     classOptions,
     numberOptions,
     transactions,
-    canManage,
-    amount,
-    reason,
-    action,
-    feedback,
     onGradeFilterChange,
     onClassFilterChange,
     onNumberFilterChange,
     onNameSearchChange,
     onSelectWallet,
-    onAmountChange,
-    onReasonChange,
-    onActionChange,
-    onSubmitAdjust,
 }) => (
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.2fr_0.95fr]">
         <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
@@ -64,7 +46,7 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
                 <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
                     <div>
                         <h2 className="text-lg font-bold text-gray-800">{'\uD559\uC0DD\uBCC4 \uD3EC\uC778\uD2B8 \uD604\uD669'}</h2>
-                        <p className="mt-1 text-sm text-gray-500">{'\uD559\uB144, \uBC18, \uBC88\uD638, \uC774\uB984 \uAC80\uC0C9\uC744 \uC870\uD569\uD574 \uD559\uC0DD\uC744 \uBE60\uB974\uAC8C \uCC3E\uACE0 \uBC14\uB85C \uC870\uC815\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.'}</p>
+                        <p className="mt-1 text-sm text-gray-500">{'\uD559\uB144, \uBC18, \uBC88\uD638, \uC774\uB984 \uAC80\uC0C9\uC744 \uC870\uD569\uD574 \uD559\uC0DD \uD3EC\uC778\uD2B8 \uD604\uD669\uACFC \uCD5C\uADFC \uAC70\uB798 \uB0B4\uC5ED\uC744 \uBE60\uB974\uAC8C \uD655\uC778\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.'}</p>
                     </div>
                     <div className="text-sm font-bold text-gray-500">{`\uAC80\uC0C9 \uACB0\uACFC ${wallets.length}\uBA85`}</div>
                 </div>
@@ -104,9 +86,14 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
                         >
                             <div className="min-w-0">
                                 <div className="truncate font-bold text-gray-800">{wallet.studentName || '(\uC774\uB984 \uC5C6\uC74C)'}</div>
-                                <div className="mt-1 text-xs text-gray-500">{`\uCD5C\uADFC \uBCC0\uB3D9\uC77C ${formatPointDateOnly(wallet.lastTransactionAt)}`}</div>
+                                <div className="mt-1 text-xs text-gray-500">{`(${formatPointDateShortTime(wallet.lastTransactionAt)})`}</div>
                             </div>
-                            <div className="truncate text-sm text-gray-600">{formatPointStudentLabel(wallet) || '-'}</div>
+                            <div className="truncate text-sm text-gray-600">
+                                {[
+                                    wallet.grade ? `${wallet.grade}\uD559\uB144` : '',
+                                    wallet.class ? `${wallet.class}\uBC18` : '',
+                                ].filter(Boolean).join(' ') || '-'}
+                            </div>
                             <div className="text-right text-lg font-black text-blue-700">{wallet.balance || 0}</div>
                             <div className="text-right font-bold text-emerald-600">{wallet.earnedTotal || 0}</div>
                             <div className="text-right font-bold text-rose-500">{wallet.spentTotal || 0}</div>
@@ -171,19 +158,6 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
                             })}
                         </div>
                     </div>
-
-                    <form onSubmit={onSubmitAdjust} className="mt-5 rounded-xl border border-gray-200 bg-gray-50 p-4">
-                        <div className="mb-1 font-bold text-gray-800">{'\uAD50\uC0AC \uC9C1\uC811 \uC9C0\uAE09\u00B7\uCC28\uAC10'}</div>
-                        <p className="mb-4 text-sm text-gray-500">{'\uD55C \uBC88\uC5D0 \uD55C \uD559\uC0DD\uB9CC \uC120\uD0DD\uD574\uC11C \uC0AC\uC720\uC640 \uD568\uAED8 \uBC18\uC601\uD569\uB2C8\uB2E4.'}</p>
-                        <div className="grid grid-cols-2 gap-3">
-                            <button type="button" onClick={() => onActionChange('grant')} className={`rounded-lg px-4 py-2 text-sm font-bold ${action === 'grant' ? 'bg-blue-600 text-white' : 'border border-gray-300 bg-white text-gray-600'}`}>{'\uD3EC\uC778\uD2B8 \uC9C0\uAE09'}</button>
-                            <button type="button" onClick={() => onActionChange('deduct')} className={`rounded-lg px-4 py-2 text-sm font-bold ${action === 'deduct' ? 'bg-rose-500 text-white' : 'border border-gray-300 bg-white text-gray-600'}`}>{'\uD3EC\uC778\uD2B8 \uCC28\uAC10'}</button>
-                        </div>
-                        <input type="number" min="1" value={amount} onChange={(event) => onAmountChange(event.target.value)} placeholder={'\uC870\uC815\uD560 \uD3EC\uC778\uD2B8 \uC218\uB7C9'} className="mt-3 w-full rounded-lg border border-gray-300 px-4 py-2 text-sm" disabled={!canManage} />
-                        <textarea value={reason} onChange={(event) => onReasonChange(event.target.value)} rows={3} placeholder={'\uC608: \uD589\uC0AC \uCC38\uC5EC \uBCF4\uC0C1, \uC911\uBCF5 \uC801\uB9BD \uD68C\uC218'} className="mt-3 w-full rounded-lg border border-gray-300 px-4 py-3 text-sm" disabled={!canManage} />
-                        {!!feedback && <div className={`mt-3 rounded-lg px-3 py-2 text-sm font-bold ${getPointFeedbackToneClass(feedback)}`}>{feedback}</div>}
-                        <button type="submit" disabled={!canManage} className="mt-3 w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-bold text-white disabled:bg-blue-300">{'\uD3EC\uC778\uD2B8 \uBC18\uC601\uD558\uAE30'}</button>
-                    </form>
                 </>
             )}
         </div>
