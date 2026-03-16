@@ -31,7 +31,7 @@ const StudentDashboard: React.FC = () => {
     const [events, setEvents] = useState<CalendarEvent[]>([]);
     const [selectedDate, setSelectedDate] = useState<string | null>(null);
     const [dailyEvents, setDailyEvents] = useState<CalendarEvent[]>([]);
-    const [welcomeText, setWelcomeText] = useState('학년/반 정보를 불러오는 중..');
+    const [welcomeText, setWelcomeText] = useState('학년/반 정보를 불러오는 중.');
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [gradeLabelMap, setGradeLabelMap] = useState<Record<string, string>>({});
     const [classLabelMap, setClassLabelMap] = useState<Record<string, string>>({});

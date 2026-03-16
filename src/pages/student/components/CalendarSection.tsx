@@ -50,11 +50,11 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
 
     const formatEventTargetLabel = (event?: CalendarEvent) => {
         if (!event || event.eventType === 'holiday' || event.targetType === 'all' || event.targetType === 'common') {
-            return '?꾩껜';
+            return '전체';
         }
         const [gradeValue, classValue] = String(event.targetClass || '').split('-');
-        if (!gradeValue || !classValue) return '?꾩껜';
-        return `${gradeValue}?숇뀈 ${classValue}諛?`;
+        if (!gradeValue || !classValue) return '전체';
+        return `${gradeValue}학년 ${classValue}반`;
     };
 
     const fcEvents = events.map((event) => {
@@ -100,8 +100,8 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
     const formatEventTitle = (event: CalendarEvent) => {
         const rawTitle = String(event.title || '').trim();
         if (rawTitle) return rawTitle;
-        if (event.eventType === 'holiday') return '怨듯쑕??';
-        return getScheduleCategoryMeta(event.eventType, categories).label || '?쇱젙';
+        if (event.eventType === 'holiday') return '공휴일';
+        return getScheduleCategoryMeta(event.eventType, categories).label || '일정';
     };
 
     const listRows = useMemo(() => {
@@ -244,7 +244,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                 opacity: 1 !important;
             }
             .fc-day-attendance .fc-daygrid-day-top::after {
-                content: '異쒖꽍';
+                content: '출석';
                 margin-left: 0.3rem;
                 border-radius: 9999px;
                 background: #dbeafe;
@@ -284,19 +284,19 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
         if (!button) return;
         button.disabled = attendanceLoading || attendanceChecked;
         button.classList.add('fc-attendance-button');
-        button.title = attendanceMessage || '異쒖꽍 泥댄겕';
+        button.title = attendanceMessage || '출석 체크';
     }, [attendanceChecked, attendanceLoading, attendanceMessage]);
 
     return (
         <div className="flex h-full min-h-[500px] flex-col overflow-hidden rounded-xl bg-white p-4 shadow-sm md:min-h-0">
             <div className="mb-2 flex flex-col items-start justify-between gap-2 md:flex-row md:items-center">
                 <h2 className="whitespace-nowrap text-lg font-bold text-gray-800">
-                    <i className="far fa-calendar-alt mr-2 text-blue-600"></i>?숈궗 ?쇱젙
+                    <i className="far fa-calendar-alt mr-2 text-blue-600"></i>학사 일정
                 </h2>
                 <button
                     onClick={onSearchClick}
                     className="rounded-lg border border-gray-200 bg-gray-50 p-1.5 text-gray-600 transition hover:text-blue-600"
-                    title="?쇱젙 寃??"
+                    title="일정 검색"
                 >
                     <i className="fas fa-search"></i>
                 </button>
@@ -314,7 +314,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                     displayEventTime={false}
                     customButtons={{
                         attendanceCheck: {
-                            text: attendanceChecked ? '?ㅻ뒛 異쒖꽍 ?꾨즺' : attendanceLoading ? '泥섎━ 以?..' : '異쒖꽍 泥댄겕',
+                            text: attendanceChecked ? '오늘 출석 완료' : attendanceLoading ? '처리 중...' : '출석 체크',
                             click: onAttendanceCheck,
                         },
                     }}
@@ -324,8 +324,8 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                         right: 'attendanceCheck dayGridMonth,listMonth',
                     }}
                     buttonText={{
-                        dayGridMonth: '?щ젰',
-                        listMonth: '紐⑸줉',
+                        dayGridMonth: '달력',
+                        listMonth: '목록',
                     }}
                     events={fcEvents}
                     datesSet={(arg) => {
@@ -339,7 +339,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                             if (!button) return;
                             button.disabled = attendanceLoading || attendanceChecked;
                             button.classList.add('fc-attendance-button');
-                            button.title = attendanceMessage || '異쒖꽍 泥댄겕';
+                            button.title = attendanceMessage || '출석 체크';
                         }, 0);
                     }}
                     dateClick={(arg) => onDateClick(arg.dateStr)}
@@ -349,10 +349,10 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                         const isHoliday = event?.eventType === 'holiday';
                         const eventTitle = String(arg.event.title || '').trim();
                         const meta = getScheduleCategoryMeta(event?.eventType, categories);
-                        const categoryLabel = isHoliday ? '怨듯쑕??' : meta.label;
+                        const categoryLabel = isHoliday ? '공휴일' : meta.label;
                         const categoryColor = isHoliday ? '#ef4444' : meta.color;
                         const targetLabel = formatEventTargetLabel(event);
-                        const safeTitle = eventTitle || (isHoliday ? '怨듯쑕??' : '?쇱젙');
+                        const safeTitle = eventTitle || (isHoliday ? '공휴일' : '일정');
 
                         if (arg.view.type === 'listMonth') {
                             return (
@@ -401,7 +401,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                                 {group.events.map((event) => {
                                     const isHoliday = event.eventType === 'holiday';
                                     const meta = getScheduleCategoryMeta(event.eventType, categories);
-                                    const categoryLabel = isHoliday ? '怨듯쑕??' : meta.label;
+                                    const categoryLabel = isHoliday ? '공휴일' : meta.label;
                                     const categoryColor = isHoliday ? '#ef4444' : meta.color;
                                     const eventTitle = formatEventTitle(event);
                                     const targetLabel = formatEventTargetLabel(event);
