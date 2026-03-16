@@ -50,27 +50,25 @@ const TeacherPresentationLauncher: React.FC<
   const selectedBadge = getTeacherPresentationRuntimeBadge(selectedSummary);
   const helperMessage =
     optionLoadState === "error" && cachedSummary
-      ? "학급 목록을 못 불러왔지만 마지막 사용 반 기준으로 이어서 열 수 있습니다."
+      ? "학급 목록 없이 마지막 사용 반으로 열 수 있습니다."
       : optionLoadState === "error"
-        ? "학급 목록을 못 불러와도 현재 선택 반으로는 바로 열 수 있습니다."
+        ? "현재 선택 반으로 바로 열 수 있습니다."
         : classLoadState === "loading"
-          ? "마지막 상태를 확인하는 중입니다."
-          : selectedSummary
-            ? getTeacherPresentationSelectorSummaryText(selectedSummary)
-            : "최근 사용 반을 바로 열 수 있습니다.";
+          ? "상태 확인 중"
+          : "";
 
   return (
-    <div className="mx-auto mb-2 grid w-full max-w-[min(100vw-1.5rem,1600px)] gap-2 rounded-2xl border border-slate-200 bg-white/95 px-3 py-3 shadow-sm lg:grid-cols-[minmax(0,1.45fr)_minmax(260px,0.9fr)]">
-      <div className="min-w-0 space-y-2">
+    <div className="mx-auto mb-2 grid w-full max-w-[min(100vw-1.5rem,1600px)] gap-2 rounded-2xl border border-slate-200 bg-white/95 px-2.5 py-2.5 shadow-sm lg:grid-cols-[minmax(0,1.45fr)_minmax(240px,0.9fr)]">
+      <div className="min-w-0 space-y-1.5">
         {!!recentItems.length && (
-          <div className="grid gap-2 md:grid-cols-3">
+          <div className="grid gap-1.5 md:grid-cols-3">
             {recentItems.map((item, index) => {
               const badge = getTeacherPresentationRuntimeBadge(item);
               const isSelected = item.classId === selectedClassId;
               return (
                 <div
                   key={item.classId}
-                  className={`rounded-2xl border px-3 py-2.5 transition ${
+                  className={`rounded-xl border px-2.5 py-2 transition ${
                     isSelected
                       ? "border-blue-300 bg-blue-50/90 ring-1 ring-blue-100"
                       : "border-slate-200 bg-white"
@@ -86,7 +84,7 @@ const TeacherPresentationLauncher: React.FC<
                       </div>
                     </div>
                     <div
-                      className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold ${badgeToneClass(
+                      className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${badgeToneClass(
                         badge.tone,
                       )}`}
                     >
@@ -96,17 +94,14 @@ const TeacherPresentationLauncher: React.FC<
                       {badge.text}
                     </div>
                   </div>
-                  <div className="mt-1 line-clamp-1 text-[11px] text-slate-500">
+                  <div className="mt-1 line-clamp-1 text-[10px] text-slate-500">
                     {getTeacherPresentationClassSummaryText(item)}
                   </div>
-                  <div className="mt-2 flex items-center justify-between gap-2">
-                    <div className="truncate text-[11px] text-slate-400">
-                      {item.currentPage ? `${item.currentPage}페이지` : "페이지 기록 없음"}
-                    </div>
+                  <div className="mt-1.5 flex items-center justify-end gap-2">
                     <button
                       type="button"
                       onClick={() => onSelectClass(item.classId)}
-                      className={`inline-flex h-8 items-center gap-1 rounded-full px-3 text-xs font-semibold transition ${
+                      className={`inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[11px] font-semibold transition ${
                         isSelected
                           ? "bg-slate-900 text-white hover:bg-slate-800"
                           : "bg-blue-600 text-white hover:bg-blue-700"
@@ -122,12 +117,14 @@ const TeacherPresentationLauncher: React.FC<
           </div>
         )}
 
-        <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-[11px] text-slate-500">
-          {helperMessage}
-        </div>
+        {helperMessage ? (
+          <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-2.5 py-1.5 text-[10px] text-slate-500">
+            {helperMessage}
+          </div>
+        ) : null}
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3">
+      <div className="rounded-xl border border-slate-200 bg-white px-2.5 py-2">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
             <div className="text-[11px] font-bold tracking-[0.14em] text-slate-400">
@@ -138,7 +135,7 @@ const TeacherPresentationLauncher: React.FC<
             </div>
           </div>
           <div
-            className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold ${badgeToneClass(
+            className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${badgeToneClass(
               selectedBadge.tone,
             )}`}
           >
@@ -149,16 +146,16 @@ const TeacherPresentationLauncher: React.FC<
           </div>
         </div>
 
-        <div className="mt-1 text-[11px] text-slate-500">
+        <div className="mt-1 line-clamp-1 text-[10px] text-slate-500">
           {getTeacherPresentationSelectorSummaryText(selectedSummary)}
         </div>
 
-        <label className="mt-3 flex flex-col gap-1 text-xs font-semibold text-slate-700">
+        <label className="mt-2 flex flex-col gap-1 text-[11px] font-semibold text-slate-700">
           <span>반 바꾸기</span>
           <select
             value={selectedClassId}
             onChange={(event) => onSelectClass(event.target.value)}
-            className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
+            className="h-8 rounded-lg border border-slate-200 bg-white px-2.5 text-xs outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
           >
             {!classOptions.length && (
               <option value="preview-default">미리보기용 공용 상태</option>

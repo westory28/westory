@@ -553,6 +553,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   const isStudentSolveMode = capabilities.enableBlankSolve;
   const isAnnotationEnabled =
     capabilities.enableAnnotationTools && (annotationEnabled ?? true);
+  const isViewportInteractive =
+    isAnnotationEnabled && (mode === "teacher-present" || isStudentSolveMode);
   const pageRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const [draftRect, setDraftRect] = useState<DraftRect | null>(null);
   const [activeTeacherPage, setActiveTeacherPage] = useState<number | null>(
@@ -909,8 +911,55 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
               : PEN_CURSOR
     : undefined;
 
-  const applyStudentZoom = (nextZoom: number) => {
-    setStudentZoom(clampZoom(nextZoom));
+  const applyViewportZoom = (
+    nextZoom: number,
+    options?: {
+      page?: number;
+      anchorClientX?: number;
+      anchorClientY?: number;
+    },
+  ) => {
+    const clampedZoom = clampZoom(nextZoom);
+    const page = options?.page ?? activeTeacherPage ?? activeStudentPage ?? null;
+    if (page == null) {
+      setStudentZoom(clampedZoom);
+      return;
+    }
+    const host = scrollHostRefs.current[page];
+    if (!host) {
+      setStudentZoom(clampedZoom);
+      return;
+    }
+
+    const verticalHost =
+      host.scrollHeight > host.clientHeight ? host : findScrollableAncestor(host);
+    const rect = host.getBoundingClientRect();
+    const anchorClientX = options?.anchorClientX ?? rect.left + rect.width / 2;
+    const anchorClientY = options?.anchorClientY ?? rect.top + rect.height / 2;
+    const localX = anchorClientX - rect.left;
+    const localY = anchorClientY - rect.top;
+    const currentZoom = Math.max(studentZoom, 0.001);
+    const currentScrollTop = verticalHost?.scrollTop ?? host.scrollTop;
+    const contentAnchorX = (host.scrollLeft + localX) / currentZoom;
+    const contentAnchorY = (currentScrollTop + localY) / currentZoom;
+
+    setStudentZoom(clampedZoom);
+
+    requestAnimationFrame(() => {
+      const nextHost = scrollHostRefs.current[page];
+      if (!nextHost) return;
+      const nextVerticalHost =
+        nextHost.scrollHeight > nextHost.clientHeight
+          ? nextHost
+          : findScrollableAncestor(nextHost);
+      nextHost.scrollLeft = Math.max(0, contentAnchorX * clampedZoom - localX);
+      const nextScrollTop = Math.max(0, contentAnchorY * clampedZoom - localY);
+      if (nextVerticalHost) {
+        nextVerticalHost.scrollTop = nextScrollTop;
+      } else {
+        nextHost.scrollTop = nextScrollTop;
+      }
+    });
   };
 
   const beginMovePan = (page: number, clientX: number, clientY: number) => {
@@ -1561,7 +1610,11 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                 <div className="flex flex-col items-center gap-2 rounded-2xl border border-slate-200 bg-white px-2 py-2 shadow-sm">
                   <button
                     type="button"
-                    onClick={() => applyStudentZoom(studentZoom + 0.1)}
+                    onClick={() =>
+                      applyViewportZoom(studentZoom + 0.1, {
+                        page: pageImages[0]?.page ?? activeTeacherPage ?? activeStudentPage ?? undefined,
+                      })
+                    }
                     className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 transition hover:bg-slate-50"
                     aria-label="확대"
                   >
@@ -1569,14 +1622,22 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                   </button>
                   <button
                     type="button"
-                    onClick={() => applyStudentZoom(1)}
+                    onClick={() =>
+                      applyViewportZoom(1, {
+                        page: pageImages[0]?.page ?? activeTeacherPage ?? activeStudentPage ?? undefined,
+                      })
+                    }
                     className="min-w-[52px] rounded-full bg-slate-50 px-2 py-1 text-center text-xs font-bold text-slate-700 transition hover:bg-slate-100"
                   >
                     {zoomPercent}%
                   </button>
                   <button
                     type="button"
-                    onClick={() => applyStudentZoom(studentZoom - 0.1)}
+                    onClick={() =>
+                      applyViewportZoom(studentZoom - 0.1, {
+                        page: pageImages[0]?.page ?? activeTeacherPage ?? activeStudentPage ?? undefined,
+                      })
+                    }
                     className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 transition hover:bg-slate-50"
                     aria-label="축소"
                   >
@@ -1726,7 +1787,11 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                 <div className="flex shrink-0 items-center gap-2 rounded-full border border-slate-200 bg-white px-2 py-1.5 shadow-sm">
                   <button
                     type="button"
-                    onClick={() => applyStudentZoom(studentZoom - 0.1)}
+                    onClick={() =>
+                      applyViewportZoom(studentZoom - 0.1, {
+                        page: activeTeacherPage ?? activeStudentPage ?? pageImages[0]?.page ?? undefined,
+                      })
+                    }
                     className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 transition hover:bg-slate-50"
                     aria-label="축소"
                   >
@@ -1734,14 +1799,22 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                   </button>
                   <button
                     type="button"
-                    onClick={() => applyStudentZoom(1)}
+                    onClick={() =>
+                      applyViewportZoom(1, {
+                        page: activeTeacherPage ?? activeStudentPage ?? pageImages[0]?.page ?? undefined,
+                      })
+                    }
                     className="min-w-[58px] rounded-full bg-slate-50 px-3 py-1 text-center text-xs font-bold text-slate-700 transition hover:bg-slate-100"
                   >
                     {zoomPercent}%
                   </button>
                   <button
                     type="button"
-                    onClick={() => applyStudentZoom(studentZoom + 0.1)}
+                    onClick={() =>
+                      applyViewportZoom(studentZoom + 0.1, {
+                        page: activeTeacherPage ?? activeStudentPage ?? pageImages[0]?.page ?? undefined,
+                      })
+                    }
                     className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 transition hover:bg-slate-50"
                     aria-label="확대"
                   >
@@ -1969,24 +2042,27 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                   scrollHostRefs.current[pageImage.page] = node;
                 }}
                 className="overflow-auto rounded-2xl border border-gray-200 bg-gray-50"
-                style={
-                  isAnnotationEnabled
-                    ? { touchAction: "none", overscrollBehavior: "contain" }
-                    : undefined
-                }
-                onWheel={(event) => {
-                  if (!isStudentSolveMode || !isAnnotationEnabled) return;
-                  event.preventDefault();
-                  const delta = event.deltaY < 0 ? 0.08 : -0.08;
-                  applyStudentZoom(studentZoom + delta);
-                }}
-                onTouchStart={(event) => {
-                  if (
-                    !isStudentSolveMode ||
-                    !isAnnotationEnabled ||
-                    event.touches.length < 2
-                  )
-                    return;
+                 style={
+                   isViewportInteractive
+                     ? { touchAction: "none", overscrollBehavior: "contain" }
+                     : undefined
+                 }
+                 onWheel={(event) => {
+                   if (!isViewportInteractive) return;
+                   event.preventDefault();
+                   const delta = event.deltaY < 0 ? 0.08 : -0.08;
+                   applyViewportZoom(studentZoom + delta, {
+                     page: pageImage.page,
+                     anchorClientX: event.clientX,
+                     anchorClientY: event.clientY,
+                   });
+                 }}
+                 onTouchStart={(event) => {
+                   if (
+                     !isViewportInteractive ||
+                     event.touches.length < 2
+                   )
+                     return;
                   const distance = getTouchDistance(event.touches);
                   const center = getTouchCenter(event.touches);
                   const host = scrollHostRefs.current[pageImage.page];
@@ -2014,10 +2090,10 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     host,
                     verticalHost,
                   };
-                }}
-                onTouchMove={(event) => {
-                  if (!isStudentSolveMode || !isAnnotationEnabled) return;
-                  const gesture = touchGestureRef.current;
+                 }}
+                 onTouchMove={(event) => {
+                   if (!isViewportInteractive) return;
+                   const gesture = touchGestureRef.current;
                   if (
                     !gesture ||
                     gesture.page !== pageImage.page ||
@@ -2033,12 +2109,12 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     gesture.startZoom * (distance / gesture.startDistance),
                   );
                   const hostRect = gesture.host.getBoundingClientRect();
-                  const localCenterX = center.x - hostRect.left;
-                  const localCenterY = center.y - hostRect.top;
-                  applyStudentZoom(nextZoom);
-                  gesture.host.scrollLeft = Math.max(
-                    0,
-                    gesture.contentAnchorX * nextZoom - localCenterX,
+                   const localCenterX = center.x - hostRect.left;
+                   const localCenterY = center.y - hostRect.top;
+                   setStudentZoom(nextZoom);
+                   gesture.host.scrollLeft = Math.max(
+                     0,
+                     gesture.contentAnchorX * nextZoom - localCenterX,
                   );
                   const nextScrollTop = Math.max(
                     0,
@@ -2065,28 +2141,28 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                   ref={(node) => {
                     pageRefs.current[pageImage.page] = node;
                   }}
-                  className={`relative ${
-                    isTeacherEditMode
-                      ? `touch-none ${teacherTool === "box" ? "cursor-default" : "cursor-text"}`
-                      : isAnnotationEnabled
-                        ? `${annotationTool === "move" ? (panRef.current?.page === pageImage.page ? "cursor-grabbing" : "cursor-grab") : `touch-none ${annotationTool === "eraser" ? "cursor-not-allowed" : annotationTool === "text" ? "cursor-text" : "cursor-crosshair"}`}`
-                        : ""
-                  }`}
-                  style={{
-                    cursor: stageCursor,
-                    touchAction: isAnnotationEnabled ? "none" : undefined,
-                    width: isStudentSolveMode
-                      ? `${studentZoom * 100}%`
-                      : "100%",
-                    minWidth: isStudentSolveMode
-                      ? `${studentZoom * 100}%`
-                      : "100%",
-                    maxWidth: isStudentSolveMode ? "none" : "100%",
-                    margin:
-                      isStudentSolveMode && studentZoom <= 1
-                        ? "0 auto"
-                        : undefined,
-                  }}
+                   className={`relative ${
+                     isTeacherEditMode
+                       ? `touch-none ${teacherTool === "box" ? "cursor-default" : "cursor-text"}`
+                       : isViewportInteractive
+                         ? `${annotationTool === "move" ? (panRef.current?.page === pageImage.page ? "cursor-grabbing" : "cursor-grab") : `touch-none ${annotationTool === "eraser" ? "cursor-not-allowed" : annotationTool === "text" ? "cursor-text" : "cursor-crosshair"}`}`
+                         : ""
+                   }`}
+                   style={{
+                     cursor: stageCursor,
+                     touchAction: isViewportInteractive ? "none" : undefined,
+                     width: isViewportInteractive
+                       ? `${studentZoom * 100}%`
+                       : "100%",
+                     minWidth: isViewportInteractive
+                       ? `${studentZoom * 100}%`
+                       : "100%",
+                     maxWidth: isViewportInteractive ? "none" : "100%",
+                     margin:
+                       isViewportInteractive && studentZoom <= 1
+                         ? "0 auto"
+                         : undefined,
+                   }}
                   onDragStart={(event) => event.preventDefault()}
                   onPointerDown={(event) =>
                     handlePointerDown(pageImage.page, event)
