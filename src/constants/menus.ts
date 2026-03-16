@@ -92,11 +92,6 @@ export const MENUS: MenuConfig = {
             ],
         },
         {
-            name: '학생 관리',
-            url: '/teacher/students',
-            icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z',
-        },
-        {
             name: '포인트 관리',
             url: '/teacher/points',
             icon: 'M12 8c-2.761 0-5 1.567-5 3.5S9.239 15 12 15s5-1.567 5-3.5S14.761 8 12 8zm0 0V5m0 10v4m-7-7H3m18 0h-2',
@@ -107,6 +102,11 @@ export const MENUS: MenuConfig = {
                 { name: '상품 관리', url: '/teacher/points?tab=products' },
                 { name: '구매 요청 관리', url: '/teacher/points?tab=requests' },
             ],
+        },
+        {
+            name: '학생 관리',
+            url: '/teacher/students',
+            icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z',
         },
     ],
 };
