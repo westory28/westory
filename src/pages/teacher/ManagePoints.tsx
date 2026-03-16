@@ -335,24 +335,7 @@ const ManagePoints: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="flex overflow-x-auto rounded-t-2xl border-b border-gray-200 bg-white shadow-sm">
-                    {(Object.keys(TEACHER_POINT_TAB_LABELS) as TeacherPointTab[]).map((tab) => (
-                        <button
-                            key={tab}
-                            type="button"
-                            onClick={() => handleTabChange(tab)}
-                            className={`border-b-2 px-6 py-3 text-sm font-bold transition ${
-                                activeTab === tab
-                                    ? 'border-blue-500 bg-blue-50 text-blue-600'
-                                    : 'border-transparent text-gray-600 hover:bg-gray-50'
-                            }`}
-                        >
-                            {TEACHER_POINT_TAB_LABELS[tab]}
-                        </button>
-                    ))}
-                </div>
-
-                <div className="rounded-b-2xl border-x border-b border-gray-200 bg-white p-6 shadow-sm">
+                <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
                     {loading && (
                         <div className="py-16 text-center text-gray-400">
                             <div className="mb-2 text-2xl">
