@@ -51,6 +51,7 @@ interface LessonWorksheetStageProps {
   pendingBlank?: LessonWorksheetBlank | null;
   annotationEnabled?: boolean;
   annotationUiMode?: "always" | "onDemand";
+  annotationPersistenceKey?: string | number | null;
   annotationState?: LessonWorksheetAnnotationState;
   onAnnotationChange?: (nextState: LessonWorksheetAnnotationState) => void;
   teacherCurrentPage?: number | null;
@@ -539,6 +540,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   pendingBlank = null,
   annotationEnabled,
   annotationUiMode = "always",
+  annotationPersistenceKey = null,
   annotationState,
   onAnnotationChange,
   teacherCurrentPage,
@@ -602,9 +604,14 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   const eraserSessionRef = useRef<EraserSessionState | null>(null);
   const scrollHostRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const holdRef = useRef<PressHoldState>({ timeoutId: null, page: null });
-  const externalAnnotationKeyRef = useRef(
-    getAnnotationStateKey(annotationState || EMPTY_ANNOTATION_STATE),
+  const initialAnnotationKey = getAnnotationStateKey(
+    annotationState || EMPTY_ANNOTATION_STATE,
   );
+  const annotationPersistenceKeyRef = useRef<string | number | null>(
+    annotationPersistenceKey,
+  );
+  const localAnnotationKeyRef = useRef(initialAnnotationKey);
+  const lastAppliedExternalAnnotationKeyRef = useRef(initialAnnotationKey);
 
   const regionsByPage = useMemo(() => {
     const grouped = new Map<number, LessonWorksheetTextRegion[]>();
@@ -698,17 +705,42 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   }, [annotationTool]);
 
   useEffect(() => {
+    if (annotationPersistenceKeyRef.current === annotationPersistenceKey) return;
+    annotationPersistenceKeyRef.current = annotationPersistenceKey;
+    const nextState = annotationState || EMPTY_ANNOTATION_STATE;
+    const nextKey = getAnnotationStateKey(nextState);
+    localAnnotationKeyRef.current = nextKey;
+    lastAppliedExternalAnnotationKeyRef.current = nextKey;
+    setDraftStroke(null);
+    setDraftBox(null);
+    setTextNoteTransform(null);
+    setActiveTextNoteId(null);
+    setEditingTextNoteId(null);
+    setStrokes(nextState.strokes || []);
+    setBoxes(nextState.boxes || []);
+    setTextNotes(nextState.textNotes || []);
+  }, [annotationPersistenceKey, annotationState]);
+
+  useEffect(() => {
     if (!annotationState) return;
     const incomingKey = getAnnotationStateKey(annotationState);
-    if (incomingKey === externalAnnotationKeyRef.current) return;
-    externalAnnotationKeyRef.current = incomingKey;
+    const localKey = localAnnotationKeyRef.current;
+    if (incomingKey === localKey) {
+      lastAppliedExternalAnnotationKeyRef.current = incomingKey;
+      return;
+    }
+    if (localKey !== lastAppliedExternalAnnotationKeyRef.current) {
+      return;
+    }
+    lastAppliedExternalAnnotationKeyRef.current = incomingKey;
+    localAnnotationKeyRef.current = incomingKey;
     setStrokes(annotationState.strokes || []);
     setBoxes(annotationState.boxes || []);
     setTextNotes(annotationState.textNotes || []);
   }, [annotationState]);
 
   useEffect(() => {
-    externalAnnotationKeyRef.current = getAnnotationStateKey({
+    localAnnotationKeyRef.current = getAnnotationStateKey({
       strokes,
       boxes,
       textNotes,

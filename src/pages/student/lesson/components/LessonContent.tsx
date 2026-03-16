@@ -679,6 +679,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
                 studentAnswers={studentAnswers}
                 onStudentAnswerChange={handleWorksheetAnswerChange}
                 annotationUiMode={annotationUiMode}
+                annotationPersistenceKey={unitId || lesson.title || "lesson-preview"}
                 annotationState={annotationState}
                 onAnnotationChange={handleAnnotationChange}
               />
