@@ -100,12 +100,6 @@ export const MENUS: MenuConfig = {
             name: '포인트 관리',
             url: '/teacher/points',
             icon: 'M12 8c-2.761 0-5 1.567-5 3.5S9.239 15 12 15s5-1.567 5-3.5S14.761 8 12 8zm0 0V5m0 10v4m-7-7H3m18 0h-2',
-            children: [
-                { name: '포인트 현황', url: '/teacher/points' },
-                { name: '포인트 정책', url: '/teacher/points?tab=policy' },
-                { name: '상품 관리', url: '/teacher/points?tab=products' },
-                { name: '구매 요청 관리', url: '/teacher/points?tab=requests' },
-            ],
         },
     ],
 };
