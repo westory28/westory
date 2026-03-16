@@ -106,8 +106,8 @@ interface TouchGestureState {
     startZoom: number;
     startCenterX: number;
     startCenterY: number;
-    startScrollLeft: number;
-    startScrollTop: number;
+    contentAnchorX: number;
+    contentAnchorY: number;
     host: HTMLDivElement;
 }
 
@@ -1185,7 +1185,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
             className="pointer-events-none fixed inset-x-0 z-[95] flex justify-end md:hidden"
             style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}
         >
-            <div className="pointer-events-auto mr-4 flex flex-col items-end gap-3">
+            <div className="pointer-events-auto mr-4 flex flex-col items-end gap-3" style={{ transform: 'none' }}>
                 {toolbarSubmenu && isMobileToolMenuOpen && (
                     <div className="max-w-[calc(100vw-2.5rem)]">{renderToolbarSubmenu()}</div>
                 )}
@@ -1270,8 +1270,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         <div className="space-y-6">
             {mode === 'student' && annotationEnabled && toolbarVisible && (
                 <>
-                    <div className="sticky top-3 z-40 hidden flex-col items-center gap-2 md:flex">
-                    <div className="inline-flex max-w-[min(96vw,1180px)] flex-nowrap items-center justify-center gap-2 overflow-x-auto rounded-full border border-blue-100 bg-white/92 px-3 py-3 shadow-[0_18px_48px_rgba(37,99,235,0.16)] backdrop-blur-xl md:px-4">
+                    <div className="sticky top-3 z-40 hidden flex-col items-center gap-2 md:flex" style={{ transform: 'none' }}>
+                    <div className="inline-flex max-w-[min(96vw,1180px)] flex-nowrap items-center justify-center gap-2 overflow-x-auto rounded-full border border-blue-100 bg-white/92 px-3 py-3 shadow-[0_18px_48px_rgba(37,99,235,0.16)] backdrop-blur-xl md:px-4" style={{ transform: 'none' }}>
                         {[
                             ['move', '이동', 'fa-up-down-left-right'],
                             ['undo', '이전', 'fa-arrow-rotate-left'],
@@ -1578,8 +1578,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                     startZoom: studentZoom,
                                     startCenterX: center.x,
                                     startCenterY: center.y,
-                                    startScrollLeft: host.scrollLeft,
-                                    startScrollTop: host.scrollTop,
+                                    contentAnchorX: (host.scrollLeft + (center.x - host.getBoundingClientRect().left)) / Math.max(studentZoom, 0.001),
+                                    contentAnchorY: (host.scrollTop + (center.y - host.getBoundingClientRect().top)) / Math.max(studentZoom, 0.001),
                                     host,
                                 };
                             }}
@@ -1592,9 +1592,13 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                 if (!distance || !center) return;
                                 event.preventDefault();
                                 cancelStudentInteraction();
-                                applyStudentZoom(gesture.startZoom * (distance / gesture.startDistance));
-                                gesture.host.scrollLeft = gesture.startScrollLeft - (center.x - gesture.startCenterX);
-                                gesture.host.scrollTop = gesture.startScrollTop - (center.y - gesture.startCenterY);
+                                const nextZoom = clampZoom(gesture.startZoom * (distance / gesture.startDistance));
+                                const hostRect = gesture.host.getBoundingClientRect();
+                                const localCenterX = center.x - hostRect.left;
+                                const localCenterY = center.y - hostRect.top;
+                                applyStudentZoom(nextZoom);
+                                gesture.host.scrollLeft = Math.max(0, (gesture.contentAnchorX * nextZoom) - localCenterX);
+                                gesture.host.scrollTop = Math.max(0, (gesture.contentAnchorY * nextZoom) - localCenterY);
                             }}
                             onTouchEnd={() => {
                                 if (touchGestureRef.current?.page === pageImage.page) {
@@ -1932,7 +1936,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                     <div
                                         key={blank.id}
                                         data-blank-box="true"
-                                        className={`absolute overflow-hidden rounded-md border shadow-sm ${
+                                        className={`absolute overflow-visible rounded-md border shadow-sm ${
                                             status === 'correct'
                                                 ? 'border-emerald-500 bg-emerald-50/98'
                                                 : status === 'wrong'
@@ -1973,7 +1977,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                             }}
                                         />
                                         {!!activeValue && (
-                                            <div className={`pointer-events-none absolute right-1 top-1 z-20 rounded-full px-1.5 py-[1px] text-[9px] font-black ${
+                                            <div className={`pointer-events-none absolute -right-1.5 -top-3 z-20 rounded-full px-1.5 py-[1px] text-[9px] font-black shadow-sm ${
                                                 status === 'correct'
                                                     ? 'bg-emerald-500 text-white'
                                                     : status === 'wrong'
