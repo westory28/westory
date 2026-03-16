@@ -4,10 +4,11 @@ import { TEACHER_POINT_TAB_LABELS } from '../../constants/pointLabels';
 import { useAuth } from '../../contexts/AuthContext';
 import {
     adjustPoints,
+    getPointSchoolOptions,
     getPointPolicy,
     listPointOrders,
     listPointProducts,
-    listPointStudentTargets,
+    listPointStudentTargetsByClass,
     listPointTransactionsByUid,
     listPointWallets,
     reviewPointOrder,
@@ -24,6 +25,7 @@ import PointsOverviewTab from './components/points/PointsOverviewTab';
 
 type TeacherPointTab = keyof typeof TEACHER_POINT_TAB_LABELS;
 type OrderFilter = 'all' | PointOrderStatus;
+type SchoolOption = { value: string; label: string };
 type ProductFormState = {
     id: string;
     name: string;
@@ -69,6 +71,7 @@ const ManagePoints: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [wallets, setWallets] = useState<PointWallet[]>([]);
     const [students, setStudents] = useState<PointStudentTarget[]>([]);
+    const [grantLoading, setGrantLoading] = useState(false);
     const [selectedUid, setSelectedUid] = useState('');
     const [transactions, setTransactions] = useState<PointTransaction[]>([]);
     const [policy, setPolicy] = useState<PointPolicy>(EMPTY_POLICY);
@@ -86,6 +89,14 @@ const ManagePoints: React.FC = () => {
     const [grantAmount, setGrantAmount] = useState('');
     const [grantReason, setGrantReason] = useState('');
     const [grantFeedback, setGrantFeedback] = useState('');
+    const [grantGradeOptions, setGrantGradeOptions] = useState<SchoolOption[]>([
+        { value: '1', label: '1학년' },
+        { value: '2', label: '2학년' },
+        { value: '3', label: '3학년' },
+    ]);
+    const [grantClassOptions, setGrantClassOptions] = useState<SchoolOption[]>(
+        Array.from({ length: 12 }, (_, index) => ({ value: String(index + 1), label: `${index + 1}반` })),
+    );
     const [productForm, setProductForm] = useState<ProductFormState>(EMPTY_PRODUCT_FORM);
     const [productFeedback, setProductFeedback] = useState('');
     const [orderFilter, setOrderFilter] = useState<OrderFilter>('all');
@@ -143,30 +154,13 @@ const ManagePoints: React.FC = () => {
         [wallets],
     );
 
-    const grantGradeOptions = useMemo(
-        () => Array.from(new Set(students.map((student) => normalizeValue(student.grade)).filter(Boolean))).sort((a, b) => Number(a) - Number(b)),
-        [students],
-    );
-
-    const grantClassOptions = useMemo(
-        () => Array.from(new Set(
-            students
-                .filter((student) => grantGradeFilter === 'all' || normalizeValue(student.grade) === grantGradeFilter)
-                .map((student) => normalizeValue(student.class))
-                .filter(Boolean),
-        )).sort((a, b) => Number(a) - Number(b)),
-        [grantGradeFilter, students],
-    );
-
     const grantNumberOptions = useMemo(
         () => Array.from(new Set(
             students
-                .filter((student) => grantGradeFilter === 'all' || normalizeValue(student.grade) === grantGradeFilter)
-                .filter((student) => grantClassFilter === 'all' || normalizeValue(student.class) === grantClassFilter)
                 .map((student) => normalizeValue(student.number))
                 .filter(Boolean),
         )).sort((a, b) => Number(a) - Number(b)),
-        [grantClassFilter, grantGradeFilter, students],
+        [students],
     );
 
     const filteredGrantStudents = useMemo(() => students
@@ -213,16 +207,17 @@ const ManagePoints: React.FC = () => {
 
         setLoading(true);
         try {
-            const [nextWallets, nextStudents, nextPolicy, nextProducts, nextOrders] = await Promise.all([
+            const [nextWallets, nextSchoolOptions, nextPolicy, nextProducts, nextOrders] = await Promise.all([
                 listPointWallets(config),
-                listPointStudentTargets(),
+                getPointSchoolOptions(),
                 getPointPolicy(config),
                 listPointProducts(config, false),
                 listPointOrders(config),
             ]);
 
             setWallets(nextWallets);
-            setStudents(nextStudents);
+            setGrantGradeOptions(nextSchoolOptions.grades);
+            setGrantClassOptions(nextSchoolOptions.classes);
             setPolicy(nextPolicy);
             setProducts(nextProducts);
             setOrders(nextOrders);
@@ -231,11 +226,6 @@ const ManagePoints: React.FC = () => {
                 ? selectedUid
                 : nextWallets[0]?.uid || '';
             setSelectedUid(nextSelectedUid);
-
-            const nextGrantSelectedUid = grantSelectedUid && nextStudents.some((student) => student.uid === grantSelectedUid)
-                ? grantSelectedUid
-                : nextStudents[0]?.uid || '';
-            setGrantSelectedUid(nextGrantSelectedUid);
         } finally {
             setLoading(false);
         }
@@ -287,7 +277,7 @@ const ManagePoints: React.FC = () => {
     }, [filteredWallets, selectedUid]);
 
     useEffect(() => {
-        if (grantClassFilter !== 'all' && !grantClassOptions.includes(grantClassFilter)) setGrantClassFilter('all');
+        if (grantClassFilter !== 'all' && !grantClassOptions.some((option) => option.value === grantClassFilter)) setGrantClassFilter('all');
     }, [grantClassFilter, grantClassOptions]);
 
     useEffect(() => {
@@ -299,6 +289,37 @@ const ManagePoints: React.FC = () => {
             setGrantSelectedUid(filteredGrantStudents[0]?.uid || '');
         }
     }, [filteredGrantStudents, grantSelectedUid]);
+
+    useEffect(() => {
+        if (grantGradeFilter === 'all' || grantClassFilter === 'all') {
+            setStudents([]);
+            setGrantSelectedUid('');
+            setGrantNumberFilter('all');
+            return;
+        }
+
+        let cancelled = false;
+        const loadGrantStudents = async () => {
+            setGrantLoading(true);
+            try {
+                const nextStudents = await listPointStudentTargetsByClass(grantGradeFilter, grantClassFilter);
+                if (cancelled) return;
+                setStudents(nextStudents);
+                setGrantSelectedUid((prev) => (
+                    prev && nextStudents.some((student) => student.uid === prev)
+                        ? prev
+                        : nextStudents[0]?.uid || ''
+                ));
+            } finally {
+                if (!cancelled) setGrantLoading(false);
+            }
+        };
+
+        void loadGrantStudents();
+        return () => {
+            cancelled = true;
+        };
+    }, [grantClassFilter, grantGradeFilter]);
 
     useEffect(() => {
         setOrderMemo(selectedOrder?.memo || '');
@@ -513,12 +534,13 @@ const ManagePoints: React.FC = () => {
                             selectedUid={grantSelectedUid}
                             canManage={canManage}
                             manualAdjustEnabled={policy.manualAdjustEnabled}
+                            loading={grantLoading}
                             gradeFilter={grantGradeFilter}
                             classFilter={grantClassFilter}
                             numberFilter={grantNumberFilter}
                             nameSearch={grantNameSearch}
-                            gradeOptions={grantGradeOptions}
-                            classOptions={grantClassOptions}
+                            gradeOptions={grantGradeOptions.map((option) => option.value)}
+                            classOptions={grantClassOptions.map((option) => option.value)}
                             numberOptions={grantNumberOptions}
                             amount={grantAmount}
                             reason={grantReason}

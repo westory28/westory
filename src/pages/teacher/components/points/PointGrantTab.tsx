@@ -13,6 +13,7 @@ interface PointGrantTabProps {
     selectedUid: string;
     canManage: boolean;
     manualAdjustEnabled: boolean;
+    loading: boolean;
     gradeFilter: string;
     classFilter: string;
     numberFilter: string;
@@ -39,6 +40,7 @@ const PointGrantTab: React.FC<PointGrantTabProps> = ({
     selectedUid,
     canManage,
     manualAdjustEnabled,
+    loading,
     gradeFilter,
     classFilter,
     numberFilter,
@@ -64,7 +66,7 @@ const PointGrantTab: React.FC<PointGrantTabProps> = ({
                 <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
                     <div>
                         <h2 className="text-lg font-bold text-gray-800">포인트 부여 대상 선택</h2>
-                        <p className="mt-1 text-sm text-gray-500">포인트 이력이 없는 학생도 포함해 학년, 반, 번호, 이름으로 찾아 바로 포인트를 부여할 수 있습니다.</p>
+                        <p className="mt-1 text-sm text-gray-500">학년과 반을 먼저 선택하면 해당 학급 학생만 표시합니다. 전체 학생 명단은 한 번에 불러오지 않습니다.</p>
                     </div>
                     <div className="text-sm font-bold text-gray-500">{`검색 결과 ${students.length}명`}</div>
                 </div>
@@ -92,7 +94,13 @@ const PointGrantTab: React.FC<PointGrantTabProps> = ({
                     <div className="text-right">현재 보유</div>
                 </div>
                 <div className="divide-y divide-gray-100">
-                    {students.length === 0 && <div className="px-5 py-12 text-center text-sm text-gray-400">조건에 맞는 학생이 없습니다.</div>}
+                    {gradeFilter === 'all' || classFilter === 'all' ? (
+                        <div className="px-5 py-12 text-center text-sm text-gray-400">학년과 반을 먼저 선택해 주세요.</div>
+                    ) : loading ? (
+                        <div className="px-5 py-12 text-center text-sm text-gray-400">선택한 학급 학생을 불러오는 중입니다.</div>
+                    ) : students.length === 0 ? (
+                        <div className="px-5 py-12 text-center text-sm text-gray-400">선택한 학급에 표시할 학생이 없습니다.</div>
+                    ) : null}
                     {students.map((student) => (
                         <button
                             key={student.uid}

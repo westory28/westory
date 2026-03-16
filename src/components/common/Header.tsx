@@ -110,8 +110,6 @@ const Header: React.FC = () => {
     const desktopSubmenuParentUrls = new Set([
         '/student/lesson/note',
         '/teacher/lesson',
-        '/student/points',
-        '/teacher/points',
     ]);
 
     const isActive = (url: string) => {

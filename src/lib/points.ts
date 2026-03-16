@@ -63,6 +63,11 @@ interface SecurePurchaseRequestInput {
     requestKey: string;
 }
 
+interface SchoolOption {
+    value: string;
+    label: string;
+}
+
 const DEFAULT_POINT_POLICY: PointPolicy = {
     attendanceDaily: 5,
     attendanceMonthlyBonus: 20,
@@ -144,6 +149,40 @@ export const listPointWallets = async (config: ConfigLike) => {
     });
 };
 
+export const getPointSchoolOptions = async () => {
+    const snap = await getDoc(doc(db, 'site_settings', 'school_config'));
+    const defaultGrades: SchoolOption[] = [
+        { value: '1', label: '1학년' },
+        { value: '2', label: '2학년' },
+        { value: '3', label: '3학년' },
+    ];
+    const defaultClasses: SchoolOption[] = Array.from({ length: 12 }, (_, index) => ({
+        value: String(index + 1),
+        label: `${index + 1}반`,
+    }));
+
+    if (!snap.exists()) {
+        return { grades: defaultGrades, classes: defaultClasses };
+    }
+
+    const data = snap.data() as {
+        grades?: Array<{ value?: string; label?: string }>;
+        classes?: Array<{ value?: string; label?: string }>;
+    };
+
+    const grades = (data.grades || [])
+        .map((grade) => ({ value: String(grade?.value || '').trim(), label: String(grade?.label || '').trim() }))
+        .filter((grade) => grade.value && grade.label);
+    const classes = (data.classes || [])
+        .map((classOption) => ({ value: String(classOption?.value || '').trim(), label: String(classOption?.label || '').trim() }))
+        .filter((classOption) => classOption.value && classOption.label);
+
+    return {
+        grades: grades.length > 0 ? grades : defaultGrades,
+        classes: classes.length > 0 ? classes : defaultClasses,
+    };
+};
+
 const resolveStudentField = (data: Record<string, any>, keys: string[]) => {
     for (const key of keys) {
         const value = String(data[key] || '').trim();
@@ -184,6 +223,58 @@ export const listPointStudentTargets = async () => {
         if (gradeGap !== 0) return gradeGap;
         const classGap = Number(a.class || 0) - Number(b.class || 0);
         if (classGap !== 0) return classGap;
+        const numberGap = Number(a.number || 0) - Number(b.number || 0);
+        if (numberGap !== 0) return numberGap;
+        return String(a.studentName || '').localeCompare(String(b.studentName || ''), 'ko');
+    });
+};
+
+export const listPointStudentTargetsByClass = async (grade: string, className: string) => {
+    const normalizedGrade = String(grade || '').trim();
+    const normalizedClass = String(className || '').trim();
+    if (!normalizedGrade || !normalizedClass) return [];
+
+    const queryCombos: Array<[string, string]> = [
+        ['studentGrade', 'studentClass'],
+        ['studentGrade', 'class'],
+        ['grade', 'studentClass'],
+        ['grade', 'class'],
+    ];
+    const seen = new Set<string>();
+    const items: PointStudentTarget[] = [];
+
+    const snapshots = await Promise.all(queryCombos.map(([gradeField, classField]) => getDocs(query(
+        collection(db, 'users'),
+        where(gradeField, '==', normalizedGrade),
+        where(classField, '==', normalizedClass),
+    ))));
+
+    snapshots.forEach((snapshot) => {
+        snapshot.forEach((item) => {
+            if (seen.has(item.id)) return;
+            const data = item.data() as Record<string, any>;
+            const role = String(data.role || '').trim();
+            if (role === 'teacher') return;
+
+            const studentName = resolveStudentField(data, ['studentName', 'name', 'displayName', 'nickname', 'customName']);
+            const resolvedGrade = resolveStudentField(data, ['studentGrade', 'grade']);
+            const resolvedClass = resolveStudentField(data, ['studentClass', 'class']);
+            const number = resolveStudentField(data, ['studentNumber', 'number']);
+            if (!studentName) return;
+
+            seen.add(item.id);
+            items.push({
+                uid: item.id,
+                studentName,
+                grade: resolvedGrade,
+                class: resolvedClass,
+                number,
+                email: String(data.email || '').trim(),
+            });
+        });
+    });
+
+    return items.sort((a, b) => {
         const numberGap = Number(a.number || 0) - Number(b.number || 0);
         if (numberGap !== 0) return numberGap;
         return String(a.studentName || '').localeCompare(String(b.studentName || ''), 'ko');
