@@ -594,37 +594,27 @@ const ManagePoints: React.FC = () => {
 
     return (
         <div className="flex min-h-screen flex-col bg-gray-50">
-            <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8">
-                <div className="mb-6 rounded-2xl border border-gray-200 bg-white px-6 py-5 shadow-sm">
-                    <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-                        <div>
-                            <h1 className="text-2xl font-bold text-gray-800">포인트 관리</h1>
-                            <p className="mt-1 text-sm text-gray-500">
-                                학생별 포인트 현황, 운영 정책, 상점 상품, 구매 요청을 현재 학기 기준으로 관리합니다.
-                            </p>
-                        </div>
-                        {!canManage && (
-                            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
-                                읽기 전용 권한으로 접속 중입니다.
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                <div className="mb-4 flex flex-wrap gap-2 border-b border-gray-200">
+            <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-4 py-6">
+                <div className="mb-4 flex shrink-0 overflow-x-auto rounded-t-lg border-b border-gray-200 bg-white px-2">
                     {(Object.keys(TEACHER_POINT_TAB_LABELS) as TeacherPointTab[]).map((tab) => (
                         <button
                             key={tab}
                             type="button"
                             onClick={() => handleTabChange(tab)}
-                            className={`border-b-2 px-4 py-3 text-sm font-bold transition ${
-                                activeTab === tab ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+                            className={`border-b-2 px-6 py-3 text-sm font-bold transition whitespace-nowrap ${
+                                activeTab === tab ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-600 hover:bg-gray-50'
                             }`}
                         >
                             {TEACHER_POINT_TAB_LABELS[tab]}
                         </button>
                     ))}
                 </div>
+
+                {!canManage && (
+                    <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
+                        읽기 전용 권한으로 접속 중입니다.
+                    </div>
+                )}
 
                 <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
                     {loading && (

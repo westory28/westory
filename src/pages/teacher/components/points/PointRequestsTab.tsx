@@ -30,7 +30,7 @@ const PointRequestsTab: React.FC<PointRequestsTabProps> = ({
     onOrderMemoChange,
     onSaveOrder,
 }) => (
-    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.75fr)]">
         <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
             <div className="flex flex-col gap-3 border-b border-gray-100 bg-gray-50 p-5 md:flex-row md:items-center md:justify-between">
                 <h2 className="text-lg font-bold text-gray-800">구매 요청 목록</h2>
@@ -41,15 +41,15 @@ const PointRequestsTab: React.FC<PointRequestsTabProps> = ({
                     ))}
                 </select>
             </div>
-            <div className="overflow-x-auto">
-                <table className="w-full min-w-[720px] text-sm text-left">
+            <div className="overflow-hidden">
+                <table className="w-full table-fixed text-sm text-left">
                     <thead className="bg-gray-100 text-xs font-bold uppercase text-gray-600">
                         <tr>
-                            <th className="p-4">학생 이름</th>
-                            <th className="p-4">상품명</th>
-                            <th className="p-4 text-right">차감 포인트</th>
-                            <th className="p-4 text-right">요청 시각</th>
-                            <th className="p-4 text-center">상태</th>
+                            <th className="w-[20%] p-4">학생 이름</th>
+                            <th className="w-[28%] p-4">상품명</th>
+                            <th className="w-[16%] p-4 text-right">차감 포인트</th>
+                            <th className="w-[24%] p-4 text-right">요청 시각</th>
+                            <th className="w-[12%] p-4 text-center">상태</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 bg-white">
@@ -60,8 +60,8 @@ const PointRequestsTab: React.FC<PointRequestsTabProps> = ({
                         )}
                         {orders.map((order) => (
                             <tr key={order.id} className={`cursor-pointer transition ${selectedOrderId === order.id ? 'bg-blue-50' : 'hover:bg-gray-50'}`} onClick={() => onSelectOrder(order.id)}>
-                                <td className="p-4 font-bold text-gray-800">{order.studentName || '(이름 없음)'}</td>
-                                <td className="p-4 text-gray-700">{order.productName}</td>
+                                <td className="truncate p-4 font-bold text-gray-800">{order.studentName || '(이름 없음)'}</td>
+                                <td className="truncate p-4 text-gray-700" title={order.productName}>{order.productName}</td>
                                 <td className="p-4 text-right font-bold text-gray-800">{order.priceSnapshot}</td>
                                 <td className="p-4 text-right text-gray-500">{formatPointDateTime(order.requestedAt)}</td>
                                 <td className="p-4 text-center">
@@ -74,14 +74,14 @@ const PointRequestsTab: React.FC<PointRequestsTabProps> = ({
             </div>
         </div>
 
-        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm xl:p-6">
             {!selectedOrder ? (
                 <div className="py-16 text-center text-gray-400">왼쪽 목록에서 요청을 선택하면 상세 내용을 볼 수 있습니다.</div>
             ) : (
                 <>
                     <h3 className="text-xl font-extrabold text-gray-900">{selectedOrder.productName}</h3>
                     <div className="mt-1 text-sm text-gray-500">{selectedOrder.studentName} · {selectedOrder.uid}</div>
-                    <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div className="mt-5 grid grid-cols-1 gap-3">
                         <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="text-sm text-gray-500">차감 포인트</div><div className="mt-1 font-bold text-gray-900">{selectedOrder.priceSnapshot}점</div></div>
                         <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="text-sm text-gray-500">현재 상태</div><div className="mt-1 font-bold text-gray-900">{POINT_ORDER_STATUS_LABELS[selectedOrder.status]}</div></div>
                         <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="text-sm text-gray-500">요청 시각</div><div className="mt-1 font-bold text-gray-900">{formatPointDateTime(selectedOrder.requestedAt)}</div></div>
