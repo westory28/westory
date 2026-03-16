@@ -109,6 +109,7 @@ interface TouchGestureState {
     contentAnchorX: number;
     contentAnchorY: number;
     host: HTMLDivElement;
+    verticalHost: HTMLElement | null;
 }
 
 interface PanState {
@@ -1083,17 +1084,12 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
 
     useEffect(() => {
         if (!draftStroke) return undefined;
-        const handleWindowPointerMove = (event: PointerEvent) => {
-            updateDraftPoint(draftStroke.page, event.clientX, event.clientY);
-        };
         const handleWindowPointerUp = () => {
             finishStudentStroke();
         };
-        window.addEventListener('pointermove', handleWindowPointerMove);
         window.addEventListener('pointerup', handleWindowPointerUp);
         window.addEventListener('pointercancel', handleWindowPointerUp);
         return () => {
-            window.removeEventListener('pointermove', handleWindowPointerMove);
             window.removeEventListener('pointerup', handleWindowPointerUp);
             window.removeEventListener('pointercancel', handleWindowPointerUp);
         };
@@ -1619,17 +1615,21 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                 const distance = getTouchDistance(event.touches);
                                 const center = getTouchCenter(event.touches);
                                 const host = scrollHostRefs.current[pageImage.page];
+                                const verticalHost = host && host.scrollHeight > host.clientHeight ? host : findScrollableAncestor(host);
                                 if (!distance || !center || !host) return;
                                 cancelStudentInteraction();
+                                const hostRect = host.getBoundingClientRect();
+                                const currentVerticalScrollTop = verticalHost?.scrollTop ?? host.scrollTop;
                                 touchGestureRef.current = {
                                     page: pageImage.page,
                                     startDistance: distance,
                                     startZoom: studentZoom,
                                     startCenterX: center.x,
                                     startCenterY: center.y,
-                                    contentAnchorX: (host.scrollLeft + (center.x - host.getBoundingClientRect().left)) / Math.max(studentZoom, 0.001),
-                                    contentAnchorY: (host.scrollTop + (center.y - host.getBoundingClientRect().top)) / Math.max(studentZoom, 0.001),
+                                    contentAnchorX: (host.scrollLeft + (center.x - hostRect.left)) / Math.max(studentZoom, 0.001),
+                                    contentAnchorY: (currentVerticalScrollTop + (center.y - hostRect.top)) / Math.max(studentZoom, 0.001),
                                     host,
+                                    verticalHost,
                                 };
                             }}
                             onTouchMove={(event) => {
@@ -1647,7 +1647,12 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                 const localCenterY = center.y - hostRect.top;
                                 applyStudentZoom(nextZoom);
                                 gesture.host.scrollLeft = Math.max(0, (gesture.contentAnchorX * nextZoom) - localCenterX);
-                                gesture.host.scrollTop = Math.max(0, (gesture.contentAnchorY * nextZoom) - localCenterY);
+                                const nextScrollTop = Math.max(0, (gesture.contentAnchorY * nextZoom) - localCenterY);
+                                if (gesture.verticalHost) {
+                                    gesture.verticalHost.scrollTop = nextScrollTop;
+                                } else {
+                                    gesture.host.scrollTop = nextScrollTop;
+                                }
                             }}
                             onTouchEnd={() => {
                                 if (touchGestureRef.current?.page === pageImage.page) {
