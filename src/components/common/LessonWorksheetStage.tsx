@@ -100,9 +100,15 @@ interface TextNoteTransformState {
     initialHeightRatio: number;
 }
 
-interface PinchState {
+interface TouchGestureState {
+    page: number;
     startDistance: number;
     startZoom: number;
+    startCenterX: number;
+    startCenterY: number;
+    startScrollLeft: number;
+    startScrollTop: number;
+    host: HTMLDivElement;
 }
 
 interface PanState {
@@ -466,7 +472,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     const [textNoteTransform, setTextNoteTransform] = useState<TextNoteTransformState | null>(null);
     const [undoStack, setUndoStack] = useState<AnnotationSnapshot[]>([]);
     const [redoStack, setRedoStack] = useState<AnnotationSnapshot[]>([]);
-    const pinchRef = useRef<PinchState | null>(null);
+    const touchGestureRef = useRef<TouchGestureState | null>(null);
+    const activeTouchPointerIdsRef = useRef<Set<number>>(new Set());
     const panRef = useRef<PanState | null>(null);
     const scrollHostRefs = useRef<Record<number, HTMLDivElement | null>>({});
     const holdRef = useRef<PressHoldState>({ timeoutId: null, page: null });
@@ -608,6 +615,30 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         const first = touches[0];
         const second = touches[1];
         return Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY);
+    };
+
+    const getTouchCenter = (touches: React.TouchList) => {
+        if (touches.length < 2) return null;
+        const first = touches[0];
+        const second = touches[1];
+        return {
+            x: (first.clientX + second.clientX) / 2,
+            y: (first.clientY + second.clientY) / 2,
+        };
+    };
+
+    const clearTouchPointer = (pointerId: number) => {
+        activeTouchPointerIdsRef.current.delete(pointerId);
+        if (activeTouchPointerIdsRef.current.size < 2) {
+            touchGestureRef.current = null;
+        }
+    };
+
+    const cancelStudentInteraction = () => {
+        clearHoldTimer();
+        setDraftStroke(null);
+        setDraftBox(null);
+        panRef.current = null;
     };
 
     const resolveRatioPoint = (page: number, clientX: number, clientY: number) => {
@@ -821,6 +852,13 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         }
 
         if (!annotationEnabled) return;
+        if (event.pointerType === 'touch') {
+            activeTouchPointerIdsRef.current.add(event.pointerId);
+            if (activeTouchPointerIdsRef.current.size >= 2) {
+                cancelStudentInteraction();
+                return;
+            }
+        }
         if (annotationUiMode === 'onDemand' && !toolbarVisible) {
             setToolbarVisible(true);
             return;
@@ -1016,6 +1054,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
 
     useEffect(() => () => {
         clearHoldTimer();
+        activeTouchPointerIdsRef.current.clear();
+        touchGestureRef.current = null;
     }, []);
 
     useEffect(() => {
@@ -1526,24 +1566,40 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                 applyStudentZoom(studentZoom + delta);
                             }}
                             onTouchStart={(event) => {
-                                if (mode !== 'student' || !annotationEnabled) return;
+                                if (mode !== 'student' || !annotationEnabled || event.touches.length < 2) return;
                                 const distance = getTouchDistance(event.touches);
-                                if (!distance) return;
-                                pinchRef.current = {
+                                const center = getTouchCenter(event.touches);
+                                const host = scrollHostRefs.current[pageImage.page];
+                                if (!distance || !center || !host) return;
+                                cancelStudentInteraction();
+                                touchGestureRef.current = {
+                                    page: pageImage.page,
                                     startDistance: distance,
                                     startZoom: studentZoom,
+                                    startCenterX: center.x,
+                                    startCenterY: center.y,
+                                    startScrollLeft: host.scrollLeft,
+                                    startScrollTop: host.scrollTop,
+                                    host,
                                 };
                             }}
                             onTouchMove={(event) => {
                                 if (mode !== 'student' || !annotationEnabled) return;
-                                if (!pinchRef.current) return;
+                                const gesture = touchGestureRef.current;
+                                if (!gesture || gesture.page !== pageImage.page || event.touches.length < 2) return;
                                 const distance = getTouchDistance(event.touches);
-                                if (!distance) return;
+                                const center = getTouchCenter(event.touches);
+                                if (!distance || !center) return;
                                 event.preventDefault();
-                                applyStudentZoom(pinchRef.current.startZoom * (distance / pinchRef.current.startDistance));
+                                cancelStudentInteraction();
+                                applyStudentZoom(gesture.startZoom * (distance / gesture.startDistance));
+                                gesture.host.scrollLeft = gesture.startScrollLeft - (center.x - gesture.startCenterX);
+                                gesture.host.scrollTop = gesture.startScrollTop - (center.y - gesture.startCenterY);
                             }}
                             onTouchEnd={() => {
-                                pinchRef.current = null;
+                                if (touchGestureRef.current?.page === pageImage.page) {
+                                    touchGestureRef.current = null;
+                                }
                             }}
                         >
                             <div
@@ -1567,15 +1623,27 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                 onDragStart={(event) => event.preventDefault()}
                                 onPointerDown={(event) => handlePointerDown(pageImage.page, event)}
                                 onPointerMove={(event) => updateDraftPoint(pageImage.page, event.clientX, event.clientY)}
-                                onPointerUp={() => {
+                                onPointerUp={(event) => {
+                                    if (event.pointerType === 'touch') {
+                                        clearTouchPointer(event.pointerId);
+                                    }
                                     if (mode === 'teacher') handleTeacherPointerUp(pageImage);
                                     else finishStudentStroke();
                                 }}
-                                onPointerCancel={() => {
+                                onPointerCancel={(event) => {
+                                    if (event.pointerType === 'touch') {
+                                        clearTouchPointer(event.pointerId);
+                                    }
                                     clearHoldTimer();
                                     setDraftRect(null);
                                     setDraftStroke(null);
                                     setDraftBox(null);
+                                    panRef.current = null;
+                                }}
+                                onPointerLeave={(event) => {
+                                    if (event.pointerType === 'touch') {
+                                        clearTouchPointer(event.pointerId);
+                                    }
                                 }}
                             >
                                 <img
