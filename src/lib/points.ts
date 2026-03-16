@@ -63,6 +63,13 @@ interface SecurePurchaseRequestInput {
     requestKey: string;
 }
 
+interface UpdatePointAdjustmentInput {
+    config: ConfigLike;
+    transactionId: string;
+    action: 'update' | 'cancel';
+    nextDelta?: number;
+}
+
 interface SchoolOption {
     value: string;
     label: string;
@@ -424,6 +431,25 @@ export const reviewPointOrder = async ({ config, orderId, nextStatus, actor, mem
         transactionId: string;
         status: PointOrderStatus;
         duplicate?: boolean;
+    };
+};
+
+export const updatePointAdjustment = async ({ config, transactionId, action, nextDelta }: UpdatePointAdjustmentInput) => {
+    const { year, semester } = getYearSemester(config);
+    const callable = httpsCallable(functions, 'updateTeacherPointAdjustment');
+    const result = await callable({
+        year,
+        semester,
+        transactionId,
+        action,
+        nextDelta: action === 'update' ? Number(nextDelta || 0) : undefined,
+    });
+    return result.data as {
+        walletId: string;
+        transactionId: string;
+        balance: number;
+        delta: number;
+        cancelled: boolean;
     };
 };
 

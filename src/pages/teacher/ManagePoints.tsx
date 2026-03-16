@@ -14,6 +14,7 @@ import {
     listPointTransactionsByUid,
     listPointWallets,
     reviewPointOrder,
+    updatePointAdjustment,
     upsertPointPolicy,
     upsertPointProduct,
 } from '../../lib/points';
@@ -153,6 +154,10 @@ const ManagePoints: React.FC = () => {
     const [selectedOrderId, setSelectedOrderId] = useState('');
     const [orderMemo, setOrderMemo] = useState('');
     const [orderFeedback, setOrderFeedback] = useState('');
+    const [selectedEditableTransactionId, setSelectedEditableTransactionId] = useState('');
+    const [adjustmentDraftValue, setAdjustmentDraftValue] = useState('');
+    const [adjustmentFeedback, setAdjustmentFeedback] = useState('');
+    const [adjustmentSaving, setAdjustmentSaving] = useState(false);
 
     const actor = useMemo(() => ({
         uid: currentUser?.uid || userData?.uid || '',
@@ -249,6 +254,20 @@ const ManagePoints: React.FC = () => {
         [filteredOrders, orders, selectedOrderId],
     );
 
+    const selectedEditableTransaction = useMemo(
+        () => transactions.find((transaction) => transaction.id === selectedEditableTransactionId) || null,
+        [selectedEditableTransactionId, transactions],
+    );
+
+    const loadTransactionsForWallet = async (uid: string) => {
+        if (!uid) {
+            setTransactions([]);
+            return;
+        }
+        const nextTransactions = await listPointTransactionsByUid(config, uid, 20);
+        setTransactions(nextTransactions);
+    };
+
     const loadAll = async () => {
         if (!canRead) {
             setLoading(false);
@@ -311,6 +330,20 @@ const ManagePoints: React.FC = () => {
             cancelled = true;
         };
     }, [config, selectedUid]);
+
+    useEffect(() => {
+        if (!selectedEditableTransaction) {
+            setAdjustmentDraftValue('');
+            return;
+        }
+        setAdjustmentDraftValue(String(selectedEditableTransaction.delta || ''));
+    }, [selectedEditableTransaction]);
+
+    useEffect(() => {
+        setSelectedEditableTransactionId('');
+        setAdjustmentDraftValue('');
+        setAdjustmentFeedback('');
+    }, [selectedUid]);
 
     useEffect(() => {
         if (classFilter !== 'all' && !classOptions.includes(classFilter)) setClassFilter('all');
@@ -580,6 +613,70 @@ const ManagePoints: React.FC = () => {
         }
     };
 
+    const handleSelectEditableTransaction = (transactionId: string) => {
+        setAdjustmentFeedback('');
+        setSelectedEditableTransactionId(transactionId);
+    };
+
+    const refreshOverviewData = async () => {
+        const nextWallets = await listPointWallets(config);
+        setWallets(nextWallets);
+        if (selectedUid) {
+            await loadTransactionsForWallet(selectedUid);
+        }
+    };
+
+    const handleSubmitAdjustmentUpdate = async () => {
+        if (!selectedEditableTransaction || !selectedUid || !canManage) return;
+
+        const nextDelta = Number(adjustmentDraftValue);
+        if (!Number.isFinite(nextDelta) || nextDelta === 0) {
+            setAdjustmentFeedback('수정 포인트는 0이 아닌 숫자로 입력해 주세요.');
+            return;
+        }
+
+        try {
+            setAdjustmentSaving(true);
+            setAdjustmentFeedback('');
+            await updatePointAdjustment({
+                config,
+                transactionId: selectedEditableTransaction.id,
+                action: 'update',
+                nextDelta,
+            });
+            await refreshOverviewData();
+            setAdjustmentFeedback('포인트를 수정했습니다.');
+        } catch (error: any) {
+            console.error('Failed to update point adjustment:', error);
+            setAdjustmentFeedback(error?.message || '포인트 수정에 실패했습니다.');
+        } finally {
+            setAdjustmentSaving(false);
+        }
+    };
+
+    const handleSubmitAdjustmentCancel = async () => {
+        if (!selectedEditableTransaction || !selectedUid || !canManage) return;
+
+        try {
+            setAdjustmentSaving(true);
+            setAdjustmentFeedback('');
+            await updatePointAdjustment({
+                config,
+                transactionId: selectedEditableTransaction.id,
+                action: 'cancel',
+            });
+            await refreshOverviewData();
+            setSelectedEditableTransactionId('');
+            setAdjustmentDraftValue('');
+            setAdjustmentFeedback('포인트 부여를 취소했습니다.');
+        } catch (error: any) {
+            console.error('Failed to cancel point adjustment:', error);
+            setAdjustmentFeedback(error?.message || '포인트 부여 취소에 실패했습니다.');
+        } finally {
+            setAdjustmentSaving(false);
+        }
+    };
+
     if (!canRead) {
         return (
             <div className="flex min-h-screen flex-col bg-gray-50">
@@ -639,11 +736,20 @@ const ManagePoints: React.FC = () => {
                             classOptions={classOptions}
                             numberOptions={numberOptions}
                             transactions={transactions}
+                            canManage={canManage}
+                            selectedEditableTransactionId={selectedEditableTransactionId}
+                            adjustmentDraftValue={adjustmentDraftValue}
+                            adjustmentFeedback={adjustmentFeedback}
+                            adjustmentSaving={adjustmentSaving}
                             onGradeFilterChange={setGradeFilter}
                             onClassFilterChange={setClassFilter}
                             onNumberFilterChange={setNumberFilter}
                             onNameSearchChange={setNameSearch}
                             onSelectWallet={setSelectedUid}
+                            onSelectEditableTransaction={handleSelectEditableTransaction}
+                            onAdjustmentDraftChange={setAdjustmentDraftValue}
+                            onSubmitAdjustmentUpdate={handleSubmitAdjustmentUpdate}
+                            onSubmitAdjustmentCancel={handleSubmitAdjustmentCancel}
                         />
                     )}
 

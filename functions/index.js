@@ -195,6 +195,14 @@ const createTransactionPayload = ({
   createdAt: FieldValue.serverTimestamp(),
 });
 
+const sortPointTransactionDocsDesc = (docs) => [...docs].sort((a, b) => {
+  const aCreatedAt = a.data()?.createdAt || null;
+  const bCreatedAt = b.data()?.createdAt || null;
+  const secondGap = Number(bCreatedAt?.seconds || 0) - Number(aCreatedAt?.seconds || 0);
+  if (secondGap !== 0) return secondGap;
+  return Number(bCreatedAt?.nanoseconds || 0) - Number(aCreatedAt?.nanoseconds || 0);
+});
+
 exports.applyPointActivityReward = onCall({ region: REGION }, async (request) => {
   const { uid } = assertAllowedWestoryUser(request);
   const { year, semester } = assertYearSemester(request.data);
@@ -505,6 +513,92 @@ exports.adjustTeacherPoints = onCall({ region: REGION }, async (request) => {
       walletId: walletRef.id,
       transactionId: txRef.id,
       balance: nextBalance,
+    };
+  });
+});
+
+exports.updateTeacherPointAdjustment = onCall({ region: REGION }, async (request) => {
+  await assertPointManager(request);
+  const { year, semester } = assertYearSemester(request.data);
+  const transactionId = String(request.data?.transactionId || '').trim();
+  const action = String(request.data?.action || 'update').trim();
+  const requestedDelta = Number(request.data?.nextDelta || 0);
+
+  if (!transactionId) {
+    throw new HttpsError('invalid-argument', 'transactionId is required.');
+  }
+  if (!['update', 'cancel'].includes(action)) {
+    throw new HttpsError('invalid-argument', 'Unsupported action.');
+  }
+  if (action === 'update' && (!Number.isFinite(requestedDelta) || requestedDelta === 0)) {
+    throw new HttpsError('invalid-argument', 'nextDelta must be a non-zero finite number.');
+  }
+
+  return db.runTransaction(async (transaction) => {
+    const txRef = db.doc(`${getPointCollectionPath(year, semester, 'point_transactions')}/${transactionId}`);
+    const txSnap = await transaction.get(txRef);
+    if (!txSnap.exists) {
+      throw new HttpsError('not-found', 'Point transaction does not exist.');
+    }
+
+    const pointTransaction = { id: txSnap.id, ...(txSnap.data() || {}) };
+    if (pointTransaction.type !== 'manual_adjust') {
+      throw new HttpsError('failed-precondition', 'Only manual point adjustments can be edited.');
+    }
+
+    const targetUid = String(pointTransaction.uid || '').trim();
+    if (!targetUid) {
+      throw new HttpsError('failed-precondition', 'Transaction target uid is missing.');
+    }
+
+    const userTransactionQuery = db.collection(getPointCollectionPath(year, semester, 'point_transactions'))
+      .where('uid', '==', targetUid);
+    const userTransactionSnap = await transaction.get(userTransactionQuery);
+    const sortedDocs = sortPointTransactionDocsDesc(userTransactionSnap.docs);
+    if (!sortedDocs.length || sortedDocs[0].id !== transactionId) {
+      throw new HttpsError('failed-precondition', 'Only the latest point transaction can be edited or cancelled.');
+    }
+
+    const { profile } = await ensureStudentProfile(targetUid);
+    const { ref: walletRef, wallet } = await ensureWallet(transaction, year, semester, targetUid, profile);
+    const policy = await loadPolicy(transaction, year, semester);
+    const previousDelta = Number(pointTransaction.delta || 0);
+    const nextDelta = action === 'cancel' ? 0 : requestedDelta;
+    const deltaDiff = nextDelta - previousDelta;
+    const nextBalance = Number(wallet.balance || 0) + deltaDiff;
+
+    if (!policy.allowNegativeBalance && nextBalance < 0) {
+      throw new HttpsError('failed-precondition', 'Insufficient point balance.');
+    }
+
+    const nextLastTransactionAt = action === 'cancel'
+      ? (sortedDocs[1]?.data()?.createdAt || null)
+      : (pointTransaction.createdAt || wallet.lastTransactionAt || null);
+
+    transaction.set(walletRef, {
+      ...buildWalletBase(targetUid, profile),
+      balance: nextBalance,
+      earnedTotal: Number(wallet.earnedTotal || 0),
+      spentTotal: Number(wallet.spentTotal || 0),
+      adjustedTotal: Number(wallet.adjustedTotal || 0) + deltaDiff,
+      lastTransactionAt: nextLastTransactionAt,
+    }, { merge: true });
+
+    if (action === 'cancel') {
+      transaction.delete(txRef);
+    } else {
+      transaction.set(txRef, {
+        delta: nextDelta,
+        balanceAfter: nextBalance,
+      }, { merge: true });
+    }
+
+    return {
+      walletId: walletRef.id,
+      transactionId,
+      balance: nextBalance,
+      delta: nextDelta,
+      cancelled: action === 'cancel',
     };
   });
 });
