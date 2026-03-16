@@ -31,7 +31,7 @@ const StudentDashboard: React.FC = () => {
     const [events, setEvents] = useState<CalendarEvent[]>([]);
     const [selectedDate, setSelectedDate] = useState<string | null>(null);
     const [dailyEvents, setDailyEvents] = useState<CalendarEvent[]>([]);
-    const [welcomeText, setWelcomeText] = useState('학년/반 정보를 불러오는 중.');
+    const [welcomeText, setWelcomeText] = useState('학생 정보를 불러오는 중');
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [gradeLabelMap, setGradeLabelMap] = useState<Record<string, string>>({});
     const [classLabelMap, setClassLabelMap] = useState<Record<string, string>>({});
@@ -127,7 +127,7 @@ const StudentDashboard: React.FC = () => {
                 const attendanceTx = await getPointActivityTransaction(config, userData.uid, 'attendance', todayAttendanceSourceId);
                 if (attendanceTx) {
                     setAttendanceChecked(true);
-                    setAttendanceMessage(`오늘 출석이 완료되었습니다. +${attendanceTx.delta}포인트`);
+                    setAttendanceMessage(`오늘 출석이 이미 반영되었습니다. +${attendanceTx.delta}포인트`);
                 } else {
                     setAttendanceChecked(false);
                     setAttendanceMessage('');
@@ -215,7 +215,9 @@ const StudentDashboard: React.FC = () => {
             setSelectedDate(todayDate);
             handleDateClick(todayDate);
 
-            if (result.awarded && result.amount > 0) {
+            if (result.monthlyBonusAwarded && result.monthlyBonusAmount) {
+                setAttendanceMessage(`출석 체크 완료. +${result.amount}포인트, 월간 개근 보너스 +${result.monthlyBonusAmount}포인트`);
+            } else if (result.awarded && result.amount > 0) {
                 setAttendanceMessage(`출석 체크가 완료되었습니다. +${result.amount}포인트`);
             } else {
                 setAttendanceMessage('오늘 출석은 이미 반영되었습니다.');

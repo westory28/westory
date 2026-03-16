@@ -46,6 +46,7 @@ export interface CalendarEvent {
 
 export type PointTransactionType =
     | 'attendance'
+    | 'attendance_monthly_bonus'
     | 'quiz'
     | 'lesson'
     | 'manual_adjust'
@@ -77,12 +78,15 @@ export interface PointTransaction {
     id: string;
     uid: string;
     type: PointTransactionType;
+    activityType?: PointTransactionType;
     delta: number;
     balanceAfter: number;
     sourceId: string;
     sourceLabel: string;
     policyId: string;
     createdBy: string;
+    targetMonth?: string;
+    targetDate?: string;
     createdAt?: any;
 }
 
@@ -115,6 +119,7 @@ export interface PointOrder {
 
 export interface PointPolicy {
     attendanceDaily: number;
+    attendanceMonthlyBonus: number;
     lessonView: number;
     quizSolve: number;
     manualAdjustEnabled: boolean;

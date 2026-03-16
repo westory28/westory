@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
 import { STUDENT_POINT_TAB_LABELS } from '../../constants/pointLabels';
+import { useAuth } from '../../contexts/AuthContext';
 import {
     createSecurePurchaseRequest,
     getPointWalletByUid,
@@ -16,7 +16,7 @@ import StudentPointShopTab from './components/points/StudentPointShopTab';
 import StudentPointSummaryTab from './components/points/StudentPointSummaryTab';
 
 type StudentPointTab = keyof typeof STUDENT_POINT_TAB_LABELS;
-type HistoryFilter = 'all' | 'earned' | 'spent' | 'attendance' | 'quiz' | 'lesson' | 'manual_adjust' | 'purchase';
+type HistoryFilter = 'all' | 'earned' | 'spent' | 'attendance' | 'attendance_monthly_bonus' | 'quiz' | 'lesson' | 'manual_adjust' | 'purchase';
 type OrderFilter = 'all' | PointOrderStatus;
 
 const DEFAULT_WALLET: PointWallet = {
@@ -32,8 +32,9 @@ const DEFAULT_WALLET: PointWallet = {
     lastTransactionAt: null,
 };
 
-const isPurchaseTransaction = (type: PointTransaction['type']) =>
-    type === 'purchase_hold' || type === 'purchase_confirm' || type === 'purchase_cancel';
+const isPurchaseTransaction = (type: PointTransaction['type']) => (
+    type === 'purchase_hold' || type === 'purchase_confirm' || type === 'purchase_cancel'
+);
 
 const getTransactionCategory = (transaction: PointTransaction) => {
     if (transaction.delta > 0) return 'earned';
@@ -88,7 +89,7 @@ const Points: React.FC = () => {
             setOrders(loadedOrders);
         } catch (error) {
             console.error('Failed to load student point data:', error);
-            setErrorMessage('포인트 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
+            setErrorMessage('\uD3EC\uC778\uD2B8 \uC815\uBCF4\uB97C \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4. \uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694.');
         } finally {
             setLoading(false);
         }
@@ -104,11 +105,12 @@ const Points: React.FC = () => {
     const selectedProduct = products.find((item) => item.id === selectedProductId) || null;
 
     const filteredTransactions = useMemo(() => transactions.filter((transaction) => {
+        const typeKey = transaction.activityType || transaction.type;
         if (historyFilter === 'all') return true;
         if (historyFilter === 'earned') return getTransactionCategory(transaction) === 'earned';
         if (historyFilter === 'spent') return getTransactionCategory(transaction) === 'spent';
         if (historyFilter === 'purchase') return isPurchaseTransaction(transaction.type);
-        return transaction.type === historyFilter;
+        return transaction.type === historyFilter || typeKey === historyFilter;
     }), [historyFilter, transactions]);
 
     const filteredOrders = useMemo(() => (
@@ -143,16 +145,16 @@ const Points: React.FC = () => {
             setPurchaseMemo('');
             setSelectedProductId('');
             setPurchaseRequestKey('');
-            setPurchaseFeedback('구매 요청이 접수되었습니다.');
+            setPurchaseFeedback('\uAD6C\uB9E4 \uC694\uCCAD\uC774 \uC811\uC218\uB418\uC5C8\uC2B5\uB2C8\uB2E4.');
             setSearchParams({ tab: 'orders' });
         } catch (error: any) {
             console.error('Failed to create point purchase request:', error);
             if (error?.message?.includes('Insufficient point balance')) {
-                setPurchaseFeedback('포인트가 부족합니다.');
+                setPurchaseFeedback('\uD3EC\uC778\uD2B8\uAC00 \uBD80\uC871\uD569\uB2C8\uB2E4.');
             } else if (error?.message?.includes('out of stock')) {
-                setPurchaseFeedback('재고가 없습니다.');
+                setPurchaseFeedback('\uC7AC\uACE0\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.');
             } else {
-                setPurchaseFeedback('구매 요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.');
+                setPurchaseFeedback('\uAD6C\uB9E4 \uC694\uCCAD\uC744 \uCC98\uB9AC\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4. \uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694.');
             }
         } finally {
             setPurchaseSubmitting(false);
@@ -160,21 +162,36 @@ const Points: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 flex flex-col">
-            <main className="flex-1 mx-auto w-full max-w-6xl px-4 py-8">
+        <div className="flex min-h-screen flex-col bg-gray-50">
+            <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">
                 <div className="mb-6 rounded-2xl border border-gray-200 bg-white px-6 py-5 shadow-sm">
                     <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                         <div>
-                            <h1 className="text-2xl font-bold text-gray-800">포인트</h1>
+                            <h1 className="text-2xl font-bold text-gray-800">{'\uD3EC\uC778\uD2B8'}</h1>
                             <p className="mt-1 text-sm text-gray-500">
-                                내 포인트 현황을 확인하고, 포인트 상점 상품과 구매 진행 상태를 확인할 수 있습니다.
+                                {'\uB0B4 \uD3EC\uC778\uD2B8 \uD604\uD669\uC744 \uD655\uC778\uD558\uACE0, \uC0C1\uC810 \uC0C1\uD488\uACFC \uAD6C\uB9E4 \uC9C4\uD589 \uC0C1\uD0DC\uB97C \uD55C\uACF3\uC5D0\uC11C \uBCFC \uC218 \uC788\uC2B5\uB2C8\uB2E4.'}
                             </p>
                         </div>
                         <div className="rounded-xl bg-blue-50 px-5 py-3 text-right">
-                            <div className="text-xs font-bold text-blue-500">현재 보유 포인트</div>
+                            <div className="text-xs font-bold text-blue-500">{'\uD604\uC7AC \uBCF4\uC720 \uD3EC\uC778\uD2B8'}</div>
                             <div className="mt-1 text-3xl font-black text-blue-700">{safeWallet.balance || 0}</div>
                         </div>
                     </div>
+                </div>
+
+                <div className="mb-4 flex flex-wrap gap-2 border-b border-gray-200">
+                    {(Object.keys(STUDENT_POINT_TAB_LABELS) as StudentPointTab[]).map((tab) => (
+                        <button
+                            key={tab}
+                            type="button"
+                            onClick={() => handleTabChange(tab)}
+                            className={`border-b-2 px-4 py-3 text-sm font-bold transition ${
+                                activeTab === tab ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+                            }`}
+                        >
+                            {STUDENT_POINT_TAB_LABELS[tab]}
+                        </button>
+                    ))}
                 </div>
 
                 <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
@@ -183,7 +200,7 @@ const Points: React.FC = () => {
                             <div className="mb-2 text-2xl">
                                 <i className="fas fa-spinner fa-spin"></i>
                             </div>
-                            <p className="font-bold">포인트 정보를 불러오는 중입니다.</p>
+                            <p className="font-bold">{'\uD3EC\uC778\uD2B8 \uC815\uBCF4\uB97C \uBD88\uB7EC\uC624\uB294 \uC911\uC785\uB2C8\uB2E4.'}</p>
                         </div>
                     )}
 

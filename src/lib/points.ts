@@ -64,6 +64,7 @@ interface SecurePurchaseRequestInput {
 
 const DEFAULT_POINT_POLICY: PointPolicy = {
     attendanceDaily: 5,
+    attendanceMonthlyBonus: 20,
     lessonView: 3,
     quizSolve: 10,
     manualAdjustEnabled: false,
@@ -300,6 +301,10 @@ export const claimPointActivityReward = async ({ config, activityType, sourceId,
         awarded: boolean;
         duplicate: boolean;
         amount: number;
+        monthlyBonusAwarded?: boolean;
+        monthlyBonusAmount?: number;
+        totalAwarded?: number;
+        targetMonth?: string;
         balance: number;
         transactionId: string;
         sourceId: string;
