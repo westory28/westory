@@ -130,7 +130,7 @@ const buildReadableClassFallback = (classId?: string | null) => {
     return buildTeacherPresentationClassLabel(grade, className);
   }
 
-  return `${normalized} 반`;
+  return `${normalized}반`;
 };
 
 export const buildTeacherPresentationClassId = (
@@ -159,8 +159,8 @@ export const buildTeacherPresentationClassLabel = (
   return DEFAULT_CLASS_LABEL;
 };
 
-// 표시용 라벨은 항상 "3학년 2반" 형태를 우선합니다.
-// 저장된 classLabel, users의 grade/class, classId fallback 순서로 안정적으로 고릅니다.
+// UI 표기는 항상 "3학년 2반" 형태를 우선합니다.
+// 저장된 classLabel, users 기반 grade/class, classId fallback 순서로 정리합니다.
 export const resolveTeacherPresentationClassLabel = (params?: {
   classId?: string | null;
   classLabel?: string | null;
@@ -402,7 +402,7 @@ export const getTeacherPresentationWarningState = (params: {
   return {
     shouldWarnOnClose: true,
     shouldWarnOnClassSwitch: true,
-    closeMessage: `${baseMessage} 지금 닫으면 마지막 변경이 사라질 수 있습니다.`,
+    closeMessage: `${baseMessage} 지금 닫으면 마지막 변경이 남지 않을 수 있습니다.`,
     classSwitchMessage: `${baseMessage} 다른 반으로 바꾸기 전에 한 번 더 확인해 주세요.`,
     unloadMessage: `${params.classLabel} 판서가 아직 저장되지 않았습니다.`,
   };
@@ -504,7 +504,7 @@ export const getTeacherPresentationStatusText = (params: {
   if (state === "saved") {
     return "저장됨";
   }
-  return `${classLabel}의 마지막 판서를 이어서 사용합니다.`;
+  return "기록 없음";
 };
 
 export const getTeacherPresentationRuntimeBadge = (
@@ -553,7 +553,7 @@ export const getTeacherPresentationSelectorSummaryText = (
     return "이 반 판서가 아직 저장되지 않았습니다.";
   }
   if (summary.hasUnsavedChanges) {
-    return "이 반에 저장 전 변경이 남아 있을 수 있습니다.";
+    return "이 반에는 저장 전 변경이 남아 있을 수 있습니다.";
   }
   return getTeacherPresentationClassSummaryText(summary);
 };

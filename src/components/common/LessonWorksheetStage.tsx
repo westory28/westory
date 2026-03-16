@@ -1499,11 +1499,13 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     </>
   );
 
-  const mobileToolbarFloating =
-    isStudentSolveMode &&
+  const shouldShowAnnotationToolbar =
     isAnnotationEnabled &&
     toolbarVisible &&
-    isMobileViewport ? (
+    (mode === "teacher-present" || isStudentSolveMode);
+
+  const mobileToolbarFloating =
+    shouldShowAnnotationToolbar && isMobileViewport ? (
       <div
         className="pointer-events-none fixed inset-x-0 z-[95] flex justify-end md:hidden"
         style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" }}
@@ -1601,7 +1603,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   return (
     <>
       <div className="space-y-6">
-        {isStudentSolveMode && isAnnotationEnabled && toolbarVisible && (
+        {shouldShowAnnotationToolbar && (
           <>
             <div
               className="sticky top-3 z-40 hidden flex-col items-center gap-2 md:flex"
