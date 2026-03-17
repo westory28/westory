@@ -503,9 +503,45 @@ const ManageLesson: React.FC = () => {
             className,
           });
         });
+
+        const classesByGrade = new Map<string, Set<number>>();
+        Array.from(optionMap.values()).forEach((option) => {
+          const gradeKey = String(option.grade || "").trim();
+          const classNum = Number(String(option.className || "").trim());
+          if (!gradeKey || Number.isNaN(classNum) || classNum <= 0) return;
+          const currentSet = classesByGrade.get(gradeKey) || new Set<number>();
+          currentSet.add(classNum);
+          classesByGrade.set(gradeKey, currentSet);
+        });
+
+        classesByGrade.forEach((classSet, gradeKey) => {
+          const classNumbers = Array.from(classSet.values()).sort(
+            (left, right) => left - right,
+          );
+          const maxClass = classNumbers[classNumbers.length - 1] || 0;
+          for (let classNumber = 1; classNumber <= maxClass; classNumber += 1) {
+            const className = String(classNumber);
+            const classId = buildTeacherPresentationClassId(
+              gradeKey,
+              className,
+            );
+            if (optionMap.has(classId)) continue;
+            optionMap.set(classId, {
+              classId,
+              classLabel: buildTeacherPresentationClassLabel(
+                gradeKey,
+                className,
+              ),
+              grade: gradeKey,
+              className,
+            });
+          }
+        });
+
         const nextOptions = Array.from(optionMap.values()).sort(
           (left, right) =>
             left.grade.localeCompare(right.grade, "ko") ||
+            Number(left.className) - Number(right.className) ||
             left.className.localeCompare(right.className, "ko"),
         );
         setPresentationClassOptions(nextOptions);

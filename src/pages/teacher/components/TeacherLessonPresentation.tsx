@@ -145,7 +145,7 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
     ) => {
       setSaveState(nextState);
       if (!presentationDocPath) {
-        setStatusMessage("Save path unavailable");
+        setStatusMessage("저장 경로를 확인할 수 없습니다.");
         return;
       }
       setStatusMessage(
@@ -381,7 +381,7 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
             restoredPage,
             data.updatedAt?.toDate?.() || null,
             data.updatedAt?.toDate?.() ? "saved" : "idle",
-            `${classContext.classLabel}: restored saved state.`,
+            `${classContext.classLabel}의 마지막 저장 상태를 불러왔습니다.`,
           );
           return;
         }
@@ -412,7 +412,7 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
               restoredPage,
               legacyData.updatedAt?.toDate?.() || null,
               "dirty",
-              `${classContext.classLabel}: restored legacy note. Save to keep it on this class.`,
+              `${classContext.classLabel}에는 저장 기록이 없어 이전 개인 메모를 임시로 불러왔습니다. 저장 버튼을 눌러 현재 반에 보관하세요.`,
             );
             return;
           }
@@ -423,7 +423,7 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
           fallbackPage,
           null,
           "idle",
-          `${classContext.classLabel}: no saved note yet.`,
+          `${classContext.classLabel}에는 아직 저장된 수업 메모가 없습니다.`,
         );
       } catch (error) {
         console.error(
@@ -545,7 +545,7 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
   const handleResetAnnotations = () => {
     if (
       !window.confirm(
-        `Clear all notes for ${classContext.classLabel}? This stays local until you press Save.`,
+        `${classContext.classLabel}의 메모를 모두 지울까요? 저장 버튼을 누르기 전까지는 현재 화면에만 반영됩니다.`,
       )
     ) {
       return;
@@ -603,28 +603,27 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-3">
           <div className="min-w-0 flex-1">
             <div className="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700">
-              Teacher Presentation
+              교사용 수업 화면
             </div>
             <h1 className="mt-2 text-xl font-extrabold leading-tight text-slate-900 md:text-2xl">
-              {lesson.title || fallbackTitle || "Untitled"}
+              {lesson.title || fallbackTitle || "제목 없음"}
             </h1>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <div className="inline-flex rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-bold text-white">
-                Class {classContext.classLabel}
+                현재 반 {classContext.classLabel}
               </div>
               <div className="inline-flex rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-500 ring-1 ring-slate-200">
-                Page {currentPage ?? worksheet.pageImages[0]?.page ?? "-"}
+                현재 페이지 {currentPage ?? worksheet.pageImages[0]?.page ?? "-"}
               </div>
               {lastSavedAt && (
                 <div className="inline-flex rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-500 ring-1 ring-slate-200">
-                  Last saved {lastSavedAtLabel}
+                  마지막 저장 {lastSavedAtLabel}
                 </div>
               )}
             </div>
             <p className="mt-2 text-xs text-slate-500">
-              Private teaching notes only. Students never see this layer. Work
-              stays local until you press Save, and it is stored for the current
-              class only.
+              학생에게 보이지 않는 개인 수업 메모입니다. 변경 후 저장 버튼을 눌러
+              보관하세요. 현재 반 기준으로 저장됩니다.
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <div
@@ -662,7 +661,7 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
               }`}
             >
               <i className="fas fa-save text-xs"></i>
-              {saveState === "saving" ? "Saving" : "Save"}
+              {saveState === "saving" ? "저장 중" : "저장"}
             </button>
             <button
               type="button"
@@ -670,7 +669,7 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
               className="inline-flex h-8 items-center gap-2 rounded-full border border-rose-200 bg-white px-3 text-xs font-semibold text-rose-600 transition hover:bg-rose-50"
             >
               <i className="fas fa-eraser text-xs"></i>
-              Clear notes
+              메모 초기화
             </button>
             {fullscreenPreview && onClosePreview && (
               <button
@@ -679,7 +678,7 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
                 className="inline-flex h-8 items-center gap-2 rounded-full border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
               >
                 <i className="fas fa-times text-xs"></i>
-                Close
+                닫기
               </button>
             )}
           </div>
