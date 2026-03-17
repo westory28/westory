@@ -483,6 +483,40 @@ const ManageLesson: React.FC = () => {
       teacherPreviewClassSummaries,
     ],
   );
+  const resolvedTeacherPreviewClassLabel = useMemo(() => {
+    const matchedOption = sortedPresentationClassOptions.find(
+      (option) => option.classId === teacherPreviewClassId,
+    );
+    if (matchedOption?.classLabel) {
+      return matchedOption.classLabel;
+    }
+
+    if (selectedTeacherPreviewSummary?.classLabel) {
+      return selectedTeacherPreviewSummary.classLabel;
+    }
+
+    if (cachedTeacherPreviewSummary) {
+      const normalizedCached = normalizePresentationClassOption(
+        cachedTeacherPreviewSummary,
+      );
+      if (normalizedCached.classId === teacherPreviewClassId) {
+        return normalizedCached.classLabel;
+      }
+    }
+
+    if (!teacherPreviewClassId) return "미리보기용 공용 상태";
+
+    return resolveTeacherPresentationClassLabel({
+      classId: teacherPreviewClassId,
+      classLabel: teacherPreviewClassLabel,
+    });
+  }, [
+    cachedTeacherPreviewSummary,
+    selectedTeacherPreviewSummary,
+    sortedPresentationClassOptions,
+    teacherPreviewClassId,
+    teacherPreviewClassLabel,
+  ]);
   const recentTeacherPreviewSummary = useMemo(
     () =>
       sortTeacherPresentationClasses(
@@ -1948,7 +1982,7 @@ const ManageLesson: React.FC = () => {
               recentItems={recentTeacherPreviewItems}
               selectedSummary={selectedTeacherPreviewSummary}
               selectedClassId={teacherPreviewClassId}
-              selectedClassLabel={teacherPreviewClassLabel}
+              selectedClassLabel={resolvedTeacherPreviewClassLabel}
               classOptions={sortedPresentationClassOptions}
               optionLoadState={presentationClassOptionLoadState}
               classLoadState={teacherPreviewClassLoadState}
@@ -1961,7 +1995,7 @@ const ManageLesson: React.FC = () => {
               fallbackTitle={selectedNodeTitle}
               fullscreenPreview
               classId={teacherPreviewClassId}
-              classLabel={teacherPreviewClassLabel}
+              classLabel={resolvedTeacherPreviewClassLabel}
               onRuntimeStatusChange={handleTeacherPreviewRuntimeStatusChange}
               onClosePreview={handleTeacherPreviewClose}
             />
