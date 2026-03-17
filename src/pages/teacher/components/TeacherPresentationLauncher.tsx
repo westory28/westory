@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import {
   getTeacherPresentationRuntimeBadge,
   getTeacherPresentationSelectorSummaryText,
@@ -44,6 +44,7 @@ const TeacherPresentationLauncher: React.FC<
   onSelectClass,
 }) => {
   const selectedBadge = getTeacherPresentationRuntimeBadge(selectedSummary);
+  const selectedClassNumber = selectedSummary?.className || selectedClassId.split("-")[1] || "";
   const helperMessage =
     optionLoadState === "error" && cachedSummary
       ? "반 목록을 모두 불러오지 못해 마지막으로 사용한 반만 표시하고 있습니다."
@@ -61,7 +62,7 @@ const TeacherPresentationLauncher: React.FC<
             현재 선택 반
           </div>
           <div className="mt-1 truncate text-base font-bold text-slate-900">
-            {selectedClassLabel}
+            {selectedClassNumber ? `3학년 ${selectedClassNumber}반` : selectedClassLabel}
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <div
@@ -81,27 +82,31 @@ const TeacherPresentationLauncher: React.FC<
         </div>
       </div>
 
-      <label className="mt-3 flex flex-col gap-1 text-sm font-semibold text-slate-700">
+      <div className="mt-3 flex flex-col gap-1 text-sm font-semibold text-slate-700">
         <span>반 선택</span>
-        <select
-          value={selectedClassId}
-          onChange={(event) => onSelectClass(event.target.value)}
-          className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
-        >
-          {!classOptions.length && (
-            <option value="preview-default">미리보기용 공용 상태</option>
-          )}
-          {classOptions.map((option) => {
-            const optionBadge = getTeacherPresentationRuntimeBadge(option);
-            return (
-              <option key={option.classId} value={option.classId}>
-                {option.classLabel}
-                {optionBadge.text ? ` · ${optionBadge.text}` : ""}
-              </option>
-            );
-          })}
-        </select>
-      </label>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex h-10 min-w-[84px] items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-700">
+            3학년
+          </div>
+          <select
+            value={selectedClassId}
+            onChange={(event) => onSelectClass(event.target.value)}
+            className="h-10 w-full max-w-[180px] rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
+          >
+            {!classOptions.length && (
+              <option value="preview-default">반 선택</option>
+            )}
+            {classOptions.map((option) => {
+              const optionBadge = getTeacherPresentationRuntimeBadge(option);
+              return (
+                <option key={option.classId} value={option.classId}>
+                  {option.className}반{optionBadge.text ? ` · ${optionBadge.text}` : ""}
+                </option>
+              );
+            })}
+          </select>
+        </div>
+      </div>
 
       {helperMessage ? (
         <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs text-slate-500">

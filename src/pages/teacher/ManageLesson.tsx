@@ -167,11 +167,6 @@ type PresentationClassOption = {
   className: string;
 };
 
-type SchoolConfigOption = {
-  value: string;
-  label: string;
-};
-
 const extractPresentationClassParts = (params: {
   classId?: string | null;
   classLabel?: string | null;
@@ -224,6 +219,15 @@ const normalizePresentationClassOption = (params: {
     className,
   };
 };
+
+const FIXED_PRESENTATION_CLASS_OPTIONS: PresentationClassOption[] = Array.from(
+  { length: 10 },
+  (_, index) =>
+    normalizePresentationClassOption({
+      grade: "3",
+      className: String(index + 1),
+    }),
+);
 
 const reindexFootnotes = (footnotes: LessonFootnote[]) =>
   sortLessonFootnotes(footnotes).map((footnote, index) => ({
@@ -577,90 +581,7 @@ const ManageLesson: React.FC = () => {
     const loadPresentationClasses = async () => {
       setPresentationClassOptionLoadState("loading");
       try {
-        const [usersSnap, schoolConfigSnap] = await Promise.all([
-          getDocs(collection(db, "users")),
-          getDoc(doc(db, "site_settings", "school_config")),
-        ]);
-        const optionMap = new Map<string, PresentationClassOption>();
-        const schoolConfig = schoolConfigSnap.exists()
-          ? (schoolConfigSnap.data() as {
-              grades?: SchoolConfigOption[];
-              classes?: SchoolConfigOption[];
-            })
-          : null;
-        const configuredGrades = (schoolConfig?.grades || [])
-          .map((item) => String(item?.value || "").trim())
-          .filter(Boolean);
-        const configuredClasses = (schoolConfig?.classes || [])
-          .map((item) => String(item?.value || "").trim())
-          .filter(Boolean);
-
-        if (configuredGrades.length && configuredClasses.length) {
-          configuredGrades.forEach((grade) => {
-            configuredClasses.forEach((className) => {
-              const option = normalizePresentationClassOption({
-                grade,
-                className,
-              });
-              optionMap.set(option.classId, option);
-            });
-          });
-        }
-
-        usersSnap.docs.forEach((docSnap) => {
-          const data = docSnap.data() as Record<string, unknown>;
-          if (String(data.role || "") === "teacher") return;
-          const grade = String(data.studentGrade || data.grade || "").trim();
-          const className = String(data.studentClass || data.class || "").trim();
-          if (!grade || !className) return;
-          const option = normalizePresentationClassOption({
-            grade,
-            className,
-          });
-          if (!optionMap.has(option.classId)) {
-            optionMap.set(option.classId, option);
-          }
-        });
-
-        if (!configuredClasses.length) {
-          const classesByGrade = new Map<string, Set<number>>();
-          Array.from(optionMap.values()).forEach((option) => {
-            const gradeKey = String(option.grade || "").trim();
-            const classNum = Number(String(option.className || "").trim());
-            if (!gradeKey || Number.isNaN(classNum) || classNum <= 0) return;
-            const currentSet = classesByGrade.get(gradeKey) || new Set<number>();
-            currentSet.add(classNum);
-            classesByGrade.set(gradeKey, currentSet);
-          });
-
-          classesByGrade.forEach((classSet, gradeKey) => {
-            const classNumbers = Array.from(classSet.values()).sort(
-              (left, right) => left - right,
-            );
-            const maxClass = classNumbers[classNumbers.length - 1] || 0;
-            for (
-              let classNumber = 1;
-              classNumber <= maxClass;
-              classNumber += 1
-            ) {
-              const option = normalizePresentationClassOption({
-                grade: gradeKey,
-                className: String(classNumber),
-              });
-              if (!optionMap.has(option.classId)) {
-                optionMap.set(option.classId, option);
-              }
-            }
-          });
-        }
-
-        const nextOptions = Array.from(optionMap.values()).sort(
-          (left, right) =>
-            left.grade.localeCompare(right.grade, "ko") ||
-            Number(left.className) - Number(right.className) ||
-            left.className.localeCompare(right.className, "ko"),
-        );
-        setPresentationClassOptions(nextOptions);
+        setPresentationClassOptions(FIXED_PRESENTATION_CLASS_OPTIONS);
         setPresentationClassOptionLoadState("ready");
       } catch (error) {
         console.error(
@@ -836,17 +757,25 @@ const ManageLesson: React.FC = () => {
         ...runtimeSummary,
       },
     }));
-    setCachedTeacherPreviewSummary(runtimeSummary);
-  }, [currentUser?.uid, selectedNodeId, teacherPreviewRuntimeStatus]);
+    if (runtimeSummary.classId === teacherPreviewClassId) {
+      setCachedTeacherPreviewSummary(runtimeSummary);
+    }
+  }, [
+    currentUser?.uid,
+    selectedNodeId,
+    teacherPreviewClassId,
+    teacherPreviewRuntimeStatus,
+  ]);
   useEffect(() => {
     if (!teacherPreviewRuntimeStatus) return;
+    if (teacherPreviewRuntimeStatus.classId !== teacherPreviewClassId) return;
     setTeacherPreviewClassLabel(
       resolveTeacherPresentationClassLabel({
         classId: teacherPreviewRuntimeStatus.classId,
         classLabel: teacherPreviewRuntimeStatus.classLabel,
       }),
     );
-  }, [teacherPreviewRuntimeStatus]);
+  }, [teacherPreviewClassId, teacherPreviewRuntimeStatus]);
 
   const resetWorksheetState = (revokeExisting = false) => {
     if (revokeExisting) revokeBlobUrls(worksheetPageImages);
