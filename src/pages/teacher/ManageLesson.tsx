@@ -167,6 +167,64 @@ type PresentationClassOption = {
   className: string;
 };
 
+type SchoolConfigOption = {
+  value: string;
+  label: string;
+};
+
+const extractPresentationClassParts = (params: {
+  classId?: string | null;
+  classLabel?: string | null;
+  grade?: string | null;
+  className?: string | null;
+}) => {
+  const grade = String(params.grade || "").trim();
+  const className = String(params.className || "").trim();
+  if (grade && className) {
+    return { grade, className };
+  }
+
+  for (const candidate of [params.classLabel, params.classId]) {
+    const matches = String(candidate || "").match(/\d+/g);
+    if (matches && matches.length >= 2) {
+      return {
+        grade: matches[0],
+        className: matches[1],
+      };
+    }
+  }
+
+  return {
+    grade: "",
+    className: "",
+  };
+};
+
+const normalizePresentationClassOption = (params: {
+  classId?: string | null;
+  classLabel?: string | null;
+  grade?: string | null;
+  className?: string | null;
+}): PresentationClassOption => {
+  const { grade, className } = extractPresentationClassParts(params);
+  const classId =
+    grade && className
+      ? buildTeacherPresentationClassId(grade, className)
+      : String(params.classId || "").trim() || "preview-default";
+
+  return {
+    classId,
+    classLabel: resolveTeacherPresentationClassLabel({
+      classId,
+      classLabel: params.classLabel,
+      grade,
+      className,
+    }),
+    grade,
+    className,
+  };
+};
+
 const reindexFootnotes = (footnotes: LessonFootnote[]) =>
   sortLessonFootnotes(footnotes).map((footnote, index) => ({
     ...footnote,
@@ -342,27 +400,51 @@ const ManageLesson: React.FC = () => {
     const optionMap = new Map<string, TeacherPresentationClassSummary>();
 
     presentationClassOptions.forEach((option) => {
-      optionMap.set(option.classId, {
-        ...(teacherPreviewClassSummaries[option.classId] || {}),
-        classId: option.classId,
-        classLabel: option.classLabel,
-        grade: option.grade,
-        className: option.className,
+      const normalizedOption = normalizePresentationClassOption(option);
+      const matchedSummary =
+        Object.values(teacherPreviewClassSummaries).find(
+          (summary) =>
+            normalizePresentationClassOption(summary).classId ===
+            normalizedOption.classId,
+        ) || null;
+      optionMap.set(normalizedOption.classId, {
+        ...(matchedSummary || {}),
+        classId: normalizedOption.classId,
+        classLabel: normalizedOption.classLabel,
+        grade: normalizedOption.grade,
+        className: normalizedOption.className,
       });
     });
 
     Object.values(teacherPreviewClassSummaries).forEach((summary) => {
-      optionMap.set(summary.classId, {
+      const normalizedSummary = normalizePresentationClassOption(summary);
+      optionMap.set(normalizedSummary.classId, {
+        ...(optionMap.get(normalizedSummary.classId) || {}),
         ...summary,
+        classId: normalizedSummary.classId,
+        classLabel: normalizedSummary.classLabel,
+        grade: normalizedSummary.grade,
+        className: normalizedSummary.className,
         hasSavedState: summary.hasSavedState ?? true,
       });
     });
 
     if (cachedTeacherPreviewSummary) {
-      optionMap.set(cachedTeacherPreviewSummary.classId, {
+      const normalizedCached = normalizePresentationClassOption(
+        cachedTeacherPreviewSummary,
+      );
+      optionMap.set(normalizedCached.classId, {
         ...cachedTeacherPreviewSummary,
+        classId: normalizedCached.classId,
+        classLabel: normalizedCached.classLabel,
+        grade: normalizedCached.grade,
+        className: normalizedCached.className,
         isFallback:
-          !teacherPreviewClassSummaries[cachedTeacherPreviewSummary.classId],
+          !Object.values(teacherPreviewClassSummaries).some(
+            (summary) =>
+              normalizePresentationClassOption(summary).classId ===
+              normalizedCached.classId,
+          ),
       });
     }
 
@@ -377,11 +459,20 @@ const ManageLesson: React.FC = () => {
     teacherPreviewClassSummaries,
   ]);
   const selectedTeacherPreviewSummary = useMemo(
-    () =>
-      teacherPreviewClassSummaries[teacherPreviewClassId] ||
-      (cachedTeacherPreviewSummary?.classId === teacherPreviewClassId
+    () => {
+      const matchedSummary =
+        Object.values(teacherPreviewClassSummaries).find(
+          (summary) =>
+            normalizePresentationClassOption(summary).classId ===
+            teacherPreviewClassId,
+        ) || null;
+      if (matchedSummary) return matchedSummary;
+      if (!cachedTeacherPreviewSummary) return null;
+      return normalizePresentationClassOption(cachedTeacherPreviewSummary)
+        .classId === teacherPreviewClassId
         ? cachedTeacherPreviewSummary
-        : null),
+        : null;
+    },
     [
       cachedTeacherPreviewSummary,
       teacherPreviewClassId,
@@ -486,57 +577,82 @@ const ManageLesson: React.FC = () => {
     const loadPresentationClasses = async () => {
       setPresentationClassOptionLoadState("loading");
       try {
-        const usersSnap = await getDocs(collection(db, "users"));
+        const [usersSnap, schoolConfigSnap] = await Promise.all([
+          getDocs(collection(db, "users")),
+          getDoc(doc(db, "site_settings", "school_config")),
+        ]);
         const optionMap = new Map<string, PresentationClassOption>();
+        const schoolConfig = schoolConfigSnap.exists()
+          ? (schoolConfigSnap.data() as {
+              grades?: SchoolConfigOption[];
+              classes?: SchoolConfigOption[];
+            })
+          : null;
+        const configuredGrades = (schoolConfig?.grades || [])
+          .map((item) => String(item?.value || "").trim())
+          .filter(Boolean);
+        const configuredClasses = (schoolConfig?.classes || [])
+          .map((item) => String(item?.value || "").trim())
+          .filter(Boolean);
+
+        if (configuredGrades.length && configuredClasses.length) {
+          configuredGrades.forEach((grade) => {
+            configuredClasses.forEach((className) => {
+              const option = normalizePresentationClassOption({
+                grade,
+                className,
+              });
+              optionMap.set(option.classId, option);
+            });
+          });
+        }
+
         usersSnap.docs.forEach((docSnap) => {
           const data = docSnap.data() as Record<string, unknown>;
           if (String(data.role || "") === "teacher") return;
-          const grade = String(data.grade || "").trim();
-          const className = String(data.class || "").trim();
+          const grade = String(data.studentGrade || data.grade || "").trim();
+          const className = String(data.studentClass || data.class || "").trim();
           if (!grade || !className) return;
-          const classId = buildTeacherPresentationClassId(grade, className);
-          if (optionMap.has(classId)) return;
-          optionMap.set(classId, {
-            classId,
-            classLabel: buildTeacherPresentationClassLabel(grade, className),
+          const option = normalizePresentationClassOption({
             grade,
             className,
           });
-        });
-
-        const classesByGrade = new Map<string, Set<number>>();
-        Array.from(optionMap.values()).forEach((option) => {
-          const gradeKey = String(option.grade || "").trim();
-          const classNum = Number(String(option.className || "").trim());
-          if (!gradeKey || Number.isNaN(classNum) || classNum <= 0) return;
-          const currentSet = classesByGrade.get(gradeKey) || new Set<number>();
-          currentSet.add(classNum);
-          classesByGrade.set(gradeKey, currentSet);
-        });
-
-        classesByGrade.forEach((classSet, gradeKey) => {
-          const classNumbers = Array.from(classSet.values()).sort(
-            (left, right) => left - right,
-          );
-          const maxClass = classNumbers[classNumbers.length - 1] || 0;
-          for (let classNumber = 1; classNumber <= maxClass; classNumber += 1) {
-            const className = String(classNumber);
-            const classId = buildTeacherPresentationClassId(
-              gradeKey,
-              className,
-            );
-            if (optionMap.has(classId)) continue;
-            optionMap.set(classId, {
-              classId,
-              classLabel: buildTeacherPresentationClassLabel(
-                gradeKey,
-                className,
-              ),
-              grade: gradeKey,
-              className,
-            });
+          if (!optionMap.has(option.classId)) {
+            optionMap.set(option.classId, option);
           }
         });
+
+        if (!configuredClasses.length) {
+          const classesByGrade = new Map<string, Set<number>>();
+          Array.from(optionMap.values()).forEach((option) => {
+            const gradeKey = String(option.grade || "").trim();
+            const classNum = Number(String(option.className || "").trim());
+            if (!gradeKey || Number.isNaN(classNum) || classNum <= 0) return;
+            const currentSet = classesByGrade.get(gradeKey) || new Set<number>();
+            currentSet.add(classNum);
+            classesByGrade.set(gradeKey, currentSet);
+          });
+
+          classesByGrade.forEach((classSet, gradeKey) => {
+            const classNumbers = Array.from(classSet.values()).sort(
+              (left, right) => left - right,
+            );
+            const maxClass = classNumbers[classNumbers.length - 1] || 0;
+            for (
+              let classNumber = 1;
+              classNumber <= maxClass;
+              classNumber += 1
+            ) {
+              const option = normalizePresentationClassOption({
+                grade: gradeKey,
+                className: String(classNumber),
+              });
+              if (!optionMap.has(option.classId)) {
+                optionMap.set(option.classId, option);
+              }
+            }
+          });
+        }
 
         const nextOptions = Array.from(optionMap.values()).sort(
           (left, right) =>
