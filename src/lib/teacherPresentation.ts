@@ -159,8 +159,6 @@ export const buildTeacherPresentationClassLabel = (
   return DEFAULT_CLASS_LABEL;
 };
 
-// UI 표기는 항상 "3학년 2반" 형태를 우선합니다.
-// 저장된 classLabel, users 기반 grade/class, classId fallback 순서로 정리합니다.
 export const resolveTeacherPresentationClassLabel = (params?: {
   classId?: string | null;
   classLabel?: string | null;
@@ -396,15 +394,15 @@ export const getTeacherPresentationWarningState = (params: {
 
   const baseMessage =
     params.saveState === "error"
-      ? `${params.classLabel} 판서가 아직 저장되지 않았습니다.`
-      : `${params.classLabel} 판서에 저장 전 변경이 남아 있습니다.`;
+      ? `${params.classLabel} 저장에 실패한 메모가 있습니다.`
+      : `${params.classLabel}에 저장하지 않은 판서가 있습니다.`;
 
   return {
     shouldWarnOnClose: true,
     shouldWarnOnClassSwitch: true,
-    closeMessage: `${baseMessage} 지금 닫으면 마지막 변경이 남지 않을 수 있습니다.`,
-    classSwitchMessage: `${baseMessage} 다른 반으로 바꾸기 전에 한 번 더 확인해 주세요.`,
-    unloadMessage: `${params.classLabel} 판서가 아직 저장되지 않았습니다.`,
+    closeMessage: `${baseMessage} 닫으면 마지막 변경이 사라질 수 있습니다.`,
+    classSwitchMessage: `${baseMessage} 다른 반으로 전환하기 전에 저장 여부를 확인하세요.`,
+    unloadMessage: `${params.classLabel}에 저장하지 않은 판서가 있습니다.`,
   };
 };
 
@@ -485,9 +483,9 @@ export const getTeacherPresentationStatusText = (params: {
   classLabel: string;
   savedAt?: Date | null;
 }) => {
-  const { state, classLabel, savedAt } = params;
+  const { state, savedAt } = params;
   if (state === "restoring") {
-    return `${classLabel} 판서를 불러오는 중입니다.`;
+    return "불러오는 중";
   }
   if (state === "dirty") {
     return "변경됨";
@@ -547,13 +545,13 @@ export const getTeacherPresentationSelectorSummaryText = (
   summary?: TeacherPresentationClassSummary | null,
 ) => {
   if (!summary) {
-    return "선택한 반의 마지막 상태를 확인하는 중입니다.";
+    return "선택한 반의 저장 상태를 확인하는 중입니다.";
   }
   if (summary.runtimeState === "error") {
-    return "이 반 판서가 아직 저장되지 않았습니다.";
+    return "이 반의 저장이 실패했습니다. 다시 저장해 주세요.";
   }
   if (summary.hasUnsavedChanges) {
-    return "이 반에는 저장 전 변경이 남아 있을 수 있습니다.";
+    return "이 반에는 저장하지 않은 변경이 있습니다.";
   }
   return getTeacherPresentationClassSummaryText(summary);
 };
@@ -568,7 +566,7 @@ export const getTeacherPresentationClassSummaryText = (
     return "최근 사용 정보가 없습니다.";
   }
   if (!summary.hasSavedState) {
-    return "아직 저장된 판서가 없습니다.";
+    return "아직 저장된 수업 메모가 없습니다.";
   }
   const savedAt =
     formatTeacherPresentationSavedAt(
@@ -579,5 +577,3 @@ export const getTeacherPresentationClassSummaryText = (
     : "페이지 기록 없음";
   return `마지막 저장 ${savedAt} · ${pageText}`;
 };
-
-// TODO: 운영 확정 후 legacy teacher 문서를 학급별 문서로 옮기는 관리 스크립트 검토
