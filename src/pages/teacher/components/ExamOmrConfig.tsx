@@ -31,14 +31,14 @@ const ExamOmrConfig: React.FC = () => {
     const loadConfig = async () => {
         setLoading(true);
         try {
-            let snap = await getDoc(doc(db, getSemesterDocPath(config, 'exam_config', 'final_exam')));
-            if (!snap.exists()) {
-                snap = await getDoc(doc(db, 'exam_config', 'final_exam'));
-            }
+            const snap = await getDoc(doc(db, getSemesterDocPath(config, 'exam_config', 'final_exam')));
             if (snap.exists()) {
                 const d = snap.data();
                 setObjective(d.objective || []);
                 setSubjective(d.subjective || []);
+            } else {
+                setObjective([]);
+                setSubjective([]);
             }
         } catch (e) {
             console.error(e);
@@ -49,19 +49,11 @@ const ExamOmrConfig: React.FC = () => {
 
     const handleSave = async () => {
         try {
-            try {
-                await setDoc(doc(db, getSemesterDocPath(config, 'exam_config', 'final_exam')), {
-                    objective,
-                    subjective,
-                    updatedAt: serverTimestamp()
-                });
-            } catch {
-                await setDoc(doc(db, 'exam_config', 'final_exam'), {
-                    objective,
-                    subjective,
-                    updatedAt: serverTimestamp()
-                });
-            }
+            await setDoc(doc(db, getSemesterDocPath(config, 'exam_config', 'final_exam')), {
+                objective,
+                subjective,
+                updatedAt: serverTimestamp()
+            });
             alert("저장되었습니다.");
         } catch (e) {
             console.error(e);

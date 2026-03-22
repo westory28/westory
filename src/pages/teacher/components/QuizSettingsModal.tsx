@@ -35,10 +35,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({ isOpen, onClose, 
         setLoading(true);
         try {
             const key = `${nodeId}_${category}`;
-            let snap = await getDoc(doc(db, getSemesterDocPath(config, 'assessment_config', 'settings')));
-            if (!snap.exists()) {
-                snap = await getDoc(doc(db, 'assessment_config', 'settings'));
-            }
+            const snap = await getDoc(doc(db, getSemesterDocPath(config, 'assessment_config', 'settings')));
 
             if (snap.exists()) {
                 const data = snap.data() as Record<string, any>;
@@ -56,6 +53,8 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({ isOpen, onClose, 
                     // Default
                     setSettings({ active: false, questionCount: 10, randomOrder: true, timeLimitMinutes: 1, allowRetake: true, cooldown: 0, hintLimit: 2 });
                 }
+            } else {
+                setSettings({ active: false, questionCount: 10, randomOrder: true, timeLimitMinutes: 1, allowRetake: true, cooldown: 0, hintLimit: 2 });
             }
         } catch (e) {
             console.error(e);

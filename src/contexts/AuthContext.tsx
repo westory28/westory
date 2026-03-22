@@ -27,24 +27,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [interfaceConfig, setInterfaceConfig] = useState<InterfaceConfig | null>(null);
     const [loading, setLoading] = useState(true);
 
-    const loadConfig = async () => {
+    const loadPublicInterfaceConfig = async () => {
         try {
-            const configSnap = await getDoc(doc(db, 'site_settings', 'config'));
             const interfaceSnap = await getDoc(doc(db, 'site_settings', 'interface_config'));
-
-            if (configSnap.exists()) {
-                setConfig(configSnap.data() as SystemConfig);
-            }
             if (interfaceSnap.exists()) {
                 setInterfaceConfig(interfaceSnap.data() as InterfaceConfig);
             }
         } catch (e) {
-            console.error("Failed to load configs", e);
+            console.error("Failed to load interface config", e);
+        }
+    };
+
+    const loadAuthedSystemConfig = async (user: User | null = currentUser) => {
+        if (!user) {
+            setConfig(null);
+            return;
+        }
+
+        try {
+            const configSnap = await getDoc(doc(db, 'site_settings', 'config'));
+            if (configSnap.exists()) {
+                setConfig(configSnap.data() as SystemConfig);
+                return;
+            }
+            setConfig(null);
+        } catch (e) {
+            console.error("Failed to load system config", e);
         }
     };
 
     useEffect(() => {
-        void loadConfig();
+        void loadPublicInterfaceConfig();
     }, []);
 
     useEffect(() => {
@@ -65,6 +78,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 unsubscribeUserDoc = null;
             }
             if (user) {
+                void loadAuthedSystemConfig(user);
                 setLoading(false);
                 window.clearTimeout(loadingGuard);
                 const userRef = doc(db, 'users', user.uid);
@@ -111,6 +125,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 );
             } else {
                 setUserData(null);
+                setConfig(null);
                 setLoading(false);
                 window.clearTimeout(loadingGuard);
             }
@@ -130,9 +145,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, []);
 
     useEffect(() => {
-        if (!currentUser) return;
-        if (config && interfaceConfig) return;
-        void loadConfig();
+        if (currentUser && !config) {
+            void loadAuthedSystemConfig(currentUser);
+        }
+        if (!interfaceConfig) {
+            void loadPublicInterfaceConfig();
+        }
     }, [currentUser, config, interfaceConfig]);
 
     const logout = async () => {

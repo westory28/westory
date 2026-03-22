@@ -109,11 +109,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
         setLoading(true);
         try {
             const scopedRef = collection(db, getSemesterCollectionPath(config, 'quiz_questions'));
-            let snap = await getDocs(query(scopedRef, where('unitId', '==', node.id)));
-            if (snap.empty) {
-                const legacyRef = collection(db, 'quiz_questions');
-                snap = await getDocs(query(legacyRef, where('unitId', '==', node.id)));
-            }
+            const snap = await getDocs(query(scopedRef, where('unitId', '==', node.id)));
             const list: Question[] = [];
             snap.forEach((d) => {
                 list.push({ id: parseInt(d.id, 10), ...(d.data() as Omit<Question, 'id'>) });
@@ -402,14 +398,11 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
         if (!canEdit) return;
         if (!window.confirm('이 문제를 삭제하시겠습니까?')) return;
         try {
-            try {
-                await deleteDoc(doc(db, getSemesterDocPath(config, 'quiz_questions', String(id))));
-            } catch {
-                await deleteDoc(doc(db, 'quiz_questions', String(id)));
-            }
+            await deleteDoc(doc(db, getSemesterDocPath(config, 'quiz_questions', String(id))));
             setQuestions((prev) => prev.filter((q) => q.id !== id));
         } catch (error) {
             console.error('Delete question failed', error);
+            alert('현재 학기 문제를 삭제하지 못했습니다.');
         }
     };
 

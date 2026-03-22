@@ -151,13 +151,10 @@ const ExamGradingPlan: React.FC = () => {
     const loadPlans = async () => {
         setLoading(true);
         try {
-            let snap = await getDocs(query(
+            const snap = await getDocs(query(
                 collection(db, getSemesterCollectionPath(userConfig, 'grading_plans')),
                 orderBy('createdAt', 'desc')
             ));
-            if (snap.empty) {
-                snap = await getDocs(query(collection(db, 'grading_plans'), orderBy('createdAt', 'desc')));
-            }
             const list: GradingPlan[] = [];
             snap.forEach(d => list.push({ id: d.id, ...d.data() } as GradingPlan));
             setPlans(list);
@@ -211,11 +208,7 @@ const ExamGradingPlan: React.FC = () => {
 
         try {
             if (editId) {
-                try {
-                    await updateDoc(doc(db, getSemesterDocPath(userConfig, 'grading_plans', editId)), data);
-                } catch {
-                    await updateDoc(doc(db, 'grading_plans', editId), data);
-                }
+                await updateDoc(doc(db, getSemesterDocPath(userConfig, 'grading_plans', editId)), data);
                 alert("수정되었습니다.");
             } else {
                 await addDoc(collection(db, getSemesterCollectionPath(userConfig, 'grading_plans')), {
@@ -251,10 +244,10 @@ const ExamGradingPlan: React.FC = () => {
         if (confirm("삭제하시겠습니까?")) {
             try {
                 await deleteDoc(doc(db, getSemesterDocPath(userConfig, 'grading_plans', id)));
-            } catch {
-                await deleteDoc(doc(db, 'grading_plans', id));
+                setPlans(plans.filter(p => p.id !== id));
+            } catch (e) {
+                console.error(e);
             }
-            setPlans(plans.filter(p => p.id !== id));
         }
     };
 

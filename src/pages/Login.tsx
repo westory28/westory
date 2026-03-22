@@ -697,7 +697,11 @@ const Login: React.FC = () => {
             photoURL: user.photoURL || '',
             role: nextRole,
             staffPermissions: nextRole === 'staff' ? staffPermissions : [],
-            teacherPortalEnabled: nextRole === 'staff' ? existing?.teacherPortalEnabled === true : true,
+            teacherPortalEnabled: nextRole === 'teacher'
+                ? true
+                : nextRole === 'staff'
+                    ? existing?.teacherPortalEnabled === true
+                    : false,
             lastLogin: serverTimestamp(),
         };
 

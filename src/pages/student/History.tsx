@@ -40,13 +40,12 @@ const StudentExamAnswer: React.FC = () => {
         const loadExamConfig = async () => {
             setLoading(true);
             try {
-                let snap;
-                if (config) {
-                    snap = await getDoc(doc(db, getSemesterDocPath(config, 'exam_config', 'final_exam')));
+                if (!config) {
+                    setExamConfig(null);
+                    return;
                 }
-                if (!snap || !snap.exists()) {
-                    snap = await getDoc(doc(db, 'exam_config', 'final_exam'));
-                }
+
+                const snap = await getDoc(doc(db, getSemesterDocPath(config, 'exam_config', 'final_exam')));
 
                 if (!snap.exists()) {
                     setExamConfig(null);

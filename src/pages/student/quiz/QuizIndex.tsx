@@ -40,18 +40,12 @@ const QuizIndex: React.FC = () => {
                 }
 
                 // 2. Fetch Assessment Config
-                let settingsDoc = await getDoc(doc(db, getSemesterDocPath(config, 'assessment_config', 'settings')));
-                if (!settingsDoc.exists()) {
-                    settingsDoc = await getDoc(doc(db, 'assessment_config', 'settings'));
-                }
+                const settingsDoc = await getDoc(doc(db, getSemesterDocPath(config, 'assessment_config', 'settings')));
                 if (settingsDoc.exists()) {
                     setAssessmentConfig(settingsDoc.data() as AssessmentConfig);
                 } else {
                     // Fallback check for status doc (legacy)
-                    let statusDoc = await getDoc(doc(db, getSemesterDocPath(config, 'assessment_config', 'status')));
-                    if (!statusDoc.exists()) {
-                        statusDoc = await getDoc(doc(db, 'assessment_config', 'status'));
-                    }
+                    const statusDoc = await getDoc(doc(db, getSemesterDocPath(config, 'assessment_config', 'status')));
                     if (statusDoc.exists()) {
                         const raw = statusDoc.data();
                         const converted: AssessmentConfig = {};
@@ -59,6 +53,8 @@ const QuizIndex: React.FC = () => {
                             converted[key] = { active: raw[key] };
                         }
                         setAssessmentConfig(converted);
+                    } else {
+                        setAssessmentConfig({});
                     }
                 }
 

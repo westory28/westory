@@ -354,10 +354,7 @@ const MyPage: React.FC = () => {
         const scoreSnap = await getDoc(doc(db, 'users', user.uid, 'academic_records', scoreDocId));
         const scoreMap = scoreSnap.exists() ? (scoreSnap.data().scores || {}) : {};
 
-        let plansSnap = await getDocs(collection(db, getSemesterCollectionPath(config, 'grading_plans')));
-        if (plansSnap.empty) {
-            plansSnap = await getDocs(collection(db, 'grading_plans'));
-        }
+        const plansSnap = await getDocs(collection(db, getSemesterCollectionPath(config, 'grading_plans')));
 
         const rows: ScoreRow[] = [];
         plansSnap.forEach((planDoc) => {
@@ -423,12 +420,9 @@ const MyPage: React.FC = () => {
         if (!user || !config) return;
         setLoadingWrong(true);
 
-        let resultSnap = await getDocs(
+        const resultSnap = await getDocs(
             query(collection(db, getSemesterCollectionPath(config, 'quiz_results')), where('uid', '==', user.uid)),
         );
-        if (resultSnap.empty) {
-            resultSnap = await getDocs(query(collection(db, 'quiz_results'), where('uid', '==', user.uid)));
-        }
 
         const results: QuizResultDoc[] = [];
         resultSnap.forEach((item) => {
@@ -509,20 +503,6 @@ const MyPage: React.FC = () => {
                 });
             }),
         );
-
-        const missingIds = questionIds.filter((qid) => !questionMap[qid]);
-        if (missingIds.length) {
-            await Promise.all(
-                chunk(missingIds, 10).map(async (ids) => {
-                    const legacySnap = await getDocs(
-                        query(collection(db, 'quiz_questions'), where(documentId(), 'in', ids)),
-                    );
-                    legacySnap.forEach((questionDoc) => {
-                        questionMap[questionDoc.id] = questionDoc.data();
-                    });
-                }),
-            );
-        }
 
         const seen = new Set<string>();
         const nextWrongItems: WrongNoteItem[] = [];

@@ -389,6 +389,27 @@ const LessonContent: React.FC<LessonContentProps> = ({
   }, [interactiveFootnoteMap]);
 
   useEffect(() => {
+    const container = contentRef.current;
+    if (!container) return;
+    const triggerMap: Record<string, HTMLButtonElement[]> = {};
+    const triggers = Array.from(
+      container.querySelectorAll(".lesson-footnote-trigger"),
+    ) as HTMLButtonElement[];
+    triggers.forEach((trigger) => {
+      const anchorKey = sanitizeLessonFootnoteAnchorKey(
+        trigger.dataset.anchorKey || "",
+      );
+      if (!anchorKey) return;
+      triggerMap[anchorKey] = [...(triggerMap[anchorKey] || []), trigger];
+      const isActive = anchorKey === activeFootnoteAnchorKey;
+      const isHighlighted = anchorKey === highlightedFootnoteAnchorKey;
+      trigger.classList.toggle("is-active", isActive);
+      trigger.classList.toggle("is-highlighted", isHighlighted);
+    });
+    footnoteTriggerElementsRef.current = triggerMap;
+  }, [activeFootnoteAnchorKey, highlightedFootnoteAnchorKey, lesson]);
+
+  useEffect(() => {
     if (!canPersist || !lesson) return;
     const restoreProgress = async () => {
       const progressRef = getProgressRef();
@@ -596,27 +617,6 @@ const LessonContent: React.FC<LessonContentProps> = ({
     }
     focusTrigger(anchorKey);
   };
-
-  useEffect(() => {
-    const container = contentRef.current;
-    if (!container) return;
-    const triggerMap: Record<string, HTMLButtonElement[]> = {};
-    const triggers = Array.from(
-      container.querySelectorAll(".lesson-footnote-trigger"),
-    ) as HTMLButtonElement[];
-    triggers.forEach((trigger) => {
-      const anchorKey = sanitizeLessonFootnoteAnchorKey(
-        trigger.dataset.anchorKey || "",
-      );
-      if (!anchorKey) return;
-      triggerMap[anchorKey] = [...(triggerMap[anchorKey] || []), trigger];
-      const isActive = anchorKey === activeFootnoteAnchorKey;
-      const isHighlighted = anchorKey === highlightedFootnoteAnchorKey;
-      trigger.classList.toggle("is-active", isActive);
-      trigger.classList.toggle("is-highlighted", isHighlighted);
-    });
-    footnoteTriggerElementsRef.current = triggerMap;
-  }, [activeFootnoteAnchorKey, bodyHtml, highlightedFootnoteAnchorKey]);
 
   const content = (
     <div

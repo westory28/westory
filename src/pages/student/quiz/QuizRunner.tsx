@@ -80,10 +80,7 @@ const QuizRunner: React.FC = () => {
     const initializeQuiz = async () => {
         try {
             // 1. Fetch Config
-            let settingsDoc = await getDoc(doc(db, getSemesterDocPath(config, 'assessment_config', 'settings')));
-            if (!settingsDoc.exists()) {
-                settingsDoc = await getDoc(doc(db, 'assessment_config', 'settings'));
-            }
+            const settingsDoc = await getDoc(doc(db, getSemesterDocPath(config, 'assessment_config', 'settings')));
             const key = `${unitId}_${category}`;
             const settingsData = settingsDoc.exists() ? settingsDoc.data() : {};
             const quizConfig: QuizConfig = settingsData[key] || { active: true, timeLimit: 60, allowRetake: true, cooldown: 0, questionCount: 10, hintLimit: 2, randomOrder: true };
@@ -103,15 +100,7 @@ const QuizRunner: React.FC = () => {
                 qQuery = query(qRef, where('unitId', '==', unitId), where('category', '==', category));
             }
 
-            let qSnap = await getDocs(qQuery);
-            if (qSnap.empty) {
-                const legacyRef = collection(db, 'quiz_questions');
-                if (unitId === 'exam_prep') {
-                    qSnap = await getDocs(query(legacyRef, where('category', '==', 'exam_prep')));
-                } else {
-                    qSnap = await getDocs(query(legacyRef, where('unitId', '==', unitId), where('category', '==', category)));
-                }
-            }
+            const qSnap = await getDocs(qQuery);
             const fetchedQuestions: Question[] = [];
             qSnap.forEach(d => fetchedQuestions.push({ id: parseInt(d.id), ...d.data() } as Question));
 
@@ -126,16 +115,7 @@ const QuizRunner: React.FC = () => {
                 where('unitId', '==', unitId),
                 where('category', '==', category),
             );
-            let hSnap = await getDocs(historyQuery);
-            if (hSnap.empty) {
-                const legacyHistoryQuery = query(
-                    collection(db, 'quiz_results'),
-                    where('uid', '==', userData?.uid),
-                    where('unitId', '==', unitId),
-                    where('category', '==', category),
-                );
-                hSnap = await getDocs(legacyHistoryQuery);
-            }
+            const hSnap = await getDocs(historyQuery);
             const historyDocs = [...hSnap.docs].sort((a, b) => {
                 const aSec = a.data().timestamp?.seconds || 0;
                 const bSec = b.data().timestamp?.seconds || 0;

@@ -114,8 +114,8 @@ const Calendar = () => {
         if (!currentConfig || !userClass) return;
 
         const fetchEvents = async () => {
-            // Path: years/{year}/calendar
-            const calRef = collection(db, 'years', currentConfig.year, 'calendar');
+            // Path: years/{year}/semesters/{semester}/calendar
+            const calRef = collection(db, 'years', currentConfig.year, 'semesters', currentConfig.semester, 'calendar');
             // Fetch all events for the year (optimization: filtering by date range)
             // For simplicity in this migration, we fetch all and filter in memory or let FullCalendar handle it via event sources if strictly needed.
             // But Firestore doesn't support complex OR queries well for "common OR class".

@@ -12,15 +12,20 @@ import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore';
 import { connectFunctionsEmulator, getFunctions } from 'firebase/functions';
 import { getStorage } from 'firebase/storage';
 
+const isLocalQaHost = (host: string) => /^(localhost|127\.0\.0\.1)$/i.test(host);
+const isWestoryCustomHost = (host: string) => /^(?:www\.)?westory\.kr$/i.test(host);
+
 const configuredAuthDomain = (() => {
     const envDomain = import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "history-quiz-yongsin.firebaseapp.com";
     if (typeof window === 'undefined') return envDomain;
 
     const runtimeHost = window.location.hostname;
-    if (/^(localhost|127\.0\.0\.1)$/.test(runtimeHost)) return envDomain;
+    if (isLocalQaHost(runtimeHost)) return envDomain;
 
-    if (/^(?:www\.)?westory\.kr$/i.test(runtimeHost)) {
-        return runtimeHost;
+    // Only use the custom domain helper when we are on the real HTTPS site,
+    // not on a local hosts-file alias or a custom-port preview.
+    if (isWestoryCustomHost(runtimeHost) && window.location.protocol === 'https:' && !window.location.port) {
+        return runtimeHost.toLowerCase();
     }
 
     return envDomain;
@@ -90,7 +95,14 @@ try {
     if (isBrowser) {
         const currentHost = window.location.hostname;
         const authHost = firebaseConfig.authDomain;
-        const isLocalHost = /^(localhost|127\.0\.0\.1)$/.test(currentHost);
+        const isLocalHost = isLocalQaHost(currentHost);
+        if (isWestoryCustomHost(currentHost) && authHost !== currentHost) {
+            console.warn(
+                `[Auth] Non-production westory.kr origin detected (${window.location.origin}); ` +
+                `falling back to Firebase authDomain (${authHost}). ` +
+                'Use the real HTTPS deployment or localhost/127.0.0.1 for QA login validation.',
+            );
+        }
         if (!isLocalHost && authHost && currentHost !== authHost) {
             console.warn(
                 `[Auth] Current host (${currentHost}) differs from Firebase authDomain (${authHost}). ` +

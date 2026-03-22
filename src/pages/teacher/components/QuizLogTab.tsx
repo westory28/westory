@@ -88,16 +88,11 @@ const QuizLogTab: React.FC = () => {
     const fetchLogs = async () => {
         setLoading(true);
         try {
-            let snap = await getDocs(query(
+            const snap = await getDocs(query(
                 collection(db, getSemesterCollectionPath(config, 'quiz_results')),
                 orderBy('timestamp', 'desc'),
                 limit(100)
             ));
-
-            if (snap.empty) {
-                // Legacy fallback
-                snap = await getDocs(query(collection(db, 'quiz_submissions'), orderBy('timestamp', 'desc'), limit(100)));
-            }
 
             const rawList: Log[] = [];
             snap.forEach((doc) => {

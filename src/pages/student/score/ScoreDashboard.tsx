@@ -124,13 +124,10 @@ const ScoreDashboard: React.FC = () => {
         setLoading(true);
         try {
             // 1. Fetch Plans
-            let snap = await getDocs(query(
+            const snap = await getDocs(query(
                 collection(db, getSemesterCollectionPath({ year: config?.year || '2026', semester: targetSemester }, 'grading_plans')),
                 orderBy('createdAt', 'desc')
             ));
-            if (snap.empty) {
-                snap = await getDocs(query(collection(db, 'grading_plans'), orderBy('createdAt', 'desc')));
-            }
             const loadedPlans: GradingPlan[] = [];
             snap.forEach(d => loadedPlans.push({ id: d.id, ...d.data() } as GradingPlan));
             setPlans(loadedPlans);

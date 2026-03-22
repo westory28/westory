@@ -146,10 +146,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
 
     const loadQuestions = async () => {
         try {
-            let snap = await getDocs(collection(db, getSemesterCollectionPath(config, 'quiz_questions')));
-            if (snap.empty) {
-                snap = await getDocs(collection(db, 'quiz_questions'));
-            }
+            const snap = await getDocs(collection(db, getSemesterCollectionPath(config, 'quiz_questions')));
 
             const list: Question[] = [];
             snap.forEach((d) => {
@@ -182,10 +179,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
 
     const loadQuestionStats = async (): Promise<Record<string, QuestionStat>> => {
         try {
-            let snap = await getDocs(collection(db, getSemesterCollectionPath(config, 'quiz_results')));
-            if (snap.empty) {
-                snap = await getDocs(collection(db, 'quiz_results'));
-            }
+            const snap = await getDocs(collection(db, getSemesterCollectionPath(config, 'quiz_results')));
 
             const stats: Record<string, QuestionStat> = {};
             snap.forEach((d) => {

@@ -102,7 +102,7 @@ const ManageSchedule = () => {
 
     const fetchEvents = async () => {
         if (!currentConfig) return;
-        const calRef = collection(db, 'years', currentConfig.year, 'calendar');
+        const calRef = collection(db, 'years', currentConfig.year, 'semesters', currentConfig.semester, 'calendar');
         try {
             const snap = await getDocs(calRef);
             const loadedEvents: any[] = [];
@@ -220,7 +220,7 @@ const ManageSchedule = () => {
         }
         if (!currentConfig) return;
 
-        const calRef = collection(db, 'years', currentConfig.year, 'calendar');
+        const calRef = collection(db, 'years', currentConfig.year, 'semesters', currentConfig.semester, 'calendar');
         const finalEnd = endEnabled ? (formData.end || formData.start) : formData.start;
         const dataToSave = {
             ...formData,
@@ -248,7 +248,7 @@ const ManageSchedule = () => {
         if (!window.confirm("정말 삭제하시겠습니까?")) return;
 
         try {
-            await deleteDoc(doc(db, 'years', currentConfig.year, 'calendar', selectedEventId));
+            await deleteDoc(doc(db, 'years', currentConfig.year, 'semesters', currentConfig.semester, 'calendar', selectedEventId));
             closeModal();
             fetchEvents();
         } catch (e: any) {
