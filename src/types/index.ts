@@ -139,3 +139,72 @@ export interface PointPolicy {
     updatedAt?: any;
     updatedBy: string;
 }
+
+export type SourceArchiveAssetType =
+    | 'photo'
+    | 'map'
+    | 'document'
+    | 'poster'
+    | 'artifact'
+    | 'other';
+
+export type SourceArchiveProcessingStatus = 'processing' | 'ready' | 'failed';
+
+export interface SourceArchiveImageMeta {
+    storagePath: string;
+    thumbPath: string;
+    displayPath: string;
+    mime: string;
+    width: number;
+    height: number;
+    byteSize: number;
+    thumbWidth: number;
+    thumbHeight: number;
+    thumbByteSize: number;
+    displayWidth: number;
+    displayHeight: number;
+    displayByteSize: number;
+    originalName?: string;
+    pendingUploadToken?: string;
+    pendingUploadPath?: string;
+}
+
+export interface SourceArchiveAsset {
+    id: string;
+    title: string;
+    description: string;
+    era: string;
+    subject: string;
+    unit: string;
+    type: SourceArchiveAssetType;
+    tags: string[];
+    source: string;
+    searchText: string;
+    processingStatus: SourceArchiveProcessingStatus;
+    processingError: string;
+    image: SourceArchiveImageMeta;
+    createdAt?: any;
+    updatedAt?: any;
+    createdBy?: string;
+    updatedBy?: string;
+}
+
+export interface SourceArchiveDraft {
+    id?: string;
+    title: string;
+    description: string;
+    era: string;
+    subject: string;
+    unit: string;
+    type: SourceArchiveAssetType;
+    tags: string[];
+    source: string;
+    searchText?: string;
+    processingStatus?: SourceArchiveProcessingStatus;
+    processingError?: string;
+    image?: Partial<SourceArchiveImageMeta>;
+    createdAt?: any;
+    updatedAt?: any;
+    createdBy?: string;
+    updatedBy?: string;
+}

@@ -63,6 +63,18 @@ service cloud.firestore {
       return isAdmin() || hasPermission('point_manage');
     }
 
+    function isTeacherRole() {
+      return hasUserProfile() && userProfile().role == 'teacher';
+    }
+
+    function canReadSourceArchive() {
+      return isAdmin() || isTeacherRole() || hasPermission('lesson_read');
+    }
+
+    function canWriteSourceArchive() {
+      return isAdmin() || isTeacherRole();
+    }
+
     function canReadOwnPointResource(targetUid) {
       return canUseWestory() && targetUid == request.auth.uid;
     }
@@ -362,6 +374,11 @@ service cloud.firestore {
     match /map_resources/{docId} {
       allow read: if canUseWestory();
       allow write: if isAdmin();
+    }
+
+    match /source_archive/{docId} {
+      allow read: if canReadSourceArchive();
+      allow write: if canWriteSourceArchive();
     }
 
     match /quiz_questions/{docId} {

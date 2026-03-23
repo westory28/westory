@@ -4,6 +4,7 @@ const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 
 initializeApp();
+Object.assign(exports, require('./sourceArchiveBeta'));
 
 const db = getFirestore();
 const REGION = 'asia-northeast3';

@@ -9,6 +9,33 @@ service firebase.storage {
       return isSignedIn() && request.auth.token.email == "westoria28@gmail.com";
     }
 
+    function hasUserProfile() {
+      return isSignedIn() && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid));
+    }
+
+    function userProfile() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function hasStoragePermission(permission) {
+      return hasUserProfile()
+        && userProfile().teacherPortalEnabled == true
+        && userProfile().staffPermissions is list
+        && permission in userProfile().staffPermissions;
+    }
+
+    function isTeacherRole() {
+      return hasUserProfile() && userProfile().role == "teacher";
+    }
+
+    function canReadSourceArchive() {
+      return isAdmin() || isTeacherRole() || hasStoragePermission('lesson_read');
+    }
+
+    function canWriteSourceArchive() {
+      return isAdmin() || isTeacherRole();
+    }
+
     match /map-resources/{resourceId}/{allPaths=**} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
@@ -32,6 +59,21 @@ service firebase.storage {
     match /years/{year}/semesters/{semester}/point_products/{productId}/{allPaths=**} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
+    }
+
+    match /source-archive/{assetId}/incoming/{fileName} {
+      allow read: if false;
+      allow write: if canWriteSourceArchive()
+        && request.resource != null
+        && request.resource.contentType is string
+        && request.resource.contentType.matches('image/.*')
+        && request.resource.size < 6 * 1024 * 1024;
+    }
+
+    // Processed assets live under a revision folder. Keep incoming uploads private.
+    match /source-archive/{assetId}/{revision}/{fileName} {
+      allow read: if canReadSourceArchive() && revision != 'incoming';
+      allow write: if false;
     }
   }
 }

@@ -68,6 +68,7 @@ export const MENUS: MenuConfig = {
             children: [
                 { name: '수업 자료', url: '/teacher/lesson' },
                 { name: '지도', url: '/teacher/lesson/maps' },
+                { name: '사료 창고(Beta)', url: '/teacher/lesson/source-archive' },
                 { name: '싱크 클라우드 관리', url: '/teacher/lesson/think-cloud' },
             ],
         },
