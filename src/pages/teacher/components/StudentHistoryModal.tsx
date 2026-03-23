@@ -13,6 +13,7 @@ interface StudentHistoryModalProps {
     studentId: string;
     studentName: string;
     readScope?: HistoryReadScope;
+    launchContextLabel?: string;
 }
 
 interface QuizResultDetail {
@@ -80,14 +81,13 @@ const getTimeText = (record: QuizResultRecord): string => {
     return record.timeString || '-';
 };
 
-const sourceLabel = (source: HistorySource): string => (source === 'current' ? '현재 학기' : '이전 기록');
-
 const StudentHistoryModal: React.FC<StudentHistoryModalProps> = ({
     isOpen,
     onClose,
     studentId,
     studentName,
     readScope = 'current',
+    launchContextLabel,
 }) => {
     const { config } = useAuth();
     const allowLegacyLookup = readScope === 'history';
@@ -224,6 +224,21 @@ const StudentHistoryModal: React.FC<StudentHistoryModalProps> = ({
     };
 
     const activeSource = allowLegacyLookup ? source : 'current';
+    const scopeBadgeLabel = allowLegacyLookup
+        ? (activeSource === 'legacy' ? '이전 기록 조회 중' : '현재 학기 조회 중')
+        : '현재 학기 전용';
+    const scopeDescription = allowLegacyLookup
+        ? (activeSource === 'legacy'
+            ? `${launchContextLabel ? `${launchContextLabel}에서 연 ` : ''}기록 조회 창입니다. 이전 기록만 따로 확인하고 있습니다.`
+            : `${launchContextLabel ? `${launchContextLabel}에서 연 ` : ''}기록 조회 창입니다. 현재 학기 기록을 먼저 보여 주며, 필요하면 이전 기록으로 전환할 수 있습니다.`)
+        : `${launchContextLabel ? `${launchContextLabel}에서 연 ` : ''}현재 학기 기록만 확인합니다.`;
+    const loadingText = activeSource === 'legacy' ? '이전 기록을 불러오는 중...' : '현재 학기 기록을 불러오는 중...';
+    const emptyTitle = activeSource === 'legacy' ? '이전 기록이 없습니다.' : '현재 학기 응시 기록이 없습니다.';
+    const emptyDescription = activeSource === 'legacy'
+        ? '이 학생의 이전 학기 누적 응시 기록은 아직 확인되지 않았습니다.'
+        : allowLegacyLookup
+            ? '현재 운영 학기에는 아직 응시 기록이 없습니다. 과거 기록을 보려면 상단에서 이전 기록을 선택해 주세요.'
+            : '현재 운영 학기 기준으로 아직 응시 기록이 없습니다.';
 
     if (!isOpen) return null;
 
@@ -241,12 +256,18 @@ const StudentHistoryModal: React.FC<StudentHistoryModalProps> = ({
                 <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-4">
                     <div>
                         <h3 className="font-bold text-xl text-gray-800">{studentName} 응시 기록</h3>
-                        <p className="text-xs text-gray-500">날짜별 응시 기록을 접고 펼쳐서 오답 상세까지 확인할 수 있습니다.</p>
-                        {allowLegacyLookup ? (
-                            <p className="mt-1 text-xs text-gray-400">현재 학기 기록과 이전 기록을 구분해서 조회합니다.</p>
-                        ) : (
-                            <p className="mt-1 text-xs text-gray-400">현재 학기 기록만 표시합니다.</p>
-                        )}
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-bold text-blue-700">
+                                {scopeBadgeLabel}
+                            </span>
+                            {launchContextLabel && (
+                                <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-bold text-gray-600">
+                                    {launchContextLabel}
+                                </span>
+                            )}
+                        </div>
+                        <p className="mt-2 text-xs text-gray-500">날짜별 응시 기록을 접고 펼쳐서 오답 상세까지 확인할 수 있습니다.</p>
+                        <p className="mt-1 text-xs text-gray-400">{scopeDescription}</p>
                     </div>
                     <button type="button" onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition">
                         <i className="fas fa-times text-gray-400 hover:text-gray-600 text-xl"></i>
@@ -266,7 +287,7 @@ const StudentHistoryModal: React.FC<StudentHistoryModalProps> = ({
                                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                 }`}
                             >
-                                {sourceLabel(item)}
+                                {item === 'current' ? '현재 학기 기록' : '이전 기록'}
                             </button>
                         ))}
                     </div>
@@ -275,11 +296,12 @@ const StudentHistoryModal: React.FC<StudentHistoryModalProps> = ({
                 <div className="overflow-y-auto flex-1 pr-1">
                     {loading ? (
                         <div className="flex items-center justify-center py-16 text-gray-500">
-                            {sourceLabel(activeSource)} 기록을 불러오는 중...
+                            {loadingText}
                         </div>
                     ) : resolvedGroups.length === 0 ? (
                         <div className="text-center py-20 text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                            {activeSource === 'legacy' ? '이전 기록이 없습니다.' : '현재 학기 응시 기록이 없습니다.'}
+                            <div className="text-sm font-bold text-gray-500">{emptyTitle}</div>
+                            <p className="mx-auto mt-2 max-w-md text-xs leading-5 text-gray-400">{emptyDescription}</p>
                         </div>
                     ) : (
                         <div className="space-y-4">

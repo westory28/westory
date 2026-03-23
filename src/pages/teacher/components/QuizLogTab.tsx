@@ -297,7 +297,7 @@ const QuizLogTab: React.FC = () => {
                                                     type="button"
                                                     onClick={() => setWrongNoteTarget({ uid: log.uid || '', name: log.studentName })}
                                                     className="font-bold text-gray-800 hover:text-blue-600 transition"
-                                                    title="학생 오답 노트 보기"
+                                                    title="현재 학기 오답 노트 보기"
                                                 >
                                                     {log.studentName}
                                                 </button>
@@ -342,6 +342,7 @@ const QuizLogTab: React.FC = () => {
                 studentId={wrongNoteTarget?.uid || ''}
                 studentName={wrongNoteTarget?.name || ''}
                 readScope="current"
+                launchContextLabel="제출 현황"
             />
         </div>
     );

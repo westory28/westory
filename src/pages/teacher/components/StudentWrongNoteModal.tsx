@@ -13,6 +13,7 @@ interface StudentWrongNoteModalProps {
     studentId: string;
     studentName: string;
     readScope?: WrongNoteReadScope;
+    launchContextLabel?: string;
 }
 
 interface WrongItem {
@@ -36,14 +37,13 @@ const categoryLabel = (category?: string) => {
 const chunk = <T,>(arr: T[], size: number) =>
     Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, i * size + size));
 
-const sourceLabel = (source: WrongNoteSource): string => (source === 'current' ? '현재 학기' : '이전 기록');
-
 const StudentWrongNoteModal: React.FC<StudentWrongNoteModalProps> = ({
     isOpen,
     onClose,
     studentId,
     studentName,
     readScope = 'current',
+    launchContextLabel,
 }) => {
     const { config } = useAuth();
     const allowLegacyLookup = readScope === 'history';
@@ -177,6 +177,21 @@ const StudentWrongNoteModal: React.FC<StudentWrongNoteModalProps> = ({
     }, [wrongItems]);
 
     const activeSource = allowLegacyLookup ? source : 'current';
+    const scopeBadgeLabel = allowLegacyLookup
+        ? (activeSource === 'legacy' ? '이전 기록 조회 중' : '현재 학기 조회 중')
+        : '현재 학기 전용';
+    const scopeDescription = allowLegacyLookup
+        ? (activeSource === 'legacy'
+            ? `${launchContextLabel ? `${launchContextLabel}에서 연 ` : ''}오답 조회 창입니다. 이전 기록만 따로 확인하고 있습니다.`
+            : `${launchContextLabel ? `${launchContextLabel}에서 연 ` : ''}오답 조회 창입니다. 현재 학기 오답을 먼저 보여 주며, 필요하면 이전 기록으로 전환할 수 있습니다.`)
+        : `${launchContextLabel ? `${launchContextLabel}에서 연 ` : ''}현재 학기 오답만 확인합니다. 이전 기록은 이 화면에 섞어 보여 주지 않습니다.`;
+    const loadingText = activeSource === 'legacy' ? '이전 오답 기록을 불러오는 중...' : '현재 학기 오답 노트를 불러오는 중...';
+    const emptyTitle = activeSource === 'legacy' ? '이전 오답 기록이 없습니다.' : '현재 학기 오답 기록이 없습니다.';
+    const emptyDescription = activeSource === 'legacy'
+        ? '이 학생의 이전 학기 오답 기록은 아직 확인되지 않았습니다.'
+        : allowLegacyLookup
+            ? '현재 운영 학기에는 아직 오답 기록이 없습니다. 과거 오답은 상단에서 이전 기록을 선택해 확인해 주세요.'
+            : '현재 운영 학기 제출 기준으로 아직 오답 기록이 없습니다.';
 
     if (!isOpen) return null;
 
@@ -192,12 +207,18 @@ const StudentWrongNoteModal: React.FC<StudentWrongNoteModalProps> = ({
                 <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
                     <div>
                         <h3 className="text-lg font-bold text-gray-800">{studentName} 오답 노트</h3>
-                        <p className="text-xs text-gray-500">학생 이름을 클릭하면 오답 기록과 문항 해설을 바로 확인할 수 있습니다.</p>
-                        {allowLegacyLookup ? (
-                            <p className="mt-1 text-xs text-gray-400">현재 학기와 이전 기록을 구분해서 조회합니다.</p>
-                        ) : (
-                            <p className="mt-1 text-xs text-gray-400">현재 학기 오답만 표시합니다.</p>
-                        )}
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-bold text-blue-700">
+                                {scopeBadgeLabel}
+                            </span>
+                            {launchContextLabel && (
+                                <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-bold text-gray-600">
+                                    {launchContextLabel}
+                                </span>
+                            )}
+                        </div>
+                        <p className="mt-2 text-xs text-gray-500">학생 이름을 클릭하면 오답 기록과 문항 해설을 바로 확인할 수 있습니다.</p>
+                        <p className="mt-1 text-xs text-gray-400">{scopeDescription}</p>
                     </div>
                     <button type="button" onClick={onClose} className="p-2 rounded hover:bg-gray-100">
                         <i className="fas fa-times text-gray-400"></i>
@@ -218,7 +239,7 @@ const StudentWrongNoteModal: React.FC<StudentWrongNoteModalProps> = ({
                                             : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                     }`}
                                 >
-                                    {sourceLabel(item)}
+                                    {item === 'current' ? '현재 학기 오답' : '이전 기록'}
                                 </button>
                             ))}
                         </div>
@@ -227,10 +248,11 @@ const StudentWrongNoteModal: React.FC<StudentWrongNoteModalProps> = ({
 
                 <div className="flex-1 overflow-y-auto p-5">
                     {loading ? (
-                        <div className="text-center py-12 text-gray-500">{sourceLabel(activeSource)} 오답 노트를 불러오는 중...</div>
+                        <div className="text-center py-12 text-gray-500">{loadingText}</div>
                     ) : groupedItems.length === 0 ? (
                         <div className="text-center py-16 text-gray-400 bg-gray-50 rounded-lg border border-dashed border-gray-200">
-                            {activeSource === 'legacy' ? '이전 오답 기록이 없습니다.' : '현재 학기 오답 기록이 없습니다.'}
+                            <div className="text-sm font-bold text-gray-500">{emptyTitle}</div>
+                            <p className="mx-auto mt-2 max-w-md text-xs leading-5 text-gray-400">{emptyDescription}</p>
                         </div>
                     ) : (
                         <div className="space-y-3">

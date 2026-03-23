@@ -510,6 +510,7 @@ const StudentList: React.FC = () => {
                                                         setSelectedStudent(student);
                                                         setHistoryModalOpen(true);
                                                     }}
+                                                    title="현재 학기와 이전 응시 기록 조회"
                                                     className="flex items-center font-bold text-gray-800 hover:text-blue-600 hover:underline group-hover:text-blue-600"
                                                 >
                                                     {student.name || '(이름 없음)'}
@@ -607,6 +608,7 @@ const StudentList: React.FC = () => {
                     studentId={selectedStudent?.id || ''}
                     studentName={selectedStudent?.name || ''}
                     readScope="history"
+                    launchContextLabel="학생 목록"
                 />
 
                 <MoveClassModal
