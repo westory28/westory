@@ -7,6 +7,7 @@ import { collection, doc, getDoc, getDocs, query, where, writeBatch } from 'fire
 import { useAuth } from '../../../contexts/AuthContext';
 import { db } from '../../../lib/firebase';
 import { getScheduleCategoryMeta, useScheduleCategories } from '../../../lib/scheduleCategories';
+import { getYearSemester } from '../../../lib/semesterScope';
 import { CalendarEvent } from '../../../types';
 
 interface TeacherCalendarSectionProps {
@@ -70,6 +71,7 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
     selectedDate,
 }) => {
     const { config } = useAuth();
+    const { year, semester } = getYearSemester(config);
     const { categories } = useScheduleCategories();
     const [gradeOptions, setGradeOptions] = useState<SchoolOption[]>([
         { value: '1', label: '1학년' },
@@ -216,15 +218,18 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
         }));
     }, [currentViewType, events, visibleRange.end, visibleRange.start]);
 
-    const loadHolidaySource = async (): Promise<HolidayItem[]> => {
-        const byConfig = await getDoc(doc(db, 'site_settings', 'holidays_2026'));
+    const loadHolidaySource = async (targetYear: string): Promise<HolidayItem[]> => {
+        const byConfig = await getDoc(doc(db, 'site_settings', `holidays_${targetYear}`));
         if (byConfig.exists()) {
             const data = byConfig.data() as { items?: HolidayItem[] };
             if (Array.isArray(data.items) && data.items.length > 0) {
                 return data.items.map((it) => ({ ...it, eventType: 'holiday' }));
             }
         }
-        return DEFAULT_2026_HOLIDAYS;
+        if (targetYear === '2026') {
+            return DEFAULT_2026_HOLIDAYS;
+        }
+        throw new Error(`${targetYear} 공휴일 데이터가 준비되지 않았습니다.`);
     };
 
     const populateHolidays = async () => {
@@ -232,11 +237,11 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
         if (!confirm('기존 공휴일을 초기화하고 다시 불러오시겠습니까?')) return;
 
         try {
-            const path = `years/${config.year}/semesters/${config.semester}/calendar`;
+            const path = `years/${year}/semesters/${semester}/calendar`;
             const holidayQuery = query(collection(db, path), where('eventType', '==', 'holiday'));
             const holidaySnap = await getDocs(holidayQuery);
 
-            const holidays = await loadHolidaySource();
+            const holidays = await loadHolidaySource(year);
             const batch = writeBatch(db);
 
             holidaySnap.forEach((item) => batch.delete(item.ref));
