@@ -138,17 +138,6 @@ const ManageSourceArchive: React.FC = () => {
   }, [canRead]);
 
   useEffect(() => {
-    if (panelMode === 'create') return;
-    if (!assets.length) {
-      setSelectedId('');
-      return;
-    }
-    if (!selectedId || !assets.some((item) => item.id === selectedId)) {
-      setSelectedId(assets[0].id);
-    }
-  }, [assets, panelMode, selectedId]);
-
-  useEffect(() => {
     setVisibleCount(SOURCE_ARCHIVE_RENDER_PAGE_SIZE);
   }, [deferredSearchText, statusFilter, tagFilter, typeFilter]);
 
@@ -181,6 +170,17 @@ const ManageSourceArchive: React.FC = () => {
     () => filteredAssets.slice(0, visibleCount),
     [filteredAssets, visibleCount],
   );
+
+  useEffect(() => {
+    if (panelMode !== 'view') return;
+    if (!filteredAssets.length) {
+      setSelectedId('');
+      return;
+    }
+    if (!selectedId || !filteredAssets.some((item) => item.id === selectedId)) {
+      setSelectedId(filteredAssets[0].id);
+    }
+  }, [filteredAssets, panelMode, selectedId]);
 
   const resetEditor = () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -327,42 +327,54 @@ const ManageSourceArchive: React.FC = () => {
 
       <div className="mt-6 rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
         <div className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))]">
-          <input
-            value={searchText}
-            onChange={(event) => setSearchText(event.target.value)}
-            placeholder={'\uC81C\uBAA9, \uC124\uBA85, \uD0DC\uADF8, \uCD9C\uCC98 \uAC80\uC0C9'}
-            className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
-          />
-          <select
-            value={typeFilter}
-            onChange={(event) => setTypeFilter(event.target.value as FilterType)}
-            className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
-          >
-            <option value="all">{'\uC804\uCCB4 \uC720\uD615'}</option>
-            {Object.entries(SOURCE_ARCHIVE_TYPE_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
-            ))}
-          </select>
-          <select
-            value={tagFilter}
-            onChange={(event) => setTagFilter(event.target.value)}
-            className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
-          >
-            <option value="all">{'\uC804\uCCB4 \uD0DC\uADF8'}</option>
-            {availableTags.map((tag) => (
-              <option key={tag} value={tag}>{tag}</option>
-            ))}
-          </select>
-          <select
-            value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value as FilterStatus)}
-            className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
-          >
-            <option value="all">{'\uC804\uCCB4 \uC0C1\uD0DC'}</option>
-            {Object.entries(SOURCE_ARCHIVE_STATUS_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
-            ))}
-          </select>
+          <label className="space-y-1">
+            <span className="block text-xs font-semibold text-gray-500">{'\uAC80\uC0C9'}</span>
+            <input
+              value={searchText}
+              onChange={(event) => setSearchText(event.target.value)}
+              placeholder={'\uC81C\uBAA9, \uC124\uBA85, \uD0DC\uADF8, \uCD9C\uCC98 \uAC80\uC0C9'}
+              className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
+            />
+          </label>
+          <label className="space-y-1">
+            <span className="block text-xs font-semibold text-gray-500">{'\uC720\uD615'}</span>
+            <select
+              value={typeFilter}
+              onChange={(event) => setTypeFilter(event.target.value as FilterType)}
+              className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
+            >
+              <option value="all">{'\uC804\uCCB4 \uC720\uD615'}</option>
+              {Object.entries(SOURCE_ARCHIVE_TYPE_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-1">
+            <span className="block text-xs font-semibold text-gray-500">{'\uD0DC\uADF8'}</span>
+            <select
+              value={tagFilter}
+              onChange={(event) => setTagFilter(event.target.value)}
+              className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
+            >
+              <option value="all">{'\uC804\uCCB4 \uD0DC\uADF8'}</option>
+              {availableTags.map((tag) => (
+                <option key={tag} value={tag}>{tag}</option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-1">
+            <span className="block text-xs font-semibold text-gray-500">{'\uC0C1\uD0DC'}</span>
+            <select
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value as FilterStatus)}
+              className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
+            >
+              <option value="all">{'\uC804\uCCB4 \uC0C1\uD0DC'}</option>
+              {Object.entries(SOURCE_ARCHIVE_STATUS_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </label>
         </div>
       </div>
 
@@ -592,71 +604,101 @@ const ManageSourceArchive: React.FC = () => {
                 ) : imagePlaceholder('processing')}
               </div>
 
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleFileChange}
-                className="block w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700"
-              />
-              <input
-                value={draft.title}
-                onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
-                placeholder={'\uC81C\uBAA9'}
-                className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
-              />
+              <label className="block space-y-1">
+                <span className="block text-xs font-semibold text-gray-500">{'\uC0AC\uB8CC \uC774\uBBF8\uC9C0'}</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="block w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700"
+                />
+                <span className="block text-xs text-gray-500">
+                  {'\uC0C8 \uC774\uBBF8\uC9C0\uB97C \uC62C\uB9AC\uBA74 \uAE30\uC874 \uD45C\uC2DC\uC6A9 \uC774\uBBF8\uC9C0\uB97C \uAC31\uC2E0\uD569\uB2C8\uB2E4.'}
+                </span>
+              </label>
+              <label className="block space-y-1">
+                <span className="block text-xs font-semibold text-gray-500">{'\uC81C\uBAA9'}</span>
+                <input
+                  value={draft.title}
+                  onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
+                  placeholder={'\uC81C\uBAA9'}
+                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
+                />
+              </label>
 
               <div className="grid gap-3 md:grid-cols-2">
-                <select
-                  value={draft.type}
-                  onChange={(event) => setDraft((current) => ({ ...current, type: event.target.value as SourceArchiveAssetType }))}
-                  className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
-                >
-                  {Object.entries(SOURCE_ARCHIVE_TYPE_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>{label}</option>
-                  ))}
-                </select>
-                <input
-                  value={draft.source}
-                  onChange={(event) => setDraft((current) => ({ ...current, source: event.target.value }))}
-                  placeholder={'\uCD9C\uCC98'}
-                  className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
-                />
+                <label className="space-y-1">
+                  <span className="block text-xs font-semibold text-gray-500">{'\uC720\uD615'}</span>
+                  <select
+                    value={draft.type}
+                    onChange={(event) => setDraft((current) => ({ ...current, type: event.target.value as SourceArchiveAssetType }))}
+                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
+                  >
+                    {Object.entries(SOURCE_ARCHIVE_TYPE_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="space-y-1">
+                  <span className="block text-xs font-semibold text-gray-500">{'\uCD9C\uCC98'}</span>
+                  <input
+                    value={draft.source}
+                    onChange={(event) => setDraft((current) => ({ ...current, source: event.target.value }))}
+                    placeholder={'\uCD9C\uCC98'}
+                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
+                  />
+                </label>
               </div>
 
               <div className="grid gap-3 md:grid-cols-3">
-                <input
-                  value={draft.era}
-                  onChange={(event) => setDraft((current) => ({ ...current, era: event.target.value }))}
-                  placeholder={'\uC2DC\uB300'}
-                  className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
-                />
-                <input
-                  value={draft.subject}
-                  onChange={(event) => setDraft((current) => ({ ...current, subject: event.target.value }))}
-                  placeholder={'\uC8FC\uC81C'}
-                  className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
-                />
-                <input
-                  value={draft.unit}
-                  onChange={(event) => setDraft((current) => ({ ...current, unit: event.target.value }))}
-                  placeholder={'\uB2E8\uC6D0'}
-                  className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
-                />
+                <label className="space-y-1">
+                  <span className="block text-xs font-semibold text-gray-500">{'\uC2DC\uB300'}</span>
+                  <input
+                    value={draft.era}
+                    onChange={(event) => setDraft((current) => ({ ...current, era: event.target.value }))}
+                    placeholder={'\uC2DC\uB300'}
+                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="block text-xs font-semibold text-gray-500">{'\uC8FC\uC81C'}</span>
+                  <input
+                    value={draft.subject}
+                    onChange={(event) => setDraft((current) => ({ ...current, subject: event.target.value }))}
+                    placeholder={'\uC8FC\uC81C'}
+                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="block text-xs font-semibold text-gray-500">{'\uB2E8\uC6D0'}</span>
+                  <input
+                    value={draft.unit}
+                    onChange={(event) => setDraft((current) => ({ ...current, unit: event.target.value }))}
+                    placeholder={'\uB2E8\uC6D0'}
+                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
+                  />
+                </label>
               </div>
 
-              <input
-                value={tagInput}
-                onChange={(event) => setTagInput(event.target.value)}
-                placeholder={'\uD0DC\uADF8\uB97C \uC27C\uD45C\uB85C \uAD6C\uBD84\uD574 \uC785\uB825'}
-                className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
-              />
-              <textarea
-                value={draft.description}
-                onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))}
-                rows={5}
-                placeholder={'\uC124\uBA85'}
-                className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
-              />
+              <label className="block space-y-1">
+                <span className="block text-xs font-semibold text-gray-500">{'\uD0DC\uADF8'}</span>
+                <input
+                  value={tagInput}
+                  onChange={(event) => setTagInput(event.target.value)}
+                  placeholder={'\uD0DC\uADF8\uB97C \uC27C\uD45C\uB85C \uAD6C\uBD84\uD574 \uC785\uB825'}
+                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="block text-xs font-semibold text-gray-500">{'\uC124\uBA85'}</span>
+                <textarea
+                  value={draft.description}
+                  onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))}
+                  rows={5}
+                  placeholder={'\uC124\uBA85'}
+                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
+                />
+              </label>
 
               <div className="flex flex-wrap gap-2">
                 <button
