@@ -25,6 +25,11 @@ const PERMISSION_LABELS: Record<StaffPermission, string> = {
     point_manage: '포인트 관리',
 };
 
+const hasGrantedAccess = (user: UserRow) =>
+    user.teacherPortalEnabled || user.staffPermissions.length > 0;
+
+const TABLE_COLUMN_COUNT = 3 + STAFF_PERMISSION_KEYS.length;
+
 const SettingsAccess: React.FC = () => {
     const [users, setUsers] = useState<UserRow[]>([]);
     const [loading, setLoading] = useState(true);
@@ -65,13 +70,18 @@ const SettingsAccess: React.FC = () => {
         void loadUsers();
     }, []);
 
+    const searchQuery = search.trim().toLowerCase();
+    const hasSearchQuery = searchQuery.length > 0;
+
     const filteredUsers = useMemo(() => {
-        const q = search.trim().toLowerCase();
-        if (!q) return [];
+        if (!hasSearchQuery) {
+            return users.filter((user) => hasGrantedAccess(user));
+        }
+
         return users.filter((user) =>
-            user.name.toLowerCase().includes(q) || user.email.toLowerCase().includes(q),
+            user.name.toLowerCase().includes(searchQuery) || user.email.toLowerCase().includes(searchQuery),
         );
-    }, [search, users]);
+    }, [hasSearchQuery, searchQuery, users]);
 
     const saveUserAccess = async (user: UserRow, patch: Partial<UserRow>) => {
         const isAdmin = user.email.toLowerCase() === ADMIN_EMAIL;
@@ -166,12 +176,14 @@ const SettingsAccess: React.FC = () => {
                         <tbody className="divide-y divide-gray-100">
                             {loading ? (
                                 <tr>
-                                    <td colSpan={6} className="px-4 py-10 text-center text-gray-400">사용자 목록을 불러오는 중입니다.</td>
+                                    <td colSpan={TABLE_COLUMN_COUNT} className="px-4 py-10 text-center text-gray-400">사용자 목록을 불러오는 중입니다.</td>
                                 </tr>
                             ) : filteredUsers.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="px-4 py-10 text-center text-gray-400">
-                                        {search.trim() ? '검색 결과가 없습니다.' : '이름 또는 이메일로 검색한 사용자만 표시됩니다.'}
+                                    <td colSpan={TABLE_COLUMN_COUNT} className="px-4 py-10 text-center text-gray-400">
+                                        {hasSearchQuery
+                                            ? '검색 결과가 없습니다.'
+                                            : '현재 세부 권한이 부여된 계정이 없습니다. 검색해서 권한을 부여하세요.'}
                                     </td>
                                 </tr>
                             ) : (
