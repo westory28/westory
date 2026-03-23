@@ -4,11 +4,15 @@ import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../contexts/AuthContext';
 import { getSemesterCollectionPath } from '../../../lib/semesterScope';
 
+type WrongNoteReadScope = 'current' | 'history';
+type WrongNoteSource = 'current' | 'legacy';
+
 interface StudentWrongNoteModalProps {
     isOpen: boolean;
     onClose: () => void;
     studentId: string;
     studentName: string;
+    readScope?: WrongNoteReadScope;
 }
 
 interface WrongItem {
@@ -32,26 +36,46 @@ const categoryLabel = (category?: string) => {
 const chunk = <T,>(arr: T[], size: number) =>
     Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, i * size + size));
 
-const StudentWrongNoteModal: React.FC<StudentWrongNoteModalProps> = ({ isOpen, onClose, studentId, studentName }) => {
+const sourceLabel = (source: WrongNoteSource): string => (source === 'current' ? '현재 학기' : '이전 기록');
+
+const StudentWrongNoteModal: React.FC<StudentWrongNoteModalProps> = ({
+    isOpen,
+    onClose,
+    studentId,
+    studentName,
+    readScope = 'current',
+}) => {
     const { config } = useAuth();
+    const allowLegacyLookup = readScope === 'history';
     const [loading, setLoading] = useState(false);
+    const [source, setSource] = useState<WrongNoteSource>('current');
     const [wrongItems, setWrongItems] = useState<WrongItem[]>([]);
     const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
     useEffect(() => {
-        if (!isOpen || !studentId) return;
-        void loadWrongNotes();
-    }, [isOpen, studentId, config]);
+        if (!isOpen) return;
+        setSource('current');
+    }, [isOpen, studentId, readScope]);
 
-    const loadWrongNotes = async () => {
+    useEffect(() => {
+        if (!isOpen || !studentId) return;
+        void loadWrongNotes(allowLegacyLookup ? source : 'current');
+    }, [allowLegacyLookup, config, isOpen, source, studentId]);
+
+    const loadWrongNotes = async (selectedSource: WrongNoteSource) => {
         setLoading(true);
+        setWrongItems([]);
+        setExpandedKey(null);
+
+        const resultCollectionPath =
+            selectedSource === 'legacy' ? 'quiz_results' : getSemesterCollectionPath(config, 'quiz_results');
+        const curriculumCollectionPath =
+            selectedSource === 'legacy' ? 'curriculum' : getSemesterCollectionPath(config, 'curriculum');
+        const questionCollectionPath =
+            selectedSource === 'legacy' ? 'quiz_questions' : getSemesterCollectionPath(config, 'quiz_questions');
+
         try {
-            let resultSnap = await getDocs(
-                query(collection(db, getSemesterCollectionPath(config, 'quiz_results')), where('uid', '==', studentId)),
-            );
-            if (resultSnap.empty) {
-                resultSnap = await getDocs(query(collection(db, 'quiz_results'), where('uid', '==', studentId)));
-            }
+            const resultSnap = await getDocs(query(collection(db, resultCollectionPath), where('uid', '==', studentId)));
 
             const results: any[] = [];
             resultSnap.forEach((doc) => results.push({ id: doc.id, ...doc.data() }));
@@ -65,32 +89,26 @@ const StudentWrongNoteModal: React.FC<StudentWrongNoteModalProps> = ({ isOpen, o
                 timeText: string;
             }> = [];
 
-            results.forEach((r) => {
-                (r.details || []).forEach((d: any) => {
-                    if (d.correct) return;
+            results.forEach((result) => {
+                (result.details || []).forEach((detail: any) => {
+                    if (detail.correct) return;
                     wrongLogs.push({
-                        qid: String(d.id),
-                        userAnswer: d.u || '',
-                        unitId: r.unitId || '',
-                        category: r.category || '',
-                        timeText: r.timestamp?.seconds
-                            ? new Date(r.timestamp.seconds * 1000).toLocaleString('ko-KR')
-                            : (r.timeString || '-'),
+                        qid: String(detail.id || ''),
+                        userAnswer: detail.u || '',
+                        unitId: result.unitId || '',
+                        category: result.category || '',
+                        timeText: result.timestamp?.seconds
+                            ? new Date(result.timestamp.seconds * 1000).toLocaleString('ko-KR')
+                            : (result.timeString || '-'),
                     });
                 });
             });
 
-            if (wrongLogs.length === 0) {
-                setWrongItems([]);
-                return;
-            }
+            if (wrongLogs.length === 0) return;
 
             const unitTitleMap: Record<string, string> = { exam_prep: '학기 시험 대비' };
             try {
-                let treeSnap = await getDocs(query(collection(db, getSemesterCollectionPath(config, 'curriculum'))));
-                if (treeSnap.empty) {
-                    treeSnap = await getDocs(query(collection(db, 'curriculum')));
-                }
+                const treeSnap = await getDocs(query(collection(db, curriculumCollectionPath)));
                 treeSnap.forEach((doc) => {
                     if (doc.id !== 'tree') return;
                     const tree = (doc.data() as any).tree || [];
@@ -104,28 +122,16 @@ const StudentWrongNoteModal: React.FC<StudentWrongNoteModalProps> = ({ isOpen, o
                 console.error(error);
             }
 
-            const questionIds = Array.from(new Set(wrongLogs.map((x) => x.qid)));
+            const questionIds = Array.from(new Set(wrongLogs.map((item) => item.qid).filter(Boolean)));
             const questionMap: Record<string, any> = {};
 
-            await Promise.all(
-                chunk(questionIds, 10).map(async (ids) => {
-                    const scopedSnap = await getDocs(
-                        query(collection(db, getSemesterCollectionPath(config, 'quiz_questions')), where(documentId(), 'in', ids)),
-                    );
-                    scopedSnap.forEach((doc) => {
-                        questionMap[doc.id] = doc.data();
-                    });
-                }),
-            );
-
-            const missing = questionIds.filter((id) => !questionMap[id]);
-            if (missing.length) {
+            if (questionIds.length > 0) {
                 await Promise.all(
-                    chunk(missing, 10).map(async (ids) => {
-                        const legacySnap = await getDocs(
-                            query(collection(db, 'quiz_questions'), where(documentId(), 'in', ids)),
+                    chunk(questionIds, 10).map(async (ids) => {
+                        const questionSnap = await getDocs(
+                            query(collection(db, questionCollectionPath), where(documentId(), 'in', ids)),
                         );
-                        legacySnap.forEach((doc) => {
+                        questionSnap.forEach((doc) => {
                             questionMap[doc.id] = doc.data();
                         });
                     }),
@@ -135,17 +141,16 @@ const StudentWrongNoteModal: React.FC<StudentWrongNoteModalProps> = ({ isOpen, o
             const seen = new Set<string>();
             const items: WrongItem[] = [];
             wrongLogs.forEach((log) => {
-                const q = questionMap[log.qid];
-                if (!q) return;
+                const questionDoc = questionMap[log.qid] || {};
                 const key = `${log.qid}_${log.unitId}_${log.category}`;
                 if (seen.has(key)) return;
                 seen.add(key);
                 items.push({
                     key,
-                    question: q.question || '문항 텍스트 없음',
+                    question: String(questionDoc.question || '문항 정보 없음'),
                     userAnswer: log.userAnswer || '(미입력)',
-                    answer: String(q.answer || '-'),
-                    explanation: q.explanation || '해설이 등록되지 않았습니다.',
+                    answer: questionDoc.answer ? String(questionDoc.answer) : '-',
+                    explanation: String(questionDoc.explanation || '해설이 등록되지 않았습니다.'),
                     unitTitle: unitTitleMap[log.unitId] || log.unitId || '단원 정보 없음',
                     categoryLabel: categoryLabel(log.category),
                     timeText: log.timeText,
@@ -171,6 +176,8 @@ const StudentWrongNoteModal: React.FC<StudentWrongNoteModalProps> = ({ isOpen, o
         return Object.entries(grouped);
     }, [wrongItems]);
 
+    const activeSource = allowLegacyLookup ? source : 'current';
+
     if (!isOpen) return null;
 
     return (
@@ -185,26 +192,52 @@ const StudentWrongNoteModal: React.FC<StudentWrongNoteModalProps> = ({ isOpen, o
                 <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
                     <div>
                         <h3 className="text-lg font-bold text-gray-800">{studentName} 오답 노트</h3>
-                        <p className="text-xs text-gray-500">학생 이름을 클릭하면 최근 오답 요약을 확인할 수 있습니다.</p>
+                        <p className="text-xs text-gray-500">학생 이름을 클릭하면 오답 기록과 문항 해설을 바로 확인할 수 있습니다.</p>
+                        {allowLegacyLookup ? (
+                            <p className="mt-1 text-xs text-gray-400">현재 학기와 이전 기록을 구분해서 조회합니다.</p>
+                        ) : (
+                            <p className="mt-1 text-xs text-gray-400">현재 학기 오답만 표시합니다.</p>
+                        )}
                     </div>
                     <button type="button" onClick={onClose} className="p-2 rounded hover:bg-gray-100">
                         <i className="fas fa-times text-gray-400"></i>
                     </button>
                 </div>
 
+                {allowLegacyLookup && (
+                    <div className="px-5 pt-4">
+                        <div className="flex gap-2">
+                            {(['current', 'legacy'] as WrongNoteSource[]).map((item) => (
+                                <button
+                                    key={item}
+                                    type="button"
+                                    onClick={() => setSource(item)}
+                                    className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${
+                                        source === item
+                                            ? 'bg-blue-600 text-white shadow-sm'
+                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                    }`}
+                                >
+                                    {sourceLabel(item)}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 <div className="flex-1 overflow-y-auto p-5">
                     {loading ? (
-                        <div className="text-center py-12 text-gray-500">오답 노트를 불러오는 중...</div>
+                        <div className="text-center py-12 text-gray-500">{sourceLabel(activeSource)} 오답 노트를 불러오는 중...</div>
                     ) : groupedItems.length === 0 ? (
                         <div className="text-center py-16 text-gray-400 bg-gray-50 rounded-lg border border-dashed border-gray-200">
-                            오답 기록이 없습니다.
+                            {activeSource === 'legacy' ? '이전 오답 기록이 없습니다.' : '현재 학기 오답 기록이 없습니다.'}
                         </div>
                     ) : (
                         <div className="space-y-3">
                             {groupedItems.map(([groupKey, items]) => (
                                 <div key={groupKey} className="border border-gray-200 rounded-lg overflow-hidden">
                                     <div className="px-4 py-3 bg-gray-50 text-sm font-bold text-gray-700">
-                                        {items[0].unitTitle} · {items[0].categoryLabel}
+                                        {items[0].unitTitle} / {items[0].categoryLabel}
                                     </div>
                                     <div className="divide-y divide-gray-100">
                                         {items.map((item) => (

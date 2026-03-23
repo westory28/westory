@@ -2,6 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { useAuth } from '../../../contexts/AuthContext';
 import { db } from '../../../lib/firebase';
+import {
+    loadSemesterReadiness,
+    type SemesterReadinessResult,
+    type SemesterReadinessStatus,
+} from '../../../lib/semesterReadiness';
 
 type SettingsConfigState = {
     year: string;
@@ -93,6 +98,24 @@ const buildSemesterRegistry = (
     return sortSemesterRegistry(Array.from(registry.values()));
 };
 
+const STATUS_META: Record<SemesterReadinessStatus, { label: string; badgeClass: string; warningClass: string }> = {
+    ready: {
+        label: '\uc900\ube44 \uc644\ub8cc',
+        badgeClass: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+        warningClass: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    },
+    partial: {
+        label: '\uc77c\ubd80 \ube44\uc5b4 \uc788\uc74c',
+        badgeClass: 'border-amber-200 bg-amber-50 text-amber-800',
+        warningClass: 'border-amber-200 bg-amber-50 text-amber-800',
+    },
+    danger: {
+        label: '\uc804\ud658 \ube44\uad8c\uc7a5',
+        badgeClass: 'border-red-200 bg-red-50 text-red-700',
+        warningClass: 'border-red-200 bg-red-50 text-red-700',
+    },
+};
+
 const SettingsGeneral: React.FC = () => {
     const { currentUser } = useAuth();
     const [config, setConfig] = useState<SettingsConfigState>(DEFAULT_CONFIG);
@@ -110,6 +133,9 @@ const SettingsGeneral: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [creating, setCreating] = useState(false);
+    const [readiness, setReadiness] = useState<SemesterReadinessResult | null>(null);
+    const [readinessLoading, setReadinessLoading] = useState(false);
+    const [readinessError, setReadinessError] = useState('');
 
     const loadConfig = async () => {
         try {
@@ -144,6 +170,37 @@ const SettingsGeneral: React.FC = () => {
         void loadConfig();
     }, []);
 
+    useEffect(() => {
+        if (loading) return;
+
+        let isMounted = true;
+        const year = normalizeYear(config.year);
+        const semester = normalizeSemester(config.semester);
+
+        setReadiness(null);
+        setReadinessLoading(true);
+        setReadinessError('');
+
+        void loadSemesterReadiness(year, semester)
+            .then((result) => {
+                if (!isMounted) return;
+                setReadiness(result);
+            })
+            .catch((error) => {
+                console.error("Failed to load semester readiness:", error);
+                if (!isMounted) return;
+                setReadinessError('준비 현황을 불러오지 못했습니다.');
+            })
+            .finally(() => {
+                if (!isMounted) return;
+                setReadinessLoading(false);
+            });
+
+        return () => {
+            isMounted = false;
+        };
+    }, [loading, config.year, config.semester]);
+
     const yearOptions = useMemo(() => {
         const years = new Set(availableSemesters.map((item) => item.year));
         years.add(config.year);
@@ -164,6 +221,14 @@ const SettingsGeneral: React.FC = () => {
         ];
     }, [availableSemesters, config.year, config.semester]);
 
+    const requiredReadyCount = readiness?.requiredItems.filter((item) => item.ready).length || 0;
+    const advisoryReadyCount = readiness?.advisoryItems.filter((item) => item.ready).length || 0;
+    const missingRequiredLabels = readiness?.requiredItems.filter((item) => !item.ready).map((item) => item.label) || [];
+    const missingAdvisoryLabels = readiness?.advisoryItems.filter((item) => !item.ready).map((item) => item.label) || [];
+    const readinessStatusMeta = readiness ? STATUS_META[readiness.status] : null;
+    const readinessStatusClass = readinessStatusMeta?.badgeClass || 'border-gray-200 bg-gray-50 text-gray-700';
+    const readinessWarningClass = readinessStatusMeta?.warningClass || 'border-amber-200 bg-amber-50 text-amber-800';
+
     const ensurePointPolicyShell = async (year: string, semester: string) => {
         const policyRef = doc(db, 'years', year, 'semesters', semester, 'point_policies', 'current');
         const policySnap = await getDoc(policyRef);
@@ -174,6 +239,49 @@ const SettingsGeneral: React.FC = () => {
             updatedAt: serverTimestamp(),
             updatedBy: currentUser?.email || currentUser?.uid || '',
         });
+    };
+
+    const ensureDocShell = async (path: string, data: Record<string, unknown>) => {
+        const targetRef = doc(db, path);
+        const targetSnap = await getDoc(targetRef);
+        if (targetSnap.exists()) return;
+        await setDoc(targetRef, data);
+    };
+
+    const ensureSemesterOperationalSeeds = async (year: string, semester: string) => {
+        const seededBy = currentUser?.email || currentUser?.uid || '';
+        const buildSeedMeta = () => ({
+            shellReady: true,
+            seededAt: serverTimestamp(),
+            seededBy,
+        });
+
+        await Promise.all([
+            ensureDocShell(
+                `years/${year}/semesters/${semester}/assessment_config/settings`,
+                buildSeedMeta(),
+            ),
+            ensureDocShell(
+                `years/${year}/semesters/${semester}/exam_config/final_exam`,
+                {
+                    ...buildSeedMeta(),
+                    objective: [],
+                    subjective: [],
+                },
+            ),
+            ensureDocShell(
+                `years/${year}/semesters/${semester}/grading_plans_meta/current`,
+                buildSeedMeta(),
+            ),
+            ensureDocShell(
+                `years/${year}/semesters/${semester}/calendar_meta/current`,
+                buildSeedMeta(),
+            ),
+            ensureDocShell(
+                `years/${year}/semesters/${semester}/notices_meta/current`,
+                buildSeedMeta(),
+            ),
+        ]);
     };
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -236,6 +344,7 @@ const SettingsGeneral: React.FC = () => {
         setFeedback('');
         try {
             await ensurePointPolicyShell(year, semester);
+            await ensureSemesterOperationalSeeds(year, semester);
 
             const nextRegistry = buildSemesterRegistry(
                 [
@@ -366,6 +475,51 @@ const SettingsGeneral: React.FC = () => {
                     <span>학년도와 학기를 변경하면 해당 기간의 데이터베이스로 즉시 전환됩니다. 학생들의 데이터 조회 범위가 변경됩니다.</span>
                 </div>
 
+                <div className="rounded-xl border border-gray-200 bg-white p-4">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div>
+                            <div className="text-xs font-bold text-gray-500">선택 학기 준비 현황</div>
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold ${readinessStatusClass}`}>
+                                    {readinessLoading ? '\ud655\uc778 \uc911...' : (readinessStatusMeta?.label || '\ud655\uc778 \ud544\uc694')}
+                                </span>
+                                <span className="text-xs font-bold text-gray-500">
+                                    {buildSemesterLabel(config.year, config.semester)}
+                                </span>
+                            </div>
+                        </div>
+                        {!readinessLoading && readiness && (
+                            <div className="grid grid-cols-2 gap-2 text-xs font-bold text-gray-600 md:text-right">
+                                <span>필수 {requiredReadyCount}/{readiness.requiredItems.length}</span>
+                                <span>참고 {advisoryReadyCount}/{readiness.advisoryItems.length}</span>
+                            </div>
+                        )}
+                    </div>
+
+                    {readinessError && (
+                        <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
+                            {readinessError}
+                        </div>
+                    )}
+
+                    {!readinessLoading && readiness && (
+                        <div className="mt-3 space-y-2 text-xs">
+                            <div className="text-gray-700">
+                                <span className="font-bold">필수 항목</span>
+                                <span className="ml-2 text-gray-500">
+                                    {missingRequiredLabels.length > 0 ? missingRequiredLabels.join(', ') : '모두 준비됨'}
+                                </span>
+                            </div>
+                            <div className="text-gray-600">
+                                <span className="font-bold">참고 항목</span>
+                                <span className="ml-2 text-gray-500">
+                                    {missingAdvisoryLabels.length > 0 ? missingAdvisoryLabels.join(', ') : '모두 준비됨'}
+                                </span>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
                 <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
                     <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
                         <div>
@@ -460,6 +614,23 @@ const SettingsGeneral: React.FC = () => {
                 </div>
 
                 <div className="pt-4 text-right">
+                    {!readinessLoading && readiness && readiness.status !== 'ready' && (
+                        <div className={`mb-4 rounded-xl border p-4 text-left text-sm font-bold flex items-start gap-3 ${readinessWarningClass}`}>
+                            <i className="fas fa-exclamation-triangle mt-0.5"></i>
+                            <div>
+                                <div>
+                                    {readiness.status === 'danger'
+                                        ? '\ud575\uc2ec \uc900\ube44 \ud56d\ubaa9\uc774 \ube44\uc5b4 \uc788\uc5b4 \ud604\uc7ac \ud559\uae30\ub85c \uc804\ud658\ud558\ub294 \uac83\uc744 \uad8c\uc7a5\ud558\uc9c0 \uc54a\uc2b5\ub2c8\ub2e4.'
+                                        : '\uc77c\ubd80 \ud56d\ubaa9\uc774 \ube44\uc5b4 \uc788\uc2b5\ub2c8\ub2e4. \uc800\uc7a5\uc740 \uac00\ub2a5\ud558\uc9c0\ub9cc \uc804\ud658 \uc804 \ud655\uc778\uc744 \uad8c\uc7a5\ud569\ub2c8\ub2e4.'}
+                                </div>
+                                <div className="mt-1 text-xs font-semibold">
+                                    {missingRequiredLabels.length > 0
+                                        ? `\ud544\uc218 \ud655\uc778: ${missingRequiredLabels.join(', ')}`
+                                        : '\ud544\uc218 \ud56d\ubaa9\uc740 \uc900\ube44\ub418\uc5c8\uace0 \ucc38\uace0 \ud56d\ubaa9\ub9cc \ucd94\uac00 \ud655\uc778\uc774 \ud544\uc694\ud569\ub2c8\ub2e4.'}
+                                </div>
+                            </div>
+                        </div>
+                    )}
                     <button
                         onClick={handleSave}
                         disabled={saving}

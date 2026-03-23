@@ -1,14 +1,18 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { collection, documentId, getDocs, orderBy, query, where } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../contexts/AuthContext';
 import { getSemesterCollectionPath } from '../../../lib/semesterScope';
+
+type HistoryReadScope = 'current' | 'history';
+type HistorySource = 'current' | 'legacy';
 
 interface StudentHistoryModalProps {
     isOpen: boolean;
     onClose: () => void;
     studentId: string;
     studentName: string;
+    readScope?: HistoryReadScope;
 }
 
 interface QuizResultDetail {
@@ -76,9 +80,19 @@ const getTimeText = (record: QuizResultRecord): string => {
     return record.timeString || '-';
 };
 
-const StudentHistoryModal: React.FC<StudentHistoryModalProps> = ({ isOpen, onClose, studentId, studentName }) => {
+const sourceLabel = (source: HistorySource): string => (source === 'current' ? '현재 학기' : '이전 기록');
+
+const StudentHistoryModal: React.FC<StudentHistoryModalProps> = ({
+    isOpen,
+    onClose,
+    studentId,
+    studentName,
+    readScope = 'current',
+}) => {
     const { config } = useAuth();
+    const allowLegacyLookup = readScope === 'history';
     const [loading, setLoading] = useState(false);
+    const [source, setSource] = useState<HistorySource>('current');
     const [groups, setGroups] = useState<HistoryGroup[]>([]);
     const [questionMap, setQuestionMap] = useState<Record<string, QuestionDoc>>({});
     const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
@@ -86,11 +100,16 @@ const StudentHistoryModal: React.FC<StudentHistoryModalProps> = ({ isOpen, onClo
     const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(new Set());
 
     useEffect(() => {
-        if (!isOpen || !studentId) return;
-        void fetchHistory();
-    }, [config, isOpen, studentId]);
+        if (!isOpen) return;
+        setSource('current');
+    }, [isOpen, studentId, readScope]);
 
-    const fetchHistory = async () => {
+    useEffect(() => {
+        if (!isOpen || !studentId) return;
+        void fetchHistory(allowLegacyLookup ? source : 'current');
+    }, [allowLegacyLookup, config, isOpen, source, studentId]);
+
+    const fetchHistory = async (selectedSource: HistorySource) => {
         setLoading(true);
         setGroups([]);
         setQuestionMap({});
@@ -98,22 +117,18 @@ const StudentHistoryModal: React.FC<StudentHistoryModalProps> = ({ isOpen, onClo
         setExpandedRecords(new Set());
         setExpandedQuestions(new Set());
 
+        const resultCollectionPath =
+            selectedSource === 'legacy' ? 'quiz_results' : getSemesterCollectionPath(config, 'quiz_results');
+        const questionCollectionPath =
+            selectedSource === 'legacy' ? 'quiz_questions' : getSemesterCollectionPath(config, 'quiz_questions');
+
         try {
-            let scopedSnap = await getDocs(
-                query(
-                    collection(db, getSemesterCollectionPath(config, 'quiz_results')),
-                    where('uid', '==', studentId),
-                    orderBy('timestamp', 'desc'),
-                ),
+            const resultSnap = await getDocs(
+                query(collection(db, resultCollectionPath), where('uid', '==', studentId), orderBy('timestamp', 'desc')),
             );
-            if (scopedSnap.empty) {
-                scopedSnap = await getDocs(
-                    query(collection(db, 'quiz_results'), where('uid', '==', studentId), orderBy('timestamp', 'desc')),
-                );
-            }
 
             const records: QuizResultRecord[] = [];
-            scopedSnap.forEach((doc) => {
+            resultSnap.forEach((doc) => {
                 records.push({ id: doc.id, ...(doc.data() as Omit<QuizResultRecord, 'id'>) });
             });
 
@@ -137,36 +152,21 @@ const StudentHistoryModal: React.FC<StudentHistoryModalProps> = ({ isOpen, onClo
                 ),
             );
 
-            if (allQuestionIds.length) {
-                const resolvedQuestionMap: Record<string, QuestionDoc> = {};
+            if (allQuestionIds.length === 0) return;
 
-                await Promise.all(
-                    chunk(allQuestionIds, BATCH_SIZE).map(async (ids) => {
-                        const scopedQuestions = await getDocs(
-                            query(collection(db, getSemesterCollectionPath(config, 'quiz_questions')), where(documentId(), 'in', ids)),
-                        );
-                        scopedQuestions.forEach((doc) => {
-                            resolvedQuestionMap[doc.id] = doc.data() as QuestionDoc;
-                        });
-                    }),
-                );
-
-                const missingIds = allQuestionIds.filter((id) => !resolvedQuestionMap[id]);
-                if (missingIds.length) {
-                    await Promise.all(
-                        chunk(missingIds, BATCH_SIZE).map(async (ids) => {
-                            const legacyQuestions = await getDocs(
-                                query(collection(db, 'quiz_questions'), where(documentId(), 'in', ids)),
-                            );
-                            legacyQuestions.forEach((doc) => {
-                                resolvedQuestionMap[doc.id] = doc.data() as QuestionDoc;
-                            });
-                        }),
+            const resolvedQuestionMap: Record<string, QuestionDoc> = {};
+            await Promise.all(
+                chunk(allQuestionIds, BATCH_SIZE).map(async (ids) => {
+                    const questionSnap = await getDocs(
+                        query(collection(db, questionCollectionPath), where(documentId(), 'in', ids)),
                     );
-                }
+                    questionSnap.forEach((doc) => {
+                        resolvedQuestionMap[doc.id] = doc.data() as QuestionDoc;
+                    });
+                }),
+            );
 
-                setQuestionMap(resolvedQuestionMap);
-            }
+            setQuestionMap(resolvedQuestionMap);
         } catch (error) {
             console.error('Error fetching student history:', error);
         } finally {
@@ -223,6 +223,8 @@ const StudentHistoryModal: React.FC<StudentHistoryModalProps> = ({ isOpen, onClo
         });
     };
 
+    const activeSource = allowLegacyLookup ? source : 'current';
+
     if (!isOpen) return null;
 
     return (
@@ -240,18 +242,44 @@ const StudentHistoryModal: React.FC<StudentHistoryModalProps> = ({ isOpen, onClo
                     <div>
                         <h3 className="font-bold text-xl text-gray-800">{studentName} 응시 기록</h3>
                         <p className="text-xs text-gray-500">날짜별 응시 기록을 접고 펼쳐서 오답 상세까지 확인할 수 있습니다.</p>
+                        {allowLegacyLookup ? (
+                            <p className="mt-1 text-xs text-gray-400">현재 학기 기록과 이전 기록을 구분해서 조회합니다.</p>
+                        ) : (
+                            <p className="mt-1 text-xs text-gray-400">현재 학기 기록만 표시합니다.</p>
+                        )}
                     </div>
                     <button type="button" onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition">
                         <i className="fas fa-times text-gray-400 hover:text-gray-600 text-xl"></i>
                     </button>
                 </div>
 
+                {allowLegacyLookup && (
+                    <div className="mb-4 flex gap-2">
+                        {(['current', 'legacy'] as HistorySource[]).map((item) => (
+                            <button
+                                key={item}
+                                type="button"
+                                onClick={() => setSource(item)}
+                                className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${
+                                    source === item
+                                        ? 'bg-blue-600 text-white shadow-sm'
+                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                }`}
+                            >
+                                {sourceLabel(item)}
+                            </button>
+                        ))}
+                    </div>
+                )}
+
                 <div className="overflow-y-auto flex-1 pr-1">
                     {loading ? (
-                        <div className="flex items-center justify-center py-16 text-gray-500">응시 기록을 불러오는 중...</div>
+                        <div className="flex items-center justify-center py-16 text-gray-500">
+                            {sourceLabel(activeSource)} 기록을 불러오는 중...
+                        </div>
                     ) : resolvedGroups.length === 0 ? (
                         <div className="text-center py-20 text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                            응시 기록이 없습니다.
+                            {activeSource === 'legacy' ? '이전 기록이 없습니다.' : '현재 학기 응시 기록이 없습니다.'}
                         </div>
                     ) : (
                         <div className="space-y-4">
@@ -262,7 +290,7 @@ const StudentHistoryModal: React.FC<StudentHistoryModalProps> = ({ isOpen, onClo
                                         className="w-full bg-gray-50 px-4 py-3 font-bold text-gray-700 flex justify-between items-center hover:bg-gray-100 transition"
                                         onClick={() => toggleDate(group.date)}
                                     >
-                                        <span>📅 {group.date} 응시 ({group.records.length}건)</span>
+                                        <span>{group.date} 응시 ({group.records.length}건)</span>
                                         <i className={`fas fa-chevron-down text-gray-400 transition-transform ${expandedDates.has(group.date) ? 'rotate-180' : ''}`}></i>
                                     </button>
 

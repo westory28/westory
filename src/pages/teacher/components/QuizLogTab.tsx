@@ -341,6 +341,7 @@ const QuizLogTab: React.FC = () => {
                 onClose={() => setWrongNoteTarget(null)}
                 studentId={wrongNoteTarget?.uid || ''}
                 studentName={wrongNoteTarget?.name || ''}
+                readScope="current"
             />
         </div>
     );

@@ -606,6 +606,7 @@ const StudentList: React.FC = () => {
                     onClose={() => setHistoryModalOpen(false)}
                     studentId={selectedStudent?.id || ''}
                     studentName={selectedStudent?.name || ''}
+                    readScope="history"
                 />
 
                 <MoveClassModal
