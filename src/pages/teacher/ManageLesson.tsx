@@ -2,7 +2,6 @@
 import { useAuth } from "../../contexts/AuthContext";
 import { db, storage } from "../../lib/firebase";
 import {
-  addDoc,
   collection,
   doc,
   getDoc,
@@ -11,7 +10,6 @@ import {
   query,
   serverTimestamp,
   setDoc,
-  updateDoc,
   where,
 } from "firebase/firestore";
 import {
@@ -19,6 +17,7 @@ import {
   getDownloadURL,
   listAll,
   ref,
+  type StorageReference,
   uploadBytes,
 } from "firebase/storage";
 import {
@@ -50,6 +49,12 @@ import {
   type LessonData,
   type LessonFootnote,
 } from "../../lib/lessonData";
+import {
+  buildFailedLessonPdfProcessingMeta,
+  buildQueuedLessonPdfProcessingMeta,
+  createEmptyLessonPdfProcessingMeta,
+  type LessonPdfProcessingMeta,
+} from "../../lib/lessonPdfExtraction";
 import {
   tryDeleteLessonFootnoteAsset,
   uploadLessonFootnoteAsset,
@@ -160,6 +165,22 @@ type FootnoteImageDraft = {
   removeExisting: boolean;
 };
 
+type PendingLessonPdfUpload = {
+  file: File;
+  storagePath: string;
+  uploadToken: string;
+};
+
+type UploadedWorksheetAssets = {
+  pdfName: string;
+  pdfUrl: string;
+  pdfStoragePath: string;
+  pageImages: LessonWorksheetPageImage[];
+  textRegions: LessonWorksheetTextRegion[];
+  pdfProcessing: LessonPdfProcessingMeta;
+  pendingIncomingUpload: PendingLessonPdfUpload | null;
+};
+
 type PresentationClassOption = {
   classId: string;
   classLabel: string;
@@ -245,6 +266,7 @@ const createEditorSnapshot = (params: {
   lessonPdfName: string;
   lessonPdfUrl: string;
   lessonPdfStoragePath: string;
+  lessonPdfProcessing: LessonPdfProcessingMeta;
   worksheetPageImages: LessonWorksheetPageImage[];
   worksheetTextRegions: LessonWorksheetTextRegion[];
   worksheetBlanks: LessonWorksheetBlank[];
@@ -262,6 +284,7 @@ const createEditorSnapshot = (params: {
     lessonPdfName: params.lessonPdfName,
     lessonPdfUrl: params.lessonPdfUrl,
     lessonPdfStoragePath: params.lessonPdfStoragePath,
+    lessonPdfProcessing: params.lessonPdfProcessing,
     worksheetPageImages: params.worksheetPageImages,
     worksheetTextRegions: params.worksheetTextRegions,
     worksheetBlanks: params.worksheetBlanks,
@@ -293,6 +316,8 @@ const ManageLesson: React.FC = () => {
   const [lessonPdfName, setLessonPdfName] = useState("");
   const [lessonPdfUrl, setLessonPdfUrl] = useState("");
   const [lessonPdfStoragePath, setLessonPdfStoragePath] = useState("");
+  const [lessonPdfProcessing, setLessonPdfProcessing] =
+    useState<LessonPdfProcessingMeta>(() => createEmptyLessonPdfProcessingMeta());
   const [worksheetPageImages, setWorksheetPageImages] = useState<
     LessonWorksheetPageImage[]
   >([]);
@@ -375,6 +400,7 @@ const ManageLesson: React.FC = () => {
       pdfName: lessonPdfName,
       pdfUrl: lessonPdfUrl,
       pdfStoragePath: lessonPdfStoragePath,
+      pdfProcessing: lessonPdfProcessing,
       worksheetPageImages,
       worksheetTextRegions,
       worksheetBlanks,
@@ -390,6 +416,7 @@ const ManageLesson: React.FC = () => {
       lessonPdfName,
       lessonPdfUrl,
       lessonPdfStoragePath,
+      lessonPdfProcessing,
       worksheetPageImages,
       worksheetTextRegions,
       worksheetBlanks,
@@ -570,6 +597,7 @@ const ManageLesson: React.FC = () => {
         lessonPdfName,
         lessonPdfUrl,
         lessonPdfStoragePath,
+        lessonPdfProcessing,
         worksheetPageImages,
         worksheetTextRegions,
         worksheetBlanks,
@@ -587,6 +615,7 @@ const ManageLesson: React.FC = () => {
       lessonPdfName,
       lessonPdfUrl,
       lessonPdfStoragePath,
+      lessonPdfProcessing,
       worksheetPageImages,
       worksheetTextRegions,
       worksheetBlanks,
@@ -816,6 +845,7 @@ const ManageLesson: React.FC = () => {
     setLessonPdfName("");
     setLessonPdfUrl("");
     setLessonPdfStoragePath("");
+    setLessonPdfProcessing(createEmptyLessonPdfProcessingMeta());
     setWorksheetPageImages([]);
     setWorksheetTextRegions([]);
     setWorksheetBlanks([]);
@@ -857,6 +887,7 @@ const ManageLesson: React.FC = () => {
       lessonPdfName: "",
       lessonPdfUrl: "",
       lessonPdfStoragePath: "",
+      lessonPdfProcessing: createEmptyLessonPdfProcessingMeta(),
       worksheetPageImages: [],
       worksheetTextRegions: [],
       worksheetBlanks: [],
@@ -1045,6 +1076,7 @@ const ManageLesson: React.FC = () => {
         setLessonPdfName(data.pdfName);
         setLessonPdfUrl(data.pdfUrl);
         setLessonPdfStoragePath(data.pdfStoragePath);
+        setLessonPdfProcessing(data.pdfProcessing);
         setWorksheetPageImages(
           normalizeWorksheetPageImages(data.worksheetPageImages),
         );
@@ -1062,6 +1094,7 @@ const ManageLesson: React.FC = () => {
           lessonPdfName: data.pdfName,
           lessonPdfUrl: data.pdfUrl,
           lessonPdfStoragePath: data.pdfStoragePath,
+          lessonPdfProcessing: data.pdfProcessing,
           worksheetPageImages: normalizeWorksheetPageImages(
             data.worksheetPageImages,
           ),
@@ -1084,6 +1117,7 @@ const ManageLesson: React.FC = () => {
           lessonPdfName: "",
           lessonPdfUrl: "",
           lessonPdfStoragePath: "",
+          lessonPdfProcessing: createEmptyLessonPdfProcessingMeta(),
           worksheetPageImages: [],
           worksheetTextRegions: [],
           worksheetBlanks: [],
@@ -1212,6 +1246,18 @@ const ManageLesson: React.FC = () => {
     if (activeBlankId === blankId) setActiveBlankId(null);
   };
 
+  const deleteStorageFolderRecursive = async (
+    folderRef: StorageReference,
+  ): Promise<void> => {
+    const listing = await listAll(folderRef);
+    await Promise.all(
+      listing.items.map((item) => deleteObject(item).catch(() => undefined)),
+    );
+    await Promise.all(
+      listing.prefixes.map((childRef) => deleteStorageFolderRecursive(childRef)),
+    );
+  };
+
   const removeAttachedPdf = async () => {
     if (!canEdit) return;
     if (!selectedNodeId) {
@@ -1224,10 +1270,7 @@ const ManageLesson: React.FC = () => {
         storage,
         `${getSemesterCollectionPath(config, "lesson_pdfs")}/${selectedNodeId}`,
       );
-      const listing = await listAll(folderRef);
-      await Promise.all(
-        listing.items.map((item) => deleteObject(item).catch(() => undefined)),
-      );
+      await deleteStorageFolderRecursive(folderRef);
     } catch (error) {
       console.error("Failed to delete lesson pdf assets:", error);
     }
@@ -1235,7 +1278,9 @@ const ManageLesson: React.FC = () => {
     if (pdfInputRef.current) pdfInputRef.current.value = "";
   };
 
-  const uploadWorksheetAssets = async (unitId: string) => {
+  const uploadWorksheetAssets = async (
+    unitId: string,
+  ): Promise<UploadedWorksheetAssets> => {
     if (!selectedPdfFile || !preparedPdf) {
       return {
         pdfName: lessonPdfName,
@@ -1243,6 +1288,8 @@ const ManageLesson: React.FC = () => {
         pdfStoragePath: lessonPdfStoragePath,
         pageImages: worksheetPageImages,
         textRegions: worksheetTextRegions,
+        pdfProcessing: lessonPdfProcessing,
+        pendingIncomingUpload: null,
       };
     }
     const basePath = `${getSemesterCollectionPath(config, "lesson_pdfs")}/${unitId}`;
@@ -1261,12 +1308,28 @@ const ManageLesson: React.FC = () => {
         height: page.height,
       });
     }
+    const uploadToken = crypto.randomUUID();
+    const pendingUploadPath = `${basePath}/incoming/${uploadToken}.pdf`;
     return {
       pdfName: selectedPdfFile.name,
       pdfUrl: await getDownloadURL(pdfRef),
       pdfStoragePath: pdfRef.fullPath,
       pageImages,
       textRegions: preparedPdf.regions,
+      pdfProcessing: buildQueuedLessonPdfProcessingMeta({
+        pdfName: selectedPdfFile.name,
+        pdfStoragePath: pdfRef.fullPath,
+        byteSize: selectedPdfFile.size || 0,
+        pageCount: preparedPdf.pageImages.length,
+        pendingUploadToken: uploadToken,
+        pendingUploadPath,
+        previous: lessonPdfProcessing,
+      }),
+      pendingIncomingUpload: {
+        file: selectedPdfFile,
+        storagePath: pendingUploadPath,
+        uploadToken,
+      },
     };
   };
 
@@ -1512,6 +1575,9 @@ const ManageLesson: React.FC = () => {
       const scopedSnap = await getDocs(
         query(scopedRef, where("unitId", "==", selectedNodeId), limit(1)),
       );
+      const lessonDocRef = scopedSnap.empty
+        ? doc(scopedRef)
+        : doc(scopedRef, scopedSnap.docs[0].id);
       const normalizedContentHtml = lessonContent.replace(
         /(^|>)([ \t]+)(?=\S)/gm,
         (_match, prefix: string, spaces: string) =>
@@ -1531,6 +1597,7 @@ const ManageLesson: React.FC = () => {
       );
       const { footnotes: uploadedFootnotes, staleAssetPathsToDelete } =
         await uploadFootnoteAssets(selectedNodeId, sanitizedFootnotes);
+      let resolvedPdfProcessing = uploadedWorksheet.pdfProcessing;
       const payload = {
         unitId: selectedNodeId,
         title: lessonTitle,
@@ -1543,14 +1610,48 @@ const ManageLesson: React.FC = () => {
         worksheetPageImages: uploadedWorksheet.pageImages,
         worksheetTextRegions: uploadedWorksheet.textRegions,
         worksheetBlanks,
+        pdfProcessing: resolvedPdfProcessing,
         footnotes: uploadedFootnotes,
         updatedAt: serverTimestamp(),
       };
-      if (scopedSnap.empty) await addDoc(scopedRef, payload);
-      else await updateDoc(doc(scopedRef, scopedSnap.docs[0].id), payload);
+      await setDoc(lessonDocRef, payload, { merge: true });
+      if (uploadedWorksheet.pendingIncomingUpload) {
+        try {
+          await uploadBytes(
+            ref(storage, uploadedWorksheet.pendingIncomingUpload.storagePath),
+            uploadedWorksheet.pendingIncomingUpload.file,
+            {
+              contentType: "application/pdf",
+              cacheControl: "private,no-store,max-age=0",
+              customMetadata: {
+                lessonDocId: lessonDocRef.id,
+                unitId: selectedNodeId,
+              },
+            },
+          );
+        } catch (error) {
+          const message = String(
+            (error as { message?: string })?.message ||
+              "lesson-pdf-extraction-upload-failed",
+          );
+          resolvedPdfProcessing = buildFailedLessonPdfProcessingMeta(
+            uploadedWorksheet.pdfProcessing,
+            message,
+          );
+          await setDoc(
+            lessonDocRef,
+            {
+              pdfProcessing: resolvedPdfProcessing,
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true },
+          );
+        }
+      }
       setLessonPdfName(uploadedWorksheet.pdfName || "");
       setLessonPdfUrl(uploadedWorksheet.pdfUrl || "");
       setLessonPdfStoragePath(uploadedWorksheet.pdfStoragePath || "");
+      setLessonPdfProcessing(resolvedPdfProcessing);
       setWorksheetPageImages(uploadedWorksheet.pageImages || []);
       setWorksheetTextRegions(uploadedWorksheet.textRegions || []);
       setLessonFootnotes(uploadedFootnotes);
@@ -1597,6 +1698,7 @@ const ManageLesson: React.FC = () => {
         lessonPdfName: uploadedWorksheet.pdfName || "",
         lessonPdfUrl: uploadedWorksheet.pdfUrl || "",
         lessonPdfStoragePath: uploadedWorksheet.pdfStoragePath || "",
+        lessonPdfProcessing: resolvedPdfProcessing,
         worksheetPageImages: uploadedWorksheet.pageImages || [],
         worksheetTextRegions: uploadedWorksheet.textRegions || [],
         worksheetBlanks,
@@ -1605,7 +1707,11 @@ const ManageLesson: React.FC = () => {
         footnoteImageDrafts: {},
       });
       setLessonSaveState("saved");
-      alert("수업 자료를 저장했습니다.");
+      alert(
+        resolvedPdfProcessing.extractionStatus === "failed"
+          ? "수업 자료를 저장했습니다. PDF 구조 추출 등록은 실패했습니다."
+          : "수업 자료를 저장했습니다.",
+      );
     } catch (error) {
       console.error(error);
       setLessonSaveState("dirty");
@@ -1846,6 +1952,7 @@ const ManageLesson: React.FC = () => {
                       selectedPdfFile={selectedPdfFile}
                       lessonPdfName={lessonPdfName}
                       lessonPdfUrl={lessonPdfUrl}
+                      pdfProcessing={lessonPdfProcessing}
                       worksheetPageImages={worksheetPageImages}
                       worksheetTextRegions={worksheetTextRegions}
                       worksheetBlanks={worksheetBlanks}

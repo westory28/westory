@@ -475,4 +475,6 @@ module.exports = {
   OPEN_DATALOADER_PARSER_KIND,
   extractSourceArchivePdf,
   saveSourceArchivePdfArtifacts,
+  extractPdfStructure: extractSourceArchivePdf,
+  savePdfStructureArtifacts: saveSourceArchivePdfArtifacts,
 };

@@ -6,6 +6,11 @@ import {
   type LessonWorksheetPageImage,
   type LessonWorksheetTextRegion,
 } from "./lessonWorksheet";
+import {
+  createEmptyLessonPdfProcessingMeta,
+  normalizeLessonPdfProcessingMeta,
+  type LessonPdfProcessingMeta,
+} from "./lessonPdfExtraction";
 
 export type LessonFootnotePlacement = "inline-bottom" | "reference-panel";
 export const LESSON_FOOTNOTE_TOKEN_REGEX = /\[fn:([a-zA-Z0-9._-]+)\]/g;
@@ -34,6 +39,7 @@ export interface LessonData {
   worksheetPageImages?: LessonWorksheetPageImage[];
   worksheetTextRegions?: LessonWorksheetTextRegion[];
   worksheetBlanks?: LessonWorksheetBlank[];
+  pdfProcessing?: LessonPdfProcessingMeta;
   footnotes?: LessonFootnote[];
   updatedAt?: unknown;
 }
@@ -49,6 +55,7 @@ export interface NormalizedLessonData extends LessonData {
   worksheetPageImages: LessonWorksheetPageImage[];
   worksheetTextRegions: LessonWorksheetTextRegion[];
   worksheetBlanks: LessonWorksheetBlank[];
+  pdfProcessing: LessonPdfProcessingMeta;
   footnotes: LessonFootnote[];
 }
 
@@ -324,6 +331,13 @@ export const normalizeLessonData = (
     worksheetBlanks: normalizeWorksheetBlanks(
       source.worksheetBlanks ?? fallback.worksheetBlanks,
     ),
+    pdfProcessing: normalizeLessonPdfProcessingMeta(source.pdfProcessing, {
+      ...(fallback.pdfProcessing || createEmptyLessonPdfProcessingMeta()),
+      pdfName: String(source.pdfName || fallback.pdfName || "").trim(),
+      pdfStoragePath: String(
+        source.pdfStoragePath || fallback.pdfStoragePath || "",
+      ).trim(),
+    }),
     footnotes: normalizeLessonFootnotes(source.footnotes ?? fallback.footnotes),
     updatedAt: source.updatedAt ?? fallback.updatedAt,
   };

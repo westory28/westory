@@ -18,6 +18,7 @@ const {
   buildSourceArchiveSearchState,
 } = require("./sourceArchiveProcessor");
 const { saveSourceArchivePdfArtifacts } = require("./sourceArchivePdfAdapter");
+Object.assign(exports, require("./lessonPdfBeta"));
 
 const db = getFirestore();
 const storage = getStorage();

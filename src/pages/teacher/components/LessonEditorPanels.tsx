@@ -1,5 +1,11 @@
 ﻿import React from "react";
 import LessonWorksheetStage from "../../../components/common/LessonWorksheetStage";
+import {
+  getLessonPdfExtractionHelpText,
+  getLessonPdfExtractionStatusLabel,
+  getLessonPdfExtractionStatusTone,
+  type LessonPdfProcessingMeta,
+} from "../../../lib/lessonPdfExtraction";
 import type {
   LessonData,
   LessonFootnote,
@@ -76,6 +82,7 @@ type LessonPdfSectionProps = {
   selectedPdfFile: File | null;
   lessonPdfName: string;
   lessonPdfUrl: string;
+  pdfProcessing: LessonPdfProcessingMeta;
   worksheetPageImages: LessonWorksheetPageImage[];
   worksheetTextRegions: LessonWorksheetTextRegion[];
   worksheetBlanks: LessonWorksheetBlank[];
@@ -151,6 +158,24 @@ function blankBadgeLabel(blank: LessonWorksheetBlank) {
     blank.prompt?.trim() ||
     `p.${blank.page + 1} 빈칸`
   );
+}
+
+function pdfStatusBadgeClass(
+  tone: ReturnType<typeof getLessonPdfExtractionStatusTone>,
+) {
+  if (tone === "rose") {
+    return "rounded-full bg-rose-100 px-3 py-1 font-semibold text-rose-700";
+  }
+  if (tone === "emerald") {
+    return "rounded-full bg-emerald-100 px-3 py-1 font-semibold text-emerald-700";
+  }
+  if (tone === "blue") {
+    return "rounded-full bg-blue-100 px-3 py-1 font-semibold text-blue-700";
+  }
+  if (tone === "amber") {
+    return "rounded-full bg-amber-100 px-3 py-1 font-semibold text-amber-700";
+  }
+  return "rounded-full bg-white px-3 py-1 font-semibold text-slate-700";
 }
 
 export function LessonTreePanel({
@@ -686,6 +711,7 @@ export function LessonPdfSection({
   selectedPdfFile,
   lessonPdfName,
   lessonPdfUrl,
+  pdfProcessing,
   worksheetPageImages,
   worksheetTextRegions,
   worksheetBlanks,
@@ -711,6 +737,18 @@ export function LessonPdfSection({
 }: LessonPdfSectionProps) {
   const [isBlankManagerOpen, setIsBlankManagerOpen] = React.useState(false);
   const [showAllBlanks, setShowAllBlanks] = React.useState(false);
+  const pdfStatusLabel = React.useMemo(
+    () => getLessonPdfExtractionStatusLabel(pdfProcessing),
+    [pdfProcessing],
+  );
+  const pdfStatusTone = React.useMemo(
+    () => getLessonPdfExtractionStatusTone(pdfProcessing),
+    [pdfProcessing],
+  );
+  const pdfStatusHelpText = React.useMemo(
+    () => getLessonPdfExtractionHelpText(pdfProcessing),
+    [pdfProcessing],
+  );
   const activeBlank = React.useMemo(
     () => sortedBlanks.find((blank) => blank.id === activeBlankId) || null,
     [activeBlankId, sortedBlanks],
@@ -778,8 +816,18 @@ export function LessonPdfSection({
         <span className="rounded-full bg-white px-3 py-1 font-semibold text-slate-700">
           현재 파일: {selectedPdfFile?.name || lessonPdfName || "없음"}
         </span>
+        {!!pdfStatusLabel && (
+          <span className={pdfStatusBadgeClass(pdfStatusTone)}>
+            {pdfStatusLabel}
+          </span>
+        )}
         <span>오른쪽 플로팅 아이콘으로 제작 도구와 키워드 목록을 확인할 수 있습니다.</span>
       </div>
+      {!!pdfStatusHelpText && (
+        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+          {pdfStatusHelpText}
+        </div>
+      )}
       {draftBlank && (
         <div className="rounded-3xl border border-blue-200 bg-blue-50/80 p-4">
           <div className="flex items-center gap-2 text-base font-bold text-slate-900">

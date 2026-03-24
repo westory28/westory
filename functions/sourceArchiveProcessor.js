@@ -38,6 +38,9 @@ const inferExtension = (contentType, objectName) => {
   return extension || "jpg";
 };
 
+const normalizeStorageBasePath = (value) =>
+  normalizeText(value).replace(/^\/+|\/+$/g, "");
+
 const buildRevisionPaths = ({ assetId, revision, contentType, objectName }) => {
   const basePath = `source-archive/${assetId}/${revision}`;
   const extension = inferExtension(contentType, objectName);
@@ -51,12 +54,21 @@ const buildRevisionPaths = ({ assetId, revision, contentType, objectName }) => {
 };
 
 const buildPdfRevisionPaths = ({ assetId, revision }) => {
-  const basePath = `source-archive/${assetId}/${revision}`;
-  const extractedPath = `${basePath}/extracted`;
-  return {
+  return buildPdfRevisionPathsForBasePath({
+    basePath: `source-archive/${assetId}`,
     revision,
-    basePath,
-    originalPath: `${basePath}/original.pdf`,
+  });
+};
+
+const buildPdfRevisionPathsForBasePath = ({ basePath, revision }) => {
+  const normalizedBasePath = normalizeStorageBasePath(basePath);
+  const normalizedRevision = normalizeText(revision);
+  const revisionBasePath = `${normalizedBasePath}/${normalizedRevision}`;
+  const extractedPath = `${revisionBasePath}/extracted`;
+  return {
+    revision: normalizedRevision,
+    basePath: revisionBasePath,
+    originalPath: `${revisionBasePath}/original.pdf`,
     extractedPath,
     extractedManifestPath: `${extractedPath}/manifest.json`,
     extractedContentPath: `${extractedPath}/content.md`,
@@ -83,6 +95,8 @@ const saveOriginalSourceArchiveFile = async ({
     byteSize: inputBuffer.length,
   };
 };
+
+const saveOriginalBinaryFile = saveOriginalSourceArchiveFile;
 
 const renderSourceArchiveVariants = async ({ inputBuffer }) => {
   const sourceImage = sharp(inputBuffer, {
@@ -202,7 +216,9 @@ module.exports = {
   mergeSearchText,
   buildRevisionPaths,
   buildPdfRevisionPaths,
+  buildPdfRevisionPathsForBasePath,
   saveOriginalSourceArchiveFile,
+  saveOriginalBinaryFile,
   renderSourceArchiveVariants,
   saveJsonStorageFile,
   saveTextStorageFile,
