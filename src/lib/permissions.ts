@@ -30,7 +30,8 @@ export const isAdminUser = (userData?: Partial<UserData> | null, email?: string 
 export const hasStaffPermission = (
     userData: Partial<UserData> | null | undefined,
     permission: StaffPermission,
-) => normalizeStaffPermissions(userData?.staffPermissions).includes(permission);
+) => (userData?.role !== 'student' || userData?.teacherPortalEnabled === true)
+    && normalizeStaffPermissions(userData?.staffPermissions).includes(permission);
 
 export const canAccessTeacherPortal = (userData?: Partial<UserData> | null, email?: string | null) => {
     const enabled = userData?.teacherPortalEnabled === true;

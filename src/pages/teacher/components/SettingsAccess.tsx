@@ -26,7 +26,9 @@ const PERMISSION_LABELS: Record<StaffPermission, string> = {
 };
 
 const hasGrantedAccess = (user: UserRow) =>
-    user.teacherPortalEnabled || user.staffPermissions.length > 0;
+    user.role === 'student'
+        ? user.teacherPortalEnabled
+        : user.teacherPortalEnabled || user.staffPermissions.length > 0;
 
 const TABLE_COLUMN_COUNT = 3 + STAFF_PERMISSION_KEYS.length;
 

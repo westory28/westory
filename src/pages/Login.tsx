@@ -1191,6 +1191,8 @@ const Login: React.FC = () => {
             }
 
             if (!userDocExists) {
+                updatePayload.staffPermissions = [];
+                updatePayload.teacherPortalEnabled = false;
                 updatePayload.createdAt = serverTimestamp();
             }
 

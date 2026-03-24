@@ -3,7 +3,8 @@
   "private": true,
   "main": "index.js",
   "scripts": {
-    "check": "node --check index.js"
+    "check": "node --check index.js",
+    "cleanup:student-teacher-portal": "node scripts/cleanup-student-teacher-portal.cjs"
   },
   "engines": {
     "node": "20"
