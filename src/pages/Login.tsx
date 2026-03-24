@@ -25,7 +25,7 @@ import { auth, authPersistenceReady, configuredAuthDomain, db } from '../lib/fir
 import { readLocalOnly, readStorage, removeStorage, writeLocalOnly, writeStorage } from '../lib/safeStorage';
 import { useAuth } from '../contexts/AuthContext';
 import type { UserData } from '../types';
-import { canAccessTeacherPortal, isAdminUser, normalizeStaffPermissions } from '../lib/permissions';
+import { canAccessTeacherPortal, getDefaultTeacherRoute, isAdminUser, normalizeStaffPermissions } from '../lib/permissions';
 
 const TEACHER_EMAIL = 'westoria28@gmail.com';
 const ALLOWED_SCHOOL_EMAIL_DOMAIN = 'yongshin-ms.ms.kr';
@@ -63,6 +63,8 @@ interface StudentOnboardingResult {
     privacyAgreed: boolean;
     consentAgreedItems: string[];
     newlyAgreedPrivacy: boolean;
+    shouldPersistProfile: boolean;
+    profileIncomplete: boolean;
 }
 
 const defaultGradeOptions: SchoolOption[] = [
@@ -80,7 +82,7 @@ const defaultNumberOptions: SchoolOption[] = Array.from({ length: 40 }, (_, i) =
     label: `${i + 1}번`,
 }));
 
-const getSavedRole = (): UserData['role'] | null => {
+const getSavedRole = (): LoginMode | null => {
     const saved = readStorage(ROLE_SESSION_KEY);
     return saved === 'teacher' || saved === 'student' ? saved : null;
 };
@@ -97,7 +99,6 @@ const isAllowedLoginEmail = (email: unknown): boolean => {
     return normalizedEmail === TEACHER_EMAIL || normalizedEmail.endsWith(`@${ALLOWED_SCHOOL_EMAIL_DOMAIN}`);
 };
 
-const getSchoolEmailBlockMessage = () => `@${ALLOWED_SCHOOL_EMAIL_DOMAIN} 이메일로만 가입할 수 있습니다.`;
 const normalizeSchoolField = (value: unknown): string => {
     const raw = String(value ?? '').trim();
     if (!raw) return '';
@@ -179,6 +180,12 @@ const isIOSDevice = (): boolean => {
     return /iPhone|iPad|iPod/i.test(ua);
 };
 
+const isAndroidDevice = (): boolean => {
+    if (typeof navigator === 'undefined') return false;
+    const ua = navigator.userAgent || '';
+    return /Android/i.test(ua);
+};
+
 const isSafariBrowser = (): boolean => {
     if (typeof navigator === 'undefined') return false;
     const ua = navigator.userAgent || '';
@@ -194,7 +201,7 @@ const isRestrictedInAppBrowser = (): boolean => {
 };
 
 const shouldPreferRedirectLogin = (): boolean => {
-    return isSafariBrowser() || isIOSDevice();
+    return isSafariBrowser() || isIOSDevice() || isAndroidDevice();
 };
 
 const markRedirectAttempt = (mode: LoginMode) => {
@@ -221,6 +228,56 @@ const shouldResolveRedirectOnBoot = (): boolean => {
     return isIOSDevice() || !!readRedirectAttemptMode() || !!readPendingLoginMode();
 };
 
+const getRedirectStartMessage = (mode: LoginMode): string => {
+    if (mode === 'teacher') {
+        return 'Google 로그인 화면으로 이동합니다. 관리자 계정을 선택한 뒤 잠시만 기다려주세요.';
+    }
+
+    if (isAndroidDevice()) {
+        return `Google 로그인 화면으로 이동합니다. 갤럭시탭에서는 학교 계정(@${ALLOWED_SCHOOL_EMAIL_DOMAIN})을 다시 선택하거나 다른 계정을 눌러 학교 계정을 선택해주세요.`;
+    }
+
+    if (isIOSDevice()) {
+        return 'Google 로그인 화면으로 이동합니다. iPhone/iPad에서는 화면이 바뀐 뒤 뒤로가기를 누르지 말고 잠시만 기다려주세요.';
+    }
+
+    return `Google 로그인 화면으로 이동합니다. 학교 계정(@${ALLOWED_SCHOOL_EMAIL_DOMAIN})을 선택한 뒤 잠시만 기다려주세요.`;
+};
+
+const getUnauthorizedEmailNotice = (email?: string | null): string => {
+    const normalizedEmail = normalizeEmail(email);
+    if (normalizedEmail) {
+        return `${normalizedEmail}은 사용할 수 없습니다. 학교 계정(@${ALLOWED_SCHOOL_EMAIL_DOMAIN})으로 다시 로그인해주세요.`;
+    }
+    return `학교 계정(@${ALLOWED_SCHOOL_EMAIL_DOMAIN})으로만 로그인할 수 있습니다.`;
+};
+
+const getStudentBootstrapFailureMessage = (error?: unknown): string => {
+    const code = (error as Partial<AuthError>)?.code || '';
+
+    if (code === 'permission-denied') {
+        return '로그인은 되었지만 학생 정보 자동 확인에 실패했습니다. 현재 계정이 맞으면 선생님에게 학년/반/번호 확인을 요청하세요. 계정이 다르면 다른 계정으로 다시 로그인하세요.';
+    }
+
+    return '학생 정보 확인 중 오류가 발생했습니다. 다시 시도해주세요.';
+};
+
+const buildGoogleProvider = (mode: LoginMode) => {
+    const provider = new GoogleAuthProvider();
+    const customParameters: Record<string, string> = {
+        prompt: 'select_account',
+    };
+
+    if (mode === 'student') {
+        customParameters.hd = ALLOWED_SCHOOL_EMAIL_DOMAIN;
+    } else {
+        customParameters.login_hint = TEACHER_EMAIL;
+    }
+
+    provider.setCustomParameters(customParameters);
+    return provider;
+};
+
 const getLoginFailureMessage = (error?: unknown): string => {
     const code = (error as Partial<AuthError>)?.code || '';
 
@@ -234,6 +291,10 @@ const getLoginFailureMessage = (error?: unknown): string => {
 
     if (code === 'auth/popup-blocked') {
         return '브라우저가 로그인 팝업을 차단했습니다. 다시 시도하거나 리다이렉트 로그인을 사용해주세요.';
+    }
+
+    if (code === 'permission-denied') {
+        return getStudentBootstrapFailureMessage(error);
     }
 
     if (isIOSDevice() && isLikelyInAppBrowser()) {
@@ -291,6 +352,7 @@ const Login: React.FC = () => {
 
     const [authBusy, setAuthBusy] = useState(false);
     const [loginNotice, setLoginNotice] = useState('');
+    const [redirectRecoveryPending, setRedirectRecoveryPending] = useState(() => shouldResolveRedirectOnBoot());
 
     const [policyOpen, setPolicyOpen] = useState(false);
     const [policyTitle, setPolicyTitle] = useState('');
@@ -318,9 +380,11 @@ const Login: React.FC = () => {
     const consentResolverRef = useRef<((value: string[] | null) => void) | null>(null);
     const redirectHandledRef = useRef(false);
     const autoResumeUidRef = useRef<string | null>(null);
+    const authActionLockRef = useRef(false);
 
     const preferredRole = getSavedRole();
-    const isTeacherUser = (preferredRole || userData?.role) === 'teacher';
+    const canUseTeacherPortal = canAccessTeacherPortal(userData, currentUser?.email || '');
+    const isTeacherUser = preferredRole === 'teacher' || canUseTeacherPortal;
 
     const forceRoute = (targetPath: string) => {
         navigate(targetPath, { replace: true });
@@ -339,7 +403,7 @@ const Login: React.FC = () => {
         removeStorage(ROLE_SESSION_KEY);
     };
 
-    const saveRoleCache = (role: UserData['role']) => {
+    const saveRoleCache = (role: LoginMode) => {
         writeStorage(ROLE_SESSION_KEY, role);
     };
 
@@ -353,13 +417,12 @@ const Login: React.FC = () => {
         removeStorage(PENDING_LOGIN_MODE_KEY);
     };
 
-    const rejectUnauthorizedEmailLogin = async () => {
+    const rejectUnauthorizedEmailLogin = async (email?: string | null) => {
         clearPendingLoginMode();
         clearRoleCache();
         clearRedirectAttempt();
         autoResumeUidRef.current = null;
-        setLoginNotice('');
-        alert(getSchoolEmailBlockMessage());
+        setLoginNotice(getUnauthorizedEmailNotice(email));
         await signOut(auth);
     };
 
@@ -583,8 +646,9 @@ const Login: React.FC = () => {
         let classValue = normalizeSchoolField(existing?.class) || normalizeSchoolField(rosterProfile?.class);
         let numberValue = normalizeSchoolField(existing?.number) || normalizeSchoolField(rosterProfile?.number);
         const customNameConfirmed = existing?.customNameConfirmed === true;
+        const shouldPersistProfile = existing?.role !== 'student' || !customNameConfirmed;
 
-        const needsProfileInput = !customNameConfirmed || !resolvedName || !gradeValue || !classValue || !numberValue;
+        const needsProfileInput = shouldPersistProfile && (!resolvedName || !gradeValue || !classValue || !numberValue);
 
         if (needsProfileInput) {
             const profile = await openProfileModal({
@@ -603,15 +667,17 @@ const Login: React.FC = () => {
             numberValue = normalizeSchoolField(profile.number);
         }
 
-        if (!resolvedName || !gradeValue || !classValue || !numberValue) {
+        const profileIncomplete = !resolvedName || !gradeValue || !classValue || !numberValue;
+
+        if (shouldPersistProfile && profileIncomplete) {
             alert('학생 정보 입력이 완료되지 않았습니다.');
             return null;
         }
-        if (!isValidStudentName(resolvedName)) {
+        if (shouldPersistProfile && !isValidStudentName(resolvedName)) {
             alert('이름은 한글 2~4글자만 입력 가능합니다.');
             return null;
         }
-        if (!isValidStudentNumber(numberValue)) {
+        if (shouldPersistProfile && !isValidStudentNumber(numberValue)) {
             alert('번호는 드롭다운에서 선택해주세요.');
             return null;
         }
@@ -624,6 +690,10 @@ const Login: React.FC = () => {
 
         if (!privacyAgreed) {
             const items = await loadConsentItems();
+            if (items.length === 0) {
+                alert('개인정보 동의 항목을 불러오지 못했습니다. 네트워크 상태를 확인한 뒤 다시 시도해주세요.');
+                return null;
+            }
             const selected = await openConsentModal(items, existingConsentItems);
             if (selected === null) return null;
             privacyAgreed = true;
@@ -638,12 +708,14 @@ const Login: React.FC = () => {
             privacyAgreed,
             consentAgreedItems,
             newlyAgreedPrivacy: existing?.privacyAgreed !== true && privacyAgreed,
+            shouldPersistProfile,
+            profileIncomplete,
         };
     };
 
     const finishLoginForRole = async (user: User, mode: LoginMode) => {
         if (!isAllowedLoginEmail(user.email)) {
-            await rejectUnauthorizedEmailLogin();
+            await rejectUnauthorizedEmailLogin(user.email);
             return;
         }
 
@@ -691,6 +763,8 @@ const Login: React.FC = () => {
             resolvedName = (user.displayName || '교사').trim() || '교사';
         }
 
+        const shouldPersistStudentProfile = nextRole === 'student' && onboardingResult?.shouldPersistProfile === true;
+
         const basePayload: Record<string, unknown> = {
             uid: user.uid,
             email: user.email || '',
@@ -705,7 +779,7 @@ const Login: React.FC = () => {
             lastLogin: serverTimestamp(),
         };
 
-        if (resolvedName) {
+        if (resolvedName && (nextRole !== 'student' || shouldPersistStudentProfile)) {
             basePayload.name = resolvedName;
         }
 
@@ -716,14 +790,20 @@ const Login: React.FC = () => {
                 await signOut(auth);
                 return;
             }
-            basePayload.customNameConfirmed = true;
-            basePayload.grade = onboardingResult.grade;
-            basePayload.class = onboardingResult.classValue;
-            basePayload.number = onboardingResult.number;
             basePayload.privacyAgreed = onboardingResult.privacyAgreed;
             basePayload.consentAgreedItems = onboardingResult.consentAgreedItems;
             if (onboardingResult.newlyAgreedPrivacy) {
                 basePayload.privacyAgreedAt = serverTimestamp();
+            }
+            if (shouldPersistStudentProfile) {
+                basePayload.customNameConfirmed = true;
+                basePayload.grade = onboardingResult.grade;
+                basePayload.class = onboardingResult.classValue;
+                basePayload.number = onboardingResult.number;
+            } else if (onboardingResult.profileIncomplete) {
+                console.warn('[Auth] Existing student profile is locked for self-edit; skipping profile rewrite during login.', {
+                    uid: user.uid,
+                });
             }
         }
 
@@ -739,22 +819,42 @@ const Login: React.FC = () => {
             await setDoc(userRef, basePayload, { merge: true });
         }
 
-        saveRoleCache(nextRole);
+        const nextPortalMode: LoginMode = nextRole === 'student' ? 'student' : 'teacher';
+        const teacherRouteUser: Partial<UserData> = {
+            ...existing,
+            uid: user.uid,
+            email: user.email || existing?.email || '',
+            role: nextRole,
+            staffPermissions: nextRole === 'staff' ? staffPermissions : [],
+            teacherPortalEnabled: nextRole === 'teacher'
+                ? true
+                : nextRole === 'staff'
+                    ? existing?.teacherPortalEnabled === true
+                    : false,
+        };
+        const targetPath = nextPortalMode === 'teacher'
+            ? getDefaultTeacherRoute(teacherRouteUser, user.email || '')
+            : '/student/dashboard';
+
+        saveRoleCache(nextPortalMode);
         clearPendingLoginMode();
-        forceRoute(nextRole === 'teacher' ? '/teacher/dashboard' : '/student/dashboard');
+        forceRoute(targetPath);
     };
 
     useEffect(() => {
         if (redirectHandledRef.current) return;
         redirectHandledRef.current = true;
-        if (!shouldResolveRedirectOnBoot()) return;
+        if (!redirectRecoveryPending) return;
 
         const resolveRedirect = async () => {
             setAuthBusy(true);
             try {
                 await authPersistenceReady;
                 const result = await getRedirectResult(auth);
-                const redirectedUser = result?.user || auth.currentUser;
+                const savedMode = getPendingLoginMode();
+                const redirectMode = readRedirectAttemptMode();
+                const hasRedirectBreadcrumb = !!savedMode || !!redirectMode;
+                const redirectedUser = result?.user || (hasRedirectBreadcrumb ? auth.currentUser : null);
                 if (!redirectedUser) {
                     if (readRedirectAttemptMode()) {
                         clearRedirectAttempt();
@@ -764,8 +864,6 @@ const Login: React.FC = () => {
                     return;
                 }
 
-                const savedMode = getPendingLoginMode();
-                const redirectMode = readRedirectAttemptMode();
                 const resolvedMode: LoginMode = savedMode
                     || redirectMode
                     || (redirectedUser.email === TEACHER_EMAIL ? 'teacher' : 'student');
@@ -784,11 +882,13 @@ const Login: React.FC = () => {
                 }
 
                 console.error('Redirect login failed', error);
-                const recoveredUser = auth.currentUser;
+                const savedMode = getPendingLoginMode();
+                const redirectMode = readRedirectAttemptMode();
+                const hasRedirectBreadcrumb = !!savedMode || !!redirectMode;
+                const recoveredUser = hasRedirectBreadcrumb ? auth.currentUser : null;
                 if (recoveredUser) {
-                    const savedMode = getPendingLoginMode();
                     const effectiveMode: LoginMode = savedMode
-                        || readRedirectAttemptMode()
+                        || redirectMode
                         || (recoveredUser.email === TEACHER_EMAIL ? 'teacher' : 'student');
                     await finishLoginForRole(recoveredUser, effectiveMode);
                     clearRedirectAttempt();
@@ -800,11 +900,12 @@ const Login: React.FC = () => {
                 alert(`리다이렉트 로그인 처리 중 오류가 발생했습니다. 다시 시도해주세요. (${(error as Partial<AuthError>)?.code || 'unknown'})`);
             } finally {
                 setAuthBusy(false);
+                setRedirectRecoveryPending(false);
             }
         };
 
         void resolveRedirect();
-    }, []);
+    }, [redirectRecoveryPending]);
 
     useEffect(() => {
         if (!currentUser) {
@@ -812,9 +913,10 @@ const Login: React.FC = () => {
             return;
         }
 
-        if (loading || authBusy) return;
+        if (loading || authBusy || redirectRecoveryPending) return;
+        if (preferredRole === 'teacher' && !userData) return;
         if (!isAllowedLoginEmail(currentUser.email)) {
-            void rejectUnauthorizedEmailLogin();
+            void rejectUnauthorizedEmailLogin(currentUser.email);
             return;
         }
         if (autoResumeUidRef.current === currentUser.uid) return;
@@ -830,7 +932,7 @@ const Login: React.FC = () => {
             if (resolvedRole === 'teacher') {
                 saveRoleCache('teacher');
                 clearPendingLoginMode();
-                forceRoute('/teacher/dashboard');
+                forceRoute(getDefaultTeacherRoute(userData, currentUser.email || ''));
                 return;
             }
 
@@ -838,20 +940,27 @@ const Login: React.FC = () => {
         };
 
         void resumeAuthenticatedSession();
-    }, [authBusy, currentUser, loading, navigate, preferredRole, userData?.role]);
+    }, [authBusy, currentUser, loading, navigate, preferredRole, redirectRecoveryPending, userData?.role]);
 
     const goToDashboard = async () => {
         if (!currentUser) return;
+        if (preferredRole === 'teacher' && !userData) {
+            setLoginNotice('교사 계정 정보를 확인하는 중입니다. 잠시만 기다려주세요.');
+            return;
+        }
         if (!isAllowedLoginEmail(currentUser.email)) {
-            await rejectUnauthorizedEmailLogin();
+            await rejectUnauthorizedEmailLogin(currentUser.email);
             return;
         }
         if (isTeacherUser) {
-            forceRoute('/teacher/dashboard');
+            saveRoleCache('teacher');
+            clearPendingLoginMode();
+            forceRoute(getDefaultTeacherRoute(userData, currentUser.email || ''));
             return;
         }
 
-        if (authBusy) return;
+        if (authBusy || authActionLockRef.current) return;
+        authActionLockRef.current = true;
         setAuthBusy(true);
 
         try {
@@ -871,15 +980,22 @@ const Login: React.FC = () => {
                 email: currentUser.email || '',
                 photoURL: currentUser.photoURL || '',
                 role: 'student',
-                name: setup.name,
-                customNameConfirmed: true,
-                grade: setup.grade,
-                class: setup.classValue,
-                number: setup.number,
                 privacyAgreed: setup.privacyAgreed,
                 consentAgreedItems: setup.consentAgreedItems,
                 lastLogin: serverTimestamp(),
             };
+
+            if (setup.shouldPersistProfile) {
+                updatePayload.name = setup.name;
+                updatePayload.customNameConfirmed = true;
+                updatePayload.grade = setup.grade;
+                updatePayload.class = setup.classValue;
+                updatePayload.number = setup.number;
+            } else if (setup.profileIncomplete) {
+                console.warn('[Auth] Existing student profile is locked for self-edit; skipping profile rewrite during auto-resume.', {
+                    uid: currentUser.uid,
+                });
+            }
 
             if (setup.newlyAgreedPrivacy) {
                 updatePayload.privacyAgreedAt = serverTimestamp();
@@ -895,39 +1011,44 @@ const Login: React.FC = () => {
             forceRoute('/student/dashboard');
         } catch (error) {
             console.error('Failed to continue student onboarding', error);
-            alert('학생 정보 확인 중 오류가 발생했습니다.');
+            alert(getStudentBootstrapFailureMessage(error));
         } finally {
+            authActionLockRef.current = false;
             setAuthBusy(false);
         }
     };
 
     const handleLogin = async (mode: LoginMode) => {
-        if (authBusy) return;
+        if (authBusy || authActionLockRef.current) return;
         if (restrictedInAppBrowser) {
             alert('네이버앱 또는 카카오톡 인앱 브라우저에서는 로그인할 수 없습니다. Chrome 또는 Safari에서 위스토리를 열어주세요.');
             return;
         }
-        const provider = new GoogleAuthProvider();
-        provider.setCustomParameters({ prompt: 'select_account' });
+        authActionLockRef.current = true;
+        const provider = buildGoogleProvider(mode);
+        const useRedirect = shouldPreferRedirectLogin();
         setPendingLoginMode(mode);
         setLoginNotice('');
         setAuthBusy(true);
 
         try {
             await authPersistenceReady;
-            if (shouldPreferRedirectLogin()) {
+            if (useRedirect) {
                 markRedirectAttempt(mode);
-                setLoginNotice('로그인 화면으로 이동 중입니다. iPhone에서는 화면이 바뀐 뒤 뒤로가기를 누르지 말고 잠시만 기다려주세요.');
+                console.info('[Auth] Starting Google redirect login', { mode });
+                setLoginNotice(getRedirectStartMessage(mode));
                 await signInWithRedirect(auth, provider);
                 return;
             }
+            console.info('[Auth] Starting Google popup login', { mode });
             const result = await signInWithPopup(auth, provider);
             await finishLoginForRole(result.user, mode);
         } catch (error) {
             if (isPopupFallbackError(error)) {
                 try {
                     markRedirectAttempt(mode);
-                    setLoginNotice('브라우저 로그인 화면으로 이동 중입니다. 화면 전환 후 잠시만 기다려주세요.');
+                    console.info('[Auth] Falling back to Google redirect login', { mode, code: (error as Partial<AuthError>)?.code || 'unknown' });
+                    setLoginNotice(getRedirectStartMessage(mode));
                     await signInWithRedirect(auth, provider);
                     return;
                 } catch (redirectError) {
@@ -940,13 +1061,15 @@ const Login: React.FC = () => {
             clearRedirectAttempt();
             alert(getLoginFailureMessage(error));
         } finally {
+            authActionLockRef.current = false;
             setAuthBusy(false);
         }
     };
 
     const handleSwitchAccount = async () => {
-        if (authBusy) return;
+        if (authBusy || authActionLockRef.current) return;
 
+        authActionLockRef.current = true;
         setAuthBusy(true);
         clearRoleCache();
         clearPendingLoginMode();
@@ -959,6 +1082,7 @@ const Login: React.FC = () => {
         } catch (error) {
             console.error('Failed to sign out before switching account', error);
         } finally {
+            authActionLockRef.current = false;
             if (typeof window !== 'undefined') {
                 window.location.replace(`${window.location.pathname}${window.location.search}#/`);
                 return;
@@ -1049,6 +1173,18 @@ const Login: React.FC = () => {
                             <img src="https://fonts.gstatic.com/s/i/productlogos/googleg/v6/24px.svg" width={24} height={24} alt="Google" />
                             학생 로그인
                         </button>
+                        <p className="text-center text-xs leading-5 text-gray-500 px-3">
+                            학교 Google 계정(@{ALLOWED_SCHOOL_EMAIL_DOMAIN})으로만 로그인할 수 있습니다.
+                        </p>
+                        {!!loginNotice && (
+                            <button
+                                onClick={() => void handleSwitchAccount()}
+                                disabled={authBusy}
+                                className="w-full bg-white border border-gray-200 px-6 py-3 rounded-full text-sm font-bold text-gray-700 shadow hover:bg-gray-50 transition disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                                다른 계정으로 다시 시도
+                            </button>
+                        )}
                     </div>
                 )}
             </div>
