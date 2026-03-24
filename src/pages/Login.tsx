@@ -1132,7 +1132,7 @@ const Login: React.FC = () => {
             const cachedStudent = userData?.uid === currentUser.uid && isReturningConfirmedStudent(userData)
                 ? userData
                 : null;
-            let existing = cachedStudent;
+            let existing: Partial<UserData> | null = cachedStudent;
             let userDocExists = !!cachedStudent;
 
             if (!existing) {
