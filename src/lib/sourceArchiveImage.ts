@@ -15,6 +15,10 @@ export interface PreparedSourceArchiveUpload {
     byteSize: number;
     extension: string;
     originalName: string;
+    originalMimeType: string;
+    originalByteSize: number;
+    originalWidth: number;
+    originalHeight: number;
 }
 
 const loadImageElement = (file: File) => new Promise<HTMLImageElement>((resolve, reject) => {
@@ -77,12 +81,25 @@ const renderVariant = async (
         height,
         byteSize: blob.size,
         extension: getExtensionFromMimeType(blob.type || variant.mimeType),
-    } satisfies Omit<PreparedSourceArchiveUpload, 'originalName'>;
+    } satisfies Omit<
+        PreparedSourceArchiveUpload,
+        'originalName' | 'originalMimeType' | 'originalByteSize' | 'originalWidth' | 'originalHeight'
+    >;
 };
 
 export const buildSourceArchiveUpload = async (file: File): Promise<PreparedSourceArchiveUpload> => {
     const image = await loadImageElement(file);
-    let lastResult: Omit<PreparedSourceArchiveUpload, 'originalName'> | null = null;
+    const sourceMeta = {
+        originalName: file.name,
+        originalMimeType: file.type || 'image/jpeg',
+        originalByteSize: file.size || 0,
+        originalWidth: image.width || 0,
+        originalHeight: image.height || 0,
+    };
+    let lastResult: Omit<
+        PreparedSourceArchiveUpload,
+        'originalName' | 'originalMimeType' | 'originalByteSize' | 'originalWidth' | 'originalHeight'
+    > | null = null;
 
     for (const variant of UPLOAD_VARIANTS) {
         try {
@@ -91,7 +108,7 @@ export const buildSourceArchiveUpload = async (file: File): Promise<PreparedSour
             if (result.byteSize <= MAX_SOURCE_ARCHIVE_UPLOAD_BYTES) {
                 return {
                     ...result,
-                    originalName: file.name,
+                    ...sourceMeta,
                 };
             }
         } catch {
@@ -105,6 +122,6 @@ export const buildSourceArchiveUpload = async (file: File): Promise<PreparedSour
 
     return {
         ...lastResult,
-        originalName: file.name,
+        ...sourceMeta,
     };
 };

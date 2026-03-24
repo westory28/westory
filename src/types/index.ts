@@ -148,22 +148,59 @@ export type SourceArchiveAssetType =
     | 'artifact'
     | 'other';
 
-export type SourceArchiveProcessingStatus = 'processing' | 'ready' | 'failed';
+export type SourceArchiveLifecycleStatus =
+    | 'uploading'
+    | 'queued'
+    | 'processing'
+    | 'ready'
+    | 'failed'
+    | 'archived';
+
+export type SourceArchiveProcessingStatus = SourceArchiveLifecycleStatus;
+
+export type SourceArchiveMediaKind = 'image';
+
+export type SourceArchiveSearchStatus = 'metadata-only' | 'pending' | 'ready' | 'failed';
+
+export interface SourceArchiveFileMeta {
+    storagePath: string;
+    originalName: string;
+    mimeType: string;
+    byteSize: number;
+    width: number;
+    height: number;
+    revision: string;
+    originalAvailable: boolean;
+    legacyPreviewOnly: boolean;
+}
+
+export interface SourceArchiveSearchMeta {
+    status: SourceArchiveSearchStatus;
+    artifactPath: string;
+    previewText: string;
+    updatedAt?: any;
+}
 
 export interface SourceArchiveImageMeta {
     storagePath: string;
+    originalPath: string;
     thumbPath: string;
     displayPath: string;
     mime: string;
+    originalMime: string;
     width: number;
     height: number;
     byteSize: number;
+    originalWidth: number;
+    originalHeight: number;
+    originalByteSize: number;
     thumbWidth: number;
     thumbHeight: number;
     thumbByteSize: number;
     displayWidth: number;
     displayHeight: number;
     displayByteSize: number;
+    revision?: string;
     originalName?: string;
     pendingUploadToken?: string;
     pendingUploadPath?: string;
@@ -171,6 +208,10 @@ export interface SourceArchiveImageMeta {
 
 export interface SourceArchiveAsset {
     id: string;
+    schemaVersion: number;
+    mediaKind: SourceArchiveMediaKind;
+    status: SourceArchiveLifecycleStatus;
+    currentRevision: string;
     title: string;
     description: string;
     era: string;
@@ -180,8 +221,11 @@ export interface SourceArchiveAsset {
     tags: string[];
     source: string;
     searchText: string;
+    file: SourceArchiveFileMeta;
+    search: SourceArchiveSearchMeta;
     processingStatus: SourceArchiveProcessingStatus;
     processingError: string;
+    processedAt?: any;
     image: SourceArchiveImageMeta;
     createdAt?: any;
     updatedAt?: any;
@@ -191,6 +235,10 @@ export interface SourceArchiveAsset {
 
 export interface SourceArchiveDraft {
     id?: string;
+    schemaVersion?: number;
+    mediaKind?: SourceArchiveMediaKind;
+    status?: SourceArchiveLifecycleStatus;
+    currentRevision?: string;
     title: string;
     description: string;
     era: string;
@@ -200,8 +248,11 @@ export interface SourceArchiveDraft {
     tags: string[];
     source: string;
     searchText?: string;
+    file?: Partial<SourceArchiveFileMeta>;
+    search?: Partial<SourceArchiveSearchMeta>;
     processingStatus?: SourceArchiveProcessingStatus;
     processingError?: string;
+    processedAt?: any;
     image?: Partial<SourceArchiveImageMeta>;
     createdAt?: any;
     updatedAt?: any;
