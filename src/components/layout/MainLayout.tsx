@@ -3,6 +3,7 @@ import Header from '../common/Header';
 import Footer from '../common/Footer';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { markLoginPerf, measureLoginPerf } from '../../lib/loginPerf';
 import { readStorage } from '../../lib/safeStorage';
 import { canAccessTeacherPath, canAccessTeacherPortal, getDefaultTeacherRoute } from '../../lib/permissions';
 
@@ -37,6 +38,19 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             }
         }
     }, [currentUser, userData, loading, location.pathname, navigate]);
+
+    useEffect(() => {
+        if (loading || !currentUser) return;
+
+        markLoginPerf('westory-main-layout-ready', {
+            pathname: location.pathname,
+        });
+        measureLoginPerf(
+            'westory-route-ready',
+            'westory-login-first-route-decided',
+            'westory-main-layout-ready',
+        );
+    }, [currentUser, loading, location.pathname]);
 
     if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
 

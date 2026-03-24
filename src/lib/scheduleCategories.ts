@@ -36,6 +36,9 @@ export const DEFAULT_SCHEDULE_CATEGORIES: ScheduleCategory[] = [
 ];
 
 const DEFAULT_CATEGORY_MAP = new Map(DEFAULT_SCHEDULE_CATEGORIES.map((item) => [item.key, item]));
+const scheduleCategoryListeners = new Set<(categories: ScheduleCategory[]) => void>();
+let sharedCategories = DEFAULT_SCHEDULE_CATEGORIES;
+let sharedCategoriesUnsubscribe: (() => void) | null = null;
 
 const normalizeColor = (value: unknown, fallback: string) => {
     const color = String(value || '').trim();
@@ -102,23 +105,46 @@ export const getScheduleCategoryMeta = (key: unknown, categories?: ScheduleCateg
         };
 };
 
+const notifyScheduleCategoryListeners = () => {
+    scheduleCategoryListeners.forEach((listener) => {
+        listener(sharedCategories);
+    });
+};
+
+const ensureSharedScheduleCategorySubscription = () => {
+    if (sharedCategoriesUnsubscribe) return;
+
+    const ref = doc(db, 'site_settings', 'schedule_categories');
+    sharedCategoriesUnsubscribe = onSnapshot(
+        ref,
+        (snapshot) => {
+            const data = snapshot.data() as { items?: RawScheduleCategory[] } | undefined;
+            sharedCategories = resolveScheduleCategories(data?.items);
+            notifyScheduleCategoryListeners();
+        },
+        (error) => {
+            console.error('Failed to load schedule categories:', error);
+            sharedCategories = DEFAULT_SCHEDULE_CATEGORIES;
+            notifyScheduleCategoryListeners();
+        }
+    );
+};
+
 export const useScheduleCategories = () => {
-    const [categories, setCategories] = useState<ScheduleCategory[]>(DEFAULT_SCHEDULE_CATEGORIES);
+    const [categories, setCategories] = useState<ScheduleCategory[]>(sharedCategories);
 
     useEffect(() => {
-        const ref = doc(db, 'site_settings', 'schedule_categories');
-        const unsubscribe = onSnapshot(
-            ref,
-            (snapshot) => {
-                const data = snapshot.data() as { items?: RawScheduleCategory[] } | undefined;
-                setCategories(resolveScheduleCategories(data?.items));
-            },
-            (error) => {
-                console.error('Failed to load schedule categories:', error);
-                setCategories(DEFAULT_SCHEDULE_CATEGORIES);
+        setCategories(sharedCategories);
+        scheduleCategoryListeners.add(setCategories);
+        ensureSharedScheduleCategorySubscription();
+
+        return () => {
+            scheduleCategoryListeners.delete(setCategories);
+            if (scheduleCategoryListeners.size === 0 && sharedCategoriesUnsubscribe) {
+                sharedCategoriesUnsubscribe();
+                sharedCategoriesUnsubscribe = null;
             }
-        );
-        return () => unsubscribe();
+        };
     }, []);
 
     const categoryMap = useMemo(() => {

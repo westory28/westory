@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './assets/index.css';
 import ErrorBoundary from './components/common/ErrorBoundary';
+import { markLoginPerf } from './lib/loginPerf';
 
 if (
     typeof window !== 'undefined' &&
@@ -12,6 +13,8 @@ if (
 ) {
     window.location.replace(`${window.location.origin}${window.location.pathname}#/`);
 }
+
+markLoginPerf('westory-app-load-start');
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>

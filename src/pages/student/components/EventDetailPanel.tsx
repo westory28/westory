@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
-import { getScheduleCategoryMeta, useScheduleCategories } from '../../../lib/scheduleCategories';
+import { getScheduleCategoryMeta } from '../../../lib/scheduleCategories';
+import type { ScheduleCategory } from '../../../lib/scheduleCategories';
 import { CalendarEvent } from '../../../types';
 
 interface EventDetailPanelProps {
+    categories: ScheduleCategory[];
     selectedDate: string | null;
     events: CalendarEvent[];
     onEventClick?: (event: CalendarEvent) => void;
 }
 
-const EventDetailPanel: React.FC<EventDetailPanelProps> = ({ selectedDate, events, onEventClick }) => {
+const EventDetailPanel: React.FC<EventDetailPanelProps> = ({ categories, selectedDate, events, onEventClick }) => {
     const [detailModalEvent, setDetailModalEvent] = useState<CalendarEvent | null>(null);
-    const { categories } = useScheduleCategories();
     const isTeacherMode = !!onEventClick;
 
     const handleSelectEvent = (event: CalendarEvent) => {

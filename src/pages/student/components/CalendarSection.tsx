@@ -3,7 +3,8 @@ import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import listPlugin from '@fullcalendar/list';
-import { getScheduleCategoryMeta, useScheduleCategories } from '../../../lib/scheduleCategories';
+import { getScheduleCategoryMeta } from '../../../lib/scheduleCategories';
+import type { ScheduleCategory } from '../../../lib/scheduleCategories';
 import { CalendarEvent } from '../../../types';
 
 const toExclusiveEnd = (start?: string, end?: string) => {
@@ -15,6 +16,7 @@ const toExclusiveEnd = (start?: string, end?: string) => {
 };
 
 interface CalendarSectionProps {
+    categories: ScheduleCategory[];
     events: CalendarEvent[];
     onDateClick: (dateStr: string) => void;
     onEventClick: (event: CalendarEvent) => void;
@@ -29,6 +31,7 @@ interface CalendarSectionProps {
 }
 
 const CalendarSection: React.FC<CalendarSectionProps> = ({
+    categories,
     events,
     onDateClick,
     onEventClick,
@@ -41,7 +44,6 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
     attendanceMessage = '',
     attendanceDates = [],
 }) => {
-    const { categories } = useScheduleCategories();
     const [currentViewType, setCurrentViewType] = useState('dayGridMonth');
     const [visibleRange, setVisibleRange] = useState<{ start: string; end: string }>({ start: '', end: '' });
     const [listTopOffset, setListTopOffset] = useState(88);

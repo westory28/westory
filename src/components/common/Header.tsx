@@ -1,9 +1,8 @@
 ﻿import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { doc, getDoc } from 'firebase/firestore';
 import { MENUS, cloneDefaultMenus, sanitizeMenuConfig, type MenuConfig } from '../../constants/menus';
-import { db } from '../../lib/firebase';
+import { runWhenIdle } from '../../lib/browserTasks';
 import { readLocalOnly, readStorage, removeStorage, writeLocalOnly } from '../../lib/safeStorage';
 import {
     canAccessTeacherPortal,
@@ -14,6 +13,7 @@ import {
     canReadStudentList,
     getDefaultTeacherRoute,
 } from '../../lib/permissions';
+import { readSiteSettingDoc } from '../../lib/siteSettings';
 
 const SESSION_DURATION_SECONDS = 60 * 60;
 const SESSION_EXPIRY_KEY = 'sessionExpiry';
@@ -206,9 +206,9 @@ const Header: React.FC = () => {
     useEffect(() => {
         const loadMenuConfig = async () => {
             try {
-                const menuSnap = await getDoc(doc(db, 'site_settings', 'menu_config'));
-                if (menuSnap.exists()) {
-                    setMenuConfig(sanitizeMenuConfig(menuSnap.data()));
+                const data = await readSiteSettingDoc<MenuConfig>('menu_config');
+                if (data) {
+                    setMenuConfig(sanitizeMenuConfig(data));
                     return;
                 }
             } catch (error) {
@@ -218,7 +218,11 @@ const Header: React.FC = () => {
             setMenuConfig(cloneDefaultMenus());
         };
 
-        void loadMenuConfig();
+        const cancel = runWhenIdle(() => {
+            void loadMenuConfig();
+        }, 600);
+
+        return cancel;
     }, []);
 
     useEffect(() => {

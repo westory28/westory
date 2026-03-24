@@ -11,6 +11,7 @@ import type { Analytics } from 'firebase/analytics';
 import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore';
 import { connectFunctionsEmulator, getFunctions } from 'firebase/functions';
 import { getStorage } from 'firebase/storage';
+import { markLoginPerf } from './loginPerf';
 
 const isLocalQaHost = (host: string) => /^(localhost|127\.0\.0\.1)$/i.test(host);
 const isWestoryCustomHost = (host: string) => /^(?:www\.)?westory\.kr$/i.test(host);
@@ -73,6 +74,10 @@ const authPersistenceReady = typeof window === 'undefined'
             }
         }
     })();
+
+void authPersistenceReady.then(() => {
+    markLoginPerf('westory-auth-persistence-ready');
+});
 
 try {
     const isBrowser = typeof window !== 'undefined';

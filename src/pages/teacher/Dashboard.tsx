@@ -9,6 +9,7 @@ import TeacherCalendarSection from './components/TeacherCalendarSection';
 import EventDetailPanel from '../student/components/EventDetailPanel'; // Reuse student panel for basic viewing
 import SearchModal from '../student/components/SearchModal'; // Reuse search modal
 import EventModal from './components/EventModal';
+import { useScheduleCategories } from '../../lib/scheduleCategories';
 import { getYearSemester } from '../../lib/semesterScope';
 
 const TeacherDashboard: React.FC = () => {
@@ -25,6 +26,7 @@ const TeacherDashboard: React.FC = () => {
     const [filterClass, setFilterClass] = useState('all');
 
     const calendarRef = useRef<FullCalendar>(null);
+    const { categories } = useScheduleCategories();
 
     // Fetch Events real-time
     useEffect(() => {
@@ -133,12 +135,18 @@ const TeacherDashboard: React.FC = () => {
                     {/* 3. Event Details (Mobile: Order 3 / Desktop: Order 3, Right Bottom) */}
                     <div className="order-3 md:order-3 md:col-span-2 md:row-span-1">
                         <div className="min-h-[260px] h-full">
-                            <EventDetailPanel selectedDate={selectedDate} events={dailyEvents} onEventClick={handleEventClick} />
+                            <EventDetailPanel
+                                categories={categories}
+                                selectedDate={selectedDate}
+                                events={dailyEvents}
+                                onEventClick={handleEventClick}
+                            />
                         </div>
                     </div>
                 </div>
 
                 <SearchModal
+                    categories={categories}
                     isOpen={isSearchOpen}
                     onClose={() => setIsSearchOpen(false)}
                     onSelectEvent={handleSelectSearchResults}

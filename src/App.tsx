@@ -49,6 +49,22 @@ const LegacyRouteRedirect: React.FC<{ to: string }> = ({ to }) => {
     return <Navigate to={`${to}${location.search}`} replace />;
 };
 
+const RouteContentFallback: React.FC<{ message: string }> = ({ message }) => (
+    <div className="mx-auto w-full max-w-7xl px-4 py-6">
+        <div className="rounded-xl border border-gray-200 bg-white px-5 py-8 text-sm font-semibold text-gray-500 shadow-sm">
+            {message}
+        </div>
+    </div>
+);
+
+const renderWithLayout = (children: React.ReactNode, message: string) => (
+    <MainLayout>
+        <Suspense fallback={<RouteContentFallback message={message} />}>
+            {children}
+        </Suspense>
+    </MainLayout>
+);
+
 
 
 
@@ -70,9 +86,7 @@ const App: React.FC = () => {
                         <Routes>
                             <Route path="/" element={<Login />} />
                             <Route path="/student/dashboard" element={
-                                <MainLayout>
-                                    <StudentDashboard />
-                                </MainLayout>
+                                renderWithLayout(<StudentDashboard />, '학생 첫 화면을 준비하는 중입니다.')
                             } />
                             <Route path="/student/lesson/note" element={
                                 <MainLayout>

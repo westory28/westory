@@ -1,15 +1,20 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import FullCalendar from '@fullcalendar/react';
-import { collection, doc, getDoc, onSnapshot, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
+import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
+import type FullCalendar from '@fullcalendar/react';
+import { collection, doc, onSnapshot, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../lib/firebase';
+import { runAfterNextPaint, runWhenIdle } from '../../lib/browserTasks';
+import { markLoginPerf, measureLoginPerf } from '../../lib/loginPerf';
 import { buildAttendanceSourceId, claimPointActivityReward, getPointActivityTransaction } from '../../lib/points';
+import { useScheduleCategories } from '../../lib/scheduleCategories';
+import { readSiteSettingDoc } from '../../lib/siteSettings';
 import { getYearSemester } from '../../lib/semesterScope';
 import { CalendarEvent } from '../../types';
-import CalendarSection from './components/CalendarSection';
 import EventDetailPanel from './components/EventDetailPanel';
-import NoticeBoard from './components/NoticeBoard';
-import SearchModal from './components/SearchModal';
+
+const CalendarSection = lazy(() => import('./components/CalendarSection'));
+const NoticeBoard = lazy(() => import('./components/NoticeBoard'));
+const SearchModal = lazy(() => import('./components/SearchModal'));
 
 const normalizeClassValue = (value: unknown): string => {
     const normalized = String(value ?? '').trim();
@@ -26,6 +31,20 @@ const withSuffix = (label: string, suffix: string) => {
     return label.endsWith(suffix) ? label : `${label}${suffix}`;
 };
 
+const DashboardCalendarFallback: React.FC = () => (
+    <div className="flex h-full min-h-[500px] flex-col overflow-hidden rounded-xl bg-white p-4 shadow-sm md:min-h-0">
+        <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-bold text-gray-800">
+                <i className="far fa-calendar-alt mr-2 text-blue-600"></i>학사 일정
+            </h2>
+            <span className="text-xs font-semibold text-gray-400">초기 로드 최적화 중</span>
+        </div>
+        <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-blue-100 bg-blue-50/50 px-6 text-center text-sm font-medium text-blue-700">
+            학사 일정을 먼저 준비하고 있습니다.
+        </div>
+    </div>
+);
+
 const StudentDashboard: React.FC = () => {
     const { user, userData, config } = useAuth();
     const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -39,12 +58,35 @@ const StudentDashboard: React.FC = () => {
     const [attendanceChecked, setAttendanceChecked] = useState(false);
     const [attendanceMessage, setAttendanceMessage] = useState('');
     const [attendanceDates, setAttendanceDates] = useState<string[]>([]);
+    const [secondaryPanelsReady, setSecondaryPanelsReady] = useState(false);
 
     const calendarRef = useRef<FullCalendar>(null);
     const { year, semester } = getYearSemester(config);
+    const { categories } = useScheduleCategories();
     const todayDate = new Date().toLocaleDateString('en-CA');
     const attendanceScope = `${year}_${semester}`;
     const todayAttendanceSourceId = buildAttendanceSourceId();
+
+    useEffect(() => {
+        markLoginPerf('westory-student-dashboard-rendered');
+        measureLoginPerf(
+            'westory-first-page-render',
+            'westory-login-first-route-decided',
+            'westory-student-dashboard-rendered',
+        );
+
+        const cancel = runAfterNextPaint(() => {
+            setSecondaryPanelsReady(true);
+            markLoginPerf('westory-student-dashboard-interactive');
+            measureLoginPerf(
+                'westory-total-to-interactive',
+                'westory-app-load-start',
+                'westory-student-dashboard-interactive',
+            );
+        });
+
+        return cancel;
+    }, []);
 
     const visibleAttendanceDates = useMemo(() => {
         const set = new Set(attendanceDates);
@@ -55,12 +97,11 @@ const StudentDashboard: React.FC = () => {
     useEffect(() => {
         const loadSchoolConfig = async () => {
             try {
-                const snap = await getDoc(doc(db, 'site_settings', 'school_config'));
-                if (!snap.exists()) return;
-                const data = snap.data() as {
+                const data = await readSiteSettingDoc<{
                     grades?: Array<{ value?: string; label?: string }>;
                     classes?: Array<{ value?: string; label?: string }>;
-                };
+                }>('school_config');
+                if (!data) return;
                 const nextGradeMap: Record<string, string> = {};
                 const nextClassMap: Record<string, string> = {};
                 (data.grades || []).forEach((g) => {
@@ -79,7 +120,12 @@ const StudentDashboard: React.FC = () => {
                 console.error('Failed to load school labels:', error);
             }
         };
-        void loadSchoolConfig();
+
+        const cancel = runWhenIdle(() => {
+            void loadSchoolConfig();
+        }, 500);
+
+        return cancel;
     }, []);
 
     useEffect(() => {
@@ -136,7 +182,12 @@ const StudentDashboard: React.FC = () => {
                 console.error('Failed to load attendance point status:', error);
             }
         };
-        void loadAttendanceStatus();
+
+        const cancel = runWhenIdle(() => {
+            void loadAttendanceStatus();
+        }, 700);
+
+        return cancel;
     }, [config, todayAttendanceSourceId, userData?.uid]);
 
     useEffect(() => {
@@ -247,35 +298,55 @@ const StudentDashboard: React.FC = () => {
 
             <div className="flex h-auto min-h-[500px] flex-col gap-4 md:grid md:h-[calc(100vh-140px)] md:grid-cols-5 md:grid-rows-2">
                 <div className="order-1 md:order-2 md:col-span-2 md:row-span-1">
-                    <NoticeBoard />
+                    {secondaryPanelsReady ? (
+                        <Suspense fallback={<div className="rounded-xl border border-yellow-200 bg-[#fffbeb] p-4 text-sm font-semibold text-amber-800/70">알림장을 준비 중입니다.</div>}>
+                            <NoticeBoard />
+                        </Suspense>
+                    ) : (
+                        <div className="rounded-xl border border-yellow-200 bg-[#fffbeb] p-4 text-sm font-semibold text-amber-800/70">
+                            알림장을 준비 중입니다.
+                        </div>
+                    )}
                 </div>
 
                 <div className="order-2 md:order-1 md:col-span-3 md:row-span-2">
-                    <CalendarSection
-                        events={events}
-                        onDateClick={handleDateClick}
-                        onEventClick={handleEventClick}
-                        onSearchClick={() => setIsSearchOpen(true)}
-                        onAttendanceCheck={() => void handleAttendanceCheck()}
-                        calendarRef={calendarRef}
-                        selectedDate={selectedDate}
-                        attendanceLoading={attendanceLoading}
-                        attendanceChecked={attendanceChecked}
-                        attendanceMessage={attendanceMessage}
-                        attendanceDates={visibleAttendanceDates}
-                    />
+                    <Suspense fallback={<DashboardCalendarFallback />}>
+                        <CalendarSection
+                            categories={categories}
+                            events={events}
+                            onDateClick={handleDateClick}
+                            onEventClick={handleEventClick}
+                            onSearchClick={() => setIsSearchOpen(true)}
+                            onAttendanceCheck={() => void handleAttendanceCheck()}
+                            calendarRef={calendarRef}
+                            selectedDate={selectedDate}
+                            attendanceLoading={attendanceLoading}
+                            attendanceChecked={attendanceChecked}
+                            attendanceMessage={attendanceMessage}
+                            attendanceDates={visibleAttendanceDates}
+                        />
+                    </Suspense>
                 </div>
 
                 <div className="order-3 md:order-3 md:col-span-2 md:row-span-1">
-                    <EventDetailPanel selectedDate={selectedDate} events={dailyEvents} />
+                    <EventDetailPanel
+                        categories={categories}
+                        selectedDate={selectedDate}
+                        events={dailyEvents}
+                    />
                 </div>
             </div>
 
-            <SearchModal
-                isOpen={isSearchOpen}
-                onClose={() => setIsSearchOpen(false)}
-                onSelectEvent={handleSelectSearchResults}
-            />
+            {isSearchOpen && (
+                <Suspense fallback={<div className="fixed inset-0 z-[100] flex items-start justify-center bg-black/50 pt-20 text-sm font-semibold text-white">검색 도구를 준비 중입니다.</div>}>
+                    <SearchModal
+                        categories={categories}
+                        isOpen={isSearchOpen}
+                        onClose={() => setIsSearchOpen(false)}
+                        onSelectEvent={handleSelectSearchResults}
+                    />
+                </Suspense>
+            )}
         </div>
     );
 };

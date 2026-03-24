@@ -1,19 +1,20 @@
 import React, { useState } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
-import { getScheduleCategoryMeta, useScheduleCategories } from '../../../lib/scheduleCategories';
+import { getScheduleCategoryMeta } from '../../../lib/scheduleCategories';
+import type { ScheduleCategory } from '../../../lib/scheduleCategories';
 import { useAuth } from '../../../contexts/AuthContext';
 import { CalendarEvent } from '../../../types';
 
 interface SearchModalProps {
+    categories: ScheduleCategory[];
     isOpen: boolean;
     onClose: () => void;
     onSelectEvent: (dateStr: string) => void;
 }
 
-const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onSelectEvent }) => {
+const SearchModal: React.FC<SearchModalProps> = ({ categories, isOpen, onClose, onSelectEvent }) => {
     const { config, userData } = useAuth();
-    const { categories } = useScheduleCategories();
     const [q, setQ] = useState('');
     const [results, setResults] = useState<CalendarEvent[]>([]);
     const [loading, setLoading] = useState(false);

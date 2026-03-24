@@ -22,6 +22,8 @@ import {
 } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { auth, authPersistenceReady, configuredAuthDomain, db } from '../lib/firebase';
+import { markLoginPerf, measureLoginPerf } from '../lib/loginPerf';
+import { readSiteSettingDoc } from '../lib/siteSettings';
 import { readLocalOnly, readStorage, removeStorage, writeLocalOnly, writeStorage } from '../lib/safeStorage';
 import { useAuth } from '../contexts/AuthContext';
 import type { UserData } from '../types';
@@ -127,6 +129,115 @@ const isValidStudentName = (value: string): boolean => {
 const isValidStudentNumber = (value: string): boolean => {
     const parsed = Number(value);
     return Number.isInteger(parsed) && parsed >= 1 && parsed <= defaultNumberOptions.length;
+};
+
+const hasCompleteStudentProfile = (value?: Partial<UserData> | null) => {
+    const name = normalizeStudentName(value?.name);
+    const grade = normalizeSchoolField(value?.grade);
+    const classValue = normalizeSchoolField(value?.class);
+    const number = normalizeSchoolField(value?.number);
+
+    return !!name
+        && !!grade
+        && !!classValue
+        && !!number
+        && isValidStudentName(name)
+        && isValidStudentNumber(number);
+};
+
+const isReturningConfirmedStudent = (value?: Partial<UserData> | null) => {
+    return value?.role === 'student'
+        && value?.privacyAgreed === true
+        && hasCompleteStudentProfile(value);
+};
+
+const shouldLookupStudentRosterProfile = (value?: Partial<UserData> | null) => {
+    return !hasCompleteStudentProfile(value);
+};
+
+const getExistingConsentItems = (value?: Partial<UserData> | null): string[] => {
+    if (!Array.isArray(value?.consentAgreedItems)) return [];
+    return value.consentAgreedItems.filter((item): item is string => typeof item === 'string').sort();
+};
+
+const areSameStringLists = (left: string[] = [], right: string[] = []) => {
+    if (left.length !== right.length) return false;
+
+    const normalizedLeft = [...left].sort();
+    const normalizedRight = [...right].sort();
+    return normalizedLeft.every((item, index) => item === normalizedRight[index]);
+};
+
+const resolveTeacherPortalEnabled = (
+    role: UserData['role'],
+    existing: Partial<UserData> | null,
+) => (
+    role === 'teacher'
+        ? true
+        : role === 'staff'
+            ? existing?.teacherPortalEnabled === true
+            : false
+);
+
+const shouldBlockUserProfileWrite = ({
+    existing,
+    nextRole,
+    nextStaffPermissions,
+    nextTeacherPortalEnabled,
+    onboardingResult,
+}: {
+    existing: Partial<UserData> | null;
+    nextRole: UserData['role'];
+    nextStaffPermissions: UserData['staffPermissions'];
+    nextTeacherPortalEnabled: boolean;
+    onboardingResult?: StudentOnboardingResult | null;
+}) => {
+    if (!existing) return true;
+    if (existing.role !== nextRole) return true;
+    if ((existing.teacherPortalEnabled === true) !== nextTeacherPortalEnabled) return true;
+    if (!areSameStringLists(
+        normalizeStaffPermissions(existing.staffPermissions),
+        normalizeStaffPermissions(nextStaffPermissions),
+    )) {
+        return true;
+    }
+
+    if (nextRole !== 'student' || !onboardingResult) return false;
+    if (onboardingResult.shouldPersistProfile || onboardingResult.newlyAgreedPrivacy) return true;
+    if ((existing.privacyAgreed === true) !== onboardingResult.privacyAgreed) return true;
+
+    return !areSameStringLists(
+        getExistingConsentItems(existing),
+        onboardingResult.consentAgreedItems,
+    );
+};
+
+const scheduleDeferredUserMerge = (
+    userRef: ReturnType<typeof doc>,
+    payload: Record<string, unknown>,
+    label: string,
+) => {
+    const run = () => {
+        void setDoc(userRef, payload, { merge: true }).catch((error) => {
+            console.warn(`[Auth] Deferred ${label} merge failed`, error);
+        });
+    };
+
+    if (typeof window === 'undefined') {
+        run();
+        return;
+    }
+
+    const idleWindow = window as Window & {
+        requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
+    };
+
+    if (typeof idleWindow.requestIdleCallback === 'function') {
+        idleWindow.requestIdleCallback(run, { timeout: 1500 });
+        return;
+    }
+
+    window.setTimeout(run, 0);
 };
 
 const pickStudentRosterProfile = async (email: string): Promise<Partial<UserData> | null> => {
@@ -429,13 +540,11 @@ const Login: React.FC = () => {
     useEffect(() => {
         const loadSchoolConfig = async () => {
             try {
-                const schoolSnap = await getDoc(doc(db, 'site_settings', 'school_config'));
-                if (!schoolSnap.exists()) return;
-
-                const data = schoolSnap.data() as {
+                const data = await readSiteSettingDoc<{
                     grades?: Array<{ value?: string; label?: string }>;
                     classes?: Array<{ value?: string; label?: string }>;
-                };
+                }>('school_config');
+                if (!data) return;
 
                 if (Array.isArray(data.grades) && data.grades.length > 0) {
                     const nextGrades = data.grades
@@ -714,6 +823,11 @@ const Login: React.FC = () => {
     };
 
     const finishLoginForRole = async (user: User, mode: LoginMode) => {
+        markLoginPerf('westory-login-bootstrap-start', {
+            mode,
+            source: 'finish-login',
+        });
+
         if (!isAllowedLoginEmail(user.email)) {
             await rejectUnauthorizedEmailLogin(user.email);
             return;
@@ -722,6 +836,10 @@ const Login: React.FC = () => {
         const isTeacherEmail = user.email === TEACHER_EMAIL;
         const userRef = doc(db, 'users', user.uid);
         const userSnap = await getDoc(userRef);
+        markLoginPerf('westory-login-user-doc-read', {
+            exists: userSnap.exists() ? 'true' : 'false',
+            source: 'finish-login',
+        });
         const existing = userSnap.exists() ? (userSnap.data() as Partial<UserData>) : null;
         const staffPermissions = normalizeStaffPermissions(existing?.staffPermissions);
         const canUseTeacherMode = isTeacherEmail || canAccessTeacherPortal({
@@ -743,9 +861,15 @@ const Login: React.FC = () => {
             ? (isAdminUser(existing, user.email || '') ? 'teacher' : 'staff')
             : 'student';
 
-        const rosterProfile = nextRole === 'student'
+        const rosterProfile = nextRole === 'student' && shouldLookupStudentRosterProfile(existing)
             ? await pickStudentRosterProfile(user.email || '')
             : null;
+        if (nextRole === 'student') {
+            markLoginPerf('westory-login-roster-profile-read', {
+                hit: rosterProfile ? 'true' : 'false',
+                source: 'finish-login',
+            });
+        }
 
         let resolvedName = (existing?.name || '').trim() || (rosterProfile?.name || '').trim();
         let onboardingResult: StudentOnboardingResult | null = null;
@@ -764,6 +888,7 @@ const Login: React.FC = () => {
         }
 
         const shouldPersistStudentProfile = nextRole === 'student' && onboardingResult?.shouldPersistProfile === true;
+        const nextTeacherPortalEnabled = resolveTeacherPortalEnabled(nextRole, existing);
 
         const basePayload: Record<string, unknown> = {
             uid: user.uid,
@@ -771,11 +896,7 @@ const Login: React.FC = () => {
             photoURL: user.photoURL || '',
             role: nextRole,
             staffPermissions: nextRole === 'staff' ? staffPermissions : [],
-            teacherPortalEnabled: nextRole === 'teacher'
-                ? true
-                : nextRole === 'staff'
-                    ? existing?.teacherPortalEnabled === true
-                    : false,
+            teacherPortalEnabled: nextTeacherPortalEnabled,
             lastLogin: serverTimestamp(),
         };
 
@@ -807,6 +928,14 @@ const Login: React.FC = () => {
             }
         }
 
+        const requiresBlockingWrite = !userSnap.exists() || shouldBlockUserProfileWrite({
+            existing,
+            nextRole,
+            nextStaffPermissions: nextRole === 'staff' ? staffPermissions : [],
+            nextTeacherPortalEnabled,
+            onboardingResult,
+        });
+
         if (!userSnap.exists()) {
             await setDoc(userRef, {
                 ...basePayload,
@@ -815,7 +944,7 @@ const Login: React.FC = () => {
                 number: nextRole === 'student' && onboardingResult ? onboardingResult.number : '',
                 createdAt: serverTimestamp(),
             }, { merge: true });
-        } else {
+        } else if (requiresBlockingWrite) {
             await setDoc(userRef, basePayload, { merge: true });
         }
 
@@ -826,19 +955,33 @@ const Login: React.FC = () => {
             email: user.email || existing?.email || '',
             role: nextRole,
             staffPermissions: nextRole === 'staff' ? staffPermissions : [],
-            teacherPortalEnabled: nextRole === 'teacher'
-                ? true
-                : nextRole === 'staff'
-                    ? existing?.teacherPortalEnabled === true
-                    : false,
+            teacherPortalEnabled: nextTeacherPortalEnabled,
         };
         const targetPath = nextPortalMode === 'teacher'
             ? getDefaultTeacherRoute(teacherRouteUser, user.email || '')
             : '/student/dashboard';
 
+        markLoginPerf('westory-login-role-resolved', {
+            role: nextRole,
+            targetPath,
+            source: 'finish-login',
+        });
         saveRoleCache(nextPortalMode);
         clearPendingLoginMode();
+        markLoginPerf('westory-login-first-route-decided', {
+            targetPath,
+            source: 'finish-login',
+        });
+        measureLoginPerf(
+            'westory-login-bootstrap',
+            'westory-login-bootstrap-start',
+            'westory-login-first-route-decided',
+        );
         forceRoute(targetPath);
+
+        if (userSnap.exists() && !requiresBlockingWrite) {
+            scheduleDeferredUserMerge(userRef, basePayload, `${nextRole}-login`);
+        }
     };
 
     useEffect(() => {
@@ -848,6 +991,7 @@ const Login: React.FC = () => {
 
         const resolveRedirect = async () => {
             setAuthBusy(true);
+            markLoginPerf('westory-login-redirect-resume-start');
             try {
                 await authPersistenceReady;
                 const result = await getRedirectResult(auth);
@@ -870,6 +1014,14 @@ const Login: React.FC = () => {
                 await finishLoginForRole(redirectedUser, resolvedMode);
                 clearRedirectAttempt();
                 setLoginNotice('');
+                markLoginPerf('westory-login-redirect-resume-end', {
+                    recovered: 'true',
+                });
+                measureLoginPerf(
+                    'westory-redirect-resume',
+                    'westory-login-redirect-resume-start',
+                    'westory-login-redirect-resume-end',
+                );
             } catch (error) {
                 if (isIgnorableRedirectError(error)) {
                     console.warn('Redirect state unavailable, skipping redirect recovery', error);
@@ -893,6 +1045,14 @@ const Login: React.FC = () => {
                     await finishLoginForRole(recoveredUser, effectiveMode);
                     clearRedirectAttempt();
                     setLoginNotice('');
+                    markLoginPerf('westory-login-redirect-resume-end', {
+                        recovered: 'fallback',
+                    });
+                    measureLoginPerf(
+                        'westory-redirect-resume',
+                        'westory-login-redirect-resume-start',
+                        'westory-login-redirect-resume-end',
+                    );
                     return;
                 }
                 clearRedirectAttempt();
@@ -944,6 +1104,10 @@ const Login: React.FC = () => {
 
     const goToDashboard = async () => {
         if (!currentUser) return;
+        markLoginPerf('westory-login-bootstrap-start', {
+            mode: 'student',
+            source: 'auto-resume',
+        });
         if (preferredRole === 'teacher' && !userData) {
             setLoginNotice('교사 계정 정보를 확인하는 중입니다. 잠시만 기다려주세요.');
             return;
@@ -965,9 +1129,34 @@ const Login: React.FC = () => {
 
         try {
             const userRef = doc(db, 'users', currentUser.uid);
-            const userSnap = await getDoc(userRef);
-            const existing = userSnap.exists() ? (userSnap.data() as Partial<UserData>) : null;
-            const rosterProfile = await pickStudentRosterProfile(currentUser.email || '');
+            const cachedStudent = userData?.uid === currentUser.uid && isReturningConfirmedStudent(userData)
+                ? userData
+                : null;
+            let existing = cachedStudent;
+            let userDocExists = !!cachedStudent;
+
+            if (!existing) {
+                const userSnap = await getDoc(userRef);
+                userDocExists = userSnap.exists();
+                existing = userSnap.exists() ? (userSnap.data() as Partial<UserData>) : null;
+                markLoginPerf('westory-login-user-doc-read', {
+                    exists: userSnap.exists() ? 'true' : 'false',
+                    source: 'auto-resume',
+                });
+            } else {
+                markLoginPerf('westory-login-user-doc-read', {
+                    exists: 'cached',
+                    source: 'auto-resume',
+                });
+            }
+
+            const rosterProfile = shouldLookupStudentRosterProfile(existing)
+                ? await pickStudentRosterProfile(currentUser.email || '')
+                : null;
+            markLoginPerf('westory-login-roster-profile-read', {
+                hit: rosterProfile ? 'true' : 'false',
+                source: 'auto-resume',
+            });
             const setup = await completeStudentOnboarding(currentUser, existing, rosterProfile);
             if (!setup) {
                 clearRoleCache();
@@ -1001,14 +1190,43 @@ const Login: React.FC = () => {
                 updatePayload.privacyAgreedAt = serverTimestamp();
             }
 
-            if (!userSnap.exists()) {
+            if (!userDocExists) {
                 updatePayload.createdAt = serverTimestamp();
             }
 
-            await setDoc(userRef, updatePayload, { merge: true });
+            const requiresBlockingWrite = !userDocExists || shouldBlockUserProfileWrite({
+                existing,
+                nextRole: 'student',
+                nextStaffPermissions: [],
+                nextTeacherPortalEnabled: false,
+                onboardingResult: setup,
+            });
+
+            if (requiresBlockingWrite) {
+                await setDoc(userRef, updatePayload, { merge: true });
+            }
+
+            markLoginPerf('westory-login-role-resolved', {
+                role: 'student',
+                targetPath: '/student/dashboard',
+                source: 'auto-resume',
+            });
             saveRoleCache('student');
             clearPendingLoginMode();
+            markLoginPerf('westory-login-first-route-decided', {
+                targetPath: '/student/dashboard',
+                source: 'auto-resume',
+            });
+            measureLoginPerf(
+                'westory-login-bootstrap',
+                'westory-login-bootstrap-start',
+                'westory-login-first-route-decided',
+            );
             forceRoute('/student/dashboard');
+
+            if (userDocExists && !requiresBlockingWrite) {
+                scheduleDeferredUserMerge(userRef, updatePayload, 'student-auto-resume');
+            }
         } catch (error) {
             console.error('Failed to continue student onboarding', error);
             alert(getStudentBootstrapFailureMessage(error));

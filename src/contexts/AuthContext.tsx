@@ -1,9 +1,11 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { User, onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { auth, authPersistenceReady, db } from '../lib/firebase';
 import { SystemConfig, InterfaceConfig, UserData } from '../types';
 import { normalizeStaffPermissions } from '../lib/permissions';
+import { markLoginPerf, measureLoginPerf } from '../lib/loginPerf';
+import { readSiteSettingDoc } from '../lib/siteSettings';
 
 interface AuthContextType {
     // Backward-compatible alias for legacy pages.
@@ -26,13 +28,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [config, setConfig] = useState<SystemConfig | null>(null);
     const [interfaceConfig, setInterfaceConfig] = useState<InterfaceConfig | null>(null);
     const [loading, setLoading] = useState(true);
+    const firstUserDocReadyRef = useRef<string | null>(null);
 
     const loadPublicInterfaceConfig = async () => {
         try {
-            const interfaceSnap = await getDoc(doc(db, 'site_settings', 'interface_config'));
-            if (interfaceSnap.exists()) {
-                setInterfaceConfig(interfaceSnap.data() as InterfaceConfig);
-            }
+            const data = await readSiteSettingDoc<InterfaceConfig>('interface_config');
+            setInterfaceConfig(data);
+            markLoginPerf('westory-interface-config-ready');
         } catch (e) {
             console.error("Failed to load interface config", e);
         }
@@ -45,12 +47,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         try {
-            const configSnap = await getDoc(doc(db, 'site_settings', 'config'));
-            if (configSnap.exists()) {
-                setConfig(configSnap.data() as SystemConfig);
-                return;
-            }
-            setConfig(null);
+            const data = await readSiteSettingDoc<SystemConfig>('config');
+            setConfig(data);
+            markLoginPerf('westory-auth-config-ready');
         } catch (e) {
             console.error("Failed to load system config", e);
         }
@@ -72,12 +71,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
 
         unsubscribe = onAuthStateChanged(auth, (user) => {
+            markLoginPerf('westory-auth-current-user-resolved', {
+                hasUser: user ? 'true' : 'false',
+            });
+            measureLoginPerf(
+                'westory-auth-init',
+                'westory-app-load-start',
+                'westory-auth-current-user-resolved',
+            );
             setCurrentUser(user);
             if (unsubscribeUserDoc) {
                 unsubscribeUserDoc();
                 unsubscribeUserDoc = null;
             }
             if (user) {
+                firstUserDocReadyRef.current = null;
                 void loadAuthedSystemConfig(user);
                 setLoading(false);
                 window.clearTimeout(loadingGuard);
@@ -87,6 +95,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     async (userSnap) => {
                         try {
                             const normalizedRole: UserData['role'] = 'student';
+                            if (firstUserDocReadyRef.current !== user.uid) {
+                                firstUserDocReadyRef.current = user.uid;
+                                markLoginPerf('westory-auth-user-doc-ready', {
+                                    exists: userSnap.exists() ? 'true' : 'false',
+                                });
+                                measureLoginPerf(
+                                    'westory-auth-user-doc-sync',
+                                    'westory-auth-current-user-resolved',
+                                    'westory-auth-user-doc-ready',
+                                );
+                            }
                             if (userSnap.exists()) {
                                 const raw = userSnap.data() as UserData;
                                 setUserData({
@@ -124,6 +143,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     }
                 );
             } else {
+                firstUserDocReadyRef.current = null;
                 setUserData(null);
                 setConfig(null);
                 setLoading(false);
