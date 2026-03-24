@@ -1,7 +1,10 @@
-import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
-import StorageImage from '../../components/common/StorageImage';
-import { useAuth } from '../../contexts/AuthContext';
-import { canReadLessonManagement, canWriteLessonManagement } from '../../lib/permissions';
+import React, { useDeferredValue, useEffect, useMemo, useState } from "react";
+import StorageImage from "../../components/common/StorageImage";
+import { useAuth } from "../../contexts/AuthContext";
+import {
+  canReadLessonManagement,
+  canWriteLessonManagement,
+} from "../../lib/permissions";
 import {
   SOURCE_ARCHIVE_RENDER_PAGE_SIZE,
   SOURCE_ARCHIVE_STATUS_LABELS,
@@ -12,97 +15,162 @@ import {
   getSourceArchiveDownloadUrl,
   saveSourceArchiveAsset,
   subscribeSourceArchiveAssets,
-} from '../../lib/sourceArchive';
-import { buildSourceArchiveUpload } from '../../lib/sourceArchiveImage';
+} from "../../lib/sourceArchive";
+import { buildSourceArchiveUpload } from "../../lib/sourceArchiveImage";
+import {
+  buildSourceArchivePdfUpload,
+  isSourceArchivePdfFile,
+} from "../../lib/sourceArchivePdf";
 import type {
   SourceArchiveAsset,
   SourceArchiveAssetType,
   SourceArchiveDraft,
+  SourceArchiveMediaKind,
   SourceArchiveProcessingStatus,
-} from '../../types';
+} from "../../types";
 
-type PanelMode = 'view' | 'create' | 'edit';
-type FilterType = 'all' | SourceArchiveAssetType;
-type FilterStatus = 'all' | SourceArchiveProcessingStatus;
-type SortOption = 'updatedDesc' | 'titleAsc';
+type PanelMode = "view" | "create" | "edit";
+type FilterType = "all" | SourceArchiveAssetType;
+type FilterStatus = "all" | SourceArchiveProcessingStatus;
+type SortOption = "updatedDesc" | "titleAsc";
 
 const UI = {
-  title: '사료 창고',
-  readOnly: '현재 계정은 읽기 전용입니다.',
-  noAccess: '이 화면을 볼 수 있는 교사 권한이 없습니다.',
-  emptyList: '조건에 맞는 사료가 없습니다.',
-  emptyDetail: '선택한 사료가 없습니다.',
-  listHint: '업로드 원본을 보존하고, 목록과 상세에는 썸네일과 표시용 이미지를 사용합니다.',
-  saveDone: '사료를 저장했습니다.',
-  saveProcessing: '사료를 저장했습니다. 업로드 원본을 보존하고 미리보기 자산을 준비하는 중입니다.',
-  deleteDone: '사료를 삭제했습니다.',
-  loadingError: '사료 창고를 불러오지 못했습니다.',
-  previewEmpty: '이미지를 선택하면 미리보기가 표시됩니다.',
-  imageUnavailable: '미리보기를 불러올 수 없습니다.',
-  processingHelp: '업로드 원본은 저장되었고, 썸네일과 표시용 이미지를 준비하는 중입니다.',
-  failedHelp: '미리보기 생성에 실패했습니다. 필요하면 새 이미지를 다시 올려 주세요.',
-  legacyHelp: '기존 베타 자료입니다. 현재는 미리보기 자산만 연결되어 있습니다. 새 이미지를 다시 저장하면 정식 구조로 승격됩니다.',
-  discardConfirm: '편집 중인 내용이 있습니다. 닫고 계속할까요?',
-  originalOpenError: '연결된 파일을 열지 못했습니다.',
+  title: "사료 창고",
+  readOnly: "현재 계정은 읽기 전용입니다.",
+  noAccess: "이 화면을 볼 수 있는 교사 권한이 없습니다.",
+  emptyList: "조건에 맞는 사료가 없습니다.",
+  emptyDetail: "선택한 사료가 없습니다.",
+  listHint:
+    "업로드 원본을 보존하고, 이미지 자료는 미리보기를 유지하며 PDF 자료는 구조 추출 결과를 별도 저장합니다.",
+  saveDone: "사료를 저장했습니다.",
+  saveProcessing:
+    "사료를 저장했습니다. 업로드 원본을 보존하고 미리보기 자산을 준비하는 중입니다.",
+  savePdfProcessing:
+    "자료를 저장했습니다. 원본 PDF를 보존하고 구조 추출을 준비하는 중입니다.",
+  deleteDone: "사료를 삭제했습니다.",
+  loadingError: "사료 창고를 불러오지 못했습니다.",
+  previewEmpty: "이미지를 선택하면 미리보기가 표시됩니다.",
+  previewPdfEmpty: "PDF 파일을 선택하면 구조 추출 상태가 여기에 표시됩니다.",
+  imageUnavailable: "미리보기를 불러올 수 없습니다.",
+  processingHelp:
+    "업로드 원본은 저장되었고, 썸네일과 표시용 이미지를 준비하는 중입니다.",
+  failedHelp:
+    "미리보기 생성에 실패했습니다. 필요하면 새 이미지를 다시 올려 주세요.",
+  pdfProcessingHelp: "원본 PDF는 저장되었고, 텍스트 구조를 추출하는 중입니다.",
+  pdfReadyHelp:
+    "구조 추출이 완료되었습니다. 미리보기 텍스트를 사용할 수 있습니다.",
+  pdfFailedHelp: "구조 추출에 실패했습니다. 원본 PDF는 계속 열 수 있습니다.",
+  legacyHelp:
+    "기존 베타 자료입니다. 현재는 미리보기 자산만 연결되어 있습니다. 새 이미지를 다시 저장하면 정식 구조로 승격됩니다.",
+  discardConfirm: "편집 중인 내용이 있습니다. 닫고 계속할까요?",
+  originalOpenError: "연결된 파일을 열지 못했습니다.",
 };
 
 const STATUS_BADGE_CLASS: Record<SourceArchiveProcessingStatus, string> = {
-  uploading: 'bg-sky-100 text-sky-700',
-  queued: 'bg-amber-100 text-amber-700',
-  processing: 'bg-amber-100 text-amber-700',
-  ready: 'bg-emerald-100 text-emerald-700',
-  failed: 'bg-rose-100 text-rose-700',
-  archived: 'bg-gray-100 text-gray-600',
+  uploading: "bg-sky-100 text-sky-700",
+  queued: "bg-amber-100 text-amber-700",
+  processing: "bg-amber-100 text-amber-700",
+  ready: "bg-emerald-100 text-emerald-700",
+  failed: "bg-rose-100 text-rose-700",
+  archived: "bg-gray-100 text-gray-600",
 };
 
 const SORT_OPTIONS: Array<{ value: SortOption; label: string }> = [
-  { value: 'updatedDesc', label: '최근 수정순' },
-  { value: 'titleAsc', label: '제목순' },
+  { value: "updatedDesc", label: "최근 수정순" },
+  { value: "titleAsc", label: "제목순" },
 ];
 
 const formatTimestamp = (value: unknown) => {
   const date =
     value instanceof Date
       ? value
-      : typeof value === 'object' && value !== null && 'seconds' in value
+      : typeof value === "object" && value !== null && "seconds" in value
         ? new Date(Number((value as { seconds?: number }).seconds || 0) * 1000)
         : null;
-  if (!date || Number.isNaN(date.getTime())) return '-';
-  return new Intl.DateTimeFormat('ko-KR', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
+  if (!date || Number.isNaN(date.getTime())) return "-";
+  return new Intl.DateTimeFormat("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
   }).format(date);
 };
 
 const normalizeTagInput = (value: string) =>
-  Array.from(new Set(value.split(/[,\n]/).map((item) => item.trim()).filter(Boolean)));
+  Array.from(
+    new Set(
+      value
+        .split(/[,\n]/)
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  );
+
+const getAssetMediaKind = (
+  asset?: Pick<SourceArchiveAsset, "mediaKind" | "file"> | null,
+): SourceArchiveMediaKind =>
+  asset?.mediaKind === "pdf" || asset?.file?.mimeType === "application/pdf"
+    ? "pdf"
+    : "image";
 
 const getAspectRatio = (asset?: SourceArchiveAsset | null) => {
+  if (getAssetMediaKind(asset) === "pdf") return "3 / 4";
   const width = Number(asset?.image?.displayWidth || asset?.image?.width || 0);
-  const height = Number(asset?.image?.displayHeight || asset?.image?.height || 0);
-  return width > 0 && height > 0 ? `${width} / ${height}` : '4 / 3';
+  const height = Number(
+    asset?.image?.displayHeight || asset?.image?.height || 0,
+  );
+  return width > 0 && height > 0 ? `${width} / ${height}` : "4 / 3";
 };
 
-const getStatusPlaceholderLabel = (status: SourceArchiveProcessingStatus) => {
-  if (status === 'uploading') return '업로드 중';
-  if (status === 'queued') return '처리 대기';
-  if (status === 'processing') return '처리 중';
-  if (status === 'failed') return '미리보기 없음';
-  if (status === 'archived') return '보관됨';
+const getStatusLabel = (
+  asset: Pick<SourceArchiveAsset, "mediaKind" | "file" | "processingStatus">,
+) => {
+  if (getAssetMediaKind(asset) !== "pdf") {
+    return SOURCE_ARCHIVE_STATUS_LABELS[asset.processingStatus];
+  }
+  if (asset.processingStatus === "uploading") return "PDF 업로드 중";
+  if (asset.processingStatus === "queued") return "PDF 구조 추출 대기중";
+  if (asset.processingStatus === "processing") return "PDF 구조 추출 중";
+  if (asset.processingStatus === "ready") return "PDF 구조 추출 완료";
+  if (asset.processingStatus === "failed") return "PDF 구조 추출 실패";
+  return SOURCE_ARCHIVE_STATUS_LABELS[asset.processingStatus];
+};
+
+const getStatusPlaceholderLabel = (
+  status: SourceArchiveProcessingStatus,
+  mediaKind: SourceArchiveMediaKind = "image",
+) => {
+  if (mediaKind === "pdf") {
+    if (status === "uploading") return "PDF 업로드 중";
+    if (status === "queued") return "PDF 구조 추출 대기중";
+    if (status === "processing") return "PDF 구조 추출 중";
+    if (status === "ready") return "PDF 구조 추출 완료";
+    if (status === "failed") return "PDF 구조 추출 실패";
+    if (status === "archived") return "PDF 보관됨";
+    return "PDF 미리보기 없음";
+  }
+  if (status === "uploading") return "업로드 중";
+  if (status === "queued") return "처리 대기";
+  if (status === "processing") return "처리 중";
+  if (status === "failed") return "미리보기 없음";
+  if (status === "archived") return "보관됨";
   return UI.imageUnavailable;
 };
 
-const imagePlaceholder = (status: SourceArchiveProcessingStatus, label?: string) => (
+const imagePlaceholder = (
+  status: SourceArchiveProcessingStatus,
+  label?: string,
+  mediaKind: SourceArchiveMediaKind = "image",
+) => (
   <div className="flex h-full w-full items-center justify-center bg-gray-100 px-4 text-center text-sm font-semibold text-gray-500">
-    {label || getStatusPlaceholderLabel(status)}
+    {label || getStatusPlaceholderLabel(status, mediaKind)}
   </div>
 );
 
 const draftSnapshot = (draft: SourceArchiveDraft, tagInput: string) =>
   JSON.stringify({
+    mediaKind: draft.mediaKind || "image",
     title: draft.title.trim(),
     description: draft.description.trim(),
     era: draft.era.trim(),
@@ -111,53 +179,98 @@ const draftSnapshot = (draft: SourceArchiveDraft, tagInput: string) =>
     type: draft.type,
     source: draft.source.trim(),
     tags: normalizeTagInput(tagInput),
-    image: draft.image?.displayPath || '',
+    file: draft.file?.storagePath || "",
+    image: draft.image?.displayPath || "",
   });
 
 const getOriginalFileLabel = (asset: SourceArchiveAsset) => {
   if (asset.file.originalName) return asset.file.originalName;
   const path = asset.file.storagePath || asset.image.originalPath;
-  return path ? path.split('/').pop() || '-' : '-';
+  return path ? path.split("/").pop() || "-" : "-";
 };
 
-const getOpenAssetLabel = (asset: SourceArchiveAsset) =>
-  asset.file.originalAvailable ? '업로드 원본 열기' : '현재 자산 열기';
+const getOpenAssetLabel = (asset: SourceArchiveAsset) => {
+  if (getAssetMediaKind(asset) === "pdf") {
+    return asset.file.originalAvailable ? "원본 PDF 열기" : "PDF 열기";
+  }
+  return asset.file.originalAvailable ? "업로드 원본 열기" : "현재 자산 열기";
+};
 
 const getStatusHelp = (asset: SourceArchiveAsset) => {
+  if (getAssetMediaKind(asset) === "pdf") {
+    if (asset.processingStatus === "failed") return UI.pdfFailedHelp;
+    if (
+      asset.processingStatus === "uploading" ||
+      asset.processingStatus === "queued" ||
+      asset.processingStatus === "processing"
+    ) {
+      return UI.pdfProcessingHelp;
+    }
+    if (
+      asset.processingStatus === "ready" &&
+      (asset.previewText || asset.pageCount > 0)
+    ) {
+      return UI.pdfReadyHelp;
+    }
+    return "";
+  }
   if (asset.file.legacyPreviewOnly) return UI.legacyHelp;
-  if (asset.processingStatus === 'failed') return UI.failedHelp;
-  if (asset.processingStatus === 'uploading' || asset.processingStatus === 'queued' || asset.processingStatus === 'processing') {
+  if (asset.processingStatus === "failed") return UI.failedHelp;
+  if (
+    asset.processingStatus === "uploading" ||
+    asset.processingStatus === "queued" ||
+    asset.processingStatus === "processing"
+  ) {
     return UI.processingHelp;
   }
-  return '';
+  return "";
 };
 
 const ManageSourceArchive: React.FC = () => {
   const { currentUser, userData } = useAuth();
-  const canRead = canReadLessonManagement(userData, currentUser?.email || '');
-  const canWrite = canWriteLessonManagement(userData, currentUser?.email || '');
+  const canRead = canReadLessonManagement(userData, currentUser?.email || "");
+  const canWrite = canWriteLessonManagement(userData, currentUser?.email || "");
   const [assets, setAssets] = useState<SourceArchiveAsset[]>([]);
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
-  const [searchText, setSearchText] = useState('');
-  const [typeFilter, setTypeFilter] = useState<FilterType>('all');
-  const [tagFilter, setTagFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState<FilterStatus>('all');
-  const [sortOption, setSortOption] = useState<SortOption>('updatedDesc');
-  const [visibleCount, setVisibleCount] = useState(SOURCE_ARCHIVE_RENDER_PAGE_SIZE);
-  const [selectedId, setSelectedId] = useState('');
-  const [panelMode, setPanelMode] = useState<PanelMode>('view');
-  const [draft, setDraft] = useState<SourceArchiveDraft>(() => createEmptySourceArchiveDraft());
-  const [tagInput, setTagInput] = useState('');
+  const [message, setMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [searchText, setSearchText] = useState("");
+  const [typeFilter, setTypeFilter] = useState<FilterType>("all");
+  const [tagFilter, setTagFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<FilterStatus>("all");
+  const [sortOption, setSortOption] = useState<SortOption>("updatedDesc");
+  const [visibleCount, setVisibleCount] = useState(
+    SOURCE_ARCHIVE_RENDER_PAGE_SIZE,
+  );
+  const [selectedId, setSelectedId] = useState("");
+  const [panelMode, setPanelMode] = useState<PanelMode>("view");
+  const [draft, setDraft] = useState<SourceArchiveDraft>(() =>
+    createEmptySourceArchiveDraft(),
+  );
+  const [tagInput, setTagInput] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState('');
-  const [editorBaseline, setEditorBaseline] = useState(() => draftSnapshot(createEmptySourceArchiveDraft(), ''));
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [editorBaseline, setEditorBaseline] = useState(() =>
+    draftSnapshot(createEmptySourceArchiveDraft(), ""),
+  );
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [openingOriginalId, setOpeningOriginalId] = useState('');
+  const [openingOriginalId, setOpeningOriginalId] = useState("");
   const deferredSearchText = useDeferredValue(searchText);
-  const selectedAsset = useMemo(() => assets.find((item) => item.id === selectedId) || null, [assets, selectedId]);
+  const selectedAsset = useMemo(
+    () => assets.find((item) => item.id === selectedId) || null,
+    [assets, selectedId],
+  );
+  const selectedFileIsPdf = selectedFile
+    ? isSourceArchivePdfFile(selectedFile)
+    : false;
+  const editorMediaKind: SourceArchiveMediaKind = selectedFile
+    ? selectedFileIsPdf
+      ? "pdf"
+      : "image"
+    : draft.mediaKind === "pdf"
+      ? "pdf"
+      : "image";
 
   useEffect(() => {
     if (!canRead) {
@@ -170,7 +283,7 @@ const ManageSourceArchive: React.FC = () => {
         setLoading(false);
       },
       (error) => {
-        console.error('Failed to subscribe source archive assets:', error);
+        console.error("Failed to subscribe source archive assets:", error);
         setErrorMessage(UI.loadingError);
         setLoading(false);
       },
@@ -182,35 +295,54 @@ const ManageSourceArchive: React.FC = () => {
     setVisibleCount(SOURCE_ARCHIVE_RENDER_PAGE_SIZE);
   }, [deferredSearchText, sortOption, statusFilter, tagFilter, typeFilter]);
 
-  useEffect(() => () => {
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-  }, [previewUrl]);
+  useEffect(
+    () => () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    },
+    [previewUrl],
+  );
 
   const availableTags = useMemo(
-    () => Array.from(new Set(assets.flatMap((item) => item.tags))).filter(Boolean).sort((left, right) => left.localeCompare(right, 'ko')),
+    () =>
+      Array.from(new Set(assets.flatMap((item) => item.tags)))
+        .filter(Boolean)
+        .sort((left, right) => left.localeCompare(right, "ko")),
     [assets],
   );
 
   const filteredAssets = useMemo(() => {
     const normalizedSearch = deferredSearchText.trim().toLowerCase();
     const nextItems = assets.filter((item) => {
-      if (typeFilter !== 'all' && item.type !== typeFilter) return false;
-      if (tagFilter !== 'all' && !item.tags.includes(tagFilter)) return false;
-      if (statusFilter !== 'all' && item.processingStatus !== statusFilter) return false;
+      if (typeFilter !== "all" && item.type !== typeFilter) return false;
+      if (tagFilter !== "all" && !item.tags.includes(tagFilter)) return false;
+      if (statusFilter !== "all" && item.processingStatus !== statusFilter)
+        return false;
       if (!normalizedSearch) return true;
       return item.searchText.includes(normalizedSearch);
     });
-    return sortOption === 'titleAsc'
-      ? [...nextItems].sort((left, right) => left.title.localeCompare(right.title, 'ko'))
+    return sortOption === "titleAsc"
+      ? [...nextItems].sort((left, right) =>
+          left.title.localeCompare(right.title, "ko"),
+        )
       : nextItems;
-  }, [assets, deferredSearchText, sortOption, statusFilter, tagFilter, typeFilter]);
+  }, [
+    assets,
+    deferredSearchText,
+    sortOption,
+    statusFilter,
+    tagFilter,
+    typeFilter,
+  ]);
 
-  const visibleAssets = useMemo(() => filteredAssets.slice(0, visibleCount), [filteredAssets, visibleCount]);
+  const visibleAssets = useMemo(
+    () => filteredAssets.slice(0, visibleCount),
+    [filteredAssets, visibleCount],
+  );
 
   useEffect(() => {
-    if (panelMode !== 'view') return;
+    if (panelMode !== "view") return;
     if (!filteredAssets.length) {
-      setSelectedId('');
+      setSelectedId("");
       return;
     }
     if (!selectedId || !filteredAssets.some((item) => item.id === selectedId)) {
@@ -219,17 +351,22 @@ const ManageSourceArchive: React.FC = () => {
   }, [filteredAssets, panelMode, selectedId]);
 
   const isEditorDirty = useMemo(
-    () => selectedFile !== null || editorBaseline !== draftSnapshot(draft, tagInput),
+    () =>
+      selectedFile !== null ||
+      editorBaseline !== draftSnapshot(draft, tagInput),
     [draft, editorBaseline, selectedFile, tagInput],
   );
 
   const clearPreview = () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPreviewUrl('');
+    setPreviewUrl("");
     setSelectedFile(null);
   };
 
-  const applyEditorState = (nextDraft: SourceArchiveDraft, nextTagInput: string) => {
+  const applyEditorState = (
+    nextDraft: SourceArchiveDraft,
+    nextTagInput: string,
+  ) => {
     setDraft(nextDraft);
     setTagInput(nextTagInput);
     setEditorBaseline(draftSnapshot(nextDraft, nextTagInput));
@@ -237,50 +374,51 @@ const ManageSourceArchive: React.FC = () => {
 
   const resetEditor = () => {
     clearPreview();
-    applyEditorState(createEmptySourceArchiveDraft(), '');
+    applyEditorState(createEmptySourceArchiveDraft(), "");
   };
 
-  const confirmDiscardIfDirty = () => (!isEditorDirty ? true : window.confirm(UI.discardConfirm));
+  const confirmDiscardIfDirty = () =>
+    !isEditorDirty ? true : window.confirm(UI.discardConfirm);
 
   const openCreate = () => {
     if (!confirmDiscardIfDirty()) return;
     resetEditor();
-    setMessage('');
-    setErrorMessage('');
-    setPanelMode('create');
+    setMessage("");
+    setErrorMessage("");
+    setPanelMode("create");
   };
 
   const openEdit = (asset: SourceArchiveAsset) => {
     if (!canWrite || !confirmDiscardIfDirty()) return;
     clearPreview();
     const nextDraft = buildSourceArchiveDraft(asset);
-    applyEditorState(nextDraft, asset.tags.join(', '));
-    setMessage('');
-    setErrorMessage('');
-    setPanelMode('edit');
+    applyEditorState(nextDraft, asset.tags.join(", "));
+    setMessage("");
+    setErrorMessage("");
+    setPanelMode("edit");
   };
 
   const closeEditor = () => {
     if (!confirmDiscardIfDirty()) return;
     resetEditor();
-    setPanelMode('view');
+    setPanelMode("view");
   };
 
   const handleSelectAsset = (assetId: string) => {
-    if (panelMode !== 'view' && !confirmDiscardIfDirty()) return;
-    if (panelMode !== 'view') {
+    if (panelMode !== "view" && !confirmDiscardIfDirty()) return;
+    if (panelMode !== "view") {
       resetEditor();
-      setPanelMode('view');
+      setPanelMode("view");
     }
     setSelectedId(assetId);
   };
 
   const resetFilters = () => {
-    setSearchText('');
-    setTypeFilter('all');
-    setTagFilter('all');
-    setStatusFilter('all');
-    setSortOption('updatedDesc');
+    setSearchText("");
+    setTypeFilter("all");
+    setTagFilter("all");
+    setStatusFilter("all");
+    setSortOption("updatedDesc");
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -288,6 +426,15 @@ const ManageSourceArchive: React.FC = () => {
     clearPreview();
     if (!file) return;
     setSelectedFile(file);
+    if (isSourceArchivePdfFile(file)) {
+      setDraft((current) => ({
+        ...current,
+        mediaKind: "pdf",
+        type: current.type === "photo" ? "document" : current.type,
+      }));
+      return;
+    }
+    setDraft((current) => ({ ...current, mediaKind: "image" }));
     setPreviewUrl(URL.createObjectURL(file));
   };
 
@@ -295,22 +442,38 @@ const ManageSourceArchive: React.FC = () => {
     event.preventDefault();
     if (!canWrite || !currentUser?.uid) return;
     setSaving(true);
-    setMessage('');
-    setErrorMessage('');
+    setMessage("");
+    setErrorMessage("");
     try {
-      const imageUpload = selectedFile ? await buildSourceArchiveUpload(selectedFile) : null;
+      const fileUpload = selectedFile
+        ? selectedFileIsPdf
+          ? await buildSourceArchivePdfUpload(selectedFile)
+          : await buildSourceArchiveUpload(selectedFile)
+        : null;
       const assetId = await saveSourceArchiveAsset({
-        draft: { ...draft, tags: normalizeTagInput(tagInput) },
+        draft: {
+          ...draft,
+          mediaKind: editorMediaKind,
+          tags: normalizeTagInput(tagInput),
+        },
         actorUid: currentUser.uid,
-        imageUpload,
+        fileUpload,
       });
       setSelectedId(assetId);
       resetEditor();
-      setPanelMode('view');
-      setMessage(imageUpload ? UI.saveProcessing : UI.saveDone);
+      setPanelMode("view");
+      setMessage(
+        fileUpload
+          ? fileUpload.kind === "pdf"
+            ? UI.savePdfProcessing
+            : UI.saveProcessing
+          : UI.saveDone,
+      );
     } catch (error) {
-      console.error('Failed to save source archive asset:', error);
-      setErrorMessage(String((error as { message?: string })?.message || UI.loadingError));
+      console.error("Failed to save source archive asset:", error);
+      setErrorMessage(
+        String((error as { message?: string })?.message || UI.loadingError),
+      );
     } finally {
       setSaving(false);
     }
@@ -320,15 +483,17 @@ const ManageSourceArchive: React.FC = () => {
     if (!canWrite) return;
     if (!window.confirm(`"${asset.title}" 사료를 삭제할까요?`)) return;
     setDeleting(true);
-    setMessage('');
-    setErrorMessage('');
+    setMessage("");
+    setErrorMessage("");
     try {
       await deleteSourceArchiveAsset(asset.id);
-      if (selectedId === asset.id) setSelectedId('');
+      if (selectedId === asset.id) setSelectedId("");
       setMessage(UI.deleteDone);
     } catch (error) {
-      console.error('Failed to delete source archive asset:', error);
-      setErrorMessage(String((error as { message?: string })?.message || UI.loadingError));
+      console.error("Failed to delete source archive asset:", error);
+      setErrorMessage(
+        String((error as { message?: string })?.message || UI.loadingError),
+      );
     } finally {
       setDeleting(false);
     }
@@ -338,15 +503,15 @@ const ManageSourceArchive: React.FC = () => {
     const storagePath = asset.file.storagePath || asset.image.originalPath;
     if (!storagePath) return;
     setOpeningOriginalId(asset.id);
-    setErrorMessage('');
+    setErrorMessage("");
     try {
       const downloadUrl = await getSourceArchiveDownloadUrl(storagePath);
-      window.open(downloadUrl, '_blank', 'noopener,noreferrer');
+      window.open(downloadUrl, "_blank", "noopener,noreferrer");
     } catch (error) {
-      console.error('Failed to open source archive original file:', error);
+      console.error("Failed to open source archive original file:", error);
       setErrorMessage(UI.originalOpenError);
     } finally {
-      setOpeningOriginalId('');
+      setOpeningOriginalId("");
     }
   };
 
@@ -361,7 +526,7 @@ const ManageSourceArchive: React.FC = () => {
     );
   }
 
-  const detailHelp = selectedAsset ? getStatusHelp(selectedAsset) : '';
+  const detailHelp = selectedAsset ? getStatusHelp(selectedAsset) : "";
   const showingFilteredResult = filteredAssets.length !== assets.length;
 
   return (
@@ -394,11 +559,13 @@ const ManageSourceArchive: React.FC = () => {
       )}
 
       {(message || errorMessage) && (
-        <div className={`mt-4 rounded-2xl px-4 py-3 text-sm font-medium ${
-          errorMessage
-            ? 'border border-rose-200 bg-rose-50 text-rose-700'
-            : 'border border-emerald-200 bg-emerald-50 text-emerald-700'
-        }`}>
+        <div
+          className={`mt-4 rounded-2xl px-4 py-3 text-sm font-medium ${
+            errorMessage
+              ? "border border-rose-200 bg-rose-50 text-rose-700"
+              : "border border-emerald-200 bg-emerald-50 text-emerald-700"
+          }`}
+        >
           {errorMessage || message}
         </div>
       )}
@@ -406,7 +573,9 @@ const ManageSourceArchive: React.FC = () => {
       <div className="mt-6 rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
         <div className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_repeat(4,minmax(0,1fr))]">
           <label className="space-y-1">
-            <span className="block text-xs font-semibold text-gray-500">검색</span>
+            <span className="block text-xs font-semibold text-gray-500">
+              검색
+            </span>
             <input
               value={searchText}
               onChange={(event) => setSearchText(event.target.value)}
@@ -415,20 +584,30 @@ const ManageSourceArchive: React.FC = () => {
             />
           </label>
           <label className="space-y-1">
-            <span className="block text-xs font-semibold text-gray-500">유형</span>
+            <span className="block text-xs font-semibold text-gray-500">
+              유형
+            </span>
             <select
               value={typeFilter}
-              onChange={(event) => setTypeFilter(event.target.value as FilterType)}
+              onChange={(event) =>
+                setTypeFilter(event.target.value as FilterType)
+              }
               className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
             >
               <option value="all">전체 유형</option>
-              {Object.entries(SOURCE_ARCHIVE_TYPE_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
-              ))}
+              {Object.entries(SOURCE_ARCHIVE_TYPE_LABELS).map(
+                ([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ),
+              )}
             </select>
           </label>
           <label className="space-y-1">
-            <span className="block text-xs font-semibold text-gray-500">태그</span>
+            <span className="block text-xs font-semibold text-gray-500">
+              태그
+            </span>
             <select
               value={tagFilter}
               onChange={(event) => setTagFilter(event.target.value)}
@@ -436,32 +615,48 @@ const ManageSourceArchive: React.FC = () => {
             >
               <option value="all">전체 태그</option>
               {availableTags.map((tag) => (
-                <option key={tag} value={tag}>{tag}</option>
+                <option key={tag} value={tag}>
+                  {tag}
+                </option>
               ))}
             </select>
           </label>
           <label className="space-y-1">
-            <span className="block text-xs font-semibold text-gray-500">상태</span>
+            <span className="block text-xs font-semibold text-gray-500">
+              상태
+            </span>
             <select
               value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value as FilterStatus)}
+              onChange={(event) =>
+                setStatusFilter(event.target.value as FilterStatus)
+              }
               className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
             >
               <option value="all">전체 상태</option>
-              {Object.entries(SOURCE_ARCHIVE_STATUS_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
-              ))}
+              {Object.entries(SOURCE_ARCHIVE_STATUS_LABELS).map(
+                ([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ),
+              )}
             </select>
           </label>
           <label className="space-y-1">
-            <span className="block text-xs font-semibold text-gray-500">정렬</span>
+            <span className="block text-xs font-semibold text-gray-500">
+              정렬
+            </span>
             <select
               value={sortOption}
-              onChange={(event) => setSortOption(event.target.value as SortOption)}
+              onChange={(event) =>
+                setSortOption(event.target.value as SortOption)
+              }
               className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
             >
               {SORT_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
               ))}
             </select>
           </label>
@@ -486,13 +681,18 @@ const ManageSourceArchive: React.FC = () => {
         <section className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h2 className="text-lg font-extrabold text-gray-900">사료 목록</h2>
-            <span className="text-sm text-gray-500">{filteredAssets.length}건</span>
+            <span className="text-sm text-gray-500">
+              {filteredAssets.length}건
+            </span>
           </div>
 
           {loading ? (
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {Array.from({ length: 6 }).map((_, index) => (
-                <div key={index} className="overflow-hidden rounded-3xl border border-gray-200">
+                <div
+                  key={index}
+                  className="overflow-hidden rounded-3xl border border-gray-200"
+                >
                   <div className="aspect-[4/3] animate-pulse bg-gray-100" />
                   <div className="space-y-2 p-4">
                     <div className="h-5 animate-pulse rounded bg-gray-100" />
@@ -514,13 +714,15 @@ const ManageSourceArchive: React.FC = () => {
                     type="button"
                     onClick={() => handleSelectAsset(asset.id)}
                     className={`overflow-hidden rounded-3xl border text-left transition ${
-                      selectedId === asset.id && panelMode === 'view'
-                        ? 'border-blue-400 shadow-lg shadow-blue-100'
-                        : 'border-gray-200 hover:border-blue-200 hover:shadow-md'
+                      selectedId === asset.id && panelMode === "view"
+                        ? "border-blue-400 shadow-lg shadow-blue-100"
+                        : "border-gray-200 hover:border-blue-200 hover:shadow-md"
                     }`}
                   >
                     <div className="aspect-[4/3] overflow-hidden bg-gray-100">
-                      {asset.processingStatus === 'ready' && asset.image.thumbPath ? (
+                      {getAssetMediaKind(asset) === "image" &&
+                      asset.processingStatus === "ready" &&
+                      asset.image.thumbPath ? (
                         <StorageImage
                           path={asset.image.thumbPath}
                           alt={asset.title}
@@ -528,25 +730,45 @@ const ManageSourceArchive: React.FC = () => {
                           className="h-full w-full object-cover"
                           width={asset.image.thumbWidth || undefined}
                           height={asset.image.thumbHeight || undefined}
-                          fallback={imagePlaceholder(asset.processingStatus)}
+                          fallback={imagePlaceholder(
+                            asset.processingStatus,
+                            undefined,
+                            getAssetMediaKind(asset),
+                          )}
                         />
-                      ) : imagePlaceholder(asset.processingStatus)}
+                      ) : (
+                        imagePlaceholder(
+                          asset.processingStatus,
+                          undefined,
+                          getAssetMediaKind(asset),
+                        )
+                      )}
                     </div>
                     <div className="space-y-3 p-4">
                       <div className="flex items-center justify-between gap-2">
-                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_BADGE_CLASS[asset.processingStatus]}`}>
-                          {SOURCE_ARCHIVE_STATUS_LABELS[asset.processingStatus]}
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_BADGE_CLASS[asset.processingStatus]}`}
+                        >
+                          {getStatusLabel(asset)}
                         </span>
-                        <span className="text-xs font-semibold text-gray-500">{SOURCE_ARCHIVE_TYPE_LABELS[asset.type]}</span>
+                        <span className="text-xs font-semibold text-gray-500">
+                          {getAssetMediaKind(asset) === "pdf"
+                            ? `${SOURCE_ARCHIVE_TYPE_LABELS[asset.type]} · PDF`
+                            : SOURCE_ARCHIVE_TYPE_LABELS[asset.type]}
+                        </span>
                       </div>
                       <div>
-                        <h3 className="line-clamp-2 text-base font-extrabold text-gray-900">{asset.title}</h3>
+                        <h3 className="line-clamp-2 text-base font-extrabold text-gray-900">
+                          {asset.title}
+                        </h3>
                         <p className="mt-1 line-clamp-2 text-sm text-gray-500">
-                          {asset.description || '설명이 없습니다.'}
+                          {asset.description || "설명이 없습니다."}
                         </p>
                       </div>
                       <p className="text-xs font-medium text-gray-500">
-                        {[asset.era, asset.subject, asset.unit].filter(Boolean).join(' · ') || '분류 미입력'}
+                        {[asset.era, asset.subject, asset.unit]
+                          .filter(Boolean)
+                          .join(" · ") || "분류 미입력"}
                       </p>
                     </div>
                   </button>
@@ -556,7 +778,11 @@ const ManageSourceArchive: React.FC = () => {
                 <div className="mt-5 flex justify-center">
                   <button
                     type="button"
-                    onClick={() => setVisibleCount((current) => current + SOURCE_ARCHIVE_RENDER_PAGE_SIZE)}
+                    onClick={() =>
+                      setVisibleCount(
+                        (current) => current + SOURCE_ARCHIVE_RENDER_PAGE_SIZE,
+                      )
+                    }
                     className="rounded-full border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-blue-300 hover:text-blue-600"
                   >
                     더 보기
@@ -568,85 +794,154 @@ const ManageSourceArchive: React.FC = () => {
         </section>
 
         <aside className="self-start rounded-3xl border border-gray-200 bg-white p-4 shadow-sm lg:sticky lg:top-24">
-          {panelMode === 'view' && !selectedAsset ? (
+          {panelMode === "view" && !selectedAsset ? (
             <div className="rounded-3xl border border-dashed border-gray-200 bg-gray-50 px-6 py-12 text-center text-sm text-gray-500">
               {filteredAssets.length === 0 ? UI.emptyList : UI.emptyDetail}
             </div>
-          ) : panelMode === 'view' && selectedAsset ? (
+          ) : panelMode === "view" && selectedAsset ? (
             <div className="space-y-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-xl font-extrabold text-gray-900">{selectedAsset.title}</h2>
+                  <h2 className="text-xl font-extrabold text-gray-900">
+                    {selectedAsset.title}
+                  </h2>
                   <p className="mt-2 text-sm text-gray-500">
-                    등록 {formatTimestamp(selectedAsset.createdAt)} · 수정 {formatTimestamp(selectedAsset.updatedAt)}
+                    등록 {formatTimestamp(selectedAsset.createdAt)} · 수정{" "}
+                    {formatTimestamp(selectedAsset.updatedAt)}
                   </p>
                 </div>
-                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${STATUS_BADGE_CLASS[selectedAsset.processingStatus]}`}>
-                  {SOURCE_ARCHIVE_STATUS_LABELS[selectedAsset.processingStatus]}
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-semibold ${STATUS_BADGE_CLASS[selectedAsset.processingStatus]}`}
+                >
+                  {getStatusLabel(selectedAsset)}
                 </span>
               </div>
 
-              <div className="overflow-hidden rounded-3xl border border-gray-200 bg-gray-100" style={{ aspectRatio: getAspectRatio(selectedAsset) }}>
-                {selectedAsset.processingStatus === 'ready' && selectedAsset.image.displayPath ? (
+              <div
+                className="overflow-hidden rounded-3xl border border-gray-200 bg-gray-100"
+                style={{ aspectRatio: getAspectRatio(selectedAsset) }}
+              >
+                {getAssetMediaKind(selectedAsset) === "image" &&
+                selectedAsset.processingStatus === "ready" &&
+                selectedAsset.image.displayPath ? (
                   <StorageImage
                     path={selectedAsset.image.displayPath}
                     alt={selectedAsset.title}
                     loading="eager"
                     className="h-full w-full object-contain"
-                    width={selectedAsset.image.displayWidth || selectedAsset.image.width || undefined}
-                    height={selectedAsset.image.displayHeight || selectedAsset.image.height || undefined}
-                    fallback={imagePlaceholder(selectedAsset.processingStatus)}
+                    width={
+                      selectedAsset.image.displayWidth ||
+                      selectedAsset.image.width ||
+                      undefined
+                    }
+                    height={
+                      selectedAsset.image.displayHeight ||
+                      selectedAsset.image.height ||
+                      undefined
+                    }
+                    fallback={imagePlaceholder(
+                      selectedAsset.processingStatus,
+                      undefined,
+                      getAssetMediaKind(selectedAsset),
+                    )}
                   />
-                ) : imagePlaceholder(selectedAsset.processingStatus)}
+                ) : (
+                  imagePlaceholder(
+                    selectedAsset.processingStatus,
+                    undefined,
+                    getAssetMediaKind(selectedAsset),
+                  )
+                )}
               </div>
 
               {detailHelp && (
-                <div className={`rounded-2xl px-4 py-3 text-sm ${
-                  selectedAsset.processingStatus === 'failed'
-                    ? 'border border-rose-200 bg-rose-50 text-rose-700'
-                    : selectedAsset.file.legacyPreviewOnly
-                      ? 'border border-blue-200 bg-blue-50 text-blue-700'
-                      : 'border border-amber-200 bg-amber-50 text-amber-700'
-                }`}>
+                <div
+                  className={`rounded-2xl px-4 py-3 text-sm ${
+                    selectedAsset.processingStatus === "failed"
+                      ? "border border-rose-200 bg-rose-50 text-rose-700"
+                      : selectedAsset.file.legacyPreviewOnly
+                        ? "border border-blue-200 bg-blue-50 text-blue-700"
+                        : "border border-amber-200 bg-amber-50 text-amber-700"
+                  }`}
+                >
                   {detailHelp}
                 </div>
               )}
 
               <div className="grid gap-3 text-sm">
                 <div className="rounded-2xl bg-gray-50 px-4 py-3">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">분류</div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                    분류
+                  </div>
                   <div className="mt-1 font-semibold text-gray-800">
-                    {[selectedAsset.era, selectedAsset.subject, selectedAsset.unit].filter(Boolean).join(' · ') || '미입력'}
+                    {[
+                      selectedAsset.era,
+                      selectedAsset.subject,
+                      selectedAsset.unit,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ") || "미입력"}
                   </div>
                 </div>
                 <div className="rounded-2xl bg-gray-50 px-4 py-3">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">유형 / 출처</div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                    유형 / 출처
+                  </div>
                   <div className="mt-1 font-semibold text-gray-800">
-                    {SOURCE_ARCHIVE_TYPE_LABELS[selectedAsset.type]} / {selectedAsset.source || '미입력'}
+                    {getAssetMediaKind(selectedAsset) === "pdf"
+                      ? `${SOURCE_ARCHIVE_TYPE_LABELS[selectedAsset.type]} · PDF`
+                      : SOURCE_ARCHIVE_TYPE_LABELS[selectedAsset.type]}{" "}
+                    / {selectedAsset.source || "미입력"}
                   </div>
                 </div>
                 <div className="rounded-2xl bg-gray-50 px-4 py-3">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">업로드 원본</div>
-                  <div className="mt-1 font-semibold text-gray-800">{getOriginalFileLabel(selectedAsset)}</div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                    업로드 원본
+                  </div>
+                  <div className="mt-1 font-semibold text-gray-800">
+                    {getOriginalFileLabel(selectedAsset)}
+                  </div>
                   <div className="mt-1 text-xs text-gray-500">
                     {selectedAsset.file.originalAvailable
-                      ? `${Math.round(Number(selectedAsset.file.byteSize || 0) / 1024)} KB · ${selectedAsset.file.width || 0} x ${selectedAsset.file.height || 0}`
-                      : '미리보기 자산만 연결됨'}
+                      ? getAssetMediaKind(selectedAsset) === "pdf"
+                        ? `${Math.round(Number(selectedAsset.file.byteSize || 0) / 1024)} KB · PDF 원본 보존`
+                        : `${Math.round(Number(selectedAsset.file.byteSize || 0) / 1024)} KB · ${selectedAsset.file.width || 0} x ${selectedAsset.file.height || 0}`
+                      : "미리보기 자산만 연결됨"}
                   </div>
                 </div>
                 <div className="rounded-2xl bg-gray-50 px-4 py-3">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">상태 기록</div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                    상태 기록
+                  </div>
                   <div className="mt-1 font-semibold text-gray-800">
-                    미리보기 {SOURCE_ARCHIVE_STATUS_LABELS[selectedAsset.processingStatus]}
+                    {getAssetMediaKind(selectedAsset) === "pdf"
+                      ? getStatusLabel(selectedAsset)
+                      : `미리보기 ${SOURCE_ARCHIVE_STATUS_LABELS[selectedAsset.processingStatus]}`}
                   </div>
                   <div className="mt-1 text-xs text-gray-500">
-                    마지막 처리 {formatTimestamp(selectedAsset.processedAt)}
+                    {getAssetMediaKind(selectedAsset) === "pdf" &&
+                    selectedAsset.pageCount > 0
+                      ? `구조 추출 완료 · ${selectedAsset.pageCount}쪽`
+                      : `마지막 처리 ${formatTimestamp(selectedAsset.processedAt)}`}
                   </div>
                 </div>
+                {getAssetMediaKind(selectedAsset) === "pdf" &&
+                  selectedAsset.previewText && (
+                    <div className="rounded-2xl bg-gray-50 px-4 py-3">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                        추출 미리보기
+                      </div>
+                      <div className="mt-1 line-clamp-4 whitespace-pre-wrap font-medium text-gray-700">
+                        {selectedAsset.previewText}
+                      </div>
+                    </div>
+                  )}
                 <div className="rounded-2xl bg-gray-50 px-4 py-3">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">설명</div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                    설명
+                  </div>
                   <div className="mt-1 whitespace-pre-wrap font-medium text-gray-700">
-                    {selectedAsset.description || '설명이 없습니다.'}
+                    {selectedAsset.description || "설명이 없습니다."}
                   </div>
                 </div>
               </div>
@@ -654,7 +949,10 @@ const ManageSourceArchive: React.FC = () => {
               {selectedAsset.tags.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {selectedAsset.tags.map((tag) => (
-                    <span key={tag} className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                    <span
+                      key={tag}
+                      className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700"
+                    >
                       #{tag}
                     </span>
                   ))}
@@ -669,7 +967,9 @@ const ManageSourceArchive: React.FC = () => {
                     disabled={openingOriginalId === selectedAsset.id}
                     className="rounded-full border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-blue-300 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {openingOriginalId === selectedAsset.id ? '파일 여는 중...' : getOpenAssetLabel(selectedAsset)}
+                    {openingOriginalId === selectedAsset.id
+                      ? "파일 여는 중..."
+                      : getOpenAssetLabel(selectedAsset)}
                   </button>
                 )}
                 {canWrite && (
@@ -698,10 +998,11 @@ const ManageSourceArchive: React.FC = () => {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h2 className="text-xl font-extrabold text-gray-900">
-                    {panelMode === 'edit' ? '사료 수정' : '사료 등록'}
+                    {panelMode === "edit" ? "사료 수정" : "사료 등록"}
                   </h2>
                   <p className="mt-2 text-sm text-gray-500">
-                    업로드 원본을 보존하고, 서버가 썸네일과 표시용 이미지를 정리합니다.
+                    업로드 원본을 보존하고, 서버가 이미지 미리보기 또는 PDF 구조
+                    추출 결과를 정리합니다.
                   </p>
                 </div>
                 <button
@@ -713,38 +1014,69 @@ const ManageSourceArchive: React.FC = () => {
                 </button>
               </div>
 
-              <div className="overflow-hidden rounded-3xl border border-gray-200 bg-gray-100" style={{ aspectRatio: '4 / 3' }}>
+              <div
+                className="overflow-hidden rounded-3xl border border-gray-200 bg-gray-100"
+                style={{
+                  aspectRatio: editorMediaKind === "pdf" ? "3 / 4" : "4 / 3",
+                }}
+              >
                 {previewUrl ? (
-                  <img src={previewUrl} alt={UI.title} className="h-full w-full object-contain" />
-                ) : draft.image?.displayPath ? (
+                  <img
+                    src={previewUrl}
+                    alt={UI.title}
+                    className="h-full w-full object-contain"
+                  />
+                ) : editorMediaKind === "image" && draft.image?.displayPath ? (
                   <StorageImage
                     path={draft.image.displayPath}
                     alt={draft.title || UI.title}
                     loading="eager"
                     className="h-full w-full object-contain"
-                    fallback={imagePlaceholder('processing', UI.previewEmpty)}
+                    fallback={imagePlaceholder(
+                      "processing",
+                      UI.previewEmpty,
+                      editorMediaKind,
+                    )}
                   />
-                ) : imagePlaceholder('processing', UI.previewEmpty)}
+                ) : (
+                  imagePlaceholder(
+                    "processing",
+                    editorMediaKind === "pdf"
+                      ? UI.previewPdfEmpty
+                      : UI.previewEmpty,
+                    editorMediaKind,
+                  )
+                )}
               </div>
 
               <label className="block space-y-1">
-                <span className="block text-xs font-semibold text-gray-500">사료 이미지</span>
+                <span className="block text-xs font-semibold text-gray-500">
+                  자료 파일
+                </span>
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/*,application/pdf"
                   onChange={handleFileChange}
                   className="block w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700"
                 />
                 <span className="block text-xs text-gray-500">
-                  새 이미지를 올리면 업로드 원본과 미리보기 자산을 함께 갱신합니다.
+                  이미지 파일은 기존 미리보기 흐름을 유지하고, PDF 파일은 원본을
+                  보존한 뒤 구조 추출을 진행합니다.
                 </span>
               </label>
 
               <label className="block space-y-1">
-                <span className="block text-xs font-semibold text-gray-500">제목</span>
+                <span className="block text-xs font-semibold text-gray-500">
+                  제목
+                </span>
                 <input
                   value={draft.title}
-                  onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      title: event.target.value,
+                    }))
+                  }
                   placeholder="제목"
                   className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
                 />
@@ -752,22 +1084,40 @@ const ManageSourceArchive: React.FC = () => {
 
               <div className="grid gap-3 md:grid-cols-2">
                 <label className="space-y-1">
-                  <span className="block text-xs font-semibold text-gray-500">유형</span>
+                  <span className="block text-xs font-semibold text-gray-500">
+                    유형
+                  </span>
                   <select
                     value={draft.type}
-                    onChange={(event) => setDraft((current) => ({ ...current, type: event.target.value as SourceArchiveAssetType }))}
+                    onChange={(event) =>
+                      setDraft((current) => ({
+                        ...current,
+                        type: event.target.value as SourceArchiveAssetType,
+                      }))
+                    }
                     className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
                   >
-                    {Object.entries(SOURCE_ARCHIVE_TYPE_LABELS).map(([value, label]) => (
-                      <option key={value} value={value}>{label}</option>
-                    ))}
+                    {Object.entries(SOURCE_ARCHIVE_TYPE_LABELS).map(
+                      ([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ),
+                    )}
                   </select>
                 </label>
                 <label className="space-y-1">
-                  <span className="block text-xs font-semibold text-gray-500">출처</span>
+                  <span className="block text-xs font-semibold text-gray-500">
+                    출처
+                  </span>
                   <input
                     value={draft.source}
-                    onChange={(event) => setDraft((current) => ({ ...current, source: event.target.value }))}
+                    onChange={(event) =>
+                      setDraft((current) => ({
+                        ...current,
+                        source: event.target.value,
+                      }))
+                    }
                     placeholder="출처"
                     className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
                   />
@@ -776,28 +1126,49 @@ const ManageSourceArchive: React.FC = () => {
 
               <div className="grid gap-3 md:grid-cols-3">
                 <label className="space-y-1">
-                  <span className="block text-xs font-semibold text-gray-500">시대</span>
+                  <span className="block text-xs font-semibold text-gray-500">
+                    시대
+                  </span>
                   <input
                     value={draft.era}
-                    onChange={(event) => setDraft((current) => ({ ...current, era: event.target.value }))}
+                    onChange={(event) =>
+                      setDraft((current) => ({
+                        ...current,
+                        era: event.target.value,
+                      }))
+                    }
                     placeholder="시대"
                     className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
                   />
                 </label>
                 <label className="space-y-1">
-                  <span className="block text-xs font-semibold text-gray-500">주제</span>
+                  <span className="block text-xs font-semibold text-gray-500">
+                    주제
+                  </span>
                   <input
                     value={draft.subject}
-                    onChange={(event) => setDraft((current) => ({ ...current, subject: event.target.value }))}
+                    onChange={(event) =>
+                      setDraft((current) => ({
+                        ...current,
+                        subject: event.target.value,
+                      }))
+                    }
                     placeholder="주제"
                     className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
                   />
                 </label>
                 <label className="space-y-1">
-                  <span className="block text-xs font-semibold text-gray-500">단원</span>
+                  <span className="block text-xs font-semibold text-gray-500">
+                    단원
+                  </span>
                   <input
                     value={draft.unit}
-                    onChange={(event) => setDraft((current) => ({ ...current, unit: event.target.value }))}
+                    onChange={(event) =>
+                      setDraft((current) => ({
+                        ...current,
+                        unit: event.target.value,
+                      }))
+                    }
                     placeholder="단원"
                     className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
                   />
@@ -805,7 +1176,9 @@ const ManageSourceArchive: React.FC = () => {
               </div>
 
               <label className="block space-y-1">
-                <span className="block text-xs font-semibold text-gray-500">태그</span>
+                <span className="block text-xs font-semibold text-gray-500">
+                  태그
+                </span>
                 <input
                   value={tagInput}
                   onChange={(event) => setTagInput(event.target.value)}
@@ -814,10 +1187,17 @@ const ManageSourceArchive: React.FC = () => {
                 />
               </label>
               <label className="block space-y-1">
-                <span className="block text-xs font-semibold text-gray-500">설명</span>
+                <span className="block text-xs font-semibold text-gray-500">
+                  설명
+                </span>
                 <textarea
                   value={draft.description}
-                  onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      description: event.target.value,
+                    }))
+                  }
                   rows={5}
                   placeholder="설명"
                   className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
@@ -830,7 +1210,11 @@ const ManageSourceArchive: React.FC = () => {
                   disabled={saving}
                   className="rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {saving ? '저장 중...' : panelMode === 'edit' ? '수정 저장' : '등록 저장'}
+                  {saving
+                    ? "저장 중..."
+                    : panelMode === "edit"
+                      ? "수정 저장"
+                      : "등록 저장"}
                 </button>
                 <button
                   type="button"

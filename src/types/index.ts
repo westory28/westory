@@ -1,261 +1,292 @@
 export interface SystemConfig {
-    year: string;
-    semester: string;
-    showQuiz: boolean;
-    showScore: boolean;
-    showLesson: boolean;
+  year: string;
+  semester: string;
+  showQuiz: boolean;
+  showScore: boolean;
+  showLesson: boolean;
 }
 
 export interface InterfaceConfig {
-    mainEmoji: string;
-    mainSubtitle: string;
-    ddayEnabled: boolean;
-    ddayTitle: string;
-    ddayDate: string;
-    footerText?: string;
+  mainEmoji: string;
+  mainSubtitle: string;
+  ddayEnabled: boolean;
+  ddayTitle: string;
+  ddayDate: string;
+  footerText?: string;
 }
 
 export interface UserData {
-    uid: string;
-    email: string;
-    name?: string;
-    profileIcon?: string;
-    customNameConfirmed?: boolean;
-    grade?: string;
-    class?: string;
-    number?: string;
-    role: 'teacher' | 'student' | 'staff';
-    staffPermissions?: string[];
-    teacherPortalEnabled?: boolean;
-    privacyAgreed?: boolean;
-    privacyAgreedAt?: any;
-    consentAgreedItems?: string[];
+  uid: string;
+  email: string;
+  name?: string;
+  profileIcon?: string;
+  customNameConfirmed?: boolean;
+  grade?: string;
+  class?: string;
+  number?: string;
+  role: "teacher" | "student" | "staff";
+  staffPermissions?: string[];
+  teacherPortalEnabled?: boolean;
+  privacyAgreed?: boolean;
+  privacyAgreedAt?: any;
+  consentAgreedItems?: string[];
 }
 
 export interface PointStudentTarget {
-    uid: string;
-    studentName: string;
-    grade: string;
-    class: string;
-    number: string;
-    email?: string;
+  uid: string;
+  studentName: string;
+  grade: string;
+  class: string;
+  number: string;
+  email?: string;
 }
 
 export interface CalendarEvent {
-    id: string;
-    title: string;
-    description?: string;
-    start: string;
-    end?: string;
-    eventType: string;
-    targetType: 'all' | 'common' | 'class';
-    targetClass?: string;
-    dDay?: number;
+  id: string;
+  title: string;
+  description?: string;
+  start: string;
+  end?: string;
+  eventType: string;
+  targetType: "all" | "common" | "class";
+  targetClass?: string;
+  dDay?: number;
 }
 
 export type PointTransactionType =
-    | 'attendance'
-    | 'attendance_monthly_bonus'
-    | 'quiz'
-    | 'lesson'
-    | 'manual_adjust'
-    | 'purchase_hold'
-    | 'purchase_confirm'
-    | 'purchase_cancel';
+  | "attendance"
+  | "attendance_monthly_bonus"
+  | "quiz"
+  | "lesson"
+  | "manual_adjust"
+  | "purchase_hold"
+  | "purchase_confirm"
+  | "purchase_cancel";
 
 export type PointOrderStatus =
-    | 'requested'
-    | 'approved'
-    | 'rejected'
-    | 'fulfilled'
-    | 'cancelled';
+  | "requested"
+  | "approved"
+  | "rejected"
+  | "fulfilled"
+  | "cancelled";
 
 export interface PointWallet {
-    uid: string;
-    studentName: string;
-    grade: string;
-    class: string;
-    number: string;
-    balance: number;
-    earnedTotal: number;
-    spentTotal: number;
-    adjustedTotal: number;
-    lastTransactionAt?: any;
+  uid: string;
+  studentName: string;
+  grade: string;
+  class: string;
+  number: string;
+  balance: number;
+  earnedTotal: number;
+  spentTotal: number;
+  adjustedTotal: number;
+  lastTransactionAt?: any;
 }
 
 export interface PointTransaction {
-    id: string;
-    uid: string;
-    type: PointTransactionType;
-    activityType?: PointTransactionType;
-    delta: number;
-    balanceAfter: number;
-    sourceId: string;
-    sourceLabel: string;
-    policyId: string;
-    createdBy: string;
-    targetMonth?: string;
-    targetDate?: string;
-    createdAt?: any;
+  id: string;
+  uid: string;
+  type: PointTransactionType;
+  activityType?: PointTransactionType;
+  delta: number;
+  balanceAfter: number;
+  sourceId: string;
+  sourceLabel: string;
+  policyId: string;
+  createdBy: string;
+  targetMonth?: string;
+  targetDate?: string;
+  createdAt?: any;
 }
 
 export interface PointProduct {
-    id: string;
-    name: string;
-    description: string;
-    price: number;
-    stock: number;
-    isActive: boolean;
-    sortOrder: number;
-    imageUrl: string;
-    previewImageUrl?: string;
-    imageStoragePath?: string;
-    previewStoragePath?: string;
-    createdAt?: any;
-    updatedAt?: any;
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  stock: number;
+  isActive: boolean;
+  sortOrder: number;
+  imageUrl: string;
+  previewImageUrl?: string;
+  imageStoragePath?: string;
+  previewStoragePath?: string;
+  createdAt?: any;
+  updatedAt?: any;
 }
 
 export interface PointOrder {
-    id: string;
-    uid: string;
-    studentName: string;
-    productId: string;
-    productName: string;
-    priceSnapshot: number;
-    status: PointOrderStatus;
-    requestedAt?: any;
-    reviewedAt?: any;
-    reviewedBy: string;
-    memo: string;
+  id: string;
+  uid: string;
+  studentName: string;
+  productId: string;
+  productName: string;
+  priceSnapshot: number;
+  status: PointOrderStatus;
+  requestedAt?: any;
+  reviewedAt?: any;
+  reviewedBy: string;
+  memo: string;
 }
 
 export interface PointPolicy {
-    attendanceDaily: number;
-    attendanceMonthlyBonus: number;
-    lessonView: number;
-    quizSolve: number;
-    manualAdjustEnabled: boolean;
-    allowNegativeBalance: boolean;
-    updatedAt?: any;
-    updatedBy: string;
+  attendanceDaily: number;
+  attendanceMonthlyBonus: number;
+  lessonView: number;
+  quizSolve: number;
+  manualAdjustEnabled: boolean;
+  allowNegativeBalance: boolean;
+  updatedAt?: any;
+  updatedBy: string;
 }
 
 export type SourceArchiveAssetType =
-    | 'photo'
-    | 'map'
-    | 'document'
-    | 'poster'
-    | 'artifact'
-    | 'other';
+  | "photo"
+  | "map"
+  | "document"
+  | "poster"
+  | "artifact"
+  | "other";
 
 export type SourceArchiveLifecycleStatus =
-    | 'uploading'
-    | 'queued'
-    | 'processing'
-    | 'ready'
-    | 'failed'
-    | 'archived';
+  | "uploading"
+  | "queued"
+  | "processing"
+  | "ready"
+  | "failed"
+  | "archived";
 
 export type SourceArchiveProcessingStatus = SourceArchiveLifecycleStatus;
 
-export type SourceArchiveMediaKind = 'image';
+export type SourceArchiveExtractionStatus =
+  | "not-applicable"
+  | "queued"
+  | "processing"
+  | "ready"
+  | "failed";
 
-export type SourceArchiveSearchStatus = 'metadata-only' | 'pending' | 'ready' | 'failed';
+export type SourceArchiveMediaKind = "image" | "pdf";
+
+export type SourceArchiveSearchStatus =
+  | "metadata-only"
+  | "pending"
+  | "ready"
+  | "failed";
 
 export interface SourceArchiveFileMeta {
-    storagePath: string;
-    originalName: string;
-    mimeType: string;
-    byteSize: number;
-    width: number;
-    height: number;
-    revision: string;
-    originalAvailable: boolean;
-    legacyPreviewOnly: boolean;
+  storagePath: string;
+  originalName: string;
+  mimeType: string;
+  byteSize: number;
+  width: number;
+  height: number;
+  revision: string;
+  originalAvailable: boolean;
+  legacyPreviewOnly: boolean;
+  pendingUploadToken?: string;
+  pendingUploadPath?: string;
 }
 
 export interface SourceArchiveSearchMeta {
-    status: SourceArchiveSearchStatus;
-    artifactPath: string;
-    previewText: string;
-    updatedAt?: any;
+  status: SourceArchiveSearchStatus;
+  artifactPath: string;
+  previewText: string;
+  updatedAt?: any;
 }
 
 export interface SourceArchiveImageMeta {
-    storagePath: string;
-    originalPath: string;
-    thumbPath: string;
-    displayPath: string;
-    mime: string;
-    originalMime: string;
-    width: number;
-    height: number;
-    byteSize: number;
-    originalWidth: number;
-    originalHeight: number;
-    originalByteSize: number;
-    thumbWidth: number;
-    thumbHeight: number;
-    thumbByteSize: number;
-    displayWidth: number;
-    displayHeight: number;
-    displayByteSize: number;
-    revision?: string;
-    originalName?: string;
-    pendingUploadToken?: string;
-    pendingUploadPath?: string;
+  storagePath: string;
+  originalPath: string;
+  thumbPath: string;
+  displayPath: string;
+  mime: string;
+  originalMime: string;
+  width: number;
+  height: number;
+  byteSize: number;
+  originalWidth: number;
+  originalHeight: number;
+  originalByteSize: number;
+  thumbWidth: number;
+  thumbHeight: number;
+  thumbByteSize: number;
+  displayWidth: number;
+  displayHeight: number;
+  displayByteSize: number;
+  revision?: string;
+  originalName?: string;
+  pendingUploadToken?: string;
+  pendingUploadPath?: string;
 }
 
 export interface SourceArchiveAsset {
-    id: string;
-    schemaVersion: number;
-    mediaKind: SourceArchiveMediaKind;
-    status: SourceArchiveLifecycleStatus;
-    currentRevision: string;
-    title: string;
-    description: string;
-    era: string;
-    subject: string;
-    unit: string;
-    type: SourceArchiveAssetType;
-    tags: string[];
-    source: string;
-    searchText: string;
-    file: SourceArchiveFileMeta;
-    search: SourceArchiveSearchMeta;
-    processingStatus: SourceArchiveProcessingStatus;
-    processingError: string;
-    processedAt?: any;
-    image: SourceArchiveImageMeta;
-    createdAt?: any;
-    updatedAt?: any;
-    createdBy?: string;
-    updatedBy?: string;
+  id: string;
+  schemaVersion: number;
+  mediaKind: SourceArchiveMediaKind;
+  status: SourceArchiveLifecycleStatus;
+  currentRevision: string;
+  title: string;
+  description: string;
+  era: string;
+  subject: string;
+  unit: string;
+  type: SourceArchiveAssetType;
+  tags: string[];
+  source: string;
+  searchText: string;
+  previewText: string;
+  pageCount: number;
+  file: SourceArchiveFileMeta;
+  search: SourceArchiveSearchMeta;
+  processingStatus: SourceArchiveProcessingStatus;
+  extractionStatus: SourceArchiveExtractionStatus;
+  extractionVersion: string;
+  extractedContentPath: string;
+  extractedManifestPath: string;
+  parserKind: string;
+  parseErrorMessage: string;
+  processingError: string;
+  processedAt?: any;
+  extractedAt?: any;
+  image: SourceArchiveImageMeta;
+  createdAt?: any;
+  updatedAt?: any;
+  createdBy?: string;
+  updatedBy?: string;
 }
 
 export interface SourceArchiveDraft {
-    id?: string;
-    schemaVersion?: number;
-    mediaKind?: SourceArchiveMediaKind;
-    status?: SourceArchiveLifecycleStatus;
-    currentRevision?: string;
-    title: string;
-    description: string;
-    era: string;
-    subject: string;
-    unit: string;
-    type: SourceArchiveAssetType;
-    tags: string[];
-    source: string;
-    searchText?: string;
-    file?: Partial<SourceArchiveFileMeta>;
-    search?: Partial<SourceArchiveSearchMeta>;
-    processingStatus?: SourceArchiveProcessingStatus;
-    processingError?: string;
-    processedAt?: any;
-    image?: Partial<SourceArchiveImageMeta>;
-    createdAt?: any;
-    updatedAt?: any;
-    createdBy?: string;
-    updatedBy?: string;
+  id?: string;
+  schemaVersion?: number;
+  mediaKind?: SourceArchiveMediaKind;
+  status?: SourceArchiveLifecycleStatus;
+  currentRevision?: string;
+  title: string;
+  description: string;
+  era: string;
+  subject: string;
+  unit: string;
+  type: SourceArchiveAssetType;
+  tags: string[];
+  source: string;
+  searchText?: string;
+  previewText?: string;
+  pageCount?: number;
+  file?: Partial<SourceArchiveFileMeta>;
+  search?: Partial<SourceArchiveSearchMeta>;
+  processingStatus?: SourceArchiveProcessingStatus;
+  extractionStatus?: SourceArchiveExtractionStatus;
+  extractionVersion?: string;
+  extractedContentPath?: string;
+  extractedManifestPath?: string;
+  parserKind?: string;
+  parseErrorMessage?: string;
+  processingError?: string;
+  processedAt?: any;
+  extractedAt?: any;
+  image?: Partial<SourceArchiveImageMeta>;
+  createdAt?: any;
+  updatedAt?: any;
+  createdBy?: string;
+  updatedBy?: string;
 }
