@@ -4,6 +4,7 @@
   "main": "index.js",
   "scripts": {
     "check": "node --check index.js",
+    "smoke:source-archive-pdf": "node scripts/smoke-source-archive-pdf.mjs",
     "cleanup:student-teacher-portal": "node scripts/cleanup-student-teacher-portal.cjs"
   },
   "engines": {

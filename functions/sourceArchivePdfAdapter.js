@@ -347,7 +347,8 @@ const tryExtractWithOpenDataLoader = async ({
 
     await convert([inputPath], {
       outputDir,
-      format: "markdown,json",
+      format: ["markdown", "json"],
+      imageOutput: "off",
       quiet: true,
       useStructTree: true,
     });
