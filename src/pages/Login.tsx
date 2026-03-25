@@ -1232,13 +1232,7 @@ const Login: React.FC = () => {
         }
     };
 
-    const handleLogin = async (mode: LoginMode) => {
-        if (authBusy || authActionLockRef.current) return;
-        if (restrictedInAppBrowser) {
-            alert('네이버앱 또는 카카오톡 인앱 브라우저에서는 로그인할 수 없습니다. Chrome 또는 Safari에서 위스토리를 열어주세요.');
-            return;
-        }
-        authActionLockRef.current = true;
+    const startGoogleLogin = async (mode: LoginMode) => {
         const provider = buildGoogleProvider();
         const useRedirect = shouldPreferRedirectLogin();
         setPendingLoginMode(mode);
@@ -1280,8 +1274,23 @@ const Login: React.FC = () => {
         }
     };
 
-    const handleSwitchAccount = async () => {
+    const handleLogin = async (mode: LoginMode) => {
         if (authBusy || authActionLockRef.current) return;
+        if (restrictedInAppBrowser) {
+            alert('네이버앱 또는 카카오톡 인앱 브라우저에서는 로그인할 수 없습니다. Chrome 또는 Safari에서 위스토리를 열어주세요.');
+            return;
+        }
+
+        authActionLockRef.current = true;
+        await startGoogleLogin(mode);
+    };
+
+    const handleSwitchAccount = async (retryMode?: LoginMode) => {
+        if (authBusy || authActionLockRef.current) return;
+        if (restrictedInAppBrowser) {
+            alert('네이버앱 또는 카카오톡 인앱 브라우저에서는 로그인할 수 없습니다. Chrome 또는 Safari에서 위스토리를 열어주세요.');
+            return;
+        }
 
         authActionLockRef.current = true;
         setAuthBusy(true);
@@ -1296,6 +1305,10 @@ const Login: React.FC = () => {
         } catch (error) {
             console.error('Failed to sign out before switching account', error);
         } finally {
+            if (retryMode) {
+                await startGoogleLogin(retryMode);
+                return;
+            }
             authActionLockRef.current = false;
             if (typeof window !== 'undefined') {
                 window.location.replace(`${window.location.pathname}${window.location.search}#/`);
@@ -1392,7 +1405,7 @@ const Login: React.FC = () => {
                         </p>
                         {!!loginNotice && (
                             <button
-                                onClick={() => void handleSwitchAccount()}
+                                onClick={() => void handleSwitchAccount('student')}
                                 disabled={authBusy}
                                 className="w-full bg-white border border-gray-200 px-6 py-3 rounded-full text-sm font-bold text-gray-700 shadow hover:bg-gray-50 transition disabled:opacity-60 disabled:cursor-not-allowed"
                             >
