@@ -1,9 +1,13 @@
 import type {
+    PointRankBadgeStyleToken,
     PointRankBasedOn,
     PointRankEmojiPolicyTier,
+    PointRankEmojiRegistryEntry,
     PointRankPolicy,
     PointRankPolicyTier,
     PointRankThemeId,
+    PointRankThemeOverride,
+    PointRankThemeTierOverride,
     PointRankTierCode,
     PointTransaction,
     PointWallet,
@@ -11,20 +15,25 @@ import type {
 import {
     buildDefaultPointRankEmojiPolicy,
     DEFAULT_PROFILE_EMOJI_ID,
+    DEFAULT_PROFILE_EMOJI_REGISTRY,
     getProfileEmojiEntryById,
-    PROFILE_EMOJI_REGISTRY,
+    getProfileEmojiRegistry,
+    getProfileEmojiValueById,
+    resolveProfileEmojiRegistry,
     sanitizeProfileEmojiIds,
 } from './profileEmojis';
 
 export interface PointRankThemeTierMeta {
     label: string;
+    shortLabel: string;
     description: string;
+    badgeStyleToken: PointRankBadgeStyleToken | string;
     badgeClass: string;
 }
 
 interface PointRankThemeMeta {
     themeName: string;
-    tiers: Partial<Record<PointRankTierCode, PointRankThemeTierMeta>>;
+    tiers: Partial<Record<PointRankTierCode, Omit<PointRankThemeTierMeta, 'badgeClass'>>>;
 }
 
 export interface PointRankDisplay {
@@ -32,6 +41,7 @@ export interface PointRankDisplay {
     themeName: string;
     tierCode: PointRankTierCode;
     label: string;
+    shortLabel: string;
     description: string;
     badgeClass: string;
     metricValue: number;
@@ -51,6 +61,7 @@ type PointRankInput = {
 };
 
 const DEFAULT_THEME_ID: PointRankThemeId = 'korean_golpum';
+const ALL_THEME_IDS: PointRankThemeId[] = ['korean_golpum', 'world_nobility'];
 
 const DEFAULT_TIERS: PointRankPolicyTier[] = [
     { code: 'tier_1', minPoints: 0 },
@@ -60,13 +71,15 @@ const DEFAULT_TIERS: PointRankPolicyTier[] = [
     { code: 'tier_5', minPoints: 500 },
 ];
 
-const FALLBACK_BADGE_CLASSES = [
-    'border-stone-200 bg-stone-50 text-stone-700',
-    'border-blue-200 bg-blue-50 text-blue-700',
-    'border-emerald-200 bg-emerald-50 text-emerald-700',
-    'border-amber-200 bg-amber-50 text-amber-700',
-    'border-rose-200 bg-rose-50 text-rose-700',
-];
+const BADGE_STYLE_CLASS_MAP: Record<string, string> = {
+    stone: 'border-stone-200 bg-stone-50 text-stone-700',
+    blue: 'border-blue-200 bg-blue-50 text-blue-700',
+    emerald: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    amber: 'border-amber-200 bg-amber-50 text-amber-700',
+    rose: 'border-rose-200 bg-rose-50 text-rose-700',
+};
+
+const BADGE_STYLE_TOKENS: PointRankBadgeStyleToken[] = ['stone', 'blue', 'emerald', 'amber', 'rose'];
 
 export const POINT_RANK_THEME_MAP: Record<PointRankThemeId, PointRankThemeMeta> = {
     korean_golpum: {
@@ -74,28 +87,33 @@ export const POINT_RANK_THEME_MAP: Record<PointRankThemeId, PointRankThemeMeta> 
         tiers: {
             tier_1: {
                 label: '4두품',
+                shortLabel: '4두품',
                 description: '누적 획득 포인트 성장을 막 시작한 단계입니다.',
-                badgeClass: FALLBACK_BADGE_CLASSES[0],
+                badgeStyleToken: 'stone',
             },
             tier_2: {
                 label: '5두품',
+                shortLabel: '5두품',
                 description: '꾸준히 포인트를 쌓아 가는 단계입니다.',
-                badgeClass: FALLBACK_BADGE_CLASSES[1],
+                badgeStyleToken: 'blue',
             },
             tier_3: {
                 label: '6두품',
+                shortLabel: '6두품',
                 description: '학습 활동 누적이 눈에 띄게 쌓인 단계입니다.',
-                badgeClass: FALLBACK_BADGE_CLASSES[2],
+                badgeStyleToken: 'emerald',
             },
             tier_4: {
                 label: '진골',
+                shortLabel: '진골',
                 description: '높은 누적 포인트를 달성한 상위 단계입니다.',
-                badgeClass: FALLBACK_BADGE_CLASSES[3],
+                badgeStyleToken: 'amber',
             },
             tier_5: {
                 label: '성골',
+                shortLabel: '성골',
                 description: '가장 높은 누적 포인트 등급입니다.',
-                badgeClass: FALLBACK_BADGE_CLASSES[4],
+                badgeStyleToken: 'rose',
             },
         },
     },
@@ -104,41 +122,63 @@ export const POINT_RANK_THEME_MAP: Record<PointRankThemeId, PointRankThemeMeta> 
         tiers: {
             tier_1: {
                 label: '남작',
+                shortLabel: '남작',
                 description: '누적 획득 포인트 성장을 막 시작한 단계입니다.',
-                badgeClass: FALLBACK_BADGE_CLASSES[0],
+                badgeStyleToken: 'stone',
             },
             tier_2: {
                 label: '자작',
+                shortLabel: '자작',
                 description: '꾸준히 포인트를 쌓아 가는 단계입니다.',
-                badgeClass: FALLBACK_BADGE_CLASSES[1],
+                badgeStyleToken: 'blue',
             },
             tier_3: {
                 label: '백작',
+                shortLabel: '백작',
                 description: '학습 활동 누적이 눈에 띄게 쌓인 단계입니다.',
-                badgeClass: FALLBACK_BADGE_CLASSES[2],
+                badgeStyleToken: 'emerald',
             },
             tier_4: {
                 label: '후작',
+                shortLabel: '후작',
                 description: '높은 누적 포인트를 달성한 상위 단계입니다.',
-                badgeClass: FALLBACK_BADGE_CLASSES[3],
+                badgeStyleToken: 'amber',
             },
             tier_5: {
                 label: '공작',
+                shortLabel: '공작',
                 description: '가장 높은 누적 포인트 등급입니다.',
-                badgeClass: FALLBACK_BADGE_CLASSES[4],
+                badgeStyleToken: 'rose',
             },
         },
     },
 };
 
+const cloneDefaultTiers = () => DEFAULT_TIERS.map((tier) => ({ ...tier }));
+
+const cloneDefaultRegistry = () => DEFAULT_PROFILE_EMOJI_REGISTRY.map((entry) => ({
+    ...entry,
+    legacyValues: [...(entry.legacyValues || [])],
+}));
+
+const normalizeThemeId = (value: unknown): PointRankThemeId => (
+    value === 'world_nobility' ? 'world_nobility' : DEFAULT_THEME_ID
+);
+
+const normalizeBadgeStyleToken = (value: unknown, fallbackIndex = 0): PointRankBadgeStyleToken | string => {
+    const raw = String(value || '').trim();
+    if (raw && BADGE_STYLE_CLASS_MAP[raw]) return raw;
+    return BADGE_STYLE_TOKENS[fallbackIndex % BADGE_STYLE_TOKENS.length];
+};
+
+const getBadgeClassByToken = (token: PointRankBadgeStyleToken | string, fallbackIndex = 0) => (
+    BADGE_STYLE_CLASS_MAP[token] || BADGE_STYLE_CLASS_MAP[normalizeBadgeStyleToken('', fallbackIndex)] || BADGE_STYLE_CLASS_MAP.stone
+);
+
 export const parsePointRankTierIndex = (tierCode: PointRankTierCode) => {
     const parsed = Number(String(tierCode).replace('tier_', ''));
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
 };
-
-const getFallbackBadgeClass = (tierCode: PointRankTierCode) => (
-    FALLBACK_BADGE_CLASSES[(parsePointRankTierIndex(tierCode) - 1) % FALLBACK_BADGE_CLASSES.length]
-);
 
 const normalizeTierCode = (value: unknown, index: number): PointRankTierCode => {
     const raw = String(value || '').trim();
@@ -152,6 +192,13 @@ const normalizeTier = (
 ): PointRankPolicyTier => ({
     code: normalizeTierCode(tier?.code, index),
     minPoints: Math.max(0, Number(tier?.minPoints ?? tier?.threshold ?? 0)),
+    label: String(tier?.label || '').trim() || undefined,
+    shortLabel: String(tier?.shortLabel || '').trim() || undefined,
+    description: String(tier?.description || '').trim() || undefined,
+    badgeStyleToken: String(tier?.badgeStyleToken || '').trim() || undefined,
+    allowedEmojiIds: Array.isArray(tier?.allowedEmojiIds)
+        ? tier?.allowedEmojiIds.map((value) => String(value || '').trim()).filter(Boolean)
+        : undefined,
 });
 
 const isValidBasedOn = (value: unknown): value is PointRankBasedOn => (
@@ -159,71 +206,93 @@ const isValidBasedOn = (value: unknown): value is PointRankBasedOn => (
     || value === 'earnedTotal_plus_positive_manual_adjust'
 );
 
-const normalizeEmojiTier = (
-    rawTier: Partial<PointRankEmojiPolicyTier> | null | undefined,
-    fallbackAllowedEmojiIds: string[],
-): PointRankEmojiPolicyTier => {
-    const allowedEmojiIds = sanitizeProfileEmojiIds(rawTier?.allowedEmojiIds);
-    return {
-        allowedEmojiIds: allowedEmojiIds.length > 0
-            ? allowedEmojiIds
-            : [...fallbackAllowedEmojiIds],
-    };
-};
+const normalizeThemeTierOverride = (
+    override: Partial<PointRankThemeTierOverride> | null | undefined,
+    fallbackIndex: number,
+) => {
+    const label = String(override?.label || '').trim();
+    const shortLabel = String(override?.shortLabel || '').trim();
+    const description = String(override?.description || '').trim();
+    const badgeStyleToken = String(override?.badgeStyleToken || '').trim();
 
-const buildResolvedEmojiPolicy = (rankPolicy: Partial<PointRankPolicy> | null | undefined, tiers: PointRankPolicyTier[]) => {
-    const defaultEmojiPolicy = buildDefaultPointRankEmojiPolicy(tiers);
-    const resolvedTiers = tiers.reduce<PointRankPolicy['emojiPolicy']['tiers']>((accumulator, tier) => {
-        accumulator[tier.code] = normalizeEmojiTier(
-            rankPolicy?.emojiPolicy?.tiers?.[tier.code],
-            defaultEmojiPolicy.tiers[tier.code]?.allowedEmojiIds || [],
-        );
-        return accumulator;
-    }, {});
-
-    const firstTierCode = tiers[0]?.code;
-    const defaultEmojiId = getProfileEmojiEntryById(rankPolicy?.emojiPolicy?.defaultEmojiId || '')
-        ? String(rankPolicy?.emojiPolicy?.defaultEmojiId || '').trim()
-        : defaultEmojiPolicy.defaultEmojiId || DEFAULT_PROFILE_EMOJI_ID;
-
-    if (firstTierCode) {
-        const firstTier = resolvedTiers[firstTierCode] || { allowedEmojiIds: [] };
-        resolvedTiers[firstTierCode] = {
-            allowedEmojiIds: Array.from(new Set([defaultEmojiId, ...firstTier.allowedEmojiIds])),
-        };
+    if (!label && !shortLabel && !description && !badgeStyleToken) {
+        return undefined;
     }
 
     return {
-        enabled: rankPolicy?.emojiPolicy?.enabled !== false,
-        defaultEmojiId,
-        tiers: resolvedTiers,
+        label: label || undefined,
+        shortLabel: shortLabel || undefined,
+        description: description || undefined,
+        badgeStyleToken: badgeStyleToken ? normalizeBadgeStyleToken(badgeStyleToken, fallbackIndex) : undefined,
     };
 };
 
-export const DEFAULT_POINT_RANK_POLICY: PointRankPolicy = {
-    enabled: true,
-    themeId: DEFAULT_THEME_ID,
-    basedOn: 'earnedTotal_plus_positive_manual_adjust',
-    tiers: DEFAULT_TIERS.map((tier) => ({ ...tier })),
-    emojiPolicy: buildDefaultPointRankEmojiPolicy(DEFAULT_TIERS),
+const normalizeThemeOverride = (
+    rawTheme: Partial<PointRankThemeOverride> | null | undefined,
+    tiers: PointRankPolicyTier[],
+) => ({
+    themeName: String(rawTheme?.themeName || '').trim() || undefined,
+    tiers: tiers.reduce<NonNullable<PointRankThemeOverride['tiers']>>((accumulator, tier, index) => {
+        const nextTierOverride = normalizeThemeTierOverride(rawTheme?.tiers?.[tier.code], index);
+        if (nextTierOverride) {
+            accumulator[tier.code] = nextTierOverride;
+        }
+        return accumulator;
+    }, {}),
+});
+
+const buildLegacyActiveThemeOverrides = (
+    rankPolicy: Partial<PointRankPolicy> | null | undefined,
+    activeThemeId: PointRankThemeId,
+    tiers: PointRankPolicyTier[],
+) => {
+    const overrides = tiers.reduce<NonNullable<PointRankThemeOverride['tiers']>>((accumulator, tier, index) => {
+        const nextTierOverride = normalizeThemeTierOverride({
+            label: tier.label,
+            shortLabel: tier.shortLabel,
+            description: tier.description,
+            badgeStyleToken: tier.badgeStyleToken,
+        }, index);
+        if (nextTierOverride) {
+            accumulator[tier.code] = nextTierOverride;
+        }
+        return accumulator;
+    }, {});
+
+    return Object.keys(overrides).length > 0 ? {
+        ...(rankPolicy?.themes?.[activeThemeId] || {}),
+        tiers: {
+            ...(rankPolicy?.themes?.[activeThemeId]?.tiers || {}),
+            ...overrides,
+        },
+    } : rankPolicy?.themes?.[activeThemeId];
 };
 
-export const resolvePointRankPolicy = (rankPolicy?: Partial<PointRankPolicy> | null): PointRankPolicy => {
-    const tiers = Array.isArray(rankPolicy?.tiers)
-        ? rankPolicy.tiers.map((tier, index) => normalizeTier(tier, index)).sort((a, b) => a.minPoints - b.minPoints)
-        : DEFAULT_POINT_RANK_POLICY.tiers.map((tier) => ({ ...tier }));
-    const normalizedTiers = tiers.length > 0 ? tiers : DEFAULT_POINT_RANK_POLICY.tiers.map((tier) => ({ ...tier }));
+const buildThemeOverrides = (
+    rankPolicy: Partial<PointRankPolicy> | null | undefined,
+    tiers: PointRankPolicyTier[],
+    activeThemeId: PointRankThemeId,
+) => ALL_THEME_IDS.reduce<NonNullable<PointRankPolicy['themes']>>((accumulator, themeId) => {
+    const rawTheme = themeId === activeThemeId
+        ? buildLegacyActiveThemeOverrides(rankPolicy, activeThemeId, tiers)
+        : rankPolicy?.themes?.[themeId];
+    const normalizedTheme = normalizeThemeOverride(rawTheme, tiers);
+    if (normalizedTheme.themeName || Object.keys(normalizedTheme.tiers).length > 0) {
+        accumulator[themeId] = normalizedTheme;
+    }
+    return accumulator;
+}, {});
 
-    return {
-        enabled: rankPolicy?.enabled !== false,
-        themeId: rankPolicy?.themeId === 'world_nobility' ? 'world_nobility' : DEFAULT_THEME_ID,
-        basedOn: isValidBasedOn(rankPolicy?.basedOn) ? rankPolicy.basedOn : DEFAULT_POINT_RANK_POLICY.basedOn,
-        tiers: normalizedTiers,
-        emojiPolicy: buildResolvedEmojiPolicy(rankPolicy, normalizedTiers),
-    };
+const getResolvedThemeName = (
+    rankPolicy: Partial<PointRankPolicy> | null | undefined,
+    themeId: PointRankThemeId,
+) => {
+    const baseTheme = POINT_RANK_THEME_MAP[themeId] || POINT_RANK_THEME_MAP[DEFAULT_THEME_ID];
+    const overrideName = String(rankPolicy?.themes?.[themeId]?.themeName || '').trim();
+    return overrideName || baseTheme.themeName;
 };
 
-export const getPointRankTierMeta = (themeId: PointRankThemeId, tierCode: PointRankTierCode): PointRankThemeTierMeta => {
+const getBaseTierMeta = (themeId: PointRankThemeId, tierCode: PointRankTierCode): Omit<PointRankThemeTierMeta, 'badgeClass'> => {
     const theme = POINT_RANK_THEME_MAP[themeId] || POINT_RANK_THEME_MAP[DEFAULT_THEME_ID];
     const tier = theme.tiers[tierCode];
     if (tier) return tier;
@@ -231,9 +300,230 @@ export const getPointRankTierMeta = (themeId: PointRankThemeId, tierCode: PointR
     const tierIndex = parsePointRankTierIndex(tierCode);
     return {
         label: `${theme.themeName} ${tierIndex}단계`,
+        shortLabel: `${tierIndex}단계`,
         description: '누적 획득 포인트를 기준으로 계산한 등급입니다.',
-        badgeClass: getFallbackBadgeClass(tierCode),
+        badgeStyleToken: normalizeBadgeStyleToken('', tierIndex - 1),
     };
+};
+
+const buildResolvedTiers = (
+    rankPolicy: Partial<PointRankPolicy> | null | undefined,
+    registry: PointRankEmojiRegistryEntry[],
+) => {
+    const rawTiers = Array.isArray(rankPolicy?.tiers)
+        ? rankPolicy.tiers.map((tier, index) => normalizeTier(tier, index))
+        : cloneDefaultTiers();
+    const sortedTiers = (rawTiers.length > 0 ? rawTiers : cloneDefaultTiers()).sort((a, b) => a.minPoints - b.minPoints);
+    const baseTiers = sortedTiers.length > 0 ? sortedTiers : cloneDefaultTiers();
+    const defaultEmojiPolicy = buildDefaultPointRankEmojiPolicy(baseTiers, registry);
+    const rawTierMap = new Map(baseTiers.map((tier) => [tier.code, tier]));
+    const usedEmojiIds = new Set<string>();
+
+    const normalizedTiers = baseTiers.map((tier) => {
+        const rawTier = rawTierMap.get(tier.code);
+        const rawAllowedEmojiIds = rawTier?.allowedEmojiIds;
+        const legacyAllowedEmojiIds = rankPolicy?.emojiPolicy?.tiers?.[tier.code]?.allowedEmojiIds;
+        const hasExplicitAllowedEmojiIds = Array.isArray(rawAllowedEmojiIds) || Array.isArray(legacyAllowedEmojiIds);
+        const nextAllowedEmojiIds = sanitizeProfileEmojiIds(
+            hasExplicitAllowedEmojiIds ? (rawAllowedEmojiIds ?? legacyAllowedEmojiIds ?? []) : (defaultEmojiPolicy.tiers[tier.code]?.allowedEmojiIds || []),
+            registry,
+        ).filter((emojiId) => {
+            if (usedEmojiIds.has(emojiId)) return false;
+            usedEmojiIds.add(emojiId);
+            return true;
+        });
+
+        return {
+            ...tier,
+            label: undefined,
+            shortLabel: undefined,
+            description: undefined,
+            allowedEmojiIds: nextAllowedEmojiIds,
+        };
+    });
+
+    const enabledRegistry = registry.filter((entry) => entry.enabled !== false);
+    const requestedDefaultEmojiId = String(rankPolicy?.emojiPolicy?.defaultEmojiId || '').trim();
+    const defaultEmojiId = getProfileEmojiEntryById(requestedDefaultEmojiId, enabledRegistry)?.id
+        || getProfileEmojiEntryById(defaultEmojiPolicy.defaultEmojiId, enabledRegistry)?.id
+        || enabledRegistry[0]?.id
+        || DEFAULT_PROFILE_EMOJI_ID;
+
+    const firstTierCode = normalizedTiers[0]?.code;
+    if (firstTierCode) {
+        normalizedTiers.forEach((tier) => {
+            tier.allowedEmojiIds = (tier.allowedEmojiIds || []).filter((emojiId) => (
+                tier.code === firstTierCode || emojiId !== defaultEmojiId
+            ));
+        });
+        const firstTier = normalizedTiers[0];
+        firstTier.allowedEmojiIds = Array.from(new Set([defaultEmojiId, ...(firstTier.allowedEmojiIds || [])]));
+    }
+
+    return {
+        tiers: normalizedTiers,
+        defaultEmojiId,
+    };
+};
+
+const buildResolvedEmojiPolicy = (
+    rankPolicy: Partial<PointRankPolicy> | null | undefined,
+    tiers: PointRankPolicyTier[],
+    defaultEmojiId: string,
+) => ({
+    enabled: rankPolicy?.emojiPolicy?.enabled !== false,
+    defaultEmojiId,
+    legacyMode: rankPolicy?.emojiPolicy?.legacyMode === 'strict' ? 'strict' : 'keep_selected',
+    tiers: tiers.reduce<NonNullable<PointRankPolicy['emojiPolicy']['tiers']>>((accumulator, tier) => {
+        accumulator[tier.code] = {
+            allowedEmojiIds: [...(tier.allowedEmojiIds || [])],
+        };
+        return accumulator;
+    }, {}),
+});
+
+export const DEFAULT_POINT_RANK_POLICY: PointRankPolicy = (() => {
+    const emojiRegistry = cloneDefaultRegistry();
+    const tiers = cloneDefaultTiers();
+    const defaultEmojiPolicy = buildDefaultPointRankEmojiPolicy(tiers, emojiRegistry);
+    return {
+        enabled: true,
+        activeThemeId: DEFAULT_THEME_ID,
+        themeId: DEFAULT_THEME_ID,
+        basedOn: 'earnedTotal_plus_positive_manual_adjust',
+        tiers: tiers.map((tier) => ({
+            ...tier,
+            allowedEmojiIds: [...(defaultEmojiPolicy.tiers[tier.code]?.allowedEmojiIds || [])],
+        })),
+        themes: {},
+        emojiRegistry,
+        emojiPolicy: {
+            ...defaultEmojiPolicy,
+            legacyMode: 'keep_selected',
+        },
+        celebrationPolicy: {
+            enabled: true,
+            effectLevel: 'standard',
+        },
+    };
+})();
+
+export const resolvePointRankPolicy = (rankPolicy?: Partial<PointRankPolicy> | null): PointRankPolicy => {
+    const activeThemeId = normalizeThemeId(rankPolicy?.activeThemeId ?? rankPolicy?.themeId);
+    const emojiRegistry = resolveProfileEmojiRegistry(rankPolicy?.emojiRegistry);
+    const { tiers, defaultEmojiId } = buildResolvedTiers(rankPolicy, emojiRegistry);
+
+    return {
+        enabled: rankPolicy?.enabled !== false,
+        activeThemeId,
+        themeId: activeThemeId,
+        basedOn: isValidBasedOn(rankPolicy?.basedOn) ? rankPolicy.basedOn : DEFAULT_POINT_RANK_POLICY.basedOn,
+        tiers,
+        themes: buildThemeOverrides(rankPolicy, tiers, activeThemeId),
+        emojiRegistry,
+        emojiPolicy: buildResolvedEmojiPolicy(rankPolicy, tiers, defaultEmojiId),
+        celebrationPolicy: {
+            enabled: rankPolicy?.celebrationPolicy?.enabled !== false,
+            effectLevel: rankPolicy?.celebrationPolicy?.effectLevel === 'subtle' ? 'subtle' : 'standard',
+        },
+    };
+};
+
+export const getPointRankThemeName = (
+    rankPolicy: Partial<PointRankPolicy> | null | undefined,
+    themeId: PointRankThemeId,
+) => getResolvedThemeName(resolvePointRankPolicy(rankPolicy), themeId);
+
+export const getPointRankTierMeta = (
+    rankPolicy: Partial<PointRankPolicy> | null | undefined,
+    themeId: PointRankThemeId,
+    tierCode: PointRankTierCode,
+): PointRankThemeTierMeta => {
+    const resolvedPolicy = resolvePointRankPolicy(rankPolicy);
+    const theme = resolvedPolicy.themes?.[themeId];
+    const baseMeta = getBaseTierMeta(themeId, tierCode);
+    const tierOverride = theme?.tiers?.[tierCode];
+    const tierPosition = resolvedPolicy.tiers.findIndex((tier) => tier.code === tierCode);
+    const badgeStyleToken = tierOverride?.badgeStyleToken
+        || resolvedPolicy.tiers.find((tier) => tier.code === tierCode)?.badgeStyleToken
+        || baseMeta.badgeStyleToken;
+
+    return {
+        label: tierOverride?.label || baseMeta.label,
+        shortLabel: tierOverride?.shortLabel || tierOverride?.label || baseMeta.shortLabel || baseMeta.label,
+        description: tierOverride?.description || baseMeta.description,
+        badgeStyleToken,
+        badgeClass: getBadgeClassByToken(badgeStyleToken, tierPosition >= 0 ? tierPosition : parsePointRankTierIndex(tierCode) - 1),
+    };
+};
+
+export const getPointRankEmojiRegistry = (
+    rankPolicy?: Partial<PointRankPolicy> | null,
+    preferredValues?: unknown,
+    options?: { includeDisabled?: boolean },
+) => {
+    const resolvedPolicy = resolvePointRankPolicy(rankPolicy);
+    return getProfileEmojiRegistry(preferredValues, resolvedPolicy.emojiRegistry, options);
+};
+
+export const getPointRankEmojiEntryById = (
+    rankPolicy: Partial<PointRankPolicy> | null | undefined,
+    emojiId: string,
+) => getProfileEmojiEntryById(emojiId, resolvePointRankPolicy(rankPolicy).emojiRegistry);
+
+export const getPointRankEmojiEntryByValue = (
+    rankPolicy: Partial<PointRankPolicy> | null | undefined,
+    value: string,
+) => getProfileEmojiEntryByValue(value, resolvePointRankPolicy(rankPolicy).emojiRegistry);
+
+export const getPointRankTierPosition = (
+    rankPolicy: Partial<PointRankPolicy> | null | undefined,
+    tierCode: PointRankTierCode | null | undefined,
+) => {
+    if (!tierCode) return -1;
+    const resolvedPolicy = resolvePointRankPolicy(rankPolicy);
+    return resolvedPolicy.tiers.findIndex((tier) => tier.code === tierCode);
+};
+
+export const createPointRankTierCode = (
+    tiers: Array<Pick<PointRankPolicyTier, 'code'>>,
+) => {
+    const maxIndex = tiers.reduce((maxValue, tier) => Math.max(maxValue, parsePointRankTierIndex(tier.code)), 0);
+    return `tier_${maxIndex + 1}` as PointRankTierCode;
+};
+
+export const getPointRankPolicyValidationError = (rankPolicy?: Partial<PointRankPolicy> | null) => {
+    const rawTiers = Array.isArray(rankPolicy?.tiers)
+        ? rankPolicy.tiers.map((tier, index) => normalizeTier(tier, index))
+        : cloneDefaultTiers();
+    if (rawTiers.length === 0) {
+        return '등급은 최소 1개 이상 필요합니다.';
+    }
+
+    const usedCodes = new Set<string>();
+    for (let index = 0; index < rawTiers.length; index += 1) {
+        const tier = rawTiers[index];
+        if (usedCodes.has(tier.code)) {
+            return '등급 코드가 중복되었습니다.';
+        }
+        usedCodes.add(tier.code);
+
+        if (!Number.isFinite(Number(tier.minPoints)) || Number(tier.minPoints) < 0) {
+            return '승급 기준 포인트는 0 이상의 숫자여야 합니다.';
+        }
+
+        if (index > 0 && Number(rawTiers[index - 1].minPoints) >= Number(tier.minPoints)) {
+            return '승급 기준 포인트는 오름차순으로 입력해야 합니다.';
+        }
+    }
+
+    const emojiRegistry = resolveProfileEmojiRegistry(rankPolicy?.emojiRegistry);
+    const enabledEmojiCount = emojiRegistry.filter((entry) => entry.enabled !== false).length;
+    if (enabledEmojiCount === 0) {
+        return '사용 가능한 이모지가 최소 1개 이상 필요합니다.';
+    }
+
+    return '';
 };
 
 export const isPointRankEarnTransaction = (transaction: Pick<PointTransaction, 'type' | 'delta'>) => (
@@ -289,21 +579,26 @@ export const getPointRankAllowedEmojiIds = (
     currentTierCode?: PointRankTierCode | null,
 ) => {
     const resolvedPolicy = resolvePointRankPolicy(rankPolicy);
+    const enabledRegistry = resolvedPolicy.emojiRegistry.filter((entry) => entry.enabled !== false);
     if (!resolvedPolicy.emojiPolicy.enabled) {
-        return PROFILE_EMOJI_REGISTRY.map((entry) => entry.id);
+        return enabledRegistry.map((entry) => entry.id);
     }
 
     const targetTierCode = currentTierCode || resolvedPolicy.tiers[0]?.code || 'tier_1';
-    const targetTierIndex = parsePointRankTierIndex(targetTierCode);
-    const allowedEmojiIds = resolvedPolicy.tiers.reduce<string[]>((accumulator, tier) => {
-        if (parsePointRankTierIndex(tier.code) > targetTierIndex) return accumulator;
+    const targetTierIndex = resolvedPolicy.tiers.findIndex((tier) => tier.code === targetTierCode);
+    const safeTargetTierIndex = targetTierIndex >= 0 ? targetTierIndex : 0;
+    const allowedEmojiIds = resolvedPolicy.tiers.reduce<string[]>((accumulator, tier, index) => {
+        if (index > safeTargetTierIndex) return accumulator;
         return [
             ...accumulator,
-            ...(resolvedPolicy.emojiPolicy.tiers[tier.code]?.allowedEmojiIds || []),
+            ...(tier.allowedEmojiIds || []),
         ];
     }, []);
     const uniqueAllowedEmojiIds = Array.from(new Set(
-        allowedEmojiIds.filter((emojiId) => Boolean(getProfileEmojiEntryById(emojiId))),
+        allowedEmojiIds.filter((emojiId) => {
+            const entry = getProfileEmojiEntryById(emojiId, resolvedPolicy.emojiRegistry);
+            return Boolean(entry && entry.enabled !== false);
+        }),
     ));
 
     return uniqueAllowedEmojiIds.length > 0
@@ -320,7 +615,7 @@ export const getPointRankUnlockTierCodeForEmoji = (
 
     const resolvedPolicy = resolvePointRankPolicy(rankPolicy);
     const match = resolvedPolicy.tiers.find((tier) => (
-        (resolvedPolicy.emojiPolicy.tiers[tier.code]?.allowedEmojiIds || []).includes(normalizedEmojiId)
+        (tier.allowedEmojiIds || []).includes(normalizedEmojiId)
     ));
     if (match) return match.code;
 
@@ -364,9 +659,9 @@ export const getPointRankDisplay = ({
         nextTier = resolvedPolicy.tiers.find((tier) => tier.minPoints > metricValue) || null;
     }
 
-    const theme = POINT_RANK_THEME_MAP[resolvedPolicy.themeId] || POINT_RANK_THEME_MAP[DEFAULT_THEME_ID];
-    const tierMeta = getPointRankTierMeta(resolvedPolicy.themeId, activeTier.code);
-    const nextTierMeta = nextTier ? getPointRankTierMeta(resolvedPolicy.themeId, nextTier.code) : null;
+    const themeName = getResolvedThemeName(resolvedPolicy, resolvedPolicy.activeThemeId);
+    const tierMeta = getPointRankTierMeta(resolvedPolicy, resolvedPolicy.activeThemeId, activeTier.code);
+    const nextTierMeta = nextTier ? getPointRankTierMeta(resolvedPolicy, resolvedPolicy.activeThemeId, nextTier.code) : null;
     const remainingToNext = nextTier ? Math.max(0, nextTier.minPoints - metricValue) : 0;
     const progressPercent = nextTier
         ? Math.min(
@@ -379,10 +674,11 @@ export const getPointRankDisplay = ({
         : 100;
 
     return {
-        themeId: resolvedPolicy.themeId,
-        themeName: theme.themeName,
+        themeId: resolvedPolicy.activeThemeId,
+        themeName,
         tierCode: activeTier.code,
         label: tierMeta.label,
+        shortLabel: tierMeta.shortLabel,
         description: tierMeta.description,
         badgeClass: tierMeta.badgeClass,
         metricValue,
@@ -394,4 +690,38 @@ export const getPointRankDisplay = ({
         basedOn: resolvedPolicy.basedOn,
         enabled: resolvedPolicy.enabled,
     };
+};
+
+export const getPointRankUnlockedEmojiEntries = (
+    rankPolicy?: Partial<PointRankPolicy> | null,
+    currentTierCode?: PointRankTierCode | null,
+) => {
+    const resolvedPolicy = resolvePointRankPolicy(rankPolicy);
+    return getPointRankAllowedEmojiIds(resolvedPolicy, currentTierCode)
+        .map((emojiId) => getProfileEmojiEntryById(emojiId, resolvedPolicy.emojiRegistry))
+        .filter((entry): entry is PointRankEmojiRegistryEntry => Boolean(entry));
+};
+
+export const getPointRankNewlyUnlockedEmojiEntries = ({
+    rankPolicy,
+    previousTierCode,
+    currentTierCode,
+}: {
+    rankPolicy?: Partial<PointRankPolicy> | null;
+    previousTierCode?: PointRankTierCode | null;
+    currentTierCode?: PointRankTierCode | null;
+}) => {
+    const resolvedPolicy = resolvePointRankPolicy(rankPolicy);
+    const previousIds = new Set(getPointRankAllowedEmojiIds(resolvedPolicy, previousTierCode));
+    return getPointRankAllowedEmojiIds(resolvedPolicy, currentTierCode)
+        .filter((emojiId) => !previousIds.has(emojiId))
+        .map((emojiId) => getProfileEmojiEntryById(emojiId, resolvedPolicy.emojiRegistry))
+        .filter((entry): entry is PointRankEmojiRegistryEntry => Boolean(entry));
+};
+
+export const getPointRankDefaultEmojiValue = (rankPolicy?: Partial<PointRankPolicy> | null) => {
+    const resolvedPolicy = resolvePointRankPolicy(rankPolicy);
+    return getProfileEmojiValueById(resolvedPolicy.emojiPolicy.defaultEmojiId, resolvedPolicy.emojiRegistry)
+        || DEFAULT_PROFILE_EMOJI_REGISTRY[0]?.emoji
+        || '😀';
 };

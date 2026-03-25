@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import Header from '../common/Header';
 import Footer from '../common/Footer';
+import StudentRankPromotionController from '../common/StudentRankPromotionController';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { markLoginPerf, measureLoginPerf } from '../../lib/loginPerf';
@@ -57,6 +58,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return (
         <div className="flex flex-col min-h-screen bg-gray-50">
             <Header />
+            <StudentRankPromotionController />
             <main className="flex-1 w-full">
                 {children}
             </main>

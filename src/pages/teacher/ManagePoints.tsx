@@ -20,12 +20,13 @@ import {
     upsertPointPolicy,
     upsertPointProduct,
 } from '../../lib/points';
-import { needsPointRankLegacyFallback } from '../../lib/pointRanks';
+import { getPointRankPolicyValidationError, needsPointRankLegacyFallback } from '../../lib/pointRanks';
 import { canManagePoints, canReadPoints } from '../../lib/permissions';
 import { getYearSemester } from '../../lib/semesterScope';
 import type { PointOrder, PointOrderStatus, PointPolicy, PointProduct, PointStudentTarget, PointTransaction, PointWallet } from '../../types';
 import PointGrantTab from './components/points/PointGrantTab';
 import PointPolicyTab from './components/points/PointPolicyTab';
+import PointRanksTab from './components/points/PointRanksTab';
 import PointProductsTab from './components/points/PointProductsTab';
 import PointRequestsTab from './components/points/PointRequestsTab';
 import PointsOverviewTab from './components/points/PointsOverviewTab';
@@ -302,7 +303,7 @@ const ManagePoints: React.FC = () => {
 
     useEffect(() => {
         const requestedTab = searchParams.get('tab');
-        if (requestedTab === 'grant' || requestedTab === 'policy' || requestedTab === 'products' || requestedTab === 'requests') {
+        if (requestedTab === 'grant' || requestedTab === 'policy' || requestedTab === 'ranks' || requestedTab === 'products' || requestedTab === 'requests') {
             setActiveTab(requestedTab);
             return;
         }
@@ -457,6 +458,14 @@ const ManagePoints: React.FC = () => {
     const handleSavePolicy = async (event: React.FormEvent) => {
         event.preventDefault();
         if (!canManage) return;
+
+        if (activeTab === 'ranks') {
+            const rankPolicyValidationError = getPointRankPolicyValidationError(policy.rankPolicy);
+            if (rankPolicyValidationError) {
+                window.alert(rankPolicyValidationError);
+                return;
+            }
+        }
 
         const sanitizedPolicy: PointPolicy = {
             ...policy,
@@ -792,6 +801,15 @@ const ManagePoints: React.FC = () => {
 
                     {!loading && activeTab === 'policy' && (
                         <PointPolicyTab
+                            policy={policy}
+                            canManage={canManage}
+                            onPolicyChange={(updater) => setPolicy((prev) => updater(prev))}
+                            onSubmit={handleSavePolicy}
+                        />
+                    )}
+
+                    {!loading && activeTab === 'ranks' && (
+                        <PointRanksTab
                             policy={policy}
                             canManage={canManage}
                             onPolicyChange={(updater) => setPolicy((prev) => updater(prev))}

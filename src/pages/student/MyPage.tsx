@@ -35,17 +35,16 @@ import {
 } from '../../lib/points';
 import {
     getPointRankAllowedEmojiIds,
+    getPointRankDefaultEmojiValue,
     getPointRankDisplay,
+    getPointRankEmojiEntryById,
+    getPointRankEmojiEntryByValue,
+    getPointRankEmojiRegistry,
     getPointRankTierMeta,
     getPointRankUnlockTierCodeForEmoji,
     needsPointRankLegacyFallback,
 } from '../../lib/pointRanks';
-import {
-    getDefaultProfileEmojiValue,
-    getProfileEmojiEntryById,
-    getProfileEmojiEntryByValue,
-    getProfileEmojiRegistry,
-} from '../../lib/profileEmojis';
+import { getDefaultProfileEmojiValue } from '../../lib/profileEmojis';
 import { getSemesterCollectionPath } from '../../lib/semesterScope';
 import type { PointPolicy, PointWallet } from '../../types';
 
@@ -60,6 +59,7 @@ interface UserProfileDoc {
     class?: string;
     number?: string;
     profileIcon?: string;
+    profileEmojiId?: string;
     myPageGoalScore?: string;
     myPageSubjectGoals?: Record<string, number>;
 }
@@ -589,8 +589,8 @@ const MyPage: React.FC = () => {
     };
 
     const orderedEmojiEntries = useMemo(
-        () => getProfileEmojiRegistry(emojiOptions),
-        [emojiOptions],
+        () => getPointRankEmojiRegistry(pointPolicy.rankPolicy, emojiOptions),
+        [emojiOptions, pointPolicy.rankPolicy],
     );
     const safePointWallet = pointWallet || DEFAULT_POINT_WALLET;
     const currentRank = getPointRankDisplay({
@@ -602,14 +602,16 @@ const MyPage: React.FC = () => {
         () => getPointRankAllowedEmojiIds(pointPolicy.rankPolicy, currentRank?.tierCode || null),
         [currentRank?.tierCode, pointPolicy.rankPolicy],
     );
-    const selectedEmojiEntry = getProfileEmojiEntryByValue(profileIcon);
+    const storedProfileEmojiId = String(profile?.profileEmojiId || userData?.profileEmojiId || '').trim();
+    const selectedEmojiEntry = storedProfileEmojiId
+        ? getPointRankEmojiEntryById(pointPolicy.rankPolicy, storedProfileEmojiId)
+        : getPointRankEmojiEntryByValue(pointPolicy.rankPolicy, profileIcon);
     const selectedEmojiAllowed = selectedEmojiEntry
-        ? allowedEmojiIds.includes(selectedEmojiEntry.id)
+        ? selectedEmojiEntry.enabled !== false && allowedEmojiIds.includes(selectedEmojiEntry.id)
         : false;
     const hasLegacySelectedEmoji = Boolean(profileIcon) && !selectedEmojiEntry;
-    const defaultProfileEmojiValue = getProfileEmojiEntryById(pointPolicy.rankPolicy.emojiPolicy.defaultEmojiId)?.value
-        || getDefaultProfileEmojiValue();
-    const displayProfileIcon = profileIcon || defaultProfileEmojiValue;
+    const defaultProfileEmojiValue = getPointRankDefaultEmojiValue(pointPolicy.rankPolicy) || getDefaultProfileEmojiValue();
+    const displayProfileIcon = selectedEmojiEntry?.emoji || profileIcon || defaultProfileEmojiValue;
     const emojiCards = useMemo(() => orderedEmojiEntries.map((entry) => {
         const unlockTierCode = getPointRankUnlockTierCodeForEmoji(pointPolicy.rankPolicy, entry.id)
             || pointPolicy.rankPolicy.tiers[0]?.code
@@ -617,7 +619,7 @@ const MyPage: React.FC = () => {
         return {
             entry,
             unlockTierCode,
-            unlockTierLabel: getPointRankTierMeta(pointPolicy.rankPolicy.themeId, unlockTierCode).label,
+            unlockTierLabel: getPointRankTierMeta(pointPolicy.rankPolicy, pointPolicy.rankPolicy.activeThemeId, unlockTierCode).label,
             unlocked: allowedEmojiIds.includes(entry.id),
             selected: selectedEmojiEntry?.id === entry.id,
         };
@@ -625,10 +627,16 @@ const MyPage: React.FC = () => {
 
     useEffect(() => {
         const storedProfileIcon = String(profile?.profileIcon || userData?.profileIcon || '').trim();
-        if (!storedProfileIcon) {
-            setProfileIcon(defaultProfileEmojiValue);
+        if (storedProfileIcon) {
+            setProfileIcon(storedProfileIcon);
+            return;
         }
-    }, [defaultProfileEmojiValue, profile?.profileIcon, userData?.profileIcon]);
+        if (selectedEmojiEntry?.emoji) {
+            setProfileIcon(selectedEmojiEntry.emoji);
+            return;
+        }
+        setProfileIcon(defaultProfileEmojiValue);
+    }, [defaultProfileEmojiValue, profile?.profileIcon, selectedEmojiEntry?.emoji, userData?.profileIcon]);
 
     const saveGoal = async () => {
         if (!user) return;
@@ -659,6 +667,7 @@ const MyPage: React.FC = () => {
             setProfileIcon(result.profileIcon);
             setProfile((prev) => ({
                 ...(prev || {}),
+                profileEmojiId: result.emojiId || nextEmojiId,
                 profileIcon: result.profileIcon,
             }));
             setIconModalOpen(false);

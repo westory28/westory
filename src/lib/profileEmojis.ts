@@ -1,61 +1,236 @@
 import type {
     PointRankEmojiPolicy,
     PointRankEmojiPolicyTiers,
+    PointRankEmojiRegistryEntry,
     PointRankPolicyTier,
     PointRankTierCode,
 } from '../types';
-
-export interface ProfileEmojiRegistryEntry {
-    id: string;
-    value: string;
-    label: string;
-    unlockTierCode: PointRankTierCode;
-}
 
 const parseTierIndex = (tierCode: PointRankTierCode) => {
     const parsed = Number(String(tierCode || '').replace('tier_', ''));
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
 };
 
-export const DEFAULT_PROFILE_EMOJI_ID = 'smile';
+const normalizeEmojiText = (value: unknown) => String(value || '').trim();
 
-export const PROFILE_EMOJI_REGISTRY: ProfileEmojiRegistryEntry[] = [
-    { id: 'smile', value: '😀', label: '웃는 얼굴', unlockTierCode: 'tier_1' },
-    { id: 'soft_smile', value: '🙂', label: '미소', unlockTierCode: 'tier_1' },
-    { id: 'note', value: '📝', label: '메모', unlockTierCode: 'tier_1' },
-    { id: 'book', value: '📚', label: '책', unlockTierCode: 'tier_1' },
-    { id: 'cool', value: '😎', label: '선글라스', unlockTierCode: 'tier_2' },
-    { id: 'brain', value: '🧠', label: '두뇌', unlockTierCode: 'tier_2' },
-    { id: 'clover', value: '🍀', label: '행운', unlockTierCode: 'tier_2' },
-    { id: 'target', value: '🎯', label: '목표', unlockTierCode: 'tier_2' },
-    { id: 'nerd', value: '🤓', label: '공부 모드', unlockTierCode: 'tier_3' },
-    { id: 'trophy', value: '🏆', label: '트로피', unlockTierCode: 'tier_3' },
-    { id: 'rocket', value: '🚀', label: '로켓', unlockTierCode: 'tier_3' },
-    { id: 'school', value: '🏫', label: '학교', unlockTierCode: 'tier_3' },
-    { id: 'sparkles', value: '🌟', label: '반짝별', unlockTierCode: 'tier_4' },
-    { id: 'science', value: '🧪', label: '실험', unlockTierCode: 'tier_4' },
-    { id: 'tiger', value: '🐯', label: '호랑이', unlockTierCode: 'tier_4' },
-    { id: 'panda', value: '🐼', label: '판다', unlockTierCode: 'tier_4' },
-    { id: 'pencil', value: '✏️', label: '연필', unlockTierCode: 'tier_5' },
-    { id: 'bear', value: '🐻', label: '곰', unlockTierCode: 'tier_5' },
-    { id: 'fox', value: '🦊', label: '여우', unlockTierCode: 'tier_5' },
-    { id: 'dolphin', value: '🐬', label: '돌고래', unlockTierCode: 'tier_5' },
-    { id: 'owl', value: '🦉', label: '부엉이', unlockTierCode: 'tier_5' },
-    { id: 'whale', value: '🐳', label: '고래', unlockTierCode: 'tier_5' },
+const normalizeTierCode = (value: unknown): PointRankTierCode | null => {
+    const raw = String(value || '').trim();
+    return /^tier_\d+$/.test(raw) ? raw as PointRankTierCode : null;
+};
+
+const buildEmojiValueAlias = (entry: Omit<PointRankEmojiRegistryEntry, 'value'>): PointRankEmojiRegistryEntry => ({
+    ...entry,
+    value: entry.emoji,
+});
+
+const DEFAULT_PROFILE_EMOJI_REGISTRY_BASE: Array<Omit<PointRankEmojiRegistryEntry, 'value'>> = [
+    { id: 'smile', emoji: '😀', label: '웃는 얼굴', category: '기본', sortOrder: 10, enabled: true, unlockTierCode: 'tier_1' },
+    { id: 'soft_smile', emoji: '🙂', label: '미소', category: '기본', sortOrder: 20, enabled: true, unlockTierCode: 'tier_1' },
+    { id: 'note', emoji: '📝', label: '메모', category: '학습', sortOrder: 30, enabled: true, unlockTierCode: 'tier_1' },
+    { id: 'book', emoji: '📚', label: '책', category: '학습', sortOrder: 40, enabled: true, unlockTierCode: 'tier_1' },
+    { id: 'cool', emoji: '😎', label: '선글라스', category: '표정', sortOrder: 50, enabled: true, unlockTierCode: 'tier_2' },
+    { id: 'brain', emoji: '🧠', label: '두뇌', category: '학습', sortOrder: 60, enabled: true, unlockTierCode: 'tier_2' },
+    { id: 'clover', emoji: '🍀', label: '행운', category: '자연', sortOrder: 70, enabled: true, unlockTierCode: 'tier_2' },
+    { id: 'target', emoji: '🎯', label: '목표', category: '학습', sortOrder: 80, enabled: true, unlockTierCode: 'tier_2' },
+    { id: 'nerd', emoji: '🤓', label: '공부 모드', category: '표정', sortOrder: 90, enabled: true, unlockTierCode: 'tier_3' },
+    { id: 'trophy', emoji: '🏆', label: '트로피', category: '성취', sortOrder: 100, enabled: true, unlockTierCode: 'tier_3' },
+    { id: 'rocket', emoji: '🚀', label: '로켓', category: '성취', sortOrder: 110, enabled: true, unlockTierCode: 'tier_3' },
+    { id: 'school', emoji: '🏫', label: '학교', category: '학습', sortOrder: 120, enabled: true, unlockTierCode: 'tier_3' },
+    { id: 'sparkles', emoji: '🌟', label: '반짝별', category: '반짝임', sortOrder: 130, enabled: true, unlockTierCode: 'tier_4' },
+    { id: 'science', emoji: '🧪', label: '실험', category: '학습', sortOrder: 140, enabled: true, unlockTierCode: 'tier_4' },
+    { id: 'tiger', emoji: '🐯', label: '호랑이', category: '동물', sortOrder: 150, enabled: true, unlockTierCode: 'tier_4' },
+    { id: 'panda', emoji: '🐼', label: '판다', category: '동물', sortOrder: 160, enabled: true, unlockTierCode: 'tier_4' },
+    { id: 'pencil', emoji: '✏️', label: '연필', category: '학습', sortOrder: 170, enabled: true, unlockTierCode: 'tier_5' },
+    { id: 'bear', emoji: '🐻', label: '곰', category: '동물', sortOrder: 180, enabled: true, unlockTierCode: 'tier_5' },
+    { id: 'fox', emoji: '🦊', label: '여우', category: '동물', sortOrder: 190, enabled: true, unlockTierCode: 'tier_5' },
+    { id: 'dolphin', emoji: '🐬', label: '돌고래', category: '동물', sortOrder: 200, enabled: true, unlockTierCode: 'tier_5' },
+    { id: 'owl', emoji: '🦉', label: '부엉이', category: '동물', sortOrder: 210, enabled: true, unlockTierCode: 'tier_5' },
+    { id: 'whale', emoji: '🐳', label: '고래', category: '동물', sortOrder: 220, enabled: true, unlockTierCode: 'tier_5' },
 ];
 
-const PROFILE_EMOJI_BY_ID = new Map(PROFILE_EMOJI_REGISTRY.map((entry) => [entry.id, entry]));
-const PROFILE_EMOJI_BY_VALUE = new Map(PROFILE_EMOJI_REGISTRY.map((entry) => [entry.value, entry]));
+export const DEFAULT_PROFILE_EMOJI_ID = 'smile';
+
+export const DEFAULT_PROFILE_EMOJI_REGISTRY: PointRankEmojiRegistryEntry[] = DEFAULT_PROFILE_EMOJI_REGISTRY_BASE.map(buildEmojiValueAlias);
+
+export const PROFILE_EMOJI_REGISTRY = DEFAULT_PROFILE_EMOJI_REGISTRY;
+
+const sortRegistry = (entries: PointRankEmojiRegistryEntry[]) => (
+    [...entries].sort((a, b) => {
+        const sortGap = Number(a.sortOrder || 0) - Number(b.sortOrder || 0);
+        if (sortGap !== 0) return sortGap;
+        return String(a.label || '').localeCompare(String(b.label || ''), 'ko');
+    })
+);
+
+const slugifyEmojiId = (value: string, fallbackIndex: number) => {
+    const slug = String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+    return slug || `emoji_${fallbackIndex + 1}`;
+};
+
+const ensureUniqueId = (candidateId: string, usedIds: Set<string>, fallbackIndex: number) => {
+    const baseId = slugifyEmojiId(candidateId, fallbackIndex);
+    let nextId = baseId;
+    let suffix = 2;
+    while (usedIds.has(nextId)) {
+        nextId = `${baseId}_${suffix}`;
+        suffix += 1;
+    }
+    usedIds.add(nextId);
+    return nextId;
+};
+
+const normalizeLegacyValues = (rawLegacyValues: unknown, currentEmoji: string, rawValue: string) => Array.from(new Set(
+    [
+        ...(
+            Array.isArray(rawLegacyValues)
+                ? rawLegacyValues.map((value) => normalizeEmojiText(value)).filter(Boolean)
+                : []
+        ),
+        rawValue && rawValue !== currentEmoji ? rawValue : '',
+    ].filter(Boolean),
+));
+
+const getDefaultRegistryEntry = (index: number) => DEFAULT_PROFILE_EMOJI_REGISTRY[index] || null;
+
+const normalizeRegistryEntry = (
+    rawEntry: Partial<PointRankEmojiRegistryEntry> | null | undefined,
+    index: number,
+    usedIds: Set<string>,
+): PointRankEmojiRegistryEntry | null => {
+    const fallbackEntry = getDefaultRegistryEntry(index);
+    const emoji = normalizeEmojiText(rawEntry?.emoji ?? rawEntry?.value ?? fallbackEntry?.emoji);
+    if (!emoji) return null;
+
+    const rawValue = normalizeEmojiText(rawEntry?.value);
+    const label = String(rawEntry?.label || fallbackEntry?.label || `이모지 ${index + 1}`).trim();
+    const category = String(rawEntry?.category || fallbackEntry?.category || '기타').trim() || '기타';
+    const sortOrder = Number.isFinite(Number(rawEntry?.sortOrder))
+        ? Number(rawEntry?.sortOrder)
+        : Number(fallbackEntry?.sortOrder || (index + 1) * 10);
+    const unlockTierCode = normalizeTierCode(rawEntry?.unlockTierCode) || fallbackEntry?.unlockTierCode;
+
+    return buildEmojiValueAlias({
+        id: ensureUniqueId(String(rawEntry?.id || fallbackEntry?.id || label || emoji), usedIds, index),
+        emoji,
+        label,
+        category,
+        sortOrder,
+        enabled: rawEntry?.enabled !== false,
+        unlockTierCode: unlockTierCode || undefined,
+        legacyValues: normalizeLegacyValues(rawEntry?.legacyValues, emoji, rawValue),
+    });
+};
+
+const buildEmojiMaps = (registry: PointRankEmojiRegistryEntry[]) => {
+    const byId = new Map<string, PointRankEmojiRegistryEntry>();
+    const byValue = new Map<string, PointRankEmojiRegistryEntry>();
+
+    registry.forEach((entry) => {
+        byId.set(entry.id, entry);
+        byValue.set(entry.emoji, entry);
+        byValue.set(entry.value || entry.emoji, entry);
+        (entry.legacyValues || []).forEach((legacyValue) => {
+            if (!byValue.has(legacyValue)) {
+                byValue.set(legacyValue, entry);
+            }
+        });
+    });
+
+    return {
+        byId,
+        byValue,
+    };
+};
+
+export const resolveProfileEmojiRegistry = (rawRegistry?: unknown) => {
+    if (!Array.isArray(rawRegistry)) {
+        return DEFAULT_PROFILE_EMOJI_REGISTRY.map((entry) => ({ ...entry, legacyValues: [...(entry.legacyValues || [])] }));
+    }
+
+    const usedIds = new Set<string>();
+    const entries = rawRegistry
+        .map((entry, index) => normalizeRegistryEntry(entry as Partial<PointRankEmojiRegistryEntry>, index, usedIds))
+        .filter((entry): entry is PointRankEmojiRegistryEntry => Boolean(entry));
+
+    if (entries.length === 0) {
+        return DEFAULT_PROFILE_EMOJI_REGISTRY.map((entry) => ({ ...entry, legacyValues: [...(entry.legacyValues || [])] }));
+    }
+
+    return sortRegistry(entries);
+};
+
+const getEnabledRegistryEntries = (registry: PointRankEmojiRegistryEntry[]) => registry.filter((entry) => entry.enabled !== false);
 
 const normalizePreferredEmojiValues = (preferredValues: unknown) => (
     Array.isArray(preferredValues)
         ? Array.from(new Set(
             preferredValues
-                .map((value) => String(value || '').trim())
+                .map((value) => normalizeEmojiText(value))
                 .filter(Boolean),
         ))
         : []
 );
+
+export const getProfileEmojiRegistry = (
+    preferredValues?: unknown,
+    registry: PointRankEmojiRegistryEntry[] = DEFAULT_PROFILE_EMOJI_REGISTRY,
+    options?: { includeDisabled?: boolean },
+) => {
+    const targetRegistry = options?.includeDisabled ? [...registry] : getEnabledRegistryEntries(registry);
+    const orderedRegistry = sortRegistry(targetRegistry);
+    const preferredEntries = normalizePreferredEmojiValues(preferredValues)
+        .map((value) => getProfileEmojiEntryByValue(value, orderedRegistry))
+        .filter((entry): entry is PointRankEmojiRegistryEntry => Boolean(entry));
+    const preferredIds = new Set(preferredEntries.map((entry) => entry.id));
+
+    return [
+        ...preferredEntries,
+        ...orderedRegistry.filter((entry) => !preferredIds.has(entry.id)),
+    ];
+};
+
+export const getProfileEmojiEntryById = (
+    emojiId: string,
+    registry: PointRankEmojiRegistryEntry[] = DEFAULT_PROFILE_EMOJI_REGISTRY,
+) => buildEmojiMaps(registry).byId.get(String(emojiId || '').trim()) || null;
+
+export const getProfileEmojiEntryByValue = (
+    value: string,
+    registry: PointRankEmojiRegistryEntry[] = DEFAULT_PROFILE_EMOJI_REGISTRY,
+) => buildEmojiMaps(registry).byValue.get(normalizeEmojiText(value)) || null;
+
+export const getProfileEmojiValueById = (
+    emojiId: string,
+    registry: PointRankEmojiRegistryEntry[] = DEFAULT_PROFILE_EMOJI_REGISTRY,
+) => getProfileEmojiEntryById(emojiId, registry)?.emoji || '';
+
+export const getDefaultProfileEmojiValue = (registry: PointRankEmojiRegistryEntry[] = DEFAULT_PROFILE_EMOJI_REGISTRY) => {
+    const defaultEntry = getProfileEmojiEntryById(DEFAULT_PROFILE_EMOJI_ID, registry)
+        || getEnabledRegistryEntries(registry)[0]
+        || registry[0];
+    return defaultEntry?.emoji || '😀';
+};
+
+export const sanitizeProfileEmojiIds = (
+    raw: unknown,
+    registry: PointRankEmojiRegistryEntry[] = DEFAULT_PROFILE_EMOJI_REGISTRY,
+) => {
+    const { byId } = buildEmojiMaps(registry);
+    return Array.from(new Set(
+        Array.isArray(raw)
+            ? raw
+                .map((value) => String(value || '').trim())
+                .filter((value) => {
+                    const entry = byId.get(value);
+                    return Boolean(entry && entry.enabled !== false);
+                })
+            : [],
+    ));
+};
 
 const getClampedTierCode = (requestedTierCode: PointRankTierCode, tiers: PointRankPolicyTier[]) => {
     if (tiers.length === 0) return requestedTierCode;
@@ -67,38 +242,11 @@ const getClampedTierCode = (requestedTierCode: PointRankTierCode, tiers: PointRa
     return match?.tier.code || tiers[tiers.length - 1].code;
 };
 
-export const getProfileEmojiRegistry = (preferredValues?: unknown) => {
-    const orderedPreferredValues = normalizePreferredEmojiValues(preferredValues);
-    if (orderedPreferredValues.length === 0) return PROFILE_EMOJI_REGISTRY;
-
-    const preferredEntries = orderedPreferredValues
-        .map((value) => PROFILE_EMOJI_BY_VALUE.get(value))
-        .filter((entry): entry is ProfileEmojiRegistryEntry => Boolean(entry));
-    const preferredIds = new Set(preferredEntries.map((entry) => entry.id));
-
-    return [
-        ...preferredEntries,
-        ...PROFILE_EMOJI_REGISTRY.filter((entry) => !preferredIds.has(entry.id)),
-    ];
-};
-
-export const getProfileEmojiEntryById = (emojiId: string) => PROFILE_EMOJI_BY_ID.get(String(emojiId || '').trim()) || null;
-
-export const getProfileEmojiEntryByValue = (value: string) => PROFILE_EMOJI_BY_VALUE.get(String(value || '').trim()) || null;
-
-export const getProfileEmojiValueById = (emojiId: string) => getProfileEmojiEntryById(emojiId)?.value || '';
-
-export const getDefaultProfileEmojiValue = () => getProfileEmojiValueById(DEFAULT_PROFILE_EMOJI_ID) || '😀';
-
-export const sanitizeProfileEmojiIds = (raw: unknown) => Array.from(new Set(
-    Array.isArray(raw)
-        ? raw
-            .map((value) => String(value || '').trim())
-            .filter((value) => PROFILE_EMOJI_BY_ID.has(value))
-        : [],
-));
-
-export const buildDefaultPointRankEmojiPolicy = (tiers: PointRankPolicyTier[]): PointRankEmojiPolicy => {
+export const buildDefaultPointRankEmojiPolicy = (
+    tiers: PointRankPolicyTier[],
+    registry: PointRankEmojiRegistryEntry[] = DEFAULT_PROFILE_EMOJI_REGISTRY,
+): PointRankEmojiPolicy => {
+    const enabledRegistry = getEnabledRegistryEntries(registry);
     const tierUnlocks = tiers.reduce<PointRankEmojiPolicyTiers>((accumulator, tier) => ({
         ...accumulator,
         [tier.code]: {
@@ -106,18 +254,22 @@ export const buildDefaultPointRankEmojiPolicy = (tiers: PointRankPolicyTier[]): 
         },
     }), {});
 
-    PROFILE_EMOJI_REGISTRY.forEach((entry) => {
-        const clampedTierCode = getClampedTierCode(entry.unlockTierCode, tiers);
+    enabledRegistry.forEach((entry) => {
+        const requestedTierCode = normalizeTierCode(entry.unlockTierCode) || tiers[0]?.code || 'tier_1';
+        const clampedTierCode = getClampedTierCode(requestedTierCode, tiers);
         const target = tierUnlocks[clampedTierCode] || { allowedEmojiIds: [] };
         target.allowedEmojiIds = [...target.allowedEmojiIds, entry.id];
         tierUnlocks[clampedTierCode] = target;
     });
 
     const firstTierCode = tiers[0]?.code;
+    const defaultEmojiId = getProfileEmojiEntryById(DEFAULT_PROFILE_EMOJI_ID, enabledRegistry)?.id
+        || enabledRegistry[0]?.id
+        || DEFAULT_PROFILE_EMOJI_ID;
     if (firstTierCode) {
         const firstTier = tierUnlocks[firstTierCode] || { allowedEmojiIds: [] };
-        if (!firstTier.allowedEmojiIds.includes(DEFAULT_PROFILE_EMOJI_ID)) {
-            firstTier.allowedEmojiIds = [DEFAULT_PROFILE_EMOJI_ID, ...firstTier.allowedEmojiIds];
+        if (!firstTier.allowedEmojiIds.includes(defaultEmojiId)) {
+            firstTier.allowedEmojiIds = [defaultEmojiId, ...firstTier.allowedEmojiIds];
         }
         tierUnlocks[firstTierCode] = {
             allowedEmojiIds: Array.from(new Set(firstTier.allowedEmojiIds)),
@@ -126,7 +278,8 @@ export const buildDefaultPointRankEmojiPolicy = (tiers: PointRankPolicyTier[]): 
 
     return {
         enabled: true,
-        defaultEmojiId: DEFAULT_PROFILE_EMOJI_ID,
+        defaultEmojiId,
+        legacyMode: 'keep_selected',
         tiers: tierUnlocks,
     };
 };

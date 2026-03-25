@@ -4,14 +4,10 @@ import PointRankBadge from './PointRankBadge';
 import { useAuth } from '../../contexts/AuthContext';
 import { MENUS, cloneDefaultMenus, sanitizeMenuConfig, type MenuConfig } from '../../constants/menus';
 import { runWhenIdle } from '../../lib/browserTasks';
-import { getDefaultProfileEmojiValue, getProfileEmojiEntryById } from '../../lib/profileEmojis';
-import {
-    getPointPolicy,
-    getPointRankManualAdjustEarnedPointsByUid,
-    getPointWalletByUid,
-} from '../../lib/points';
-import { getPointRankDisplay, needsPointRankLegacyFallback } from '../../lib/pointRanks';
+import { getDefaultProfileEmojiValue } from '../../lib/profileEmojis';
+import { loadStudentRankPromotionSnapshot } from '../../lib/pointRankPromotion';
 import { readLocalOnly, readStorage, removeStorage, writeLocalOnly } from '../../lib/safeStorage';
+import { getPointRankDefaultEmojiValue, type PointRankDisplay } from '../../lib/pointRanks';
 import {
     canAccessTeacherPortal,
     canManageSettings,
@@ -78,7 +74,7 @@ const Header: React.FC = () => {
     const [sessionExpiry, setSessionExpiry] = useState<number | null>(null);
     const [remainingSeconds, setRemainingSeconds] = useState(SESSION_DURATION_SECONDS);
     const [menuConfig, setMenuConfig] = useState<MenuConfig>(() => cloneDefaultMenus());
-    const [studentRank, setStudentRank] = useState<ReturnType<typeof getPointRankDisplay>>(null);
+    const [studentRank, setStudentRank] = useState<PointRankDisplay | null>(null);
     const [profileFallbackIcon, setProfileFallbackIcon] = useState(getDefaultProfileEmojiValue());
     const timeoutHandledRef = useRef(false);
 
@@ -295,22 +291,12 @@ const Header: React.FC = () => {
             }
 
             try {
-                const [wallet, policy] = await Promise.all([
-                    getPointWalletByUid(config, currentUser.uid),
-                    getPointPolicy(config),
-                ]);
-                const legacyManualAdjustPoints = wallet && needsPointRankLegacyFallback(wallet)
-                    ? await getPointRankManualAdjustEarnedPointsByUid(config, currentUser.uid)
-                    : 0;
+                const snapshot = await loadStudentRankPromotionSnapshot(config, currentUser.uid);
                 if (cancelled) return;
 
-                setStudentRank(getPointRankDisplay({
-                    rankPolicy: policy.rankPolicy,
-                    wallet: wallet || null,
-                    earnedPointsFromTransactions: legacyManualAdjustPoints,
-                }));
+                setStudentRank(snapshot.rank);
                 setProfileFallbackIcon(
-                    getProfileEmojiEntryById(policy.rankPolicy.emojiPolicy.defaultEmojiId)?.value
+                    getPointRankDefaultEmojiValue(snapshot.policy.rankPolicy)
                     || getDefaultProfileEmojiValue(),
                 );
             } catch (error) {
@@ -326,7 +312,7 @@ const Header: React.FC = () => {
         return () => {
             cancelled = true;
         };
-    }, [config, currentUser, isTeacherPortal]);
+    }, [config?.year, config?.semester, currentUser?.uid, isTeacherPortal, location.pathname, location.search]);
 
     if (!isReady) return null;
 

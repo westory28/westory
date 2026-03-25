@@ -21,6 +21,7 @@ export interface UserData {
   email: string;
   name?: string;
   profileIcon?: string;
+  profileEmojiId?: string;
   customNameConfirmed?: boolean;
   grade?: string;
   class?: string;
@@ -138,6 +139,13 @@ export type PointRankThemeId =
   | "korean_golpum"
   | "world_nobility";
 
+export type PointRankBadgeStyleToken =
+  | "stone"
+  | "blue"
+  | "emerald"
+  | "amber"
+  | "rose";
+
 export type PointRankBasedOn =
   | "earnedTotal"
   | "earnedTotal_plus_positive_manual_adjust";
@@ -145,6 +153,11 @@ export type PointRankBasedOn =
 export interface PointRankPolicyTier {
   code: PointRankTierCode;
   minPoints: number;
+  label?: string;
+  shortLabel?: string;
+  description?: string;
+  badgeStyleToken?: PointRankBadgeStyleToken | string;
+  allowedEmojiIds?: string[];
 }
 
 export interface PointRankEmojiPolicyTier {
@@ -153,18 +166,54 @@ export interface PointRankEmojiPolicyTier {
 
 export type PointRankEmojiPolicyTiers = Partial<Record<PointRankTierCode, PointRankEmojiPolicyTier>>;
 
+export interface PointRankEmojiRegistryEntry {
+  id: string;
+  emoji: string;
+  value?: string;
+  label: string;
+  category: string;
+  sortOrder: number;
+  enabled: boolean;
+  unlockTierCode?: PointRankTierCode;
+  legacyValues?: string[];
+}
+
 export interface PointRankEmojiPolicy {
   enabled: boolean;
   defaultEmojiId: string;
+  legacyMode?: "keep_selected" | "strict";
   tiers: PointRankEmojiPolicyTiers;
+}
+
+export interface PointRankThemeTierOverride {
+  label?: string;
+  shortLabel?: string;
+  description?: string;
+  badgeStyleToken?: PointRankBadgeStyleToken | string;
+}
+
+export interface PointRankThemeOverride {
+  themeName?: string;
+  tiers?: Partial<Record<PointRankTierCode, PointRankThemeTierOverride>>;
+}
+
+export type PointRankThemeOverrides = Partial<Record<PointRankThemeId, PointRankThemeOverride>>;
+
+export interface PointRankCelebrationPolicy {
+  enabled: boolean;
+  effectLevel: "subtle" | "standard";
 }
 
 export interface PointRankPolicy {
   enabled: boolean;
-  themeId: PointRankThemeId;
+  activeThemeId: PointRankThemeId;
+  themeId?: PointRankThemeId;
   basedOn: PointRankBasedOn;
   tiers: PointRankPolicyTier[];
+  themes?: PointRankThemeOverrides;
+  emojiRegistry?: PointRankEmojiRegistryEntry[];
   emojiPolicy: PointRankEmojiPolicy;
+  celebrationPolicy?: PointRankCelebrationPolicy;
 }
 
 export interface PointWalletRankSnapshot {
