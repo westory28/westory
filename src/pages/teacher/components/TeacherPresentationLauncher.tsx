@@ -1,5 +1,6 @@
 ﻿import React from "react";
 import {
+  getTeacherPresentationClassOptionStatusText,
   getTeacherPresentationRuntimeBadge,
   getTeacherPresentationSelectorSummaryText,
   type TeacherPresentationClassSummary,
@@ -91,16 +92,22 @@ const TeacherPresentationLauncher: React.FC<
           <select
             value={selectedClassId}
             onChange={(event) => onSelectClass(event.target.value)}
-            className="h-10 w-full max-w-[180px] rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
+            className="h-10 w-full max-w-[220px] rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
           >
             {!classOptions.length && (
               <option value="preview-default">반 선택</option>
             )}
             {classOptions.map((option) => {
-              const optionBadge = getTeacherPresentationRuntimeBadge(option);
+              const optionStatus = getTeacherPresentationClassOptionStatusText(
+                option,
+              );
+              const optionLabel = option.className
+                ? `${option.className}반`
+                : option.classLabel;
               return (
                 <option key={option.classId} value={option.classId}>
-                  {option.className}반{optionBadge.text ? ` · ${optionBadge.text}` : ""}
+                  {optionLabel}
+                  {optionStatus ? ` · ${optionStatus}` : ""}
                 </option>
               );
             })}

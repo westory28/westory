@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import LessonFootnoteDialog from "../../../../components/common/LessonFootnoteDialog";
 import {
   collection,
   doc,
@@ -91,6 +92,8 @@ const LessonContent: React.FC<LessonContentProps> = ({
     null,
   );
   const [footnotePanelOpen, setFootnotePanelOpen] = useState(false);
+  const [activeWorksheetFootnoteAnchorId, setActiveWorksheetFootnoteAnchorId] =
+    useState<string | null>(null);
   const [activeFootnoteAnchorKey, setActiveFootnoteAnchorKey] = useState("");
   const [highlightedFootnoteAnchorKey, setHighlightedFootnoteAnchorKey] =
     useState("");
@@ -146,6 +149,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
     setPointMessage("");
     setActiveFootnote(null);
     setFootnotePanelOpen(false);
+    setActiveWorksheetFootnoteAnchorId(null);
     setActiveFootnoteAnchorKey("");
     setHighlightedFootnoteAnchorKey("");
     viewStartedAtRef.current = Date.now();
@@ -195,6 +199,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
         setPointMessage("");
         setActiveFootnote(null);
         setFootnotePanelOpen(false);
+        setActiveWorksheetFootnoteAnchorId(null);
         setActiveFootnoteAnchorKey("");
         setHighlightedFootnoteAnchorKey("");
         viewStartedAtRef.current = Date.now();
@@ -560,9 +565,21 @@ const LessonContent: React.FC<LessonContentProps> = ({
   const footnoteMap = new Map(
     footnotes.map((footnote) => [footnote.anchorKey, footnote]),
   );
+  const footnoteByIdMap = new Map(
+    footnotes.map((footnote) => [footnote.id, footnote]),
+  );
   const footnoteNumberMap = new Map(
     linkedFootnotes.map((footnote, index) => [footnote.anchorKey, index + 1]),
   );
+  const activeFootnoteBadgeLabel = activeFootnote
+    ? footnoteNumberMap.get(activeFootnote.anchorKey)
+      ? `#${footnoteNumberMap.get(activeFootnote.anchorKey)}`
+      : worksheet.footnoteAnchors.some(
+            (anchor) => anchor.footnoteId === activeFootnote.id,
+          )
+        ? "PDF"
+        : null
+    : null;
   const embedUrl = normalizedLesson.videoUrl
     ? normalizedLesson.videoUrl.match(
         /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/,
@@ -609,6 +626,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
     if (!footnote) return;
     setActiveFootnote(footnote);
     setActiveFootnoteAnchorKey(anchorKey);
+    setActiveWorksheetFootnoteAnchorId(null);
     setFootnotePanelOpen(true);
     pulseFootnote(anchorKey);
     if (source === "trigger") {
@@ -616,6 +634,20 @@ const LessonContent: React.FC<LessonContentProps> = ({
       return;
     }
     focusTrigger(anchorKey);
+  };
+
+  const openWorksheetFootnoteAnchor = (anchorId: string) => {
+    const anchor = worksheet.footnoteAnchors.find((item) => item.id === anchorId);
+    if (!anchor) return;
+    const footnote = footnoteByIdMap.get(anchor.footnoteId);
+    if (!footnote) return;
+    setActiveFootnote(footnote);
+    setActiveWorksheetFootnoteAnchorId(anchorId);
+    setActiveFootnoteAnchorKey(footnote.anchorKey || "");
+    setFootnotePanelOpen(true);
+    if (footnote.anchorKey) {
+      pulseFootnote(footnote.anchorKey);
+    }
   };
 
   const content = (
@@ -672,9 +704,18 @@ const LessonContent: React.FC<LessonContentProps> = ({
           {!!worksheet.pageImages.length &&
             (fullscreenPreview ? (
               <LessonWorksheetStage
-                pageImages={worksheet.pageImages}
-                blanks={worksheet.blanks}
-                textRegions={worksheet.textRegions}
+              pageImages={worksheet.pageImages}
+              blanks={worksheet.blanks}
+              textRegions={worksheet.textRegions}
+              footnoteAnchors={worksheet.footnoteAnchors}
+              selectedFootnoteAnchorId={activeWorksheetFootnoteAnchorId}
+              footnoteTitles={Object.fromEntries(
+                footnotes.map((footnote) => [
+                  footnote.id,
+                    footnote.title || footnote.label || "각주",
+                  ]),
+                )}
+                onActivateFootnoteAnchor={openWorksheetFootnoteAnchor}
                 mode="student-solve"
                 studentAnswers={studentAnswers}
                 onStudentAnswerChange={handleWorksheetAnswerChange}
@@ -808,64 +849,15 @@ const LessonContent: React.FC<LessonContentProps> = ({
           </div>
         )}
 
-        {footnotePanelOpen && activeFootnote && (
-          <div className="fixed inset-0 z-[85] bg-black/45 backdrop-blur-sm">
-            <div className="flex h-full items-end justify-center p-3 md:items-center md:p-6">
-              <div className="max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-[28px] bg-white shadow-2xl">
-                <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-                  <div>
-                    <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
-                      참고자료
-                    </div>
-                    <div className="mt-1 text-lg font-bold text-slate-900">
-                      {footnoteNumberMap.get(activeFootnote.anchorKey)
-                        ? `#${footnoteNumberMap.get(activeFootnote.anchorKey)} `
-                        : ""}
-                      {activeFootnote.title ||
-                        activeFootnote.label ||
-                        activeFootnote.anchorKey}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setFootnotePanelOpen(false)}
-                    className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
-                  >
-                    닫기
-                  </button>
-                </div>
-                <div className="max-h-[calc(88vh-88px)] overflow-y-auto px-5 py-5">
-                  {activeFootnote.imageUrl && (
-                    <div className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-50">
-                      <img
-                        src={activeFootnote.imageUrl}
-                        alt={
-                          activeFootnote.title ||
-                          activeFootnote.label ||
-                          "참고 이미지"
-                        }
-                        className="max-h-[60vh] w-full object-contain"
-                      />
-                    </div>
-                  )}
-                  {activeFootnote.bodyHtml && (
-                    <div
-                      className="prose prose-slate mt-5 max-w-none text-slate-700"
-                      dangerouslySetInnerHTML={{
-                        __html: activeFootnote.bodyHtml,
-                      }}
-                    />
-                  )}
-                  {!activeFootnote.imageUrl && !activeFootnote.bodyHtml && (
-                    <div className="rounded-2xl bg-slate-50 px-4 py-5 text-sm text-slate-500">
-                      아직 등록된 설명이나 이미지가 없습니다.
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        <LessonFootnoteDialog
+          open={footnotePanelOpen}
+          footnote={activeFootnote}
+          badgeLabel={activeFootnoteBadgeLabel}
+          onClose={() => {
+            setFootnotePanelOpen(false);
+            setActiveWorksheetFootnoteAnchorId(null);
+          }}
+        />
 
         {worksheetScreenOpen && !fullscreenPreview && (
           <div className="fixed inset-0 z-[80] bg-slate-950/80 backdrop-blur-sm">

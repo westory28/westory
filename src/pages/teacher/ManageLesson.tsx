@@ -31,9 +31,11 @@ import {
 import {
   clampRatio,
   getTightTextRegionBounds,
+  normalizeWorksheetFootnoteAnchors,
   normalizeWorksheetPageImages,
   normalizeWorksheetTextRegions,
   type LessonWorksheetBlank,
+  type LessonWorksheetFootnoteAnchor,
   type LessonWorksheetPageImage,
   type LessonWorksheetTextRegion,
 } from "../../lib/lessonWorksheet";
@@ -60,6 +62,7 @@ import {
   uploadLessonFootnoteAsset,
 } from "../../lib/lessonFootnoteAssets";
 import { canWriteLessonManagement } from "../../lib/permissions";
+import { subscribeSourceArchiveAssets } from "../../lib/sourceArchive";
 import {
   buildTeacherPresentationClassId,
   buildTeacherPresentationClassLabel,
@@ -73,8 +76,10 @@ import {
   type TeacherPresentationClassSummary,
   type TeacherPresentationRuntimeStatus,
 } from "../../lib/teacherPresentation";
+import type { SourceArchiveAsset } from "../../types";
 import TeacherPresentationLauncher from "./components/TeacherPresentationLauncher";
 import TeacherLessonPresentation from "./components/TeacherLessonPresentation";
+import LessonSourceArchivePickerModal from "./components/LessonSourceArchivePickerModal";
 import {
   LessonBodyEditor,
   LessonEditorHeader,
@@ -90,8 +95,7 @@ type TreeNode = LessonTreeNode;
 
 const TABS: Array<{ id: LessonEditorTab; label: string; icon: string }> = [
   { id: "meta", label: "기본 정보", icon: "fa-sliders" },
-  { id: "body", label: "본문", icon: "fa-align-left" },
-  { id: "pdf", label: "PDF 학습지", icon: "fa-file-pdf" },
+  { id: "pdf", label: "PDF 편집", icon: "fa-file-pdf" },
   { id: "student-preview", label: "학생 미리보기", icon: "fa-user-graduate" },
 ];
 
@@ -256,6 +260,25 @@ const reindexFootnotes = (footnotes: LessonFootnote[]) =>
     order: index,
   }));
 
+const sortWorksheetFootnoteAnchors = (
+  anchors: LessonWorksheetFootnoteAnchor[],
+) =>
+  [...anchors].sort((left, right) => {
+    if (left.page !== right.page) return left.page - right.page;
+    if (left.topRatio !== right.topRatio) return left.topRatio - right.topRatio;
+    if (left.leftRatio !== right.leftRatio) {
+      return left.leftRatio - right.leftRatio;
+    }
+    return left.id.localeCompare(right.id);
+  });
+
+const normalizeLessonContentForSave = (value: string) =>
+  String(value || "").replace(
+    /(^|>)([ \t]+)(?=\S)/gm,
+    (_match, prefix: string, spaces: string) =>
+      `${prefix}${spaces.replace(/\t/g, "    ").replace(/ /g, "&nbsp;")}`,
+  );
+
 const createEditorSnapshot = (params: {
   selectedNodeId: string | null;
   lessonTitle: string;
@@ -263,6 +286,7 @@ const createEditorSnapshot = (params: {
   lessonContent: string;
   lessonVisibleToStudents: boolean;
   lessonFootnotes: LessonFootnote[];
+  worksheetFootnoteAnchors: LessonWorksheetFootnoteAnchor[];
   lessonPdfName: string;
   lessonPdfUrl: string;
   lessonPdfStoragePath: string;
@@ -278,9 +302,12 @@ const createEditorSnapshot = (params: {
     selectedNodeId: params.selectedNodeId,
     lessonTitle: params.lessonTitle,
     lessonVideo: params.lessonVideo,
-    lessonContent: params.lessonContent,
+    lessonContent: normalizeLessonContentForSave(params.lessonContent),
     lessonVisibleToStudents: params.lessonVisibleToStudents,
     lessonFootnotes: params.lessonFootnotes,
+    worksheetFootnoteAnchors: sortWorksheetFootnoteAnchors(
+      params.worksheetFootnoteAnchors,
+    ),
     lessonPdfName: params.lessonPdfName,
     lessonPdfUrl: params.lessonPdfUrl,
     lessonPdfStoragePath: params.lessonPdfStoragePath,
@@ -313,6 +340,13 @@ const ManageLesson: React.FC = () => {
   const [lessonContent, setLessonContent] = useState("");
   const [lessonVisibleToStudents, setLessonVisibleToStudents] = useState(true);
   const [lessonFootnotes, setLessonFootnotes] = useState<LessonFootnote[]>([]);
+  const [worksheetFootnoteAnchors, setWorksheetFootnoteAnchors] = useState<
+    LessonWorksheetFootnoteAnchor[]
+  >([]);
+  const [activeFootnoteId, setActiveFootnoteId] = useState<string | null>(null);
+  const [activeFootnoteAnchorId, setActiveFootnoteAnchorId] = useState<
+    string | null
+  >(null);
   const [lessonPdfName, setLessonPdfName] = useState("");
   const [lessonPdfUrl, setLessonPdfUrl] = useState("");
   const [lessonPdfStoragePath, setLessonPdfStoragePath] = useState("");
@@ -335,7 +369,9 @@ const ManageLesson: React.FC = () => {
   );
   const [draftBlankAnswer, setDraftBlankAnswer] = useState("");
   const [draftBlankPrompt, setDraftBlankPrompt] = useState("");
-  const [worksheetTool, setWorksheetTool] = useState<"ocr" | "box">("box");
+  const [worksheetTool, setWorksheetTool] = useState<
+    "ocr" | "box" | "footnote"
+  >("box");
   const [pdfBusy, setPdfBusy] = useState(false);
   const [screenBusyMessage, setScreenBusyMessage] = useState<string | null>(
     null,
@@ -375,6 +411,12 @@ const ManageLesson: React.FC = () => {
   const [footnoteImageDrafts, setFootnoteImageDrafts] = useState<
     Record<string, FootnoteImageDraft>
   >({});
+  const [sourceArchiveAssets, setSourceArchiveAssets] = useState<
+    SourceArchiveAsset[]
+  >([]);
+  const [sourceArchiveSearch, setSourceArchiveSearch] = useState("");
+  const [sourceArchivePickerFootnoteId, setSourceArchivePickerFootnoteId] =
+    useState<string | null>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const lastSavedSnapshotRef = useRef("");
   const deletedFootnoteAssetPathsRef = useRef<string[]>([]);
@@ -404,6 +446,7 @@ const ManageLesson: React.FC = () => {
       worksheetPageImages,
       worksheetTextRegions,
       worksheetBlanks,
+      worksheetFootnoteAnchors,
       footnotes: lessonFootnotes,
     }),
     [
@@ -420,6 +463,7 @@ const ManageLesson: React.FC = () => {
       worksheetPageImages,
       worksheetTextRegions,
       worksheetBlanks,
+      worksheetFootnoteAnchors,
       lessonFootnotes,
     ],
   );
@@ -427,6 +471,43 @@ const ManageLesson: React.FC = () => {
     () => getLessonFootnoteUsageMap(lessonContent, lessonFootnotes),
     [lessonContent, lessonFootnotes],
   );
+  const footnoteAnchorCountMap = useMemo(() => {
+    const nextMap = new Map<string, number>();
+    worksheetFootnoteAnchors.forEach((anchor) => {
+      nextMap.set(
+        anchor.footnoteId,
+        (nextMap.get(anchor.footnoteId) || 0) + 1,
+      );
+    });
+    return nextMap;
+  }, [worksheetFootnoteAnchors]);
+  const footnoteTitles = useMemo(
+    () =>
+      lessonFootnotes.reduce<Record<string, string>>((accumulator, footnote) => {
+        accumulator[footnote.id] =
+          footnote.title?.trim() ||
+          footnote.label?.trim() ||
+          footnote.sourceArchiveTitle?.trim() ||
+          "각주";
+        return accumulator;
+      }, {}),
+    [lessonFootnotes],
+  );
+  const filteredSourceArchiveAssets = useMemo(() => {
+    const keyword = sourceArchiveSearch.trim().toLowerCase();
+    if (!keyword) return sourceArchiveAssets;
+    return sourceArchiveAssets.filter((asset) =>
+      [
+        asset.title,
+        asset.description,
+        asset.previewText,
+        ...(asset.tags || []),
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(keyword),
+    );
+  }, [sourceArchiveAssets, sourceArchiveSearch]);
   const sortedPresentationClassOptions = useMemo(() => {
     const optionMap = new Map<string, TeacherPresentationClassSummary>();
 
@@ -594,6 +675,7 @@ const ManageLesson: React.FC = () => {
         lessonContent,
         lessonVisibleToStudents,
         lessonFootnotes,
+        worksheetFootnoteAnchors,
         lessonPdfName,
         lessonPdfUrl,
         lessonPdfStoragePath,
@@ -612,6 +694,7 @@ const ManageLesson: React.FC = () => {
       lessonContent,
       lessonVisibleToStudents,
       lessonFootnotes,
+      worksheetFootnoteAnchors,
       lessonPdfName,
       lessonPdfUrl,
       lessonPdfStoragePath,
@@ -630,6 +713,41 @@ const ManageLesson: React.FC = () => {
   useEffect(() => {
     void loadTree();
   }, [config]);
+  useEffect(() => {
+    const unsubscribe = subscribeSourceArchiveAssets(
+      (items) => {
+        setSourceArchiveAssets(
+          items.filter(
+            (item) =>
+              item.mediaKind !== "pdf" && item.processingStatus === "ready",
+          ),
+        );
+      },
+      (error) => {
+        console.error("Failed to load source archive assets:", error);
+        setSourceArchiveAssets([]);
+      },
+    );
+    return unsubscribe;
+  }, []);
+  useEffect(() => {
+    if (activeFootnoteId && !lessonFootnotes.some((item) => item.id === activeFootnoteId)) {
+      setActiveFootnoteId(null);
+    }
+  }, [activeFootnoteId, lessonFootnotes]);
+  useEffect(() => {
+    if (
+      activeFootnoteAnchorId &&
+      !worksheetFootnoteAnchors.some((item) => item.id === activeFootnoteAnchorId)
+    ) {
+      setActiveFootnoteAnchorId(null);
+    }
+  }, [activeFootnoteAnchorId, worksheetFootnoteAnchors]);
+  useEffect(() => {
+    if (!sourceArchivePickerFootnoteId) {
+      setSourceArchiveSearch("");
+    }
+  }, [sourceArchivePickerFootnoteId]);
   useEffect(() => {
     setCachedTeacherPreviewSummary(
       normalizeTeacherPresentationClassSummary(
@@ -849,9 +967,11 @@ const ManageLesson: React.FC = () => {
     setWorksheetPageImages([]);
     setWorksheetTextRegions([]);
     setWorksheetBlanks([]);
+    setWorksheetFootnoteAnchors([]);
     setPreparedPdf(null);
     setSelectedPdfFile(null);
     setActiveBlankId(null);
+    setActiveFootnoteAnchorId(null);
     setDraftBlank(null);
     setDraftBlankAnswer("");
     setDraftBlankPrompt("");
@@ -874,6 +994,8 @@ const ManageLesson: React.FC = () => {
     setBodyInsertMessage("");
     setLessonVisibleToStudents(true);
     setLessonFootnotes([]);
+    setActiveFootnoteId(null);
+    setSourceArchivePickerFootnoteId(null);
     resetFootnoteImageDrafts();
     resetWorksheetState(revokeExisting);
     deletedFootnoteAssetPathsRef.current = [];
@@ -884,6 +1006,7 @@ const ManageLesson: React.FC = () => {
       lessonContent: "",
       lessonVisibleToStudents: true,
       lessonFootnotes: [],
+      worksheetFootnoteAnchors: [],
       lessonPdfName: "",
       lessonPdfUrl: "",
       lessonPdfStoragePath: "",
@@ -1073,6 +1196,12 @@ const ManageLesson: React.FC = () => {
         setLessonContent(data.contentHtml);
         setLessonVisibleToStudents(data.isVisibleToStudents);
         setLessonFootnotes(data.footnotes);
+        setWorksheetFootnoteAnchors(
+          normalizeWorksheetFootnoteAnchors(data.worksheetFootnoteAnchors),
+        );
+        setActiveFootnoteId(null);
+        setActiveFootnoteAnchorId(null);
+        setSourceArchivePickerFootnoteId(null);
         setLessonPdfName(data.pdfName);
         setLessonPdfUrl(data.pdfUrl);
         setLessonPdfStoragePath(data.pdfStoragePath);
@@ -1091,6 +1220,9 @@ const ManageLesson: React.FC = () => {
           lessonContent: data.contentHtml,
           lessonVisibleToStudents: data.isVisibleToStudents,
           lessonFootnotes: data.footnotes,
+          worksheetFootnoteAnchors: normalizeWorksheetFootnoteAnchors(
+            data.worksheetFootnoteAnchors,
+          ),
           lessonPdfName: data.pdfName,
           lessonPdfUrl: data.pdfUrl,
           lessonPdfStoragePath: data.pdfStoragePath,
@@ -1114,6 +1246,7 @@ const ManageLesson: React.FC = () => {
           lessonContent: "",
           lessonVisibleToStudents: true,
           lessonFootnotes: [],
+          worksheetFootnoteAnchors: [],
           lessonPdfName: "",
           lessonPdfUrl: "",
           lessonPdfStoragePath: "",
@@ -1125,6 +1258,10 @@ const ManageLesson: React.FC = () => {
           preparedPdf: null,
           footnoteImageDrafts: {},
         });
+        setWorksheetFootnoteAnchors([]);
+        setActiveFootnoteId(null);
+        setActiveFootnoteAnchorId(null);
+        setSourceArchivePickerFootnoteId(null);
       }
       setLessonSaveState("saved");
     } catch (error) {
@@ -1169,7 +1306,9 @@ const ManageLesson: React.FC = () => {
       setWorksheetPageImages(nextPageImages);
       setWorksheetTextRegions(processed.regions);
       setWorksheetBlanks([]);
+      setWorksheetFootnoteAnchors([]);
       setActiveBlankId(null);
+      setActiveFootnoteAnchorId(null);
       setDraftBlank(null);
       setDraftBlankAnswer("");
       setDraftBlankPrompt("");
@@ -1334,10 +1473,16 @@ const ManageLesson: React.FC = () => {
   };
 
   const handleAddFootnote = () => {
+    let nextFootnoteId = "";
     setLessonFootnotes((prev) => {
       const nextFootnote = createLessonFootnoteDraft({}, prev);
+      nextFootnoteId = nextFootnote.id;
       return reindexFootnotes([...prev, nextFootnote]);
     });
+    if (nextFootnoteId) {
+      setActiveFootnoteId(nextFootnoteId);
+      setActiveFootnoteAnchorId(null);
+    }
   };
 
   const handleUpdateFootnote = (
@@ -1415,6 +1560,16 @@ const ManageLesson: React.FC = () => {
     setLessonFootnotes((prev) =>
       reindexFootnotes(prev.filter((footnote) => footnote.id !== footnoteId)),
     );
+    setWorksheetFootnoteAnchors((prev) =>
+      prev.filter((anchor) => anchor.footnoteId !== footnoteId),
+    );
+    if (activeFootnoteId === footnoteId) {
+      setActiveFootnoteId(null);
+      setActiveFootnoteAnchorId(null);
+    }
+    if (sourceArchivePickerFootnoteId === footnoteId) {
+      setSourceArchivePickerFootnoteId(null);
+    }
   };
 
   const handleCopyFootnoteToken = async (anchorKey: string) => {
@@ -1471,7 +1626,11 @@ const ManageLesson: React.FC = () => {
     );
   };
 
-  const getFootnotePreviewUrl = (footnote: LessonFootnote) => {
+  const getFootnotePreviewUrl = <
+    T extends { id: string; imageUrl?: string | null },
+  >(
+    footnote: T,
+  ) => {
     const draft = footnoteImageDrafts[footnote.id];
     if (!draft) return footnote.imageUrl || "";
     if (draft.removeExisting) return "";
@@ -1500,16 +1659,130 @@ const ManageLesson: React.FC = () => {
 
   const handleAddFootnoteAndInsert = () => {
     let nextAnchorKey = "";
+    let nextFootnoteId = "";
     setLessonFootnotes((prev) => {
       const nextFootnote = createLessonFootnoteDraft({}, prev);
       nextAnchorKey = nextFootnote.anchorKey;
+      nextFootnoteId = nextFootnote.id;
       return reindexFootnotes([...prev, nextFootnote]);
     });
+    if (nextFootnoteId) {
+      setActiveFootnoteId(nextFootnoteId);
+      setActiveFootnoteAnchorId(null);
+    }
     window.setTimeout(() => {
       if (nextAnchorKey) {
         insertFootnoteTokenIntoContent(nextAnchorKey);
       }
     }, 0);
+  };
+
+  const handleOpenSourceArchivePicker = (footnoteId: string) => {
+    setActiveFootnoteId(footnoteId);
+    setSourceArchiveSearch("");
+    setSourceArchivePickerFootnoteId(footnoteId);
+  };
+
+  const handleClearSourceArchiveImage = (footnoteId: string) => {
+    setLessonFootnotes((prev) =>
+      prev.map((footnote) =>
+        footnote.id === footnoteId
+          ? {
+              ...footnote,
+              sourceArchiveAssetId: "",
+              sourceArchiveImagePath: "",
+              sourceArchiveThumbPath: "",
+              sourceArchiveTitle: "",
+            }
+          : footnote,
+      ),
+    );
+  };
+
+  const handleSelectSourceArchiveAsset = (asset: SourceArchiveAsset) => {
+    if (!sourceArchivePickerFootnoteId) return;
+    setLessonFootnotes((prev) =>
+      prev.map((footnote) =>
+        footnote.id === sourceArchivePickerFootnoteId
+          ? {
+              ...footnote,
+              sourceArchiveAssetId: asset.id,
+              sourceArchiveImagePath:
+                asset.image.displayPath ||
+                asset.image.thumbPath ||
+                asset.image.originalPath,
+              sourceArchiveThumbPath: asset.image.thumbPath || "",
+              sourceArchiveTitle: asset.title || asset.image.originalName || "",
+            }
+          : footnote,
+      ),
+    );
+    setActiveFootnoteId(sourceArchivePickerFootnoteId);
+    setSourceArchiveSearch("");
+    setSourceArchivePickerFootnoteId(null);
+  };
+
+  const handleSelectFootnoteAnchor = (anchorId: string) => {
+    const matchedAnchor = worksheetFootnoteAnchors.find(
+      (anchor) => anchor.id === anchorId,
+    );
+    setActiveFootnoteAnchorId(anchorId);
+    if (matchedAnchor?.footnoteId) {
+      setActiveFootnoteId(matchedAnchor.footnoteId);
+    }
+  };
+
+  const handleDeleteFootnoteAnchor = (anchorId: string) => {
+    setWorksheetFootnoteAnchors((prev) =>
+      prev.filter((anchor) => anchor.id !== anchorId),
+    );
+    if (activeFootnoteAnchorId === anchorId) {
+      setActiveFootnoteAnchorId(null);
+    }
+  };
+
+  const handleCreateFootnoteAnchorFromSelection = (
+    page: number,
+    rect: {
+      leftRatio: number;
+      topRatio: number;
+      widthRatio: number;
+      heightRatio: number;
+    },
+  ) => {
+    const hasActiveFootnote =
+      Boolean(activeFootnoteId) &&
+      lessonFootnotes.some((item) => item.id === activeFootnoteId);
+    const createdFootnote = hasActiveFootnote
+      ? null
+      : createLessonFootnoteDraft({}, lessonFootnotes);
+    const nextFootnoteId = hasActiveFootnote
+      ? activeFootnoteId
+      : createdFootnote?.id || null;
+
+    if (createdFootnote) {
+      setLessonFootnotes((prev) => reindexFootnotes([...prev, createdFootnote]));
+    }
+
+    if (!nextFootnoteId) return;
+
+    const nextAnchorId = `footnote-anchor-${Date.now()}`;
+    setWorksheetFootnoteAnchors((prev) =>
+      sortWorksheetFootnoteAnchors([
+        ...prev,
+        {
+          id: nextAnchorId,
+          footnoteId: nextFootnoteId,
+          page,
+          leftRatio: rect.leftRatio,
+          topRatio: rect.topRatio,
+          widthRatio: rect.widthRatio,
+          heightRatio: rect.heightRatio,
+        },
+      ]),
+    );
+    setActiveFootnoteId(nextFootnoteId);
+    setActiveFootnoteAnchorId(nextAnchorId);
   };
 
   const uploadFootnoteAssets = async (
@@ -1578,11 +1851,7 @@ const ManageLesson: React.FC = () => {
       const lessonDocRef = scopedSnap.empty
         ? doc(scopedRef)
         : doc(scopedRef, scopedSnap.docs[0].id);
-      const normalizedContentHtml = lessonContent.replace(
-        /(^|>)([ \t]+)(?=\S)/gm,
-        (_match, prefix: string, spaces: string) =>
-          `${prefix}${spaces.replace(/\t/g, "    ").replace(/ /g, "&nbsp;")}`,
-      );
+      const normalizedContentHtml = normalizeLessonContentForSave(lessonContent);
       const uploadedWorksheet = await uploadWorksheetAssets(selectedNodeId);
       const sanitizedFootnotes = reindexFootnotes(
         lessonFootnotes.map((footnote) =>
@@ -1610,6 +1879,9 @@ const ManageLesson: React.FC = () => {
         worksheetPageImages: uploadedWorksheet.pageImages,
         worksheetTextRegions: uploadedWorksheet.textRegions,
         worksheetBlanks,
+        worksheetFootnoteAnchors: sortWorksheetFootnoteAnchors(
+          worksheetFootnoteAnchors,
+        ),
         pdfProcessing: resolvedPdfProcessing,
         footnotes: uploadedFootnotes,
         updatedAt: serverTimestamp(),
@@ -1654,6 +1926,7 @@ const ManageLesson: React.FC = () => {
       setLessonPdfProcessing(resolvedPdfProcessing);
       setWorksheetPageImages(uploadedWorksheet.pageImages || []);
       setWorksheetTextRegions(uploadedWorksheet.textRegions || []);
+      setWorksheetFootnoteAnchors((prev) => sortWorksheetFootnoteAnchors(prev));
       setLessonFootnotes(uploadedFootnotes);
       setPreparedPdf(null);
       setSelectedPdfFile(null);
@@ -1695,6 +1968,7 @@ const ManageLesson: React.FC = () => {
         lessonContent: normalizedContentHtml,
         lessonVisibleToStudents,
         lessonFootnotes: uploadedFootnotes,
+        worksheetFootnoteAnchors,
         lessonPdfName: uploadedWorksheet.pdfName || "",
         lessonPdfUrl: uploadedWorksheet.pdfUrl || "",
         lessonPdfStoragePath: uploadedWorksheet.pdfStoragePath || "",
@@ -1924,64 +2198,77 @@ const ManageLesson: React.FC = () => {
                       selectedNodeTitle={selectedNodeTitle}
                     />
                   )}
-                  {editorTab === "body" && (
-                    <LessonBodyEditor
-                      lessonContent={lessonContent}
-                      onLessonContentChange={setLessonContent}
-                      bodyInsertMessage={bodyInsertMessage}
-                      footnotes={lessonFootnotes}
-                      footnoteUsageMap={footnoteUsageMap}
-                      onBodySelectionChange={handleBodySelectionChange}
-                      onAddFootnote={handleAddFootnote}
-                      onAddFootnoteAndInsert={handleAddFootnoteAndInsert}
-                      onUpdateFootnote={handleUpdateFootnote}
-                      onMoveFootnote={handleMoveFootnote}
-                      onDeleteFootnote={handleDeleteFootnote}
-                      onCopyFootnoteToken={(anchorKey) =>
-                        void handleCopyFootnoteToken(anchorKey)
-                      }
-                      onInsertFootnoteToken={insertFootnoteTokenIntoContent}
-                      onSelectFootnoteImage={handleSelectFootnoteImage}
-                      onRemoveFootnoteImage={handleRemoveFootnoteImage}
-                      getFootnotePreviewUrl={getFootnotePreviewUrl}
-                    />
-                  )}
                   {editorTab === "pdf" && (
-                    <LessonPdfSection
-                      pdfBusy={pdfBusy}
-                      selectedPdfFile={selectedPdfFile}
-                      lessonPdfName={lessonPdfName}
-                      lessonPdfUrl={lessonPdfUrl}
-                      pdfProcessing={lessonPdfProcessing}
-                      worksheetPageImages={worksheetPageImages}
-                      worksheetTextRegions={worksheetTextRegions}
-                      worksheetBlanks={worksheetBlanks}
-                      worksheetTool={worksheetTool}
-                      activeBlankId={activeBlankId}
-                      draftBlank={draftBlank}
-                      draftBlankAnswer={draftBlankAnswer}
-                      draftBlankPrompt={draftBlankPrompt}
-                      sortedBlanks={sortedBlanks}
-                      pdfInputRef={pdfInputRef}
-                      onPdfFileChange={handlePdfFileChange}
-                      onPreparePdf={() => void handlePreparePdf()}
-                      onRemovePdf={() => void removeAttachedPdf()}
-                      onWorksheetToolChange={setWorksheetTool}
-                      onSelectBlank={handleSelectBlank}
-                      onDeleteBlank={handleDeleteBlank}
-                      onCreateBlankFromSelection={
-                        handleCreateBlankFromSelection
-                      }
-                      onDraftBlankAnswerChange={setDraftBlankAnswer}
-                      onDraftBlankPromptChange={setDraftBlankPrompt}
-                      onConfirmDraftBlank={handleConfirmDraftBlank}
-                      onCancelDraftBlank={() => {
-                        setDraftBlank(null);
-                        setDraftBlankAnswer("");
-                        setDraftBlankPrompt("");
-                      }}
-                      onUpdateBlank={updateBlank}
-                    />
+                    <div className="space-y-8">
+                      <LessonPdfSection
+                        pdfBusy={pdfBusy}
+                        selectedPdfFile={selectedPdfFile}
+                        lessonPdfName={lessonPdfName}
+                        lessonPdfUrl={lessonPdfUrl}
+                        pdfProcessing={lessonPdfProcessing}
+                        worksheetPageImages={worksheetPageImages}
+                        worksheetTextRegions={worksheetTextRegions}
+                        worksheetBlanks={worksheetBlanks}
+                        worksheetFootnoteAnchors={worksheetFootnoteAnchors}
+                        worksheetTool={worksheetTool}
+                        activeBlankId={activeBlankId}
+                        activeFootnoteAnchorId={activeFootnoteAnchorId}
+                        draftBlank={draftBlank}
+                        draftBlankAnswer={draftBlankAnswer}
+                        draftBlankPrompt={draftBlankPrompt}
+                        sortedBlanks={sortedBlanks}
+                        pdfInputRef={pdfInputRef}
+                        onPdfFileChange={handlePdfFileChange}
+                        onPreparePdf={() => void handlePreparePdf()}
+                        onRemovePdf={() => void removeAttachedPdf()}
+                        onWorksheetToolChange={setWorksheetTool}
+                        onSelectBlank={handleSelectBlank}
+                        onDeleteBlank={handleDeleteBlank}
+                        onSelectFootnoteAnchor={handleSelectFootnoteAnchor}
+                        onDeleteFootnoteAnchor={handleDeleteFootnoteAnchor}
+                        onActivateFootnoteAnchor={handleSelectFootnoteAnchor}
+                        footnoteTitles={footnoteTitles}
+                        onCreateBlankFromSelection={
+                          handleCreateBlankFromSelection
+                        }
+                        onCreateFootnoteAnchorFromSelection={
+                          handleCreateFootnoteAnchorFromSelection
+                        }
+                        onDraftBlankAnswerChange={setDraftBlankAnswer}
+                        onDraftBlankPromptChange={setDraftBlankPrompt}
+                        onConfirmDraftBlank={handleConfirmDraftBlank}
+                        onCancelDraftBlank={() => {
+                          setDraftBlank(null);
+                          setDraftBlankAnswer("");
+                          setDraftBlankPrompt("");
+                        }}
+                        onUpdateBlank={updateBlank}
+                      />
+                      <LessonBodyEditor
+                        lessonContent={lessonContent}
+                        onLessonContentChange={setLessonContent}
+                        bodyInsertMessage={bodyInsertMessage}
+                        footnotes={lessonFootnotes}
+                        footnoteUsageMap={footnoteUsageMap}
+                        footnoteAnchorCountMap={footnoteAnchorCountMap}
+                        selectedFootnoteId={activeFootnoteId}
+                        onBodySelectionChange={handleBodySelectionChange}
+                        onAddFootnote={handleAddFootnote}
+                        onAddFootnoteAndInsert={handleAddFootnoteAndInsert}
+                        onUpdateFootnote={handleUpdateFootnote}
+                        onMoveFootnote={handleMoveFootnote}
+                        onDeleteFootnote={handleDeleteFootnote}
+                        onCopyFootnoteToken={(anchorKey) =>
+                          void handleCopyFootnoteToken(anchorKey)
+                        }
+                        onInsertFootnoteToken={insertFootnoteTokenIntoContent}
+                        onSelectFootnoteImage={handleSelectFootnoteImage}
+                        onRemoveFootnoteImage={handleRemoveFootnoteImage}
+                        onOpenSourceArchivePicker={handleOpenSourceArchivePicker}
+                        onClearSourceArchiveImage={handleClearSourceArchiveImage}
+                        getFootnotePreviewUrl={getFootnotePreviewUrl}
+                      />
+                    </div>
                   )}
                   {editorTab === "student-preview" && (
                     <>
@@ -2080,6 +2367,18 @@ const ManageLesson: React.FC = () => {
           </div>
         </div>
       )}
+      <LessonSourceArchivePickerModal
+        open={Boolean(sourceArchivePickerFootnoteId)}
+        assets={filteredSourceArchiveAssets}
+        loading={
+          Boolean(sourceArchivePickerFootnoteId) &&
+          sourceArchiveAssets.length === 0
+        }
+        searchValue={sourceArchiveSearch}
+        onSearchChange={setSourceArchiveSearch}
+        onClose={() => setSourceArchivePickerFootnoteId(null)}
+        onSelectAsset={handleSelectSourceArchiveAsset}
+      />
       {/* ManageLesson is the current official teacher-present entry point.
           Future entry points should pass the same class context contract. */}
       {teacherPreviewOpen && (

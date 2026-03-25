@@ -7,6 +7,7 @@ import {
   normalizeBlankText,
   splitTextRegionIntoTokens,
   type LessonWorksheetBlank,
+  type LessonWorksheetFootnoteAnchor,
   type LessonWorksheetPageImage,
   type LessonWorksheetStageMode,
   type LessonWorksheetTextRegion,
@@ -26,12 +27,18 @@ interface LessonWorksheetStageProps {
   pageImages: LessonWorksheetPageImage[];
   blanks: LessonWorksheetBlank[];
   mode: LessonWorksheetStageMode;
-  teacherTool?: "ocr" | "box";
+  teacherTool?: "ocr" | "box" | "footnote";
   textRegions?: LessonWorksheetTextRegion[];
+  footnoteAnchors?: LessonWorksheetFootnoteAnchor[];
+  selectedFootnoteAnchorId?: string | null;
+  footnoteTitles?: Record<string, string>;
   selectedBlankId?: string | null;
   studentAnswers?: Record<string, { value?: string; status?: AnswerStatus }>;
   onSelectBlank?: (blankId: string) => void;
   onDeleteBlank?: (blankId: string) => void;
+  onSelectFootnoteAnchor?: (anchorId: string) => void;
+  onDeleteFootnoteAnchor?: (anchorId: string) => void;
+  onActivateFootnoteAnchor?: (anchorId: string) => void;
   onCreateBlankFromSelection?: (
     page: number,
     rect: {
@@ -42,6 +49,15 @@ interface LessonWorksheetStageProps {
     },
     matchedRegions: LessonWorksheetTextRegion[],
     source: "ocr" | "manual",
+  ) => void;
+  onCreateFootnoteAnchorFromSelection?: (
+    page: number,
+    rect: {
+      leftRatio: number;
+      topRatio: number;
+      widthRatio: number;
+      heightRatio: number;
+    },
   ) => void;
   onStudentAnswerChange?: (
     blankId: string,
@@ -169,6 +185,7 @@ interface ToolColorOption {
 
 const MIN_DRAG_SIZE = 0.0012;
 const MIN_BOX_DRAG_SIZE = 0.003;
+const MIN_FOOTNOTE_DRAG_SIZE = 0.002;
 const LIVE_REGION_INTERSECTION_RATIO = 0.04;
 const FINAL_REGION_INTERSECTION_RATIO = 0.12;
 const EMPTY_BLANK_LABEL = "빈칸";
@@ -224,17 +241,25 @@ const toPercent = (value: number) => `${value * 100}%`;
 const clampZoom = (value: number) =>
   Math.min(MAX_STUDENT_ZOOM, Math.max(MIN_STUDENT_ZOOM, value));
 
-const findScrollableAncestor = (element: HTMLElement | null) => {
-  let current = element?.parentElement || null;
-  while (current) {
-    const style = window.getComputedStyle(current);
-    const canScrollY =
-      /(auto|scroll)/.test(style.overflowY) &&
-      current.scrollHeight > current.clientHeight;
-    if (canScrollY) return current;
-    current = current.parentElement;
-  }
-  return null;
+const getDefaultFootnoteAnchorRect = (
+  point: RatioPoint,
+  pageImage: LessonWorksheetPageImage,
+) => {
+  const widthRatio = Math.max(0.04, 48 / Math.max(pageImage.width, 1));
+  const heightRatio = Math.max(0.055, 48 / Math.max(pageImage.height, 1));
+  const leftRatio = clampRatio(
+    Math.min(Math.max(0, point.x - widthRatio / 2), 1 - widthRatio),
+  );
+  const topRatio = clampRatio(
+    Math.min(Math.max(0, point.y - heightRatio / 2), 1 - heightRatio),
+  );
+
+  return {
+    leftRatio,
+    topRatio,
+    widthRatio,
+    heightRatio,
+  };
 };
 
 const getIntersectionArea = (
@@ -531,11 +556,18 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   mode,
   teacherTool = "ocr",
   textRegions = [],
+  footnoteAnchors = [],
+  selectedFootnoteAnchorId = null,
+  footnoteTitles = {},
   selectedBlankId,
   studentAnswers = {},
   onSelectBlank,
   onDeleteBlank,
+  onSelectFootnoteAnchor,
+  onDeleteFootnoteAnchor,
+  onActivateFootnoteAnchor,
   onCreateBlankFromSelection,
+  onCreateFootnoteAnchorFromSelection,
   onStudentAnswerChange,
   pendingBlank = null,
   annotationEnabled,
@@ -570,6 +602,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   const [highlighterColorKey, setHighlighterColorKey] =
     useState<DrawingColor>("yellow");
   const [studentZoom, setStudentZoom] = useState(1);
+  const studentZoomRef = useRef(1);
   const [toolbarVisible, setToolbarVisible] = useState(
     annotationUiMode === "always",
   );
@@ -600,8 +633,12 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   const [redoStack, setRedoStack] = useState<AnnotationSnapshot[]>([]);
   const touchGestureRef = useRef<TouchGestureState | null>(null);
   const activeTouchPointerIdsRef = useRef<Set<number>>(new Set());
+  const pointerCaptureTargetsRef = useRef<
+    Map<number, HTMLDivElement | null>
+  >(new Map());
   const panRef = useRef<PanState | null>(null);
   const eraserSessionRef = useRef<EraserSessionState | null>(null);
+  const viewportZoomFrameRef = useRef<number | null>(null);
   const scrollHostRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const holdRef = useRef<PressHoldState>({ timeoutId: null, page: null });
   const initialAnnotationKey = getAnnotationStateKey(
@@ -612,6 +649,10 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   );
   const localAnnotationKeyRef = useRef(initialAnnotationKey);
   const lastAppliedExternalAnnotationKeyRef = useRef(initialAnnotationKey);
+
+  useEffect(() => {
+    studentZoomRef.current = studentZoom;
+  }, [studentZoom]);
 
   const regionsByPage = useMemo(() => {
     const grouped = new Map<number, LessonWorksheetTextRegion[]>();
@@ -632,6 +673,16 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     });
     return grouped;
   }, [blanks]);
+
+  const footnoteAnchorsByPage = useMemo(() => {
+    const grouped = new Map<number, LessonWorksheetFootnoteAnchor[]>();
+    footnoteAnchors.forEach((anchor) => {
+      const current = grouped.get(anchor.page) || [];
+      current.push(anchor);
+      grouped.set(anchor.page, current);
+    });
+    return grouped;
+  }, [footnoteAnchors]);
 
   useEffect(() => {
     if (!pageImages.length) {
@@ -660,9 +711,21 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   }, [isTeacherViewMode, pageImages, teacherCurrentPage]);
 
   useEffect(() => {
-    if (!isTeacherViewMode || activeTeacherPage == null) return;
+    if (
+      !isTeacherViewMode ||
+      activeTeacherPage == null ||
+      teacherCurrentPage == null ||
+      activeTeacherPage === teacherCurrentPage
+    ) {
+      return;
+    }
     onTeacherCurrentPageChange?.(activeTeacherPage);
-  }, [activeTeacherPage, isTeacherViewMode, onTeacherCurrentPageChange]);
+  }, [
+    activeTeacherPage,
+    isTeacherViewMode,
+    onTeacherCurrentPageChange,
+    teacherCurrentPage,
+  ]);
 
   useEffect(() => {
     setToolbarVisible(annotationUiMode === "always");
@@ -825,15 +888,55 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     };
   };
 
+  const setStagePointerCapture = (
+    target: HTMLDivElement,
+    pointerId: number,
+  ) => {
+    try {
+      target.setPointerCapture(pointerId);
+      pointerCaptureTargetsRef.current.set(pointerId, target);
+    } catch {
+      pointerCaptureTargetsRef.current.delete(pointerId);
+    }
+  };
+
+  const releaseStagePointerCapture = (pointerId: number) => {
+    const target = pointerCaptureTargetsRef.current.get(pointerId);
+    if (!target) return;
+    try {
+      if (target.hasPointerCapture(pointerId)) {
+        target.releasePointerCapture(pointerId);
+      }
+    } catch {
+      // Ignore stale release attempts.
+    }
+    pointerCaptureTargetsRef.current.delete(pointerId);
+  };
+
+  const releaseActiveTouchPointerCaptures = () => {
+    activeTouchPointerIdsRef.current.forEach((pointerId) => {
+      releaseStagePointerCapture(pointerId);
+    });
+  };
+
   const clearTouchPointer = (pointerId: number) => {
+    releaseStagePointerCapture(pointerId);
     activeTouchPointerIdsRef.current.delete(pointerId);
     if (activeTouchPointerIdsRef.current.size < 2) {
       touchGestureRef.current = null;
     }
   };
 
+  const hasActiveTouchGesture = (page?: number) => {
+    const gesture = touchGestureRef.current;
+    if (!gesture) return activeTouchPointerIdsRef.current.size >= 2;
+    if (page == null) return true;
+    return gesture.page === page;
+  };
+
   const cancelStudentInteraction = () => {
     clearHoldTimer();
+    releaseActiveTouchPointerCaptures();
     setDraftStroke(null);
     setDraftBox(null);
     panRef.current = null;
@@ -949,6 +1052,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
       page?: number;
       anchorClientX?: number;
       anchorClientY?: number;
+      contentAnchorX?: number;
+      contentAnchorY?: number;
     },
   ) => {
     const clampedZoom = clampZoom(nextZoom);
@@ -963,50 +1068,45 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
       return;
     }
 
-    const verticalHost =
-      host.scrollHeight > host.clientHeight ? host : findScrollableAncestor(host);
+    const verticalHost = host;
     const rect = host.getBoundingClientRect();
     const anchorClientX = options?.anchorClientX ?? rect.left + rect.width / 2;
     const anchorClientY = options?.anchorClientY ?? rect.top + rect.height / 2;
     const localX = anchorClientX - rect.left;
     const localY = anchorClientY - rect.top;
-    const currentZoom = Math.max(studentZoom, 0.001);
-    const currentScrollTop = verticalHost?.scrollTop ?? host.scrollTop;
-    const contentAnchorX = (host.scrollLeft + localX) / currentZoom;
-    const contentAnchorY = (currentScrollTop + localY) / currentZoom;
+    const currentZoom = Math.max(studentZoomRef.current, 0.001);
+    const currentScrollTop = host.scrollTop;
+    const contentAnchorX =
+      options?.contentAnchorX ?? (host.scrollLeft + localX) / currentZoom;
+    const contentAnchorY =
+      options?.contentAnchorY ?? (currentScrollTop + localY) / currentZoom;
 
     setStudentZoom(clampedZoom);
 
-    requestAnimationFrame(() => {
+    if (viewportZoomFrameRef.current !== null) {
+      window.cancelAnimationFrame(viewportZoomFrameRef.current);
+    }
+
+    viewportZoomFrameRef.current = window.requestAnimationFrame(() => {
+      viewportZoomFrameRef.current = null;
       const nextHost = scrollHostRefs.current[page];
       if (!nextHost) return;
-      const nextVerticalHost =
-        nextHost.scrollHeight > nextHost.clientHeight
-          ? nextHost
-          : findScrollableAncestor(nextHost);
       nextHost.scrollLeft = Math.max(0, contentAnchorX * clampedZoom - localX);
       const nextScrollTop = Math.max(0, contentAnchorY * clampedZoom - localY);
-      if (nextVerticalHost) {
-        nextVerticalHost.scrollTop = nextScrollTop;
-      } else {
-        nextHost.scrollTop = nextScrollTop;
-      }
+      nextHost.scrollTop = nextScrollTop;
     });
   };
 
   const beginMovePan = (page: number, clientX: number, clientY: number) => {
     const host = scrollHostRefs.current[page];
     if (!host) return;
-    const verticalHost =
-      host.scrollHeight > host.clientHeight
-        ? host
-        : findScrollableAncestor(host);
+    const verticalHost = host;
     panRef.current = {
       page,
       startClientX: clientX,
       startClientY: clientY,
       startScrollLeft: host.scrollLeft,
-      startScrollTop: verticalHost?.scrollTop ?? host.scrollTop,
+      startScrollTop: host.scrollTop,
       horizontalHost: host,
       verticalHost,
     };
@@ -1162,11 +1262,15 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     if (event.button !== 0) return;
 
     if (isTeacherEditMode) {
-      if ((event.target as HTMLElement).closest("[data-blank-box]")) return;
+      if (
+        (event.target as HTMLElement).closest("[data-blank-box]") ||
+        (event.target as HTMLElement).closest("[data-footnote-anchor]")
+      )
+        return;
       const point = resolveRatioPoint(page, event.clientX, event.clientY);
       if (!point) return;
       event.preventDefault();
-      event.currentTarget.setPointerCapture(event.pointerId);
+      setStagePointerCapture(event.currentTarget, event.pointerId);
       setDraftRect({
         page,
         startX: point.x,
@@ -1178,10 +1282,14 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     }
 
     if (!isAnnotationEnabled) return;
+    if (hasActiveTouchGesture(page)) return;
     if (event.pointerType === "touch") {
       activeTouchPointerIdsRef.current.add(event.pointerId);
       if (activeTouchPointerIdsRef.current.size >= 2) {
         cancelStudentInteraction();
+        return;
+      }
+      if (hasActiveTouchGesture(page)) {
         return;
       }
     }
@@ -1193,7 +1301,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     const target = event.target as HTMLElement;
     if (
       target.closest("[data-blank-box]") ||
-      target.closest("[data-annotation-note]")
+      target.closest("[data-annotation-note]") ||
+      target.closest("[data-footnote-anchor]")
     )
       return;
     if (activeTextNoteId && annotationTool === "text") {
@@ -1205,7 +1314,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     }
     if (annotationTool === "move") {
       event.preventDefault();
-      event.currentTarget.setPointerCapture(event.pointerId);
+      setStagePointerCapture(event.currentTarget, event.pointerId);
       beginMovePan(page, event.clientX, event.clientY);
       return;
     }
@@ -1223,7 +1332,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
       return;
     }
     if (annotationTool === "eraser") {
-      event.currentTarget.setPointerCapture(event.pointerId);
+      setStagePointerCapture(event.currentTarget, event.pointerId);
       const erased = eraseAnnotationAtPoint(page, point, pageImage);
       eraserSessionRef.current = {
         page,
@@ -1234,13 +1343,13 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     }
     if (annotationTool === "rectangle") {
       pushUndoSnapshot();
-      event.currentTarget.setPointerCapture(event.pointerId);
+      setStagePointerCapture(event.currentTarget, event.pointerId);
       setDraftBox(createBox(page, point, selectedPenColor.pen));
       return;
     }
 
     pushUndoSnapshot();
-    event.currentTarget.setPointerCapture(event.pointerId);
+    setStagePointerCapture(event.currentTarget, event.pointerId);
     const nextStroke = createStroke(page, annotationTool, point);
     nextStroke.color =
       annotationTool === "pen"
@@ -1265,6 +1374,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
       );
       return;
     }
+
+    if (touchGestureRef.current?.page === page) return;
 
     const currentPan = panRef.current;
     if (annotationTool === "move" && currentPan?.page === page) {
@@ -1357,6 +1468,25 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
       nextRect.widthRatio < MIN_DRAG_SIZE ||
       nextRect.heightRatio < MIN_DRAG_SIZE;
     const isBoxTool = teacherTool === "box";
+    const isFootnoteTool = teacherTool === "footnote";
+
+    if (isFootnoteTool) {
+      const isTinyFootnoteDrag =
+        nextRect.widthRatio < MIN_FOOTNOTE_DRAG_SIZE ||
+        nextRect.heightRatio < MIN_FOOTNOTE_DRAG_SIZE;
+      const anchorRect = isTinyFootnoteDrag
+        ? getDefaultFootnoteAnchorRect(
+            {
+              x: (draftRect.startX + draftRect.currentX) / 2,
+              y: (draftRect.startY + draftRect.currentY) / 2,
+            },
+            pageImage,
+          )
+        : nextRect;
+      onCreateFootnoteAnchorFromSelection?.(pageImage.page, anchorRect);
+      setDraftRect(null);
+      return;
+    }
 
     if (
       isBoxTool &&
@@ -1452,9 +1582,14 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   useEffect(
     () => () => {
       clearHoldTimer();
+      releaseActiveTouchPointerCaptures();
       activeTouchPointerIdsRef.current.clear();
+      pointerCaptureTargetsRef.current.clear();
       touchGestureRef.current = null;
       eraserSessionRef.current = null;
+      if (viewportZoomFrameRef.current !== null) {
+        window.cancelAnimationFrame(viewportZoomFrameRef.current);
+      }
     },
     [],
   );
@@ -2001,6 +2136,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
           )}
         {visiblePageImages.map((pageImage) => {
           const pageBlanks = blanksByPage.get(pageImage.page) || [];
+          const pageFootnoteAnchors =
+            footnoteAnchorsByPage.get(pageImage.page) || [];
           const pageRegions = regionsByPage.get(pageImage.page) || [];
           const pagePendingBlank =
             pendingBlank?.page === pageImage.page ? pendingBlank : null;
@@ -2070,12 +2207,16 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                   scrollHostRefs.current[pageImage.page] = node;
                 }}
                 className="overflow-auto rounded-2xl border border-gray-200 bg-gray-50"
-                 style={
-                   isViewportInteractive
-                     ? { touchAction: "none", overscrollBehavior: "contain" }
-                     : undefined
-                 }
-                 onWheel={(event) => {
+                style={
+                  isViewportInteractive
+                    ? {
+                        touchAction: "none",
+                        overscrollBehavior: "contain",
+                        maxHeight: "min(78vh, 960px)",
+                      }
+                    : undefined
+                }
+                onWheel={(event) => {
                    if (!isViewportInteractive) return;
                    event.preventDefault();
                    const delta = event.deltaY < 0 ? 0.08 : -0.08;
@@ -2085,43 +2226,36 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                      anchorClientY: event.clientY,
                    });
                  }}
-                 onTouchStart={(event) => {
-                   if (
-                     !isViewportInteractive ||
-                     event.touches.length < 2
-                   )
-                     return;
+                onTouchStart={(event) => {
+                  if (!isViewportInteractive || event.touches.length < 2) return;
+                  event.preventDefault();
                   const distance = getTouchDistance(event.touches);
                   const center = getTouchCenter(event.touches);
                   const host = scrollHostRefs.current[pageImage.page];
-                  const verticalHost =
-                    host && host.scrollHeight > host.clientHeight
-                      ? host
-                      : findScrollableAncestor(host);
+                  const verticalHost = host;
                   if (!distance || !center || !host) return;
                   cancelStudentInteraction();
                   const hostRect = host.getBoundingClientRect();
-                  const currentVerticalScrollTop =
-                    verticalHost?.scrollTop ?? host.scrollTop;
+                  const currentVerticalScrollTop = host.scrollTop;
                   touchGestureRef.current = {
                     page: pageImage.page,
                     startDistance: distance,
-                    startZoom: studentZoom,
+                    startZoom: studentZoomRef.current,
                     startCenterX: center.x,
                     startCenterY: center.y,
                     contentAnchorX:
                       (host.scrollLeft + (center.x - hostRect.left)) /
-                      Math.max(studentZoom, 0.001),
+                      Math.max(studentZoomRef.current, 0.001),
                     contentAnchorY:
                       (currentVerticalScrollTop + (center.y - hostRect.top)) /
-                      Math.max(studentZoom, 0.001),
+                      Math.max(studentZoomRef.current, 0.001),
                     host,
                     verticalHost,
                   };
-                 }}
-                 onTouchMove={(event) => {
-                   if (!isViewportInteractive) return;
-                   const gesture = touchGestureRef.current;
+                }}
+                onTouchMove={(event) => {
+                  if (!isViewportInteractive) return;
+                  const gesture = touchGestureRef.current;
                   if (
                     !gesture ||
                     gesture.page !== pageImage.page ||
@@ -2136,23 +2270,13 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                   const nextZoom = clampZoom(
                     gesture.startZoom * (distance / gesture.startDistance),
                   );
-                  const hostRect = gesture.host.getBoundingClientRect();
-                   const localCenterX = center.x - hostRect.left;
-                   const localCenterY = center.y - hostRect.top;
-                   setStudentZoom(nextZoom);
-                   gesture.host.scrollLeft = Math.max(
-                     0,
-                     gesture.contentAnchorX * nextZoom - localCenterX,
-                  );
-                  const nextScrollTop = Math.max(
-                    0,
-                    gesture.contentAnchorY * nextZoom - localCenterY,
-                  );
-                  if (gesture.verticalHost) {
-                    gesture.verticalHost.scrollTop = nextScrollTop;
-                  } else {
-                    gesture.host.scrollTop = nextScrollTop;
-                  }
+                  applyViewportZoom(nextZoom, {
+                    page: pageImage.page,
+                    anchorClientX: center.x,
+                    anchorClientY: center.y,
+                    contentAnchorX: gesture.contentAnchorX,
+                    contentAnchorY: gesture.contentAnchorY,
+                  });
                 }}
                 onTouchEnd={() => {
                   if (touchGestureRef.current?.page === pageImage.page) {
@@ -2169,14 +2293,20 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                   ref={(node) => {
                     pageRefs.current[pageImage.page] = node;
                   }}
-                   className={`relative ${
-                     isTeacherEditMode
-                       ? `touch-none ${teacherTool === "box" ? "cursor-default" : "cursor-text"}`
-                       : isViewportInteractive
-                         ? `${annotationTool === "move" ? (panRef.current?.page === pageImage.page ? "cursor-grabbing" : "cursor-grab") : `touch-none ${annotationTool === "eraser" ? "cursor-not-allowed" : annotationTool === "text" ? "cursor-text" : "cursor-crosshair"}`}`
-                         : ""
-                   }`}
-                   style={{
+                  className={`relative ${
+                    isTeacherEditMode
+                      ? `touch-none ${
+                          teacherTool === "box"
+                            ? "cursor-default"
+                            : teacherTool === "footnote"
+                              ? "cursor-crosshair"
+                              : "cursor-text"
+                        }`
+                      : isViewportInteractive
+                        ? `${annotationTool === "move" ? (panRef.current?.page === pageImage.page ? "cursor-grabbing" : "cursor-grab") : `touch-none ${annotationTool === "eraser" ? "cursor-not-allowed" : annotationTool === "text" ? "cursor-text" : "cursor-crosshair"}`}`
+                        : ""
+                  }`}
+                  style={{
                      cursor: stageCursor,
                      touchAction: isViewportInteractive ? "none" : undefined,
                      width: isViewportInteractive
@@ -2195,17 +2325,29 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                   onPointerDown={(event) =>
                     handlePointerDown(pageImage.page, event)
                   }
-                  onPointerMove={(event) =>
+                  onPointerMove={(event) => {
+                    if (
+                      event.pointerType === "touch" &&
+                      hasActiveTouchGesture(pageImage.page)
+                    ) {
+                      return;
+                    }
                     updateDraftPoint(
                       pageImage.page,
                       event.clientX,
                       event.clientY,
                       event.pointerId,
-                    )
-                  }
+                    );
+                  }}
                   onPointerUp={(event) => {
                     if (event.pointerType === "touch") {
+                      const hadTouchGesture = hasActiveTouchGesture(
+                        pageImage.page,
+                      );
                       clearTouchPointer(event.pointerId);
+                      if (hadTouchGesture) {
+                        return;
+                      }
                     }
                     if (isTeacherEditMode) handleTeacherPointerUp(pageImage);
                     else finishStudentStroke();
@@ -2468,6 +2610,66 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                       )}
                     </div>
                   ))}
+
+                  {pageFootnoteAnchors.map((anchor) => {
+                    const anchorTitle =
+                      footnoteTitles[anchor.footnoteId] || "각주";
+                    const isSelectedAnchor =
+                      selectedFootnoteAnchorId === anchor.id;
+
+                    return (
+                      <React.Fragment key={anchor.id}>
+                        <div
+                          className={`pointer-events-none absolute rounded-2xl border ${
+                            isSelectedAnchor
+                              ? "z-[25] border-blue-400 bg-blue-100/25"
+                              : "z-[21] border-blue-300/60 bg-blue-100/14"
+                          }`}
+                          style={{
+                            left: toPercent(anchor.leftRatio),
+                            top: toPercent(anchor.topRatio),
+                            width: toPercent(anchor.widthRatio),
+                            height: toPercent(anchor.heightRatio),
+                          }}
+                        />
+                        <button
+                          type="button"
+                          data-footnote-anchor="true"
+                          onPointerDown={(event) => {
+                            event.stopPropagation();
+                          }}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            if (isTeacherEditMode) {
+                              onSelectFootnoteAnchor?.(anchor.id);
+                              return;
+                            }
+                            onActivateFootnoteAnchor?.(anchor.id);
+                          }}
+                          onContextMenu={(event) => {
+                            if (!isTeacherEditMode) return;
+                            event.preventDefault();
+                            event.stopPropagation();
+                            onDeleteFootnoteAnchor?.(anchor.id);
+                          }}
+                          className={`absolute z-[31] inline-flex h-10 w-10 items-center justify-center rounded-full border text-sm shadow-lg transition ${
+                            isSelectedAnchor
+                              ? "border-blue-600 bg-blue-600 text-white"
+                              : "border-white/80 bg-white text-blue-700 hover:-translate-y-0.5 hover:bg-blue-50"
+                          }`}
+                          style={{
+                            left: `calc(${toPercent(anchor.leftRatio + anchor.widthRatio / 2)} - 1.25rem)`,
+                            top: `calc(${toPercent(anchor.topRatio + anchor.heightRatio / 2)} - 1.25rem)`,
+                          }}
+                          aria-label={`${anchorTitle} 열기`}
+                          title={anchorTitle}
+                        >
+                          <i className="fas fa-comment-dots"></i>
+                        </button>
+                      </React.Fragment>
+                    );
+                  })}
 
                   {capabilities.enableBlankSelection &&
                     pageBlanks.map((blank) => {

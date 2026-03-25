@@ -1,5 +1,6 @@
 ﻿import React from "react";
 import LessonWorksheetStage from "../../../components/common/LessonWorksheetStage";
+import StorageImage from "../../../components/common/StorageImage";
 import {
   getLessonPdfExtractionHelpText,
   getLessonPdfExtractionStatusLabel,
@@ -12,14 +13,16 @@ import type {
   LessonFootnotePlacement,
   LessonFootnoteUsage,
 } from "../../../lib/lessonData";
+import { getLessonFootnoteDisplayTitle } from "../../../lib/lessonData";
 import type {
   LessonWorksheetBlank,
+  LessonWorksheetFootnoteAnchor,
   LessonWorksheetPageImage,
   LessonWorksheetTextRegion,
 } from "../../../lib/lessonWorksheet";
 import LessonContent from "../../student/lesson/components/LessonContent";
 
-export type LessonEditorTab = "meta" | "body" | "pdf" | "student-preview";
+export type LessonEditorTab = "meta" | "pdf" | "student-preview";
 
 export type LessonTreeNode = {
   id: string;
@@ -61,6 +64,8 @@ type LessonBodyEditorProps = {
   bodyInsertMessage?: string;
   footnotes?: LessonFootnote[];
   footnoteUsageMap?: Map<string, LessonFootnoteUsage>;
+  footnoteAnchorCountMap?: Map<string, number>;
+  selectedFootnoteId?: string | null;
   onBodySelectionChange?: (selection: { start: number; end: number }) => void;
   onAddFootnote?: () => void;
   onAddFootnoteAndInsert?: () => void;
@@ -74,6 +79,8 @@ type LessonBodyEditorProps = {
   onInsertFootnoteToken?: (anchorKey: string) => void;
   onSelectFootnoteImage?: (footnoteId: string, file: File | null) => void;
   onRemoveFootnoteImage?: (footnoteId: string) => void;
+  onOpenSourceArchivePicker?: (footnoteId: string) => void;
+  onClearSourceArchiveImage?: (footnoteId: string) => void;
   getFootnotePreviewUrl?: (footnote: LessonFootnote) => string;
 };
 
@@ -86,8 +93,10 @@ type LessonPdfSectionProps = {
   worksheetPageImages: LessonWorksheetPageImage[];
   worksheetTextRegions: LessonWorksheetTextRegion[];
   worksheetBlanks: LessonWorksheetBlank[];
-  worksheetTool: "ocr" | "box";
+  worksheetFootnoteAnchors: LessonWorksheetFootnoteAnchor[];
+  worksheetTool: "ocr" | "box" | "footnote";
   activeBlankId: string | null;
+  activeFootnoteAnchorId?: string | null;
   draftBlank: LessonWorksheetBlank | null;
   draftBlankAnswer: string;
   draftBlankPrompt: string;
@@ -96,9 +105,13 @@ type LessonPdfSectionProps = {
   onPdfFileChange: (file: File | null) => void;
   onPreparePdf: () => void;
   onRemovePdf: () => void;
-  onWorksheetToolChange: (value: "ocr" | "box") => void;
+  onWorksheetToolChange: (value: "ocr" | "box" | "footnote") => void;
   onSelectBlank: (blankId: string) => void;
   onDeleteBlank: (blankId: string) => void;
+  onSelectFootnoteAnchor?: (anchorId: string) => void;
+  onDeleteFootnoteAnchor?: (anchorId: string) => void;
+  onActivateFootnoteAnchor?: (anchorId: string) => void;
+  footnoteTitles?: Record<string, string>;
   onCreateBlankFromSelection: (
     page: number,
     rect: {
@@ -109,6 +122,15 @@ type LessonPdfSectionProps = {
     },
     matchedRegions: LessonWorksheetTextRegion[],
     source: "ocr" | "manual",
+  ) => void;
+  onCreateFootnoteAnchorFromSelection?: (
+    page: number,
+    rect: {
+      leftRatio: number;
+      topRatio: number;
+      widthRatio: number;
+      heightRatio: number;
+    },
   ) => void;
   onDraftBlankAnswerChange: (value: string) => void;
   onDraftBlankPromptChange: (value: string) => void;
@@ -150,6 +172,12 @@ function usageBadgeLabel(usage?: LessonFootnoteUsage) {
   if (!usage || usage.count === 0) return "아직 연결 안 됨";
   if (usage.count === 1) return "본문 연결됨";
   return `본문 ${usage.count}곳 연결`;
+}
+
+function footnoteAnchorBadgeLabel(count = 0) {
+  if (count <= 0) return "PDF 앵커 없음";
+  if (count === 1) return "PDF 앵커 1개";
+  return `PDF 앵커 ${count}개`;
 }
 
 function blankBadgeLabel(blank: LessonWorksheetBlank) {
@@ -334,18 +362,24 @@ function FootnoteCard({
   index,
   total,
   usage,
+  pdfAnchorCount = 0,
+  selected = false,
   onUpdateFootnote,
   onMoveFootnote,
   onDeleteFootnote,
   onCopyFootnoteToken,
   onSelectFootnoteImage,
   onRemoveFootnoteImage,
+  onOpenSourceArchivePicker,
+  onClearSourceArchiveImage,
   getFootnotePreviewUrl,
 }: {
   footnote: LessonFootnote;
   index: number;
   total: number;
   usage?: LessonFootnoteUsage;
+  pdfAnchorCount?: number;
+  selected?: boolean;
   onUpdateFootnote?: (
     footnoteId: string,
     patch: Partial<LessonFootnote>,
@@ -355,13 +389,21 @@ function FootnoteCard({
   onCopyFootnoteToken?: (anchorKey: string) => void;
   onSelectFootnoteImage?: (footnoteId: string, file: File | null) => void;
   onRemoveFootnoteImage?: (footnoteId: string) => void;
+  onOpenSourceArchivePicker?: (footnoteId: string) => void;
+  onClearSourceArchiveImage?: (footnoteId: string) => void;
   getFootnotePreviewUrl?: (footnote: LessonFootnote) => string;
 }) {
   const previewUrl =
     getFootnotePreviewUrl?.(footnote) || footnote.imageUrl || "";
 
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div
+      className={`rounded-3xl border bg-white p-5 shadow-sm ${
+        selected
+          ? "border-blue-300 ring-2 ring-blue-100"
+          : "border-slate-200"
+      }`}
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -371,6 +413,20 @@ function FootnoteCard({
             <span className={usageBadgeClass(usage)}>
               {usageBadgeLabel(usage)}
             </span>
+            <span
+              className={
+                pdfAnchorCount > 0
+                  ? "rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700"
+                  : "rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500"
+              }
+            >
+              {footnoteAnchorBadgeLabel(pdfAnchorCount)}
+            </span>
+            {selected && (
+              <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-700">
+                현재 선택
+              </span>
+            )}
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <span className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
@@ -472,7 +528,7 @@ function FootnoteCard({
       </div>
       <label className="mt-4 block">
         <span className="mb-2 block text-sm font-semibold text-slate-700">
-          참고 설명
+          각주 설명
         </span>
         <textarea
           value={footnote.bodyHtml ?? ""}
@@ -483,10 +539,23 @@ function FootnoteCard({
           className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
         />
       </label>
+      <label className="mt-4 block">
+        <span className="mb-2 block text-sm font-semibold text-slate-700">
+          유튜브 링크
+        </span>
+        <input
+          value={footnote.youtubeUrl ?? ""}
+          onChange={(event) =>
+            onUpdateFootnote?.(footnote.id, { youtubeUrl: event.target.value })
+          }
+          placeholder="https://www.youtube.com/watch?v=..."
+          className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
+        />
+      </label>
       <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm font-semibold text-slate-700">
-            참고 이미지
+            업로드 이미지
           </div>
           <div className="flex flex-wrap gap-2">
             <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">
@@ -531,6 +600,61 @@ function FootnoteCard({
           </div>
         )}
       </div>
+      <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold text-slate-700">
+              사료창고 이미지
+            </div>
+            <p className="mt-1 text-xs text-slate-500">
+              기존 사료창고 자료를 각주 팝업에 연결할 수 있습니다.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => onOpenSourceArchivePicker?.(footnote.id)}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+            >
+              <i className="fas fa-landmark text-[11px]"></i>
+              사료창고에서 선택
+            </button>
+            {footnote.sourceArchiveImagePath && (
+              <button
+                type="button"
+                onClick={() => onClearSourceArchiveImage?.(footnote.id)}
+                className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm font-semibold text-rose-600 hover:bg-rose-50"
+              >
+                <i className="fas fa-trash text-[11px]"></i>
+                사료창고 이미지 제거
+              </button>
+            )}
+          </div>
+        </div>
+        {footnote.sourceArchiveImagePath ? (
+          <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+            <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
+              {footnote.sourceArchiveTitle || getLessonFootnoteDisplayTitle(footnote)}
+            </div>
+            <StorageImage
+              path={footnote.sourceArchiveImagePath}
+              alt={footnote.sourceArchiveTitle || footnote.title || footnote.label || "사료창고 이미지"}
+              className="max-h-72 w-full object-contain"
+              fallback={
+                <div className="flex items-center gap-2 px-4 py-4 text-sm text-slate-500">
+                  <i className="fas fa-image text-sm"></i>
+                  사료창고 이미지를 불러오지 못했습니다.
+                </div>
+              }
+            />
+          </div>
+        ) : (
+          <div className="mt-4 flex items-center gap-2 rounded-2xl bg-white px-4 py-4 text-sm text-slate-500">
+            <i className="fas fa-landmark text-sm"></i>
+            아직 연결된 사료창고 이미지가 없습니다.
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -541,6 +665,8 @@ export function LessonBodyEditor({
   bodyInsertMessage,
   footnotes = [],
   footnoteUsageMap = new Map<string, LessonFootnoteUsage>(),
+  footnoteAnchorCountMap = new Map<string, number>(),
+  selectedFootnoteId = null,
   onBodySelectionChange,
   onAddFootnote,
   onAddFootnoteAndInsert,
@@ -551,12 +677,15 @@ export function LessonBodyEditor({
   onInsertFootnoteToken,
   onSelectFootnoteImage,
   onRemoveFootnoteImage,
+  onOpenSourceArchivePicker,
+  onClearSourceArchiveImage,
   getFootnotePreviewUrl,
 }: LessonBodyEditorProps) {
   const connectedCount = footnotes.filter(
     (footnote) => (footnoteUsageMap.get(footnote.anchorKey)?.count ?? 0) > 0,
   ).length;
   const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const selectedCardRef = React.useRef<HTMLDivElement | null>(null);
 
   const reportSelection = () => {
     const element = textareaRef.current;
@@ -567,18 +696,26 @@ export function LessonBodyEditor({
     });
   };
 
+  React.useEffect(() => {
+    if (!selectedFootnoteId || !selectedCardRef.current) return;
+    selectedCardRef.current.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+    });
+  }, [selectedFootnoteId]);
+
   return (
     <section className="space-y-8">
       <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
-          본문 작성
+          본문 및 참고자료
         </div>
         <h3 className="mt-2 text-xl font-bold text-slate-900">
-          학생에게 보여줄 수업 내용을 적어 주세요
+          본문과 PDF 각주 내용을 함께 관리합니다
         </h3>
         <p className="mt-2 text-sm text-slate-500">
-          본문을 먼저 작성한 뒤, 필요한 곳에 참고자료를 연결하면 학생 화면에서
-          참고 버튼으로 안내됩니다.
+          기존 본문 내용은 그대로 유지되고, PDF 위 각주도 같은 참고자료 목록을
+          사용합니다.
         </p>
       </div>
       <textarea
@@ -645,20 +782,32 @@ export function LessonBodyEditor({
             </div>
           ) : (
             footnotes.map((footnote, index) => (
-              <FootnoteCard
+              <div
                 key={footnote.id}
-                footnote={footnote}
-                index={index}
-                total={footnotes.length}
-                usage={footnoteUsageMap.get(footnote.anchorKey)}
-                onUpdateFootnote={onUpdateFootnote}
-                onMoveFootnote={onMoveFootnote}
-                onDeleteFootnote={onDeleteFootnote}
-                onCopyFootnoteToken={onCopyFootnoteToken}
-                onSelectFootnoteImage={onSelectFootnoteImage}
-                onRemoveFootnoteImage={onRemoveFootnoteImage}
-                getFootnotePreviewUrl={getFootnotePreviewUrl}
-              />
+                ref={
+                  selectedFootnoteId === footnote.id ? selectedCardRef : undefined
+                }
+              >
+                <FootnoteCard
+                  footnote={footnote}
+                  index={index}
+                  total={footnotes.length}
+                  usage={footnoteUsageMap.get(footnote.anchorKey)}
+                  pdfAnchorCount={
+                    footnoteAnchorCountMap.get(footnote.id) ?? 0
+                  }
+                  selected={selectedFootnoteId === footnote.id}
+                  onUpdateFootnote={onUpdateFootnote}
+                  onMoveFootnote={onMoveFootnote}
+                  onDeleteFootnote={onDeleteFootnote}
+                  onCopyFootnoteToken={onCopyFootnoteToken}
+                  onSelectFootnoteImage={onSelectFootnoteImage}
+                  onRemoveFootnoteImage={onRemoveFootnoteImage}
+                  onOpenSourceArchivePicker={onOpenSourceArchivePicker}
+                  onClearSourceArchiveImage={onClearSourceArchiveImage}
+                  getFootnotePreviewUrl={getFootnotePreviewUrl}
+                />
+              </div>
             ))
           )}
         </div>
@@ -715,8 +864,10 @@ export function LessonPdfSection({
   worksheetPageImages,
   worksheetTextRegions,
   worksheetBlanks,
+  worksheetFootnoteAnchors,
   worksheetTool,
   activeBlankId,
+  activeFootnoteAnchorId,
   draftBlank,
   draftBlankAnswer,
   draftBlankPrompt,
@@ -728,7 +879,12 @@ export function LessonPdfSection({
   onWorksheetToolChange,
   onSelectBlank,
   onDeleteBlank,
+  onSelectFootnoteAnchor,
+  onDeleteFootnoteAnchor,
+  onActivateFootnoteAnchor,
+  footnoteTitles,
   onCreateBlankFromSelection,
+  onCreateFootnoteAnchorFromSelection,
   onDraftBlankAnswerChange,
   onDraftBlankPromptChange,
   onConfirmDraftBlank,
@@ -769,14 +925,14 @@ export function LessonPdfSection({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
-            PDF 학습지
+            PDF 편집
           </div>
           <h3 className="mt-2 text-xl font-bold text-slate-900">
-            PDF 위에서 바로 빈칸 만들기
+            PDF 위에서 빈칸과 각주를 함께 편집합니다
           </h3>
           <p className="mt-2 text-sm text-slate-500">
-            PDF를 준비한 뒤, 화면 위 아이콘으로 OCR 선택과 박스 생성을 바로
-            진행하세요.
+            PDF를 준비한 뒤 오른쪽 플로팅 아이콘으로 OCR 선택, 텍스트 박스,
+            각주 앵커를 바로 만들 수 있습니다.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -821,7 +977,10 @@ export function LessonPdfSection({
             {pdfStatusLabel}
           </span>
         )}
-        <span>오른쪽 플로팅 아이콘으로 제작 도구와 키워드 목록을 확인할 수 있습니다.</span>
+        <span>
+          오른쪽 플로팅 아이콘으로 제작 도구, 각주 추가, 키워드 목록을 확인할
+          수 있습니다.
+        </span>
       </div>
       {!!pdfStatusHelpText && (
         <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
@@ -994,6 +1153,19 @@ export function LessonPdfSection({
               </button>
               <button
                 type="button"
+                onClick={() => onWorksheetToolChange("footnote")}
+                className={`inline-flex h-11 w-11 items-center justify-center rounded-full text-sm transition ${
+                  worksheetTool === "footnote"
+                    ? "bg-slate-900 text-white shadow-sm"
+                    : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+                aria-label="각주 추가"
+                title="각주 추가"
+              >
+                <i className="fas fa-comment-dots"></i>
+              </button>
+              <button
+                type="button"
                 onClick={() => setIsBlankManagerOpen((prev) => !prev)}
                 className={`inline-flex h-11 w-11 items-center justify-center rounded-full text-sm transition ${
                   isBlankManagerOpen
@@ -1015,16 +1187,25 @@ export function LessonPdfSection({
               textRegions={worksheetTextRegions}
               teacherTool={worksheetTool}
               selectedBlankId={activeBlankId}
+              footnoteAnchors={worksheetFootnoteAnchors}
+              selectedFootnoteAnchorId={activeFootnoteAnchorId}
               pendingBlank={draftBlank}
               onSelectBlank={onSelectBlank}
               onDeleteBlank={onDeleteBlank}
+              onSelectFootnoteAnchor={onSelectFootnoteAnchor}
+              onDeleteFootnoteAnchor={onDeleteFootnoteAnchor}
+              onActivateFootnoteAnchor={onActivateFootnoteAnchor}
+              footnoteTitles={footnoteTitles}
               onCreateBlankFromSelection={onCreateBlankFromSelection}
+              onCreateFootnoteAnchorFromSelection={
+                onCreateFootnoteAnchorFromSelection
+              }
             />
           </div>
         </div>
       ) : (
         <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-6 py-16 text-center text-sm text-slate-500">
-          PDF를 준비하면 여기에서 OCR 결과와 빈칸을 편집할 수 있습니다.
+          PDF를 준비하면 여기에서 OCR 결과와 빈칸, 각주를 편집할 수 있습니다.
         </div>
       )}
     </section>

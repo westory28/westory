@@ -6,6 +6,7 @@
   useState,
 } from "react";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
+import LessonFootnoteDialog from "../../../components/common/LessonFootnoteDialog";
 import LessonWorksheetStage, {
   type LessonWorksheetAnnotationState,
 } from "../../../components/common/LessonWorksheetStage";
@@ -13,6 +14,7 @@ import { useAuth } from "../../../contexts/AuthContext";
 import { db } from "../../../lib/firebase";
 import {
   getLessonContentSections,
+  type LessonFootnote,
   type LessonData,
 } from "../../../lib/lessonData";
 import {
@@ -47,11 +49,9 @@ const EMPTY_ANNOTATION_STATE: LessonWorksheetAnnotationState = {
 
 const serializePresentationSnapshot = (
   annotations: LessonWorksheetAnnotationState,
-  currentPage: number | null,
 ) =>
   JSON.stringify({
     annotations,
-    currentPage: currentPage ?? null,
   });
 
 const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
@@ -72,7 +72,7 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
       }),
     [classId, classLabel],
   );
-  const { bodyHtml, worksheet } = useMemo(
+  const { bodyHtml, footnotes, worksheet } = useMemo(
     () => getLessonContentSections(lesson),
     [lesson],
   );
@@ -85,14 +85,20 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
   const [statusMessage, setStatusMessage] = useState("");
   const [restoreMessage, setRestoreMessage] = useState("");
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const [activeWorksheetFootnote, setActiveWorksheetFootnote] =
+    useState<LessonFootnote | null>(null);
+  const [activeWorksheetFootnoteAnchorId, setActiveWorksheetFootnoteAnchorId] =
+    useState<string | null>(null);
+  const [worksheetFootnoteOpen, setWorksheetFootnoteOpen] = useState(false);
 
   const latestAnnotationRef = useRef(EMPTY_ANNOTATION_STATE);
   const latestPageRef = useRef<number | null>(null);
   const lastSavedAtRef = useRef<Date | null>(null);
+  const lastSavedPageRef = useRef<number | null>(null);
   const currentClassLabelRef = useRef(classContext.classLabel);
   const localInteractionSinceRestoreRef = useRef(false);
   const lastSavedSnapshotRef = useRef(
-    serializePresentationSnapshot(EMPTY_ANNOTATION_STATE, null),
+    serializePresentationSnapshot(EMPTY_ANNOTATION_STATE),
   );
 
   const presentationDocPath = useMemo(() => {
@@ -116,15 +122,25 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
     );
   }, [config, currentUser?.uid, lesson.unitId]);
 
-  const hasUnsavedChanges = useMemo(
-    () =>
-      serializePresentationSnapshot(annotationState, currentPage) !==
-      lastSavedSnapshotRef.current,
-    [annotationState, currentPage],
-  );
+  const hasUnsavedChanges =
+    serializePresentationSnapshot(annotationState) !==
+    lastSavedSnapshotRef.current;
 
   const canPersistPresentation = Boolean(
     presentationDocPath && currentUser?.uid && lesson.unitId,
+  );
+  const footnoteByIdMap = useMemo(
+    () => new Map(footnotes.map((footnote) => [footnote.id, footnote])),
+    [footnotes],
+  );
+  const footnoteTitles = useMemo(
+    () =>
+      footnotes.reduce<Record<string, string>>((accumulator, footnote) => {
+        accumulator[footnote.id] =
+          footnote.title?.trim() || footnote.label?.trim() || "각주";
+        return accumulator;
+      }, {}),
+    [footnotes],
   );
 
   const warningState = useMemo(
@@ -211,12 +227,12 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
         params?.currentPage === undefined
           ? latestPageRef.current
           : params.currentPage;
-      const nextSnapshot = serializePresentationSnapshot(
-        nextAnnotations,
-        nextPage,
-      );
+      const nextSnapshot = serializePresentationSnapshot(nextAnnotations);
 
-      if (nextSnapshot === lastSavedSnapshotRef.current) {
+      if (
+        nextSnapshot === lastSavedSnapshotRef.current &&
+        nextPage === lastSavedPageRef.current
+      ) {
         updateStatus(
           lastSavedAtRef.current ? "saved" : "idle",
           currentClassLabelRef.current,
@@ -246,6 +262,7 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
         const savedAt = new Date();
         lastSavedSnapshotRef.current = nextSnapshot;
         lastSavedAtRef.current = savedAt;
+        lastSavedPageRef.current = nextPage;
         setLastSavedAt(savedAt);
         syncRuntimeSummary("saved", savedAt, nextPage, false);
         updateStatus("saved", currentClassLabelRef.current, savedAt);
@@ -293,6 +310,12 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
   }, [lastSavedAt]);
 
   useEffect(() => {
+    setActiveWorksheetFootnote(null);
+    setActiveWorksheetFootnoteAnchorId(null);
+    setWorksheetFootnoteOpen(false);
+  }, [classContext.classId, lesson.unitId]);
+
+  useEffect(() => {
     onRuntimeStatusChange?.({
       classId: classContext.classId,
       classLabel: classContext.classLabel,
@@ -328,10 +351,10 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
       setCurrentPage(restoredPage);
       latestPageRef.current = restoredPage;
       lastSavedAtRef.current = restoredAt;
+      lastSavedPageRef.current = restoredPage;
       setLastSavedAt(restoredAt);
       lastSavedSnapshotRef.current = serializePresentationSnapshot(
         restoredAnnotations,
-        restoredPage,
       );
       setRestoreMessage(nextMessage);
       updateStatus(nextState, classContext.classLabel, restoredAt);
@@ -464,9 +487,11 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
     (
       nextAnnotations: LessonWorksheetAnnotationState,
       nextPage: number | null,
-      options?: { clearRestoreMessage?: boolean },
+      options?: { clearRestoreMessage?: boolean; markInteraction?: boolean },
     ) => {
-      localInteractionSinceRestoreRef.current = true;
+      if (options?.markInteraction !== false) {
+        localInteractionSinceRestoreRef.current = true;
+      }
       latestAnnotationRef.current = nextAnnotations;
       latestPageRef.current = nextPage;
       setAnnotationState(nextAnnotations);
@@ -476,10 +501,7 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
         setRestoreMessage("");
       }
 
-      const nextSnapshot = serializePresentationSnapshot(
-        nextAnnotations,
-        nextPage,
-      );
+      const nextSnapshot = serializePresentationSnapshot(nextAnnotations);
       const nextState =
         nextSnapshot === lastSavedSnapshotRef.current
           ? lastSavedAtRef.current
@@ -505,13 +527,9 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
   const handleAnnotationChange = (
     nextState: LessonWorksheetAnnotationState,
   ) => {
-    const nextSnapshot = serializePresentationSnapshot(
-      nextState,
-      latestPageRef.current,
-    );
+    const nextSnapshot = serializePresentationSnapshot(nextState);
     const currentSnapshot = serializePresentationSnapshot(
       latestAnnotationRef.current,
-      latestPageRef.current,
     );
     if (nextSnapshot === currentSnapshot) return;
 
@@ -522,7 +540,9 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
 
   const handleTeacherCurrentPageChange = (page: number) => {
     if (latestPageRef.current === page) return;
-    reflectLocalChange(latestAnnotationRef.current, page);
+    reflectLocalChange(latestAnnotationRef.current, page, {
+      markInteraction: false,
+    });
   };
 
   const handleManualSave = async () => {
@@ -556,6 +576,16 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
       worksheet.pageImages[0]?.page ?? null,
       { clearRestoreMessage: true },
     );
+  };
+
+  const handleOpenWorksheetFootnoteAnchor = (anchorId: string) => {
+    const anchor = worksheet.footnoteAnchors.find((item) => item.id === anchorId);
+    if (!anchor) return;
+    const footnote = footnoteByIdMap.get(anchor.footnoteId);
+    if (!footnote) return;
+    setActiveWorksheetFootnote(footnote);
+    setActiveWorksheetFootnoteAnchorId(anchorId);
+    setWorksheetFootnoteOpen(true);
   };
 
   const getVideoEmbedUrl = (url?: string) => {
@@ -705,6 +735,10 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
               pageImages={worksheet.pageImages}
               blanks={worksheet.blanks}
               textRegions={worksheet.textRegions}
+              footnoteAnchors={worksheet.footnoteAnchors}
+              selectedFootnoteAnchorId={activeWorksheetFootnoteAnchorId}
+              footnoteTitles={footnoteTitles}
+              onActivateFootnoteAnchor={handleOpenWorksheetFootnoteAnchor}
               mode="teacher-present"
               annotationUiMode="always"
               annotationPersistenceKey={`${lesson.unitId || "lesson"}:${classContext.classId}`}
@@ -722,6 +756,15 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
             dangerouslySetInnerHTML={{ __html: bodyHtml }}
           />
         )}
+        <LessonFootnoteDialog
+          open={worksheetFootnoteOpen}
+          footnote={activeWorksheetFootnote}
+          badgeLabel="PDF"
+          onClose={() => {
+            setWorksheetFootnoteOpen(false);
+            setActiveWorksheetFootnoteAnchorId(null);
+          }}
+        />
       </div>
     </div>
   );

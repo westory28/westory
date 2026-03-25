@@ -470,12 +470,11 @@ export const getRecentTeacherPresentationItems = (
 
 export const formatTeacherPresentationSavedAt = (value: Date | null) =>
   value
-    ? new Intl.DateTimeFormat("ko-KR", {
-        month: "numeric",
-        day: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-      }).format(value)
+    ? `${String(value.getMonth() + 1).padStart(2, "0")}/${String(
+        value.getDate(),
+      ).padStart(2, "0")} ${String(value.getHours()).padStart(2, "0")}:${String(
+        value.getMinutes(),
+      ).padStart(2, "0")}`
     : "";
 
 export const getTeacherPresentationStatusText = (params: {
@@ -541,6 +540,30 @@ export const getTeacherPresentationRuntimeBadge = (
   };
 };
 
+export const getTeacherPresentationOptionStatusText = (
+  summary?: Pick<
+    TeacherPresentationClassSummary,
+    "runtimeState" | "hasUnsavedChanges" | "hasSavedState" | "updatedAt"
+  > | null,
+) => {
+  if (!summary) {
+    return "기록 없음";
+  }
+  if (summary.runtimeState === "error") {
+    return "저장 오류";
+  }
+  if (summary.hasUnsavedChanges || summary.runtimeState === "dirty") {
+    return "변경됨";
+  }
+  if (summary.hasSavedState && summary.updatedAt) {
+    return `${formatTeacherPresentationSavedAt(summary.updatedAt)} 저장`;
+  }
+  if (summary.hasSavedState) {
+    return "저장됨";
+  }
+  return "기록 없음";
+};
+
 export const getTeacherPresentationSelectorSummaryText = (
   summary?: TeacherPresentationClassSummary | null,
 ) => {
@@ -576,4 +599,28 @@ export const getTeacherPresentationClassSummaryText = (
     ? `${summary.currentPage}페이지`
     : "페이지 기록 없음";
   return `마지막 저장 ${savedAt} · ${pageText}`;
+};
+
+export const getTeacherPresentationClassOptionStatusText = (
+  summary?: Pick<
+    TeacherPresentationClassSummary,
+    "runtimeState" | "hasUnsavedChanges" | "updatedAt" | "lastUsedAt" | "hasSavedState"
+  > | null,
+) => {
+  if (!summary) {
+    return "기록 없음";
+  }
+  if (summary.runtimeState === "error") {
+    return "저장 안 됨";
+  }
+  if (summary.hasUnsavedChanges || summary.runtimeState === "dirty") {
+    return "변경됨";
+  }
+  if (!summary.hasSavedState) {
+    return "기록 없음";
+  }
+  const savedAt = formatTeacherPresentationSavedAt(
+    summary.updatedAt || summary.lastUsedAt || null,
+  );
+  return savedAt ? `${savedAt} 저장` : "기록 없음";
 };

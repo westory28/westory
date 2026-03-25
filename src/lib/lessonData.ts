@@ -1,8 +1,10 @@
 import {
   normalizeWorksheetBlanks,
+  normalizeWorksheetFootnoteAnchors,
   normalizeWorksheetPageImages,
   normalizeWorksheetTextRegions,
   type LessonWorksheetBlank,
+  type LessonWorksheetFootnoteAnchor,
   type LessonWorksheetPageImage,
   type LessonWorksheetTextRegion,
 } from "./lessonWorksheet";
@@ -13,6 +15,11 @@ import {
 } from "./lessonPdfExtraction";
 
 export type LessonFootnotePlacement = "inline-bottom" | "reference-panel";
+export type LessonFootnoteContentType =
+  | "text"
+  | "image"
+  | "sourceArchiveImage"
+  | "youtube";
 export const LESSON_FOOTNOTE_TOKEN_REGEX = /\[fn:([a-zA-Z0-9._-]+)\]/g;
 
 export interface LessonFootnote {
@@ -23,6 +30,12 @@ export interface LessonFootnote {
   bodyHtml?: string;
   imageUrl?: string;
   imageStoragePath?: string;
+  contentType?: LessonFootnoteContentType;
+  youtubeUrl?: string;
+  sourceArchiveAssetId?: string;
+  sourceArchiveImagePath?: string;
+  sourceArchiveThumbPath?: string;
+  sourceArchiveTitle?: string;
   placement?: LessonFootnotePlacement;
   order: number;
 }
@@ -39,6 +52,7 @@ export interface LessonData {
   worksheetPageImages?: LessonWorksheetPageImage[];
   worksheetTextRegions?: LessonWorksheetTextRegion[];
   worksheetBlanks?: LessonWorksheetBlank[];
+  worksheetFootnoteAnchors?: LessonWorksheetFootnoteAnchor[];
   pdfProcessing?: LessonPdfProcessingMeta;
   footnotes?: LessonFootnote[];
   updatedAt?: unknown;
@@ -55,6 +69,7 @@ export interface NormalizedLessonData extends LessonData {
   worksheetPageImages: LessonWorksheetPageImage[];
   worksheetTextRegions: LessonWorksheetTextRegion[];
   worksheetBlanks: LessonWorksheetBlank[];
+  worksheetFootnoteAnchors: LessonWorksheetFootnoteAnchor[];
   pdfProcessing: LessonPdfProcessingMeta;
   footnotes: LessonFootnote[];
 }
@@ -68,6 +83,7 @@ export interface LessonContentSections {
     pageImages: LessonWorksheetPageImage[];
     textRegions: LessonWorksheetTextRegion[];
     blanks: LessonWorksheetBlank[];
+    footnoteAnchors: LessonWorksheetFootnoteAnchor[];
   };
 }
 
@@ -131,6 +147,18 @@ export const createLessonFootnoteDraft = (
     bodyHtml: String(partial.bodyHtml || "").trim(),
     imageUrl: String(partial.imageUrl || "").trim(),
     imageStoragePath: String(partial.imageStoragePath || "").trim(),
+    contentType:
+      partial.contentType === "image" ||
+      partial.contentType === "sourceArchiveImage" ||
+      partial.contentType === "youtube" ||
+      partial.contentType === "text"
+        ? partial.contentType
+        : undefined,
+    youtubeUrl: String(partial.youtubeUrl || "").trim(),
+    sourceArchiveAssetId: String(partial.sourceArchiveAssetId || "").trim(),
+    sourceArchiveImagePath: String(partial.sourceArchiveImagePath || "").trim(),
+    sourceArchiveThumbPath: String(partial.sourceArchiveThumbPath || "").trim(),
+    sourceArchiveTitle: String(partial.sourceArchiveTitle || "").trim(),
     placement:
       partial.placement === "reference-panel"
         ? "reference-panel"
@@ -164,6 +192,18 @@ export const sanitizeLessonFootnote = (
     bodyHtml: String(footnote.bodyHtml || "").trim(),
     imageUrl: String(footnote.imageUrl || "").trim(),
     imageStoragePath: String(footnote.imageStoragePath || "").trim(),
+    contentType:
+      footnote.contentType === "image" ||
+      footnote.contentType === "sourceArchiveImage" ||
+      footnote.contentType === "youtube" ||
+      footnote.contentType === "text"
+        ? footnote.contentType
+        : undefined,
+    youtubeUrl: String(footnote.youtubeUrl || "").trim(),
+    sourceArchiveAssetId: String(footnote.sourceArchiveAssetId || "").trim(),
+    sourceArchiveImagePath: String(footnote.sourceArchiveImagePath || "").trim(),
+    sourceArchiveThumbPath: String(footnote.sourceArchiveThumbPath || "").trim(),
+    sourceArchiveTitle: String(footnote.sourceArchiveTitle || "").trim(),
     placement:
       footnote.placement === "reference-panel"
         ? "reference-panel"
@@ -197,6 +237,12 @@ const normalizeLessonFootnotes = (raw: unknown): LessonFootnote[] => {
         bodyHtml: source.bodyHtml as string,
         imageUrl: source.imageUrl as string,
         imageStoragePath: source.imageStoragePath as string,
+        contentType: source.contentType as LessonFootnoteContentType,
+        youtubeUrl: source.youtubeUrl as string,
+        sourceArchiveAssetId: source.sourceArchiveAssetId as string,
+        sourceArchiveImagePath: source.sourceArchiveImagePath as string,
+        sourceArchiveThumbPath: source.sourceArchiveThumbPath as string,
+        sourceArchiveTitle: source.sourceArchiveTitle as string,
         placement: source.placement as LessonFootnotePlacement,
         order: Number(source.order) || index,
       },
@@ -331,6 +377,9 @@ export const normalizeLessonData = (
     worksheetBlanks: normalizeWorksheetBlanks(
       source.worksheetBlanks ?? fallback.worksheetBlanks,
     ),
+    worksheetFootnoteAnchors: normalizeWorksheetFootnoteAnchors(
+      source.worksheetFootnoteAnchors ?? fallback.worksheetFootnoteAnchors,
+    ),
     pdfProcessing: normalizeLessonPdfProcessingMeta(source.pdfProcessing, {
       ...(fallback.pdfProcessing || createEmptyLessonPdfProcessingMeta()),
       pdfName: String(source.pdfName || fallback.pdfName || "").trim(),
@@ -356,6 +405,83 @@ export const getLessonContentSections = (
       pageImages: normalized.worksheetPageImages,
       textRegions: normalized.worksheetTextRegions,
       blanks: normalized.worksheetBlanks,
+      footnoteAnchors: normalized.worksheetFootnoteAnchors,
     },
   };
+};
+
+export const getLessonFootnoteDisplayTitle = (footnote: LessonFootnote) =>
+  String(
+    footnote.title ||
+      footnote.label ||
+      footnote.sourceArchiveTitle ||
+      footnote.anchorKey,
+  ).trim();
+
+export const getLessonFootnotePrimaryContentType = (
+  footnote: LessonFootnote,
+): LessonFootnoteContentType => {
+  if (
+    footnote.contentType === "text" ||
+    footnote.contentType === "image" ||
+    footnote.contentType === "sourceArchiveImage" ||
+    footnote.contentType === "youtube"
+  ) {
+    return footnote.contentType;
+  }
+  if (String(footnote.youtubeUrl || "").trim()) return "youtube";
+  if (String(footnote.sourceArchiveImagePath || "").trim()) {
+    return "sourceArchiveImage";
+  }
+  if (String(footnote.imageUrl || "").trim()) return "image";
+  return "text";
+};
+
+export const getLessonFootnoteContentTypes = (
+  footnote: LessonFootnote,
+): LessonFootnoteContentType[] => {
+  const primaryType = getLessonFootnotePrimaryContentType(footnote);
+  const types: LessonFootnoteContentType[] = [primaryType];
+  if (primaryType !== "text" && String(footnote.bodyHtml || "").trim()) {
+    types.push("text");
+  }
+  return types;
+};
+
+const LESSON_FOOTNOTE_YOUTUBE_HOSTS = new Set([
+  "youtube.com",
+  "www.youtube.com",
+  "m.youtube.com",
+  "youtu.be",
+  "www.youtu.be",
+  "youtube-nocookie.com",
+  "www.youtube-nocookie.com",
+]);
+
+export const getLessonFootnoteYouTubeEmbedUrl = (value?: string | null) => {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+
+  try {
+    const url = new URL(raw);
+    const host = url.hostname.toLowerCase();
+    if (!LESSON_FOOTNOTE_YOUTUBE_HOSTS.has(host)) {
+      return null;
+    }
+
+    let videoId = "";
+    if (host.includes("youtu.be")) {
+      videoId = url.pathname.split("/").filter(Boolean)[0] || "";
+    } else if (url.pathname.startsWith("/embed/")) {
+      videoId = url.pathname.split("/").filter(Boolean)[1] || "";
+    } else {
+      videoId = url.searchParams.get("v") || "";
+    }
+
+    return /^[A-Za-z0-9_-]{11}$/.test(videoId)
+      ? `https://www.youtube.com/embed/${videoId}`
+      : null;
+  } catch {
+    return null;
+  }
 };
