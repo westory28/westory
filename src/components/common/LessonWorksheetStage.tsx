@@ -633,9 +633,9 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   const [redoStack, setRedoStack] = useState<AnnotationSnapshot[]>([]);
   const touchGestureRef = useRef<TouchGestureState | null>(null);
   const activeTouchPointerIdsRef = useRef<Set<number>>(new Set());
-  const pointerCaptureTargetsRef = useRef<
-    Map<number, HTMLDivElement | null>
-  >(new Map());
+  const pointerCaptureTargetsRef = useRef<Map<number, HTMLDivElement | null>>(
+    new Map(),
+  );
   const panRef = useRef<PanState | null>(null);
   const eraserSessionRef = useRef<EraserSessionState | null>(null);
   const viewportZoomFrameRef = useRef<number | null>(null);
@@ -768,7 +768,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   }, [annotationTool]);
 
   useEffect(() => {
-    if (annotationPersistenceKeyRef.current === annotationPersistenceKey) return;
+    if (annotationPersistenceKeyRef.current === annotationPersistenceKey)
+      return;
     annotationPersistenceKeyRef.current = annotationPersistenceKey;
     const nextState = annotationState || EMPTY_ANNOTATION_STATE;
     const nextKey = getAnnotationStateKey(nextState);
@@ -1057,7 +1058,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     },
   ) => {
     const clampedZoom = clampZoom(nextZoom);
-    const page = options?.page ?? activeTeacherPage ?? activeStudentPage ?? null;
+    const page =
+      options?.page ?? activeTeacherPage ?? activeStudentPage ?? null;
     if (page == null) {
       setStudentZoom(clampedZoom);
       return;
@@ -1268,8 +1270,16 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
       )
         return;
       const point = resolveRatioPoint(page, event.clientX, event.clientY);
-      if (!point) return;
+      const pageImage = pageImages.find((item) => item.page === page);
+      if (!point || !pageImage) return;
       event.preventDefault();
+      if (teacherTool === "footnote") {
+        onCreateFootnoteAnchorFromSelection?.(
+          page,
+          getDefaultFootnoteAnchorRect(point, pageImage),
+        );
+        return;
+      }
       setStagePointerCapture(event.currentTarget, event.pointerId);
       setDraftRect({
         page,
@@ -1810,7 +1820,11 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() =>
                       applyViewportZoom(studentZoom + 0.1, {
-                        page: pageImages[0]?.page ?? activeTeacherPage ?? activeStudentPage ?? undefined,
+                        page:
+                          pageImages[0]?.page ??
+                          activeTeacherPage ??
+                          activeStudentPage ??
+                          undefined,
                       })
                     }
                     className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 transition hover:bg-slate-50"
@@ -1824,7 +1838,11 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={(event) => {
                       applyViewportZoom(1, {
-                        page: pageImages[0]?.page ?? activeTeacherPage ?? activeStudentPage ?? undefined,
+                        page:
+                          pageImages[0]?.page ??
+                          activeTeacherPage ??
+                          activeStudentPage ??
+                          undefined,
                       });
                       releaseToolbarFocus(event.currentTarget);
                     }}
@@ -1837,7 +1855,11 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() =>
                       applyViewportZoom(studentZoom - 0.1, {
-                        page: pageImages[0]?.page ?? activeTeacherPage ?? activeStudentPage ?? undefined,
+                        page:
+                          pageImages[0]?.page ??
+                          activeTeacherPage ??
+                          activeStudentPage ??
+                          undefined,
                       })
                     }
                     className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 transition hover:bg-slate-50"
@@ -1948,7 +1970,11 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() =>
                       applyViewportZoom(studentZoom - 0.1, {
-                        page: activeTeacherPage ?? activeStudentPage ?? pageImages[0]?.page ?? undefined,
+                        page:
+                          activeTeacherPage ??
+                          activeStudentPage ??
+                          pageImages[0]?.page ??
+                          undefined,
                       })
                     }
                     className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 transition hover:bg-slate-50"
@@ -1962,7 +1988,11 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={(event) => {
                       applyViewportZoom(1, {
-                        page: activeTeacherPage ?? activeStudentPage ?? pageImages[0]?.page ?? undefined,
+                        page:
+                          activeTeacherPage ??
+                          activeStudentPage ??
+                          pageImages[0]?.page ??
+                          undefined,
                       });
                       releaseToolbarFocus(event.currentTarget);
                     }}
@@ -1975,7 +2005,11 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() =>
                       applyViewportZoom(studentZoom + 0.1, {
-                        page: activeTeacherPage ?? activeStudentPage ?? pageImages[0]?.page ?? undefined,
+                        page:
+                          activeTeacherPage ??
+                          activeStudentPage ??
+                          pageImages[0]?.page ??
+                          undefined,
                       })
                     }
                     className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 transition hover:bg-slate-50"
@@ -2217,17 +2251,18 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     : undefined
                 }
                 onWheel={(event) => {
-                   if (!isViewportInteractive) return;
-                   event.preventDefault();
-                   const delta = event.deltaY < 0 ? 0.08 : -0.08;
-                   applyViewportZoom(studentZoom + delta, {
-                     page: pageImage.page,
-                     anchorClientX: event.clientX,
-                     anchorClientY: event.clientY,
-                   });
-                 }}
+                  if (!isViewportInteractive) return;
+                  event.preventDefault();
+                  const delta = event.deltaY < 0 ? 0.08 : -0.08;
+                  applyViewportZoom(studentZoom + delta, {
+                    page: pageImage.page,
+                    anchorClientX: event.clientX,
+                    anchorClientY: event.clientY,
+                  });
+                }}
                 onTouchStart={(event) => {
-                  if (!isViewportInteractive || event.touches.length < 2) return;
+                  if (!isViewportInteractive || event.touches.length < 2)
+                    return;
                   event.preventDefault();
                   const distance = getTouchDistance(event.touches);
                   const center = getTouchCenter(event.touches);
@@ -2307,20 +2342,20 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                         : ""
                   }`}
                   style={{
-                     cursor: stageCursor,
-                     touchAction: isViewportInteractive ? "none" : undefined,
-                     width: isViewportInteractive
-                       ? `${studentZoom * 100}%`
-                       : "100%",
-                     minWidth: isViewportInteractive
-                       ? `${studentZoom * 100}%`
-                       : "100%",
-                     maxWidth: isViewportInteractive ? "none" : "100%",
-                     margin:
-                       isViewportInteractive && studentZoom <= 1
-                         ? "0 auto"
-                         : undefined,
-                   }}
+                    cursor: stageCursor,
+                    touchAction: isViewportInteractive ? "none" : undefined,
+                    width: isViewportInteractive
+                      ? `${studentZoom * 100}%`
+                      : "100%",
+                    minWidth: isViewportInteractive
+                      ? `${studentZoom * 100}%`
+                      : "100%",
+                    maxWidth: isViewportInteractive ? "none" : "100%",
+                    margin:
+                      isViewportInteractive && studentZoom <= 1
+                        ? "0 auto"
+                        : undefined,
+                  }}
                   onDragStart={(event) => event.preventDefault()}
                   onPointerDown={(event) =>
                     handlePointerDown(pageImage.page, event)
@@ -2616,22 +2651,24 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                       footnoteTitles[anchor.footnoteId] || "각주";
                     const isSelectedAnchor =
                       selectedFootnoteAnchorId === anchor.id;
+                    const resolvedAnchorTitle =
+                      footnoteTitles[anchor.footnoteId] || "각주";
+                    const anchorCenterLeft =
+                      anchor.leftRatio + anchor.widthRatio / 2;
+                    const anchorCenterTop =
+                      anchor.topRatio + anchor.heightRatio / 2;
 
                     return (
                       <React.Fragment key={anchor.id}>
-                        <div
-                          className={`pointer-events-none absolute rounded-2xl border ${
-                            isSelectedAnchor
-                              ? "z-[25] border-blue-400 bg-blue-100/25"
-                              : "z-[21] border-blue-300/60 bg-blue-100/14"
-                          }`}
-                          style={{
-                            left: toPercent(anchor.leftRatio),
-                            top: toPercent(anchor.topRatio),
-                            width: toPercent(anchor.widthRatio),
-                            height: toPercent(anchor.heightRatio),
-                          }}
-                        />
+                        {isSelectedAnchor && (
+                          <div
+                            className="pointer-events-none absolute z-[25] h-12 w-12 rounded-full border-2 border-blue-400 bg-blue-100/40 shadow-[0_0_0_6px_rgba(59,130,246,0.12)]"
+                            style={{
+                              left: `calc(${toPercent(anchorCenterLeft)} - 1.5rem)`,
+                              top: `calc(${toPercent(anchorCenterTop)} - 1.5rem)`,
+                            }}
+                          />
+                        )}
                         <button
                           type="button"
                           data-footnote-anchor="true"
@@ -2643,6 +2680,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                             event.stopPropagation();
                             if (isTeacherEditMode) {
                               onSelectFootnoteAnchor?.(anchor.id);
+                              onActivateFootnoteAnchor?.(anchor.id);
                               return;
                             }
                             onActivateFootnoteAnchor?.(anchor.id);
@@ -2659,11 +2697,11 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                               : "border-white/80 bg-white text-blue-700 hover:-translate-y-0.5 hover:bg-blue-50"
                           }`}
                           style={{
-                            left: `calc(${toPercent(anchor.leftRatio + anchor.widthRatio / 2)} - 1.25rem)`,
-                            top: `calc(${toPercent(anchor.topRatio + anchor.heightRatio / 2)} - 1.25rem)`,
+                            left: `calc(${toPercent(anchorCenterLeft)} - 1.25rem)`,
+                            top: `calc(${toPercent(anchorCenterTop)} - 1.25rem)`,
                           }}
                           aria-label={`${anchorTitle} 열기`}
-                          title={anchorTitle}
+                          title={resolvedAnchorTitle}
                         >
                           <i className="fas fa-comment-dots"></i>
                         </button>

@@ -10,7 +10,6 @@ import {
 import type {
   LessonData,
   LessonFootnote,
-  LessonFootnotePlacement,
   LessonFootnoteUsage,
 } from "../../../lib/lessonData";
 import { getLessonFootnoteDisplayTitle } from "../../../lib/lessonData";
@@ -66,16 +65,23 @@ type LessonBodyEditorProps = {
   footnoteUsageMap?: Map<string, LessonFootnoteUsage>;
   footnoteAnchorCountMap?: Map<string, number>;
   selectedFootnoteId?: string | null;
+  footnoteEditorSession?: {
+    mode: "create" | "edit";
+    draft: LessonFootnote;
+    pendingAnchorPlacement?: {
+      page: number;
+    } | null;
+    insertIntoBody?: boolean;
+  } | null;
   onBodySelectionChange?: (selection: { start: number; end: number }) => void;
   onAddFootnote?: () => void;
   onAddFootnoteAndInsert?: () => void;
-  onUpdateFootnote?: (
-    footnoteId: string,
-    patch: Partial<LessonFootnote>,
-  ) => void;
+  onOpenFootnoteEditor?: (footnoteId: string) => void;
+  onFootnoteDraftChange?: (patch: Partial<LessonFootnote>) => void;
+  onSaveFootnoteEditor?: () => void;
+  onCloseFootnoteEditor?: () => void;
   onMoveFootnote?: (footnoteId: string, direction: -1 | 1) => void;
   onDeleteFootnote?: (footnoteId: string) => void;
-  onCopyFootnoteToken?: (anchorKey: string) => void;
   onInsertFootnoteToken?: (anchorKey: string) => void;
   onSelectFootnoteImage?: (footnoteId: string, file: File | null) => void;
   onRemoveFootnoteImage?: (footnoteId: string) => void;
@@ -149,11 +155,6 @@ type LessonPreviewLauncherProps = {
   onOpenTeacherPreview: () => void;
 };
 
-const FOOTNOTE_PLACEMENTS: LessonFootnotePlacement[] = [
-  "inline-bottom",
-  "reference-panel",
-];
-
 function saveBadgeClass(tone: SaveStateTone = "saved") {
   if (tone === "saving")
     return "rounded-full bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700";
@@ -169,22 +170,30 @@ function usageBadgeClass(usage?: LessonFootnoteUsage) {
 }
 
 function usageBadgeLabel(usage?: LessonFootnoteUsage) {
-  if (!usage || usage.count === 0) return "아직 연결 안 됨";
-  if (usage.count === 1) return "본문 연결됨";
-  return `본문 ${usage.count}곳 연결`;
+  if (!usage || usage.count === 0) return "본문 연결 없음";
+  if (usage.count === 1) return "본문에 표시됨";
+  return `본문 ${usage.count}곳에 표시됨`;
 }
 
 function footnoteAnchorBadgeLabel(count = 0) {
-  if (count <= 0) return "PDF 앵커 없음";
-  if (count === 1) return "PDF 앵커 1개";
-  return `PDF 앵커 ${count}개`;
+  if (count <= 0) return "PDF 위치 미지정";
+  if (count === 1) return "PDF에 표시됨";
+  return `PDF ${count}곳에 표시`;
 }
+
+const stripHtml = (value?: string) =>
+  String(value || "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const getFootnoteDisplayName = (footnote: LessonFootnote, index?: number) =>
+  getLessonFootnoteDisplayTitle(footnote) ||
+  (typeof index === "number" ? `각주 ${index + 1}` : "각주");
 
 function blankBadgeLabel(blank: LessonWorksheetBlank) {
   return (
-    blank.answer?.trim() ||
-    blank.prompt?.trim() ||
-    `p.${blank.page + 1} 빈칸`
+    blank.answer?.trim() || blank.prompt?.trim() || `p.${blank.page + 1} 빈칸`
   );
 }
 
@@ -357,303 +366,366 @@ export function LessonMetaForm({
   );
 }
 
-function FootnoteCard({
+function FootnoteSummaryCard({
   footnote,
   index,
-  total,
   usage,
   pdfAnchorCount = 0,
   selected = false,
-  onUpdateFootnote,
+  onOpen,
+}: {
+  footnote: LessonFootnote;
+  index: number;
+  usage?: LessonFootnoteUsage;
+  pdfAnchorCount?: number;
+  selected?: boolean;
+  onOpen?: () => void;
+}) {
+  const previewText = stripHtml(footnote.bodyHtml);
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className={`w-full rounded-3xl border bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md ${
+        selected ? "border-blue-300 ring-2 ring-blue-100" : "border-slate-200"
+      }`}
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <strong className="min-w-0 flex-1 truncate text-sm font-bold text-slate-900">
+          {getFootnoteDisplayName(footnote, index)}
+        </strong>
+        {selected && (
+          <span className="rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-semibold text-blue-700">
+            현재 편집 중
+          </span>
+        )}
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <span className={usageBadgeClass(usage)}>{usageBadgeLabel(usage)}</span>
+        <span
+          className={
+            pdfAnchorCount > 0
+              ? "rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700"
+              : "rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500"
+          }
+        >
+          {footnoteAnchorBadgeLabel(pdfAnchorCount)}
+        </span>
+      </div>
+      <div className="mt-3 text-xs leading-5 text-slate-500">
+        {previewText || "제목, 설명, 이미지, 유튜브를 간단히 채울 수 있습니다."}
+      </div>
+    </button>
+  );
+}
+
+function FootnoteEditorDialog({
+  session,
+  footnotes,
+  footnoteUsageMap,
+  footnoteAnchorCountMap,
+  onFootnoteDraftChange,
   onMoveFootnote,
   onDeleteFootnote,
-  onCopyFootnoteToken,
+  onSaveFootnoteEditor,
+  onCloseFootnoteEditor,
   onSelectFootnoteImage,
   onRemoveFootnoteImage,
   onOpenSourceArchivePicker,
   onClearSourceArchiveImage,
   getFootnotePreviewUrl,
 }: {
-  footnote: LessonFootnote;
-  index: number;
-  total: number;
-  usage?: LessonFootnoteUsage;
-  pdfAnchorCount?: number;
-  selected?: boolean;
-  onUpdateFootnote?: (
-    footnoteId: string,
-    patch: Partial<LessonFootnote>,
-  ) => void;
+  session: NonNullable<LessonBodyEditorProps["footnoteEditorSession"]>;
+  footnotes: LessonFootnote[];
+  footnoteUsageMap: Map<string, LessonFootnoteUsage>;
+  footnoteAnchorCountMap: Map<string, number>;
+  onFootnoteDraftChange?: (patch: Partial<LessonFootnote>) => void;
   onMoveFootnote?: (footnoteId: string, direction: -1 | 1) => void;
   onDeleteFootnote?: (footnoteId: string) => void;
-  onCopyFootnoteToken?: (anchorKey: string) => void;
+  onSaveFootnoteEditor?: () => void;
+  onCloseFootnoteEditor?: () => void;
   onSelectFootnoteImage?: (footnoteId: string, file: File | null) => void;
   onRemoveFootnoteImage?: (footnoteId: string) => void;
   onOpenSourceArchivePicker?: (footnoteId: string) => void;
   onClearSourceArchiveImage?: (footnoteId: string) => void;
   getFootnotePreviewUrl?: (footnote: LessonFootnote) => string;
 }) {
+  const footnote = session.draft;
+  const usage = footnoteUsageMap.get(footnote.anchorKey);
+  const pdfAnchorCount = footnoteAnchorCountMap.get(footnote.id) ?? 0;
   const previewUrl =
     getFootnotePreviewUrl?.(footnote) || footnote.imageUrl || "";
+  const currentIndex = footnotes.findIndex((item) => item.id === footnote.id);
+  const locationMessage = session.pendingAnchorPlacement
+    ? `PDF p.${session.pendingAnchorPlacement.page} 위치를 선택했습니다. 저장하면 버튼이 생깁니다.`
+    : footnoteAnchorBadgeLabel(pdfAnchorCount);
 
   return (
-    <div
-      className={`rounded-3xl border bg-white p-5 shadow-sm ${
-        selected
-          ? "border-blue-300 ring-2 ring-blue-100"
-          : "border-slate-200"
-      }`}
-    >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <strong className="text-base text-slate-900">
-              {footnote.title?.trim() || `참고자료 ${index + 1}`}
-            </strong>
-            <span className={usageBadgeClass(usage)}>
-              {usageBadgeLabel(usage)}
-            </span>
-            <span
-              className={
-                pdfAnchorCount > 0
-                  ? "rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700"
-                  : "rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500"
-              }
-            >
-              {footnoteAnchorBadgeLabel(pdfAnchorCount)}
-            </span>
-            {selected && (
-              <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-700">
-                현재 선택
-              </span>
-            )}
-          </div>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <span className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
-              연결 코드 [fn:{footnote.anchorKey}]
-            </span>
+    <div className="fixed inset-0 z-[80] bg-slate-950/45 backdrop-blur-sm">
+      <div className="flex h-full items-end justify-center p-3 md:items-center md:p-6">
+        <div className="w-full max-w-2xl overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_28px_80px_rgba(15,23,42,0.2)]">
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
+            <div>
+              <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
+                {session.mode === "create" ? "새 각주" : "각주 편집"}
+              </div>
+              <h4 className="mt-1 text-lg font-bold text-slate-900">
+                {session.mode === "create"
+                  ? "PDF 팝업 내용 입력"
+                  : getFootnoteDisplayName(footnote)}
+              </h4>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <span
+                  className={
+                    pdfAnchorCount > 0 || session.pendingAnchorPlacement
+                      ? "rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700"
+                      : "rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500"
+                  }
+                >
+                  {locationMessage}
+                </span>
+                {session.insertIntoBody && (
+                  <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+                    저장하면 본문에도 넣기
+                  </span>
+                )}
+                {usage && (
+                  <span className={usageBadgeClass(usage)}>
+                    {usageBadgeLabel(usage)}
+                  </span>
+                )}
+              </div>
+            </div>
             <button
               type="button"
-              onClick={() => onCopyFootnoteToken?.(footnote.anchorKey)}
-              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+              onClick={onCloseFootnoteEditor}
+              className="inline-flex h-10 items-center justify-center rounded-full border border-slate-200 px-4 text-sm font-semibold text-slate-600 hover:bg-slate-50"
             >
-              <i className="fas fa-copy text-[11px]"></i>
-              코드 복사
+              닫기
             </button>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => onMoveFootnote?.(footnote.id, -1)}
-            disabled={index === 0}
-            className="rounded-lg border border-slate-200 p-2 text-slate-500 disabled:opacity-40"
-          >
-            <i className="fas fa-arrow-up text-xs"></i>
-          </button>
-          <button
-            type="button"
-            onClick={() => onMoveFootnote?.(footnote.id, 1)}
-            disabled={index === total - 1}
-            className="rounded-lg border border-slate-200 p-2 text-slate-500 disabled:opacity-40"
-          >
-            <i className="fas fa-arrow-down text-xs"></i>
-          </button>
-          <button
-            type="button"
-            onClick={() => onDeleteFootnote?.(footnote.id)}
-            className="rounded-lg border border-rose-200 p-2 text-rose-500 hover:bg-rose-50"
-          >
-            <i className="fas fa-trash text-xs"></i>
-          </button>
-        </div>
-      </div>
-      <div className="mt-4 grid gap-4 md:grid-cols-2">
-        <label className="block">
-          <span className="mb-2 block text-sm font-semibold text-slate-700">
-            연결 코드
-          </span>
-          <input
-            value={footnote.anchorKey}
-            onChange={(event) =>
-              onUpdateFootnote?.(footnote.id, { anchorKey: event.target.value })
-            }
-            className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
-          />
-        </label>
-        <label className="block">
-          <span className="mb-2 block text-sm font-semibold text-slate-700">
-            버튼 이름
-          </span>
-          <input
-            value={footnote.label ?? ""}
-            onChange={(event) =>
-              onUpdateFootnote?.(footnote.id, { label: event.target.value })
-            }
-            className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
-          />
-        </label>
-        <label className="block">
-          <span className="mb-2 block text-sm font-semibold text-slate-700">
-            참고자료 제목
-          </span>
-          <input
-            value={footnote.title ?? ""}
-            onChange={(event) =>
-              onUpdateFootnote?.(footnote.id, { title: event.target.value })
-            }
-            className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
-          />
-        </label>
-        <label className="block">
-          <span className="mb-2 block text-sm font-semibold text-slate-700">
-            표시 위치
-          </span>
-          <select
-            value={footnote.placement}
-            onChange={(event) =>
-              onUpdateFootnote?.(footnote.id, {
-                placement: event.target.value as LessonFootnotePlacement,
-              })
-            }
-            className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
-          >
-            {FOOTNOTE_PLACEMENTS.map((placement) => (
-              <option key={placement} value={placement}>
-                {placement === "inline-bottom" ? "본문 아래" : "참고자료 패널"}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-      <label className="mt-4 block">
-        <span className="mb-2 block text-sm font-semibold text-slate-700">
-          각주 설명
-        </span>
-        <textarea
-          value={footnote.bodyHtml ?? ""}
-          onChange={(event) =>
-            onUpdateFootnote?.(footnote.id, { bodyHtml: event.target.value })
-          }
-          rows={5}
-          className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
-        />
-      </label>
-      <label className="mt-4 block">
-        <span className="mb-2 block text-sm font-semibold text-slate-700">
-          유튜브 링크
-        </span>
-        <input
-          value={footnote.youtubeUrl ?? ""}
-          onChange={(event) =>
-            onUpdateFootnote?.(footnote.id, { youtubeUrl: event.target.value })
-          }
-          placeholder="https://www.youtube.com/watch?v=..."
-          className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
-        />
-      </label>
-      <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="text-sm font-semibold text-slate-700">
-            업로드 이미지
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">
-              <i className="fas fa-image text-[11px]"></i>
-              이미지 선택
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(event) =>
-                  onSelectFootnoteImage?.(
-                    footnote.id,
-                    event.target.files?.[0] ?? null,
-                  )
-                }
-              />
-            </label>
-            {(previewUrl || footnote.imageStoragePath) && (
-              <button
-                type="button"
-                onClick={() => onRemoveFootnoteImage?.(footnote.id)}
-                className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm font-semibold text-rose-600 hover:bg-rose-50"
-              >
-                <i className="fas fa-trash text-[11px]"></i>
-                이미지 제거
-              </button>
-            )}
-          </div>
-        </div>
-        {previewUrl ? (
-          <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white">
-            <img
-              src={previewUrl}
-              alt={footnote.title || footnote.label || "각주 이미지"}
-              className="max-h-72 w-full object-contain"
-            />
-          </div>
-        ) : (
-          <div className="mt-4 flex items-center gap-2 rounded-2xl bg-white px-4 py-4 text-sm text-slate-500">
-            <i className="fas fa-image text-sm"></i>
-            아직 연결된 이미지가 없습니다.
-          </div>
-        )}
-      </div>
-      <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="text-sm font-semibold text-slate-700">
-              사료창고 이미지
-            </div>
-            <p className="mt-1 text-xs text-slate-500">
-              기존 사료창고 자료를 각주 팝업에 연결할 수 있습니다.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => onOpenSourceArchivePicker?.(footnote.id)}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
-            >
-              <i className="fas fa-landmark text-[11px]"></i>
-              사료창고에서 선택
-            </button>
-            {footnote.sourceArchiveImagePath && (
-              <button
-                type="button"
-                onClick={() => onClearSourceArchiveImage?.(footnote.id)}
-                className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm font-semibold text-rose-600 hover:bg-rose-50"
-              >
-                <i className="fas fa-trash text-[11px]"></i>
-                사료창고 이미지 제거
-              </button>
-            )}
-          </div>
-        </div>
-        {footnote.sourceArchiveImagePath ? (
-          <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white">
-            <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
-              {footnote.sourceArchiveTitle || getLessonFootnoteDisplayTitle(footnote)}
-            </div>
-            <StorageImage
-              path={footnote.sourceArchiveImagePath}
-              alt={footnote.sourceArchiveTitle || footnote.title || footnote.label || "사료창고 이미지"}
-              className="max-h-72 w-full object-contain"
-              fallback={
-                <div className="flex items-center gap-2 px-4 py-4 text-sm text-slate-500">
-                  <i className="fas fa-image text-sm"></i>
-                  사료창고 이미지를 불러오지 못했습니다.
+
+          <div className="max-h-[calc(88vh-84px)] overflow-y-auto px-5 py-5">
+            <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_240px]">
+              <div className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="mb-1.5 block text-sm font-semibold text-slate-700">
+                      팝업 제목
+                    </span>
+                    <input
+                      value={footnote.title ?? ""}
+                      onChange={(event) =>
+                        onFootnoteDraftChange?.({ title: event.target.value })
+                      }
+                      placeholder="예: 독립신문 기사"
+                      className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1.5 block text-sm font-semibold text-slate-700">
+                      각주 버튼 이름
+                    </span>
+                    <input
+                      value={footnote.label ?? ""}
+                      onChange={(event) =>
+                        onFootnoteDraftChange?.({ label: event.target.value })
+                      }
+                      placeholder="예: 기사 보기"
+                      className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
+                    />
+                  </label>
                 </div>
-              }
-            />
+
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-semibold text-slate-700">
+                    팝업 내용
+                  </span>
+                  <textarea
+                    value={footnote.bodyHtml ?? ""}
+                    onChange={(event) =>
+                      onFootnoteDraftChange?.({ bodyHtml: event.target.value })
+                    }
+                    rows={4}
+                    placeholder="학생에게 보여 줄 설명이나 해설을 적어 주세요."
+                    className="w-full resize-none rounded-2xl border border-slate-200 px-3 py-2.5 text-sm leading-6 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
+                  />
+                </label>
+
+                <div className="grid gap-3">
+                  <label className="block">
+                    <span className="mb-1.5 block text-sm font-semibold text-slate-700">
+                      유튜브 링크
+                    </span>
+                    <input
+                      value={footnote.youtubeUrl ?? ""}
+                      onChange={(event) =>
+                        onFootnoteDraftChange?.({
+                          youtubeUrl: event.target.value,
+                        })
+                      }
+                      placeholder="https://www.youtube.com/watch?v=..."
+                      className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-sm font-semibold text-slate-800">
+                      업로드 이미지
+                    </div>
+                    {(previewUrl || footnote.imageStoragePath) && (
+                      <button
+                        type="button"
+                        onClick={() => onRemoveFootnoteImage?.(footnote.id)}
+                        className="text-xs font-semibold text-rose-600 hover:text-rose-700"
+                      >
+                        제거
+                      </button>
+                    )}
+                  </div>
+                  <label className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                    <i className="fas fa-image text-[11px]"></i>
+                    이미지 선택
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(event) =>
+                        onSelectFootnoteImage?.(
+                          footnote.id,
+                          event.target.files?.[0] ?? null,
+                        )
+                      }
+                    />
+                  </label>
+                  <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                    {previewUrl ? (
+                      <img
+                        src={previewUrl}
+                        alt={getFootnoteDisplayName(footnote)}
+                        className="h-32 w-full object-contain"
+                      />
+                    ) : (
+                      <div className="flex h-32 items-center justify-center px-4 text-center text-xs text-slate-500">
+                        선택한 이미지가 없으면 텍스트 내용만 표시됩니다.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-sm font-semibold text-slate-800">
+                      사료창고 이미지
+                    </div>
+                    {footnote.sourceArchiveImagePath && (
+                      <button
+                        type="button"
+                        onClick={() => onClearSourceArchiveImage?.(footnote.id)}
+                        className="text-xs font-semibold text-rose-600 hover:text-rose-700"
+                      >
+                        제거
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onOpenSourceArchivePicker?.(footnote.id)}
+                    className="mt-3 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    <i className="fas fa-landmark text-[11px]"></i>
+                    사료창고에서 선택
+                  </button>
+                  <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                    {footnote.sourceArchiveImagePath ? (
+                      <>
+                        <div className="border-b border-slate-100 px-3 py-2 text-xs font-semibold text-slate-600">
+                          {footnote.sourceArchiveTitle ||
+                            getFootnoteDisplayName(footnote)}
+                        </div>
+                        <StorageImage
+                          path={footnote.sourceArchiveImagePath}
+                          alt={
+                            footnote.sourceArchiveTitle ||
+                            getFootnoteDisplayName(footnote)
+                          }
+                          className="h-32 w-full object-contain"
+                          fallback={
+                            <div className="flex h-32 items-center justify-center px-4 text-center text-xs text-slate-500">
+                              사료 이미지를 불러오지 못했습니다.
+                            </div>
+                          }
+                        />
+                      </>
+                    ) : (
+                      <div className="flex h-32 items-center justify-center px-4 text-center text-xs text-slate-500">
+                        사료창고 이미지를 연결하면 팝업에 함께 보여 줄 수
+                        있습니다.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-        ) : (
-          <div className="mt-4 flex items-center gap-2 rounded-2xl bg-white px-4 py-4 text-sm text-slate-500">
-            <i className="fas fa-landmark text-sm"></i>
-            아직 연결된 사료창고 이미지가 없습니다.
+
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-5 py-4">
+            <div className="flex flex-wrap items-center gap-2">
+              {session.mode === "edit" && currentIndex >= 0 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onMoveFootnote?.(footnote.id, -1)}
+                    disabled={currentIndex === 0}
+                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+                  >
+                    <i className="fas fa-arrow-up text-[10px]"></i>
+                    위로
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onMoveFootnote?.(footnote.id, 1)}
+                    disabled={currentIndex === footnotes.length - 1}
+                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+                  >
+                    <i className="fas fa-arrow-down text-[10px]"></i>
+                    아래로
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onDeleteFootnote?.(footnote.id)}
+                    className="inline-flex items-center gap-2 rounded-full border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50"
+                  >
+                    <i className="fas fa-trash text-[10px]"></i>
+                    삭제
+                  </button>
+                </>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={onCloseFootnoteEditor}
+                className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={onSaveFootnoteEditor}
+                className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+              >
+                <i className="fas fa-check text-xs"></i>
+                {session.mode === "create" ? "추가하기" : "저장하기"}
+              </button>
+            </div>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
@@ -667,13 +739,16 @@ export function LessonBodyEditor({
   footnoteUsageMap = new Map<string, LessonFootnoteUsage>(),
   footnoteAnchorCountMap = new Map<string, number>(),
   selectedFootnoteId = null,
+  footnoteEditorSession = null,
   onBodySelectionChange,
   onAddFootnote,
   onAddFootnoteAndInsert,
-  onUpdateFootnote,
+  onOpenFootnoteEditor,
+  onFootnoteDraftChange,
+  onSaveFootnoteEditor,
+  onCloseFootnoteEditor,
   onMoveFootnote,
   onDeleteFootnote,
-  onCopyFootnoteToken,
   onInsertFootnoteToken,
   onSelectFootnoteImage,
   onRemoveFootnoteImage,
@@ -708,13 +783,13 @@ export function LessonBodyEditor({
     <section className="space-y-8">
       <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
-          본문 및 참고자료
+          본문과 각주
         </div>
         <h3 className="mt-2 text-xl font-bold text-slate-900">
-          본문과 PDF 각주 내용을 함께 관리합니다
+          본문과 각주 팝업 내용을 함께 관리합니다
         </h3>
         <p className="mt-2 text-sm text-slate-500">
-          기존 본문 내용은 그대로 유지되고, PDF 위 각주도 같은 참고자료 목록을
+          본문에 들어가는 각주 표시와 PDF 위 각주 버튼이 같은 팝업 내용을 함께
           사용합니다.
         </p>
       </div>
@@ -732,11 +807,11 @@ export function LessonBodyEditor({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="text-sm font-bold text-slate-900">
-              본문에 참고자료 연결
+              본문에 각주 표시 넣기
             </div>
             <p className="mt-1 text-sm text-slate-600">
-              아래 버튼으로 참고자료 연결 코드를 넣을 수 있습니다. 커서를 두면
-              그 위치에, 선택하지 않으면 본문 끝에 들어갑니다.
+              목록에서 `본문에 넣기`를 누르면 커서 위치에 각주 표시가 들어가고,
+              선택하지 않으면 본문 끝에 추가됩니다.
             </p>
           </div>
           <button
@@ -744,7 +819,8 @@ export function LessonBodyEditor({
             onClick={onAddFootnoteAndInsert}
             className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
           >
-            <i className="fas fa-magic text-xs"></i>참고자료 만들고 본문에 연결
+            <i className="fas fa-plus text-xs"></i>
+            본문용 각주 만들기
           </button>
         </div>
         {!!bodyInsertMessage && (
@@ -758,10 +834,10 @@ export function LessonBodyEditor({
           <div>
             <div className="flex items-center gap-2 text-base font-bold text-slate-900">
               <i className="fas fa-link text-sm"></i>
-              참고자료 목록
+              각주 목록
             </div>
             <p className="mt-1 text-sm text-slate-500">
-              등록된 참고자료 {footnotes.length}개 중 {connectedCount}개가 본문에
+              등록된 각주 {footnotes.length}개 중 {connectedCount}개가 본문에
               연결되어 있습니다.
             </p>
           </div>
@@ -771,58 +847,51 @@ export function LessonBodyEditor({
             className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
           >
             <i className="fas fa-plus text-xs"></i>
-            참고자료 추가
+            각주 추가
           </button>
         </div>
-        <div className="mt-5 space-y-4">
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {footnotes.length === 0 ? (
             <div className="flex items-center gap-3 rounded-2xl bg-white px-4 py-5 text-sm text-slate-500">
               <i className="fas fa-file-alt text-sm"></i>
-              아직 참고자료가 없습니다. 먼저 참고자료를 추가해 보세요.
+              아직 각주가 없습니다. 먼저 각주를 추가해 보세요.
             </div>
           ) : (
             footnotes.map((footnote, index) => (
               <div
                 key={footnote.id}
                 ref={
-                  selectedFootnoteId === footnote.id ? selectedCardRef : undefined
+                  selectedFootnoteId === footnote.id
+                    ? selectedCardRef
+                    : undefined
                 }
               >
-                <FootnoteCard
+                <FootnoteSummaryCard
                   footnote={footnote}
                   index={index}
-                  total={footnotes.length}
                   usage={footnoteUsageMap.get(footnote.anchorKey)}
-                  pdfAnchorCount={
-                    footnoteAnchorCountMap.get(footnote.id) ?? 0
-                  }
+                  pdfAnchorCount={footnoteAnchorCountMap.get(footnote.id) ?? 0}
                   selected={selectedFootnoteId === footnote.id}
-                  onUpdateFootnote={onUpdateFootnote}
-                  onMoveFootnote={onMoveFootnote}
-                  onDeleteFootnote={onDeleteFootnote}
-                  onCopyFootnoteToken={onCopyFootnoteToken}
-                  onSelectFootnoteImage={onSelectFootnoteImage}
-                  onRemoveFootnoteImage={onRemoveFootnoteImage}
-                  onOpenSourceArchivePicker={onOpenSourceArchivePicker}
-                  onClearSourceArchiveImage={onClearSourceArchiveImage}
-                  getFootnotePreviewUrl={getFootnotePreviewUrl}
+                  onOpen={() => onOpenFootnoteEditor?.(footnote.id)}
                 />
               </div>
             ))
           )}
         </div>
       </div>
+
       {!!footnotes.length && (
         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex items-center gap-2 text-base font-bold text-slate-900">
             <i className="fas fa-pen-nib text-sm"></i>
-            본문에 연결할 참고자료
+            본문에 넣을 각주
           </div>
           <p className="mt-1 text-sm text-slate-500">
-            참고자료를 누르면 본문에 연결 코드가 들어갑니다.
+            각주를 누르면 본문에 연결됩니다. 기술용 표기는 화면에 드러나지
+            않습니다.
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
-            {footnotes.map((footnote) => {
+            {footnotes.map((footnote, index) => {
               const usage = footnoteUsageMap.get(footnote.anchorKey);
               return (
                 <button
@@ -831,11 +900,7 @@ export function LessonBodyEditor({
                   onClick={() => onInsertFootnoteToken?.(footnote.anchorKey)}
                   className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
                 >
-                  <span>
-                    {footnote.title?.trim() ||
-                      footnote.label?.trim() ||
-                      `참고자료 ${footnote.anchorKey}`}
-                  </span>
+                  <span>{getFootnoteDisplayName(footnote, index)}</span>
                   <span
                     className={
                       usage && usage.count > 0
@@ -843,13 +908,34 @@ export function LessonBodyEditor({
                         : "rounded-full bg-slate-200 px-2 py-0.5 text-[11px] text-slate-500"
                     }
                   >
-                    {usage && usage.count > 0 ? "본문 연결됨" : "아직 연결 안 됨"}
+                    {usage && usage.count > 0
+                      ? "본문에 표시됨"
+                      : "본문 연결 없음"}
                   </span>
                 </button>
               );
             })}
           </div>
         </div>
+      )}
+
+      {footnoteEditorSession && (
+        <FootnoteEditorDialog
+          session={footnoteEditorSession}
+          footnotes={footnotes}
+          footnoteUsageMap={footnoteUsageMap}
+          footnoteAnchorCountMap={footnoteAnchorCountMap}
+          onFootnoteDraftChange={onFootnoteDraftChange}
+          onMoveFootnote={onMoveFootnote}
+          onDeleteFootnote={onDeleteFootnote}
+          onSaveFootnoteEditor={onSaveFootnoteEditor}
+          onCloseFootnoteEditor={onCloseFootnoteEditor}
+          onSelectFootnoteImage={onSelectFootnoteImage}
+          onRemoveFootnoteImage={onRemoveFootnoteImage}
+          onOpenSourceArchivePicker={onOpenSourceArchivePicker}
+          onClearSourceArchiveImage={onClearSourceArchiveImage}
+          getFootnotePreviewUrl={getFootnotePreviewUrl}
+        />
       )}
     </section>
   );
@@ -931,8 +1017,8 @@ export function LessonPdfSection({
             PDF 위에서 빈칸과 각주를 함께 편집합니다
           </h3>
           <p className="mt-2 text-sm text-slate-500">
-            PDF를 준비한 뒤 오른쪽 플로팅 아이콘으로 OCR 선택, 텍스트 박스,
-            각주 앵커를 바로 만들 수 있습니다.
+            PDF를 준비한 뒤 오른쪽 플로팅 아이콘으로 OCR 선택, 텍스트 박스, 각주
+            버튼 배치를 바로 진행할 수 있습니다.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -978,13 +1064,19 @@ export function LessonPdfSection({
           </span>
         )}
         <span>
-          오른쪽 플로팅 아이콘으로 제작 도구, 각주 추가, 키워드 목록을 확인할
-          수 있습니다.
+          오른쪽 플로팅 아이콘으로 제작 도구, 각주 추가, 키워드 목록을 확인할 수
+          있습니다.
         </span>
       </div>
       {!!pdfStatusHelpText && (
         <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
           {pdfStatusHelpText}
+        </div>
+      )}
+      {worksheetTool === "footnote" && !!worksheetPageImages.length && (
+        <div className="rounded-2xl border border-blue-100 bg-blue-50/80 px-4 py-3 text-sm text-blue-900">
+          원하는 위치를 한 번 눌러 각주 버튼을 찍어 주세요. 바로 작은 편집창이
+          열리고, 저장하면 PDF에 표시됩니다.
         </div>
       )}
       {draftBlank && (

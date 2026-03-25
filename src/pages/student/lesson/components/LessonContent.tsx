@@ -637,7 +637,9 @@ const LessonContent: React.FC<LessonContentProps> = ({
   };
 
   const openWorksheetFootnoteAnchor = (anchorId: string) => {
-    const anchor = worksheet.footnoteAnchors.find((item) => item.id === anchorId);
+    const anchor = worksheet.footnoteAnchors.find(
+      (item) => item.id === anchorId,
+    );
     if (!anchor) return;
     const footnote = footnoteByIdMap.get(anchor.footnoteId);
     if (!footnote) return;
@@ -704,14 +706,14 @@ const LessonContent: React.FC<LessonContentProps> = ({
           {!!worksheet.pageImages.length &&
             (fullscreenPreview ? (
               <LessonWorksheetStage
-              pageImages={worksheet.pageImages}
-              blanks={worksheet.blanks}
-              textRegions={worksheet.textRegions}
-              footnoteAnchors={worksheet.footnoteAnchors}
-              selectedFootnoteAnchorId={activeWorksheetFootnoteAnchorId}
-              footnoteTitles={Object.fromEntries(
-                footnotes.map((footnote) => [
-                  footnote.id,
+                pageImages={worksheet.pageImages}
+                blanks={worksheet.blanks}
+                textRegions={worksheet.textRegions}
+                footnoteAnchors={worksheet.footnoteAnchors}
+                selectedFootnoteAnchorId={activeWorksheetFootnoteAnchorId}
+                footnoteTitles={Object.fromEntries(
+                  footnotes.map((footnote) => [
+                    footnote.id,
                     footnote.title || footnote.label || "각주",
                   ]),
                 )}
@@ -720,7 +722,9 @@ const LessonContent: React.FC<LessonContentProps> = ({
                 studentAnswers={studentAnswers}
                 onStudentAnswerChange={handleWorksheetAnswerChange}
                 annotationUiMode={annotationUiMode}
-                annotationPersistenceKey={unitId || lesson.title || "lesson-preview"}
+                annotationPersistenceKey={
+                  unitId || lesson.title || "lesson-preview"
+                }
                 annotationState={annotationState}
                 onAnnotationChange={handleAnnotationChange}
               />
@@ -801,7 +805,9 @@ const LessonContent: React.FC<LessonContentProps> = ({
                         <div className="text-sm font-bold text-slate-800">
                           {footnote.title ||
                             footnote.label ||
-                            footnote.anchorKey}
+                            (footnoteNumberMap.get(footnote.anchorKey)
+                              ? `각주 ${footnoteNumberMap.get(footnote.anchorKey)}`
+                              : "각주")}
                         </div>
                         <div className="mt-1 text-xs text-slate-500">
                           눌러서 참고자료 보기

@@ -201,8 +201,12 @@ export const sanitizeLessonFootnote = (
         : undefined,
     youtubeUrl: String(footnote.youtubeUrl || "").trim(),
     sourceArchiveAssetId: String(footnote.sourceArchiveAssetId || "").trim(),
-    sourceArchiveImagePath: String(footnote.sourceArchiveImagePath || "").trim(),
-    sourceArchiveThumbPath: String(footnote.sourceArchiveThumbPath || "").trim(),
+    sourceArchiveImagePath: String(
+      footnote.sourceArchiveImagePath || "",
+    ).trim(),
+    sourceArchiveThumbPath: String(
+      footnote.sourceArchiveThumbPath || "",
+    ).trim(),
     sourceArchiveTitle: String(footnote.sourceArchiveTitle || "").trim(),
     placement:
       footnote.placement === "reference-panel"
@@ -412,10 +416,7 @@ export const getLessonContentSections = (
 
 export const getLessonFootnoteDisplayTitle = (footnote: LessonFootnote) =>
   String(
-    footnote.title ||
-      footnote.label ||
-      footnote.sourceArchiveTitle ||
-      footnote.anchorKey,
+    footnote.title || footnote.label || footnote.sourceArchiveTitle || "각주",
   ).trim();
 
 export const getLessonFootnotePrimaryContentType = (
