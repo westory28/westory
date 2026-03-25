@@ -329,7 +329,7 @@ export function LessonEditorHeader({
             onClick={onSave}
             className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
           >
-            저장
+            기본 정보 저장
           </button>
           <button
             type="button"
@@ -468,12 +468,16 @@ function FootnoteEditorDialog({
   const previewUrl =
     getFootnotePreviewUrl?.(footnote) || footnote.imageUrl || "";
   const currentIndex = footnotes.findIndex((item) => item.id === footnote.id);
+  const nestedModalProps = isNestedModalOpen
+    ? ({ inert: "" } as React.HTMLAttributes<HTMLDivElement>)
+    : {};
   const locationMessage = session.pendingAnchorPlacement
-    ? `PDF p.${session.pendingAnchorPlacement.page} 위치를 선택했습니다. 저장하면 버튼이 생깁니다.`
+    ? `PDF p.${session.pendingAnchorPlacement.page} 위치를 선택했습니다. 오른쪽 저장 버튼을 누르면 버튼이 생깁니다.`
     : footnoteAnchorBadgeLabel(pdfAnchorCount);
 
   return (
     <div
+      {...nestedModalProps}
       className={`fixed inset-0 z-[80] bg-slate-950/45 backdrop-blur-sm ${
         isNestedModalOpen ? "pointer-events-none" : ""
       }`}
@@ -810,7 +814,8 @@ export function LessonBodyEditor({
         </h3>
         <p className="mt-2 text-sm text-slate-500">
           본문에 들어가는 각주 표시와 PDF 위 각주 버튼이 같은 팝업 내용을 함께
-          사용합니다.
+          사용합니다. 각주를 추가하거나 고친 뒤에는 오른쪽 저장 버튼을 눌러
+          반영하세요.
         </p>
       </div>
       <textarea
