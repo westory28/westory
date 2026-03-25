@@ -19,6 +19,7 @@ interface TeacherCalendarSectionProps {
     onSearchClick: () => void;
     calendarRef: React.RefObject<FullCalendar>;
     filterClass: string;
+    availableClassTargets: string[];
     onFilterChange: (cls: string) => void;
     selectedDate?: string | null;
 }
@@ -67,6 +68,7 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
     onSearchClick,
     calendarRef,
     filterClass,
+    availableClassTargets,
     onFilterChange,
     selectedDate,
 }) => {
@@ -154,12 +156,17 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
         };
     }, [currentViewType, visibleRange.end, visibleRange.start]);
 
-    const classTargets = gradeOptions.flatMap((gradeOpt) =>
-        classOptions.map((classOpt) => ({
-            value: `${gradeOpt.value}-${classOpt.value}`,
-            label: `${gradeOpt.label} ${classOpt.label}`,
-        })),
-    );
+    const classTargets = useMemo(() => {
+        return availableClassTargets.map((value) => {
+            const [gradeValue, classValue] = value.split('-');
+            const gradeLabel = gradeOptions.find((item) => item.value === gradeValue)?.label || (gradeValue ? `${gradeValue}학년` : '');
+            const classLabel = classOptions.find((item) => item.value === classValue)?.label || (classValue ? `${classValue}반` : '');
+            return {
+                value,
+                label: `${gradeLabel} ${classLabel}`.trim() || value,
+            };
+        });
+    }, [availableClassTargets, classOptions, gradeOptions]);
 
     const formatEventTargetLabel = (event?: CalendarEvent) => {
         if (!event || event.eventType === 'holiday' || event.targetType === 'all' || event.targetType === 'common') {

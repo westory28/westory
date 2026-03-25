@@ -12,6 +12,19 @@ import EventModal from './components/EventModal';
 import { useScheduleCategories } from '../../lib/scheduleCategories';
 import { getYearSemester } from '../../lib/semesterScope';
 
+const getVisibleCalendarEvents = (events: CalendarEvent[], filterClass: string) => {
+    return events.filter((event) => {
+        const isCommon = event.targetType === 'common';
+        const isHoliday = event.eventType === 'holiday';
+        const targetClass = String(event.targetClass || '').trim();
+
+        if (filterClass === 'all') return true;
+        if (filterClass === 'common') return isCommon || isHoliday;
+
+        return isCommon || isHoliday || (event.targetType === 'class' && targetClass === filterClass);
+    });
+};
+
 const TeacherDashboard: React.FC = () => {
     const { config } = useAuth();
     const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -36,43 +49,39 @@ const TeacherDashboard: React.FC = () => {
         const unsubscribe = onSnapshot(collection(db, path), (snapshot) => {
             const loadedEvents: CalendarEvent[] = [];
 
-            snapshot.forEach(doc => {
+            snapshot.forEach((doc) => {
                 const d = doc.data();
-                // Client-side filtering based on 'filterClass' state
-                // Common events always show. Holiday always show.
-                // Class events show if filterClass is 'all' OR matches targetClass
-
-                const isCommon = d.targetType === 'common';
-                const isHoliday = d.eventType === 'holiday';
-                const isTargetClass = d.targetType === 'class' && d.targetClass === filterClass;
-
-                let shouldShow = false;
-                if (filterClass === 'all') shouldShow = true;
-                else if (filterClass === 'common') shouldShow = (isCommon || isHoliday);
-                else shouldShow = (isCommon || isHoliday || isTargetClass);
-
-                if (shouldShow) {
-                    loadedEvents.push({ id: doc.id, ...d } as CalendarEvent);
-                }
+                loadedEvents.push({ id: doc.id, ...d } as CalendarEvent);
             });
             setEvents(loadedEvents);
         });
 
         return () => unsubscribe();
-    }, [config, filterClass]);
+    }, [config]);
+
+    const availableClassTargets = useMemo(() => {
+        const targets = new Set<string>();
+        events.forEach((event) => {
+            if (event.targetType !== 'class') return;
+            const targetClass = String(event.targetClass || '').trim();
+            if (!targetClass) return;
+            targets.add(targetClass);
+        });
+        return Array.from(targets).sort((a, b) => a.localeCompare(b, 'ko', { numeric: true }));
+    }, [events]);
+
+    const effectiveFilterClass = useMemo(() => {
+        if (filterClass === 'all' || filterClass === 'common') return filterClass;
+        return availableClassTargets.includes(filterClass) ? filterClass : 'all';
+    }, [availableClassTargets, filterClass]);
+
+    const visibleEvents = useMemo(
+        () => getVisibleCalendarEvents(events, effectiveFilterClass),
+        [effectiveFilterClass, events],
+    );
 
     const handleDateClick = (dateStr: string) => {
         setSelectedDate(dateStr);
-        const filtered = events.filter(e => {
-            const start = new Date(e.start);
-            const end = new Date(e.end || e.start);
-            const target = new Date(dateStr);
-            start.setHours(0, 0, 0, 0);
-            end.setHours(0, 0, 0, 0);
-            target.setHours(0, 0, 0, 0);
-            return target >= start && target <= end;
-        });
-        setDailyEvents(filtered);
     };
 
     const handleEventClick = (event: CalendarEvent) => {
@@ -92,6 +101,25 @@ const TeacherDashboard: React.FC = () => {
             handleDateClick(dateStr);
         }
     };
+
+    useEffect(() => {
+        if (!selectedDate) {
+            setDailyEvents([]);
+            return;
+        }
+
+        const filtered = visibleEvents.filter((event) => {
+            const start = new Date(event.start);
+            const end = new Date(event.end || event.start);
+            const target = new Date(selectedDate);
+            start.setHours(0, 0, 0, 0);
+            end.setHours(0, 0, 0, 0);
+            target.setHours(0, 0, 0, 0);
+            return target >= start && target <= end;
+        });
+
+        setDailyEvents(filtered);
+    }, [selectedDate, visibleEvents]);
 
     return (
         <div className="dashboard-container w-full max-w-7xl mx-auto px-4 py-6 flex-1">
@@ -119,14 +147,15 @@ const TeacherDashboard: React.FC = () => {
                     {/* 2. Calendar (Mobile: Order 2 / Desktop: Order 1, Left Full Height) */}
                     <div className="order-2 md:order-1 md:col-span-3 md:row-span-2">
                         <TeacherCalendarSection
-                            events={events}
+                            events={visibleEvents}
                             onDateClick={handleDateClick}
                             onDateDoubleClick={handleAddEvent}
                             onEventClick={handleEventClick}
                             onAddEvent={handleAddEvent}
                             onSearchClick={() => setIsSearchOpen(true)}
                             calendarRef={calendarRef}
-                            filterClass={filterClass}
+                            filterClass={effectiveFilterClass}
+                            availableClassTargets={availableClassTargets}
                             onFilterChange={setFilterClass}
                             selectedDate={selectedDate}
                         />
