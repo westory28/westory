@@ -135,6 +135,40 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
     useEffect(() => {
         const style = document.createElement('style');
         style.innerHTML = `
+            .fc-header-toolbar {
+                gap: 0.5rem 0.75rem;
+                align-items: flex-start;
+                flex-wrap: wrap;
+            }
+            .fc-toolbar-chunk {
+                min-width: 0;
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 0.35rem;
+            }
+            .fc-toolbar-title {
+                font-size: clamp(1.55rem, 4vw, 2.2rem) !important;
+                font-weight: 800;
+                line-height: 1.05;
+                letter-spacing: -0.04em;
+                color: #111827;
+            }
+            @media (max-width: 640px) {
+                .fc-header-toolbar {
+                    align-items: stretch;
+                }
+                .fc-toolbar-chunk {
+                    justify-content: flex-start;
+                }
+                .fc-toolbar-chunk:nth-child(2) {
+                    order: -1;
+                    width: 100%;
+                }
+                .fc-toolbar-title {
+                    font-size: clamp(1.35rem, 5vw, 1.8rem) !important;
+                }
+            }
             .fc-daygrid-event.holiday-text-event { background-color: #ef4444 !important; border-color: #ef4444 !important; }
             .fc-daygrid-event.holiday-text-event .fc-event-title { color: #ffffff !important; font-size: 0.75rem; font-weight: 800; }
             .fc-day-selected { background-color: #eff6ff !important; outline: 2px solid #3b82f6 !important; outline-offset: -2px !important; }
@@ -142,7 +176,6 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             .fc-day-sat a { color: #3b82f6 !important; text-decoration: none; font-weight: 700; }
             .fc-day-holiday a { color: #ef4444 !important; text-decoration: none; font-weight: 700 !important; }
             .fc-day-holiday .fc-daygrid-day-number { color: #ef4444 !important; font-weight: 700 !important; }
-            .fc-toolbar-title { font-size: 1.25em !important; font-weight: 700; color: #1f2937; }
             .fc-button { background-color: #2563eb !important; border-color: #2563eb !important; font-weight: 600 !important; }
             .fc-list-event.holiday-text-event { background-color: transparent !important; border: none !important; }
             .fc-list-event.holiday-text-event .fc-list-event-title a { color: #ef4444 !important; font-weight: 800 !important; }
@@ -247,14 +280,25 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             }
             .fc-day-attendance .fc-daygrid-day-top::after {
                 content: '출석';
-                margin-left: 0.3rem;
-                border-radius: 9999px;
-                background: #dbeafe;
-                color: #1d4ed8;
-                font-size: 0.65rem;
-                font-weight: 700;
+                display: inline-flex;
+                align-self: flex-end;
+                margin-top: 0.2rem;
+                border: 1px solid #ef4444;
+                border-radius: 0.35rem;
+                background: rgba(254, 242, 242, 0.9);
+                color: #b91c1c;
+                font-size: 0.7rem;
+                font-weight: 800;
                 line-height: 1;
-                padding: 0.18rem 0.38rem;
+                letter-spacing: -0.01em;
+                padding: 0.18rem 0.45rem;
+                white-space: nowrap;
+            }
+            .fc-day-attendance .fc-daygrid-day-top {
+                display: flex;
+                flex-direction: column;
+                align-items: flex-end;
+                gap: 0.05rem;
             }
         `;
         document.head.appendChild(style);

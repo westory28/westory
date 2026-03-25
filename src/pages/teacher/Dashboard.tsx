@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import { useAuth } from '../../contexts/AuthContext';
 import { CalendarEvent } from '../../types';
@@ -14,7 +14,7 @@ import { getYearSemester } from '../../lib/semesterScope';
 
 const getVisibleCalendarEvents = (events: CalendarEvent[], filterClass: string) => {
     return events.filter((event) => {
-        const isCommon = event.targetType === 'common';
+        const isCommon = event.targetType === 'common' || event.targetType === 'all';
         const isHoliday = event.eventType === 'holiday';
         const targetClass = String(event.targetClass || '').trim();
 
@@ -74,6 +74,11 @@ const TeacherDashboard: React.FC = () => {
         if (filterClass === 'all' || filterClass === 'common') return filterClass;
         return availableClassTargets.includes(filterClass) ? filterClass : 'all';
     }, [availableClassTargets, filterClass]);
+
+    useEffect(() => {
+        if (filterClass === effectiveFilterClass) return;
+        setFilterClass(effectiveFilterClass);
+    }, [effectiveFilterClass, filterClass]);
 
     const visibleEvents = useMemo(
         () => getVisibleCalendarEvents(events, effectiveFilterClass),
