@@ -1383,7 +1383,7 @@ const Login: React.FC = () => {
                             학생 로그인 (계정 선택)
                         </button>
                         <button
-                            onClick={() => void handleSwitchAccount()}
+                            onClick={() => void handleSwitchAccount(isTeacherUser ? 'teacher' : 'student')}
                             disabled={authBusy}
                             className="w-full bg-white border border-gray-200 px-6 py-3 rounded-full text-sm font-bold text-gray-700 shadow hover:bg-gray-50 transition disabled:opacity-60 disabled:cursor-not-allowed"
                         >
