@@ -1,4 +1,5 @@
 import React from "react";
+import { createPortal } from "react-dom";
 import StorageImage from "../../../components/common/StorageImage";
 import type { SourceArchiveAsset } from "../../../types";
 
@@ -23,12 +24,51 @@ const LessonSourceArchivePickerModal: React.FC<
   onClose,
   onSelectAsset,
 }) => {
-  if (!open) return null;
+  const searchInputRef = React.useRef<HTMLInputElement | null>(null);
+  const previousFocusRef = React.useRef<HTMLElement | null>(null);
 
-  return (
-    <div className="fixed inset-0 z-[75] bg-black/45 backdrop-blur-sm">
+  React.useEffect(() => {
+    if (!open || typeof document === "undefined") return;
+
+    previousFocusRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+
+    const frameId = window.requestAnimationFrame(() => {
+      searchInputRef.current?.focus();
+    });
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      onClose();
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      document.removeEventListener("keydown", handleKeyDown);
+      const previousFocus = previousFocusRef.current;
+      window.requestAnimationFrame(() => previousFocus?.focus());
+    };
+  }, [open, onClose]);
+
+  if (!open || typeof document === "undefined") return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[90] bg-black/45 backdrop-blur-sm"
+      onClick={onClose}
+      role="presentation"
+    >
       <div className="flex h-full items-end justify-center p-3 md:items-center md:p-6">
-        <div className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-[28px] bg-white shadow-2xl">
+        <div
+          className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-[28px] bg-white shadow-2xl"
+          onClick={(event) => event.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          aria-label="사료창고 이미지 선택"
+        >
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
             <div>
               <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
@@ -52,6 +92,7 @@ const LessonSourceArchivePickerModal: React.FC<
                 검색
               </span>
               <input
+                ref={searchInputRef}
                 value={searchValue}
                 onChange={(event) => onSearchChange(event.target.value)}
                 placeholder="제목, 설명, 태그로 찾기"
@@ -80,7 +121,9 @@ const LessonSourceArchivePickerModal: React.FC<
                     <div className="aspect-[4/3] bg-slate-100">
                       {asset.image.thumbPath || asset.image.displayPath ? (
                         <StorageImage
-                          path={asset.image.thumbPath || asset.image.displayPath}
+                          path={
+                            asset.image.thumbPath || asset.image.displayPath
+                          }
                           alt={asset.title}
                           className="h-full w-full object-cover"
                           fallback={
@@ -120,7 +163,8 @@ const LessonSourceArchivePickerModal: React.FC<
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };
 

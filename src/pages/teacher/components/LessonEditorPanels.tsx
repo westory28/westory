@@ -88,6 +88,7 @@ type LessonBodyEditorProps = {
   onOpenSourceArchivePicker?: (footnoteId: string) => void;
   onClearSourceArchiveImage?: (footnoteId: string) => void;
   getFootnotePreviewUrl?: (footnote: LessonFootnote) => string;
+  sourceArchivePickerOpen?: boolean;
 };
 
 type LessonPdfSectionProps = {
@@ -146,6 +147,14 @@ type LessonPdfSectionProps = {
     blankId: string,
     patch: Partial<LessonWorksheetBlank>,
   ) => void;
+  hasUnsavedPdfChanges: boolean;
+  pdfSaveState: SaveStateTone;
+  pdfSaveFeedback?: {
+    tone: "success" | "error";
+    message: string;
+  } | null;
+  onSavePdf: () => void;
+  disablePdfSave: boolean;
 };
 
 type LessonPreviewLauncherProps = {
@@ -435,6 +444,7 @@ function FootnoteEditorDialog({
   onOpenSourceArchivePicker,
   onClearSourceArchiveImage,
   getFootnotePreviewUrl,
+  isNestedModalOpen = false,
 }: {
   session: NonNullable<LessonBodyEditorProps["footnoteEditorSession"]>;
   footnotes: LessonFootnote[];
@@ -450,6 +460,7 @@ function FootnoteEditorDialog({
   onOpenSourceArchivePicker?: (footnoteId: string) => void;
   onClearSourceArchiveImage?: (footnoteId: string) => void;
   getFootnotePreviewUrl?: (footnote: LessonFootnote) => string;
+  isNestedModalOpen?: boolean;
 }) {
   const footnote = session.draft;
   const usage = footnoteUsageMap.get(footnote.anchorKey);
@@ -462,7 +473,15 @@ function FootnoteEditorDialog({
     : footnoteAnchorBadgeLabel(pdfAnchorCount);
 
   return (
-    <div className="fixed inset-0 z-[80] bg-slate-950/45 backdrop-blur-sm">
+    <div
+      className={`fixed inset-0 z-[80] bg-slate-950/45 backdrop-blur-sm ${
+        isNestedModalOpen ? "pointer-events-none" : ""
+      }`}
+      role="dialog"
+      aria-modal={isNestedModalOpen ? undefined : true}
+      aria-hidden={isNestedModalOpen}
+      aria-label={session.mode === "create" ? "새 각주" : "각주 편집"}
+    >
       <div className="flex h-full items-end justify-center p-3 md:items-center md:p-6">
         <div className="w-full max-w-2xl overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_28px_80px_rgba(15,23,42,0.2)]">
           <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
@@ -755,6 +774,7 @@ export function LessonBodyEditor({
   onOpenSourceArchivePicker,
   onClearSourceArchiveImage,
   getFootnotePreviewUrl,
+  sourceArchivePickerOpen = false,
 }: LessonBodyEditorProps) {
   const connectedCount = footnotes.filter(
     (footnote) => (footnoteUsageMap.get(footnote.anchorKey)?.count ?? 0) > 0,
@@ -935,6 +955,7 @@ export function LessonBodyEditor({
           onOpenSourceArchivePicker={onOpenSourceArchivePicker}
           onClearSourceArchiveImage={onClearSourceArchiveImage}
           getFootnotePreviewUrl={getFootnotePreviewUrl}
+          isNestedModalOpen={sourceArchivePickerOpen}
         />
       )}
     </section>
@@ -976,6 +997,11 @@ export function LessonPdfSection({
   onConfirmDraftBlank,
   onCancelDraftBlank,
   onUpdateBlank: _onUpdateBlank,
+  hasUnsavedPdfChanges,
+  pdfSaveState,
+  pdfSaveFeedback,
+  onSavePdf,
+  disablePdfSave,
 }: LessonPdfSectionProps) {
   const [isBlankManagerOpen, setIsBlankManagerOpen] = React.useState(false);
   const [showAllBlanks, setShowAllBlanks] = React.useState(false);
@@ -1068,6 +1094,21 @@ export function LessonPdfSection({
           있습니다.
         </span>
       </div>
+      {(hasUnsavedPdfChanges || pdfSaveFeedback?.message) && (
+        <div
+          className={`rounded-2xl border px-4 py-3 text-sm ${
+            hasUnsavedPdfChanges
+              ? "border-amber-200 bg-amber-50 text-amber-900"
+              : pdfSaveFeedback?.tone === "error"
+                ? "border-rose-200 bg-rose-50 text-rose-700"
+                : "border-emerald-200 bg-emerald-50 text-emerald-700"
+          }`}
+        >
+          {hasUnsavedPdfChanges
+            ? "저장하지 않은 PDF 편집 내용이 있습니다. 오른쪽 저장 버튼을 눌러 반영하세요. 저장 후 학생/수업 화면에 반영됩니다."
+            : pdfSaveFeedback?.message}
+        </div>
+      )}
       {!!pdfStatusHelpText && (
         <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
           {pdfStatusHelpText}
@@ -1076,7 +1117,7 @@ export function LessonPdfSection({
       {worksheetTool === "footnote" && !!worksheetPageImages.length && (
         <div className="rounded-2xl border border-blue-100 bg-blue-50/80 px-4 py-3 text-sm text-blue-900">
           원하는 위치를 한 번 눌러 각주 버튼을 찍어 주세요. 바로 작은 편집창이
-          열리고, 저장하면 PDF에 표시됩니다.
+          열립니다. 각주를 추가한 뒤 오른쪽 저장 버튼을 눌러 보관하세요.
         </div>
       )}
       {draftBlank && (
@@ -1255,6 +1296,28 @@ export function LessonPdfSection({
                 title="각주 추가"
               >
                 <i className="fas fa-comment-dots"></i>
+              </button>
+              <button
+                type="button"
+                onClick={onSavePdf}
+                disabled={disablePdfSave}
+                className={`inline-flex h-11 w-11 items-center justify-center rounded-full text-sm transition ${
+                  disablePdfSave
+                    ? "cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400"
+                    : hasUnsavedPdfChanges
+                      ? "bg-blue-600 text-white shadow-lg shadow-blue-200/70 ring-4 ring-blue-100 hover:bg-blue-700"
+                      : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+                aria-label={pdfSaveState === "saving" ? "저장 중" : "저장"}
+                title={pdfSaveState === "saving" ? "저장 중" : "저장"}
+              >
+                <i
+                  className={`fas ${
+                    pdfSaveState === "saving"
+                      ? "fa-spinner fa-spin"
+                      : "fa-floppy-disk"
+                  }`}
+                ></i>
               </button>
               <button
                 type="button"
