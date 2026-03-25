@@ -1,8 +1,16 @@
 ﻿import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import PointRankBadge from './PointRankBadge';
 import { useAuth } from '../../contexts/AuthContext';
 import { MENUS, cloneDefaultMenus, sanitizeMenuConfig, type MenuConfig } from '../../constants/menus';
 import { runWhenIdle } from '../../lib/browserTasks';
+import { getDefaultProfileEmojiValue, getProfileEmojiEntryById } from '../../lib/profileEmojis';
+import {
+    getPointPolicy,
+    getPointRankManualAdjustEarnedPointsByUid,
+    getPointWalletByUid,
+} from '../../lib/points';
+import { getPointRankDisplay, needsPointRankLegacyFallback } from '../../lib/pointRanks';
 import { readLocalOnly, readStorage, removeStorage, writeLocalOnly } from '../../lib/safeStorage';
 import {
     canAccessTeacherPortal,
@@ -63,13 +71,15 @@ const getResolvedChildUrls = (
 }));
 
 const Header: React.FC = () => {
-    const { currentUser, userData, logout } = useAuth();
+    const { currentUser, userData, logout, config } = useAuth();
     const location = useLocation();
     const navigate = useNavigate();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [sessionExpiry, setSessionExpiry] = useState<number | null>(null);
     const [remainingSeconds, setRemainingSeconds] = useState(SESSION_DURATION_SECONDS);
     const [menuConfig, setMenuConfig] = useState<MenuConfig>(() => cloneDefaultMenus());
+    const [studentRank, setStudentRank] = useState<ReturnType<typeof getPointRankDisplay>>(null);
+    const [profileFallbackIcon, setProfileFallbackIcon] = useState(getDefaultProfileEmojiValue());
     const timeoutHandledRef = useRef(false);
 
     const isReady = !!currentUser;
@@ -105,7 +115,7 @@ const Header: React.FC = () => {
         ? (canManageSettings(userData, currentUser?.email || '') ? '/teacher/settings' : home)
         : '/student/mypage';
     const profileLabel = `${displayName} ${isTeacherPortal ? '교사' : '학생'}`;
-    const studentProfileIcon = userData?.profileIcon || '🧑‍🎓';
+    const studentProfileIcon = userData?.profileIcon || profileFallbackIcon;
     const resolveTarget = (url: string) => resolveMenuTarget(url, portal);
     const desktopSubmenuParentUrls = new Set([
         '/student/lesson/note',
@@ -272,6 +282,52 @@ const Header: React.FC = () => {
         return () => document.removeEventListener('click', handleActivityClick, true);
     }, [currentUser]);
 
+    useEffect(() => {
+        let cancelled = false;
+
+        const loadStudentHeaderRank = async () => {
+            if (!currentUser || !config || isTeacherPortal) {
+                if (!cancelled) {
+                    setStudentRank(null);
+                    setProfileFallbackIcon(getDefaultProfileEmojiValue());
+                }
+                return;
+            }
+
+            try {
+                const [wallet, policy] = await Promise.all([
+                    getPointWalletByUid(config, currentUser.uid),
+                    getPointPolicy(config),
+                ]);
+                const legacyManualAdjustPoints = wallet && needsPointRankLegacyFallback(wallet)
+                    ? await getPointRankManualAdjustEarnedPointsByUid(config, currentUser.uid)
+                    : 0;
+                if (cancelled) return;
+
+                setStudentRank(getPointRankDisplay({
+                    rankPolicy: policy.rankPolicy,
+                    wallet: wallet || null,
+                    earnedPointsFromTransactions: legacyManualAdjustPoints,
+                }));
+                setProfileFallbackIcon(
+                    getProfileEmojiEntryById(policy.rankPolicy.emojiPolicy.defaultEmojiId)?.value
+                    || getDefaultProfileEmojiValue(),
+                );
+            } catch (error) {
+                console.error('Failed to load student header rank:', error);
+                if (!cancelled) {
+                    setStudentRank(null);
+                    setProfileFallbackIcon(getDefaultProfileEmojiValue());
+                }
+            }
+        };
+
+        void loadStudentHeaderRank();
+        return () => {
+            cancelled = true;
+        };
+    }, [config, currentUser, isTeacherPortal]);
+
     if (!isReady) return null;
 
     return (
@@ -336,13 +392,16 @@ const Header: React.FC = () => {
                         </Link>
                     )}
 
-                    <Link to={profileTarget} data-session-ignore="true" className="user-greeting header-user-link inline-flex items-center hover:text-blue-600 transition cursor-pointer" title={isTeacherPortal ? '관리자 페이지' : '마이페이지'}>
+                    <Link to={profileTarget} data-session-ignore="true" className="user-greeting header-user-link inline-flex items-center gap-1.5 hover:text-blue-600 transition cursor-pointer" title={isTeacherPortal ? '관리자 페이지' : '마이페이지'}>
                         {!isTeacherPortal && (
                             <span className="mr-1.5 inline-flex h-6 w-6 items-center justify-center rounded-full border border-gray-300 bg-gray-100 text-[14px] leading-none">
                                 {studentProfileIcon}
                             </span>
                         )}
-                        {profileLabel}
+                        <span>{profileLabel}</span>
+                        {!isTeacherPortal && studentRank && (
+                            <PointRankBadge rank={studentRank} size="sm" className="shrink-0" />
+                        )}
                     </Link>
 
                     <button

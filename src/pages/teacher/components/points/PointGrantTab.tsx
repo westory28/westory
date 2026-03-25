@@ -1,7 +1,9 @@
 import React from 'react';
+import PointRankBadge from '../../../../components/common/PointRankBadge';
 import { getPointFeedbackToneClass } from '../../../../constants/pointLabels';
+import { getPointRankDisplay } from '../../../../lib/pointRanks';
 import { formatPointStudentLabel } from '../../../../lib/pointFormatters';
-import type { PointStudentTarget, PointWallet } from '../../../../types';
+import type { PointRankPolicy, PointStudentTarget, PointWallet } from '../../../../types';
 
 type GrantStudentRow = PointStudentTarget & {
     wallet?: PointWallet | null;
@@ -11,6 +13,8 @@ interface PointGrantTabProps {
     students: GrantStudentRow[];
     selectedStudent: GrantStudentRow | null;
     selectedUid: string;
+    rankPolicy: PointRankPolicy;
+    rankManualAdjustEarnedPointsByUid: Record<string, number>;
     canManage: boolean;
     manualAdjustEnabled: boolean;
     loading: boolean;
@@ -38,6 +42,8 @@ const PointGrantTab: React.FC<PointGrantTabProps> = ({
     students,
     selectedStudent,
     selectedUid,
+    rankPolicy,
+    rankManualAdjustEarnedPointsByUid,
     canManage,
     manualAdjustEnabled,
     loading,
@@ -101,26 +107,37 @@ const PointGrantTab: React.FC<PointGrantTabProps> = ({
                     ) : students.length === 0 ? (
                         <div className="px-5 py-12 text-center text-sm text-gray-400">선택한 학급에 표시할 학생이 없습니다.</div>
                     ) : null}
-                    {students.map((student) => (
-                        <button
-                            key={student.uid}
-                            type="button"
-                            onClick={() => onSelectStudent(student.uid)}
-                            className={`grid w-full grid-cols-[minmax(0,1.3fr)_140px_110px] gap-3 px-5 py-4 text-left transition ${student.uid === selectedUid ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
-                        >
-                            <div className="min-w-0">
-                                <div className="truncate font-bold text-gray-800">{student.studentName}</div>
-                                <div className="mt-1 text-xs text-gray-500">{student.wallet ? '포인트 현황에 등록된 학생' : '첫 부여 시 포인트 현황에 추가'}</div>
-                            </div>
-                            <div className="truncate text-sm text-gray-600">
-                                {[
-                                    student.grade ? `${student.grade}학년` : '',
-                                    student.class ? `${student.class}반` : '',
-                                ].filter(Boolean).join(' ') || '-'}
-                            </div>
-                            <div className="text-right text-lg font-black text-blue-700">{student.wallet?.balance || 0}</div>
-                        </button>
-                    ))}
+                    {students.map((student) => {
+                        const rank = getPointRankDisplay({
+                            rankPolicy,
+                            wallet: student.wallet || null,
+                            earnedPointsFromTransactions: rankManualAdjustEarnedPointsByUid[student.uid] || 0,
+                        });
+
+                        return (
+                            <button
+                                key={student.uid}
+                                type="button"
+                                onClick={() => onSelectStudent(student.uid)}
+                                className={`grid w-full grid-cols-[minmax(0,1.3fr)_140px_110px] gap-3 px-5 py-4 text-left transition ${student.uid === selectedUid ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
+                            >
+                                <div className="min-w-0">
+                                    <div className="flex items-center gap-2">
+                                        <div className="truncate font-bold text-gray-800">{student.studentName}</div>
+                                        <PointRankBadge rank={rank} size="sm" />
+                                    </div>
+                                    <div className="mt-1 text-xs text-gray-500">{student.wallet ? '포인트 현황에 등록된 학생' : '첫 부여 시 포인트 현황에 추가'}</div>
+                                </div>
+                                <div className="truncate text-sm text-gray-600">
+                                    {[
+                                        student.grade ? `${student.grade}학년` : '',
+                                        student.class ? `${student.class}반` : '',
+                                    ].filter(Boolean).join(' ') || '-'}
+                                </div>
+                                <div className="text-right text-lg font-black text-blue-700">{student.wallet?.balance || 0}</div>
+                            </button>
+                        );
+                    })}
                 </div>
             </div>
         </div>
@@ -132,7 +149,16 @@ const PointGrantTab: React.FC<PointGrantTabProps> = ({
                 <>
                     <div className="flex items-start justify-between gap-4">
                         <div>
-                            <h3 className="text-xl font-extrabold text-gray-900">{selectedStudent.studentName}</h3>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <h3 className="text-xl font-extrabold text-gray-900">{selectedStudent.studentName}</h3>
+                                <PointRankBadge
+                                    rank={getPointRankDisplay({
+                                        rankPolicy,
+                                        wallet: selectedStudent.wallet || null,
+                                        earnedPointsFromTransactions: rankManualAdjustEarnedPointsByUid[selectedStudent.uid] || 0,
+                                    })}
+                                />
+                            </div>
                             <div className="mt-1 text-sm text-gray-500">{formatPointStudentLabel(selectedStudent) || '소속 정보 없음'}</div>
                         </div>
                         <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-right">

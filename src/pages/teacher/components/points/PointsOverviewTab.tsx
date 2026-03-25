@@ -1,12 +1,16 @@
 import React from 'react';
+import PointRankBadge from '../../../../components/common/PointRankBadge';
 import { POINT_TRANSACTION_TYPE_LABELS, getPointDeltaToneClass } from '../../../../constants/pointLabels';
+import { getPointRankDisplay } from '../../../../lib/pointRanks';
 import { formatPointDateShortTime, formatPointDateTime, formatPointStudentLabel } from '../../../../lib/pointFormatters';
-import type { PointTransaction, PointWallet } from '../../../../types';
+import type { PointRankPolicy, PointTransaction, PointWallet } from '../../../../types';
 
 interface PointsOverviewTabProps {
     wallets: PointWallet[];
     selectedWallet: PointWallet | null;
     selectedUid: string;
+    rankPolicy: PointRankPolicy;
+    rankManualAdjustEarnedPointsByUid: Record<string, number>;
     gradeFilter: string;
     classFilter: string;
     numberFilter: string;
@@ -35,6 +39,8 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
     wallets,
     selectedWallet,
     selectedUid,
+    rankPolicy,
+    rankManualAdjustEarnedPointsByUid,
     gradeFilter,
     classFilter,
     numberFilter,
@@ -95,28 +101,39 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
                 </div>
                 <div className="divide-y divide-gray-100">
                     {wallets.length === 0 && <div className="px-5 py-12 text-center text-sm text-gray-400">조건에 맞는 학생이 없습니다.</div>}
-                    {wallets.map((wallet) => (
-                        <button
-                            key={wallet.uid}
-                            type="button"
-                            onClick={() => onSelectWallet(wallet.uid)}
-                            className={`grid w-full grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_110px_120px_120px] gap-3 px-5 py-4 text-left transition ${wallet.uid === selectedUid ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
-                        >
-                            <div className="min-w-0">
-                                <div className="truncate font-bold text-gray-800">{wallet.studentName || '(이름 없음)'}</div>
-                                <div className="mt-1 text-xs text-gray-500">{`(${formatPointDateShortTime(wallet.lastTransactionAt)})`}</div>
-                            </div>
-                            <div className="truncate text-sm text-gray-600">
-                                {[
-                                    wallet.grade ? `${wallet.grade}학년` : '',
-                                    wallet.class ? `${wallet.class}반` : '',
-                                ].filter(Boolean).join(' ') || '-'}
-                            </div>
-                            <div className="text-right text-lg font-black text-blue-700">{wallet.balance || 0}</div>
-                            <div className="text-right font-bold text-emerald-600">{wallet.earnedTotal || 0}</div>
-                            <div className="text-right font-bold text-rose-500">{wallet.spentTotal || 0}</div>
-                        </button>
-                    ))}
+                    {wallets.map((wallet) => {
+                        const rank = getPointRankDisplay({
+                            rankPolicy,
+                            wallet,
+                            earnedPointsFromTransactions: rankManualAdjustEarnedPointsByUid[wallet.uid] || 0,
+                        });
+
+                        return (
+                            <button
+                                key={wallet.uid}
+                                type="button"
+                                onClick={() => onSelectWallet(wallet.uid)}
+                                className={`grid w-full grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_110px_120px_120px] gap-3 px-5 py-4 text-left transition ${wallet.uid === selectedUid ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
+                            >
+                                <div className="min-w-0">
+                                    <div className="flex items-center gap-2">
+                                        <div className="truncate font-bold text-gray-800">{wallet.studentName || '(이름 없음)'}</div>
+                                        <PointRankBadge rank={rank} size="sm" />
+                                    </div>
+                                    <div className="mt-1 text-xs text-gray-500">{`(${formatPointDateShortTime(wallet.lastTransactionAt)})`}</div>
+                                </div>
+                                <div className="truncate text-sm text-gray-600">
+                                    {[
+                                        wallet.grade ? `${wallet.grade}학년` : '',
+                                        wallet.class ? `${wallet.class}반` : '',
+                                    ].filter(Boolean).join(' ') || '-'}
+                                </div>
+                                <div className="text-right text-lg font-black text-blue-700">{wallet.balance || 0}</div>
+                                <div className="text-right font-bold text-emerald-600">{wallet.earnedTotal || 0}</div>
+                                <div className="text-right font-bold text-rose-500">{wallet.spentTotal || 0}</div>
+                            </button>
+                        );
+                    })}
                 </div>
             </div>
         </div>
@@ -128,7 +145,16 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
                 <>
                     <div className="flex items-start justify-between gap-4">
                         <div>
-                            <h3 className="text-xl font-extrabold text-gray-900">{selectedWallet.studentName || '(이름 없음)'}</h3>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <h3 className="text-xl font-extrabold text-gray-900">{selectedWallet.studentName || '(이름 없음)'}</h3>
+                                <PointRankBadge
+                                    rank={getPointRankDisplay({
+                                        rankPolicy,
+                                        wallet: selectedWallet,
+                                        earnedPointsFromTransactions: rankManualAdjustEarnedPointsByUid[selectedWallet.uid] || 0,
+                                    })}
+                                />
+                            </div>
                             <div className="mt-1 text-sm text-gray-500">{formatPointStudentLabel(selectedWallet) || '소속 정보 없음'}</div>
                         </div>
                         <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-right">

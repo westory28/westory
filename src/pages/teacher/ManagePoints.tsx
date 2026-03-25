@@ -8,16 +8,19 @@ import {
     adjustPoints,
     getPointSchoolOptions,
     getPointPolicy,
+    getPointRankManualAdjustEarnedPointsMap,
     listPointOrders,
     listPointProducts,
     listPointStudentTargetsByClass,
     listPointTransactionsByUid,
     listPointWallets,
+    POINT_POLICY_FALLBACK,
     reviewPointOrder,
     updatePointAdjustment,
     upsertPointPolicy,
     upsertPointProduct,
 } from '../../lib/points';
+import { needsPointRankLegacyFallback } from '../../lib/pointRanks';
 import { canManagePoints, canReadPoints } from '../../lib/permissions';
 import { getYearSemester } from '../../lib/semesterScope';
 import type { PointOrder, PointOrderStatus, PointPolicy, PointProduct, PointStudentTarget, PointTransaction, PointWallet } from '../../types';
@@ -44,15 +47,7 @@ type ProductFormState = {
     isActive: boolean;
 };
 
-const EMPTY_POLICY: PointPolicy = {
-    attendanceDaily: 5,
-    attendanceMonthlyBonus: 20,
-    lessonView: 3,
-    quizSolve: 10,
-    manualAdjustEnabled: false,
-    allowNegativeBalance: false,
-    updatedBy: '',
-};
+const EMPTY_POLICY: PointPolicy = POINT_POLICY_FALLBACK;
 
 const EMPTY_PRODUCT_FORM: ProductFormState = {
     id: '',
@@ -123,6 +118,7 @@ const ManagePoints: React.FC = () => {
     const [selectedUid, setSelectedUid] = useState('');
     const [transactions, setTransactions] = useState<PointTransaction[]>([]);
     const [policy, setPolicy] = useState<PointPolicy>(EMPTY_POLICY);
+    const [rankManualAdjustEarnedPointsByUid, setRankManualAdjustEarnedPointsByUid] = useState<Record<string, number>>({});
     const [products, setProducts] = useState<PointProduct[]>([]);
     const [orders, setOrders] = useState<PointOrder[]>([]);
     const [gradeFilter, setGradeFilter] = useState('all');
@@ -283,6 +279,9 @@ const ManagePoints: React.FC = () => {
                 listPointProducts(config, false),
                 listPointOrders(config),
             ]);
+            const nextRankManualAdjustEarnedPointsByUid = nextWallets.some((wallet) => needsPointRankLegacyFallback(wallet))
+                ? await getPointRankManualAdjustEarnedPointsMap(config)
+                : {};
 
             setWallets(nextWallets);
             setGrantGradeOptions(nextSchoolOptions.grades);
@@ -290,6 +289,7 @@ const ManagePoints: React.FC = () => {
             setPolicy(nextPolicy);
             setProducts(nextProducts);
             setOrders(nextOrders);
+            setRankManualAdjustEarnedPointsByUid(nextRankManualAdjustEarnedPointsByUid);
 
             const nextSelectedUid = selectedUid && nextWallets.some((wallet) => wallet.uid === selectedUid)
                 ? selectedUid
@@ -620,7 +620,11 @@ const ManagePoints: React.FC = () => {
 
     const refreshOverviewData = async () => {
         const nextWallets = await listPointWallets(config);
+        const nextRankManualAdjustEarnedPointsByUid = nextWallets.some((wallet) => needsPointRankLegacyFallback(wallet))
+            ? await getPointRankManualAdjustEarnedPointsMap(config)
+            : {};
         setWallets(nextWallets);
+        setRankManualAdjustEarnedPointsByUid(nextRankManualAdjustEarnedPointsByUid);
         if (selectedUid) {
             await loadTransactionsForWallet(selectedUid);
         }
@@ -728,6 +732,8 @@ const ManagePoints: React.FC = () => {
                             wallets={filteredWallets}
                             selectedWallet={selectedWallet}
                             selectedUid={selectedUid}
+                            rankPolicy={policy.rankPolicy}
+                            rankManualAdjustEarnedPointsByUid={rankManualAdjustEarnedPointsByUid}
                             gradeFilter={gradeFilter}
                             classFilter={classFilter}
                             numberFilter={numberFilter}
@@ -758,6 +764,8 @@ const ManagePoints: React.FC = () => {
                             students={filteredGrantStudents}
                             selectedStudent={selectedGrantStudent}
                             selectedUid={grantSelectedUid}
+                            rankPolicy={policy.rankPolicy}
+                            rankManualAdjustEarnedPointsByUid={rankManualAdjustEarnedPointsByUid}
                             canManage={canManage}
                             manualAdjustEnabled={policy.manualAdjustEnabled}
                             loading={grantLoading}

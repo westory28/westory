@@ -1,16 +1,31 @@
 import React from 'react';
+import PointRankBadge from '../../../../components/common/PointRankBadge';
+import type { PointRankDisplay } from '../../../../lib/pointRanks';
 import { POINT_TRANSACTION_TYPE_LABELS, getPointDeltaToneClass } from '../../../../constants/pointLabels';
 import { formatPointDateOnly, formatPointDateTime } from '../../../../lib/pointFormatters';
 import type { PointTransaction, PointWallet } from '../../../../types';
 
 interface StudentPointSummaryTabProps {
     wallet: PointWallet;
+    rank: PointRankDisplay | null;
     recentTransactions: PointTransaction[];
     onOpenHistory: () => void;
 }
 
-const StudentPointSummaryTab: React.FC<StudentPointSummaryTabProps> = ({ wallet, recentTransactions, onOpenHistory }) => (
+const StudentPointSummaryTab: React.FC<StudentPointSummaryTabProps> = ({ wallet, rank, recentTransactions, onOpenHistory }) => (
     <div className="space-y-6">
+        {rank && (
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-sm font-bold text-gray-700">{'현재 등급'}</div>
+                <PointRankBadge rank={rank} />
+                <div className="text-xs text-gray-500">
+                    {rank.nextLabel
+                        ? `다음 등급 ${rank.nextLabel}까지 ${rank.remainingToNext}점 남았습니다.`
+                        : '현재 최고 등급이며, 구매나 차감으로 내려가지 않습니다.'}
+                </div>
+            </div>
+        )}
+
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
                 <div className="text-sm font-bold text-gray-500">{'\uD604\uC7AC \uBCF4\uC720 \uD3EC\uC778\uD2B8'}</div>

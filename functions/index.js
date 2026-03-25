@@ -10,6 +10,227 @@ const db = getFirestore();
 const REGION = 'asia-northeast3';
 const ADMIN_EMAIL = 'westoria28@gmail.com';
 const SCHOOL_EMAIL_PATTERN = /@yongshin-ms\.ms\.kr$/i;
+const DEFAULT_POINT_RANK_TIERS = [
+  { code: 'tier_1', minPoints: 0 },
+  { code: 'tier_2', minPoints: 50 },
+  { code: 'tier_3', minPoints: 150 },
+  { code: 'tier_4', minPoints: 300 },
+  { code: 'tier_5', minPoints: 500 },
+];
+
+const DEFAULT_PROFILE_EMOJI_ID = 'smile';
+const PROFILE_EMOJI_REGISTRY = [
+  { id: 'smile', value: '😀', unlockTierCode: 'tier_1' },
+  { id: 'soft_smile', value: '🙂', unlockTierCode: 'tier_1' },
+  { id: 'note', value: '📝', unlockTierCode: 'tier_1' },
+  { id: 'book', value: '📚', unlockTierCode: 'tier_1' },
+  { id: 'cool', value: '😎', unlockTierCode: 'tier_2' },
+  { id: 'brain', value: '🧠', unlockTierCode: 'tier_2' },
+  { id: 'clover', value: '🍀', unlockTierCode: 'tier_2' },
+  { id: 'target', value: '🎯', unlockTierCode: 'tier_2' },
+  { id: 'nerd', value: '🤓', unlockTierCode: 'tier_3' },
+  { id: 'trophy', value: '🏆', unlockTierCode: 'tier_3' },
+  { id: 'rocket', value: '🚀', unlockTierCode: 'tier_3' },
+  { id: 'school', value: '🏫', unlockTierCode: 'tier_3' },
+  { id: 'sparkles', value: '🌟', unlockTierCode: 'tier_4' },
+  { id: 'science', value: '🧪', unlockTierCode: 'tier_4' },
+  { id: 'tiger', value: '🐯', unlockTierCode: 'tier_4' },
+  { id: 'panda', value: '🐼', unlockTierCode: 'tier_4' },
+  { id: 'pencil', value: '✏️', unlockTierCode: 'tier_5' },
+  { id: 'bear', value: '🐻', unlockTierCode: 'tier_5' },
+  { id: 'fox', value: '🦊', unlockTierCode: 'tier_5' },
+  { id: 'dolphin', value: '🐬', unlockTierCode: 'tier_5' },
+  { id: 'owl', value: '🦉', unlockTierCode: 'tier_5' },
+  { id: 'whale', value: '🐳', unlockTierCode: 'tier_5' },
+];
+
+const getProfileEmojiEntryById = (emojiId) =>
+  PROFILE_EMOJI_REGISTRY.find((entry) => entry.id === String(emojiId || '').trim()) || null;
+
+const parseTierIndex = (tierCode) => {
+  const parsed = Number(String(tierCode || '').replace('tier_', ''));
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+};
+
+const normalizeTierCode = (value, index) => {
+  const raw = String(value || '').trim();
+  return /^tier_\d+$/.test(raw) ? raw : `tier_${index + 1}`;
+};
+
+const normalizeRankTier = (tier, index) => ({
+  code: normalizeTierCode(tier?.code, index),
+  minPoints: Math.max(0, Number(tier?.minPoints ?? tier?.threshold ?? 0)),
+});
+
+const sanitizeEmojiIds = (raw) => Array.from(new Set(
+  Array.isArray(raw)
+    ? raw
+      .map((value) => String(value || '').trim())
+      .filter((emojiId) => Boolean(getProfileEmojiEntryById(emojiId)))
+    : [],
+));
+
+const getClampedTierCode = (requestedTierCode, tiers) => {
+  if (!tiers.length) return requestedTierCode;
+  const requestedIndex = parseTierIndex(requestedTierCode);
+  const matchedTier = tiers
+    .map((tier) => ({ tier, index: parseTierIndex(tier.code) }))
+    .find(({ index }) => index >= requestedIndex);
+  return matchedTier?.tier.code || tiers[tiers.length - 1].code;
+};
+
+const buildDefaultRankEmojiPolicy = (tiers) => {
+  const tierUnlocks = tiers.reduce((accumulator, tier) => ({
+    ...accumulator,
+    [tier.code]: {
+      allowedEmojiIds: [],
+    },
+  }), {});
+
+  PROFILE_EMOJI_REGISTRY.forEach((entry) => {
+    const tierCode = getClampedTierCode(entry.unlockTierCode, tiers);
+    const currentTier = tierUnlocks[tierCode] || { allowedEmojiIds: [] };
+    currentTier.allowedEmojiIds = [...currentTier.allowedEmojiIds, entry.id];
+    tierUnlocks[tierCode] = currentTier;
+  });
+
+  const firstTierCode = tiers[0]?.code;
+  if (firstTierCode) {
+    const firstTier = tierUnlocks[firstTierCode] || { allowedEmojiIds: [] };
+    if (!firstTier.allowedEmojiIds.includes(DEFAULT_PROFILE_EMOJI_ID)) {
+      firstTier.allowedEmojiIds = [DEFAULT_PROFILE_EMOJI_ID, ...firstTier.allowedEmojiIds];
+    }
+    tierUnlocks[firstTierCode] = {
+      allowedEmojiIds: Array.from(new Set(firstTier.allowedEmojiIds)),
+    };
+  }
+
+  return {
+    enabled: true,
+    defaultEmojiId: DEFAULT_PROFILE_EMOJI_ID,
+    tiers: tierUnlocks,
+  };
+};
+
+const resolveRankPolicy = (rawRankPolicy) => {
+  const tiers = Array.isArray(rawRankPolicy?.tiers)
+    ? rawRankPolicy.tiers
+      .map((tier, index) => normalizeRankTier(tier, index))
+      .sort((a, b) => a.minPoints - b.minPoints)
+    : DEFAULT_POINT_RANK_TIERS.map((tier) => ({ ...tier }));
+  const normalizedTiers = tiers.length > 0 ? tiers : DEFAULT_POINT_RANK_TIERS.map((tier) => ({ ...tier }));
+  const defaultEmojiPolicy = buildDefaultRankEmojiPolicy(normalizedTiers);
+  const emojiPolicyTiers = normalizedTiers.reduce((accumulator, tier) => {
+    const allowedEmojiIds = sanitizeEmojiIds(rawRankPolicy?.emojiPolicy?.tiers?.[tier.code]?.allowedEmojiIds);
+    accumulator[tier.code] = {
+      allowedEmojiIds: allowedEmojiIds.length > 0
+        ? allowedEmojiIds
+        : [...(defaultEmojiPolicy.tiers[tier.code]?.allowedEmojiIds || [])],
+    };
+    return accumulator;
+  }, {});
+
+  const defaultEmojiId = getProfileEmojiEntryById(rawRankPolicy?.emojiPolicy?.defaultEmojiId)
+    ? String(rawRankPolicy?.emojiPolicy?.defaultEmojiId || '').trim()
+    : defaultEmojiPolicy.defaultEmojiId;
+  const firstTierCode = normalizedTiers[0]?.code;
+  if (firstTierCode) {
+    const firstTier = emojiPolicyTiers[firstTierCode] || { allowedEmojiIds: [] };
+    emojiPolicyTiers[firstTierCode] = {
+      allowedEmojiIds: Array.from(new Set([defaultEmojiId, ...firstTier.allowedEmojiIds])),
+    };
+  }
+
+  return {
+    enabled: rawRankPolicy?.enabled !== false,
+    themeId: rawRankPolicy?.themeId === 'world_nobility' ? 'world_nobility' : 'korean_golpum',
+    basedOn: rawRankPolicy?.basedOn === 'earnedTotal' || rawRankPolicy?.basedOn === 'earnedTotal_plus_positive_manual_adjust'
+      ? rawRankPolicy.basedOn
+      : 'earnedTotal_plus_positive_manual_adjust',
+    tiers: normalizedTiers,
+    emojiPolicy: {
+      enabled: rawRankPolicy?.emojiPolicy?.enabled !== false,
+      defaultEmojiId,
+      tiers: emojiPolicyTiers,
+    },
+  };
+};
+
+const buildRankSnapshot = (rankEarnedTotal, rankPolicy) => {
+  const resolvedRankPolicy = resolveRankPolicy(rankPolicy);
+  const metricValue = Math.max(0, Number(rankEarnedTotal || 0));
+  let activeTier = resolvedRankPolicy.tiers[0] || { code: 'tier_1' };
+
+  resolvedRankPolicy.tiers.forEach((tier) => {
+    if (metricValue >= Number(tier.minPoints || 0)) {
+      activeTier = tier;
+    }
+  });
+
+  return {
+    tierCode: activeTier.code,
+    metricValue,
+    basedOn: resolvedRankPolicy.basedOn,
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+};
+
+const buildWalletRankState = (rankEarnedTotal, rankPolicy) => {
+  const safeRankEarnedTotal = Math.max(0, Number(rankEarnedTotal || 0));
+  return {
+    rankEarnedTotal: safeRankEarnedTotal,
+    rankSnapshot: buildRankSnapshot(safeRankEarnedTotal, rankPolicy),
+  };
+};
+
+const sumPositiveManualAdjustDocs = (docs) => docs.reduce((total, docSnapshot) => {
+  const transaction = docSnapshot?.data ? docSnapshot.data() : docSnapshot;
+  if (transaction?.type !== 'manual_adjust') return total;
+  const delta = Number(transaction?.delta || 0);
+  return delta > 0 ? total + delta : total;
+}, 0);
+
+const getCurrentRankEarnedTotal = async (transaction, year, semester, uid, wallet) => {
+  if (Number.isFinite(Number(wallet?.rankEarnedTotal))) {
+    return Math.max(0, Number(wallet.rankEarnedTotal || 0));
+  }
+
+  const manualAdjustQuery = db.collection(getPointCollectionPath(year, semester, 'point_transactions'))
+    .where('uid', '==', uid)
+    .where('type', '==', 'manual_adjust');
+  const manualAdjustSnap = await transaction.get(manualAdjustQuery);
+  return Math.max(0, Number(wallet?.earnedTotal || 0) + sumPositiveManualAdjustDocs(manualAdjustSnap.docs));
+};
+
+const getAllowedEmojiIdsForTier = (rankPolicy, currentTierCode) => {
+  const resolvedRankPolicy = resolveRankPolicy(rankPolicy);
+  if (!resolvedRankPolicy.emojiPolicy.enabled) {
+    return PROFILE_EMOJI_REGISTRY.map((entry) => entry.id);
+  }
+
+  const targetTierCode = currentTierCode || resolvedRankPolicy.tiers[0]?.code || 'tier_1';
+  const targetTierIndex = parseTierIndex(targetTierCode);
+  const allowedEmojiIds = resolvedRankPolicy.tiers.reduce((accumulator, tier) => {
+    if (parseTierIndex(tier.code) > targetTierIndex) {
+      return accumulator;
+    }
+    return [
+      ...accumulator,
+      ...(resolvedRankPolicy.emojiPolicy.tiers[tier.code]?.allowedEmojiIds || []),
+    ];
+  }, []);
+  const uniqueAllowedEmojiIds = Array.from(new Set(
+    allowedEmojiIds.filter((emojiId) => Boolean(getProfileEmojiEntryById(emojiId))),
+  ));
+
+  return uniqueAllowedEmojiIds.length > 0
+    ? uniqueAllowedEmojiIds
+    : [resolvedRankPolicy.emojiPolicy.defaultEmojiId];
+};
+
+const getCurrentTierCodeForRankTotal = (rankEarnedTotal, rankPolicy) =>
+  buildRankSnapshot(rankEarnedTotal, rankPolicy).tierCode;
+
 const DEFAULT_POINT_POLICY = {
   attendanceDaily: 5,
   attendanceMonthlyBonus: 20,
@@ -17,6 +238,12 @@ const DEFAULT_POINT_POLICY = {
   quizSolve: 10,
   manualAdjustEnabled: false,
   allowNegativeBalance: false,
+  rankPolicy: resolveRankPolicy({
+    enabled: true,
+    themeId: 'korean_golpum',
+    basedOn: 'earnedTotal_plus_positive_manual_adjust',
+    tiers: DEFAULT_POINT_RANK_TIERS,
+  }),
   updatedBy: '',
 };
 
@@ -153,8 +380,10 @@ const ensureWallet = async (transaction, year, semester, uid, profile) => {
     ...buildWalletBase(uid, profile),
     balance: 0,
     earnedTotal: 0,
+    rankEarnedTotal: 0,
     spentTotal: 0,
     adjustedTotal: 0,
+    rankSnapshot: null,
     lastTransactionAt: null,
   };
   return {
@@ -166,7 +395,16 @@ const ensureWallet = async (transaction, year, semester, uid, profile) => {
 const loadPolicy = async (transaction, year, semester) => {
   const policyRef = db.doc(getPointPolicyPath(year, semester));
   const policySnap = await transaction.get(policyRef);
-  return policySnap.exists ? { ...DEFAULT_POINT_POLICY, ...(policySnap.data() || {}) } : DEFAULT_POINT_POLICY;
+  if (!policySnap.exists) {
+    return DEFAULT_POINT_POLICY;
+  }
+
+  const data = policySnap.data() || {};
+  return {
+    ...DEFAULT_POINT_POLICY,
+    ...data,
+    rankPolicy: resolveRankPolicy(data.rankPolicy),
+  };
 };
 
 const createTransactionPayload = ({
@@ -226,6 +464,7 @@ exports.applyPointActivityReward = onCall({ region: REGION }, async (request) =>
   return db.runTransaction(async (transaction) => {
     const { ref: walletRef, wallet } = await ensureWallet(transaction, year, semester, uid, profile);
     const policy = await loadPolicy(transaction, year, semester);
+    const currentRankEarnedTotal = await getCurrentRankEarnedTotal(transaction, year, semester, uid, wallet);
     const todayKey = getKstDateKey();
     const monthKey = todayKey.slice(0, 7);
     const rewardAmount = activityType === 'attendance'
@@ -266,38 +505,14 @@ exports.applyPointActivityReward = onCall({ region: REGION }, async (request) =>
     let totalAwarded = rewardAmount;
     let monthlyBonusAmount = 0;
     let monthlyBonusAwarded = false;
-    transaction.set(walletRef, {
-      ...buildWalletBase(uid, profile),
-      balance: nextBalance,
-      earnedTotal: Number(wallet.earnedTotal || 0) + rewardAmount,
-      spentTotal: Number(wallet.spentTotal || 0),
-      adjustedTotal: Number(wallet.adjustedTotal || 0),
-      lastTransactionAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
-
-    transaction.set(txRef, createTransactionPayload({
-      uid,
-      type: activityType,
-      delta: rewardAmount,
-      balanceAfter: nextBalance,
-      sourceId,
-      sourceLabel: requestedLabel || (
-        activityType === 'attendance'
-          ? `${getKstDateKey()} attendance`
-          : activityType === 'quiz'
-            ? 'Quiz completed'
-            : 'Lesson viewed'
-      ),
-      policyId: 'current',
-      createdBy: 'system:auto',
-      targetMonth: activityType === 'attendance' ? monthKey : '',
-      targetDate: activityType === 'attendance' ? todayKey : '',
-    }));
+    let nextRankEarnedTotal = currentRankEarnedTotal + rewardAmount;
+    let nextEarnedTotal = Number(wallet.earnedTotal || 0) + rewardAmount;
+    let bonusTxRef = null;
 
     if (activityType === 'attendance') {
       const bonusAmount = Number(policy.attendanceMonthlyBonus || 0);
       const bonusTransactionId = buildActivityTransactionId(uid, 'attendance_monthly_bonus', monthKey);
-      const bonusTxRef = db.doc(`${getPointCollectionPath(year, semester, 'point_transactions')}/${bonusTransactionId}`);
+      bonusTxRef = db.doc(`${getPointCollectionPath(year, semester, 'point_transactions')}/${bonusTransactionId}`);
       const existingBonusTx = await transaction.get(bonusTxRef);
 
       if (!existingBonusTx.exists && bonusAmount > 0 && isLastDayOfMonth()) {
@@ -318,20 +533,45 @@ exports.applyPointActivityReward = onCall({ region: REGION }, async (request) =>
           monthlyBonusAwarded = true;
           totalAwarded += bonusAmount;
           nextBalance += bonusAmount;
+          nextRankEarnedTotal += bonusAmount;
+          nextEarnedTotal += bonusAmount;
+        }
+      }
+    }
+    transaction.set(walletRef, {
+      ...buildWalletBase(uid, profile),
+      balance: nextBalance,
+      earnedTotal: nextEarnedTotal,
+      ...buildWalletRankState(nextRankEarnedTotal, policy.rankPolicy),
+      spentTotal: Number(wallet.spentTotal || 0),
+      adjustedTotal: Number(wallet.adjustedTotal || 0),
+      lastTransactionAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
 
-          transaction.set(walletRef, {
-            ...buildWalletBase(uid, profile),
-            balance: nextBalance,
-            earnedTotal: Number(wallet.earnedTotal || 0) + rewardAmount + bonusAmount,
-            spentTotal: Number(wallet.spentTotal || 0),
-            adjustedTotal: Number(wallet.adjustedTotal || 0),
-            lastTransactionAt: FieldValue.serverTimestamp(),
-          }, { merge: true });
+    transaction.set(txRef, createTransactionPayload({
+      uid,
+      type: activityType,
+      delta: rewardAmount,
+      balanceAfter: Number(wallet.balance || 0) + rewardAmount,
+      sourceId,
+      sourceLabel: requestedLabel || (
+        activityType === 'attendance'
+          ? `${getKstDateKey()} attendance`
+          : activityType === 'quiz'
+            ? 'Quiz completed'
+            : 'Lesson viewed'
+      ),
+      policyId: 'current',
+      createdBy: 'system:auto',
+      targetMonth: activityType === 'attendance' ? monthKey : '',
+      targetDate: activityType === 'attendance' ? todayKey : '',
+    }));
 
-          transaction.set(bonusTxRef, createTransactionPayload({
+    if (monthlyBonusAwarded && bonusTxRef) {
+      transaction.set(bonusTxRef, createTransactionPayload({
             uid,
             type: 'attendance_monthly_bonus',
-            delta: bonusAmount,
+            delta: monthlyBonusAmount,
             balanceAfter: nextBalance,
             sourceId: monthKey,
             sourceLabel: `${monthKey} 월간 개근 보너스`,
@@ -340,8 +580,6 @@ exports.applyPointActivityReward = onCall({ region: REGION }, async (request) =>
             targetMonth: monthKey,
             targetDate: todayKey,
           }));
-        }
-      }
     }
 
     return {
@@ -374,6 +612,8 @@ exports.createPointPurchaseRequest = onCall({ region: REGION }, async (request) 
 
   return db.runTransaction(async (transaction) => {
     const { ref: walletRef, wallet } = await ensureWallet(transaction, year, semester, uid, profile);
+    const policy = await loadPolicy(transaction, year, semester);
+    const currentRankEarnedTotal = await getCurrentRankEarnedTotal(transaction, year, semester, uid, wallet);
     const productRef = db.doc(`${getPointCollectionPath(year, semester, 'point_products')}/${productId}`);
     const productSnap = await transaction.get(productRef);
     if (!productSnap.exists) {
@@ -409,6 +649,7 @@ exports.createPointPurchaseRequest = onCall({ region: REGION }, async (request) 
       ...buildWalletBase(uid, profile),
       balance: nextBalance,
       earnedTotal: Number(wallet.earnedTotal || 0),
+      ...buildWalletRankState(currentRankEarnedTotal, policy.rankPolicy),
       spentTotal: Number(wallet.spentTotal || 0) + Number(product.price || 0),
       adjustedTotal: Number(wallet.adjustedTotal || 0),
       lastTransactionAt: FieldValue.serverTimestamp(),
@@ -479,12 +720,14 @@ exports.adjustTeacherPoints = onCall({ region: REGION }, async (request) => {
   return db.runTransaction(async (transaction) => {
     const { ref: walletRef, wallet } = await ensureWallet(transaction, year, semester, targetUid, profile);
     const policy = await loadPolicy(transaction, year, semester);
+    const currentRankEarnedTotal = await getCurrentRankEarnedTotal(transaction, year, semester, targetUid, wallet);
 
     if (!policy.manualAdjustEnabled) {
       throw new HttpsError('failed-precondition', 'Manual point adjustment is disabled by policy.');
     }
 
     const nextBalance = Number(wallet.balance || 0) + delta;
+    const nextRankEarnedTotal = currentRankEarnedTotal + Math.max(0, delta);
     if (!policy.allowNegativeBalance && nextBalance < 0) {
       throw new HttpsError('failed-precondition', 'Insufficient point balance.');
     }
@@ -493,6 +736,7 @@ exports.adjustTeacherPoints = onCall({ region: REGION }, async (request) => {
       ...buildWalletBase(targetUid, profile),
       balance: nextBalance,
       earnedTotal: Number(wallet.earnedTotal || 0),
+      ...buildWalletRankState(nextRankEarnedTotal, policy.rankPolicy),
       spentTotal: Number(wallet.spentTotal || 0),
       adjustedTotal: Number(wallet.adjustedTotal || 0) + delta,
       lastTransactionAt: FieldValue.serverTimestamp(),
@@ -563,10 +807,15 @@ exports.updateTeacherPointAdjustment = onCall({ region: REGION }, async (request
     const { profile } = await ensureStudentProfile(targetUid);
     const { ref: walletRef, wallet } = await ensureWallet(transaction, year, semester, targetUid, profile);
     const policy = await loadPolicy(transaction, year, semester);
+    const currentRankEarnedTotal = await getCurrentRankEarnedTotal(transaction, year, semester, targetUid, wallet);
     const previousDelta = Number(pointTransaction.delta || 0);
     const nextDelta = action === 'cancel' ? 0 : requestedDelta;
     const deltaDiff = nextDelta - previousDelta;
     const nextBalance = Number(wallet.balance || 0) + deltaDiff;
+    const nextRankEarnedTotal = Math.max(
+      0,
+      currentRankEarnedTotal + Math.max(0, nextDelta) - Math.max(0, previousDelta),
+    );
 
     if (!policy.allowNegativeBalance && nextBalance < 0) {
       throw new HttpsError('failed-precondition', 'Insufficient point balance.');
@@ -580,6 +829,7 @@ exports.updateTeacherPointAdjustment = onCall({ region: REGION }, async (request
       ...buildWalletBase(targetUid, profile),
       balance: nextBalance,
       earnedTotal: Number(wallet.earnedTotal || 0),
+      ...buildWalletRankState(nextRankEarnedTotal, policy.rankPolicy),
       spentTotal: Number(wallet.spentTotal || 0),
       adjustedTotal: Number(wallet.adjustedTotal || 0) + deltaDiff,
       lastTransactionAt: nextLastTransactionAt,
@@ -646,6 +896,8 @@ exports.reviewTeacherPointOrder = onCall({ region: REGION }, async (request) => 
 
     const { profile } = await ensureStudentProfile(order.uid);
     const { ref: walletRef, wallet } = await ensureWallet(transaction, year, semester, order.uid, profile);
+    const policy = await loadPolicy(transaction, year, semester);
+    const currentRankEarnedTotal = await getCurrentRankEarnedTotal(transaction, year, semester, order.uid, wallet);
     const productRef = db.doc(`${getPointCollectionPath(year, semester, 'point_products')}/${order.productId}`);
     const productSnap = await transaction.get(productRef);
 
@@ -665,6 +917,7 @@ exports.reviewTeacherPointOrder = onCall({ region: REGION }, async (request) => 
         ...buildWalletBase(order.uid, profile),
         balance: restoredBalance,
         earnedTotal: Number(wallet.earnedTotal || 0),
+        ...buildWalletRankState(currentRankEarnedTotal, policy.rankPolicy),
         spentTotal: Math.max(0, Number(wallet.spentTotal || 0) - Number(order.priceSnapshot || 0)),
         adjustedTotal: Number(wallet.adjustedTotal || 0),
         lastTransactionAt: FieldValue.serverTimestamp(),
@@ -696,6 +949,11 @@ exports.reviewTeacherPointOrder = onCall({ region: REGION }, async (request) => 
       };
     }
 
+    transaction.set(walletRef, {
+      ...buildWalletBase(order.uid, profile),
+      ...buildWalletRankState(currentRankEarnedTotal, policy.rankPolicy),
+    }, { merge: true });
+
     transaction.set(txRef, createTransactionPayload({
       uid: order.uid,
       type: 'purchase_confirm',
@@ -712,6 +970,41 @@ exports.reviewTeacherPointOrder = onCall({ region: REGION }, async (request) => 
       transactionId,
       status: nextStatus,
       duplicate: false,
+    };
+  });
+});
+
+exports.updateStudentProfileIcon = onCall({ region: REGION }, async (request) => {
+  const { uid } = assertAllowedWestoryUser(request);
+  const { year, semester } = assertYearSemester(request.data);
+  const emojiId = String(request.data?.emojiId || '').trim();
+  const emojiEntry = getProfileEmojiEntryById(emojiId);
+
+  if (!emojiEntry) {
+    throw new HttpsError('invalid-argument', 'A valid emojiId is required.');
+  }
+
+  return db.runTransaction(async (transaction) => {
+    const { ref: userRef, profile } = await getUserProfile(uid);
+    const { wallet } = await ensureWallet(transaction, year, semester, uid, profile);
+    const policy = await loadPolicy(transaction, year, semester);
+    const currentRankEarnedTotal = await getCurrentRankEarnedTotal(transaction, year, semester, uid, wallet);
+    const currentTierCode = getCurrentTierCodeForRankTotal(currentRankEarnedTotal, policy.rankPolicy);
+    const allowedEmojiIds = getAllowedEmojiIdsForTier(policy.rankPolicy, currentTierCode);
+
+    if (!allowedEmojiIds.includes(emojiId)) {
+      throw new HttpsError('failed-precondition', 'This profile emoji is locked for the current rank.');
+    }
+
+    transaction.set(userRef, {
+      profileIcon: emojiEntry.value,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    return {
+      emojiId,
+      profileIcon: emojiEntry.value,
+      tierCode: currentTierCode,
     };
   });
 });

@@ -1,0 +1,205 @@
+# Westory 포인트 등급제 설계 준비 메모
+
+이 문서는 2026-03-24 기준 Westory의 현재 포인트 시스템을 코드 기준으로 정리하고, 향후 등급제를 안전하게 도입하기 위한 설계 준비안을 정리한 메모다.
+
+원칙:
+- 로그인 코어는 수정하지 않는다.
+- 현재 정상 동작 중인 포인트 적립/차감/주문 흐름은 흔들지 않는다.
+- 이번 단계는 구현보다 안전한 설계 정리와 영향 범위 파악에 집중한다.
+
+[1] 작업 전 확인 결과
+- 읽은 규칙 파일
+  - `AGENTS.md`
+  - `UI_RULES.md`
+  - `src/pages/teacher/AGENTS.md`
+  - `src/pages/student/AGENTS.md`
+- 추가 규칙 파일 확인 결과
+  - `functions` 또는 서버 로직 전용 `AGENTS.md`/`RULES` 파일은 별도로 발견되지 않았다.
+- 조사에 사용한 주요 파일/디렉터리
+  - `src/lib/points.ts`
+  - `src/types/index.ts`
+  - `src/constants/pointLabels.ts`
+  - `src/lib/pointFormatters.ts`
+  - `src/lib/permissions.ts`
+  - `src/lib/semesterScope.ts`
+  - `src/lib/semesterReadiness.ts`
+  - `src/pages/teacher/ManagePoints.tsx`
+  - `src/pages/teacher/components/points/*`
+  - `src/pages/student/Points.tsx`
+  - `src/pages/student/components/points/*`
+  - `src/pages/student/Dashboard.tsx`
+  - `src/pages/student/quiz/QuizRunner.tsx`
+  - `src/pages/student/lesson/components/LessonContent.tsx`
+  - `src/pages/student/history-classroom/HistoryClassroomRunner.tsx`
+  - `src/pages/teacher/components/SettingsAccess.tsx`
+  - `src/pages/teacher/components/SettingsGeneral.tsx`
+  - `functions/index.js`
+  - `functions/README.md`
+  - `scripts/verify-point-system.mjs`
+  - `firestore.rules`
+  - `storage.rules`
+- 로그인 코어 비수정 여부 확인
+  - `src/pages/Login.tsx`, `src/contexts/AuthContext.tsx`, `src/lib/firebase.ts`는 조사만 했고 수정하지 않았다.
+
+[2] 현재 포인트 시스템 구조 파악
+- 데이터 모델
+  - 포인트 시스템은 전부 `years/{year}/semesters/{semester}` 학기 경로 아래에 있다.
+  - `point_wallets/{uid}`는 학생별 현재 상태 snapshot이다.
+  - wallet 필드는 `balance`, `earnedTotal`, `spentTotal`, `adjustedTotal`, `lastTransactionAt`와 학생 이름/학년/반/번호 비정규화 값이다.
+  - `point_transactions/{txId}`는 원장 성격의 거래 기록이다.
+  - transaction 필드는 `type`, `activityType`, `delta`, `balanceAfter`, `sourceId`, `sourceLabel`, `policyId`, `createdBy`, `targetMonth`, `targetDate`, `createdAt`다.
+  - `point_orders/{orderId}`는 학생 구매 요청 상태 저장소다.
+  - `point_products/{productId}`는 상점 상품이며 재고 차감과 복구 대상이다.
+  - `point_policies/current`는 자동 적립량, 월간 개근 보너스, 수동 조정 허용, 음수 잔액 허용 여부를 담는다.
+  - 현재 lifetime 포인트 전용 저장소는 없다. 포인트 핵심 상태는 전부 학기 범위에 묶여 있다.
+- trusted write path
+  - `applyPointActivityReward`: 출석, 퀴즈, 수업자료 적립과 월간 개근 보너스를 처리한다.
+  - `createPointPurchaseRequest`: 구매 요청 시 wallet 차감, stock 감소, order 생성, hold transaction 생성까지 한 번에 처리한다.
+  - `adjustTeacherPoints`: 교사 수동 포인트 지급/차감을 처리한다.
+  - `updateTeacherPointAdjustment`: 최신 manual adjustment만 수정/취소할 수 있다.
+  - `reviewTeacherPointOrder`: 승인/반려/지급 완료/취소 상태 전이와 환불/재고 복구를 처리한다.
+  - 위 5개 핵심 mutation은 모두 `functions/index.js`의 Firestore transaction 안에서 처리된다.
+  - 반대로 `point_wallets`, `point_transactions`, `point_orders`는 `firestore.rules`에서 클라이언트 직접 쓰기가 전면 금지되어 있다.
+  - `point_policies`와 `point_products`만 예외적으로 `point_manage` 권한 기반 클라이언트 직접 쓰기다.
+- UI 구조
+  - 교사 포인트 관리 진입점은 `src/pages/teacher/ManagePoints.tsx`다.
+  - 교사 화면은 `overview`, `grant`, `policy`, `products`, `requests` 5개 탭 구조다.
+  - 학생 포인트 화면 진입점은 `src/pages/student/Points.tsx`다.
+  - 학생 화면은 `overview`, `history`, `shop`, `orders` 4개 탭 구조다.
+  - 메뉴와 라우트는 `src/constants/menus.ts`, `src/App.tsx`, `src/components/common/Header.tsx`에서 연결된다.
+  - 권한 분리는 `src/lib/permissions.ts`와 `src/pages/teacher/components/SettingsAccess.tsx`에서 `point_read`, `point_manage`로 처리한다.
+- 정책/보너스/지급 흐름
+  - 월간 개근 보너스는 `applyPointActivityReward` 내부에서 KST 말일, 해당 월 전일 출석 완료, 보너스 transaction 미존재 조건을 만족할 때만 1회 지급된다.
+  - 학생 필터 지급은 `ManagePoints.tsx`와 `PointGrantTab.tsx`에서 학년/반/번호/이름 필터로 학생을 고르고 1명 단위 지급하는 구조다.
+  - 관리자 친화 용어는 `src/constants/pointLabels.ts`와 각 포인트 탭 UI에서 중앙 관리되고 있다.
+  - 학생 자동 적립 호출 지점은 `Dashboard.tsx`, `QuizRunner.tsx`, `LessonContent.tsx`, `HistoryClassroomRunner.tsx`다.
+
+[3] 등급제 도입 후보 구조 비교
+- 후보 A
+  - 기준값: `wallet.balance`
+  - 저장 방식: 계산식 파생만
+  - 정책 위치: `point_policies/current.rankPolicy`
+  - 장점: 현재 데이터만으로 즉시 표시 가능하고 구현량이 가장 적다.
+  - 단점: 구매 요청 시 `purchase_hold`가 즉시 balance를 줄이므로 등급이 바로 하락할 수 있다. 학생이 포인트를 쓰는 행동이 등급 하락으로 이어져 상점 흐름과 충돌한다. 환불/취소 때 다시 오르는 흔들림도 생긴다.
+- 후보 B
+  - 기준값: 학기 누적 획득 포인트
+  - 실제 계산 기준: 1차는 `wallet.earnedTotal`
+  - 저장 방식: 1단계는 계산식 파생, 2단계는 필요 시 wallet snapshot 추가
+  - 정책 위치: `point_policies/current.rankPolicy`
+  - 장점: 현재 학기 스코프 구조와 가장 자연스럽다. 자동 적립과 월간 개근 보너스가 이미 `earnedTotal`을 누적한다. 소비와 분리되어 구매 요청이 등급을 흔들지 않는다. 마이그레이션이 거의 필요 없다.
+  - 단점: 현재 `earnedTotal`은 수동 teacher grant를 포함하지 않는다. 학교 운영상 수동 보상도 등급에 반영해야 하면 추가 정의가 필요하다.
+- 후보 C
+  - 기준값: 별도 `rankXp`
+  - 저장 방식: wallet snapshot + rank history
+  - 정책 위치: 별도 `point_rank_policies/current`
+  - 장점: 포인트 경제와 등급 진행을 완전히 분리할 수 있다. 테마, 승급 보상, 등급 유지 규칙, 혜택 연결 같은 확장성은 가장 좋다.
+  - 단점: 모든 trusted write path에 rank XP 규칙을 추가해야 한다. 초기값 결정, backfill, 정책 저장 경로, 권한, 로그 설계까지 새로 필요해 현재 단계에서는 과하다.
+- 추가 비교 메모
+  - lifetime earned는 현재 저장소 구조와 맞지 않는다. 학기 횡단 누적 저장소가 없어서 aggregate를 새로 만들어야 한다.
+  - wallet snapshot만으로 current rank를 저장하는 구조는 대량 조회에는 좋지만, 승급 이력 자체를 설명하지는 못한다.
+  - promotion log는 나중에 승급 보상/이력 UI가 붙을 때 유용하지만 지금 바로 필수는 아니다.
+- 장단점 비교 결론
+  - 지금 Westory에 가장 안전한 1차 기준은 `학기 누적 획득 포인트`다.
+  - 지금 Westory에 가장 확장성이 높은 장기 구조는 `별도 rank XP`지만 현재 단계에서는 침습 범위가 너무 크다.
+  - 따라서 이번 단계 메인안은 후보 B가 적합하다.
+
+[4] 최종 추천 구조
+- 내부 tier 구조
+  - 내부 공통 코드는 `tier_1`, `tier_2`, `tier_3`처럼 고정한다.
+  - wallet이나 로그에 저장할 때도 표시명이 아니라 `tierCode`만 저장한다.
+  - threshold는 `minPoints` 기준 오름차순 배열로 둔다.
+- 테마별 표시명 구조
+  - 표시 테마는 `themeId`로 분리한다.
+  - 예시
+  - `korean_golpum`: `tier_1=육두품`, `tier_2=진골`, `tier_3=성골` 식 매핑
+  - `world_nobility`: `tier_1=남작`, `tier_2=자작`, `tier_3=백작` 식 매핑
+  - 공통 로직은 `tierCode`만 보고, UI는 `themeId + tierCode`로 라벨/색/설명을 푼다.
+- 정책 저장 위치
+  - 1단계 추천: 기존 `years/{year}/semesters/{semester}/point_policies/current` 안에 `rankPolicy` 블록을 추가한다.
+  - 이유: 새 컬렉션, rules, seed 로직 없이 가장 보수적으로 붙일 수 있다.
+  - 추천 필드 초안
+  - `rankPolicy.enabled`
+  - `rankPolicy.metric = 'semester_earned'`
+  - `rankPolicy.themeId = 'korean_golpum' | 'world_nobility'`
+  - `rankPolicy.tiers = [{ code, minPoints }]`
+  - `rankPolicy.customLabels` 또는 `rankPolicy.themeOverrides`
+  - `rankPolicy.preserveAcrossSemester = false`
+  - `rankPolicy.version`
+  - 장기적으로 설정이 복잡해지면 `point_rank_policies/current`로 분리한다.
+- 계산 방식
+  - 1단계 권장: 클라이언트 표시용 파생 계산
+  - 입력값은 `wallet.earnedTotal`과 `point_policies/current.rankPolicy`
+  - 계산 helper는 새 공용 파일 `src/lib/pointRank.ts`로 분리한다.
+  - 2단계 권장: 교사 목록 정렬/승급 보상/히스토리가 필요해지면 callable write path 안에서 `wallet.rankSnapshot`을 같이 갱신한다.
+  - 3단계 권장: 승급 이력과 보상 지급이 필요해지면 `point_rank_history`를 append-only로 추가한다.
+- 표시 방식
+  - 학생 `Points.tsx` 상단 요약 박스: 현재 보유 포인트 옆에 작은 등급 배지
+  - 학생 `StudentPointSummaryTab.tsx`: 4개 요약 카드 중 1곳에 현재 등급 또는 다음 등급까지 남은 포인트 표시
+  - 교사 `PointsOverviewTab.tsx`: 학생 이름 옆 작은 등급 배지, 상세 패널 상단에 현재 등급
+  - 교사 `PointGrantTab.tsx`: 선택 학생 패널에 현재 등급만 노출
+  - 정책 UI `PointPolicyTab.tsx`: 하단에 등급제 설정 섹션 추가
+  - 상점/주문 화면은 1단계에서는 배지만 노출하고, 레이아웃 재배치는 하지 않는다.
+
+[5] 구현 준비 체크리스트
+- 수정 필요 파일
+  - 프론트
+  - `src/types/index.ts`
+  - `src/lib/points.ts`
+  - `src/constants/pointLabels.ts`
+  - `src/pages/teacher/ManagePoints.tsx`
+  - `src/pages/teacher/components/points/PointPolicyTab.tsx`
+  - `src/pages/teacher/components/points/PointsOverviewTab.tsx`
+  - `src/pages/teacher/components/points/PointGrantTab.tsx`
+  - `src/pages/student/Points.tsx`
+  - `src/pages/student/components/points/StudentPointSummaryTab.tsx`
+  - 새 파일 후보: `src/lib/pointRank.ts`, `src/constants/pointRankThemes.ts`
+  - 함수/서버
+  - 1단계 최소안이면 필수 수정 없음
+  - 2단계부터 `functions/index.js`, `functions/README.md`, `scripts/verify-point-system.mjs`
+  - rules
+  - 1단계 최소안이면 필수 수정 없음
+  - 새 컬렉션이나 snapshot/history를 추가하는 2단계부터 `firestore.rules`
+  - 타입/상수/설정
+  - `src/types/index.ts`
+  - `src/constants/pointLabels.ts`
+  - `src/pages/teacher/components/SettingsGeneral.tsx`
+  - `src/lib/semesterReadiness.ts`
+- 마이그레이션 필요 여부
+  - 1단계 최소안: 없음
+  - 이유: 기존 wallet의 `earnedTotal`과 현재 policy만으로 계산 가능하다.
+  - 2단계 snapshot 저장형: 권장
+  - 기존 semester wallet 전체를 한 번 돌며 `rankCode`, `rankMetricValue`, `rankPolicyVersion`을 backfill한다.
+- 테스트 필요 항목
+  - `semester_earned` 기준에서 구매 요청/환불/취소가 등급을 흔들지 않는지
+  - 출석, 월간 개근 보너스, 퀴즈, 수업자료 적립 후 등급 계산이 일관적인지
+  - 수동 teacher grant를 1단계에서 등급에 반영하지 않는 정책 설명이 UI에 충분한지
+  - 학기 전환 시 이전 학기 등급이 현재 학기에 섞이지 않는지
+  - theme 변경 시 내부 `tierCode`는 유지되고 표시명만 바뀌는지
+  - 정책 저장 후 student/teacher 양쪽 화면이 같은 결과를 보여주는지
+- 위험 요소
+  - `balance` 기준 사용 시 구매 hold 때문에 등급 하락이 발생한다.
+  - lifetime 기준은 현재 구조와 어긋나서 aggregate 복잡도가 높다.
+  - point policy 기본값이 여러 파일에 중복되어 있어 rank 기본값도 같은 방식으로 흩어질 위험이 있다.
+  - `point_policies`와 `point_products`는 현재 direct client write라 복잡한 rank 설정을 바로 많이 넣으면 검증이 약해진다.
+  - storage.rules상 point product 이미지는 admin만 업로드 가능해 `point_manage` staff와 권한 체감이 다를 수 있다.
+
+[6] 추천 도입 순서
+- 1단계
+  - `point_policies/current.rankPolicy` 추가
+  - `tierCode`와 theme mapping을 공용 helper로 정리
+  - student/teacher 포인트 화면에 표시 전용 등급 배지 추가
+  - 계산 기준은 `wallet.earnedTotal`
+  - 함수, rules, 로그인 코어는 건드리지 않는다
+- 2단계
+  - `functions/index.js` trusted write path 안에서 `wallet.rankSnapshot` 동기화
+  - 정책 변경 시 backfill callable 또는 admin script 추가
+  - `scripts/verify-point-system.mjs`에 rank snapshot 정합성 검증 추가
+  - 필요하면 `point_rank_history` 추가
+- 3단계
+  - theme override, custom label, badge color, 설명, 승급 보상 연결
+  - 필요 시 `point_rank_policies/current` 분리
+  - 장기적으로 포인트 경제와 등급을 완전히 분리하려면 별도 `rankXp` 체계로 확장
+- Codex 최종 추천
+  - 지금 바로 구현해도 되는 최소 1단계의 메인안은 `학기 누적 획득 포인트 기반`, `내부 tierCode와 테마 표시명 분리`, `기존 point_policies/current 안의 rankPolicy 추가`, `표시 전용 파생 계산`이다.
+  - 이 안은 현재 trusted write path를 건드리지 않고도 시작할 수 있고, 구매/주문/보너스/학기 스코프와 충돌 가능성이 가장 낮다.
+  - 승급 보상, 이력, 정렬, 서버 권위 current rank가 필요해지는 시점에만 2단계 snapshot/log 구조로 확장하는 것이 가장 안전하다.

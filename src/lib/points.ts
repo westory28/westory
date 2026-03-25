@@ -11,6 +11,12 @@ import {
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './firebase';
+import {
+    buildPointRankEarnedPointsByUid,
+    DEFAULT_POINT_RANK_POLICY,
+    resolvePointRankPolicy,
+    sumPointRankEarnedPoints,
+} from './pointRanks';
 import { getYearSemester } from './semesterScope';
 import type {
     PointOrder,
@@ -70,6 +76,11 @@ interface UpdatePointAdjustmentInput {
     nextDelta?: number;
 }
 
+interface UpdateStudentProfileIconInput {
+    config: ConfigLike;
+    emojiId: string;
+}
+
 interface SchoolOption {
     value: string;
     label: string;
@@ -82,10 +93,17 @@ const DEFAULT_POINT_POLICY: PointPolicy = {
     quizSolve: 10,
     manualAdjustEnabled: false,
     allowNegativeBalance: false,
+    rankPolicy: resolvePointRankPolicy(DEFAULT_POINT_RANK_POLICY),
     updatedBy: '',
 };
 
-export const POINT_POLICY_FALLBACK = DEFAULT_POINT_POLICY;
+const mergePointPolicy = (policy?: Partial<PointPolicy> | null): PointPolicy => ({
+    ...DEFAULT_POINT_POLICY,
+    ...policy,
+    rankPolicy: resolvePointRankPolicy(policy?.rankPolicy),
+});
+
+export const POINT_POLICY_FALLBACK = mergePointPolicy();
 
 const sortByTimestampDesc = <T extends { createdAt?: any; requestedAt?: any }>(items: T[], key: 'createdAt' | 'requestedAt') =>
     [...items].sort((a, b) => {
@@ -290,23 +308,41 @@ export const listPointStudentTargetsByClass = async (grade: string, className: s
 
 export const getPointPolicy = async (config: ConfigLike) => {
     const snap = await getDoc(doc(db, getPointPolicyDocPath(config)));
-    if (!snap.exists()) return DEFAULT_POINT_POLICY;
-    return {
-        ...DEFAULT_POINT_POLICY,
-        ...(snap.data() as Partial<PointPolicy>),
-    } as PointPolicy;
+    if (!snap.exists()) return POINT_POLICY_FALLBACK;
+    return mergePointPolicy(snap.data() as Partial<PointPolicy>);
 };
 
-export const listPointTransactionsByUid = async (config: ConfigLike, uid: string, limitCount = 100) => {
-    const snapshot = await getDocs(query(
-        collection(db, getPointCollectionPath(config, 'point_transactions')),
-        where('uid', '==', uid),
-    ));
+export const listPointTransactions = async (config: ConfigLike, options?: { uid?: string; type?: PointTransactionType }) => {
+    const constraints = [];
+    if (options?.uid) constraints.push(where('uid', '==', options.uid));
+    if (options?.type) constraints.push(where('type', '==', options.type));
+
+    const snapshot = constraints.length > 0
+        ? await getDocs(query(
+            collection(db, getPointCollectionPath(config, 'point_transactions')),
+            ...constraints,
+        ))
+        : await getDocs(collection(db, getPointCollectionPath(config, 'point_transactions')));
     const items: PointTransaction[] = [];
     snapshot.forEach((item) => {
         items.push({ id: item.id, ...(item.data() as Omit<PointTransaction, 'id'>) });
     });
-    return sortByTimestampDesc(items, 'createdAt').slice(0, limitCount);
+    return sortByTimestampDesc(items, 'createdAt');
+};
+
+export const listPointTransactionsByUid = async (config: ConfigLike, uid: string, limitCount = 100) => {
+    const items = await listPointTransactions(config, { uid });
+    return items.slice(0, limitCount);
+};
+
+export const getPointRankManualAdjustEarnedPointsByUid = async (config: ConfigLike, uid: string) => {
+    const transactions = await listPointTransactions(config, { uid, type: 'manual_adjust' });
+    return sumPointRankEarnedPoints(transactions);
+};
+
+export const getPointRankManualAdjustEarnedPointsMap = async (config: ConfigLike) => {
+    const transactions = await listPointTransactions(config, { type: 'manual_adjust' });
+    return buildPointRankEarnedPointsByUid(transactions);
 };
 
 export const getPointActivityTransaction = async (
@@ -376,8 +412,7 @@ export const adjustPoints = async ({ config, uid, delta, sourceId, sourceLabel, 
 export const upsertPointPolicy = async (config: ConfigLike, policy: Partial<PointPolicy>, actor: ActorInfo) => {
     const targetRef = doc(db, getPointPolicyDocPath(config));
     const payload: PointPolicy = {
-        ...DEFAULT_POINT_POLICY,
-        ...policy,
+        ...mergePointPolicy(policy),
         updatedAt: serverTimestamp(),
         updatedBy: actor.uid,
     } as PointPolicy;
@@ -450,6 +485,20 @@ export const updatePointAdjustment = async ({ config, transactionId, action, nex
         balance: number;
         delta: number;
         cancelled: boolean;
+    };
+};
+
+export const updateStudentProfileIcon = async ({ config, emojiId }: UpdateStudentProfileIconInput) => {
+    const { year, semester } = getYearSemester(config);
+    const callable = httpsCallable(functions, 'updateStudentProfileIcon');
+    const result = await callable({
+        year,
+        semester,
+        emojiId: String(emojiId || '').trim(),
+    });
+    return result.data as {
+        emojiId: string;
+        profileIcon: string;
     };
 };
 

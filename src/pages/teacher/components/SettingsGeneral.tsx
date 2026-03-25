@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { useAuth } from '../../../contexts/AuthContext';
 import { db } from '../../../lib/firebase';
+import { DEFAULT_POINT_RANK_POLICY } from '../../../lib/pointRanks';
 import {
     loadSemesterReadiness,
     type SemesterReadinessResult,
@@ -43,6 +44,7 @@ const DEFAULT_POINT_POLICY = {
     quizSolve: 10,
     manualAdjustEnabled: false,
     allowNegativeBalance: false,
+    rankPolicy: DEFAULT_POINT_RANK_POLICY,
     updatedBy: '',
 };
 

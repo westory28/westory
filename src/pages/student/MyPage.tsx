@@ -23,9 +23,31 @@ import {
     Tooltip,
 } from 'chart.js';
 import { Bar, Line } from 'react-chartjs-2';
+import PointRankBadge from '../../components/common/PointRankBadge';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../lib/firebase';
+import {
+    getPointPolicy,
+    getPointRankManualAdjustEarnedPointsByUid,
+    getPointWalletByUid,
+    POINT_POLICY_FALLBACK,
+    updateStudentProfileIcon,
+} from '../../lib/points';
+import {
+    getPointRankAllowedEmojiIds,
+    getPointRankDisplay,
+    getPointRankTierMeta,
+    getPointRankUnlockTierCodeForEmoji,
+    needsPointRankLegacyFallback,
+} from '../../lib/pointRanks';
+import {
+    getDefaultProfileEmojiValue,
+    getProfileEmojiEntryById,
+    getProfileEmojiEntryByValue,
+    getProfileEmojiRegistry,
+} from '../../lib/profileEmojis';
 import { getSemesterCollectionPath } from '../../lib/semesterScope';
+import type { PointPolicy, PointWallet } from '../../types';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
@@ -125,6 +147,20 @@ interface TrendPoint {
 }
 
 const DEFAULT_EMOJIS = ['😀', '😎', '🤓', '🙂', '🧠', '📝', '📚', '🏆', '🚀', '🌟', '🍀', '🎯', '🐯', '🐳', '🐼'];
+const DEFAULT_POINT_WALLET: PointWallet = {
+    uid: '',
+    studentName: '',
+    grade: '',
+    class: '',
+    number: '',
+    balance: 0,
+    earnedTotal: 0,
+    rankEarnedTotal: 0,
+    spentTotal: 0,
+    adjustedTotal: 0,
+    rankSnapshot: null,
+    lastTransactionAt: null,
+};
 const SUBJECT_PRIORITY = ['국어', '영어', '수학', '사회', '역사', '도덕', '과학', '기술', '가정', '기술가정', '체육', '미술', '음악', '정보'];
 const CATEGORY_LABELS: Array<{ key: CategoryTab; label: string }> = [
     { key: 'diagnostic', label: '진단평가' },
@@ -238,6 +274,9 @@ const MyPage: React.FC = () => {
     const [iconModalOpen, setIconModalOpen] = useState(false);
     const [emojiOptions, setEmojiOptions] = useState<string[]>(DEFAULT_EMOJIS);
     const [savingIcon, setSavingIcon] = useState(false);
+    const [pointPolicy, setPointPolicy] = useState<PointPolicy>(POINT_POLICY_FALLBACK);
+    const [pointWallet, setPointWallet] = useState<PointWallet | null>(null);
+    const [rankManualAdjustPoints, setRankManualAdjustPoints] = useState(0);
 
     const [goalScore, setGoalScore] = useState('');
     const [subjectGoals, setSubjectGoals] = useState<Record<string, number>>({});
@@ -264,7 +303,7 @@ const MyPage: React.FC = () => {
 
     const loadMyPage = async () => {
         const titles = await loadUnitTitles();
-        await Promise.all([loadProfileAndEmoji(), loadScoreData(), loadQuizData(titles)]);
+        await Promise.all([loadProfileAndEmoji(), loadPointRankState(), loadScoreData(), loadQuizData(titles)]);
     };
 
     const loadProfileAndEmoji = async () => {
@@ -279,12 +318,12 @@ const MyPage: React.FC = () => {
         if (userSnap.exists()) {
             const data = userSnap.data() as UserProfileDoc;
             setProfile(data);
-            setProfileIcon(data.profileIcon || '😀');
+            setProfileIcon(data.profileIcon || getDefaultProfileEmojiValue());
             setGoalScore(data.myPageGoalScore || '');
             setSubjectGoals(data.myPageSubjectGoals || {});
         } else {
             setProfile(null);
-            setProfileIcon('😀');
+            setProfileIcon(getDefaultProfileEmojiValue());
             setGoalScore('');
             setSubjectGoals({});
         }
@@ -318,6 +357,22 @@ const MyPage: React.FC = () => {
             setGradeLabelMap({});
             setClassLabelMap({});
         }
+    };
+
+    const loadPointRankState = async () => {
+        if (!user || !config) return;
+
+        const [nextWallet, nextPolicy] = await Promise.all([
+            getPointWalletByUid(config, user.uid),
+            getPointPolicy(config),
+        ]);
+        const nextRankManualAdjustPoints = nextWallet && needsPointRankLegacyFallback(nextWallet)
+            ? await getPointRankManualAdjustEarnedPointsByUid(config, user.uid)
+            : 0;
+
+        setPointWallet(nextWallet);
+        setPointPolicy(nextPolicy);
+        setRankManualAdjustPoints(nextRankManualAdjustPoints);
     };
 
     const loadUnitTitles = async () => {
@@ -533,6 +588,48 @@ const MyPage: React.FC = () => {
         setLoadingWrong(false);
     };
 
+    const orderedEmojiEntries = useMemo(
+        () => getProfileEmojiRegistry(emojiOptions),
+        [emojiOptions],
+    );
+    const safePointWallet = pointWallet || DEFAULT_POINT_WALLET;
+    const currentRank = getPointRankDisplay({
+        rankPolicy: pointPolicy.rankPolicy,
+        wallet: safePointWallet,
+        earnedPointsFromTransactions: rankManualAdjustPoints,
+    });
+    const allowedEmojiIds = useMemo(
+        () => getPointRankAllowedEmojiIds(pointPolicy.rankPolicy, currentRank?.tierCode || null),
+        [currentRank?.tierCode, pointPolicy.rankPolicy],
+    );
+    const selectedEmojiEntry = getProfileEmojiEntryByValue(profileIcon);
+    const selectedEmojiAllowed = selectedEmojiEntry
+        ? allowedEmojiIds.includes(selectedEmojiEntry.id)
+        : false;
+    const hasLegacySelectedEmoji = Boolean(profileIcon) && !selectedEmojiEntry;
+    const defaultProfileEmojiValue = getProfileEmojiEntryById(pointPolicy.rankPolicy.emojiPolicy.defaultEmojiId)?.value
+        || getDefaultProfileEmojiValue();
+    const displayProfileIcon = profileIcon || defaultProfileEmojiValue;
+    const emojiCards = useMemo(() => orderedEmojiEntries.map((entry) => {
+        const unlockTierCode = getPointRankUnlockTierCodeForEmoji(pointPolicy.rankPolicy, entry.id)
+            || pointPolicy.rankPolicy.tiers[0]?.code
+            || 'tier_1';
+        return {
+            entry,
+            unlockTierCode,
+            unlockTierLabel: getPointRankTierMeta(pointPolicy.rankPolicy.themeId, unlockTierCode).label,
+            unlocked: allowedEmojiIds.includes(entry.id),
+            selected: selectedEmojiEntry?.id === entry.id,
+        };
+    }), [allowedEmojiIds, orderedEmojiEntries, pointPolicy.rankPolicy, selectedEmojiEntry?.id]);
+
+    useEffect(() => {
+        const storedProfileIcon = String(profile?.profileIcon || userData?.profileIcon || '').trim();
+        if (!storedProfileIcon) {
+            setProfileIcon(defaultProfileEmojiValue);
+        }
+    }, [defaultProfileEmojiValue, profile?.profileIcon, userData?.profileIcon]);
+
     const saveGoal = async () => {
         if (!user) return;
         setSavingGoal(true);
@@ -551,20 +648,23 @@ const MyPage: React.FC = () => {
         }
     };
 
-    const saveProfileIcon = async (nextIcon: string) => {
-        if (!user) return;
+    const saveProfileIcon = async (nextEmojiId: string) => {
+        if (!user || !config) return;
         setSavingIcon(true);
         try {
-            await setDoc(
-                doc(db, 'users', user.uid),
-                {
-                    profileIcon: nextIcon,
-                    updatedAt: serverTimestamp(),
-                },
-                { merge: true },
-            );
-            setProfileIcon(nextIcon);
+            const result = await updateStudentProfileIcon({
+                config,
+                emojiId: nextEmojiId,
+            });
+            setProfileIcon(result.profileIcon);
+            setProfile((prev) => ({
+                ...(prev || {}),
+                profileIcon: result.profileIcon,
+            }));
             setIconModalOpen(false);
+        } catch (error) {
+            console.error('Failed to update profile icon:', error);
+            alert('현재 등급에서 선택할 수 없는 아이콘입니다.');
         } finally {
             setSavingIcon(false);
         }
@@ -846,7 +946,7 @@ const MyPage: React.FC = () => {
                                 <div className="rounded-2xl bg-gradient-to-br from-blue-600 via-blue-500 to-indigo-500 text-white p-6 md:p-7 shadow-lg">
                                     <div className="flex items-center gap-5">
                                     <div className="w-24 h-24 rounded-full bg-white/20 backdrop-blur-sm text-4xl flex items-center justify-center relative border border-white/40">
-                                        {profileIcon}
+                                        {displayProfileIcon}
                                         <button
                                             type="button"
                                             onClick={() => setIconModalOpen(true)}
@@ -856,7 +956,10 @@ const MyPage: React.FC = () => {
                                         </button>
                                     </div>
                                     <div>
-                                            <div className="text-2xl font-extrabold tracking-tight">{profile?.name || userData?.name || '학생'}</div>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <div className="text-2xl font-extrabold tracking-tight">{profile?.name || userData?.name || '학생'}</div>
+                                                {currentRank && <PointRankBadge rank={currentRank} size="sm" className="border-white/30 bg-white/15 text-white" />}
+                                            </div>
                                             <div className="mt-2 text-2xl md:text-3xl font-black tracking-tight">
                                                 <span>{withSuffix(profileGradeLabel, '학년')}</span>
                                                 <span className="mx-2 opacity-80">·</span>
@@ -864,7 +967,7 @@ const MyPage: React.FC = () => {
                                                 <span className="mx-2 opacity-80">·</span>
                                                 <span>{profileNumberValue}번</span>
                                             </div>
-                                        <div className="mt-2 text-sm text-blue-100">학년, 반, 번호 정보가 표시됩니다.</div>
+                                        <div className="mt-2 text-sm text-blue-100">학년, 반, 번호 정보와 현재 등급이 함께 표시됩니다.</div>
                                     </div>
                                 </div>
                                 </div>
@@ -1263,16 +1366,45 @@ const MyPage: React.FC = () => {
                                 <i className="fas fa-times"></i>
                             </button>
                         </div>
+                        <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-sm font-bold text-gray-700">현재 등급</span>
+                                {currentRank && <PointRankBadge rank={currentRank} size="sm" />}
+                                <span className="text-xs text-gray-500">{`선택 가능 ${allowedEmojiIds.length}개 / 전체 ${emojiCards.length}개`}</span>
+                            </div>
+                            <div className="mt-2 text-xs leading-5 text-gray-500">
+                                잠금 아이콘은 더 높은 등급에서 열립니다. 이미 쓰고 있는 아이콘은 바로 깨지지 않지만, 잠긴 아이콘은 다시 선택할 수 없습니다.
+                            </div>
+                        </div>
+                        {(hasLegacySelectedEmoji || (selectedEmojiEntry && !selectedEmojiAllowed)) && (
+                            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                                <span className="mr-2 text-lg leading-none">{displayProfileIcon}</span>
+                                현재 사용 중인 아이콘은 지금 정책으로는 다시 선택할 수 없습니다. 다른 아이콘으로 바꾸면 이전 아이콘으로 되돌릴 수 없어요.
+                            </div>
+                        )}
                         <div className="grid grid-cols-5 gap-2">
-                            {emojiOptions.map((emoji) => (
+                            {emojiCards.map(({ entry, unlockTierLabel, unlocked, selected }) => (
                                 <button
-                                    key={emoji}
+                                    key={entry.id}
                                     type="button"
-                                    disabled={savingIcon}
-                                    onClick={() => void saveProfileIcon(emoji)}
-                                    className={`h-11 rounded border text-2xl ${profileIcon === emoji ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-gray-50'}`}
+                                    disabled={savingIcon || !unlocked}
+                                    onClick={() => void saveProfileIcon(entry.id)}
+                                    title={unlocked ? entry.label : `${unlockTierLabel}에서 해금`}
+                                    className={`relative h-12 rounded border text-2xl transition ${
+                                        selected
+                                            ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-200'
+                                            : unlocked
+                                                ? 'border-gray-200 hover:bg-gray-50'
+                                                : 'cursor-not-allowed border-gray-200 bg-gray-100 text-gray-300'
+                                    }`}
+                                    aria-label={unlocked ? `${entry.label} 아이콘 선택` : `${unlockTierLabel} 등급에서 열리는 잠금 아이콘`}
                                 >
-                                    {emoji}
+                                    {entry.value}
+                                    {!unlocked && (
+                                        <span className="absolute right-1 top-1 text-[10px] text-gray-500">
+                                            <i className="fas fa-lock"></i>
+                                        </span>
+                                    )}
                                 </button>
                             ))}
                         </div>

@@ -13,6 +13,7 @@ export interface InterfaceConfig {
   ddayTitle: string;
   ddayDate: string;
   footerText?: string;
+  studentProfileEmojis?: string[];
 }
 
 export interface UserData {
@@ -78,8 +79,10 @@ export interface PointWallet {
   number: string;
   balance: number;
   earnedTotal: number;
+  rankEarnedTotal?: number;
   spentTotal: number;
   adjustedTotal: number;
+  rankSnapshot?: PointWalletRankSnapshot | null;
   lastTransactionAt?: any;
 }
 
@@ -129,6 +132,48 @@ export interface PointOrder {
   memo: string;
 }
 
+export type PointRankTierCode = `tier_${number}`;
+
+export type PointRankThemeId =
+  | "korean_golpum"
+  | "world_nobility";
+
+export type PointRankBasedOn =
+  | "earnedTotal"
+  | "earnedTotal_plus_positive_manual_adjust";
+
+export interface PointRankPolicyTier {
+  code: PointRankTierCode;
+  minPoints: number;
+}
+
+export interface PointRankEmojiPolicyTier {
+  allowedEmojiIds: string[];
+}
+
+export type PointRankEmojiPolicyTiers = Partial<Record<PointRankTierCode, PointRankEmojiPolicyTier>>;
+
+export interface PointRankEmojiPolicy {
+  enabled: boolean;
+  defaultEmojiId: string;
+  tiers: PointRankEmojiPolicyTiers;
+}
+
+export interface PointRankPolicy {
+  enabled: boolean;
+  themeId: PointRankThemeId;
+  basedOn: PointRankBasedOn;
+  tiers: PointRankPolicyTier[];
+  emojiPolicy: PointRankEmojiPolicy;
+}
+
+export interface PointWalletRankSnapshot {
+  tierCode: PointRankTierCode;
+  metricValue: number;
+  basedOn: PointRankBasedOn;
+  updatedAt?: any;
+}
+
 export interface PointPolicy {
   attendanceDaily: number;
   attendanceMonthlyBonus: number;
@@ -136,6 +181,7 @@ export interface PointPolicy {
   quizSolve: number;
   manualAdjustEnabled: boolean;
   allowNegativeBalance: boolean;
+  rankPolicy: PointRankPolicy;
   updatedAt?: any;
   updatedBy: string;
 }

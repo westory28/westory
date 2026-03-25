@@ -165,7 +165,6 @@ service cloud.firestore {
             'photoURL',
             'lastLogin',
             'updatedAt',
-            'profileIcon',
             'myPageGoalScore',
             'myPageSubjectGoals',
             'scoreWarningAcknowledged',

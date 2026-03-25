@@ -40,6 +40,29 @@ const functionsHost = '127.0.0.1';
 const functionsPort = 5001;
 
 const apps = [];
+const rankPolicy = {
+  enabled: true,
+  themeId: 'korean_golpum',
+  basedOn: 'earnedTotal_plus_positive_manual_adjust',
+  tiers: [
+    { code: 'tier_1', minPoints: 0 },
+    { code: 'tier_2', minPoints: 15 },
+    { code: 'tier_3', minPoints: 35 },
+    { code: 'tier_4', minPoints: 60 },
+    { code: 'tier_5', minPoints: 90 },
+  ],
+  emojiPolicy: {
+    enabled: true,
+    defaultEmojiId: 'smile',
+    tiers: {
+      tier_1: { allowedEmojiIds: ['smile', 'soft_smile'] },
+      tier_2: { allowedEmojiIds: ['brain', 'cool'] },
+      tier_3: { allowedEmojiIds: ['trophy', 'rocket'] },
+      tier_4: { allowedEmojiIds: ['sparkles', 'science'] },
+      tier_5: { allowedEmojiIds: ['whale', 'owl'] },
+    },
+  },
+};
 
 const createClient = async (name, email, password) => {
   const app = initializeApp(firebaseConfig, name);
@@ -111,6 +134,7 @@ const main = async () => {
   await testEnv.clearFirestore();
 
   const student = await createClient('student-app', 'student1@yongshin-ms.ms.kr', 'Password!123');
+  const legacyStudent = await createClient('legacy-student-app', 'student2@yongshin-ms.ms.kr', 'Password!123');
   const teacher = await createClient('teacher-app', 'teacher1@yongshin-ms.ms.kr', 'Password!123');
   const reader = await createClient('reader-app', 'reader1@yongshin-ms.ms.kr', 'Password!123');
 
@@ -123,6 +147,17 @@ const main = async () => {
       grade: '1',
       class: '2',
       number: '3',
+      role: 'student',
+      teacherPortalEnabled: false,
+      staffPermissions: [],
+    });
+    await setDoc(doc(adminDb, 'users', legacyStudent.user.uid), {
+      uid: legacyStudent.user.uid,
+      email: legacyStudent.email,
+      name: 'Legacy Student',
+      grade: '1',
+      class: '2',
+      number: '4',
       role: 'student',
       teacherPortalEnabled: false,
       staffPermissions: [],
@@ -151,11 +186,36 @@ const main = async () => {
     });
     await setDoc(doc(adminDb, `${semesterRoot}/point_policies/current`), {
       attendanceDaily: 5,
+      attendanceMonthlyBonus: 20,
       lessonView: 3,
       quizSolve: 10,
       manualAdjustEnabled: true,
       allowNegativeBalance: false,
+      rankPolicy,
       updatedBy: teacher.user.uid,
+    });
+    await setDoc(doc(adminDb, `${semesterRoot}/point_wallets/${legacyStudent.user.uid}`), {
+      uid: legacyStudent.user.uid,
+      studentName: 'Legacy Student',
+      grade: '1',
+      class: '2',
+      number: '4',
+      balance: 15,
+      earnedTotal: 10,
+      spentTotal: 0,
+      adjustedTotal: 5,
+      lastTransactionAt: null,
+    });
+    await setDoc(doc(adminDb, `${semesterRoot}/point_transactions/legacy_manual_adjust`), {
+      uid: legacyStudent.user.uid,
+      type: 'manual_adjust',
+      activityType: 'manual_adjust',
+      delta: 5,
+      balanceAfter: 15,
+      sourceId: 'legacy_manual_adjust',
+      sourceLabel: 'legacy bonus',
+      policyId: 'manual',
+      createdBy: teacher.user.uid,
     });
     await setDoc(doc(adminDb, `${semesterRoot}/point_products/expensive`), {
       name: '고가 상품',
@@ -191,6 +251,8 @@ const main = async () => {
   const adjustCallable = httpsCallable(teacher.functions, 'adjustTeacherPoints');
   const reviewCallable = httpsCallable(teacher.functions, 'reviewTeacherPointOrder');
   const readerAdjustCallable = httpsCallable(reader.functions, 'adjustTeacherPoints');
+  const updateProfileIconCallable = httpsCallable(student.functions, 'updateStudentProfileIcon');
+  const legacyUpdateProfileIconCallable = httpsCallable(legacyStudent.functions, 'updateStudentProfileIcon');
 
   await expectPass('rules: student can read own wallet after wallet exists', async () => {
     await adjustCallable({
@@ -217,6 +279,49 @@ const main = async () => {
     const teacherDb = testEnv.authenticatedContext(teacher.user.uid, { email: teacher.email }).firestore();
     await assertFails(setDoc(doc(teacherDb, `${semesterRoot}/point_orders/manual-test`), { status: 'requested' }));
     return 'teacher direct order write denied';
+  }, results);
+
+  await expectPass('rules: student direct profile icon write blocked', async () => {
+    const studentDb = testEnv.authenticatedContext(student.user.uid, { email: student.email }).firestore();
+    await assertFails(setDoc(doc(studentDb, `users/${student.user.uid}`), { profileIcon: '😎' }, { merge: true }));
+    return 'direct profile icon write denied';
+  }, results);
+
+  await expectFail('rank: locked emoji is rejected for low tier student', async () => {
+    await updateProfileIconCallable({
+      year,
+      semester,
+      emojiId: 'brain',
+    });
+  }, results, ['locked', 'failed-precondition']);
+
+  await expectPass('rank: default emoji save succeeds for low tier student', async () => {
+    const data = await updateProfileIconCallable({
+      year,
+      semester,
+      emojiId: 'smile',
+    });
+    return data.data;
+  }, results);
+
+  await expectFail('rank: legacy wallet fallback still blocks higher locked emoji', async () => {
+    await legacyUpdateProfileIconCallable({
+      year,
+      semester,
+      emojiId: 'trophy',
+    });
+  }, results, ['locked', 'failed-precondition']);
+
+  await expectPass('rank: legacy wallet fallback unlocks tier-2 emoji without snapshot', async () => {
+    const data = await legacyUpdateProfileIconCallable({
+      year,
+      semester,
+      emojiId: 'brain',
+    });
+    if (data.data.tierCode !== 'tier_2') {
+      throw new Error(`Expected legacy tier_2 but received ${data.data.tierCode}`);
+    }
+    return data.data;
   }, results);
 
   await expectPass('A. attendance reward first claim', async () => {
@@ -294,6 +399,38 @@ const main = async () => {
     return data.data;
   }, results);
 
+  await expectPass('rank: automatic rewards increase rankEarnedTotal', async () => {
+    let detail = {};
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const adminDb = context.firestore();
+      const walletSnap = await getDoc(doc(adminDb, `${semesterRoot}/point_wallets/${student.user.uid}`));
+      const wallet = walletSnap.data() || {};
+      if (wallet.rankEarnedTotal !== 19) {
+        throw new Error(`Expected rankEarnedTotal 19 after automatic rewards, received ${wallet.rankEarnedTotal}`);
+      }
+      if (wallet.rankSnapshot?.tierCode !== 'tier_2') {
+        throw new Error(`Expected tier_2 snapshot after automatic rewards, received ${wallet.rankSnapshot?.tierCode}`);
+      }
+      detail = {
+        rankEarnedTotal: wallet.rankEarnedTotal,
+        tierCode: wallet.rankSnapshot?.tierCode,
+      };
+    });
+    return detail;
+  }, results);
+
+  await expectPass('rank: tier-2 emoji unlocks after automatic rewards', async () => {
+    const data = await updateProfileIconCallable({
+      year,
+      semester,
+      emojiId: 'brain',
+    });
+    if (data.data.tierCode !== 'tier_2') {
+      throw new Error(`Expected tier_2 after automatic rewards, received ${data.data.tierCode}`);
+    }
+    return data.data;
+  }, results);
+
   await expectFail('E. reader teacher cannot adjust points', async () => {
     await readerAdjustCallable({
       year,
@@ -331,6 +468,31 @@ const main = async () => {
     return data.data;
   }, results);
 
+  await expectPass('rank: positive manual adjust increases rankEarnedTotal and can promote tier', async () => {
+    const data = await updateProfileIconCallable({
+      year,
+      semester,
+      emojiId: 'trophy',
+    });
+    let walletCheck = {};
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const adminDb = context.firestore();
+      const walletSnap = await getDoc(doc(adminDb, `${semesterRoot}/point_wallets/${student.user.uid}`));
+      walletCheck = walletSnap.data() || {};
+    });
+    if (walletCheck.rankEarnedTotal !== 39) {
+      throw new Error(`Expected rankEarnedTotal 39 after positive manual adjust, received ${walletCheck.rankEarnedTotal}`);
+    }
+    if (walletCheck.rankSnapshot?.tierCode !== 'tier_3') {
+      throw new Error(`Expected tier_3 snapshot after positive manual adjust, received ${walletCheck.rankSnapshot?.tierCode}`);
+    }
+    return {
+      profileIcon: data.data.profileIcon,
+      tierCode: data.data.tierCode,
+      rankEarnedTotal: walletCheck.rankEarnedTotal,
+    };
+  }, results);
+
   await expectFail('D. purchase fails with insufficient balance', async () => {
     await purchaseCallable({
       year,
@@ -364,6 +526,26 @@ const main = async () => {
     return data.data;
   }, results);
 
+  await expectPass('rank: purchase hold does not reduce rankEarnedTotal', async () => {
+    let detail = {};
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const adminDb = context.firestore();
+      const walletSnap = await getDoc(doc(adminDb, `${semesterRoot}/point_wallets/${student.user.uid}`));
+      const wallet = walletSnap.data() || {};
+      if (wallet.balance !== 29) {
+        throw new Error(`Expected balance 29 after purchase hold, received ${wallet.balance}`);
+      }
+      if (wallet.rankEarnedTotal !== 39) {
+        throw new Error(`Expected rankEarnedTotal 39 after purchase hold, received ${wallet.rankEarnedTotal}`);
+      }
+      detail = {
+        balance: wallet.balance,
+        rankEarnedTotal: wallet.rankEarnedTotal,
+      };
+    });
+    return detail;
+  }, results);
+
   await expectFail('F. direct fulfill from requested is blocked', async () => {
     await reviewCallable({
       year,
@@ -394,6 +576,27 @@ const main = async () => {
       memo: '지급 완료',
     });
     return data.data;
+  }, results);
+
+  await expectPass('rank: purchase confirm does not reduce rankEarnedTotal', async () => {
+    let detail = {};
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const adminDb = context.firestore();
+      const walletSnap = await getDoc(doc(adminDb, `${semesterRoot}/point_wallets/${student.user.uid}`));
+      const wallet = walletSnap.data() || {};
+      if (wallet.rankEarnedTotal !== 39) {
+        throw new Error(`Expected rankEarnedTotal 39 after purchase confirm, received ${wallet.rankEarnedTotal}`);
+      }
+      if (wallet.rankSnapshot?.tierCode !== 'tier_3') {
+        throw new Error(`Expected tier_3 after purchase confirm, received ${wallet.rankSnapshot?.tierCode}`);
+      }
+      detail = {
+        balance: wallet.balance,
+        rankEarnedTotal: wallet.rankEarnedTotal,
+        tierCode: wallet.rankSnapshot?.tierCode,
+      };
+    });
+    return detail;
   }, results);
 
   let rejectedOrderId = '';
@@ -444,9 +647,66 @@ const main = async () => {
     return data.data;
   }, results);
 
-  const summary = await testEnv.withSecurityRulesDisabled(async (context) => {
+  await expectPass('rank: purchase cancel and reject keep rankEarnedTotal unchanged', async () => {
+    let detail = {};
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const adminDb = context.firestore();
+      const walletSnap = await getDoc(doc(adminDb, `${semesterRoot}/point_wallets/${student.user.uid}`));
+      const wallet = walletSnap.data() || {};
+      if (wallet.balance !== 29) {
+        throw new Error(`Expected balance 29 after reject/cancel flows, received ${wallet.balance}`);
+      }
+      if (wallet.rankEarnedTotal !== 39) {
+        throw new Error(`Expected rankEarnedTotal 39 after reject/cancel flows, received ${wallet.rankEarnedTotal}`);
+      }
+      detail = {
+        balance: wallet.balance,
+        rankEarnedTotal: wallet.rankEarnedTotal,
+      };
+    });
+    return detail;
+  }, results);
+
+  await expectPass('rank: negative manual adjust does not demote student', async () => {
+    await adjustCallable({
+      year,
+      semester,
+      uid: student.user.uid,
+      delta: -12,
+      sourceId: 'manual_penalty',
+      sourceLabel: 'negative test',
+      policyId: 'manual',
+    });
+    let detail = {};
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const adminDb = context.firestore();
+      const walletSnap = await getDoc(doc(adminDb, `${semesterRoot}/point_wallets/${student.user.uid}`));
+      const wallet = walletSnap.data() || {};
+      if (wallet.balance !== 17) {
+        throw new Error(`Expected balance 17 after negative adjust, received ${wallet.balance}`);
+      }
+      if (wallet.rankEarnedTotal !== 39) {
+        throw new Error(`Expected rankEarnedTotal 39 after negative adjust, received ${wallet.rankEarnedTotal}`);
+      }
+      if (wallet.rankSnapshot?.tierCode !== 'tier_3') {
+        throw new Error(`Expected tier_3 after negative adjust, received ${wallet.rankSnapshot?.tierCode}`);
+      }
+      detail = {
+        balance: wallet.balance,
+        rankEarnedTotal: wallet.rankEarnedTotal,
+        tierCode: wallet.rankSnapshot?.tierCode,
+      };
+    });
+    return detail;
+  }, results);
+
+  let summary = {};
+  await testEnv.withSecurityRulesDisabled(async (context) => {
     const adminDb = context.firestore();
     const walletSnap = await getDoc(doc(adminDb, `${semesterRoot}/point_wallets/${student.user.uid}`));
+    const legacyWalletSnap = await getDoc(doc(adminDb, `${semesterRoot}/point_wallets/${legacyStudent.user.uid}`));
+    const userSnap = await getDoc(doc(adminDb, `users/${student.user.uid}`));
+    const legacyUserSnap = await getDoc(doc(adminDb, `users/${legacyStudent.user.uid}`));
     const approvedOrderSnap = await getDoc(doc(adminDb, `${semesterRoot}/point_orders/${approvedOrderId}`));
     const rejectedOrderSnap = await getDoc(doc(adminDb, `${semesterRoot}/point_orders/${rejectedOrderId}`));
     const cancelledOrderSnap = await getDoc(doc(adminDb, `${semesterRoot}/point_orders/${cancelledOrderId}`));
@@ -457,8 +717,13 @@ const main = async () => {
     const lessonCount = await countTransactions(adminDb, student.user.uid, 'lesson');
     const manualAdjustCount = await countTransactions(adminDb, student.user.uid, 'manual_adjust');
 
-    return {
+    summary = {
       walletBalance: walletSnap.data()?.balance,
+      walletRankEarnedTotal: walletSnap.data()?.rankEarnedTotal,
+      walletRankTierCode: walletSnap.data()?.rankSnapshot?.tierCode,
+      profileIcon: userSnap.data()?.profileIcon,
+      legacyProfileIcon: legacyUserSnap.data()?.profileIcon,
+      legacyWalletHasSnapshot: Object.prototype.hasOwnProperty.call(legacyWalletSnap.data() || {}, 'rankEarnedTotal'),
       attendanceCount,
       quizCount,
       lessonCount,
@@ -473,6 +738,7 @@ const main = async () => {
   console.log(JSON.stringify({ results, summary }, null, 2));
 
   await signOut(student.auth);
+  await signOut(legacyStudent.auth);
   await signOut(teacher.auth);
   await signOut(reader.auth);
   await Promise.all(apps.map((app) => deleteApp(app)));

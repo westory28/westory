@@ -1,14 +1,19 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import PointRankBadge from '../../components/common/PointRankBadge';
 import { STUDENT_POINT_TAB_LABELS } from '../../constants/pointLabels';
 import { useAuth } from '../../contexts/AuthContext';
 import {
     createSecurePurchaseRequest,
+    getPointPolicy,
+    getPointRankManualAdjustEarnedPointsByUid,
     getPointWalletByUid,
     listPointOrders,
     listPointProducts,
     listPointTransactionsByUid,
+    POINT_POLICY_FALLBACK,
 } from '../../lib/points';
+import { getPointRankDisplay, needsPointRankLegacyFallback } from '../../lib/pointRanks';
 import type { PointOrder, PointOrderStatus, PointProduct, PointTransaction, PointWallet } from '../../types';
 import StudentPointHistoryTab from './components/points/StudentPointHistoryTab';
 import StudentPointOrdersTab from './components/points/StudentPointOrdersTab';
@@ -27,8 +32,10 @@ const DEFAULT_WALLET: PointWallet = {
     number: '',
     balance: 0,
     earnedTotal: 0,
+    rankEarnedTotal: 0,
     spentTotal: 0,
     adjustedTotal: 0,
+    rankSnapshot: null,
     lastTransactionAt: null,
 };
 
@@ -50,6 +57,8 @@ const Points: React.FC = () => {
     const [transactions, setTransactions] = useState<PointTransaction[]>([]);
     const [products, setProducts] = useState<PointProduct[]>([]);
     const [orders, setOrders] = useState<PointOrder[]>([]);
+    const [policy, setPolicy] = useState(POINT_POLICY_FALLBACK);
+    const [rankManualAdjustPoints, setRankManualAdjustPoints] = useState(0);
     const [loading, setLoading] = useState(true);
     const [errorMessage, setErrorMessage] = useState('');
     const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('all');
@@ -77,16 +86,22 @@ const Points: React.FC = () => {
         setLoading(true);
         setErrorMessage('');
         try {
-            const [loadedWallet, loadedTransactions, loadedProducts, loadedOrders] = await Promise.all([
+            const [loadedWallet, loadedTransactions, loadedProducts, loadedOrders, loadedPolicy] = await Promise.all([
                 getPointWalletByUid(config, uid),
                 listPointTransactionsByUid(config, uid, 100),
                 listPointProducts(config, true),
                 listPointOrders(config, { uid, limitCount: 100 }),
+                getPointPolicy(config),
             ]);
+            const loadedRankManualAdjustPoints = loadedWallet && needsPointRankLegacyFallback(loadedWallet)
+                ? await getPointRankManualAdjustEarnedPointsByUid(config, uid)
+                : 0;
             setWallet(loadedWallet);
             setTransactions(loadedTransactions);
             setProducts(loadedProducts);
             setOrders(loadedOrders);
+            setPolicy(loadedPolicy);
+            setRankManualAdjustPoints(loadedRankManualAdjustPoints);
         } catch (error) {
             console.error('Failed to load student point data:', error);
             setErrorMessage('\uD3EC\uC778\uD2B8 \uC815\uBCF4\uB97C \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4. \uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694.');
@@ -101,6 +116,11 @@ const Points: React.FC = () => {
     }, [config, uid]);
 
     const safeWallet = wallet || DEFAULT_WALLET;
+    const rank = getPointRankDisplay({
+        rankPolicy: policy.rankPolicy,
+        wallet: safeWallet,
+        earnedPointsFromTransactions: rankManualAdjustPoints,
+    });
     const recentTransactions = transactions.slice(0, 5);
     const selectedProduct = products.find((item) => item.id === selectedProductId) || null;
 
@@ -171,6 +191,11 @@ const Points: React.FC = () => {
                             <p className="mt-1 text-sm text-gray-500">
                                 {'\uB0B4 \uD3EC\uC778\uD2B8 \uD604\uD669\uC744 \uD655\uC778\uD558\uACE0, \uC0C1\uC810 \uC0C1\uD488\uACFC \uAD6C\uB9E4 \uC9C4\uD589 \uC0C1\uD0DC\uB97C \uD55C\uACF3\uC5D0\uC11C \uBCFC \uC218 \uC788\uC2B5\uB2C8\uB2E4.'}
                             </p>
+                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                                <span className="text-sm font-bold text-gray-700">{'현재 등급'}</span>
+                                {rank && <PointRankBadge rank={rank} size="md" />}
+                                <span className="text-xs text-gray-500">{'누적 획득 기준으로 유지되며, 구매나 차감으로 내려가지 않습니다.'}</span>
+                            </div>
                         </div>
                         <div className="rounded-xl bg-blue-50 px-5 py-3 text-right">
                             <div className="text-xs font-bold text-blue-500">{'\uD604\uC7AC \uBCF4\uC720 \uD3EC\uC778\uD2B8'}</div>
@@ -213,6 +238,7 @@ const Points: React.FC = () => {
                     {!loading && !errorMessage && activeTab === 'overview' && (
                         <StudentPointSummaryTab
                             wallet={safeWallet}
+                            rank={rank}
                             recentTransactions={recentTransactions}
                             onOpenHistory={() => handleTabChange('history')}
                         />
