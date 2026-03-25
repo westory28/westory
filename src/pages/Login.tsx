@@ -341,18 +341,18 @@ const shouldResolveRedirectOnBoot = (): boolean => {
 
 const getRedirectStartMessage = (mode: LoginMode): string => {
     if (mode === 'teacher') {
-        return 'Google 로그인 화면으로 이동합니다. 관리자 계정을 선택한 뒤 잠시만 기다려주세요.';
+        return 'Google 계정 선택 화면으로 이동합니다. 관리자 계정을 선택한 뒤 잠시만 기다려주세요.';
     }
 
     if (isAndroidDevice()) {
-        return `Google 로그인 화면으로 이동합니다. 갤럭시탭에서는 학교 계정(@${ALLOWED_SCHOOL_EMAIL_DOMAIN})을 다시 선택하거나 다른 계정을 눌러 학교 계정을 선택해주세요.`;
+        return `Google 계정 선택 화면으로 이동합니다. 갤럭시탭에서는 학교 계정(@${ALLOWED_SCHOOL_EMAIL_DOMAIN})을 선택하고, 목록에 없으면 다른 계정을 눌러 학교 계정을 선택해주세요.`;
     }
 
     if (isIOSDevice()) {
-        return 'Google 로그인 화면으로 이동합니다. iPhone/iPad에서는 화면이 바뀐 뒤 뒤로가기를 누르지 말고 잠시만 기다려주세요.';
+        return 'Google 계정 선택 화면으로 이동합니다. iPhone/iPad에서는 화면이 바뀐 뒤 뒤로가기를 누르지 말고 잠시만 기다려주세요.';
     }
 
-    return `Google 로그인 화면으로 이동합니다. 학교 계정(@${ALLOWED_SCHOOL_EMAIL_DOMAIN})을 선택한 뒤 잠시만 기다려주세요.`;
+    return `Google 계정 선택 화면으로 이동합니다. 학교 계정(@${ALLOWED_SCHOOL_EMAIL_DOMAIN})을 선택한 뒤 잠시만 기다려주세요.`;
 };
 
 const getUnauthorizedEmailNotice = (email?: string | null): string => {
@@ -373,19 +373,13 @@ const getStudentBootstrapFailureMessage = (error?: unknown): string => {
     return '학생 정보 확인 중 오류가 발생했습니다. 다시 시도해주세요.';
 };
 
-const buildGoogleProvider = (mode: LoginMode) => {
+const buildGoogleProvider = () => {
     const provider = new GoogleAuthProvider();
-    const customParameters: Record<string, string> = {
+    // Keep chooser-first behavior even when Chrome/Android already has Google
+    // accounts cached on the device. Domain/role checks still run after sign-in.
+    provider.setCustomParameters({
         prompt: 'select_account',
-    };
-
-    if (mode === 'student') {
-        customParameters.hd = ALLOWED_SCHOOL_EMAIL_DOMAIN;
-    } else {
-        customParameters.login_hint = TEACHER_EMAIL;
-    }
-
-    provider.setCustomParameters(customParameters);
+    });
     return provider;
 };
 
@@ -1245,7 +1239,7 @@ const Login: React.FC = () => {
             return;
         }
         authActionLockRef.current = true;
-        const provider = buildGoogleProvider(mode);
+        const provider = buildGoogleProvider();
         const useRedirect = shouldPreferRedirectLogin();
         setPendingLoginMode(mode);
         setLoginNotice('');
@@ -1686,4 +1680,3 @@ const Login: React.FC = () => {
 };
 
 export default Login;
-
