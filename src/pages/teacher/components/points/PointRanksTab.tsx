@@ -109,7 +109,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
     const previewThemeId: PointRankThemeId = draftRankPolicy.activeThemeId === 'korean_golpum'
         ? 'world_nobility'
         : 'korean_golpum';
-    const [selectedTierCode, setSelectedTierCode] = useState<string | null>(null);
+    const [selectedTierCode, setSelectedTierCode] = useState<PointRankPolicyTier['code'] | null>(null);
     const [isCelebrationPreviewOpen, setIsCelebrationPreviewOpen] = useState(false);
 
     const updateRankPolicy = (updater: (prev: PointRankPolicy) => PointRankPolicy) => {
@@ -119,14 +119,14 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
         }));
     };
 
-    const updateTier = (tierCode: string, updater: (tier: PointRankPolicyTier) => PointRankPolicyTier) => {
+    const updateTier = (tierCode: PointRankPolicyTier['code'], updater: (tier: PointRankPolicyTier) => PointRankPolicyTier) => {
         updateRankPolicy((prev) => ({
             ...prev,
             tiers: prev.tiers.map((tier) => (tier.code === tierCode ? updater(tier) : tier)),
         }));
     };
 
-    const setTierField = <K extends keyof PointRankPolicyTier>(tierCode: string, field: K, value: PointRankPolicyTier[K]) => {
+    const setTierField = <K extends keyof PointRankPolicyTier>(tierCode: PointRankPolicyTier['code'], field: K, value: PointRankPolicyTier[K]) => {
         updateTier(tierCode, (tier) => ({
             ...tier,
             [field]: value,
@@ -134,7 +134,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
     };
 
     const setActiveThemeTierField = (
-        tierCode: string,
+        tierCode: PointRankPolicyTier['code'],
         field: 'label' | 'shortLabel' | 'description',
         value: string,
     ) => {
@@ -156,7 +156,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
         }));
     };
 
-    const toggleTierEmoji = (tierCode: string, emojiId: string) => {
+    const toggleTierEmoji = (tierCode: PointRankPolicyTier['code'], emojiId: string) => {
         updateRankPolicy((prev) => {
             const nextTiers = prev.tiers.map((tier) => ({
                 ...tier,
@@ -228,7 +228,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
         },
     });
 
-    const handleSelectTier = (tierCode: string) => {
+    const handleSelectTier = (tierCode: PointRankPolicyTier['code']) => {
         setSelectedTierCode((prev) => (prev === tierCode ? null : tierCode));
     };
 
@@ -241,7 +241,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
         setSelectedTierCode(nextTier.code);
     };
 
-    const handleRemoveTier = (tierCode: string) => {
+    const handleRemoveTier = (tierCode: PointRankPolicyTier['code']) => {
         const tierIndex = draftRankPolicy.tiers.findIndex((tier) => tier.code === tierCode);
         if (tierIndex < 0 || draftRankPolicy.tiers.length <= 1) return;
         const removedTier = draftRankPolicy.tiers[tierIndex];
@@ -759,7 +759,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
                 </div>
 
                 <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-                    저장 전까지는 추가, 수정, 삭제, 비활성화 내용이 학생 화면에 반영되지 않습니다.
+                    저장 전까지는 추가, 수정, 비활성화 내용이 학생 화면에 반영되지 않습니다.
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -814,14 +814,6 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
                                         className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-gray-50 px-4 py-2 text-sm font-bold text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
                                     >
                                         {entry.enabled === false ? '다시 사용' : '비활성화'}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleRemoveEmojiRegistryEntry(entry.id)}
-                                        disabled={!canManage || draftRankPolicy.emojiRegistry.length <= 1}
-                                        className="inline-flex items-center justify-center rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-bold text-rose-600 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
-                                    >
-                                        삭제
                                     </button>
                                 </div>
 
