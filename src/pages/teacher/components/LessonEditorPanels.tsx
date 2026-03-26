@@ -21,7 +21,7 @@ import type {
 } from "../../../lib/lessonWorksheet";
 import LessonContent from "../../student/lesson/components/LessonContent";
 
-export type LessonEditorTab = "meta" | "pdf" | "student-preview";
+export type LessonEditorTab = "pdf" | "student-preview";
 
 export type LessonTreeNode = {
   id: string;
@@ -49,12 +49,6 @@ type LessonEditorHeaderProps = {
   onToggleVisible: (value: boolean) => void;
   onSave: () => void;
   onOpenTeacherPreview: () => void;
-};
-
-type LessonMetaFormProps = {
-  lessonVideo: string;
-  onLessonVideoChange: (value: string) => void;
-  selectedNodeTitle?: string;
 };
 
 type LessonBodyEditorProps = {
@@ -329,7 +323,7 @@ export function LessonEditorHeader({
             onClick={onSave}
             className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
           >
-            기본 정보 저장
+            제목/공개 저장
           </button>
           <button
             type="button"
@@ -342,36 +336,6 @@ export function LessonEditorHeader({
         </div>
       </div>
     </div>
-  );
-}
-
-export function LessonMetaForm({
-  lessonVideo,
-  onLessonVideoChange,
-  selectedNodeTitle,
-}: LessonMetaFormProps) {
-  return (
-    <section className="space-y-6">
-      <div>
-        <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
-          기본 정보
-        </div>
-        <h3 className="mt-2 text-xl font-bold text-slate-900">
-          {selectedNodeTitle || "선택한 자료"} 기본 설정
-        </h3>
-      </div>
-      <label className="block">
-        <span className="mb-2 block text-sm font-semibold text-slate-700">
-          영상 URL
-        </span>
-        <input
-          value={lessonVideo}
-          onChange={(event) => onLessonVideoChange(event.target.value)}
-          placeholder="https://www.youtube.com/watch?v=..."
-          className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
-        />
-      </label>
-    </section>
   );
 }
 

@@ -87,7 +87,6 @@ import LessonSourceArchivePickerModal from "./components/LessonSourceArchivePick
 import {
   LessonBodyEditor,
   LessonEditorHeader,
-  LessonMetaForm,
   LessonPdfSection,
   LessonPreviewLauncher,
   LessonTreePanel,
@@ -98,7 +97,6 @@ import {
 type TreeNode = LessonTreeNode;
 
 const TABS: Array<{ id: LessonEditorTab; label: string; icon: string }> = [
-  { id: "meta", label: "기본 정보", icon: "fa-sliders" },
   { id: "pdf", label: "PDF 편집", icon: "fa-file-pdf" },
   { id: "student-preview", label: "학생 미리보기", icon: "fa-user-graduate" },
 ];
@@ -539,7 +537,7 @@ const ManageLesson: React.FC = () => {
   const [selectedNodeTitle, setSelectedNodeTitle] = useState("");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [editorTab, setEditorTab] = useState<LessonEditorTab>("meta");
+  const [editorTab, setEditorTab] = useState<LessonEditorTab>("pdf");
   const [lessonTitle, setLessonTitle] = useState("");
   const [lessonVideo, setLessonVideo] = useState("");
   const [lessonContent, setLessonContent] = useState("");
@@ -926,11 +924,11 @@ const ManageLesson: React.FC = () => {
   const combinedSaveStateTone = lessonSaveState;
   const unsavedLessonWarningMessage =
     hasUnsavedMetaChanges && hasUnsavedPdfChanges
-      ? "저장하지 않은 PDF 편집 내용과 기본 정보 변경이 있습니다. 이동하면 현재 편집 내용이 사라집니다."
+      ? "저장하지 않은 PDF 편집 내용과 제목/공개 설정 변경이 있습니다. 이동하면 현재 편집 내용이 사라집니다."
       : hasUnsavedPdfChanges
         ? "저장하지 않은 PDF 편집 내용이 있습니다. 이동하면 현재 편집 내용이 사라집니다."
         : hasUnsavedMetaChanges
-          ? "저장하지 않은 기본 정보 변경이 있습니다. 이동하면 현재 편집 내용이 사라집니다."
+          ? "저장하지 않은 제목/공개 설정 변경이 있습니다. 이동하면 현재 편집 내용이 사라집니다."
           : "";
 
   const syncSavedMetaState = useCallback(
@@ -1487,7 +1485,7 @@ const ManageLesson: React.FC = () => {
     setSelectedNodeId(node.id);
     setSelectedNodeTitle(node.title);
     setSidebarOpen(false);
-    setEditorTab("meta");
+    setEditorTab("pdf");
     void loadLessonContent(node.id, node.title);
   };
 
@@ -2390,7 +2388,7 @@ const ManageLesson: React.FC = () => {
         : doc(scopedRef, scopedSnap.docs[0].id);
       if (source === "header") {
         setLessonSaveState("saving");
-        setScreenBusyMessage("기본 정보를 저장하는 중입니다...");
+        setScreenBusyMessage("제목과 공개 설정을 저장하는 중입니다...");
         const normalizedGeneralDraft = buildNormalizedGeneralLessonDraft({
           lessonTitle,
           lessonVideo,
@@ -2433,7 +2431,7 @@ const ManageLesson: React.FC = () => {
         });
         setLessonSaveState("saved");
         setScreenBusyMessage(null);
-        alert("기본 정보를 저장했습니다.");
+        alert("제목과 공개 설정을 저장했습니다.");
         return;
       }
       if (selectedPdfFile && !preparedPdf) {
@@ -2612,7 +2610,7 @@ const ManageLesson: React.FC = () => {
           message: "PDF 편집 내용을 저장하지 못했습니다.",
         });
       } else {
-        alert("기본 정보 저장에 실패했습니다.");
+        alert("제목과 공개 설정 저장에 실패했습니다.");
       }
     }
     setScreenBusyMessage(null);
@@ -2788,10 +2786,10 @@ const ManageLesson: React.FC = () => {
                   lessonVisibleToStudents={lessonVisibleToStudents}
                   saveStateLabel={
                     combinedSaveStateTone === "saving"
-                      ? "기본 정보 저장 중..."
+                      ? "제목/공개 저장 중..."
                       : hasUnsavedMetaChanges
-                        ? "기본 정보 저장 필요"
-                        : "기본 정보 저장됨"
+                        ? "제목/공개 저장 필요"
+                        : "제목/공개 저장됨"
                   }
                   saveStateTone={combinedSaveStateTone}
                   onLessonTitleChange={setLessonTitle}
@@ -2815,13 +2813,6 @@ const ManageLesson: React.FC = () => {
                   </div>
                 </div>
                 <div className="flex-1 overflow-y-auto p-4 lg:p-6">
-                  {editorTab === "meta" && (
-                    <LessonMetaForm
-                      lessonVideo={lessonVideo}
-                      onLessonVideoChange={setLessonVideo}
-                      selectedNodeTitle={selectedNodeTitle}
-                    />
-                  )}
                   {editorTab === "pdf" && (
                     <div className="space-y-8">
                       <LessonPdfSection
