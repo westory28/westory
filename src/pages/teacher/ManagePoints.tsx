@@ -118,7 +118,10 @@ const ManagePoints: React.FC = () => {
     const [grantLoading, setGrantLoading] = useState(false);
     const [selectedUid, setSelectedUid] = useState('');
     const [transactions, setTransactions] = useState<PointTransaction[]>([]);
-    const [policy, setPolicy] = useState<PointPolicy>(EMPTY_POLICY);
+    const [savedPolicy, setSavedPolicy] = useState<PointPolicy>(EMPTY_POLICY);
+    const [policyDraft, setPolicyDraft] = useState<PointPolicy>(EMPTY_POLICY);
+    const [policyDirty, setPolicyDirty] = useState(false);
+    const [policyFeedback, setPolicyFeedback] = useState('');
     const [rankManualAdjustEarnedPointsByUid, setRankManualAdjustEarnedPointsByUid] = useState<Record<string, number>>({});
     const [products, setProducts] = useState<PointProduct[]>([]);
     const [orders, setOrders] = useState<PointOrder[]>([]);
@@ -287,7 +290,10 @@ const ManagePoints: React.FC = () => {
             setWallets(nextWallets);
             setGrantGradeOptions(nextSchoolOptions.grades);
             setGrantClassOptions(nextSchoolOptions.classes);
-            setPolicy(nextPolicy);
+            setSavedPolicy(nextPolicy);
+            setPolicyDraft(nextPolicy);
+            setPolicyDirty(false);
+            setPolicyFeedback('');
             setProducts(nextProducts);
             setOrders(nextOrders);
             setRankManualAdjustEarnedPointsByUid(nextRankManualAdjustEarnedPointsByUid);
@@ -422,6 +428,12 @@ const ManagePoints: React.FC = () => {
         setSearchParams(tab === 'overview' ? {} : { tab });
     };
 
+    const updatePolicyDraft = (updater: (prev: PointPolicy) => PointPolicy) => {
+        setPolicyDraft((prev) => updater(prev));
+        setPolicyDirty(true);
+        setPolicyFeedback('');
+    };
+
     const handleSaveGrant = async (event: React.FormEvent) => {
         event.preventDefault();
         if (!selectedGrantStudent || !canManage) return;
@@ -448,7 +460,19 @@ const ManagePoints: React.FC = () => {
             setGrantAmount('');
             setGrantReason('');
             setGrantFeedback('학생 포인트를 반영했습니다.');
-            await loadAll();
+
+            const nextWallets = await listPointWallets(config);
+            const nextRankManualAdjustEarnedPointsByUid = nextWallets.some((wallet) => needsPointRankLegacyFallback(wallet))
+                ? await getPointRankManualAdjustEarnedPointsMap(config)
+                : {};
+            setWallets(nextWallets);
+            setRankManualAdjustEarnedPointsByUid(nextRankManualAdjustEarnedPointsByUid);
+
+            const nextSelectedUid = selectedUid && nextWallets.some((wallet) => wallet.uid === selectedUid)
+                ? selectedUid
+                : nextWallets[0]?.uid || '';
+            setSelectedUid(nextSelectedUid);
+            await loadTransactionsForWallet(nextSelectedUid);
         } catch (error: any) {
             console.error('Failed to adjust points:', error);
             setGrantFeedback(error?.message || '포인트 부여에 실패했습니다.');
@@ -459,27 +483,30 @@ const ManagePoints: React.FC = () => {
         event.preventDefault();
         if (!canManage) return;
 
-        if (activeTab === 'ranks') {
-            const rankPolicyValidationError = getPointRankPolicyValidationError(policy.rankPolicy);
-            if (rankPolicyValidationError) {
-                window.alert(rankPolicyValidationError);
-                return;
-            }
+        const rankPolicyValidationError = getPointRankPolicyValidationError(policyDraft.rankPolicy);
+        if (rankPolicyValidationError) {
+            window.alert(rankPolicyValidationError);
+            return;
         }
 
         const sanitizedPolicy: PointPolicy = {
-            ...policy,
-            attendanceDaily: Math.max(0, Number(policy.attendanceDaily || 0)),
-            attendanceMonthlyBonus: Math.max(0, Number(policy.attendanceMonthlyBonus || 0)),
-            quizSolve: Math.max(0, Number(policy.quizSolve || 0)),
-            lessonView: Math.max(0, Number(policy.lessonView || 0)),
+            ...policyDraft,
+            attendanceDaily: Math.max(0, Number(policyDraft.attendanceDaily || 0)),
+            attendanceMonthlyBonus: Math.max(0, Number(policyDraft.attendanceMonthlyBonus || 0)),
+            quizSolve: Math.max(0, Number(policyDraft.quizSolve || 0)),
+            lessonView: Math.max(0, Number(policyDraft.lessonView || 0)),
         };
 
         try {
-            const nextPolicy = await upsertPointPolicy(config, sanitizedPolicy, actor);
-            setPolicy(nextPolicy);
-        } catch (error) {
+            await upsertPointPolicy(config, sanitizedPolicy, actor);
+            const confirmedPolicy = await getPointPolicy(config);
+            setSavedPolicy(confirmedPolicy);
+            setPolicyDraft(confirmedPolicy);
+            setPolicyDirty(false);
+            setPolicyFeedback(activeTab === 'policy' ? '운영 정책을 저장했습니다.' : '등급 설정을 저장했습니다.');
+        } catch (error: any) {
             console.error('Failed to save point policy:', error);
+            setPolicyFeedback(error?.message || '포인트 정책 저장에 실패했습니다. 기존 저장값은 유지됩니다.');
         }
     };
 
@@ -741,7 +768,7 @@ const ManagePoints: React.FC = () => {
                             wallets={filteredWallets}
                             selectedWallet={selectedWallet}
                             selectedUid={selectedUid}
-                            rankPolicy={policy.rankPolicy}
+                            rankPolicy={savedPolicy.rankPolicy}
                             rankManualAdjustEarnedPointsByUid={rankManualAdjustEarnedPointsByUid}
                             gradeFilter={gradeFilter}
                             classFilter={classFilter}
@@ -773,10 +800,10 @@ const ManagePoints: React.FC = () => {
                             students={filteredGrantStudents}
                             selectedStudent={selectedGrantStudent}
                             selectedUid={grantSelectedUid}
-                            rankPolicy={policy.rankPolicy}
+                            rankPolicy={savedPolicy.rankPolicy}
                             rankManualAdjustEarnedPointsByUid={rankManualAdjustEarnedPointsByUid}
                             canManage={canManage}
-                            manualAdjustEnabled={policy.manualAdjustEnabled}
+                            manualAdjustEnabled={savedPolicy.manualAdjustEnabled}
                             loading={grantLoading}
                             gradeFilter={grantGradeFilter}
                             classFilter={grantClassFilter}
@@ -801,18 +828,22 @@ const ManagePoints: React.FC = () => {
 
                     {!loading && activeTab === 'policy' && (
                         <PointPolicyTab
-                            policy={policy}
+                            policy={policyDraft}
                             canManage={canManage}
-                            onPolicyChange={(updater) => setPolicy((prev) => updater(prev))}
+                            hasUnsavedChanges={policyDirty}
+                            saveFeedback={policyFeedback}
+                            onPolicyChange={updatePolicyDraft}
                             onSubmit={handleSavePolicy}
                         />
                     )}
 
                     {!loading && activeTab === 'ranks' && (
                         <PointRanksTab
-                            policy={policy}
+                            policy={policyDraft}
                             canManage={canManage}
-                            onPolicyChange={(updater) => setPolicy((prev) => updater(prev))}
+                            hasUnsavedChanges={policyDirty}
+                            saveFeedback={policyFeedback}
+                            onPolicyChange={updatePolicyDraft}
                             onSubmit={handleSavePolicy}
                         />
                     )}

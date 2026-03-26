@@ -1,10 +1,12 @@
 import React from 'react';
-import { POINT_POLICY_FIELD_HELPERS, POINT_POLICY_FIELD_LABELS } from '../../../../constants/pointLabels';
+import { getPointFeedbackToneClass, POINT_POLICY_FIELD_HELPERS, POINT_POLICY_FIELD_LABELS } from '../../../../constants/pointLabels';
 import type { PointPolicy } from '../../../../types';
 
 interface PointPolicyTabProps {
     policy: PointPolicy;
     canManage: boolean;
+    hasUnsavedChanges: boolean;
+    saveFeedback: string;
     onPolicyChange: (updater: (prev: PointPolicy) => PointPolicy) => void;
     onSubmit: (event: React.FormEvent) => void;
 }
@@ -14,6 +16,8 @@ const inputClassName = 'w-full rounded-lg border border-gray-300 px-4 py-2.5 tex
 const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
     policy,
     canManage,
+    hasUnsavedChanges,
+    saveFeedback,
     onPolicyChange,
     onSubmit,
 }) => (
@@ -33,9 +37,21 @@ const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
                 >
                     운영 정책 저장
                 </button>
-                <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-                    저장은 기존 정책 저장 흐름을 그대로 사용합니다.
+                <div className={[
+                    'rounded-xl border px-4 py-3 text-sm',
+                    hasUnsavedChanges
+                        ? 'border-amber-200 bg-amber-50 text-amber-800'
+                        : 'border-blue-100 bg-blue-50 text-blue-700',
+                ].join(' ')}>
+                    {hasUnsavedChanges
+                        ? '현재 보이는 값은 draft입니다. 저장 전에는 실제 운영 정책이 바뀌지 않습니다.'
+                        : '저장된 운영 정책과 동일합니다.'}
                 </div>
+                {saveFeedback && (
+                    <div className={`rounded-xl px-4 py-3 text-sm ${getPointFeedbackToneClass(saveFeedback)}`}>
+                        {saveFeedback}
+                    </div>
+                )}
             </div>
         </div>
 

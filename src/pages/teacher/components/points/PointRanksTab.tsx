@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import PointRankBadge from '../../../../components/common/PointRankBadge';
 import {
+    getPointFeedbackToneClass,
     POINT_RANK_BADGE_STYLE_OPTIONS,
     POINT_RANK_CELEBRATION_EFFECT_LABELS,
     POINT_RANK_FIELD_HELPERS,
@@ -13,7 +14,7 @@ import {
     getPointRankDisplay,
     getPointRankPolicyValidationError,
     getPointRankThemeName,
-    resolvePointRankPolicy,
+    resolvePointRankPolicyDraft,
 } from '../../../../lib/pointRanks';
 import type {
     PointPolicy,
@@ -26,6 +27,8 @@ import type {
 interface PointRanksTabProps {
     policy: PointPolicy;
     canManage: boolean;
+    hasUnsavedChanges: boolean;
+    saveFeedback: string;
     onPolicyChange: (updater: (prev: PointPolicy) => PointPolicy) => void;
     onSubmit: (event: React.FormEvent) => void;
 }
@@ -41,8 +44,11 @@ const clampNumber = (value: unknown, fallback = 0) => {
 };
 
 const makeTierDraft = (tiers: PointRankPolicyTier[]): PointRankPolicyTier => {
-    const lastTier = tiers[tiers.length - 1];
-    const nextThreshold = lastTier ? Math.max(0, Number(lastTier.minPoints || 0) + 50) : 0;
+    const highestThreshold = tiers.reduce(
+        (maxValue, tier) => Math.max(maxValue, Number(tier.minPoints || 0)),
+        -50,
+    );
+    const nextThreshold = Math.max(0, highestThreshold + 50);
     const nextIndex = tiers.length + 1;
 
     return {
@@ -78,18 +84,26 @@ const makeEmojiRegistryDraft = (entries: PointRankEmojiRegistryEntry[]): PointRa
     };
 };
 
-const PointRanksTab: React.FC<PointRanksTabProps> = ({ policy, canManage, onPolicyChange, onSubmit }) => {
-    const resolvedRankPolicy = resolvePointRankPolicy(policy.rankPolicy);
+const PointRanksTab: React.FC<PointRanksTabProps> = ({
+    policy,
+    canManage,
+    hasUnsavedChanges,
+    saveFeedback,
+    onPolicyChange,
+    onSubmit,
+}) => {
+    const draftRankPolicy = resolvePointRankPolicyDraft(policy.rankPolicy);
     const validationError = getPointRankPolicyValidationError(policy.rankPolicy);
-    const previewThemeId: PointRankThemeId = resolvedRankPolicy.activeThemeId === 'korean_golpum'
+    const previewThemeId: PointRankThemeId = draftRankPolicy.activeThemeId === 'korean_golpum'
         ? 'world_nobility'
         : 'korean_golpum';
     const [selectedTierCode, setSelectedTierCode] = useState<string | null>(null);
+    const [expandedEmojiRegistryEntryId, setExpandedEmojiRegistryEntryId] = useState<string | null>(null);
 
     const updateRankPolicy = (updater: (prev: PointRankPolicy) => PointRankPolicy) => {
         onPolicyChange((prev) => ({
             ...prev,
-            rankPolicy: updater(resolvePointRankPolicy(prev.rankPolicy)),
+            rankPolicy: updater(resolvePointRankPolicyDraft(prev.rankPolicy)),
         }));
     };
 
@@ -147,6 +161,33 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({ policy, canManage, onPoli
             return {
                 ...prev,
                 tiers: nextTiers,
+                emojiRegistry: prev.emojiRegistry.map((entry) => (
+                    entry.id === emojiId && !wasChecked
+                        ? { ...entry, unlockTierCode: tierCode }
+                        : entry
+                )),
+            };
+        });
+    };
+
+    const moveEmojiToTier = (emojiId: string, tierCode: string) => {
+        updateRankPolicy((prev) => {
+            const nextTiers = prev.tiers.map((tier) => ({
+                ...tier,
+                allowedEmojiIds: (tier.allowedEmojiIds || []).filter((item) => item !== emojiId),
+            }));
+            const targetTier = nextTiers.find((tier) => tier.code === tierCode);
+            if (!targetTier) return prev;
+
+            targetTier.allowedEmojiIds = [...(targetTier.allowedEmojiIds || []), emojiId];
+            return {
+                ...prev,
+                tiers: nextTiers,
+                emojiRegistry: prev.emojiRegistry.map((entry) => (
+                    entry.id === emojiId
+                        ? { ...entry, unlockTierCode: tierCode }
+                        : entry
+                )),
             };
         });
     };
@@ -160,10 +201,12 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({ policy, canManage, onPoli
     };
 
     const addEmojiRegistryEntry = () => {
+        const nextEntry = makeEmojiRegistryDraft(draftRankPolicy.emojiRegistry);
         updateRankPolicy((prev) => ({
             ...prev,
-            emojiRegistry: [...prev.emojiRegistry, makeEmojiRegistryDraft(prev.emojiRegistry)],
+            emojiRegistry: [...prev.emojiRegistry, nextEntry],
         }));
+        setExpandedEmojiRegistryEntryId(nextEntry.id);
     };
 
     const updateEmojiRegistryEntry = (
@@ -178,15 +221,23 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({ policy, canManage, onPoli
 
     useEffect(() => {
         if (!selectedTierCode) return;
-        const exists = resolvedRankPolicy.tiers.some((tier) => tier.code === selectedTierCode);
+        const exists = draftRankPolicy.tiers.some((tier) => tier.code === selectedTierCode);
         if (!exists) {
             setSelectedTierCode(null);
         }
-    }, [resolvedRankPolicy.tiers, selectedTierCode]);
+    }, [draftRankPolicy.tiers, selectedTierCode]);
 
-    const getTierPreview = (tier: PointRankPolicyTier, themeId: PointRankThemeId = resolvedRankPolicy.activeThemeId) => getPointRankDisplay({
+    useEffect(() => {
+        if (!expandedEmojiRegistryEntryId) return;
+        const exists = draftRankPolicy.emojiRegistry.some((entry) => entry.id === expandedEmojiRegistryEntryId);
+        if (!exists) {
+            setExpandedEmojiRegistryEntryId(null);
+        }
+    }, [draftRankPolicy.emojiRegistry, expandedEmojiRegistryEntryId]);
+
+    const getTierPreview = (tier: PointRankPolicyTier, themeId: PointRankThemeId = draftRankPolicy.activeThemeId) => getPointRankDisplay({
         rankPolicy: {
-            ...resolvedRankPolicy,
+            ...draftRankPolicy,
             activeThemeId: themeId,
             themeId,
         },
@@ -201,7 +252,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({ policy, canManage, onPoli
     };
 
     const handleAddTier = () => {
-        const nextTier = makeTierDraft(resolvedRankPolicy.tiers);
+        const nextTier = makeTierDraft(draftRankPolicy.tiers);
         updateRankPolicy((prev) => ({
             ...prev,
             tiers: [...prev.tiers, nextTier],
@@ -210,10 +261,10 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({ policy, canManage, onPoli
     };
 
     const handleRemoveTier = (tierCode: string) => {
-        const tierIndex = resolvedRankPolicy.tiers.findIndex((tier) => tier.code === tierCode);
-        if (tierIndex < 0 || resolvedRankPolicy.tiers.length <= 1) return;
-        const removedTier = resolvedRankPolicy.tiers[tierIndex];
-        const targetTier = resolvedRankPolicy.tiers[tierIndex - 1] || resolvedRankPolicy.tiers[tierIndex + 1] || null;
+        const tierIndex = draftRankPolicy.tiers.findIndex((tier) => tier.code === tierCode);
+        if (tierIndex < 0 || draftRankPolicy.tiers.length <= 1) return;
+        const removedTier = draftRankPolicy.tiers[tierIndex];
+        const targetTier = draftRankPolicy.tiers[tierIndex - 1] || draftRankPolicy.tiers[tierIndex + 1] || null;
         const removedTierLabel = getTierPreview(removedTier)?.label || removedTier.code;
         const targetTierLabel = targetTier ? (getTierPreview(targetTier)?.label || targetTier.code) : '';
 
@@ -262,13 +313,13 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({ policy, canManage, onPoli
         setSelectedTierCode((prev) => (prev === tierCode ? (targetTier?.code || null) : prev));
     };
 
-    const activeThemeName = getPointRankThemeName(resolvedRankPolicy, resolvedRankPolicy.activeThemeId);
-    const previewThemeName = getPointRankThemeName(resolvedRankPolicy, previewThemeId);
+    const activeThemeName = getPointRankThemeName(draftRankPolicy, draftRankPolicy.activeThemeId);
+    const previewThemeName = getPointRankThemeName(draftRankPolicy, previewThemeId);
     const selectedTier = selectedTierCode
-        ? resolvedRankPolicy.tiers.find((tier) => tier.code === selectedTierCode) || null
+        ? draftRankPolicy.tiers.find((tier) => tier.code === selectedTierCode) || null
         : null;
     const selectedTierPreview = selectedTier ? getTierPreview(selectedTier) : null;
-    const enabledEmojiCount = resolvedRankPolicy.emojiRegistry.filter((entry) => entry.enabled !== false).length;
+    const enabledEmojiCount = draftRankPolicy.emojiRegistry.filter((entry) => entry.enabled !== false).length;
     const compareThemes: Array<{
         themeId: PointRankThemeId;
         label: string;
@@ -276,7 +327,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({ policy, canManage, onPoli
         tone: string;
     }> = [
         {
-            themeId: resolvedRankPolicy.activeThemeId,
+            themeId: draftRankPolicy.activeThemeId,
             label: '현재 활성 테마',
             name: activeThemeName,
             tone: 'bg-blue-50 text-blue-700 border-blue-200',
@@ -311,9 +362,24 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({ policy, canManage, onPoli
                     >
                         등급 설정 저장
                     </button>
-                    <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-                        변경사항은 저장 버튼을 눌러야 반영됩니다.
+                    <div className={[
+                        'rounded-xl border px-4 py-3 text-sm',
+                        hasUnsavedChanges
+                            ? 'border-amber-200 bg-amber-50 text-amber-800'
+                            : 'border-gray-200 bg-gray-50 text-gray-600',
+                    ].join(' ')}>
+                        {hasUnsavedChanges
+                            ? '현재 화면은 draft입니다. 저장 전에는 실제 policy와 학생 반영값이 바뀌지 않습니다.'
+                            : '저장된 등급 정책과 동일합니다.'}
                     </div>
+                    <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+                        변경사항은 저장 버튼을 눌러야 반영됩니다. 기준 포인트 순서는 저장 시점에 정리됩니다.
+                    </div>
+                    {saveFeedback && (
+                        <div className={`rounded-xl px-4 py-3 text-sm ${getPointFeedbackToneClass(saveFeedback)}`}>
+                            {saveFeedback}
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -329,7 +395,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({ policy, canManage, onPoli
                         <label className="block">
                             <div className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">현재 활성 테마</div>
                             <select
-                                value={resolvedRankPolicy.activeThemeId}
+                                value={draftRankPolicy.activeThemeId}
                                 onChange={(event) => setActiveThemeId(event.target.value === 'world_nobility' ? 'world_nobility' : 'korean_golpum')}
                                 className={selectClassName}
                                 disabled={!canManage}
@@ -353,7 +419,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({ policy, canManage, onPoli
                                     <div className="text-xs font-bold uppercase tracking-wide text-gray-500">{theme.label}</div>
                                     <h4 className="mt-1 text-lg font-bold text-gray-900">{theme.name}</h4>
                                     <p className="mt-1 text-sm text-gray-500">
-                                        {theme.themeId === resolvedRankPolicy.activeThemeId
+                                        {theme.themeId === draftRankPolicy.activeThemeId
                                             ? '이 카드의 설정이 저장 대상입니다.'
                                             : '현재 설정을 그대로 옮겨 본 미리보기입니다.'}
                                     </p>
@@ -364,7 +430,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({ policy, canManage, onPoli
                             </div>
 
                             <div className="mt-4 space-y-3">
-                                {resolvedRankPolicy.tiers.map((tier) => {
+                                {draftRankPolicy.tiers.map((tier) => {
                                     const previewRank = getTierPreview(tier, theme.themeId);
 
                                     return (
@@ -410,14 +476,14 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({ policy, canManage, onPoli
                     )}
 
                     <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-                        처음에는 모든 등급이 접혀 있습니다. 한 번에 한 등급만 열 수 있으며, 저장 전에는 학생 화면에 반영되지 않습니다.
+                        현재 보이는 등급 카드 순서는 draft 편집 순서입니다. 기준 포인트 정렬은 저장 시점에만 정리되며, 저장 전에는 학생 화면에 반영되지 않습니다.
                     </div>
 
                     <div className="space-y-3">
-                        {resolvedRankPolicy.tiers.map((tier, tierIndex) => {
+                        {draftRankPolicy.tiers.map((tier, tierIndex) => {
                             const tierPreview = getTierPreview(tier);
                             const isOpen = selectedTierCode === tier.code;
-                            const canDelete = resolvedRankPolicy.tiers.length > 1;
+                            const canDelete = draftRankPolicy.tiers.length > 1;
                             const badgeStyleLabel = POINT_RANK_BADGE_STYLE_OPTIONS.find((option) => option.value === (tier.badgeStyleToken || 'stone'))?.label
                                 || String(tier.badgeStyleToken || 'stone');
 
@@ -523,7 +589,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({ policy, canManage, onPoli
                                                 <label className="block">
                                                     <div className="mb-2 text-sm font-bold text-gray-700">{POINT_RANK_FIELD_LABELS.tierLabel}</div>
                                                     <input
-                                                        value={resolvedRankPolicy.themes?.[resolvedRankPolicy.activeThemeId]?.tiers?.[tier.code]?.label || ''}
+                                                        value={draftRankPolicy.themes?.[draftRankPolicy.activeThemeId]?.tiers?.[tier.code]?.label || ''}
                                                         onChange={(event) => setActiveThemeTierField(tier.code, 'label', event.target.value)}
                                                         placeholder={tierPreview?.label || `등급 ${tierIndex + 1}`}
                                                         className={inputClassName}
@@ -535,7 +601,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({ policy, canManage, onPoli
                                                 <label className="block">
                                                     <div className="mb-2 text-sm font-bold text-gray-700">{POINT_RANK_FIELD_LABELS.tierShortLabel}</div>
                                                     <input
-                                                        value={resolvedRankPolicy.themes?.[resolvedRankPolicy.activeThemeId]?.tiers?.[tier.code]?.shortLabel || ''}
+                                                        value={draftRankPolicy.themes?.[draftRankPolicy.activeThemeId]?.tiers?.[tier.code]?.shortLabel || ''}
                                                         onChange={(event) => setActiveThemeTierField(tier.code, 'shortLabel', event.target.value)}
                                                         placeholder={tierPreview?.shortLabel || tierPreview?.label || `등급 ${tierIndex + 1}`}
                                                         className={inputClassName}
@@ -549,7 +615,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({ policy, canManage, onPoli
                                                 <div className="mb-2 text-sm font-bold text-gray-700">{POINT_RANK_FIELD_LABELS.tierDescription}</div>
                                                 <textarea
                                                     rows={3}
-                                                    value={resolvedRankPolicy.themes?.[resolvedRankPolicy.activeThemeId]?.tiers?.[tier.code]?.description || ''}
+                                                    value={draftRankPolicy.themes?.[draftRankPolicy.activeThemeId]?.tiers?.[tier.code]?.description || ''}
                                                     onChange={(event) => setActiveThemeTierField(tier.code, 'description', event.target.value)}
                                                     placeholder={tierPreview?.description || '등급 설명을 입력하세요.'}
                                                     className={inputClassName}
@@ -611,7 +677,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({ policy, canManage, onPoli
                                 </div>
                                 <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
                                     <div className="text-[11px] font-bold uppercase tracking-wide text-gray-400">현재 테마</div>
-                                    <div className="mt-1 text-sm font-bold text-gray-900">{POINT_RANK_THEME_LABELS[resolvedRankPolicy.activeThemeId]}</div>
+                                    <div className="mt-1 text-sm font-bold text-gray-900">{POINT_RANK_THEME_LABELS[draftRankPolicy.activeThemeId]}</div>
                                 </div>
                             </div>
 
@@ -620,9 +686,14 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({ policy, canManage, onPoli
                             </div>
 
                             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-2 2xl:grid-cols-3">
-                                {resolvedRankPolicy.emojiRegistry.map((entry) => {
+                                {draftRankPolicy.emojiRegistry.map((entry) => {
                                     const checked = (selectedTier.allowedEmojiIds || []).includes(entry.id);
                                     const disabled = !canManage || entry.enabled === false;
+                                    const unlockTierCode = draftRankPolicy.tiers.find((tier) => (
+                                        (tier.allowedEmojiIds || []).includes(entry.id)
+                                    ))?.code || entry.unlockTierCode || draftRankPolicy.tiers[0]?.code || 'tier_1';
+                                    const unlockTier = draftRankPolicy.tiers.find((tier) => tier.code === unlockTierCode) || null;
+                                    const unlockLabel = unlockTier ? (getTierPreview(unlockTier)?.label || unlockTier.code) : '기본 등급';
 
                                     return (
                                         <button
@@ -651,14 +722,19 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({ policy, canManage, onPoli
                                                 </span>
                                             </div>
                                             <div className="mt-2 text-sm font-bold">{entry.label}</div>
-                                            <div className="mt-1 text-[11px] text-gray-500">{entry.id}</div>
+                                            <div className="mt-2 flex flex-wrap items-center gap-1 text-[11px] text-gray-500">
+                                                {entry.category && (
+                                                    <span className="rounded-full bg-gray-100 px-2 py-0.5">{entry.category}</span>
+                                                )}
+                                                <span>{checked ? '현재 등급' : `해제 ${unlockLabel}`}</span>
+                                            </div>
                                         </button>
                                     );
                                 })}
                             </div>
 
                             <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-xs leading-5 text-gray-500">
-                                {resolvedRankPolicy.tiers[0]?.code === selectedTier.code
+                                {draftRankPolicy.tiers[0]?.code === selectedTier.code
                                     ? '첫 번째 등급에는 기본 이모지가 자동으로 포함됩니다.'
                                     : '상위 등급과의 이모지 중복은 자동으로 정리됩니다.'}
                             </div>
@@ -672,45 +748,85 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({ policy, canManage, onPoli
                     <div>
                         <h3 className="text-base font-bold text-gray-900">이모지 레지스트리</h3>
                         <p className="mt-1 text-sm text-gray-500">
-                            등급에서 사용할 이모지를 추가, 수정, 비활성화합니다. 비활성화는 소프트 삭제로 동작합니다.
+                            자주 바꾸는 정보만 먼저 보여줍니다. 상세 메타데이터는 카드별 고급 설정에서 확인할 수 있습니다.
                         </p>
                     </div>
-                    <button
-                        type="button"
-                        onClick={addEmojiRegistryEntry}
-                        disabled={!canManage}
-                        className="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                        {POINT_RANK_FIELD_LABELS.addRegistryItem}
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <div className="rounded-full border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-bold text-gray-600">
+                            등록 {draftRankPolicy.emojiRegistry.length}개
+                        </div>
+                        <div className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">
+                            활성 {enabledEmojiCount}개
+                        </div>
+                        <button
+                            type="button"
+                            onClick={addEmojiRegistryEntry}
+                            disabled={!canManage}
+                            className="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                            {POINT_RANK_FIELD_LABELS.addRegistryItem}
+                        </button>
+                    </div>
                 </div>
 
-                <div className="space-y-4">
-                    {resolvedRankPolicy.emojiRegistry.map((entry) => (
-                        <article
-                            key={entry.id}
-                            className={[
-                                'rounded-2xl border p-4',
-                                entry.enabled === false ? 'border-gray-200 bg-gray-50 opacity-70' : 'border-gray-200 bg-white',
-                            ].join(' ')}
-                        >
-                            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                                <div className="flex items-start gap-3">
-                                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-gray-200 bg-gray-50 text-2xl">{entry.emoji}</div>
-                                    <div>
+                <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                    이모지 추가와 수정은 draft로만 반영됩니다. 실제 해제 순서와 정렬값은 저장 시점에 최종 정리됩니다.
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                    {draftRankPolicy.emojiRegistry.map((entry) => {
+                        const isAdvancedOpen = expandedEmojiRegistryEntryId === entry.id;
+                        const assignedTier = draftRankPolicy.tiers.find((tier) => (
+                            (tier.allowedEmojiIds || []).includes(entry.id)
+                        )) || null;
+                        const unlockTierCode = assignedTier?.code || entry.unlockTierCode || draftRankPolicy.tiers[0]?.code || 'tier_1';
+                        const unlockTier = draftRankPolicy.tiers.find((tier) => tier.code === unlockTierCode) || null;
+                        const unlockLabel = unlockTier ? (getTierPreview(unlockTier)?.label || unlockTier.code) : '기본 등급';
+
+                        return (
+                            <article
+                                key={entry.id}
+                                className={[
+                                    'rounded-2xl border p-4 transition',
+                                    entry.enabled === false ? 'border-gray-200 bg-gray-50 opacity-80' : 'border-gray-200 bg-white',
+                                ].join(' ')}
+                            >
+                            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                <div className="flex min-w-0 items-start gap-3">
+                                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-gray-200 bg-gray-50 text-2xl">
+                                        {entry.emoji}
+                                    </div>
+                                    <div className="min-w-0">
                                         <div className="flex flex-wrap items-center gap-2">
                                             <h4 className="text-base font-bold text-gray-900">{entry.label}</h4>
-                                            {!entry.enabled && (
-                                                <span className="rounded-full border border-gray-200 bg-gray-100 px-2 py-0.5 text-[11px] font-bold text-gray-500">
-                                                    비활성
+                                            <span className={[
+                                                'rounded-full border px-2 py-0.5 text-[11px] font-bold',
+                                                entry.enabled === false
+                                                    ? 'border-gray-200 bg-gray-100 text-gray-500'
+                                                    : 'border-emerald-200 bg-emerald-50 text-emerald-700',
+                                            ].join(' ')}>
+                                                {entry.enabled === false ? '비활성' : '활성'}
+                                            </span>
+                                        </div>
+                                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                                            <span className="rounded-full border border-blue-100 bg-blue-50 px-2 py-0.5 font-bold text-blue-700">
+                                                해제 {unlockLabel}
+                                            </span>
+                                            {entry.category && (
+                                                <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5">
+                                                    {entry.category}
+                                                </span>
+                                            )}
+                                            {assignedTier && (
+                                                <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5">
+                                                    현재 배치 {assignedTier.code}
                                                 </span>
                                             )}
                                         </div>
-                                        <div className="mt-1 text-xs text-gray-500">{entry.id}</div>
                                     </div>
                                 </div>
 
-                                <label className="flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-bold text-gray-700">
+                                <label className="flex shrink-0 items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-bold text-gray-700">
                                     <input
                                         type="checkbox"
                                         checked={entry.enabled !== false}
@@ -725,20 +841,9 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({ policy, canManage, onPoli
                                 </label>
                             </div>
 
-                            <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
+                            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-[88px_minmax(0,1fr)]">
                                 <label className="block">
-                                    <div className="mb-2 text-sm font-bold text-gray-700">{POINT_RANK_FIELD_LABELS.registryId}</div>
-                                    <input
-                                        value={entry.id}
-                                        className={inputClassName}
-                                        disabled
-                                        readOnly
-                                    />
-                                    <div className="mt-2 text-xs leading-5 text-gray-500">{POINT_RANK_FIELD_HELPERS.registryId}</div>
-                                </label>
-
-                                <label className="block">
-                                    <div className="mb-2 text-sm font-bold text-gray-700">{POINT_RANK_FIELD_LABELS.registryEmoji}</div>
+                                    <div className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">{POINT_RANK_FIELD_LABELS.registryEmoji}</div>
                                     <input
                                         value={entry.emoji}
                                         onChange={(event) => updateEmojiRegistryEntry(entry.id, (current) => ({
@@ -753,11 +858,10 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({ policy, canManage, onPoli
                                         className={inputClassName}
                                         disabled={!canManage}
                                     />
-                                    <div className="mt-2 text-xs leading-5 text-gray-500">{POINT_RANK_FIELD_HELPERS.registryEmoji}</div>
                                 </label>
 
                                 <label className="block">
-                                    <div className="mb-2 text-sm font-bold text-gray-700">{POINT_RANK_FIELD_LABELS.registryLabel}</div>
+                                    <div className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">{POINT_RANK_FIELD_LABELS.registryLabel}</div>
                                     <input
                                         value={entry.label}
                                         onChange={(event) => updateEmojiRegistryEntry(entry.id, (current) => ({
@@ -767,61 +871,78 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({ policy, canManage, onPoli
                                         className={inputClassName}
                                         disabled={!canManage}
                                     />
-                                    <div className="mt-2 text-xs leading-5 text-gray-500">{POINT_RANK_FIELD_HELPERS.registryLabel}</div>
                                 </label>
+                            </div>
 
+                            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
                                 <label className="block">
-                                    <div className="mb-2 text-sm font-bold text-gray-700">{POINT_RANK_FIELD_LABELS.registryCategory}</div>
-                                    <input
-                                        value={entry.category}
-                                        onChange={(event) => updateEmojiRegistryEntry(entry.id, (current) => ({
-                                            ...current,
-                                            category: event.target.value,
-                                        }))}
-                                        className={inputClassName}
-                                        disabled={!canManage}
-                                    />
-                                    <div className="mt-2 text-xs leading-5 text-gray-500">{POINT_RANK_FIELD_HELPERS.registryCategory}</div>
-                                </label>
-
-                                <label className="block">
-                                    <div className="mb-2 text-sm font-bold text-gray-700">{POINT_RANK_FIELD_LABELS.registrySortOrder}</div>
-                                    <input
-                                        type="number"
-                                        value={entry.sortOrder}
-                                        onChange={(event) => updateEmojiRegistryEntry(entry.id, (current) => ({
-                                            ...current,
-                                            sortOrder: clampNumber(event.target.value, 0),
-                                        }))}
-                                        className={inputClassName}
-                                        disabled={!canManage}
-                                    />
-                                    <div className="mt-2 text-xs leading-5 text-gray-500">{POINT_RANK_FIELD_HELPERS.registrySortOrder}</div>
-                                </label>
-
-                                <label className="block">
-                                    <div className="mb-2 text-sm font-bold text-gray-700">{POINT_RANK_FIELD_LABELS.registryUnlockTierCode}</div>
+                                    <div className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">{POINT_RANK_FIELD_LABELS.registryUnlockTierCode}</div>
                                     <select
-                                        value={entry.unlockTierCode || ''}
-                                        onChange={(event) => updateEmojiRegistryEntry(entry.id, (current) => ({
-                                            ...current,
-                                            unlockTierCode: normalizeText(event.target.value) || undefined,
-                                        }))}
+                                        value={unlockTierCode}
+                                        onChange={(event) => moveEmojiToTier(entry.id, event.target.value)}
                                         className={selectClassName}
                                         disabled={!canManage}
                                     >
-                                        <option value="">기본값</option>
-                                        {resolvedRankPolicy.tiers.map((tier) => (
+                                        {draftRankPolicy.tiers.map((tier) => (
                                             <option key={tier.code} value={tier.code}>
                                                 {getTierPreview(tier)?.label || tier.code}
                                             </option>
                                         ))}
                                     </select>
-                                    <div className="mt-2 text-xs leading-5 text-gray-500">{POINT_RANK_FIELD_HELPERS.registryUnlockTierCode}</div>
                                 </label>
+
+                                <button
+                                    type="button"
+                                    onClick={() => setExpandedEmojiRegistryEntryId((prev) => (prev === entry.id ? null : entry.id))}
+                                    className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm font-bold text-gray-700 transition hover:bg-gray-100"
+                                >
+                                    {isAdvancedOpen ? '고급 설정 닫기' : '고급 설정'}
+                                </button>
                             </div>
-                        </article>
-                    ))}
+
+                            {isAdvancedOpen && (
+                                <div className="mt-4 grid grid-cols-1 gap-4 border-t border-gray-200 pt-4 lg:grid-cols-2">
+                                    <label className="block">
+                                        <div className="mb-2 text-sm font-bold text-gray-700">{POINT_RANK_FIELD_LABELS.registryCategory}</div>
+                                        <input
+                                            value={entry.category}
+                                            onChange={(event) => updateEmojiRegistryEntry(entry.id, (current) => ({
+                                                ...current,
+                                                category: event.target.value,
+                                            }))}
+                                            className={inputClassName}
+                                            disabled={!canManage}
+                                        />
+                                        <div className="mt-2 text-xs leading-5 text-gray-500">{POINT_RANK_FIELD_HELPERS.registryCategory}</div>
+                                    </label>
+
+                                    <label className="block">
+                                        <div className="mb-2 text-sm font-bold text-gray-700">{POINT_RANK_FIELD_LABELS.registrySortOrder}</div>
+                                        <input
+                                            type="number"
+                                            value={entry.sortOrder}
+                                            onChange={(event) => updateEmojiRegistryEntry(entry.id, (current) => ({
+                                                ...current,
+                                                sortOrder: clampNumber(event.target.value, 0),
+                                            }))}
+                                            className={inputClassName}
+                                            disabled={!canManage}
+                                        />
+                                        <div className="mt-2 text-xs leading-5 text-gray-500">{POINT_RANK_FIELD_HELPERS.registrySortOrder}</div>
+                                    </label>
+
+                                    <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 lg:col-span-2">
+                                        <div className="text-xs font-bold uppercase tracking-wide text-gray-500">{POINT_RANK_FIELD_LABELS.registryId}</div>
+                                        <div className="mt-1 break-all font-mono text-sm text-gray-800">{entry.id}</div>
+                                        <div className="mt-2 text-xs leading-5 text-gray-500">
+                                            {POINT_RANK_FIELD_HELPERS.registryId}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            </article>
+                        );
+                    })}
                 </div>
             </section>
 
@@ -834,7 +955,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({ policy, canManage, onPoli
                         </p>
                     </div>
                     <div className="inline-flex rounded-full border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-bold text-gray-500">
-                        {resolvedRankPolicy.celebrationPolicy.enabled ? '축하 효과 활성화됨' : '축하 효과 비활성화됨'}
+                        {draftRankPolicy.celebrationPolicy.enabled ? '축하 효과 활성화됨' : '축하 효과 비활성화됨'}
                     </div>
                 </div>
 
@@ -846,7 +967,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({ policy, canManage, onPoli
                         </div>
                         <input
                             type="checkbox"
-                            checked={resolvedRankPolicy.celebrationPolicy.enabled}
+                            checked={draftRankPolicy.celebrationPolicy.enabled}
                             onChange={(event) => updateRankPolicy((prev) => ({
                                 ...prev,
                                 celebrationPolicy: {
@@ -862,7 +983,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({ policy, canManage, onPoli
                     <label className="block">
                         <div className="mb-2 text-sm font-bold text-gray-700">{POINT_RANK_FIELD_LABELS.celebrationEffectLevel}</div>
                         <select
-                            value={resolvedRankPolicy.celebrationPolicy.effectLevel}
+                            value={draftRankPolicy.celebrationPolicy.effectLevel}
                             onChange={(event) => updateRankPolicy((prev) => ({
                                 ...prev,
                                 celebrationPolicy: {

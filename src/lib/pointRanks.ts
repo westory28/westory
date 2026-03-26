@@ -37,6 +37,11 @@ interface PointRankThemeMeta {
     tiers: Partial<Record<PointRankTierCode, Omit<PointRankThemeTierMeta, 'badgeClass'>>>;
 }
 
+interface ResolvePointRankPolicyOptions {
+    sortTiers?: boolean;
+    sortEmojiRegistry?: boolean;
+}
+
 export interface PointRankDisplay {
     themeId: PointRankThemeId;
     themeName: string;
@@ -310,12 +315,15 @@ const getBaseTierMeta = (themeId: PointRankThemeId, tierCode: PointRankTierCode)
 const buildResolvedTiers = (
     rankPolicy: Partial<PointRankPolicy> | null | undefined,
     registry: PointRankEmojiRegistryEntry[],
+    options?: { sortByMinPoints?: boolean },
 ) => {
     const rawTiers = Array.isArray(rankPolicy?.tiers)
         ? rankPolicy.tiers.map((tier, index) => normalizeTier(tier, index))
         : cloneDefaultTiers();
-    const sortedTiers = (rawTiers.length > 0 ? rawTiers : cloneDefaultTiers()).sort((a, b) => a.minPoints - b.minPoints);
-    const baseTiers = sortedTiers.length > 0 ? sortedTiers : cloneDefaultTiers();
+    const baseTiers = rawTiers.length > 0 ? [...rawTiers] : cloneDefaultTiers();
+    if (options?.sortByMinPoints !== false) {
+        baseTiers.sort((a, b) => a.minPoints - b.minPoints);
+    }
     const defaultEmojiPolicy = buildDefaultPointRankEmojiPolicy(baseTiers, registry);
     const rawTierMap = new Map(baseTiers.map((tier) => [tier.code, tier]));
     const usedEmojiIds = new Set<string>();
@@ -409,10 +417,17 @@ export const DEFAULT_POINT_RANK_POLICY: PointRankPolicy = (() => {
     };
 })();
 
-export const resolvePointRankPolicy = (rankPolicy?: Partial<PointRankPolicy> | null): PointRankPolicy => {
+export const resolvePointRankPolicy = (
+    rankPolicy?: Partial<PointRankPolicy> | null,
+    options?: ResolvePointRankPolicyOptions,
+): PointRankPolicy => {
     const activeThemeId = normalizeThemeId(rankPolicy?.activeThemeId ?? rankPolicy?.themeId);
-    const emojiRegistry = resolveProfileEmojiRegistry(rankPolicy?.emojiRegistry);
-    const { tiers, defaultEmojiId } = buildResolvedTiers(rankPolicy, emojiRegistry);
+    const emojiRegistry = resolveProfileEmojiRegistry(rankPolicy?.emojiRegistry, {
+        sort: options?.sortEmojiRegistry !== false,
+    });
+    const { tiers, defaultEmojiId } = buildResolvedTiers(rankPolicy, emojiRegistry, {
+        sortByMinPoints: options?.sortTiers !== false,
+    });
 
     return {
         enabled: rankPolicy?.enabled !== false,
@@ -429,6 +444,13 @@ export const resolvePointRankPolicy = (rankPolicy?: Partial<PointRankPolicy> | n
         },
     };
 };
+
+export const resolvePointRankPolicyDraft = (rankPolicy?: Partial<PointRankPolicy> | null) => (
+    resolvePointRankPolicy(rankPolicy, {
+        sortTiers: false,
+        sortEmojiRegistry: false,
+    })
+);
 
 export const getPointRankThemeName = (
     rankPolicy: Partial<PointRankPolicy> | null | undefined,
@@ -512,9 +534,12 @@ export const getPointRankPolicyValidationError = (rankPolicy?: Partial<PointRank
         if (!Number.isFinite(Number(tier.minPoints)) || Number(tier.minPoints) < 0) {
             return '승급 기준 포인트는 0 이상의 숫자여야 합니다.';
         }
+    }
 
-        if (index > 0 && Number(rawTiers[index - 1].minPoints) >= Number(tier.minPoints)) {
-            return '승급 기준 포인트는 오름차순으로 입력해야 합니다.';
+    const sortedTiers = [...rawTiers].sort((a, b) => a.minPoints - b.minPoints);
+    for (let index = 1; index < sortedTiers.length; index += 1) {
+        if (Number(sortedTiers[index - 1].minPoints) >= Number(sortedTiers[index].minPoints)) {
+            return '승급 기준 포인트는 서로 다른 값으로 입력해 주세요.';
         }
     }
 

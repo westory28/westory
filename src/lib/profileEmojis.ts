@@ -146,9 +146,16 @@ const buildEmojiMaps = (registry: PointRankEmojiRegistryEntry[]) => {
     };
 };
 
-export const resolveProfileEmojiRegistry = (rawRegistry?: unknown) => {
+export const resolveProfileEmojiRegistry = (
+    rawRegistry?: unknown,
+    options?: { sort?: boolean },
+) => {
+    const fallbackRegistry = DEFAULT_PROFILE_EMOJI_REGISTRY.map((entry) => ({
+        ...entry,
+        legacyValues: [...(entry.legacyValues || [])],
+    }));
     if (!Array.isArray(rawRegistry)) {
-        return DEFAULT_PROFILE_EMOJI_REGISTRY.map((entry) => ({ ...entry, legacyValues: [...(entry.legacyValues || [])] }));
+        return options?.sort === false ? fallbackRegistry : sortRegistry(fallbackRegistry);
     }
 
     const usedIds = new Set<string>();
@@ -157,10 +164,10 @@ export const resolveProfileEmojiRegistry = (rawRegistry?: unknown) => {
         .filter((entry): entry is PointRankEmojiRegistryEntry => Boolean(entry));
 
     if (entries.length === 0) {
-        return DEFAULT_PROFILE_EMOJI_REGISTRY.map((entry) => ({ ...entry, legacyValues: [...(entry.legacyValues || [])] }));
+        return options?.sort === false ? fallbackRegistry : sortRegistry(fallbackRegistry);
     }
 
-    return sortRegistry(entries);
+    return options?.sort === false ? entries : sortRegistry(entries);
 };
 
 const getEnabledRegistryEntries = (registry: PointRankEmojiRegistryEntry[]) => registry.filter((entry) => entry.enabled !== false);
