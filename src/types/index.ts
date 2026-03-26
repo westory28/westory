@@ -13,7 +13,6 @@ export interface InterfaceConfig {
   ddayTitle: string;
   ddayDate: string;
   footerText?: string;
-  studentProfileEmojis?: string[];
 }
 
 export interface UserData {

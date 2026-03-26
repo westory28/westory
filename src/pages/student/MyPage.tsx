@@ -146,7 +146,6 @@ interface TrendPoint {
     score: number;
 }
 
-const DEFAULT_EMOJIS = ['😀', '😎', '🤓', '🙂', '🧠', '📝', '📚', '🏆', '🚀', '🌟', '🍀', '🎯', '🐯', '🐳', '🐼'];
 const DEFAULT_POINT_WALLET: PointWallet = {
     uid: '',
     studentName: '',
@@ -180,12 +179,6 @@ const getCategoryShort = (category?: string) => {
     if (category === 'formative') return '형성';
     if (category === 'exam_prep') return '시험대비';
     return '기타';
-};
-
-const normalizeEmojiList = (raw: unknown) => {
-    if (!Array.isArray(raw)) return DEFAULT_EMOJIS;
-    const list = Array.from(new Set(raw.map((item) => String(item ?? '').trim()).filter(Boolean)));
-    return list.length > 0 ? list : DEFAULT_EMOJIS;
 };
 
 const chunk = <T,>(arr: T[], size: number) =>
@@ -272,7 +265,6 @@ const MyPage: React.FC = () => {
     const [profile, setProfile] = useState<UserProfileDoc | null>(null);
     const [profileIcon, setProfileIcon] = useState('😀');
     const [iconModalOpen, setIconModalOpen] = useState(false);
-    const [emojiOptions, setEmojiOptions] = useState<string[]>(DEFAULT_EMOJIS);
     const [savingIcon, setSavingIcon] = useState(false);
     const [pointPolicy, setPointPolicy] = useState<PointPolicy>(POINT_POLICY_FALLBACK);
     const [pointWallet, setPointWallet] = useState<PointWallet | null>(null);
@@ -309,9 +301,8 @@ const MyPage: React.FC = () => {
     const loadProfileAndEmoji = async () => {
         if (!user) return;
 
-        const [userSnap, interfaceSnap, schoolSnap] = await Promise.all([
+        const [userSnap, schoolSnap] = await Promise.all([
             getDoc(doc(db, 'users', user.uid)),
-            getDoc(doc(db, 'site_settings', 'interface_config')),
             getDoc(doc(db, 'site_settings', 'school_config')),
         ]);
 
@@ -326,12 +317,6 @@ const MyPage: React.FC = () => {
             setProfileIcon(getDefaultProfileEmojiValue());
             setGoalScore('');
             setSubjectGoals({});
-        }
-
-        if (interfaceSnap.exists()) {
-            setEmojiOptions(normalizeEmojiList(interfaceSnap.data().studentProfileEmojis));
-        } else {
-            setEmojiOptions(DEFAULT_EMOJIS);
         }
 
         if (schoolSnap.exists()) {
@@ -589,8 +574,8 @@ const MyPage: React.FC = () => {
     };
 
     const orderedEmojiEntries = useMemo(
-        () => getPointRankEmojiRegistry(pointPolicy.rankPolicy, emojiOptions),
-        [emojiOptions, pointPolicy.rankPolicy],
+        () => getPointRankEmojiRegistry(pointPolicy.rankPolicy),
+        [pointPolicy.rankPolicy],
     );
     const safePointWallet = pointWallet || DEFAULT_POINT_WALLET;
     const currentRank = getPointRankDisplay({
