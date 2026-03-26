@@ -211,9 +211,9 @@ export interface PointRankPolicy {
   basedOn: PointRankBasedOn;
   tiers: PointRankPolicyTier[];
   themes?: PointRankThemeOverrides;
-  emojiRegistry?: PointRankEmojiRegistryEntry[];
+  emojiRegistry: PointRankEmojiRegistryEntry[];
   emojiPolicy: PointRankEmojiPolicy;
-  celebrationPolicy?: PointRankCelebrationPolicy;
+  celebrationPolicy: PointRankCelebrationPolicy;
 }
 
 export interface PointWalletRankSnapshot {

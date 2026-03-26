@@ -1,6 +1,7 @@
 import type {
     PointRankBadgeStyleToken,
     PointRankBasedOn,
+    PointRankEmojiPolicy,
     PointRankEmojiPolicyTier,
     PointRankEmojiRegistryEntry,
     PointRankPolicy,
@@ -221,7 +222,7 @@ const normalizeTier = (
     const badgeStyleToken = String(tier?.badgeStyleToken || '').trim();
     const hasAllowedEmojiIds = Array.isArray(tier?.allowedEmojiIds);
     const allowedEmojiIds = hasAllowedEmojiIds
-        ? tier?.allowedEmojiIds.map((value) => String(value || '').trim()).filter(Boolean)
+        ? (tier?.allowedEmojiIds || []).map((value) => String(value || '').trim()).filter(Boolean)
         : [];
 
     return {
@@ -416,17 +417,23 @@ const buildResolvedEmojiPolicy = (
     rankPolicy: Partial<PointRankPolicy> | null | undefined,
     tiers: PointRankPolicyTier[],
     defaultEmojiId: string,
-) => ({
-    enabled: rankPolicy?.emojiPolicy?.enabled !== false,
-    defaultEmojiId,
-    legacyMode: rankPolicy?.emojiPolicy?.legacyMode === 'strict' ? 'strict' : 'keep_selected',
-    tiers: tiers.reduce<NonNullable<PointRankPolicy['emojiPolicy']['tiers']>>((accumulator, tier) => {
+) => {
+    const legacyMode: PointRankEmojiPolicy['legacyMode'] = rankPolicy?.emojiPolicy?.legacyMode === 'strict'
+        ? 'strict'
+        : 'keep_selected';
+
+    return {
+        enabled: rankPolicy?.emojiPolicy?.enabled !== false,
+        defaultEmojiId,
+        legacyMode,
+        tiers: tiers.reduce<NonNullable<PointRankPolicy['emojiPolicy']['tiers']>>((accumulator, tier) => {
         accumulator[tier.code] = {
             allowedEmojiIds: [...(tier.allowedEmojiIds || [])],
         };
         return accumulator;
-    }, {}),
-});
+        }, {}),
+    };
+};
 
 export const DEFAULT_POINT_RANK_POLICY: PointRankPolicy = (() => {
     const emojiRegistry = cloneDefaultRegistry();

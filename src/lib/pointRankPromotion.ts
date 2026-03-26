@@ -1,6 +1,5 @@
 import type {
     PointPolicy,
-    PointRankDisplay,
     PointRankTierCode,
     PointWallet,
     SystemConfig,
@@ -9,6 +8,7 @@ import { getPointPolicy, getPointRankManualAdjustEarnedPointsByUid, getPointWall
 import {
     getPointRankDisplay,
     getPointRankNewlyUnlockedEmojiEntries,
+    type PointRankDisplay,
     getPointRankTierPosition,
     needsPointRankLegacyFallback,
     resolvePointRankPolicy,
