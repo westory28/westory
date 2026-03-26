@@ -45,6 +45,8 @@ type LessonEditorHeaderProps = {
   lessonVisibleToStudents: boolean;
   saveStateLabel?: string;
   saveStateTone?: SaveStateTone;
+  saveButtonLabel?: string;
+  disableSave?: boolean;
   onLessonTitleChange: (value: string) => void;
   onToggleVisible: (value: boolean) => void;
   onSave: () => void;
@@ -289,6 +291,8 @@ export function LessonEditorHeader({
   lessonVisibleToStudents,
   saveStateLabel = "저장됨",
   saveStateTone = "saved",
+  saveButtonLabel = "저장",
+  disableSave = false,
   onLessonTitleChange,
   onToggleVisible,
   onSave,
@@ -321,9 +325,10 @@ export function LessonEditorHeader({
           <button
             type="button"
             onClick={onSave}
-            className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
+            disabled={disableSave}
+            className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
-            제목/공개 저장
+            {saveButtonLabel}
           </button>
           <button
             type="button"
@@ -436,7 +441,7 @@ function FootnoteEditorDialog({
     ? ({ inert: "" } as React.HTMLAttributes<HTMLDivElement>)
     : {};
   const locationMessage = session.pendingAnchorPlacement
-    ? `PDF p.${session.pendingAnchorPlacement.page} 위치를 선택했습니다. 오른쪽 저장 버튼을 누르면 버튼이 생깁니다.`
+    ? `PDF p.${session.pendingAnchorPlacement.page} 위치를 선택했습니다. 저장 버튼을 누르면 버튼이 생깁니다.`
     : footnoteAnchorBadgeLabel(pdfAnchorCount);
 
   return (
@@ -778,8 +783,7 @@ export function LessonBodyEditor({
         </h3>
         <p className="mt-2 text-sm text-slate-500">
           본문에 들어가는 각주 표시와 PDF 위 각주 버튼이 같은 팝업 내용을 함께
-          사용합니다. 각주를 추가하거나 고친 뒤에는 오른쪽 저장 버튼을 눌러
-          반영하세요.
+          사용합니다. 각주를 추가하거나 고친 뒤에는 저장 버튼을 눌러 반영하세요.
         </p>
       </div>
       <textarea
@@ -1074,7 +1078,7 @@ export function LessonPdfSection({
           }`}
         >
           {hasUnsavedPdfChanges
-            ? "저장하지 않은 PDF 편집 내용이 있습니다. 오른쪽 저장 버튼을 눌러 반영하세요. 저장 후 학생/수업 화면에 반영됩니다."
+            ? "저장하지 않은 PDF 편집 내용이 있습니다. 상단 저장 버튼이나 오른쪽 저장 버튼을 눌러 반영하세요. 저장 후 학생/수업 화면에 반영됩니다."
             : pdfSaveFeedback?.message}
         </div>
       )}
@@ -1086,7 +1090,7 @@ export function LessonPdfSection({
       {worksheetTool === "footnote" && !!worksheetPageImages.length && (
         <div className="rounded-2xl border border-blue-100 bg-blue-50/80 px-4 py-3 text-sm text-blue-900">
           원하는 위치를 한 번 눌러 각주 버튼을 찍어 주세요. 바로 작은 편집창이
-          열립니다. 각주를 추가한 뒤 오른쪽 저장 버튼을 눌러 보관하세요.
+          열립니다. 각주를 추가한 뒤 저장 버튼을 눌러 보관하세요.
         </div>
       )}
       {draftBlank && (
@@ -1277,8 +1281,10 @@ export function LessonPdfSection({
                       ? "bg-blue-600 text-white shadow-lg shadow-blue-200/70 ring-4 ring-blue-100 hover:bg-blue-700"
                       : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                 }`}
-                aria-label={pdfSaveState === "saving" ? "저장 중" : "저장"}
-                title={pdfSaveState === "saving" ? "저장 중" : "저장"}
+                aria-label={
+                  pdfSaveState === "saving" ? "PDF 저장 중" : "PDF 저장"
+                }
+                title={pdfSaveState === "saving" ? "PDF 저장 중" : "PDF 저장"}
               >
                 <i
                   className={`fas ${

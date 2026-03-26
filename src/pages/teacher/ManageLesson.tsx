@@ -921,7 +921,12 @@ const ManageLesson: React.FC = () => {
   const hasUnsavedPdfChanges =
     currentPdfSnapshot !== lastSavedPdfSnapshotRef.current;
   const hasUnsavedLessonChanges = hasUnsavedMetaChanges || hasUnsavedPdfChanges;
-  const combinedSaveStateTone = lessonSaveState;
+  const combinedSaveStateTone =
+    lessonSaveState === "saving" || pdfSaveState === "saving"
+      ? "saving"
+      : hasUnsavedLessonChanges
+        ? "dirty"
+        : "saved";
   const unsavedLessonWarningMessage =
     hasUnsavedMetaChanges && hasUnsavedPdfChanges
       ? "저장하지 않은 PDF 편집 내용과 제목/공개 설정 변경이 있습니다. 이동하면 현재 편집 내용이 사라집니다."
@@ -930,6 +935,39 @@ const ManageLesson: React.FC = () => {
         : hasUnsavedMetaChanges
           ? "저장하지 않은 제목/공개 설정 변경이 있습니다. 이동하면 현재 편집 내용이 사라집니다."
           : "";
+  const primarySaveStateLabel =
+    combinedSaveStateTone === "saving"
+      ? hasUnsavedMetaChanges && hasUnsavedPdfChanges
+        ? "전체 저장 중..."
+        : hasUnsavedPdfChanges
+          ? "PDF 저장 중..."
+          : "제목/공개 저장 중..."
+      : hasUnsavedMetaChanges && hasUnsavedPdfChanges
+        ? "전체 저장 필요"
+        : hasUnsavedPdfChanges
+          ? "PDF 저장 필요"
+          : hasUnsavedMetaChanges
+            ? "제목/공개 저장 필요"
+            : "모든 변경 저장됨";
+  const primarySaveButtonLabel =
+    combinedSaveStateTone === "saving"
+      ? hasUnsavedMetaChanges && hasUnsavedPdfChanges
+        ? "전체 저장 중..."
+        : hasUnsavedPdfChanges
+          ? "PDF 저장 중..."
+          : "제목/공개 저장 중..."
+      : hasUnsavedMetaChanges && hasUnsavedPdfChanges
+        ? "전체 저장"
+        : hasUnsavedPdfChanges
+          ? "PDF 저장"
+          : hasUnsavedMetaChanges
+            ? "제목/공개 저장"
+            : "저장";
+  const disableHeaderSave =
+    !canEdit ||
+    !selectedNodeId ||
+    !hasUnsavedLessonChanges ||
+    combinedSaveStateTone === "saving";
 
   const syncSavedMetaState = useCallback(
     (params: {
@@ -2375,6 +2413,32 @@ const ManageLesson: React.FC = () => {
   }) => {
     if (!canEdit || !selectedNodeId) return;
     const source = options?.source || "header";
+    const shouldSavePdf =
+      source === "pdf-floating" ||
+      (source === "header" && hasUnsavedPdfChanges);
+    const shouldSaveMeta = source === "header" && hasUnsavedMetaChanges;
+
+    if (!shouldSaveMeta && !shouldSavePdf) return;
+    if (shouldSavePdf && selectedPdfFile && !preparedPdf) {
+      alert("PDF 페이지 추출이 끝날 때까지 기다려 주세요.");
+      return;
+    }
+
+    const normalizedGeneralDraft = buildNormalizedGeneralLessonDraft({
+      lessonTitle,
+      lessonVideo,
+      lessonVisibleToStudents,
+    });
+    const persistedMetaTitle = shouldSaveMeta
+      ? normalizedGeneralDraft.title
+      : savedLessonState.title || selectedNodeTitle;
+    const persistedMetaVideoUrl = shouldSaveMeta
+      ? normalizedGeneralDraft.videoUrl
+      : savedLessonState.videoUrl;
+    const persistedMetaVisibleToStudents = shouldSaveMeta
+      ? normalizedGeneralDraft.isVisibleToStudents
+      : savedLessonState.isVisibleToStudents;
+    let metaSaved = false;
     try {
       const scopedRef = collection(
         db,
@@ -2386,14 +2450,22 @@ const ManageLesson: React.FC = () => {
       const lessonDocRef = scopedSnap.empty
         ? doc(scopedRef)
         : doc(scopedRef, scopedSnap.docs[0].id);
-      if (source === "header") {
+      if (shouldSaveMeta) {
         setLessonSaveState("saving");
-        setScreenBusyMessage("제목과 공개 설정을 저장하는 중입니다...");
-        const normalizedGeneralDraft = buildNormalizedGeneralLessonDraft({
-          lessonTitle,
-          lessonVideo,
-          lessonVisibleToStudents,
-        });
+      }
+      if (shouldSavePdf) {
+        setPdfSaveState("saving");
+        setPdfSaveFeedback(null);
+      }
+      setScreenBusyMessage(
+        shouldSaveMeta && shouldSavePdf
+          ? "수업 자료를 저장하는 중입니다..."
+          : shouldSavePdf
+            ? "PDF 편집 내용을 저장하는 중입니다..."
+            : "제목과 공개 설정을 저장하는 중입니다...",
+      );
+
+      if (shouldSaveMeta) {
         await setDoc(
           lessonDocRef,
           {
@@ -2430,16 +2502,12 @@ const ManageLesson: React.FC = () => {
           lessonVisibleToStudents: normalizedGeneralDraft.isVisibleToStudents,
         });
         setLessonSaveState("saved");
-        setScreenBusyMessage(null);
-        alert("제목과 공개 설정을 저장했습니다.");
-        return;
+        metaSaved = true;
+        if (!shouldSavePdf) {
+          alert("제목과 공개 설정을 저장했습니다.");
+          return;
+        }
       }
-      if (selectedPdfFile && !preparedPdf) {
-        alert("PDF 페이지 추출이 끝날 때까지 기다려 주세요.");
-        return;
-      }
-      setPdfSaveState("saving");
-      setScreenBusyMessage("PDF 편집 내용을 저장하는 중입니다...");
       const normalizedDraft = buildNormalizedPdfEditorDraft({
         lessonContent,
         lessonFootnotes,
@@ -2470,9 +2538,9 @@ const ManageLesson: React.FC = () => {
       });
       const payload = {
         unitId: selectedNodeId,
-        title: savedLessonState.title || selectedNodeTitle,
-        videoUrl: savedLessonState.videoUrl,
-        isVisibleToStudents: savedLessonState.isVisibleToStudents,
+        title: persistedMetaTitle,
+        videoUrl: persistedMetaVideoUrl,
+        isVisibleToStudents: persistedMetaVisibleToStudents,
         contentHtml: draftForPersist.contentHtml,
         pdfName: draftForPersist.pdfName,
         pdfUrl: draftForPersist.pdfUrl,
@@ -2570,9 +2638,9 @@ const ManageLesson: React.FC = () => {
       }
       syncSavedSnapshots({
         selectedNodeId,
-        lessonTitle: savedLessonState.title || selectedNodeTitle,
-        lessonVideo: savedLessonState.videoUrl,
-        lessonVisibleToStudents: savedLessonState.isVisibleToStudents,
+        lessonTitle: persistedMetaTitle,
+        lessonVideo: persistedMetaVideoUrl,
+        lessonVisibleToStudents: persistedMetaVisibleToStudents,
         lessonContent: savedDraft.contentHtml,
         lessonFootnotes: savedDraft.footnotes,
         worksheetFootnoteAnchors: savedDraft.worksheetFootnoteAnchors,
@@ -2587,33 +2655,52 @@ const ManageLesson: React.FC = () => {
         preparedPdf: null,
         footnoteImageDrafts: {},
       });
-      setLessonSaveState("saved");
+      if (shouldSaveMeta) {
+        setLessonSaveState("saved");
+      }
       setPdfSaveState("saved");
+      const successMessage =
+        resolvedPdfProcessing.extractionStatus === "failed"
+          ? shouldSaveMeta
+            ? "PDF 편집 내용과 제목/공개 설정을 저장했습니다. PDF 구조 추출 등록은 실패했습니다."
+            : "PDF 편집 내용을 저장했습니다. PDF 구조 추출 등록은 실패했습니다."
+          : shouldSaveMeta
+            ? "PDF 편집 내용과 제목/공개 설정을 저장했습니다."
+            : "PDF 편집 내용을 저장했습니다.";
       setPdfSaveFeedback({
         tone: "success",
-        message:
-          resolvedPdfProcessing.extractionStatus === "failed"
-            ? "PDF 편집 내용을 저장했습니다. PDF 구조 추출 등록은 실패했습니다."
-            : "PDF 편집 내용을 저장했습니다.",
+        message: successMessage,
       });
+      if (source === "header") {
+        alert(successMessage);
+      }
     } catch (error) {
       console.error(error);
-      if (hasUnsavedMetaChanges) {
+      if (shouldSaveMeta) {
+        setLessonSaveState(metaSaved ? "saved" : "dirty");
+      } else if (hasUnsavedMetaChanges) {
         setLessonSaveState("dirty");
       }
-      if (hasUnsavedPdfChanges) {
+      if (shouldSavePdf) {
         setPdfSaveState("dirty");
-      }
-      if (options?.source === "pdf-floating") {
+        const errorMessage = shouldSaveMeta
+          ? metaSaved
+            ? "제목/공개 설정은 저장했지만 PDF 편집 내용을 저장하지 못했습니다."
+            : "제목/공개 설정과 PDF 편집 내용을 저장하지 못했습니다."
+          : "PDF 편집 내용을 저장하지 못했습니다.";
         setPdfSaveFeedback({
           tone: "error",
-          message: "PDF 편집 내용을 저장하지 못했습니다.",
+          message: errorMessage,
         });
+        if (source === "header") {
+          alert(errorMessage);
+        }
       } else {
         alert("제목과 공개 설정 저장에 실패했습니다.");
       }
+    } finally {
+      setScreenBusyMessage(null);
     }
-    setScreenBusyMessage(null);
   };
 
   const handleTeacherPreviewRuntimeStatusChange = (
@@ -2784,14 +2871,10 @@ const ManageLesson: React.FC = () => {
                 <LessonEditorHeader
                   lessonTitle={lessonTitle}
                   lessonVisibleToStudents={lessonVisibleToStudents}
-                  saveStateLabel={
-                    combinedSaveStateTone === "saving"
-                      ? "제목/공개 저장 중..."
-                      : hasUnsavedMetaChanges
-                        ? "제목/공개 저장 필요"
-                        : "제목/공개 저장됨"
-                  }
+                  saveStateLabel={primarySaveStateLabel}
                   saveStateTone={combinedSaveStateTone}
+                  saveButtonLabel={primarySaveButtonLabel}
+                  disableSave={disableHeaderSave}
                   onLessonTitleChange={setLessonTitle}
                   onToggleVisible={setLessonVisibleToStudents}
                   onSave={() => void saveLesson({ source: "header" })}
