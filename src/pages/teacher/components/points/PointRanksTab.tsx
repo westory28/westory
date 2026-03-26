@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import PointRankBadge from '../../../../components/common/PointRankBadge';
 import {
     POINT_RANK_BADGE_STYLE_OPTIONS,
@@ -84,6 +84,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({ policy, canManage, onPoli
     const previewThemeId: PointRankThemeId = resolvedRankPolicy.activeThemeId === 'korean_golpum'
         ? 'world_nobility'
         : 'korean_golpum';
+    const [selectedTierCode, setSelectedTierCode] = useState<string | null>(null);
 
     const updateRankPolicy = (updater: (prev: PointRankPolicy) => PointRankPolicy) => {
         onPolicyChange((prev) => ({
@@ -158,35 +159,63 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({ policy, canManage, onPoli
         }));
     };
 
-    const addTier = () => {
+    const addEmojiRegistryEntry = () => {
         updateRankPolicy((prev) => ({
             ...prev,
-            tiers: [...prev.tiers, makeTierDraft(prev.tiers)],
+            emojiRegistry: [...prev.emojiRegistry, makeEmojiRegistryDraft(prev.emojiRegistry)],
         }));
     };
 
-    const removeTier = (tierCode: string) => {
+    const updateEmojiRegistryEntry = (
+        entryId: string,
+        updater: (entry: PointRankEmojiRegistryEntry) => PointRankEmojiRegistryEntry,
+    ) => {
+        updateRankPolicy((prev) => ({
+            ...prev,
+            emojiRegistry: prev.emojiRegistry.map((entry) => (entry.id === entryId ? updater(entry) : entry)),
+        }));
+    };
+
+    useEffect(() => {
+        if (!selectedTierCode) return;
+        const exists = resolvedRankPolicy.tiers.some((tier) => tier.code === selectedTierCode);
+        if (!exists) {
+            setSelectedTierCode(null);
+        }
+    }, [resolvedRankPolicy.tiers, selectedTierCode]);
+
+    const getTierPreview = (tier: PointRankPolicyTier, themeId: PointRankThemeId = resolvedRankPolicy.activeThemeId) => getPointRankDisplay({
+        rankPolicy: {
+            ...resolvedRankPolicy,
+            activeThemeId: themeId,
+            themeId,
+        },
+        wallet: {
+            earnedTotal: tier.minPoints,
+            rankEarnedTotal: tier.minPoints,
+        },
+    });
+
+    const handleSelectTier = (tierCode: string) => {
+        setSelectedTierCode((prev) => (prev === tierCode ? null : tierCode));
+    };
+
+    const handleAddTier = () => {
+        const nextTier = makeTierDraft(resolvedRankPolicy.tiers);
+        updateRankPolicy((prev) => ({
+            ...prev,
+            tiers: [...prev.tiers, nextTier],
+        }));
+        setSelectedTierCode(nextTier.code);
+    };
+
+    const handleRemoveTier = (tierCode: string) => {
         const tierIndex = resolvedRankPolicy.tiers.findIndex((tier) => tier.code === tierCode);
         if (tierIndex < 0 || resolvedRankPolicy.tiers.length <= 1) return;
-
         const removedTier = resolvedRankPolicy.tiers[tierIndex];
         const targetTier = resolvedRankPolicy.tiers[tierIndex - 1] || resolvedRankPolicy.tiers[tierIndex + 1] || null;
-        const removedTierLabel = getPointRankDisplay({
-            rankPolicy: resolvedRankPolicy,
-            wallet: {
-                earnedTotal: removedTier.minPoints,
-                rankEarnedTotal: removedTier.minPoints,
-            },
-        })?.label || removedTier.code;
-        const targetTierLabel = targetTier
-            ? (getPointRankDisplay({
-                rankPolicy: resolvedRankPolicy,
-                wallet: {
-                    earnedTotal: targetTier.minPoints,
-                    rankEarnedTotal: targetTier.minPoints,
-                },
-            })?.label || targetTier.code)
-            : '';
+        const removedTierLabel = getTierPreview(removedTier)?.label || removedTier.code;
+        const targetTierLabel = targetTier ? (getTierPreview(targetTier)?.label || targetTier.code) : '';
 
         const confirmed = window.confirm(
             targetTier
@@ -229,27 +258,17 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({ policy, canManage, onPoli
                 ),
             };
         });
-    };
 
-    const addEmojiRegistryEntry = () => {
-        updateRankPolicy((prev) => ({
-            ...prev,
-            emojiRegistry: [...prev.emojiRegistry, makeEmojiRegistryDraft(prev.emojiRegistry)],
-        }));
-    };
-
-    const updateEmojiRegistryEntry = (
-        entryId: string,
-        updater: (entry: PointRankEmojiRegistryEntry) => PointRankEmojiRegistryEntry,
-    ) => {
-        updateRankPolicy((prev) => ({
-            ...prev,
-            emojiRegistry: prev.emojiRegistry.map((entry) => (entry.id === entryId ? updater(entry) : entry)),
-        }));
+        setSelectedTierCode((prev) => (prev === tierCode ? (targetTier?.code || null) : prev));
     };
 
     const activeThemeName = getPointRankThemeName(resolvedRankPolicy, resolvedRankPolicy.activeThemeId);
     const previewThemeName = getPointRankThemeName(resolvedRankPolicy, previewThemeId);
+    const selectedTier = selectedTierCode
+        ? resolvedRankPolicy.tiers.find((tier) => tier.code === selectedTierCode) || null
+        : null;
+    const selectedTierPreview = selectedTier ? getTierPreview(selectedTier) : null;
+    const enabledEmojiCount = resolvedRankPolicy.emojiRegistry.filter((entry) => entry.enabled !== false).length;
     const compareThemes: Array<{
         themeId: PointRankThemeId;
         label: string;
@@ -280,7 +299,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({ policy, canManage, onPoli
                     <div>
                         <h2 className="text-lg font-bold text-gray-900">등급 설정</h2>
                         <p className="mt-1 max-w-3xl text-sm leading-6 text-gray-500">
-                            현재 활성 테마를 기준으로 등급, 이모지, 축하 효과를 편집합니다. 비교 카드는 한국사와 세계사 테마를 나란히 보여 줍니다.
+                            현재 활성 테마를 기준으로 등급, 이모지, 축하 효과를 편집합니다. 저장 전에는 실제 정책에 반영되지 않습니다.
                         </p>
                     </div>
                 </div>
@@ -293,10 +312,11 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({ policy, canManage, onPoli
                         등급 설정 저장
                     </button>
                     <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-                        저장은 기존 `onPolicyChange`와 `onSubmit` 흐름을 그대로 사용합니다.
+                        변경사항은 저장 버튼을 눌러야 반영됩니다.
                     </div>
                 </div>
             </div>
+
             <section className="space-y-4">
                 <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
                     <div>
@@ -345,17 +365,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({ policy, canManage, onPoli
 
                             <div className="mt-4 space-y-3">
                                 {resolvedRankPolicy.tiers.map((tier) => {
-                                    const previewRank = getPointRankDisplay({
-                                        rankPolicy: {
-                                            ...resolvedRankPolicy,
-                                            activeThemeId: theme.themeId,
-                                            themeId: theme.themeId,
-                                        },
-                                        wallet: {
-                                            earnedTotal: tier.minPoints,
-                                            rankEarnedTotal: tier.minPoints,
-                                        },
-                                    });
+                                    const previewRank = getTierPreview(tier, theme.themeId);
 
                                     return (
                                         <div key={`${theme.themeId}-${tier.code}`} className="rounded-xl border border-gray-200 bg-white px-4 py-3">
@@ -373,178 +383,290 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({ policy, canManage, onPoli
                     ))}
                 </div>
             </section>
-            <section className="space-y-4 rounded-2xl border border-gray-200 bg-white p-5">
-                <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                    <div>
-                        <h3 className="text-base font-bold text-gray-900">등급 편집</h3>
-                        <p className="mt-1 text-sm text-gray-500">
-                            기준 포인트, 이름, 약칭, 설명, 배지 스타일, 허용 이모지를 한 등급씩 수정합니다.
-                        </p>
+
+            <section className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.9fr)]">
+                <div className="space-y-4 rounded-2xl border border-gray-200 bg-white p-5">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div>
+                            <h3 className="text-base font-bold text-gray-900">등급 설정</h3>
+                            <p className="mt-1 text-sm text-gray-500">
+                                등급을 선택해 상세 설정을 수정하세요. 허용 이모지는 오른쪽 패널에서 따로 관리합니다.
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={handleAddTier}
+                            disabled={!canManage}
+                            className="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                            {POINT_RANK_FIELD_LABELS.addTier}
+                        </button>
                     </div>
-                    <button
-                        type="button"
-                        onClick={addTier}
-                        disabled={!canManage}
-                        className="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                        {POINT_RANK_FIELD_LABELS.addTier}
-                    </button>
-                </div>
 
-                {validationError && (
-                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
-                        {validationError}
+                    {validationError && (
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
+                            {validationError}
+                        </div>
+                    )}
+
+                    <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                        처음에는 모든 등급이 접혀 있습니다. 한 번에 한 등급만 열 수 있으며, 저장 전에는 학생 화면에 반영되지 않습니다.
                     </div>
-                )}
 
-                <div className="space-y-4">
-                    {resolvedRankPolicy.tiers.map((tier, tierIndex) => {
-                        const tierPreview = getPointRankDisplay({
-                            rankPolicy: resolvedRankPolicy,
-                            wallet: {
-                                earnedTotal: tier.minPoints,
-                                rankEarnedTotal: tier.minPoints,
-                            },
-                        });
-                        const canDelete = resolvedRankPolicy.tiers.length > 1;
+                    <div className="space-y-3">
+                        {resolvedRankPolicy.tiers.map((tier, tierIndex) => {
+                            const tierPreview = getTierPreview(tier);
+                            const isOpen = selectedTierCode === tier.code;
+                            const canDelete = resolvedRankPolicy.tiers.length > 1;
+                            const badgeStyleLabel = POINT_RANK_BADGE_STYLE_OPTIONS.find((option) => option.value === (tier.badgeStyleToken || 'stone'))?.label
+                                || String(tier.badgeStyleToken || 'stone');
 
-                        return (
-                            <article key={tier.code} className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-                                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                                    <div>
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <PointRankBadge rank={tierPreview} size="sm" showTheme />
-                                            <span className="text-xs font-bold uppercase tracking-wide text-gray-500">{tier.code}</span>
-                                        </div>
-                                        <div className="mt-2 text-sm text-gray-600">현재 활성 테마 기준 {tier.minPoints}점 이상</div>
-                                    </div>
+                            return (
+                                <article
+                                    key={tier.code}
+                                    className={[
+                                        'overflow-hidden rounded-2xl border transition',
+                                        isOpen ? 'border-blue-200 bg-blue-50/40' : 'border-gray-200 bg-gray-50',
+                                    ].join(' ')}
+                                >
                                     <button
                                         type="button"
-                                        onClick={() => removeTier(tier.code)}
-                                        disabled={!canManage || !canDelete}
-                                        className="inline-flex items-center justify-center rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                        onClick={() => handleSelectTier(tier.code)}
+                                        aria-expanded={isOpen}
+                                        aria-controls={`point-rank-tier-panel-${tier.code}`}
+                                        className="flex w-full flex-col gap-3 px-4 py-4 text-left transition hover:bg-white/70"
                                     >
-                                        {POINT_RANK_FIELD_LABELS.deleteTier}
-                                    </button>
-                                </div>
-
-                                <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-                                    <label className="block">
-                                        <div className="mb-2 text-sm font-bold text-gray-700">{POINT_RANK_FIELD_LABELS.tierThreshold}</div>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            value={tier.minPoints}
-                                            onChange={(event) => setTierField(tier.code, 'minPoints', clampNumber(event.target.value, 0))}
-                                            className={inputClassName}
-                                            disabled={!canManage}
-                                        />
-                                        <div className="mt-2 text-xs leading-5 text-gray-500">{POINT_RANK_FIELD_HELPERS.tierThreshold}</div>
-                                    </label>
-
-                                    <label className="block">
-                                        <div className="mb-2 text-sm font-bold text-gray-700">{POINT_RANK_FIELD_LABELS.badgeStyleToken}</div>
-                                        <select
-                                            value={tier.badgeStyleToken || 'stone'}
-                                            onChange={(event) => setTierField(tier.code, 'badgeStyleToken', normalizeText(event.target.value) || 'stone')}
-                                            className={selectClassName}
-                                            disabled={!canManage}
-                                        >
-                                            {POINT_RANK_BADGE_STYLE_OPTIONS.map((option) => (
-                                                <option key={option.value} value={option.value}>{option.label}</option>
-                                            ))}
-                                        </select>
-                                        <div className="mt-2 text-xs leading-5 text-gray-500">{POINT_RANK_FIELD_HELPERS.badgeStyleToken}</div>
-                                    </label>
-
-                                    <label className="block">
-                                        <div className="mb-2 text-sm font-bold text-gray-700">{POINT_RANK_FIELD_LABELS.tierLabel}</div>
-                                        <input
-                                            value={resolvedRankPolicy.themes?.[resolvedRankPolicy.activeThemeId]?.tiers?.[tier.code]?.label || ''}
-                                            onChange={(event) => setActiveThemeTierField(tier.code, 'label', event.target.value)}
-                                            placeholder={tierPreview?.label || `등급 ${tierIndex + 1}`}
-                                            className={inputClassName}
-                                            disabled={!canManage}
-                                        />
-                                        <div className="mt-2 text-xs leading-5 text-gray-500">{POINT_RANK_FIELD_HELPERS.tierLabel}</div>
-                                    </label>
-
-                                    <label className="block">
-                                        <div className="mb-2 text-sm font-bold text-gray-700">{POINT_RANK_FIELD_LABELS.tierShortLabel}</div>
-                                        <input
-                                            value={resolvedRankPolicy.themes?.[resolvedRankPolicy.activeThemeId]?.tiers?.[tier.code]?.shortLabel || ''}
-                                            onChange={(event) => setActiveThemeTierField(tier.code, 'shortLabel', event.target.value)}
-                                            placeholder={tierPreview?.shortLabel || tierPreview?.label || `등급 ${tierIndex + 1}`}
-                                            className={inputClassName}
-                                            disabled={!canManage}
-                                        />
-                                        <div className="mt-2 text-xs leading-5 text-gray-500">{POINT_RANK_FIELD_HELPERS.tierShortLabel}</div>
-                                    </label>
-                                </div>
-
-                                <label className="mt-4 block">
-                                    <div className="mb-2 text-sm font-bold text-gray-700">{POINT_RANK_FIELD_LABELS.tierDescription}</div>
-                                    <textarea
-                                        rows={3}
-                                        value={resolvedRankPolicy.themes?.[resolvedRankPolicy.activeThemeId]?.tiers?.[tier.code]?.description || ''}
-                                        onChange={(event) => setActiveThemeTierField(tier.code, 'description', event.target.value)}
-                                        placeholder={tierPreview?.description || '등급 설명을 입력하세요.'}
-                                        className={inputClassName}
-                                        disabled={!canManage}
-                                    />
-                                    <div className="mt-2 text-xs leading-5 text-gray-500">{POINT_RANK_FIELD_HELPERS.tierDescription}</div>
-                                </label>
-
-                                <div className="mt-5">
-                                    <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                                        <div>
-                                            <div className="text-sm font-bold text-gray-700">{POINT_RANK_FIELD_LABELS.allowedEmojiIds}</div>
-                                            <p className="mt-1 text-xs leading-5 text-gray-500">
-                                                이 등급에서 사용할 수 있는 이모지를 선택합니다. 비활성 이모지는 회색으로 표시됩니다.
-                                            </p>
+                                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                            <div className="min-w-0 space-y-3">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <PointRankBadge rank={tierPreview} size="sm" showTheme />
+                                                    <span className="text-xs font-bold uppercase tracking-wide text-gray-500">{tier.code}</span>
+                                                    {isOpen && (
+                                                        <span className="rounded-full border border-blue-200 bg-blue-100 px-2 py-0.5 text-[11px] font-bold text-blue-700">
+                                                            편집 중
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="grid grid-cols-1 gap-2 text-sm text-gray-600 sm:grid-cols-2 xl:grid-cols-4">
+                                                    <div className="rounded-xl border border-gray-200 bg-white px-3 py-2">
+                                                        <div className="text-[11px] font-bold uppercase tracking-wide text-gray-400">등급명</div>
+                                                        <div className="mt-1 font-bold text-gray-800">{tierPreview?.label || `등급 ${tierIndex + 1}`}</div>
+                                                    </div>
+                                                    <div className="rounded-xl border border-gray-200 bg-white px-3 py-2">
+                                                        <div className="text-[11px] font-bold uppercase tracking-wide text-gray-400">기준 포인트</div>
+                                                        <div className="mt-1 font-bold text-gray-800">{tier.minPoints}점 이상</div>
+                                                    </div>
+                                                    <div className="rounded-xl border border-gray-200 bg-white px-3 py-2">
+                                                        <div className="text-[11px] font-bold uppercase tracking-wide text-gray-400">허용 이모지</div>
+                                                        <div className="mt-1 font-bold text-gray-800">{tier.allowedEmojiIds?.length || 0}개 선택</div>
+                                                    </div>
+                                                    <div className="rounded-xl border border-gray-200 bg-white px-3 py-2">
+                                                        <div className="text-[11px] font-bold uppercase tracking-wide text-gray-400">배지 스타일</div>
+                                                        <div className="mt-1 font-bold text-gray-800">{badgeStyleLabel}</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-bold text-gray-600">
+                                                {isOpen ? '접기' : '열기'}
+                                            </div>
                                         </div>
-                                        <div className="text-xs font-bold text-gray-500">{tier.allowedEmojiIds?.length || 0}개 선택됨</div>
-                                    </div>
+                                    </button>
 
-                                    <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-                                        {resolvedRankPolicy.emojiRegistry.map((entry) => {
-                                            const checked = (tier.allowedEmojiIds || []).includes(entry.id);
-                                            const disabled = !canManage || entry.enabled === false;
-
-                                            return (
+                                    {isOpen && (
+                                        <div
+                                            id={`point-rank-tier-panel-${tier.code}`}
+                                            className="border-t border-blue-100 bg-white px-4 py-4"
+                                        >
+                                            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                                <div className="text-xs leading-5 text-gray-500">
+                                                    왼쪽에서는 등급 정보만 수정하고, 허용 이모지는 오른쪽 패널에서 관리합니다.
+                                                </div>
                                                 <button
-                                                    key={`${tier.code}-${entry.id}`}
                                                     type="button"
-                                                    onClick={() => toggleTierEmoji(tier.code, entry.id)}
-                                                    disabled={disabled}
-                                                    className={[
-                                                        'rounded-xl border px-3 py-3 text-left transition',
-                                                        checked
-                                                            ? 'border-blue-300 bg-blue-50 text-blue-700'
-                                                            : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50',
-                                                        entry.enabled === false ? 'opacity-50' : '',
-                                                        disabled ? 'cursor-not-allowed' : '',
-                                                    ].filter(Boolean).join(' ')}
+                                                    onClick={() => handleRemoveTier(tier.code)}
+                                                    disabled={!canManage || !canDelete}
+                                                    className="inline-flex items-center justify-center rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
                                                 >
-                                                    <div className="text-2xl leading-none">{entry.emoji}</div>
-                                                    <div className="mt-2 text-sm font-bold">{entry.label}</div>
-                                                    <div className="mt-1 text-[11px] text-gray-500">{entry.id}</div>
+                                                    {POINT_RANK_FIELD_LABELS.deleteTier}
                                                 </button>
-                                            );
-                                        })}
+                                            </div>
+
+                                            <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                                                <label className="block">
+                                                    <div className="mb-2 text-sm font-bold text-gray-700">{POINT_RANK_FIELD_LABELS.tierThreshold}</div>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        value={tier.minPoints}
+                                                        onChange={(event) => setTierField(tier.code, 'minPoints', clampNumber(event.target.value, 0))}
+                                                        className={inputClassName}
+                                                        disabled={!canManage}
+                                                    />
+                                                    <div className="mt-2 text-xs leading-5 text-gray-500">{POINT_RANK_FIELD_HELPERS.tierThreshold}</div>
+                                                </label>
+
+                                                <label className="block">
+                                                    <div className="mb-2 text-sm font-bold text-gray-700">{POINT_RANK_FIELD_LABELS.badgeStyleToken}</div>
+                                                    <select
+                                                        value={tier.badgeStyleToken || 'stone'}
+                                                        onChange={(event) => setTierField(tier.code, 'badgeStyleToken', normalizeText(event.target.value) || 'stone')}
+                                                        className={selectClassName}
+                                                        disabled={!canManage}
+                                                    >
+                                                        {POINT_RANK_BADGE_STYLE_OPTIONS.map((option) => (
+                                                            <option key={option.value} value={option.value}>{option.label}</option>
+                                                        ))}
+                                                    </select>
+                                                    <div className="mt-2 text-xs leading-5 text-gray-500">{POINT_RANK_FIELD_HELPERS.badgeStyleToken}</div>
+                                                </label>
+
+                                                <label className="block">
+                                                    <div className="mb-2 text-sm font-bold text-gray-700">{POINT_RANK_FIELD_LABELS.tierLabel}</div>
+                                                    <input
+                                                        value={resolvedRankPolicy.themes?.[resolvedRankPolicy.activeThemeId]?.tiers?.[tier.code]?.label || ''}
+                                                        onChange={(event) => setActiveThemeTierField(tier.code, 'label', event.target.value)}
+                                                        placeholder={tierPreview?.label || `등급 ${tierIndex + 1}`}
+                                                        className={inputClassName}
+                                                        disabled={!canManage}
+                                                    />
+                                                    <div className="mt-2 text-xs leading-5 text-gray-500">{POINT_RANK_FIELD_HELPERS.tierLabel}</div>
+                                                </label>
+
+                                                <label className="block">
+                                                    <div className="mb-2 text-sm font-bold text-gray-700">{POINT_RANK_FIELD_LABELS.tierShortLabel}</div>
+                                                    <input
+                                                        value={resolvedRankPolicy.themes?.[resolvedRankPolicy.activeThemeId]?.tiers?.[tier.code]?.shortLabel || ''}
+                                                        onChange={(event) => setActiveThemeTierField(tier.code, 'shortLabel', event.target.value)}
+                                                        placeholder={tierPreview?.shortLabel || tierPreview?.label || `등급 ${tierIndex + 1}`}
+                                                        className={inputClassName}
+                                                        disabled={!canManage}
+                                                    />
+                                                    <div className="mt-2 text-xs leading-5 text-gray-500">{POINT_RANK_FIELD_HELPERS.tierShortLabel}</div>
+                                                </label>
+                                            </div>
+
+                                            <label className="mt-4 block">
+                                                <div className="mb-2 text-sm font-bold text-gray-700">{POINT_RANK_FIELD_LABELS.tierDescription}</div>
+                                                <textarea
+                                                    rows={3}
+                                                    value={resolvedRankPolicy.themes?.[resolvedRankPolicy.activeThemeId]?.tiers?.[tier.code]?.description || ''}
+                                                    onChange={(event) => setActiveThemeTierField(tier.code, 'description', event.target.value)}
+                                                    placeholder={tierPreview?.description || '등급 설명을 입력하세요.'}
+                                                    className={inputClassName}
+                                                    disabled={!canManage}
+                                                />
+                                                <div className="mt-2 text-xs leading-5 text-gray-500">{POINT_RANK_FIELD_HELPERS.tierDescription}</div>
+                                            </label>
+                                        </div>
+                                    )}
+                                </article>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                <aside className="rounded-2xl border border-gray-200 bg-white p-5 lg:sticky lg:top-6 lg:max-h-[calc(100vh-9rem)] lg:overflow-y-auto">
+                    <div className="space-y-2 border-b border-gray-200 pb-4">
+                        <h3 className="text-base font-bold text-gray-900">이모지 선택</h3>
+                        <p className="text-sm text-gray-500">
+                            선택한 등급에서 사용할 수 있는 이모지를 지정하세요. 변경사항은 저장 버튼을 눌러야 반영됩니다.
+                        </p>
+                    </div>
+
+                    {!selectedTier && (
+                        <div className="flex min-h-[240px] items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-6 py-10 text-center text-sm leading-6 text-gray-500">
+                            왼쪽에서 등급을 선택하면 허용 이모지를 편집할 수 있습니다.
+                        </div>
+                    )}
+
+                    {selectedTier && (
+                        <div className="space-y-4 pt-4">
+                            <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-4">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <PointRankBadge rank={selectedTierPreview} size="sm" showTheme />
+                                    <span className="text-xs font-bold uppercase tracking-wide text-blue-700">{selectedTier.code}</span>
+                                </div>
+                                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                    <div className="rounded-xl border border-white/80 bg-white/80 px-3 py-2">
+                                        <div className="text-[11px] font-bold uppercase tracking-wide text-blue-500">등급명</div>
+                                        <div className="mt-1 font-bold text-gray-900">{selectedTierPreview?.label || selectedTier.code}</div>
+                                        <div className="mt-1 text-xs text-gray-500">{selectedTierPreview?.shortLabel || '약칭 없음'}</div>
+                                    </div>
+                                    <div className="rounded-xl border border-white/80 bg-white/80 px-3 py-2">
+                                        <div className="text-[11px] font-bold uppercase tracking-wide text-blue-500">기준 포인트</div>
+                                        <div className="mt-1 font-bold text-gray-900">{selectedTier.minPoints}점 이상</div>
+                                        <div className="mt-1 text-xs text-gray-500">{selectedTier.allowedEmojiIds?.length || 0}개 선택됨</div>
                                     </div>
                                 </div>
+                            </div>
 
-                                <div className="mt-4 rounded-xl border border-gray-200 bg-white px-4 py-3 text-xs leading-5 text-gray-500">
-                                    {tierIndex === 0
-                                        ? '첫 번째 등급에는 기본 이모지가 자동으로 묶입니다.'
-                                        : '이 등급의 이모지 선택은 상위 등급과 중복되지 않도록 정리됩니다.'}
+                            <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3 lg:grid-cols-2 2xl:grid-cols-3">
+                                <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
+                                    <div className="text-[11px] font-bold uppercase tracking-wide text-gray-400">선택 수</div>
+                                    <div className="mt-1 text-lg font-bold text-gray-900">{selectedTier.allowedEmojiIds?.length || 0}</div>
                                 </div>
-                            </article>
-                        );
-                    })}
-                </div>
+                                <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
+                                    <div className="text-[11px] font-bold uppercase tracking-wide text-gray-400">활성 이모지</div>
+                                    <div className="mt-1 text-lg font-bold text-gray-900">{enabledEmojiCount}</div>
+                                </div>
+                                <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
+                                    <div className="text-[11px] font-bold uppercase tracking-wide text-gray-400">현재 테마</div>
+                                    <div className="mt-1 text-sm font-bold text-gray-900">{POINT_RANK_THEME_LABELS[resolvedRankPolicy.activeThemeId]}</div>
+                                </div>
+                            </div>
+
+                            <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-xs leading-5 text-gray-500">
+                                선택한 이모지는 현재 등급으로 이동합니다. 비활성 이모지는 회색으로 표시되며 선택할 수 없습니다.
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-2 2xl:grid-cols-3">
+                                {resolvedRankPolicy.emojiRegistry.map((entry) => {
+                                    const checked = (selectedTier.allowedEmojiIds || []).includes(entry.id);
+                                    const disabled = !canManage || entry.enabled === false;
+
+                                    return (
+                                        <button
+                                            key={`${selectedTier.code}-${entry.id}`}
+                                            type="button"
+                                            onClick={() => toggleTierEmoji(selectedTier.code, entry.id)}
+                                            disabled={disabled}
+                                            className={[
+                                                'rounded-xl border px-3 py-3 text-left transition',
+                                                checked
+                                                    ? 'border-blue-300 bg-blue-50 text-blue-700'
+                                                    : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50',
+                                                entry.enabled === false ? 'opacity-50' : '',
+                                                disabled ? 'cursor-not-allowed' : '',
+                                            ].filter(Boolean).join(' ')}
+                                        >
+                                            <div className="flex items-start justify-between gap-2">
+                                                <div className="text-2xl leading-none">{entry.emoji}</div>
+                                                <span
+                                                    className={[
+                                                        'rounded-full px-2 py-0.5 text-[10px] font-bold',
+                                                        checked ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500',
+                                                    ].join(' ')}
+                                                >
+                                                    {checked ? '선택됨' : entry.enabled === false ? '비활성' : '선택 가능'}
+                                                </span>
+                                            </div>
+                                            <div className="mt-2 text-sm font-bold">{entry.label}</div>
+                                            <div className="mt-1 text-[11px] text-gray-500">{entry.id}</div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-xs leading-5 text-gray-500">
+                                {resolvedRankPolicy.tiers[0]?.code === selectedTier.code
+                                    ? '첫 번째 등급에는 기본 이모지가 자동으로 포함됩니다.'
+                                    : '상위 등급과의 이모지 중복은 자동으로 정리됩니다.'}
+                            </div>
+                        </div>
+                    )}
+                </aside>
             </section>
+
             <section className="space-y-4 rounded-2xl border border-gray-200 bg-white p-5">
                 <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                     <div>
@@ -691,13 +813,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({ policy, canManage, onPoli
                                         <option value="">기본값</option>
                                         {resolvedRankPolicy.tiers.map((tier) => (
                                             <option key={tier.code} value={tier.code}>
-                                                {getPointRankDisplay({
-                                                    rankPolicy: resolvedRankPolicy,
-                                                    wallet: {
-                                                        earnedTotal: tier.minPoints,
-                                                        rankEarnedTotal: tier.minPoints,
-                                                    },
-                                                })?.label || tier.code}
+                                                {getTierPreview(tier)?.label || tier.code}
                                             </option>
                                         ))}
                                     </select>
