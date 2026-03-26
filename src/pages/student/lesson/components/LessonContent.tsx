@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import LessonFootnoteDialog from "../../../../components/common/LessonFootnoteDialog";
 import {
   collection,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -11,9 +12,7 @@ import {
   setDoc,
   where,
 } from "firebase/firestore";
-import LessonWorksheetStage, {
-  type LessonWorksheetAnnotationState,
-} from "../../../../components/common/LessonWorksheetStage";
+import LessonWorksheetStage from "../../../../components/common/LessonWorksheetStage";
 import { useAuth } from "../../../../contexts/AuthContext";
 import { db } from "../../../../lib/firebase";
 import {
@@ -37,16 +36,10 @@ interface LessonContentProps {
   disablePersistence?: boolean;
   fullscreenPreview?: boolean;
   onClosePreview?: () => void;
-  annotationUiMode?: "always" | "onDemand";
   allowHiddenAccess?: boolean;
 }
 
 const EMPTY_BLANK_LABEL = "빈칸";
-const EMPTY_ANNOTATION_STATE: LessonWorksheetAnnotationState = {
-  strokes: [],
-  boxes: [],
-  textNotes: [],
-};
 const normalizeAnswer = (value: string) =>
   String(value || "")
     .trim()
@@ -68,7 +61,6 @@ const LessonContent: React.FC<LessonContentProps> = ({
   disablePersistence = false,
   fullscreenPreview = false,
   onClosePreview,
-  annotationUiMode = "always",
   allowHiddenAccess = false,
 }) => {
   const { config, currentUser } = useAuth();
@@ -81,8 +73,6 @@ const LessonContent: React.FC<LessonContentProps> = ({
   const [studentAnswers, setStudentAnswers] = useState<
     Record<string, { value?: string; status?: AnswerStatus }>
   >({});
-  const [annotationState, setAnnotationState] =
-    useState<LessonWorksheetAnnotationState>(EMPTY_ANNOTATION_STATE);
   const [worksheetScreenOpen, setWorksheetScreenOpen] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -143,7 +133,6 @@ const LessonContent: React.FC<LessonContentProps> = ({
     setError(false);
     setLoading(false);
     setStudentAnswers({});
-    setAnnotationState(EMPTY_ANNOTATION_STATE);
     setHasUnsavedChanges(false);
     setSaveMessage("");
     setPointMessage("");
@@ -193,7 +182,6 @@ const LessonContent: React.FC<LessonContentProps> = ({
           setLesson(null);
         }
         setStudentAnswers({});
-        setAnnotationState(EMPTY_ANNOTATION_STATE);
         setHasUnsavedChanges(false);
         setSaveMessage("");
         setPointMessage("");
@@ -253,7 +241,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
           userId: currentUser.uid,
           unitId,
           answers: serializeAnswers(),
-          annotations: annotationState,
+          annotations: deleteField(),
           updatedAt: serverTimestamp(),
         },
         { merge: true },
@@ -425,11 +413,9 @@ const LessonContent: React.FC<LessonContentProps> = ({
         if (!snap.exists()) return;
         const data = snap.data() as {
           answers?: Record<string, { value?: string; status?: AnswerStatus }>;
-          annotations?: LessonWorksheetAnnotationState;
         };
         const answers = data.answers || {};
         setStudentAnswers(answers);
-        setAnnotationState(data.annotations || EMPTY_ANNOTATION_STATE);
         setHasUnsavedChanges(false);
         setSaveMessage("");
         const inputs = container.querySelectorAll(
@@ -488,26 +474,6 @@ const LessonContent: React.FC<LessonContentProps> = ({
     interactedRef.current = true;
     setHasUnsavedChanges(true);
     setSaveMessage("저장 필요");
-  };
-
-  const handleAnnotationChange = (
-    nextState: LessonWorksheetAnnotationState,
-  ) => {
-    let changed = false;
-    setAnnotationState((prev) => {
-      const same =
-        JSON.stringify(prev.strokes) === JSON.stringify(nextState.strokes) &&
-        JSON.stringify(prev.boxes) === JSON.stringify(nextState.boxes) &&
-        JSON.stringify(prev.textNotes) === JSON.stringify(nextState.textNotes);
-      if (same) return prev;
-      changed = true;
-      return nextState;
-    });
-    if (changed) {
-      interactedRef.current = true;
-      setHasUnsavedChanges(true);
-      setSaveMessage("저장 필요");
-    }
   };
 
   if (!unitId && !lessonOverride)
@@ -721,12 +687,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
                 mode="student-solve"
                 studentAnswers={studentAnswers}
                 onStudentAnswerChange={handleWorksheetAnswerChange}
-                annotationUiMode={annotationUiMode}
-                annotationPersistenceKey={
-                  unitId || lesson.title || "lesson-preview"
-                }
-                annotationState={annotationState}
-                onAnnotationChange={handleAnnotationChange}
+                annotationEnabled={false}
               />
             ) : (
               <button
@@ -740,7 +701,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
                       PDF 학습지 열기
                     </div>
                     <div className="mt-1 text-xs text-slate-500">
-                      빈칸 풀이와 필기 기능은 전체 화면에서 이어집니다.
+                      빈칸 풀이와 각주 확인은 전체 화면에서 이어집니다.
                     </div>
                   </div>
                   <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-600">
@@ -875,7 +836,6 @@ const LessonContent: React.FC<LessonContentProps> = ({
                 disablePersistence={disablePersistence}
                 fullscreenPreview
                 onClosePreview={() => setWorksheetScreenOpen(false)}
-                annotationUiMode="always"
                 allowHiddenAccess={allowHiddenAccess}
               />
             </div>

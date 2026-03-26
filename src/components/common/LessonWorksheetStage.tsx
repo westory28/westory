@@ -588,7 +588,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   const isAnnotationEnabled =
     capabilities.enableAnnotationTools && (annotationEnabled ?? true);
   const isViewportInteractive =
-    isAnnotationEnabled && (mode === "teacher-present" || isStudentSolveMode);
+    mode === "teacher-present" || isStudentSolveMode;
   const pageRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const [draftRect, setDraftRect] = useState<DraftRect | null>(null);
   const [activeTeacherPage, setActiveTeacherPage] = useState<number | null>(
@@ -1033,16 +1033,19 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     ["eraser", "지우개", "fa-eraser"],
     ["text", "텍스트", "fa-font"],
   ];
+  const activeStudentTool: StudentTool = isAnnotationEnabled
+    ? annotationTool
+    : "move";
   const stageCursor = isAnnotationEnabled
-    ? annotationTool === "move"
+    ? activeStudentTool === "move"
       ? MOVE_CURSOR
-      : annotationTool === "eraser"
+      : activeStudentTool === "eraser"
         ? ERASER_CURSOR
-        : annotationTool === "text"
+        : activeStudentTool === "text"
           ? "text"
-          : annotationTool === "rectangle"
+          : activeStudentTool === "rectangle"
             ? RECTANGLE_CURSOR
-            : annotationTool === "highlighter"
+            : activeStudentTool === "highlighter"
               ? HIGHLIGHTER_CURSOR
               : PEN_CURSOR
     : undefined;
@@ -1291,7 +1294,6 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
       return;
     }
 
-    if (!isAnnotationEnabled) return;
     if (hasActiveTouchGesture(page)) return;
     if (event.pointerType === "touch") {
       activeTouchPointerIdsRef.current.add(event.pointerId);
@@ -1303,11 +1305,6 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         return;
       }
     }
-    if (annotationUiMode === "onDemand" && !toolbarVisible) {
-      setToolbarVisible(true);
-      return;
-    }
-    setToolbarSubmenu(null);
     const target = event.target as HTMLElement;
     if (
       target.closest("[data-blank-box]") ||
@@ -1315,6 +1312,17 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
       target.closest("[data-footnote-anchor]")
     )
       return;
+    if (!isAnnotationEnabled) {
+      event.preventDefault();
+      setStagePointerCapture(event.currentTarget, event.pointerId);
+      beginMovePan(page, event.clientX, event.clientY);
+      return;
+    }
+    if (annotationUiMode === "onDemand" && !toolbarVisible) {
+      setToolbarVisible(true);
+      return;
+    }
+    setToolbarSubmenu(null);
     if (activeTextNoteId && annotationTool === "text") {
       event.preventDefault();
       if (editingTextNoteId === activeTextNoteId) {
@@ -1388,7 +1396,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     if (touchGestureRef.current?.page === page) return;
 
     const currentPan = panRef.current;
-    if (annotationTool === "move" && currentPan?.page === page) {
+    if (activeStudentTool === "move" && currentPan?.page === page) {
       currentPan.horizontalHost.scrollLeft =
         currentPan.startScrollLeft - (clientX - currentPan.startClientX);
       if (currentPan.verticalHost) {
@@ -2136,6 +2144,60 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
               </button>
             </div>
           )}
+        {isStudentSolveMode && !isAnnotationEnabled && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-slate-200 bg-white/88 px-4 py-3 shadow-sm backdrop-blur">
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-400">
+                PDF 보기
+              </div>
+              <div className="text-sm font-semibold text-slate-700">
+                보기 전용 PDF에서 빈칸과 각주만 확인할 수 있습니다.
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-2 rounded-full border border-slate-200 bg-white px-2 py-1.5 shadow-sm">
+              <button
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() =>
+                  applyViewportZoom(studentZoom - 0.1, {
+                    page: activeStudentPage ?? pageImages[0]?.page ?? undefined,
+                  })
+                }
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 transition hover:bg-slate-50"
+                aria-label="축소"
+              >
+                <i className="fas fa-minus text-xs"></i>
+              </button>
+              <button
+                type="button"
+                tabIndex={-1}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={(event) => {
+                  applyViewportZoom(1, {
+                    page: activeStudentPage ?? pageImages[0]?.page ?? undefined,
+                  });
+                  releaseToolbarFocus(event.currentTarget);
+                }}
+                className="min-w-[58px] select-none rounded-full bg-slate-50 px-3 py-1 text-center text-xs font-bold text-slate-700 transition hover:bg-slate-100"
+              >
+                {zoomPercent}%
+              </button>
+              <button
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() =>
+                  applyViewportZoom(studentZoom + 0.1, {
+                    page: activeStudentPage ?? pageImages[0]?.page ?? undefined,
+                  })
+                }
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 transition hover:bg-slate-50"
+                aria-label="확대"
+              >
+                <i className="fas fa-plus text-xs"></i>
+              </button>
+            </div>
+          </div>
+        )}
         {capabilities.showTeacherPageNavigator &&
           pageImages.length > 1 &&
           activeTeacherPageIndex >= 0 && (
@@ -2338,7 +2400,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                               : "cursor-text"
                         }`
                       : isViewportInteractive
-                        ? `${annotationTool === "move" ? (panRef.current?.page === pageImage.page ? "cursor-grabbing" : "cursor-grab") : `touch-none ${annotationTool === "eraser" ? "cursor-not-allowed" : annotationTool === "text" ? "cursor-text" : "cursor-crosshair"}`}`
+                        ? `${activeStudentTool === "move" ? (panRef.current?.page === pageImage.page ? "cursor-grabbing" : "cursor-grab") : `touch-none ${activeStudentTool === "eraser" ? "cursor-not-allowed" : activeStudentTool === "text" ? "cursor-text" : "cursor-crosshair"}`}`
                         : ""
                   }`}
                   style={{
@@ -2412,213 +2474,149 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     onDragStart={(event) => event.preventDefault()}
                   />
 
-                  {(pageStrokes.length > 0 || currentDraftStroke) && (
-                    <svg
-                      className="pointer-events-none absolute inset-0 z-[24] h-full w-full"
-                      viewBox={`0 0 ${pageImage.width} ${pageImage.height}`}
-                      preserveAspectRatio="none"
-                    >
-                      {pageStrokes.map((stroke) => (
-                        <polyline
-                          key={stroke.id}
-                          fill="none"
-                          points={buildStrokePath(stroke.points, pageImage)}
-                          stroke={stroke.color}
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={stroke.width}
-                          strokeOpacity={1}
-                        />
-                      ))}
-                      {currentDraftStroke && (
-                        <polyline
-                          fill="none"
-                          points={buildStrokePath(
-                            currentDraftStroke.points,
-                            pageImage,
-                          )}
-                          stroke={currentDraftStroke.color}
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={currentDraftStroke.width}
-                          strokeOpacity={1}
-                        />
-                      )}
-                    </svg>
-                  )}
+                  {isAnnotationEnabled &&
+                    (pageStrokes.length > 0 || currentDraftStroke) && (
+                      <svg
+                        className="pointer-events-none absolute inset-0 z-[24] h-full w-full"
+                        viewBox={`0 0 ${pageImage.width} ${pageImage.height}`}
+                        preserveAspectRatio="none"
+                      >
+                        {pageStrokes.map((stroke) => (
+                          <polyline
+                            key={stroke.id}
+                            fill="none"
+                            points={buildStrokePath(stroke.points, pageImage)}
+                            stroke={stroke.color}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={stroke.width}
+                            strokeOpacity={1}
+                          />
+                        ))}
+                        {currentDraftStroke && (
+                          <polyline
+                            fill="none"
+                            points={buildStrokePath(
+                              currentDraftStroke.points,
+                              pageImage,
+                            )}
+                            stroke={currentDraftStroke.color}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={currentDraftStroke.width}
+                            strokeOpacity={1}
+                          />
+                        )}
+                      </svg>
+                    )}
 
-                  {(pageBoxes.length > 0 || currentDraftBox) && (
-                    <svg
-                      className="pointer-events-none absolute inset-0 z-[24] h-full w-full"
-                      viewBox={`0 0 ${pageImage.width} ${pageImage.height}`}
-                      preserveAspectRatio="none"
-                    >
-                      {pageBoxes.map((box) => (
-                        <rect
-                          key={box.id}
-                          x={box.leftRatio * pageImage.width}
-                          y={box.topRatio * pageImage.height}
-                          width={box.widthRatio * pageImage.width}
-                          height={box.heightRatio * pageImage.height}
-                          fill="none"
-                          stroke={box.color}
-                          strokeWidth={box.width}
-                          rx="4"
-                        />
-                      ))}
-                      {currentDraftBox && (
-                        <rect
-                          x={currentDraftBox.leftRatio * pageImage.width}
-                          y={currentDraftBox.topRatio * pageImage.height}
-                          width={currentDraftBox.widthRatio * pageImage.width}
-                          height={
-                            currentDraftBox.heightRatio * pageImage.height
-                          }
-                          fill="none"
-                          stroke={currentDraftBox.color}
-                          strokeWidth={currentDraftBox.width}
-                          strokeDasharray="8 4"
-                          rx="4"
-                        />
-                      )}
-                    </svg>
-                  )}
+                  {isAnnotationEnabled &&
+                    (pageBoxes.length > 0 || currentDraftBox) && (
+                      <svg
+                        className="pointer-events-none absolute inset-0 z-[24] h-full w-full"
+                        viewBox={`0 0 ${pageImage.width} ${pageImage.height}`}
+                        preserveAspectRatio="none"
+                      >
+                        {pageBoxes.map((box) => (
+                          <rect
+                            key={box.id}
+                            x={box.leftRatio * pageImage.width}
+                            y={box.topRatio * pageImage.height}
+                            width={box.widthRatio * pageImage.width}
+                            height={box.heightRatio * pageImage.height}
+                            fill="none"
+                            stroke={box.color}
+                            strokeWidth={box.width}
+                            rx="4"
+                          />
+                        ))}
+                        {currentDraftBox && (
+                          <rect
+                            x={currentDraftBox.leftRatio * pageImage.width}
+                            y={currentDraftBox.topRatio * pageImage.height}
+                            width={currentDraftBox.widthRatio * pageImage.width}
+                            height={
+                              currentDraftBox.heightRatio * pageImage.height
+                            }
+                            fill="none"
+                            stroke={currentDraftBox.color}
+                            strokeWidth={currentDraftBox.width}
+                            strokeDasharray="8 4"
+                            rx="4"
+                          />
+                        )}
+                      </svg>
+                    )}
 
-                  {pageTextNotes.map((note) => (
-                    <div
-                      key={note.id}
-                      data-annotation-note="true"
-                      className="absolute z-[12] rounded-md"
-                      style={{
-                        left: toPercent(note.leftRatio),
-                        top: toPercent(note.topRatio),
-                        width: toPercent(note.widthRatio),
-                        height: toPercent(note.heightRatio),
-                      }}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setActiveTextNoteId(note.id);
-                      }}
-                      onPointerDown={(event) => {
-                        const target = event.target as HTMLElement;
-                        event.stopPropagation();
-                        setToolbarSubmenu(null);
-                        setActiveTextNoteId(note.id);
-                        setTextFontSize(note.fontSize || 20);
-                        if (target.closest("[data-note-delete]")) return;
-                        if (target.closest("[data-note-resize]")) {
-                          event.preventDefault();
-                          pushUndoSnapshot();
-                          setEditingTextNoteId(null);
-                          setTextNoteTransform({
-                            noteId: note.id,
-                            page: note.page,
-                            mode: "resize",
-                            startClientX: event.clientX,
-                            startClientY: event.clientY,
-                            initialLeftRatio: note.leftRatio,
-                            initialTopRatio: note.topRatio,
-                            initialWidthRatio: note.widthRatio,
-                            initialHeightRatio: note.heightRatio,
-                          });
-                          return;
-                        }
-                        if (
-                          target.tagName === "TEXTAREA" &&
-                          editingTextNoteId === note.id
-                        )
-                          return;
-                        if (activeTextNoteId === note.id) {
-                          event.preventDefault();
-                          pushUndoSnapshot();
-                          setEditingTextNoteId(null);
-                          setTextNoteTransform({
-                            noteId: note.id,
-                            page: note.page,
-                            mode: "move",
-                            startClientX: event.clientX,
-                            startClientY: event.clientY,
-                            initialLeftRatio: note.leftRatio,
-                            initialTopRatio: note.topRatio,
-                            initialWidthRatio: note.widthRatio,
-                            initialHeightRatio: note.heightRatio,
-                          });
-                        } else {
-                          setEditingTextNoteId(null);
-                        }
-                      }}
-                    >
-                      <div className="hidden">
-                        <span>텍스트</span>
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setTextNotes((prev) =>
-                              prev.filter((item) => item.id !== note.id),
-                            );
-                            if (activeTextNoteId === note.id)
-                              setActiveTextNoteId(null);
-                          }}
-                          className="text-slate-400 transition hover:text-red-500"
-                        >
-                          <i className="fas fa-times"></i>
-                        </button>
-                      </div>
-                      <textarea
-                        value={note.text}
-                        readOnly={editingTextNoteId !== note.id}
+                  {isAnnotationEnabled &&
+                    pageTextNotes.map((note) => (
+                      <div
+                        key={note.id}
+                        data-annotation-note="true"
+                        className="absolute z-[12] rounded-md"
+                        style={{
+                          left: toPercent(note.leftRatio),
+                          top: toPercent(note.topRatio),
+                          width: toPercent(note.widthRatio),
+                          height: toPercent(note.heightRatio),
+                        }}
                         onClick={(event) => {
                           event.stopPropagation();
                           setActiveTextNoteId(note.id);
                         }}
-                        onFocus={(event) => {
+                        onPointerDown={(event) => {
+                          const target = event.target as HTMLElement;
+                          event.stopPropagation();
+                          setToolbarSubmenu(null);
                           setActiveTextNoteId(note.id);
-                          setEditingTextNoteId(note.id);
-                          autoSizeTextNote(
-                            note.id,
-                            note.page,
-                            event.currentTarget,
-                          );
-                          setToolbarSubmenu(
-                            annotationTool === "text" ? "text" : null,
-                          );
+                          setTextFontSize(note.fontSize || 20);
+                          if (target.closest("[data-note-delete]")) return;
+                          if (target.closest("[data-note-resize]")) {
+                            event.preventDefault();
+                            pushUndoSnapshot();
+                            setEditingTextNoteId(null);
+                            setTextNoteTransform({
+                              noteId: note.id,
+                              page: note.page,
+                              mode: "resize",
+                              startClientX: event.clientX,
+                              startClientY: event.clientY,
+                              initialLeftRatio: note.leftRatio,
+                              initialTopRatio: note.topRatio,
+                              initialWidthRatio: note.widthRatio,
+                              initialHeightRatio: note.heightRatio,
+                            });
+                            return;
+                          }
+                          if (
+                            target.tagName === "TEXTAREA" &&
+                            editingTextNoteId === note.id
+                          )
+                            return;
+                          if (activeTextNoteId === note.id) {
+                            event.preventDefault();
+                            pushUndoSnapshot();
+                            setEditingTextNoteId(null);
+                            setTextNoteTransform({
+                              noteId: note.id,
+                              page: note.page,
+                              mode: "move",
+                              startClientX: event.clientX,
+                              startClientY: event.clientY,
+                              initialLeftRatio: note.leftRatio,
+                              initialTopRatio: note.topRatio,
+                              initialWidthRatio: note.widthRatio,
+                              initialHeightRatio: note.heightRatio,
+                            });
+                          } else {
+                            setEditingTextNoteId(null);
+                          }
                         }}
-                        onChange={(event) => {
-                          const value = event.target.value;
-                          setTextNotes((prev) =>
-                            prev.map((item) =>
-                              item.id === note.id
-                                ? { ...item, text: value }
-                                : item,
-                            ),
-                          );
-                          autoSizeTextNote(
-                            note.id,
-                            note.page,
-                            event.currentTarget,
-                          );
-                        }}
-                        className={`h-full w-full resize-none overflow-hidden border bg-transparent px-1.5 py-0.5 text-[11px] font-medium leading-4 text-slate-800 outline-none ${
-                          editingTextNoteId === note.id
-                            ? "cursor-text border-blue-400"
-                            : textNoteTransform?.noteId === note.id
-                              ? "cursor-grabbing border-blue-400"
-                              : activeTextNoteId === note.id
-                                ? "cursor-grab border-blue-400"
-                                : "cursor-text border-transparent"
-                        }`}
-                        placeholder="메모"
-                        style={{
-                          fontSize: `${note.fontSize || textFontSize}px`,
-                        }}
-                      />
-                      {activeTextNoteId === note.id && (
-                        <>
-                          <div className="pointer-events-none absolute inset-0 rounded-md border border-blue-400"></div>
+                      >
+                        <div className="hidden">
+                          <span>텍스트</span>
                           <button
                             type="button"
-                            data-note-delete="true"
                             onClick={(event) => {
                               event.stopPropagation();
                               setTextNotes((prev) =>
@@ -2626,25 +2624,92 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                               );
                               if (activeTextNoteId === note.id)
                                 setActiveTextNoteId(null);
-                              if (editingTextNoteId === note.id)
-                                setEditingTextNoteId(null);
-                              if (textNoteTransform?.noteId === note.id)
-                                setTextNoteTransform(null);
                             }}
-                            className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 bg-white text-[10px] text-slate-500 shadow-sm transition hover:text-red-500"
+                            className="text-slate-400 transition hover:text-red-500"
                           >
                             <i className="fas fa-times"></i>
                           </button>
-                          <button
-                            type="button"
-                            data-note-resize="true"
-                            aria-label="Resize text box"
-                            className="absolute -bottom-1 -right-1 h-3.5 w-3.5 rounded-sm border border-blue-500 bg-white shadow-sm"
-                          />
-                        </>
-                      )}
-                    </div>
-                  ))}
+                        </div>
+                        <textarea
+                          value={note.text}
+                          readOnly={editingTextNoteId !== note.id}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setActiveTextNoteId(note.id);
+                          }}
+                          onFocus={(event) => {
+                            setActiveTextNoteId(note.id);
+                            setEditingTextNoteId(note.id);
+                            autoSizeTextNote(
+                              note.id,
+                              note.page,
+                              event.currentTarget,
+                            );
+                            setToolbarSubmenu(
+                              annotationTool === "text" ? "text" : null,
+                            );
+                          }}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            setTextNotes((prev) =>
+                              prev.map((item) =>
+                                item.id === note.id
+                                  ? { ...item, text: value }
+                                  : item,
+                              ),
+                            );
+                            autoSizeTextNote(
+                              note.id,
+                              note.page,
+                              event.currentTarget,
+                            );
+                          }}
+                          className={`h-full w-full resize-none overflow-hidden border bg-transparent px-1.5 py-0.5 text-[11px] font-medium leading-4 text-slate-800 outline-none ${
+                            editingTextNoteId === note.id
+                              ? "cursor-text border-blue-400"
+                              : textNoteTransform?.noteId === note.id
+                                ? "cursor-grabbing border-blue-400"
+                                : activeTextNoteId === note.id
+                                  ? "cursor-grab border-blue-400"
+                                  : "cursor-text border-transparent"
+                          }`}
+                          placeholder="메모"
+                          style={{
+                            fontSize: `${note.fontSize || textFontSize}px`,
+                          }}
+                        />
+                        {activeTextNoteId === note.id && (
+                          <>
+                            <div className="pointer-events-none absolute inset-0 rounded-md border border-blue-400"></div>
+                            <button
+                              type="button"
+                              data-note-delete="true"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setTextNotes((prev) =>
+                                  prev.filter((item) => item.id !== note.id),
+                                );
+                                if (activeTextNoteId === note.id)
+                                  setActiveTextNoteId(null);
+                                if (editingTextNoteId === note.id)
+                                  setEditingTextNoteId(null);
+                                if (textNoteTransform?.noteId === note.id)
+                                  setTextNoteTransform(null);
+                              }}
+                              className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 bg-white text-[10px] text-slate-500 shadow-sm transition hover:text-red-500"
+                            >
+                              <i className="fas fa-times"></i>
+                            </button>
+                            <button
+                              type="button"
+                              data-note-resize="true"
+                              aria-label="Resize text box"
+                              className="absolute -bottom-1 -right-1 h-3.5 w-3.5 rounded-sm border border-blue-500 bg-white shadow-sm"
+                            />
+                          </>
+                        )}
+                      </div>
+                    ))}
 
                   {pageFootnoteAnchors.map((anchor) => {
                     const anchorTitle =
@@ -2819,7 +2884,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                       const verticalPadding =
                         pixelHeight < 18 ? 0 : pixelHeight < 24 ? 0.2 : 0.5;
                       const allowBlankPointerInteraction =
-                        !isAnnotationEnabled || annotationTool === "text";
+                        !isAnnotationEnabled || activeStudentTool === "text";
 
                       return (
                         <div

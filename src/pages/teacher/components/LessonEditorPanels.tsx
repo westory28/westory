@@ -1375,7 +1375,6 @@ export function LessonPreviewLauncher({
           lessonOverride={lesson}
           disablePersistence
           allowHiddenAccess
-          annotationUiMode="always"
         />
       </div>
     </section>
