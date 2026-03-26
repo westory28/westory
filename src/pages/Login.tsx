@@ -345,7 +345,7 @@ const getRedirectStartMessage = (mode: LoginMode): string => {
     }
 
     if (isAndroidDevice()) {
-        return `Google 계정 선택 화면으로 이동합니다. 갤럭시탭에서는 학교 계정(@${ALLOWED_SCHOOL_EMAIL_DOMAIN})을 선택하고, 목록에 없으면 다른 계정을 눌러 학교 계정을 선택해주세요.`;
+        return `Google 계정 선택 화면으로 이동합니다. 갤럭시탭에서는 기기에 등록된 학교 계정(@${ALLOWED_SCHOOL_EMAIL_DOMAIN})이 보이면 바로 선택해주세요.`;
     }
 
     if (isIOSDevice()) {
@@ -1278,6 +1278,13 @@ const Login: React.FC = () => {
         if (authBusy || authActionLockRef.current) return;
         if (restrictedInAppBrowser) {
             alert('네이버앱 또는 카카오톡 인앱 브라우저에서는 로그인할 수 없습니다. Chrome 또는 Safari에서 위스토리를 열어주세요.');
+            return;
+        }
+
+        // Re-enter chooser through the dedicated cleanup path when a cached
+        // Firebase session already exists in this regular-tab browser state.
+        if (currentUser) {
+            await handleSwitchAccount(mode);
             return;
         }
 
