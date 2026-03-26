@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import StudentRankPromotionPopup from '../../../../components/common/StudentRankPromotionPopup';
-import { POINT_RANK_BADGE_STYLE_OPTIONS, POINT_RANK_FIELD_LABELS } from '../../../../constants/pointLabels';
+import { POINT_RANK_BADGE_STYLE_OPTIONS } from '../../../../constants/pointLabels';
 import { buildStudentRankPromotionPreview } from '../../../../lib/pointRankPromotion';
 import {
     createPointRankTierCode,
@@ -11,7 +11,6 @@ import {
 } from '../../../../lib/pointRanks';
 import { findDuplicateProfileEmojiEntry, normalizeProfileEmojiValue } from '../../../../lib/profileEmojis';
 import type {
-    PointPolicy,
     PointRankEmojiRegistryEntry,
     PointRankPolicy,
     PointRankPolicyTier,
@@ -25,26 +24,108 @@ import RankSettingsSidebar, {
 import RankThemePreviewPanel from './RankThemePreviewPanel';
 import RankTierEditorPanel from './RankTierEditorPanel';
 
-interface PointRanksTabProps {
-    policy: PointPolicy;
-    canManage: boolean;
-    hasUnsavedChanges: boolean;
-    saveFeedbackMessage: string;
-    saveFeedbackTone: 'success' | 'error' | 'warning' | null;
-    onPolicyChange: (updater: (prev: PointPolicy) => PointPolicy) => void;
-    onSubmit: (event: React.FormEvent) => void;
+export interface RankThemeDraft {
+    activeThemeId: PointRankThemeId;
 }
 
-const feedbackToneClassName: Record<'success' | 'error' | 'warning', string> = {
-    success: 'border border-emerald-200 bg-emerald-50 text-emerald-700',
-    error: 'border border-red-200 bg-red-50 text-red-700',
-    warning: 'border border-amber-200 bg-amber-50 text-amber-800',
-};
+export interface RankSettingsDraft {
+    tiers: PointRankPolicyTier[];
+    themes?: PointRankPolicy['themes'];
+    celebrationPolicy: PointRankPolicy['celebrationPolicy'];
+}
+
+export interface RankEmojiCollectionDraft {
+    emojiRegistry: PointRankEmojiRegistryEntry[];
+}
+
+export type RankPanelSaveTone = 'success' | 'error' | 'warning';
+
+interface PointRanksTabProps {
+    savedRankPolicy: PointRankPolicy;
+    canManage: boolean;
+    themeDraft: RankThemeDraft;
+    themeHasUnsavedChanges: boolean;
+    themeSaveFeedbackMessage: string;
+    themeSaveFeedbackTone: RankPanelSaveTone | null;
+    onThemeDraftChange: (updater: (prev: RankThemeDraft) => RankThemeDraft) => void;
+    onThemeSave: () => void;
+    rankSettingsDraft: RankSettingsDraft;
+    rankSettingsHasUnsavedChanges: boolean;
+    rankSettingsSaveFeedbackMessage: string;
+    rankSettingsSaveFeedbackTone: RankPanelSaveTone | null;
+    onRankSettingsDraftChange: (updater: (prev: RankSettingsDraft) => RankSettingsDraft) => void;
+    onRankSettingsSave: () => void;
+    emojiDraft: RankEmojiCollectionDraft;
+    emojiHasUnsavedChanges: boolean;
+    emojiSaveFeedbackMessage: string;
+    emojiSaveFeedbackTone: RankPanelSaveTone | null;
+    onEmojiDraftChange: (updater: (prev: RankEmojiCollectionDraft) => RankEmojiCollectionDraft) => void;
+    onEmojiSave: () => void;
+}
 
 const buildEmojiCollectionLabel = (emoji: string, fallbackIndex: number) => {
     const normalizedEmoji = normalizeProfileEmojiValue(emoji);
     return normalizedEmoji ? `${normalizedEmoji} 아이콘` : `이모지 ${fallbackIndex + 1}`;
 };
+
+const cloneRankTiers = (tiers: PointRankPolicyTier[] = []) => tiers.map((tier) => ({
+    ...tier,
+    allowedEmojiIds: [...(tier.allowedEmojiIds || [])],
+}));
+
+const cloneRankThemes = (
+    themes: PointRankPolicy['themes'] = {},
+): PointRankPolicy['themes'] => Object.fromEntries(
+    Object.entries(themes || {}).map(([themeId, themeConfig]) => [
+        themeId,
+        {
+            ...themeConfig,
+            tiers: Object.fromEntries(
+                Object.entries(themeConfig?.tiers || {}).map(([tierCode, tierOverride]) => [
+                    tierCode,
+                    { ...tierOverride },
+                ]),
+            ),
+        },
+    ]),
+) as PointRankPolicy['themes'];
+
+const cloneRankEmojiRegistry = (emojiRegistry: PointRankEmojiRegistryEntry[] = []) => emojiRegistry.map((entry) => ({
+    ...entry,
+    legacyValues: [...(entry.legacyValues || [])],
+}));
+
+const extractRankSettingsDraft = (rankPolicy: PointRankPolicy): RankSettingsDraft => ({
+    tiers: cloneRankTiers(rankPolicy.tiers),
+    themes: cloneRankThemes(rankPolicy.themes),
+    celebrationPolicy: {
+        ...rankPolicy.celebrationPolicy,
+    },
+});
+
+const buildRankSettingsPolicy = (
+    savedRankPolicy: PointRankPolicy,
+    draft: RankSettingsDraft,
+) => resolvePointRankPolicyDraft({
+    ...savedRankPolicy,
+    tiers: cloneRankTiers(draft.tiers),
+    themes: cloneRankThemes(draft.themes),
+    celebrationPolicy: {
+        ...draft.celebrationPolicy,
+    },
+});
+
+const extractRankEmojiDraft = (rankPolicy: PointRankPolicy): RankEmojiCollectionDraft => ({
+    emojiRegistry: cloneRankEmojiRegistry(rankPolicy.emojiRegistry),
+});
+
+const buildEmojiCollectionPolicy = (
+    savedRankPolicy: PointRankPolicy,
+    draft: RankEmojiCollectionDraft,
+) => resolvePointRankPolicyDraft({
+    ...savedRankPolicy,
+    emojiRegistry: cloneRankEmojiRegistry(draft.emojiRegistry),
+});
 
 const makeTierDraft = (tiers: PointRankPolicyTier[]): PointRankPolicyTier => {
     const highestThreshold = tiers.reduce(
@@ -102,34 +183,59 @@ type DuplicateEmojiDialogState = {
 };
 
 const PointRanksTab: React.FC<PointRanksTabProps> = ({
-    policy,
+    savedRankPolicy,
     canManage,
-    hasUnsavedChanges,
-    saveFeedbackMessage,
-    saveFeedbackTone,
-    onPolicyChange,
-    onSubmit,
+    themeDraft,
+    themeHasUnsavedChanges,
+    themeSaveFeedbackMessage,
+    themeSaveFeedbackTone,
+    onThemeDraftChange,
+    onThemeSave,
+    rankSettingsDraft,
+    rankSettingsHasUnsavedChanges,
+    rankSettingsSaveFeedbackMessage,
+    rankSettingsSaveFeedbackTone,
+    onRankSettingsDraftChange,
+    onRankSettingsSave,
+    emojiDraft,
+    emojiHasUnsavedChanges,
+    emojiSaveFeedbackMessage,
+    emojiSaveFeedbackTone,
+    onEmojiDraftChange,
+    onEmojiSave,
 }) => {
-    const draftRankPolicy = resolvePointRankPolicyDraft(policy.rankPolicy);
-    const validationError = getPointRankPolicyValidationError(policy.rankPolicy);
-    const previewThemeId: PointRankThemeId = draftRankPolicy.activeThemeId === 'korean_golpum'
-        ? 'world_nobility'
-        : 'korean_golpum';
     const [activePanel, setActivePanel] = useState<RankSettingsPanelId>('theme_preview');
     const [selectedTierCode, setSelectedTierCode] = useState<PointRankPolicyTier['code'] | null>(null);
     const [isCelebrationPreviewOpen, setIsCelebrationPreviewOpen] = useState(false);
     const [newEmojiValue, setNewEmojiValue] = useState('');
     const [duplicateEmojiDialog, setDuplicateEmojiDialog] = useState<DuplicateEmojiDialogState | null>(null);
 
-    const updateRankPolicy = (updater: (prev: PointRankPolicy) => PointRankPolicy) => {
-        onPolicyChange((prev) => ({
-            ...prev,
-            rankPolicy: updater(resolvePointRankPolicyDraft(prev.rankPolicy)),
-        }));
+    const themePreviewPolicy = resolvePointRankPolicyDraft({
+        ...savedRankPolicy,
+        activeThemeId: themeDraft.activeThemeId,
+        themeId: themeDraft.activeThemeId,
+    });
+    const rankSettingsPolicy = buildRankSettingsPolicy(savedRankPolicy, rankSettingsDraft);
+    const emojiCollectionPolicy = buildEmojiCollectionPolicy(savedRankPolicy, emojiDraft);
+    const rankSettingsValidationError = getPointRankPolicyValidationError(rankSettingsPolicy);
+    const previewThemeId: PointRankThemeId = themePreviewPolicy.activeThemeId === 'korean_golpum'
+        ? 'world_nobility'
+        : 'korean_golpum';
+
+    const updateRankSettingsPolicy = (updater: (prev: PointRankPolicy) => PointRankPolicy) => {
+        onRankSettingsDraftChange((prev) => extractRankSettingsDraft(
+            updater(buildRankSettingsPolicy(savedRankPolicy, prev)),
+        ));
+    };
+
+    const updateEmojiCollectionPolicy = (updater: (prev: PointRankPolicy) => PointRankPolicy) => {
+        onEmojiDraftChange((prev) => extractRankEmojiDraft(
+            updater(buildEmojiCollectionPolicy(savedRankPolicy, prev)),
+        ));
     };
 
     const updateTier = (tierCode: PointRankPolicyTier['code'], updater: (tier: PointRankPolicyTier) => PointRankPolicyTier) => {
-        updateRankPolicy((prev) => ({
+        updateRankSettingsPolicy((prev) => ({
             ...prev,
             tiers: prev.tiers.map((tier) => (tier.code === tierCode ? updater(tier) : tier)),
         }));
@@ -147,7 +253,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
         field: 'label' | 'shortLabel' | 'description',
         value: string,
     ) => {
-        updateRankPolicy((prev) => ({
+        updateRankSettingsPolicy((prev) => ({
             ...prev,
             themes: {
                 ...(prev.themes || {}),
@@ -166,7 +272,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
     };
 
     const toggleTierEmoji = (tierCode: PointRankPolicyTier['code'], emojiId: string) => {
-        updateRankPolicy((prev) => {
+        updateRankSettingsPolicy((prev) => {
             const nextTiers = prev.tiers.map((tier) => ({
                 ...tier,
                 allowedEmojiIds: (tier.allowedEmojiIds || []).filter((item) => item !== emojiId),
@@ -182,20 +288,13 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
             return {
                 ...prev,
                 tiers: nextTiers,
-                emojiRegistry: prev.emojiRegistry.map((entry) => (
-                    entry.id === emojiId && !wasChecked
-                        ? { ...entry, unlockTierCode: tierCode }
-                        : entry
-                )),
             };
         });
     };
 
     const setActiveThemeId = (themeId: PointRankThemeId) => {
-        updateRankPolicy((prev) => ({
-            ...prev,
+        onThemeDraftChange(() => ({
             activeThemeId: themeId,
-            themeId,
         }));
     };
 
@@ -203,7 +302,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
         entryId: string,
         updater: (entry: PointRankEmojiRegistryEntry) => PointRankEmojiRegistryEntry,
     ) => {
-        updateRankPolicy((prev) => ({
+        updateEmojiCollectionPolicy((prev) => ({
             ...prev,
             emojiRegistry: prev.emojiRegistry.map((entry) => (entry.id === entryId ? updater(entry) : entry)),
         }));
@@ -219,7 +318,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
     };
 
     const findDuplicateEmoji = (emoji: string, excludedId?: string | null) => (
-        findDuplicateProfileEmojiEntry(draftRankPolicy.emojiRegistry, emoji, { excludeId: excludedId })
+        findDuplicateProfileEmojiEntry(emojiCollectionPolicy.emojiRegistry, emoji, { excludeId: excludedId })
     );
 
     const handleAddEmojiRegistryEntry = () => {
@@ -232,8 +331,8 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
             return;
         }
 
-        const nextEntry = makeEmojiRegistryDraft(draftRankPolicy.emojiRegistry, nextEmoji);
-        updateRankPolicy((prev) => ({
+        const nextEntry = makeEmojiRegistryDraft(emojiCollectionPolicy.emojiRegistry, nextEmoji);
+        updateEmojiCollectionPolicy((prev) => ({
             ...prev,
             emojiRegistry: [...prev.emojiRegistry, nextEntry],
         }));
@@ -270,7 +369,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
     };
 
     const handleReorderEmojiRegistry = (sourceId: string, targetId: string) => {
-        updateRankPolicy((prev) => {
+        updateEmojiCollectionPolicy((prev) => {
             const nextRegistry = [...prev.emojiRegistry];
             const sourceIndex = nextRegistry.findIndex((entry) => entry.id === sourceId);
             const targetIndex = nextRegistry.findIndex((entry) => entry.id === targetId);
@@ -288,31 +387,37 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
 
     useEffect(() => {
         if (!selectedTierCode) return;
-        const exists = draftRankPolicy.tiers.some((tier) => tier.code === selectedTierCode);
+        const exists = rankSettingsPolicy.tiers.some((tier) => tier.code === selectedTierCode);
         if (!exists) {
             setSelectedTierCode(null);
         }
-    }, [draftRankPolicy.tiers, selectedTierCode]);
+    }, [rankSettingsPolicy.tiers, selectedTierCode]);
 
-    const getTierPreview = (tier: PointRankPolicyTier, themeId: PointRankThemeId = draftRankPolicy.activeThemeId) => getPointRankDisplay({
-        rankPolicy: {
-            ...draftRankPolicy,
-            activeThemeId: themeId,
-            themeId,
-        },
-        wallet: {
-            earnedTotal: tier.minPoints,
-            rankEarnedTotal: tier.minPoints,
-        },
-    });
+    const buildTierPreviewGetter = (rankPolicy: PointRankPolicy) => (
+        (tier: PointRankPolicyTier, themeId: PointRankThemeId = rankPolicy.activeThemeId) => getPointRankDisplay({
+            rankPolicy: {
+                ...rankPolicy,
+                activeThemeId: themeId,
+                themeId,
+            },
+            wallet: {
+                earnedTotal: tier.minPoints,
+                rankEarnedTotal: tier.minPoints,
+            },
+        })
+    );
+
+    const getThemeTierPreview = buildTierPreviewGetter(themePreviewPolicy);
+    const getRankSettingsTierPreview = buildTierPreviewGetter(rankSettingsPolicy);
+    const getEmojiTierPreview = buildTierPreviewGetter(savedRankPolicy);
 
     const handleSelectTier = (tierCode: PointRankPolicyTier['code']) => {
         setSelectedTierCode((prev) => (prev === tierCode ? null : tierCode));
     };
 
     const handleAddTier = () => {
-        const nextTier = makeTierDraft(draftRankPolicy.tiers);
-        updateRankPolicy((prev) => ({
+        const nextTier = makeTierDraft(rankSettingsPolicy.tiers);
+        updateRankSettingsPolicy((prev) => ({
             ...prev,
             tiers: [...prev.tiers, nextTier],
         }));
@@ -321,12 +426,12 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
     };
 
     const handleRemoveTier = (tierCode: PointRankPolicyTier['code']) => {
-        const tierIndex = draftRankPolicy.tiers.findIndex((tier) => tier.code === tierCode);
-        if (tierIndex < 0 || draftRankPolicy.tiers.length <= 1) return;
-        const removedTier = draftRankPolicy.tiers[tierIndex];
-        const targetTier = draftRankPolicy.tiers[tierIndex - 1] || draftRankPolicy.tiers[tierIndex + 1] || null;
-        const removedTierLabel = getTierPreview(removedTier)?.label || removedTier.code;
-        const targetTierLabel = targetTier ? (getTierPreview(targetTier)?.label || targetTier.code) : '';
+        const tierIndex = rankSettingsPolicy.tiers.findIndex((tier) => tier.code === tierCode);
+        if (tierIndex < 0 || rankSettingsPolicy.tiers.length <= 1) return;
+        const removedTier = rankSettingsPolicy.tiers[tierIndex];
+        const targetTier = rankSettingsPolicy.tiers[tierIndex - 1] || rankSettingsPolicy.tiers[tierIndex + 1] || null;
+        const removedTierLabel = getRankSettingsTierPreview(removedTier)?.label || removedTier.code;
+        const targetTierLabel = targetTier ? (getRankSettingsTierPreview(targetTier)?.label || targetTier.code) : '';
 
         const confirmed = window.confirm(
             targetTier
@@ -335,7 +440,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
         );
         if (!confirmed) return;
 
-        updateRankPolicy((prev) => {
+        updateRankSettingsPolicy((prev) => {
             if (prev.tiers.length <= 1) return prev;
             const currentTierIndex = prev.tiers.findIndex((tier) => tier.code === tierCode);
             if (currentTierIndex < 0) return prev;
@@ -373,139 +478,105 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
         setSelectedTierCode((prev) => (prev === tierCode ? (targetTier?.code || null) : prev));
     };
 
-    const activeThemeName = getPointRankThemeName(draftRankPolicy, draftRankPolicy.activeThemeId);
-    const previewThemeName = getPointRankThemeName(draftRankPolicy, previewThemeId);
+    const activeThemeName = getPointRankThemeName(themePreviewPolicy, themePreviewPolicy.activeThemeId);
+    const previewThemeName = getPointRankThemeName(themePreviewPolicy, previewThemeId);
     const selectedTier = selectedTierCode
-        ? draftRankPolicy.tiers.find((tier) => tier.code === selectedTierCode) || null
+        ? rankSettingsPolicy.tiers.find((tier) => tier.code === selectedTierCode) || null
         : null;
-    const selectedTierPreview = selectedTier ? getTierPreview(selectedTier) : null;
-    const enabledEmojiCount = draftRankPolicy.emojiRegistry.filter((entry) => entry.enabled !== false).length;
+    const selectedTierPreview = selectedTier ? getRankSettingsTierPreview(selectedTier) : null;
+    const savedEnabledEmojiCount = savedRankPolicy.emojiRegistry.filter((entry) => entry.enabled !== false).length;
+    const emojiEnabledCount = emojiCollectionPolicy.emojiRegistry.filter((entry) => entry.enabled !== false).length;
     const celebrationPreview = buildStudentRankPromotionPreview(
-        draftRankPolicy,
+        rankSettingsPolicy,
         selectedTierCode as PointRankPolicyTier['code'] | null,
     );
     const celebrationPreviewTier = celebrationPreview.targetTierCode
-        ? draftRankPolicy.tiers.find((tier) => tier.code === celebrationPreview.targetTierCode) || null
+        ? rankSettingsPolicy.tiers.find((tier) => tier.code === celebrationPreview.targetTierCode) || null
         : null;
     const celebrationPreviewTierLabel = celebrationPreviewTier
-        ? (getTierPreview(celebrationPreviewTier)?.label || celebrationPreviewTier.code)
+        ? (getRankSettingsTierPreview(celebrationPreviewTier)?.label || celebrationPreviewTier.code)
         : '샘플 등급';
 
     const sidebarItems: RankSettingsSidebarItem[] = [
         {
             id: 'theme_preview',
             label: '테마 미리보기',
-            description: `${activeThemeName} 테마를 중심으로 비교 미리보기를 확인합니다.`,
             iconClassName: 'fas fa-palette',
-            badge: '저장 대상',
-            meta: `등급 ${draftRankPolicy.tiers.length}개 · 활성 ${enabledEmojiCount}개`,
+            badge: themeHasUnsavedChanges ? '미저장' : '저장됨',
+            meta: activeThemeName,
         },
         {
             id: 'rank_settings',
             label: '등급 설정',
-            description: selectedTierPreview
-                ? `${selectedTierPreview.label} 등급을 편집하고 있습니다.`
-                : '기준 포인트, 이름, 설명, 허용 이모지를 설정합니다.',
             iconClassName: 'fas fa-medal',
-            badge: selectedTierPreview ? '편집 중' : undefined,
-            meta: `등급 ${draftRankPolicy.tiers.length}개`,
+            badge: rankSettingsHasUnsavedChanges ? '미저장' : '저장됨',
+            meta: `등급 ${rankSettingsPolicy.tiers.length}개`,
         },
         {
             id: 'emoji_collection',
             label: '이모지 모음',
-            description: '이모지를 추가하고, 비활성화하고, 순서를 드래그로 정리합니다.',
             iconClassName: 'fas fa-smile',
-            badge: `총 ${draftRankPolicy.emojiRegistry.length}개`,
-            meta: `활성 ${enabledEmojiCount}개 · 저장 후 반영`,
+            badge: emojiHasUnsavedChanges ? '미저장' : '저장됨',
+            meta: `총 ${emojiCollectionPolicy.emojiRegistry.length}개 · 활성 ${emojiEnabledCount}개`,
         },
     ];
 
     return (
-        <form onSubmit={onSubmit} className="space-y-6">
-            <div className="flex flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm md:flex-row md:items-start md:justify-between">
-                <div className="space-y-2">
-                    <div className="inline-flex rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
-                        {POINT_RANK_FIELD_LABELS.activeThemeId}
-                    </div>
-                    <div>
-                        <h2 className="text-lg font-bold text-gray-900">등급 설정</h2>
-                        <p className="mt-1 max-w-3xl text-sm leading-6 text-gray-500">
-                            변경사항은 저장 버튼을 눌러야 반영됩니다. 왼쪽 패널로 작업 영역을 나눠서 편집하세요.
-                        </p>
-                    </div>
-                </div>
-                <div className="flex flex-col gap-3 md:min-w-[300px] md:items-end">
-                    <button
-                        type="submit"
-                        disabled={!canManage || Boolean(validationError)}
-                        className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
-                    >
-                        등급 설정 저장
-                    </button>
-                    <div className={[
-                        'rounded-xl border px-4 py-3 text-sm',
-                        hasUnsavedChanges
-                            ? 'border-amber-200 bg-amber-50 text-amber-800'
-                            : 'border-gray-200 bg-gray-50 text-gray-600',
-                    ].join(' ')}>
-                        {hasUnsavedChanges
-                            ? '저장 전 변경사항이 있습니다. 저장해야 학생 화면에 반영됩니다.'
-                            : '저장된 등급 설정과 같습니다.'}
-                    </div>
-                    {saveFeedbackMessage && saveFeedbackTone && (
-                        <div className={`rounded-xl px-4 py-3 text-sm ${feedbackToneClassName[saveFeedbackTone]}`}>
-                            {saveFeedbackMessage}
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            <div className="grid gap-6 xl:grid-cols-[260px_minmax(0,1fr)]">
+        <div className="space-y-5">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
                 <RankSettingsSidebar
                     activePanel={activePanel}
                     items={sidebarItems}
                     onSelect={setActivePanel}
                 />
 
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1 rounded-3xl border border-gray-200 bg-gray-50/80 p-4 shadow-sm sm:p-5">
                     {activePanel === 'theme_preview' && (
                         <RankThemePreviewPanel
                             canManage={canManage}
-                            draftRankPolicy={draftRankPolicy}
+                            draftRankPolicy={themePreviewPolicy}
                             activeThemeName={activeThemeName}
                             previewThemeId={previewThemeId}
                             previewThemeName={previewThemeName}
-                            enabledEmojiCount={enabledEmojiCount}
+                            enabledEmojiCount={savedEnabledEmojiCount}
+                            hasUnsavedChanges={themeHasUnsavedChanges}
+                            saveFeedbackMessage={themeSaveFeedbackMessage}
+                            saveFeedbackTone={themeSaveFeedbackTone}
                             onThemeChange={setActiveThemeId}
-                            getTierPreview={getTierPreview}
+                            onSave={onThemeSave}
+                            getTierPreview={getThemeTierPreview}
                         />
                     )}
 
                     {activePanel === 'rank_settings' && (
                         <RankTierEditorPanel
                             canManage={canManage}
-                            draftRankPolicy={draftRankPolicy}
-                            validationError={validationError}
+                            draftRankPolicy={rankSettingsPolicy}
+                            validationError={rankSettingsValidationError}
                             selectedTierCode={selectedTierCode}
                             selectedTier={selectedTier}
                             selectedTierPreview={selectedTierPreview}
-                            enabledEmojiCount={enabledEmojiCount}
+                            enabledEmojiCount={savedEnabledEmojiCount}
                             celebrationPreviewTierLabel={celebrationPreviewTierLabel}
                             celebrationPreviewAvailable={Boolean(celebrationPreview.rank)}
+                            hasUnsavedChanges={rankSettingsHasUnsavedChanges}
+                            saveFeedbackMessage={rankSettingsSaveFeedbackMessage}
+                            saveFeedbackTone={rankSettingsSaveFeedbackTone}
+                            onSave={onRankSettingsSave}
                             onSelectTier={handleSelectTier}
                             onAddTier={handleAddTier}
                             onRemoveTier={handleRemoveTier}
                             onSetTierField={setTierField}
                             onSetActiveThemeTierField={setActiveThemeTierField}
                             onToggleTierEmoji={toggleTierEmoji}
-                            onCelebrationEnabledChange={(enabled) => updateRankPolicy((prev) => ({
+                            onCelebrationEnabledChange={(enabled) => updateRankSettingsPolicy((prev) => ({
                                 ...prev,
                                 celebrationPolicy: {
                                     ...prev.celebrationPolicy,
                                     enabled,
                                 },
                             }))}
-                            onCelebrationEffectLevelChange={(effectLevel) => updateRankPolicy((prev) => ({
+                            onCelebrationEffectLevelChange={(effectLevel) => updateRankSettingsPolicy((prev) => ({
                                 ...prev,
                                 celebrationPolicy: {
                                     ...prev.celebrationPolicy,
@@ -513,22 +584,26 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
                                 },
                             }))}
                             onOpenCelebrationPreview={() => setIsCelebrationPreviewOpen(true)}
-                            getTierPreview={getTierPreview}
+                            getTierPreview={getRankSettingsTierPreview}
                         />
                     )}
 
                     {activePanel === 'emoji_collection' && (
                         <RankEmojiCollectionPanel
                             canManage={canManage}
-                            draftRankPolicy={draftRankPolicy}
-                            enabledEmojiCount={enabledEmojiCount}
+                            draftRankPolicy={emojiCollectionPolicy}
+                            enabledEmojiCount={emojiEnabledCount}
                             newEmojiValue={newEmojiValue}
+                            hasUnsavedChanges={emojiHasUnsavedChanges}
+                            saveFeedbackMessage={emojiSaveFeedbackMessage}
+                            saveFeedbackTone={emojiSaveFeedbackTone}
                             onNewEmojiValueChange={setNewEmojiValue}
                             onAddEmoji={handleAddEmojiRegistryEntry}
+                            onSave={onEmojiSave}
                             onEmojiValueChange={handleEmojiValueChange}
                             onToggleEmojiEnabled={handleToggleEmojiEnabled}
                             onReorderEmojiRegistry={handleReorderEmojiRegistry}
-                            getTierPreview={getTierPreview}
+                            getTierPreview={getEmojiTierPreview}
                         />
                     )}
                 </div>
@@ -577,7 +652,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
                     </div>
                 </div>
             )}
-        </form>
+        </div>
     );
 };
 

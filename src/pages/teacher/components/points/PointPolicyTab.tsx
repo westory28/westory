@@ -9,7 +9,7 @@ interface PointPolicyTabProps {
     saveFeedbackMessage: string;
     saveFeedbackTone: 'success' | 'error' | 'warning' | null;
     onPolicyChange: (updater: (prev: PointPolicy) => PointPolicy) => void;
-    onSubmit: (event: React.FormEvent) => void;
+    onSubmit: () => void;
 }
 
 const inputClassName = 'w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm';
@@ -28,7 +28,13 @@ const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
     onPolicyChange,
     onSubmit,
 }) => (
-    <form onSubmit={onSubmit} className="space-y-6">
+    <form
+        onSubmit={(event) => {
+            event.preventDefault();
+            onSubmit();
+        }}
+        className="space-y-6"
+    >
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
                 <h2 className="text-lg font-bold text-gray-900">운영 정책</h2>

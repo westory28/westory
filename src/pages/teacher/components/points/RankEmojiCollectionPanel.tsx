@@ -11,8 +11,12 @@ interface RankEmojiCollectionPanelProps {
   draftRankPolicy: PointRankPolicy;
   enabledEmojiCount: number;
   newEmojiValue: string;
+  hasUnsavedChanges: boolean;
+  saveFeedbackMessage: string;
+  saveFeedbackTone: "success" | "error" | "warning" | null;
   onNewEmojiValueChange: (value: string) => void;
   onAddEmoji: () => void;
+  onSave: () => void;
   onEmojiValueChange: (
     entryId: string,
     nextEmoji: string,
@@ -26,13 +30,30 @@ interface RankEmojiCollectionPanelProps {
   ) => PointRankDisplay | null;
 }
 
+type EditingEntryState = {
+  id: string;
+  index: number;
+  label: string;
+  value: string;
+};
+
+const feedbackToneClassName: Record<"success" | "error" | "warning", string> = {
+  success: "border border-emerald-200 bg-emerald-50 text-emerald-700",
+  error: "border border-red-200 bg-red-50 text-red-700",
+  warning: "border border-amber-200 bg-amber-50 text-amber-800",
+};
+
 const RankEmojiCollectionPanel: React.FC<RankEmojiCollectionPanelProps> = ({
   canManage,
   draftRankPolicy,
   enabledEmojiCount,
   newEmojiValue,
+  hasUnsavedChanges,
+  saveFeedbackMessage,
+  saveFeedbackTone,
   onNewEmojiValueChange,
   onAddEmoji,
+  onSave,
   onEmojiValueChange,
   onToggleEmojiEnabled,
   onReorderEmojiRegistry,
@@ -40,6 +61,9 @@ const RankEmojiCollectionPanel: React.FC<RankEmojiCollectionPanelProps> = ({
 }) => {
   const [draggedEntryId, setDraggedEntryId] = useState<string | null>(null);
   const [dragOverEntryId, setDragOverEntryId] = useState<string | null>(null);
+  const [editingEntry, setEditingEntry] = useState<EditingEntryState | null>(
+    null,
+  );
 
   const handleDragStart = (
     entryId: string,
@@ -64,91 +88,120 @@ const RankEmojiCollectionPanel: React.FC<RankEmojiCollectionPanelProps> = ({
     onReorderEmojiRegistry(sourceId, targetId);
   };
 
-  return (
-    <section className="space-y-6">
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <h2 className="text-lg font-bold text-gray-900">이모지 모음</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              이모지 추가, 비활성화, 순서 조정을 이 탭에서 가볍게 관리합니다.
-            </p>
-          </div>
-          <div className="grid gap-3 lg:min-w-[360px]">
-            <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
-              <label className="block">
-                <div className="text-xs font-bold uppercase tracking-wide text-blue-700">
-                  새 이모지 추가
-                </div>
-                <div className="mt-2 flex gap-2">
-                  <input
-                    value={newEmojiValue}
-                    onChange={(event) =>
-                      onNewEmojiValueChange(event.target.value)
-                    }
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        onAddEmoji();
-                      }
-                    }}
-                    placeholder="예: 🐉"
-                    className="h-12 w-full rounded-xl border border-blue-200 bg-white px-4 text-center text-2xl font-bold text-gray-900"
-                    maxLength={8}
-                    disabled={!canManage}
-                    aria-label="새 이모지"
-                  />
-                  <button
-                    type="button"
-                    onClick={onAddEmoji}
-                    disabled={!canManage}
-                    className="inline-flex h-12 shrink-0 items-center justify-center rounded-xl bg-blue-600 px-4 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
-                  >
-                    추가
-                  </button>
-                </div>
-              </label>
-              <p className="mt-2 text-xs leading-5 text-blue-700">
-                같은 이모지는 한 번만 등록할 수 있습니다.
-              </p>
-            </div>
+  const handleOpenEditor = (
+    entryId: string,
+    entryIndex: number,
+    emoji: string,
+    label: string,
+  ) => {
+    setEditingEntry({
+      id: entryId,
+      index: entryIndex,
+      label,
+      value: emoji,
+    });
+  };
 
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="rounded-full border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-bold text-gray-600">
-                총 {draftRankPolicy.emojiRegistry.length}개
-              </div>
-              <div className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">
-                활성 {enabledEmojiCount}개
-              </div>
-              <div className="rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700">
-                드래그 후 저장
-              </div>
+  const handleSubmitEditor = () => {
+    if (!editingEntry) return;
+    onEmojiValueChange(
+      editingEntry.id,
+      editingEntry.value,
+      editingEntry.index,
+    );
+    setEditingEntry(null);
+  };
+
+  return (
+    <section className="space-y-4">
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-lg font-bold text-gray-900">이모지 모음</h2>
+            <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-bold text-gray-600">
+              총 {draftRankPolicy.emojiRegistry.length}개
+            </span>
+            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+              활성 {enabledEmojiCount}개
+            </span>
+          </div>
+          <div className="flex flex-col gap-3 xl:min-w-[360px] xl:items-end">
+            <div className="flex w-full flex-wrap items-center gap-2 xl:justify-end">
+              <input
+                value={newEmojiValue}
+                onChange={(event) => onNewEmojiValueChange(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    onAddEmoji();
+                  }
+                }}
+                placeholder="😀"
+                className="h-10 w-20 rounded-lg border border-gray-300 bg-white px-3 text-center text-2xl font-bold text-gray-900"
+                maxLength={8}
+                disabled={!canManage}
+                aria-label="새 이모지"
+              />
+              <button
+                type="button"
+                onClick={onAddEmoji}
+                disabled={!canManage}
+                className="inline-flex h-10 items-center justify-center rounded-lg border border-gray-200 bg-white px-4 text-sm font-bold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                추가
+              </button>
+              <button
+                type="button"
+                onClick={onSave}
+                disabled={!canManage}
+                className="inline-flex h-10 items-center justify-center rounded-lg bg-blue-600 px-4 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+              >
+                이모지 모음 저장
+              </button>
             </div>
+            <div
+              className={[
+                "w-full rounded-xl border px-4 py-3 text-sm xl:max-w-[360px]",
+                hasUnsavedChanges
+                  ? "border-amber-200 bg-amber-50 text-amber-800"
+                  : "border-gray-200 bg-gray-50 text-gray-600",
+              ].join(" ")}
+            >
+              {hasUnsavedChanges
+                ? "이모지 변경사항이 저장 대기 중입니다."
+                : "저장된 이모지 모음과 같습니다."}
+            </div>
+            {saveFeedbackMessage && saveFeedbackTone && (
+              <div
+                className={`w-full rounded-xl px-4 py-3 text-sm xl:max-w-[360px] ${feedbackToneClassName[saveFeedbackTone]}`}
+              >
+                {saveFeedbackMessage}
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
         {draftRankPolicy.emojiRegistry.map((entry, entryIndex) => {
           const assignedTier =
             draftRankPolicy.tiers.find((tier) =>
               (tier.allowedEmojiIds || []).includes(entry.id),
             ) || null;
-          const assignedTierLabel = assignedTier
-            ? getTierPreview(assignedTier)?.label || assignedTier.code
-            : "등급 미지정";
+          const assignedTierPreview = assignedTier
+            ? getTierPreview(assignedTier)
+            : null;
+          const assignedTierLabel =
+            assignedTierPreview?.shortLabel ||
+            assignedTierPreview?.label ||
+            assignedTier?.code ||
+            "미지정";
           const isDragTarget =
             dragOverEntryId === entry.id && draggedEntryId !== entry.id;
 
           return (
             <article
               key={entry.id}
-              draggable={canManage}
-              onDragStart={(event) => handleDragStart(entry.id, event)}
-              onDragEnd={() => {
-                setDraggedEntryId(null);
-                setDragOverEntryId(null);
-              }}
               onDragOver={(event) => {
                 if (!canManage) return;
                 event.preventDefault();
@@ -161,121 +214,144 @@ const RankEmojiCollectionPanel: React.FC<RankEmojiCollectionPanelProps> = ({
               }}
               onDrop={(event) => handleDrop(entry.id, event)}
               className={[
-                "flex min-h-[220px] flex-col rounded-2xl border p-4 transition",
+                "grid grid-cols-[auto_auto_minmax(0,1fr)_auto_auto] items-center gap-2 rounded-xl border px-2.5 py-2.5 transition",
                 entry.enabled === false
-                  ? "border-gray-200 bg-gray-50/90"
-                  : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm",
-                canManage ? "cursor-grab active:cursor-grabbing" : "",
+                  ? "border-gray-200 bg-gray-100/80"
+                  : "border-gray-200 bg-white hover:border-gray-300",
                 draggedEntryId === entry.id ? "opacity-60" : "",
-                isDragTarget ? "border-blue-300 ring-2 ring-blue-100" : "",
+                isDragTarget ? "border-blue-300 bg-blue-50/70 ring-1 ring-blue-100" : "",
               ]
                 .filter(Boolean)
                 .join(" ")}
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <div
-                    className={[
-                      "inline-flex h-9 w-9 items-center justify-center rounded-xl border text-gray-500",
-                      canManage
-                        ? "border-gray-200 bg-gray-50"
-                        : "border-gray-100 bg-gray-50/70",
-                    ].join(" ")}
-                    title={
-                      canManage ? "드래그해 순서를 변경하세요." : "읽기 전용"
-                    }
-                    aria-hidden="true"
-                  >
-                    <i className="fas fa-grip-vertical text-sm"></i>
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold uppercase tracking-wide text-gray-400">
-                      정렬 #{entryIndex + 1}
-                    </div>
-                    <div className="text-[11px] text-gray-500">
-                      드래그해 순서 변경
-                    </div>
-                  </div>
-                </div>
+              <button
+                type="button"
+                draggable={canManage}
+                onDragStart={(event) => handleDragStart(entry.id, event)}
+                onDragEnd={() => {
+                  setDraggedEntryId(null);
+                  setDragOverEntryId(null);
+                }}
+                disabled={!canManage}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-gray-500 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label={`${entry.emoji} 순서 변경`}
+                title="순서 변경"
+              >
+                <i className="fas fa-grip-vertical text-xs" aria-hidden="true"></i>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  handleOpenEditor(entry.id, entryIndex, entry.emoji, entry.label)
+                }
+                disabled={!canManage}
+                className={[
+                  "inline-flex h-10 w-10 items-center justify-center rounded-lg border text-2xl leading-none transition",
+                  entry.enabled === false
+                    ? "border-gray-200 bg-white text-gray-400"
+                    : "border-gray-200 bg-gray-50 text-gray-900 hover:bg-white",
+                  "disabled:cursor-not-allowed disabled:opacity-60",
+                ].join(" ")}
+                aria-label={`${entry.label} 수정`}
+              >
+                {entry.emoji}
+              </button>
+
+              <div className="min-w-0">
                 <span
                   className={[
-                    "rounded-full border px-2 py-0.5 text-[10px] font-bold",
+                    "inline-flex max-w-full items-center rounded-full border px-2.5 py-1 text-[11px] font-bold",
                     assignedTier
                       ? "border-blue-100 bg-blue-50 text-blue-700"
                       : "border-gray-200 bg-gray-50 text-gray-500",
                   ].join(" ")}
+                  title={assignedTierLabel}
                 >
-                  {assignedTier ? assignedTierLabel : "미지정"}
+                  <span className="truncate">{assignedTierLabel}</span>
                 </span>
               </div>
 
-              <div className="mt-4 flex items-center justify-between gap-2">
-                <span
-                  className={[
-                    "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold",
-                    entry.enabled === false
-                      ? "border-gray-200 bg-white text-gray-500"
-                      : "border-emerald-200 bg-emerald-50 text-emerald-700",
-                  ].join(" ")}
-                >
-                  {entry.enabled === false ? "비활성" : "사용 중"}
-                </span>
-                <span className="text-xs text-gray-400">{entry.id}</span>
-              </div>
-
-              <label className="mt-4 flex flex-1 items-center justify-center">
-                <span className="sr-only">{entry.label} 이모지</span>
-                <input
-                  value={entry.emoji}
-                  onChange={(event) =>
-                    onEmojiValueChange(entry.id, event.target.value, entryIndex)
-                  }
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                    }
-                  }}
-                  className={[
-                    "h-24 w-full rounded-2xl border text-center text-5xl leading-none transition",
-                    entry.enabled === false
-                      ? "border-gray-200 bg-white text-gray-400"
-                      : "border-gray-200 bg-gray-50 text-gray-900 focus:border-blue-200 focus:bg-white",
-                  ].join(" ")}
-                  disabled={!canManage}
-                  maxLength={8}
-                  aria-label={`${entry.label} 이모지`}
-                />
-              </label>
-
-              <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
-                <div className="text-sm font-bold text-gray-800">
-                  {entry.label}
-                </div>
-                <div className="mt-1 text-xs leading-5 text-gray-500">
-                  {assignedTier
-                    ? `${assignedTierLabel}에서 학생이 사용할 수 있습니다.`
-                    : "아직 허용 등급이 정해지지 않았습니다."}
-                </div>
-              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  handleOpenEditor(entry.id, entryIndex, entry.emoji, entry.label)
+                }
+                disabled={!canManage}
+                className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                수정
+              </button>
 
               <button
                 type="button"
                 onClick={() => onToggleEmojiEnabled(entry.id)}
                 disabled={!canManage}
                 className={[
-                  "mt-3 inline-flex w-full items-center justify-center rounded-xl border px-3 py-2 text-xs font-bold transition",
+                  "inline-flex items-center justify-center rounded-lg border px-2.5 py-1.5 text-[11px] font-bold transition",
                   entry.enabled === false
                     ? "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
                     : "border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100",
                   "disabled:cursor-not-allowed disabled:opacity-60",
                 ].join(" ")}
               >
-                {entry.enabled === false ? "다시 사용" : "비활성화"}
+                {entry.enabled === false ? "사용" : "비활성"}
               </button>
             </article>
           );
         })}
       </div>
+
+      {editingEntry && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/35 p-4">
+          <div className="w-full max-w-xs rounded-2xl bg-white p-5 shadow-2xl">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-bold text-gray-900">이모지 수정</h3>
+              <button
+                type="button"
+                onClick={() => setEditingEntry(null)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition hover:bg-gray-50"
+                aria-label="이모지 수정 닫기"
+              >
+                <i className="fas fa-times text-xs" aria-hidden="true"></i>
+              </button>
+            </div>
+            <input
+              value={editingEntry.value}
+              onChange={(event) =>
+                setEditingEntry((prev) =>
+                  prev ? { ...prev, value: event.target.value } : prev,
+                )
+              }
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  handleSubmitEditor();
+                }
+              }}
+              className="mt-4 h-16 w-full rounded-xl border border-gray-300 bg-white px-4 text-center text-4xl text-gray-900"
+              maxLength={8}
+              aria-label={`${editingEntry.label} 이모지`}
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setEditingEntry(null)}
+                className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-700 transition hover:bg-gray-50"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmitEditor}
+                className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-700"
+              >
+                적용
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 };

@@ -34,6 +34,10 @@ interface RankTierEditorPanelProps {
   enabledEmojiCount: number;
   celebrationPreviewTierLabel: string;
   celebrationPreviewAvailable: boolean;
+  hasUnsavedChanges: boolean;
+  saveFeedbackMessage: string;
+  saveFeedbackTone: "success" | "error" | "warning" | null;
+  onSave: () => void;
   onSelectTier: (tierCode: PointRankPolicyTier["code"]) => void;
   onAddTier: () => void;
   onRemoveTier: (tierCode: PointRankPolicyTier["code"]) => void;
@@ -60,6 +64,12 @@ interface RankTierEditorPanelProps {
   ) => PointRankDisplay | null;
 }
 
+const feedbackToneClassName: Record<"success" | "error" | "warning", string> = {
+  success: "border border-emerald-200 bg-emerald-50 text-emerald-700",
+  error: "border border-red-200 bg-red-50 text-red-700",
+  warning: "border border-amber-200 bg-amber-50 text-amber-800",
+};
+
 const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
   canManage,
   draftRankPolicy,
@@ -70,6 +80,10 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
   enabledEmojiCount,
   celebrationPreviewTierLabel,
   celebrationPreviewAvailable,
+  hasUnsavedChanges,
+  saveFeedbackMessage,
+  saveFeedbackTone,
+  onSave,
   onSelectTier,
   onAddTier,
   onRemoveTier,
@@ -82,11 +96,51 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
   getTierPreview,
 }) => (
   <section className="space-y-6">
+    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+        <div>
+          <h2 className="text-lg font-bold text-gray-900">등급 설정</h2>
+          <p className="mt-1 text-sm text-gray-500">
+            기준 포인트, 이름, 약칭, 허용 이모지와 축하 팝업을 이 탭에서 저장합니다.
+          </p>
+        </div>
+        <div className="flex flex-col gap-3 xl:min-w-[300px] xl:items-end">
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={!canManage || Boolean(validationError)}
+            className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+          >
+            등급 설정 저장
+          </button>
+          <div
+            className={[
+              "rounded-xl border px-4 py-3 text-sm",
+              hasUnsavedChanges
+                ? "border-amber-200 bg-amber-50 text-amber-800"
+                : "border-gray-200 bg-gray-50 text-gray-600",
+            ].join(" ")}
+          >
+            {hasUnsavedChanges
+              ? "등급 설정 변경사항이 저장 대기 중입니다."
+              : "저장된 등급 설정과 같습니다."}
+          </div>
+          {saveFeedbackMessage && saveFeedbackTone && (
+            <div
+              className={`rounded-xl px-4 py-3 text-sm ${feedbackToneClassName[saveFeedbackTone]}`}
+            >
+              {saveFeedbackMessage}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(340px,0.95fr)]">
       <div className="space-y-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
-            <h2 className="text-lg font-bold text-gray-900">등급 설정</h2>
+            <h3 className="text-lg font-bold text-gray-900">등급 목록</h3>
             <p className="mt-1 text-sm text-gray-500">
               등급 기준, 이름, 설명, 배지 스타일을 이 탭에서 정리합니다.
             </p>

@@ -20,20 +20,40 @@ import {
     upsertPointPolicy,
     upsertPointProduct,
 } from '../../lib/points';
-import { getPointRankPolicyValidationError, needsPointRankLegacyFallback } from '../../lib/pointRanks';
+import {
+    getPointRankPolicyValidationError,
+    needsPointRankLegacyFallback,
+    resolvePointRankPolicyDraft,
+} from '../../lib/pointRanks';
 import { canManagePoints, canReadPoints } from '../../lib/permissions';
 import { getYearSemester } from '../../lib/semesterScope';
-import type { PointOrder, PointOrderStatus, PointPolicy, PointProduct, PointStudentTarget, PointTransaction, PointWallet } from '../../types';
+import type {
+    PointOrder,
+    PointOrderStatus,
+    PointPolicy,
+    PointProduct,
+    PointRankEmojiRegistryEntry,
+    PointRankPolicy,
+    PointRankPolicyTier,
+    PointStudentTarget,
+    PointTransaction,
+    PointWallet,
+} from '../../types';
 import PointGrantTab from './components/points/PointGrantTab';
 import PointPolicyTab from './components/points/PointPolicyTab';
-import PointRanksTab from './components/points/PointRanksTab';
+import PointRanksTab, {
+    type RankEmojiCollectionDraft,
+    type RankPanelSaveTone,
+    type RankSettingsDraft,
+    type RankThemeDraft,
+} from './components/points/PointRanksTab';
 import PointProductsTab from './components/points/PointProductsTab';
 import PointRequestsTab from './components/points/PointRequestsTab';
 import PointsOverviewTab from './components/points/PointsOverviewTab';
 
 type TeacherPointTab = keyof typeof TEACHER_POINT_TAB_LABELS;
 type OrderFilter = 'all' | PointOrderStatus;
-type PolicyFeedbackTone = 'success' | 'error' | 'warning';
+type PolicyFeedbackTone = RankPanelSaveTone;
 type SchoolOption = { value: string; label: string };
 type ProductFormState = {
     id: string;
@@ -66,6 +86,58 @@ const EMPTY_PRODUCT_FORM: ProductFormState = {
 };
 
 const normalizeValue = (value: unknown) => String(value || '').trim();
+
+const cloneRankTiers = (tiers: PointRankPolicyTier[] = []) => tiers.map((tier) => ({
+    ...tier,
+    allowedEmojiIds: [...(tier.allowedEmojiIds || [])],
+}));
+
+const cloneRankThemes = (
+    themes: PointRankPolicy['themes'] = {},
+): PointRankPolicy['themes'] => Object.fromEntries(
+    Object.entries(themes || {}).map(([themeId, themeConfig]) => [
+        themeId,
+        {
+            ...themeConfig,
+            tiers: Object.fromEntries(
+                Object.entries(themeConfig?.tiers || {}).map(([tierCode, tierOverride]) => [
+                    tierCode,
+                    { ...tierOverride },
+                ]),
+            ),
+        },
+    ]),
+) as PointRankPolicy['themes'];
+
+const cloneRankEmojiRegistry = (emojiRegistry: PointRankEmojiRegistryEntry[] = []) => emojiRegistry.map((entry) => ({
+    ...entry,
+    legacyValues: [...(entry.legacyValues || [])],
+}));
+
+const createRankThemeDraft = (rankPolicy?: Partial<PointRankPolicy> | null): RankThemeDraft => {
+    const resolvedPolicy = resolvePointRankPolicyDraft(rankPolicy);
+    return {
+        activeThemeId: resolvedPolicy.activeThemeId,
+    };
+};
+
+const createRankSettingsDraft = (rankPolicy?: Partial<PointRankPolicy> | null): RankSettingsDraft => {
+    const resolvedPolicy = resolvePointRankPolicyDraft(rankPolicy);
+    return {
+        tiers: cloneRankTiers(resolvedPolicy.tiers),
+        themes: cloneRankThemes(resolvedPolicy.themes),
+        celebrationPolicy: {
+            ...resolvedPolicy.celebrationPolicy,
+        },
+    };
+};
+
+const createRankEmojiCollectionDraft = (rankPolicy?: Partial<PointRankPolicy> | null): RankEmojiCollectionDraft => {
+    const resolvedPolicy = resolvePointRankPolicyDraft(rankPolicy);
+    return {
+        emojiRegistry: cloneRankEmojiRegistry(resolvedPolicy.emojiRegistry),
+    };
+};
 
 const loadImageElement = (file: File) => new Promise<HTMLImageElement>((resolve, reject) => {
     const objectUrl = URL.createObjectURL(file);
@@ -124,6 +196,18 @@ const ManagePoints: React.FC = () => {
     const [policyDirty, setPolicyDirty] = useState(false);
     const [policyFeedbackMessage, setPolicyFeedbackMessage] = useState('');
     const [policyFeedbackTone, setPolicyFeedbackTone] = useState<PolicyFeedbackTone | null>(null);
+    const [rankThemeDraft, setRankThemeDraft] = useState<RankThemeDraft>(() => createRankThemeDraft(EMPTY_POLICY.rankPolicy));
+    const [rankThemeDirty, setRankThemeDirty] = useState(false);
+    const [rankThemeFeedbackMessage, setRankThemeFeedbackMessage] = useState('');
+    const [rankThemeFeedbackTone, setRankThemeFeedbackTone] = useState<PolicyFeedbackTone | null>(null);
+    const [rankSettingsDraft, setRankSettingsDraft] = useState<RankSettingsDraft>(() => createRankSettingsDraft(EMPTY_POLICY.rankPolicy));
+    const [rankSettingsDirty, setRankSettingsDirty] = useState(false);
+    const [rankSettingsFeedbackMessage, setRankSettingsFeedbackMessage] = useState('');
+    const [rankSettingsFeedbackTone, setRankSettingsFeedbackTone] = useState<PolicyFeedbackTone | null>(null);
+    const [rankEmojiDraft, setRankEmojiDraft] = useState<RankEmojiCollectionDraft>(() => createRankEmojiCollectionDraft(EMPTY_POLICY.rankPolicy));
+    const [rankEmojiDirty, setRankEmojiDirty] = useState(false);
+    const [rankEmojiFeedbackMessage, setRankEmojiFeedbackMessage] = useState('');
+    const [rankEmojiFeedbackTone, setRankEmojiFeedbackTone] = useState<PolicyFeedbackTone | null>(null);
     const [rankManualAdjustEarnedPointsByUid, setRankManualAdjustEarnedPointsByUid] = useState<Record<string, number>>({});
     const [products, setProducts] = useState<PointProduct[]>([]);
     const [orders, setOrders] = useState<PointOrder[]>([]);
@@ -165,6 +249,55 @@ const ManagePoints: React.FC = () => {
         uid: currentUser?.uid || userData?.uid || '',
         name: userData?.name || currentUser?.displayName || '',
     }), [currentUser?.displayName, currentUser?.uid, userData?.name, userData?.uid]);
+    const savedRankPolicy = useMemo(
+        () => resolvePointRankPolicyDraft(savedPolicy.rankPolicy),
+        [savedPolicy.rankPolicy],
+    );
+
+    const syncRankEmojiUnlockTierCodes = (
+        tiers: PointRankPolicyTier[],
+        emojiRegistry: PointRankEmojiRegistryEntry[],
+    ) => cloneRankEmojiRegistry(emojiRegistry).map((entry) => {
+        const assignedTier = tiers.find((tier) => (tier.allowedEmojiIds || []).includes(entry.id));
+        return {
+            ...entry,
+            ...(assignedTier ? { unlockTierCode: assignedTier.code } : {}),
+        };
+    });
+
+    const applyConfirmedPolicy = (
+        confirmedPolicy: PointPolicy,
+        options?: {
+            resetThemeDraft?: boolean;
+            resetRankSettingsDraft?: boolean;
+            resetEmojiDraft?: boolean;
+        },
+    ) => {
+        setSavedPolicy(confirmedPolicy);
+        setPolicyDraft((prev) => (
+            policyDirty
+                ? {
+                    ...prev,
+                    rankPolicy: confirmedPolicy.rankPolicy,
+                }
+                : confirmedPolicy
+        ));
+        setRankThemeDraft((prev) => (
+            options?.resetThemeDraft || !rankThemeDirty
+                ? createRankThemeDraft(confirmedPolicy.rankPolicy)
+                : prev
+        ));
+        setRankSettingsDraft((prev) => (
+            options?.resetRankSettingsDraft || !rankSettingsDirty
+                ? createRankSettingsDraft(confirmedPolicy.rankPolicy)
+                : prev
+        ));
+        setRankEmojiDraft((prev) => (
+            options?.resetEmojiDraft || !rankEmojiDirty
+                ? createRankEmojiCollectionDraft(confirmedPolicy.rankPolicy)
+                : prev
+        ));
+    };
 
     const gradeOptions = useMemo(
         () => Array.from(new Set(wallets.map((wallet) => normalizeValue(wallet.grade)).filter(Boolean))).sort((a, b) => Number(a) - Number(b)),
@@ -297,6 +430,18 @@ const ManagePoints: React.FC = () => {
             setPolicyDirty(false);
             setPolicyFeedbackMessage('');
             setPolicyFeedbackTone(null);
+            setRankThemeDraft(createRankThemeDraft(nextPolicy.rankPolicy));
+            setRankThemeDirty(false);
+            setRankThemeFeedbackMessage('');
+            setRankThemeFeedbackTone(null);
+            setRankSettingsDraft(createRankSettingsDraft(nextPolicy.rankPolicy));
+            setRankSettingsDirty(false);
+            setRankSettingsFeedbackMessage('');
+            setRankSettingsFeedbackTone(null);
+            setRankEmojiDraft(createRankEmojiCollectionDraft(nextPolicy.rankPolicy));
+            setRankEmojiDirty(false);
+            setRankEmojiFeedbackMessage('');
+            setRankEmojiFeedbackTone(null);
             setProducts(nextProducts);
             setOrders(nextOrders);
             setRankManualAdjustEarnedPointsByUid(nextRankManualAdjustEarnedPointsByUid);
@@ -440,6 +585,27 @@ const ManagePoints: React.FC = () => {
         setPolicyFeedbackTone(null);
     };
 
+    const updateRankThemeDraft = (updater: (prev: RankThemeDraft) => RankThemeDraft) => {
+        setRankThemeDraft((prev) => updater(prev));
+        setRankThemeDirty(true);
+        setRankThemeFeedbackMessage('');
+        setRankThemeFeedbackTone(null);
+    };
+
+    const updateRankSettingsDraft = (updater: (prev: RankSettingsDraft) => RankSettingsDraft) => {
+        setRankSettingsDraft((prev) => updater(prev));
+        setRankSettingsDirty(true);
+        setRankSettingsFeedbackMessage('');
+        setRankSettingsFeedbackTone(null);
+    };
+
+    const updateRankEmojiDraft = (updater: (prev: RankEmojiCollectionDraft) => RankEmojiCollectionDraft) => {
+        setRankEmojiDraft((prev) => updater(prev));
+        setRankEmojiDirty(true);
+        setRankEmojiFeedbackMessage('');
+        setRankEmojiFeedbackTone(null);
+    };
+
     const handleSaveGrant = async (event: React.FormEvent) => {
         event.preventDefault();
         if (!selectedGrantStudent || !canManage) return;
@@ -485,38 +651,126 @@ const ManagePoints: React.FC = () => {
         }
     };
 
-    const handleSavePolicy = async (event: React.FormEvent) => {
-        event.preventDefault();
+    const handleSavePolicy = async () => {
         if (!canManage) return;
 
-        const rankPolicyValidationError = getPointRankPolicyValidationError(policyDraft.rankPolicy);
-        if (rankPolicyValidationError) {
-            console.warn('Blocked point policy save due to validation error:', rankPolicyValidationError);
-            setPolicyFeedbackTone('warning');
-            setPolicyFeedbackMessage(`저장 전에 확인해 주세요. ${rankPolicyValidationError}`);
-            return;
-        }
-
         const sanitizedPolicy: PointPolicy = {
+            ...savedPolicy,
             ...policyDraft,
             attendanceDaily: Math.max(0, Number(policyDraft.attendanceDaily || 0)),
             attendanceMonthlyBonus: Math.max(0, Number(policyDraft.attendanceMonthlyBonus || 0)),
             quizSolve: Math.max(0, Number(policyDraft.quizSolve || 0)),
             lessonView: Math.max(0, Number(policyDraft.lessonView || 0)),
+            rankPolicy: savedPolicy.rankPolicy,
         };
 
         try {
             await upsertPointPolicy(config, sanitizedPolicy, actor);
             const confirmedPolicy = await getPointPolicy(config);
-            setSavedPolicy(confirmedPolicy);
+            applyConfirmedPolicy(confirmedPolicy);
             setPolicyDraft(confirmedPolicy);
             setPolicyDirty(false);
             setPolicyFeedbackTone('success');
-            setPolicyFeedbackMessage(activeTab === 'policy' ? '운영 정책이 저장되었습니다.' : '등급 설정이 저장되었습니다.');
+            setPolicyFeedbackMessage('운영 정책이 저장되었습니다.');
         } catch (error: any) {
             console.error('Failed to save point policy:', error);
             setPolicyFeedbackTone('error');
             setPolicyFeedbackMessage('저장 중 문제가 발생했습니다. 입력값을 확인한 뒤 다시 시도해 주세요.');
+        }
+    };
+
+    const handleSaveRankTheme = async () => {
+        if (!canManage) return;
+
+        const mergedRankPolicy = resolvePointRankPolicyDraft({
+            ...savedRankPolicy,
+            activeThemeId: rankThemeDraft.activeThemeId,
+            themeId: rankThemeDraft.activeThemeId,
+        });
+
+        try {
+            await upsertPointPolicy(config, {
+                ...savedPolicy,
+                rankPolicy: mergedRankPolicy,
+            }, actor);
+            const confirmedPolicy = await getPointPolicy(config);
+            applyConfirmedPolicy(confirmedPolicy, { resetThemeDraft: true });
+            setRankThemeDirty(false);
+            setRankThemeFeedbackTone('success');
+            setRankThemeFeedbackMessage('테마 설정이 저장되었습니다.');
+        } catch (error: any) {
+            console.error('Failed to save rank theme:', error);
+            setRankThemeFeedbackTone('error');
+            setRankThemeFeedbackMessage('테마 설정 저장에 실패했습니다. 다시 시도해 주세요.');
+        }
+    };
+
+    const handleSaveRankSettings = async () => {
+        if (!canManage) return;
+
+        const nextTiers = cloneRankTiers(rankSettingsDraft.tiers);
+        const nextThemes = cloneRankThemes(rankSettingsDraft.themes);
+        const mergedRankPolicy = resolvePointRankPolicyDraft({
+            ...savedRankPolicy,
+            tiers: nextTiers,
+            themes: nextThemes,
+            celebrationPolicy: {
+                ...rankSettingsDraft.celebrationPolicy,
+            },
+            emojiRegistry: syncRankEmojiUnlockTierCodes(nextTiers, savedRankPolicy.emojiRegistry),
+        });
+        const validationError = getPointRankPolicyValidationError(mergedRankPolicy);
+        if (validationError) {
+            setRankSettingsFeedbackTone('warning');
+            setRankSettingsFeedbackMessage(`저장 전에 확인해 주세요. ${validationError}`);
+            return;
+        }
+
+        try {
+            await upsertPointPolicy(config, {
+                ...savedPolicy,
+                rankPolicy: mergedRankPolicy,
+            }, actor);
+            const confirmedPolicy = await getPointPolicy(config);
+            applyConfirmedPolicy(confirmedPolicy, { resetRankSettingsDraft: true });
+            setRankSettingsDirty(false);
+            setRankSettingsFeedbackTone('success');
+            setRankSettingsFeedbackMessage('등급 설정이 저장되었습니다.');
+        } catch (error: any) {
+            console.error('Failed to save rank settings:', error);
+            setRankSettingsFeedbackTone('error');
+            setRankSettingsFeedbackMessage('등급 설정 저장에 실패했습니다. 다시 시도해 주세요.');
+        }
+    };
+
+    const handleSaveRankEmojiCollection = async () => {
+        if (!canManage) return;
+
+        const mergedRankPolicy = resolvePointRankPolicyDraft({
+            ...savedRankPolicy,
+            emojiRegistry: cloneRankEmojiRegistry(rankEmojiDraft.emojiRegistry),
+        });
+        const validationError = getPointRankPolicyValidationError(mergedRankPolicy);
+        if (validationError) {
+            setRankEmojiFeedbackTone('warning');
+            setRankEmojiFeedbackMessage(`저장 전에 확인해 주세요. ${validationError}`);
+            return;
+        }
+
+        try {
+            await upsertPointPolicy(config, {
+                ...savedPolicy,
+                rankPolicy: mergedRankPolicy,
+            }, actor);
+            const confirmedPolicy = await getPointPolicy(config);
+            applyConfirmedPolicy(confirmedPolicy, { resetEmojiDraft: true });
+            setRankEmojiDirty(false);
+            setRankEmojiFeedbackTone('success');
+            setRankEmojiFeedbackMessage('이모지 모음이 저장되었습니다.');
+        } catch (error: any) {
+            console.error('Failed to save rank emoji collection:', error);
+            setRankEmojiFeedbackTone('error');
+            setRankEmojiFeedbackMessage('이모지 모음 저장에 실패했습니다. 다시 시도해 주세요.');
         }
     };
 
@@ -739,6 +993,8 @@ const ManagePoints: React.FC = () => {
         );
     }
 
+    const usesSharedPanelFrame = activeTab !== 'ranks';
+
     return (
         <div className="flex min-h-screen flex-col bg-gray-50">
             <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-4 py-6">
@@ -763,9 +1019,9 @@ const ManagePoints: React.FC = () => {
                     </div>
                 )}
 
-                <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+                <div className={usesSharedPanelFrame ? 'rounded-2xl border border-gray-200 bg-white p-6 shadow-sm' : ''}>
                     {loading && (
-                        <div className="py-16 text-center text-gray-400">
+                        <div className={usesSharedPanelFrame ? 'py-16 text-center text-gray-400' : 'rounded-2xl border border-gray-200 bg-white py-16 text-center text-gray-400 shadow-sm'}>
                             <div className="mb-2 text-2xl">
                                 <i className="fas fa-spinner fa-spin"></i>
                             </div>
@@ -850,13 +1106,26 @@ const ManagePoints: React.FC = () => {
 
                     {!loading && activeTab === 'ranks' && (
                         <PointRanksTab
-                            policy={policyDraft}
+                            savedRankPolicy={savedRankPolicy}
                             canManage={canManage}
-                            hasUnsavedChanges={policyDirty}
-                            saveFeedbackMessage={policyFeedbackMessage}
-                            saveFeedbackTone={policyFeedbackTone}
-                            onPolicyChange={updatePolicyDraft}
-                            onSubmit={handleSavePolicy}
+                            themeDraft={rankThemeDraft}
+                            themeHasUnsavedChanges={rankThemeDirty}
+                            themeSaveFeedbackMessage={rankThemeFeedbackMessage}
+                            themeSaveFeedbackTone={rankThemeFeedbackTone}
+                            onThemeDraftChange={updateRankThemeDraft}
+                            onThemeSave={handleSaveRankTheme}
+                            rankSettingsDraft={rankSettingsDraft}
+                            rankSettingsHasUnsavedChanges={rankSettingsDirty}
+                            rankSettingsSaveFeedbackMessage={rankSettingsFeedbackMessage}
+                            rankSettingsSaveFeedbackTone={rankSettingsFeedbackTone}
+                            onRankSettingsDraftChange={updateRankSettingsDraft}
+                            onRankSettingsSave={handleSaveRankSettings}
+                            emojiDraft={rankEmojiDraft}
+                            emojiHasUnsavedChanges={rankEmojiDirty}
+                            emojiSaveFeedbackMessage={rankEmojiFeedbackMessage}
+                            emojiSaveFeedbackTone={rankEmojiFeedbackTone}
+                            onEmojiDraftChange={updateRankEmojiDraft}
+                            onEmojiSave={handleSaveRankEmojiCollection}
                         />
                     )}
 

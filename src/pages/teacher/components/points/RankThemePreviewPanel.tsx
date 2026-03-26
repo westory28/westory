@@ -21,12 +21,22 @@ interface RankThemePreviewPanelProps {
   previewThemeId: PointRankThemeId;
   previewThemeName: string;
   enabledEmojiCount: number;
+  hasUnsavedChanges: boolean;
+  saveFeedbackMessage: string;
+  saveFeedbackTone: "success" | "error" | "warning" | null;
   onThemeChange: (themeId: PointRankThemeId) => void;
+  onSave: () => void;
   getTierPreview: (
     tier: PointRankPolicyTier,
     themeId?: PointRankThemeId,
   ) => PointRankDisplay | null;
 }
+
+const feedbackToneClassName: Record<"success" | "error" | "warning", string> = {
+  success: "border border-emerald-200 bg-emerald-50 text-emerald-700",
+  error: "border border-red-200 bg-red-50 text-red-700",
+  warning: "border border-amber-200 bg-amber-50 text-amber-800",
+};
 
 const RankThemePreviewPanel: React.FC<RankThemePreviewPanelProps> = ({
   canManage,
@@ -35,7 +45,11 @@ const RankThemePreviewPanel: React.FC<RankThemePreviewPanelProps> = ({
   previewThemeId,
   previewThemeName,
   enabledEmojiCount,
+  hasUnsavedChanges,
+  saveFeedbackMessage,
+  saveFeedbackTone,
   onThemeChange,
+  onSave,
   getTierPreview,
 }) => {
   const compareThemes: Array<{
@@ -64,57 +78,87 @@ const RankThemePreviewPanel: React.FC<RankThemePreviewPanelProps> = ({
   return (
     <section className="space-y-6">
       <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div>
             <h2 className="text-lg font-bold text-gray-900">테마 미리보기</h2>
             <p className="mt-1 text-sm text-gray-500">
               현재 저장 대상 테마를 중심으로 등급 감각을 비교합니다.
             </p>
           </div>
-          <div className="grid gap-2 lg:min-w-[380px] lg:grid-cols-[minmax(0,1fr)_200px]">
-            <div className="rounded-2xl border border-blue-200 bg-blue-50/70 p-4">
-              <label className="block">
-                <div className="text-xs font-bold uppercase tracking-wide text-blue-700">
-                  현재 활성 테마
-                </div>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <span className="rounded-full border border-blue-200 bg-white px-2.5 py-0.5 text-[11px] font-bold text-blue-700">
-                    저장 대상
-                  </span>
-                  <span className="text-sm font-bold text-gray-800">
-                    {activeThemeName}
-                  </span>
-                </div>
-                <select
-                  value={draftRankPolicy.activeThemeId}
-                  onChange={(event) =>
-                    onThemeChange(
-                      event.target.value === "world_nobility"
-                        ? "world_nobility"
-                        : "korean_golpum",
-                    )
-                  }
-                  className={`${selectClassName} mt-3 border-blue-200`}
-                  disabled={!canManage}
-                >
-                  <option value="korean_golpum">
-                    {POINT_RANK_THEME_DETAIL_LABELS.korean_golpum}
-                  </option>
-                  <option value="world_nobility">
-                    {POINT_RANK_THEME_DETAIL_LABELS.world_nobility}
-                  </option>
-                </select>
-              </label>
+          <div className="flex flex-col gap-3 xl:min-w-[300px] xl:items-end">
+            <button
+              type="button"
+              onClick={onSave}
+              disabled={!canManage}
+              className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+            >
+              테마 설정 저장
+            </button>
+            <div
+              className={[
+                "rounded-xl border px-4 py-3 text-sm",
+                hasUnsavedChanges
+                  ? "border-amber-200 bg-amber-50 text-amber-800"
+                  : "border-gray-200 bg-gray-50 text-gray-600",
+              ].join(" ")}
+            >
+              {hasUnsavedChanges
+                ? "테마 변경사항이 저장 대기 중입니다."
+                : "저장된 테마 설정과 같습니다."}
             </div>
-            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3">
-              <div className="text-[11px] font-bold uppercase tracking-wide text-gray-500">
-                비교 미리보기
+            {saveFeedbackMessage && saveFeedbackTone && (
+              <div
+                className={`rounded-xl px-4 py-3 text-sm ${feedbackToneClassName[saveFeedbackTone]}`}
+              >
+                {saveFeedbackMessage}
               </div>
-              <div className="mt-1 text-sm font-bold text-gray-700">
-                {previewThemeName}
+            )}
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-2 lg:grid-cols-[minmax(0,1fr)_200px]">
+          <div className="rounded-2xl border border-blue-200 bg-blue-50/70 p-4">
+            <label className="block">
+              <div className="text-xs font-bold uppercase tracking-wide text-blue-700">
+                현재 활성 테마
               </div>
-              <div className="mt-1 text-xs text-gray-500">보조 비교용</div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className="rounded-full border border-blue-200 bg-white px-2.5 py-0.5 text-[11px] font-bold text-blue-700">
+                  저장 대상
+                </span>
+                <span className="text-sm font-bold text-gray-800">
+                  {activeThemeName}
+                </span>
+              </div>
+              <select
+                value={draftRankPolicy.activeThemeId}
+                onChange={(event) =>
+                  onThemeChange(
+                    event.target.value === "world_nobility"
+                      ? "world_nobility"
+                      : "korean_golpum",
+                  )
+                }
+                className={`${selectClassName} mt-3 border-blue-200`}
+                disabled={!canManage}
+              >
+                <option value="korean_golpum">
+                  {POINT_RANK_THEME_DETAIL_LABELS.korean_golpum}
+                </option>
+                <option value="world_nobility">
+                  {POINT_RANK_THEME_DETAIL_LABELS.world_nobility}
+                </option>
+              </select>
+            </label>
+          </div>
+          <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3">
+            <div className="text-[11px] font-bold uppercase tracking-wide text-gray-500">
+              비교 미리보기
             </div>
+            <div className="mt-1 text-sm font-bold text-gray-700">
+              {previewThemeName}
+            </div>
+            <div className="mt-1 text-xs text-gray-500">보조 비교용</div>
           </div>
         </div>
       </div>
