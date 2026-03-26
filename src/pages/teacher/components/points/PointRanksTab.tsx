@@ -315,19 +315,22 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
         themeId: PointRankThemeId;
         label: string;
         name: string;
-        tone: string;
+        chipTone: string;
+        isPrimary: boolean;
     }> = [
         {
             themeId: draftRankPolicy.activeThemeId,
             label: '현재 활성 테마',
             name: activeThemeName,
-            tone: 'bg-blue-50 text-blue-700 border-blue-200',
+            chipTone: 'border-blue-200 bg-blue-50 text-blue-700',
+            isPrimary: true,
         },
         {
             themeId: previewThemeId,
-            label: '비교 미리보기 테마',
+            label: '비교 미리보기',
             name: previewThemeName,
-            tone: 'bg-amber-50 text-amber-700 border-amber-200',
+            chipTone: 'border-gray-200 bg-gray-100 text-gray-600',
+            isPrimary: false,
         },
     ];
 
@@ -341,7 +344,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
                     <div>
                         <h2 className="text-lg font-bold text-gray-900">등급 설정</h2>
                         <p className="mt-1 max-w-3xl text-sm leading-6 text-gray-500">
-                            현재 활성 테마 기준으로 등급, 이모지 모음, 축하 팝업을 함께 정리합니다.
+                            현재 활성 테마 기준으로 등급과 이모지를 정리합니다.
                         </p>
                     </div>
                 </div>
@@ -374,77 +377,130 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
             <section className="space-y-4">
                 <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
                     <div>
-                        <h3 className="text-base font-bold text-gray-900">한국사 / 세계사 비교 카드</h3>
+                        <h3 className="text-base font-bold text-gray-900">테마 미리보기</h3>
                         <p className="mt-1 text-sm text-gray-500">
-                            현재 선택한 활성 테마와 비교 미리보기를 분리해서 보여 줍니다.
+                            저장 대상은 현재 활성 테마입니다.
                         </p>
                     </div>
-                    <div className="grid gap-2 md:min-w-[320px] md:grid-cols-2">
-                        <label className="block">
-                            <div className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">현재 활성 테마</div>
-                            <select
-                                value={draftRankPolicy.activeThemeId}
-                                onChange={(event) => setActiveThemeId(event.target.value === 'world_nobility' ? 'world_nobility' : 'korean_golpum')}
-                                className={selectClassName}
-                                disabled={!canManage}
-                            >
-                                <option value="korean_golpum">{POINT_RANK_THEME_DETAIL_LABELS.korean_golpum}</option>
-                                <option value="world_nobility">{POINT_RANK_THEME_DETAIL_LABELS.world_nobility}</option>
-                            </select>
-                        </label>
-                        <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
-                            <div className="text-xs font-bold uppercase tracking-wide text-gray-500">비교 미리보기</div>
-                            <div className="mt-1 text-sm font-bold text-gray-800">{previewThemeName}</div>
+                    <div className="grid gap-2 md:min-w-[360px] md:grid-cols-[minmax(0,1fr)_200px]">
+                        <div className="rounded-2xl border border-blue-200 bg-blue-50/70 p-4">
+                            <label className="block">
+                                <div className="text-xs font-bold uppercase tracking-wide text-blue-700">현재 활성 테마</div>
+                                <div className="mt-2 flex flex-wrap items-center gap-2">
+                                    <span className="rounded-full border border-blue-200 bg-white px-2.5 py-0.5 text-[11px] font-bold text-blue-700">
+                                        저장 대상
+                                    </span>
+                                    <span className="text-sm font-bold text-gray-800">{activeThemeName}</span>
+                                </div>
+                                <select
+                                    value={draftRankPolicy.activeThemeId}
+                                    onChange={(event) => setActiveThemeId(event.target.value === 'world_nobility' ? 'world_nobility' : 'korean_golpum')}
+                                    className={`${selectClassName} mt-3 border-blue-200`}
+                                    disabled={!canManage}
+                                >
+                                    <option value="korean_golpum">{POINT_RANK_THEME_DETAIL_LABELS.korean_golpum}</option>
+                                    <option value="world_nobility">{POINT_RANK_THEME_DETAIL_LABELS.world_nobility}</option>
+                                </select>
+                            </label>
+                        </div>
+                        <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3">
+                            <div className="text-[11px] font-bold uppercase tracking-wide text-gray-500">비교 미리보기</div>
+                            <div className="mt-1 text-sm font-bold text-gray-700">{previewThemeName}</div>
+                            <div className="mt-1 text-xs text-gray-500">보조 비교용</div>
                         </div>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.85fr)]">
                     {compareThemes.map((theme) => (
-                        <div key={theme.themeId} className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
-                            <div className="flex items-start justify-between gap-3">
-                                <div>
-                                    <div className="text-xs font-bold uppercase tracking-wide text-gray-500">{theme.label}</div>
-                                    <h4 className="mt-1 text-lg font-bold text-gray-900">{theme.name}</h4>
-                                    <p className="mt-1 text-sm text-gray-500">
-                                        {theme.themeId === draftRankPolicy.activeThemeId
-                                            ? '이 카드의 설정이 저장 대상입니다.'
-                                            : '현재 설정을 그대로 옮겨 본 미리보기입니다.'}
-                                    </p>
+                        <article
+                            key={theme.themeId}
+                            className={[
+                                'border transition',
+                                theme.isPrimary
+                                    ? 'rounded-3xl border-blue-200 bg-gradient-to-br from-blue-50 via-white to-slate-50 p-6 shadow-[0_18px_40px_-32px_rgba(37,99,235,0.55)] ring-1 ring-blue-100'
+                                    : 'rounded-2xl border-gray-200 bg-gray-50/80 p-4',
+                            ].join(' ')}
+                        >
+                            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                                <div className="space-y-2">
+                                    <div
+                                        className={[
+                                            'inline-flex rounded-full border px-3 py-1 text-xs font-bold',
+                                            theme.isPrimary
+                                                ? 'border-blue-200 bg-white text-blue-700'
+                                                : 'border-gray-200 bg-white text-gray-600',
+                                        ].join(' ')}
+                                    >
+                                        {theme.isPrimary ? '현재 저장 대상' : '비교용 미리보기'}
+                                    </div>
+                                    <div>
+                                        <div className="text-xs font-bold uppercase tracking-wide text-gray-500">{theme.label}</div>
+                                        <h4 className={theme.isPrimary ? 'mt-1 text-xl font-bold text-gray-900' : 'mt-1 text-lg font-bold text-gray-800'}>
+                                            {theme.name}
+                                        </h4>
+                                        <p className={theme.isPrimary ? 'mt-2 text-sm text-blue-700' : 'mt-2 text-sm text-gray-500'}>
+                                            {theme.isPrimary
+                                                ? '저장 버튼을 누르면 이 테마 설정이 학생 화면에 반영됩니다.'
+                                                : '이름과 등급 감각만 가볍게 비교합니다.'}
+                                        </p>
+                                    </div>
                                 </div>
-                                <div className={`rounded-full border px-3 py-1 text-xs font-bold ${theme.tone}`}>
+                                <div className={`rounded-full border px-3 py-1 text-xs font-bold ${theme.chipTone}`}>
                                     {POINT_RANK_THEME_LABELS[theme.themeId]}
                                 </div>
                             </div>
 
-                            <div className="mt-4 space-y-3">
+                            {theme.isPrimary && (
+                                <div className="mt-4 flex flex-wrap gap-2">
+                                    <div className="rounded-full border border-blue-100 bg-white px-3 py-1 text-xs font-bold text-blue-700">
+                                        등급 {draftRankPolicy.tiers.length}개
+                                    </div>
+                                    <div className="rounded-full border border-blue-100 bg-white px-3 py-1 text-xs font-bold text-blue-700">
+                                        활성 이모지 {enabledEmojiCount}개
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className={theme.isPrimary ? 'mt-4 space-y-3' : 'mt-4 space-y-2.5'}>
                                 {draftRankPolicy.tiers.map((tier) => {
                                     const previewRank = getTierPreview(tier, theme.themeId);
 
                                     return (
-                                        <div key={`${theme.themeId}-${tier.code}`} className="rounded-xl border border-gray-200 bg-white px-4 py-3">
+                                        <div
+                                            key={`${theme.themeId}-${tier.code}`}
+                                            className={
+                                                theme.isPrimary
+                                                    ? 'rounded-2xl border border-blue-100 bg-white/95 px-4 py-3 shadow-sm'
+                                                    : 'rounded-xl border border-gray-200 bg-white/70 px-3 py-2.5'
+                                            }
+                                        >
                                             <div className="flex flex-wrap items-center gap-2">
                                                 <PointRankBadge rank={previewRank} size="sm" showTheme />
                                                 <span className="text-xs font-bold uppercase tracking-wide text-gray-500">{tier.code}</span>
                                             </div>
-                                            <div className="mt-2 text-sm text-gray-600">기준 포인트 {tier.minPoints}점 이상</div>
-                                            <div className="mt-1 text-xs leading-5 text-gray-500">{previewRank?.description || '등급 설명이 표시됩니다.'}</div>
+                                            <div className={theme.isPrimary ? 'mt-2 text-sm text-gray-600' : 'mt-2 text-xs font-medium text-gray-500'}>
+                                                기준 포인트 {tier.minPoints}점 이상
+                                            </div>
+                                            <div className={theme.isPrimary ? 'mt-1 text-xs leading-5 text-gray-500' : 'mt-1 text-[11px] leading-5 text-gray-500'}>
+                                                {previewRank?.description || '등급 설명이 표시됩니다.'}
+                                            </div>
                                         </div>
                                     );
                                 })}
                             </div>
-                        </div>
+                        </article>
                     ))}
                 </div>
             </section>
 
-            <section className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.9fr)]">
+            <section className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(340px,0.95fr)]">
                 <div className="space-y-4 rounded-2xl border border-gray-200 bg-white p-5">
                     <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                         <div>
                             <h3 className="text-base font-bold text-gray-900">등급 설정</h3>
                             <p className="mt-1 text-sm text-gray-500">
-                                등급을 선택해 상세 설정을 수정하세요. 허용 이모지는 오른쪽 패널에서 따로 관리합니다.
+                                등급을 선택해 수정하세요.
                             </p>
                         </div>
                         <button
@@ -532,9 +588,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
                                             className="border-t border-blue-100 bg-white px-4 py-4"
                                         >
                                             <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                                                <div className="text-xs leading-5 text-gray-500">
-                                                    이곳에서는 등급 정보만 수정하고, 이모지 해금은 옆 패널에서 정합니다.
-                                                </div>
+                                                <div className="text-xs leading-5 text-gray-500">이모지는 오른쪽에서 설정합니다.</div>
                                                 <button
                                                     type="button"
                                                     onClick={() => handleRemoveTier(tier.code)}
@@ -622,13 +676,11 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
                 <aside className="rounded-2xl border border-gray-200 bg-white p-5 lg:sticky lg:top-6 lg:max-h-[calc(100vh-9rem)] lg:overflow-y-auto">
                     <div className="space-y-2 border-b border-gray-200 pb-4">
                         <h3 className="text-base font-bold text-gray-900">등급별 이모지</h3>
-                        <p className="text-sm text-gray-500">
-                            선택한 등급에서 열릴 이모지를 고릅니다. 저장해야 학생 화면에 반영됩니다.
-                        </p>
+                        <p className="text-sm text-gray-500">선택한 등급의 이모지를 고릅니다.</p>
                     </div>
 
                     {!selectedTier && (
-                        <div className="flex min-h-[240px] items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-6 py-10 text-center text-sm leading-6 text-gray-500">
+                        <div className="flex min-h-[180px] md:min-h-[220px] items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-6 py-10 text-center text-sm leading-6 text-gray-500">
                             왼쪽에서 등급을 선택하면 허용 이모지를 편집할 수 있습니다.
                         </div>
                     )}
@@ -654,7 +706,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3 lg:grid-cols-2 2xl:grid-cols-3">
+                            <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-[repeat(auto-fit,minmax(7.5rem,1fr))]">
                                 <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
                                     <div className="text-[11px] font-bold uppercase tracking-wide text-gray-400">선택 수</div>
                                     <div className="mt-1 text-lg font-bold text-gray-900">{selectedTier.allowedEmojiIds?.length || 0}</div>
@@ -663,17 +715,13 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
                                     <div className="text-[11px] font-bold uppercase tracking-wide text-gray-400">활성 이모지</div>
                                     <div className="mt-1 text-lg font-bold text-gray-900">{enabledEmojiCount}</div>
                                 </div>
-                                <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
-                                    <div className="text-[11px] font-bold uppercase tracking-wide text-gray-400">현재 테마</div>
-                                    <div className="mt-1 text-sm font-bold text-gray-900">{POINT_RANK_THEME_LABELS[draftRankPolicy.activeThemeId]}</div>
-                                </div>
                             </div>
 
                             <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-xs leading-5 text-gray-500">
-                                이곳에서는 등급별 해금만 정합니다. 비활성화된 이모지는 회색으로 표시되며 선택할 수 없습니다.
+                                비활성 이모지는 선택할 수 없습니다.
                             </div>
 
-                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-2 2xl:grid-cols-3">
+                            <div className="grid grid-cols-2 gap-2 md:grid-cols-[repeat(auto-fit,minmax(8rem,1fr))]">
                                 {draftRankPolicy.emojiRegistry.map((entry) => {
                                     const checked = (selectedTier.allowedEmojiIds || []).includes(entry.id);
                                     const disabled = !canManage || entry.enabled === false;
@@ -712,10 +760,10 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
                                             <div className="mt-2 text-sm font-bold">{entry.label}</div>
                                             <div className="mt-2 text-[11px] text-gray-500">
                                                 {checked
-                                                    ? '현재 선택한 등급에서 사용 중'
+                                                    ? '배정: 현재 등급'
                                                     : assignedTier
-                                                        ? `${assignedTierLabel} 등급에서 사용 중`
-                                                        : '아직 등급이 정해지지 않았습니다.'}
+                                                        ? `배정: ${assignedTierLabel}`
+                                                        : '미지정'}
                                             </div>
                                         </button>
                                     );
@@ -724,8 +772,8 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
 
                             <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-xs leading-5 text-gray-500">
                                 {draftRankPolicy.tiers[0]?.code === selectedTier.code
-                                    ? '첫 번째 등급에는 기본 이모지가 자동으로 포함됩니다.'
-                                    : '상위 등급과의 이모지 중복은 자동으로 정리됩니다.'}
+                                    ? '첫 등급에는 기본 이모지가 자동 포함됩니다.'
+                                    : '중복 선택은 자동으로 정리됩니다.'}
                             </div>
                         </div>
                     )}
@@ -736,16 +784,14 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div>
                         <h3 className="text-base font-bold text-gray-900">이모지 모음</h3>
-                        <p className="mt-1 text-sm text-gray-500">
-                            이곳에서는 이모지만 추가하고 정리합니다. 어느 등급에서 열릴지는 등급별 이모지에서 정합니다.
-                        </p>
+                        <p className="mt-1 text-sm text-gray-500">이모지만 빠르게 추가·수정합니다.</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                         <div className="rounded-full border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-bold text-gray-600">
-                            등록 {draftRankPolicy.emojiRegistry.length}개
+                            총 {draftRankPolicy.emojiRegistry.length}개 · 활성 {enabledEmojiCount}개
                         </div>
-                        <div className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">
-                            사용 중 {enabledEmojiCount}개
+                        <div className="rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700">
+                            저장 후 반영
                         </div>
                         <button
                             type="button"
@@ -758,11 +804,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
                     </div>
                 </div>
 
-                <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-                    저장 전까지는 추가, 수정, 비활성화 내용이 학생 화면에 반영되지 않습니다.
-                </div>
-
-                <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-7">
                     {draftRankPolicy.emojiRegistry.map((entry, entryIndex) => {
                         const assignedTier = draftRankPolicy.tiers.find((tier) => (
                             (tier.allowedEmojiIds || []).includes(entry.id)
@@ -773,77 +815,76 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
                             <article
                                 key={entry.id}
                                 className={[
-                                    'rounded-2xl border p-4 transition',
-                                    entry.enabled === false ? 'border-gray-200 bg-gray-50 opacity-80' : 'border-gray-200 bg-white',
+                                    'flex min-h-[160px] flex-col rounded-2xl border p-3 transition',
+                                    entry.enabled === false
+                                        ? 'border-gray-200 bg-gray-50/90'
+                                        : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm',
                                 ].join(' ')}
                             >
-                                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                                    <div className="flex min-w-0 items-start gap-3">
-                                        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-gray-200 bg-gray-50 text-2xl">
-                                            {entry.emoji}
-                                        </div>
-                                        <div className="min-w-0">
-                                            <div className="flex flex-wrap items-center gap-2">
-                                                <span className={[
-                                                    'rounded-full border px-2 py-0.5 text-[11px] font-bold',
-                                                    entry.enabled === false
-                                                        ? 'border-gray-200 bg-gray-100 text-gray-500'
-                                                        : 'border-emerald-200 bg-emerald-50 text-emerald-700',
-                                                ].join(' ')}>
-                                                    {entry.enabled === false ? '비활성화' : '사용 중'}
-                                                </span>
-                                                <span className="rounded-full border border-blue-100 bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-blue-700">
-                                                    {assignedTierLabel}
-                                                </span>
-                                            </div>
-                                            <p className="mt-2 text-sm text-gray-600">
-                                                {assignedTier
-                                                    ? `${assignedTierLabel} 등급에서 열리도록 설정되어 있습니다.`
-                                                    : '아직 어느 등급에서도 열리지 않습니다.'}
-                                            </p>
-                                        </div>
-                                    </div>
+                                <div className="flex items-start justify-between gap-2">
+                                    <span className={[
+                                        'inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold',
+                                        entry.enabled === false
+                                            ? 'border-gray-200 bg-white text-gray-500'
+                                            : 'border-emerald-200 bg-emerald-50 text-emerald-700',
+                                    ].join(' ')}>
+                                        {entry.enabled === false ? '비활성' : '사용 중'}
+                                    </span>
+                                    <span className={[
+                                        'rounded-full border px-2 py-0.5 text-[10px] font-bold',
+                                        assignedTier
+                                            ? 'border-blue-100 bg-blue-50 text-blue-700'
+                                            : 'border-gray-200 bg-gray-50 text-gray-500',
+                                    ].join(' ')}>
+                                        {assignedTier ? assignedTierLabel : '미지정'}
+                                    </span>
+                                </div>
 
-                                    <button
-                                        type="button"
-                                        onClick={() => updateEmojiRegistryEntry(entry.id, (current) => ({
-                                            ...current,
-                                            enabled: current.enabled === false,
-                                        }))}
+                                <label className="mt-3 flex flex-1 items-center justify-center">
+                                    <span className="sr-only">{entry.label} 이모지</span>
+                                    <input
+                                        value={entry.emoji}
+                                        onChange={(event) => {
+                                            const nextEmoji = event.target.value;
+                                            updateEmojiRegistryEntry(entry.id, (current) => ({
+                                                ...current,
+                                                emoji: nextEmoji,
+                                                value: nextEmoji,
+                                                label: buildEmojiCollectionLabel(nextEmoji, entryIndex),
+                                                legacyValues: Array.from(new Set([
+                                                    ...(current.legacyValues || []),
+                                                    current.emoji && current.emoji !== nextEmoji ? current.emoji : '',
+                                                ].filter(Boolean))),
+                                            }));
+                                        }}
+                                        className={[
+                                            'h-20 w-full rounded-2xl border text-center text-4xl leading-none transition',
+                                            entry.enabled === false
+                                                ? 'border-gray-200 bg-white text-gray-400'
+                                                : 'border-gray-200 bg-gray-50 text-gray-900 focus:border-blue-200 focus:bg-white',
+                                        ].join(' ')}
                                         disabled={!canManage}
-                                        className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-gray-50 px-4 py-2 text-sm font-bold text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
-                                    >
-                                        {entry.enabled === false ? '다시 사용' : '비활성화'}
-                                    </button>
-                                </div>
+                                        aria-label={`${entry.label} 이모지`}
+                                    />
+                                </label>
 
-                                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-[88px_minmax(0,1fr)]">
-                                    <label className="block">
-                                        <div className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">이모지</div>
-                                        <input
-                                            value={entry.emoji}
-                                            onChange={(event) => {
-                                                const nextEmoji = event.target.value;
-                                                updateEmojiRegistryEntry(entry.id, (current) => ({
-                                                    ...current,
-                                                    emoji: nextEmoji,
-                                                    value: nextEmoji,
-                                                    label: buildEmojiCollectionLabel(nextEmoji, entryIndex),
-                                                    legacyValues: Array.from(new Set([
-                                                        ...(current.legacyValues || []),
-                                                        current.emoji && current.emoji !== nextEmoji ? current.emoji : '',
-                                                    ].filter(Boolean))),
-                                                }));
-                                            }}
-                                            className={`${inputClassName} text-center text-2xl leading-none`}
-                                            disabled={!canManage}
-                                        />
-                                    </label>
-
-                                    <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4 text-sm leading-6 text-gray-500">
-                                        표시명과 내부 정렬값은 자동으로 관리합니다. 등급 배정은 등급별 이모지에서 조정합니다.
-                                    </div>
-                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => updateEmojiRegistryEntry(entry.id, (current) => ({
+                                        ...current,
+                                        enabled: current.enabled === false,
+                                    }))}
+                                    disabled={!canManage}
+                                    className={[
+                                        'mt-3 inline-flex w-full items-center justify-center rounded-xl border px-3 py-2 text-xs font-bold transition',
+                                        entry.enabled === false
+                                            ? 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                                            : 'border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100',
+                                        'disabled:cursor-not-allowed disabled:opacity-60',
+                                    ].join(' ')}
+                                >
+                                    {entry.enabled === false ? '다시 사용' : '비활성화'}
+                                </button>
                             </article>
                         );
                     })}
