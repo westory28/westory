@@ -13,6 +13,10 @@ const parseTierIndex = (tierCode: PointRankTierCode) => {
 
 const normalizeEmojiText = (value: unknown) => String(value || '').trim();
 
+export const normalizeProfileEmojiValue = (value: unknown) => (
+    normalizeEmojiText(value).normalize('NFC')
+);
+
 const normalizeTierCode = (value: unknown): PointRankTierCode | null => {
     const raw = String(value || '').trim();
     return /^tier_\d+$/.test(raw) ? raw as PointRankTierCode : null;
@@ -214,6 +218,21 @@ export const getProfileEmojiValueById = (
     emojiId: string,
     registry: PointRankEmojiRegistryEntry[] = DEFAULT_PROFILE_EMOJI_REGISTRY,
 ) => getProfileEmojiEntryById(emojiId, registry)?.emoji || '';
+
+export const findDuplicateProfileEmojiEntry = (
+    registry: PointRankEmojiRegistryEntry[] = DEFAULT_PROFILE_EMOJI_REGISTRY,
+    emoji: string,
+    options?: { excludeId?: string | null },
+) => {
+    const normalizedEmoji = normalizeProfileEmojiValue(emoji);
+    if (!normalizedEmoji) return null;
+    const excludedId = String(options?.excludeId || '').trim();
+
+    return registry.find((entry) => (
+        entry.id !== excludedId
+        && normalizeProfileEmojiValue(entry.emoji) === normalizedEmoji
+    )) || null;
+};
 
 export const getDefaultProfileEmojiValue = (registry: PointRankEmojiRegistryEntry[] = DEFAULT_PROFILE_EMOJI_REGISTRY) => {
     const defaultEntry = getProfileEmojiEntryById(DEFAULT_PROFILE_EMOJI_ID, registry)
