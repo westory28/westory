@@ -179,7 +179,7 @@ const RankEmojiCollectionPanel: React.FC<RankEmojiCollectionPanelProps> = ({
       )}
 
       <div className="rounded-[1.6rem] border border-gray-200 bg-white p-3 sm:p-4">
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
           {draftRankPolicy.emojiRegistry.map((entry, entryIndex) => {
             const assignedTier =
               draftRankPolicy.tiers.find((tier) =>
