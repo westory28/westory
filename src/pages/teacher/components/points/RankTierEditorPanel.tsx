@@ -14,9 +14,11 @@ import type {
 } from "../../../../types";
 
 const inputClassName =
-  "w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm";
+  "w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm transition focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-50";
 const selectClassName =
-  "w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm";
+  "w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm transition focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-50";
+const fieldCardClassName =
+  "block rounded-2xl border border-gray-200 bg-gray-50/80 p-4";
 
 const normalizeText = (value: unknown) => String(value || "").trim();
 const clampNumber = (value: unknown, fallback = 0) => {
@@ -69,6 +71,8 @@ const feedbackToneClassName: Record<"success" | "error" | "warning", string> = {
   error: "border border-red-200 bg-red-50 text-red-700",
   warning: "border border-amber-200 bg-amber-50 text-amber-800",
 };
+const tierSummaryChipClassName =
+  "inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-600 whitespace-nowrap";
 
 const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
   canManage,
@@ -96,15 +100,15 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
   getTierPreview,
 }) => (
   <section className="space-y-6">
-    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="flex flex-col gap-4 p-5 sm:p-6 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h2 className="text-lg font-bold text-gray-900">등급 설정</h2>
           <p className="mt-1 text-sm text-gray-500">
             기준 포인트, 이름, 약칭, 허용 이모지와 축하 팝업을 이 탭에서 저장합니다.
           </p>
         </div>
-        <div className="flex flex-col gap-3 xl:min-w-[300px] xl:items-end">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center lg:min-w-[320px] lg:flex-col lg:items-end">
           <button
             type="button"
             onClick={onSave}
@@ -137,8 +141,8 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
     </div>
 
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(340px,0.95fr)]">
-      <div className="space-y-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-3 border-b border-gray-100 p-5 sm:flex-row sm:items-start sm:justify-between sm:p-6">
           <div>
             <h3 className="text-lg font-bold text-gray-900">등급 목록</h3>
             <p className="mt-1 text-sm text-gray-500">
@@ -155,269 +159,279 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
           </button>
         </div>
 
-        {validationError && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
-            {validationError}
+        <div className="space-y-4 p-5 sm:p-6">
+          {validationError && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
+              {validationError}
+            </div>
+          )}
+
+          <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+            카드 순서는 편집 중 그대로 유지되고, 기준 포인트 정렬은 저장할 때만
+            정리됩니다.
           </div>
-        )}
 
-        <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-          카드 순서는 편집 중 그대로 유지되고, 기준 포인트 정렬은 저장할 때만
-          정리됩니다.
-        </div>
+          <div className="space-y-3">
+            {draftRankPolicy.tiers.map((tier, tierIndex) => {
+              const tierPreview = getTierPreview(tier);
+              const isOpen = selectedTierCode === tier.code;
+              const canDelete = draftRankPolicy.tiers.length > 1;
+              const badgeStyleLabel =
+                POINT_RANK_BADGE_STYLE_OPTIONS.find(
+                  (option) => option.value === (tier.badgeStyleToken || "stone"),
+                )?.label || String(tier.badgeStyleToken || "stone");
 
-        <div className="space-y-3">
-          {draftRankPolicy.tiers.map((tier, tierIndex) => {
-            const tierPreview = getTierPreview(tier);
-            const isOpen = selectedTierCode === tier.code;
-            const canDelete = draftRankPolicy.tiers.length > 1;
-            const badgeStyleLabel =
-              POINT_RANK_BADGE_STYLE_OPTIONS.find(
-                (option) => option.value === (tier.badgeStyleToken || "stone"),
-              )?.label || String(tier.badgeStyleToken || "stone");
-
-            return (
-              <article
-                key={tier.code}
-                className={[
-                  "overflow-hidden rounded-2xl border transition",
-                  isOpen
-                    ? "border-blue-200 bg-blue-50/40"
-                    : "border-gray-200 bg-gray-50",
-                ].join(" ")}
-              >
-                <button
-                  type="button"
-                  onClick={() => onSelectTier(tier.code)}
-                  aria-expanded={isOpen}
-                  aria-controls={`point-rank-tier-panel-${tier.code}`}
-                  className="flex w-full flex-col gap-3 px-4 py-4 text-left transition hover:bg-white/70"
+              return (
+                <article
+                  key={tier.code}
+                  className={[
+                    "overflow-hidden rounded-2xl border transition",
+                    isOpen
+                      ? "border-blue-200 bg-blue-50/40 ring-1 ring-blue-100"
+                      : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm",
+                  ].join(" ")}
                 >
-                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                    <div className="min-w-0 space-y-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <PointRankBadge
-                          rank={tierPreview}
-                          size="sm"
-                          showTheme
-                        />
-                        <span className="text-xs font-bold uppercase tracking-wide text-gray-500">
-                          {tier.code}
-                        </span>
-                        {isOpen && (
-                          <span className="rounded-full border border-blue-200 bg-blue-100 px-2 py-0.5 text-[11px] font-bold text-blue-700">
-                            편집 중
-                          </span>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-1 gap-2 text-sm text-gray-600 sm:grid-cols-2 xl:grid-cols-4">
-                        <div className="rounded-xl border border-gray-200 bg-white px-3 py-2">
-                          <div className="text-[11px] font-bold uppercase tracking-wide text-gray-400">
-                            등급명
-                          </div>
-                          <div className="mt-1 font-bold text-gray-800">
-                            {tierPreview?.label || `등급 ${tierIndex + 1}`}
-                          </div>
-                        </div>
-                        <div className="rounded-xl border border-gray-200 bg-white px-3 py-2">
-                          <div className="text-[11px] font-bold uppercase tracking-wide text-gray-400">
-                            기준 포인트
-                          </div>
-                          <div className="mt-1 font-bold text-gray-800">
-                            {tier.minPoints}점 이상
-                          </div>
-                        </div>
-                        <div className="rounded-xl border border-gray-200 bg-white px-3 py-2">
-                          <div className="text-[11px] font-bold uppercase tracking-wide text-gray-400">
-                            허용 이모지
-                          </div>
-                          <div className="mt-1 font-bold text-gray-800">
-                            {tier.allowedEmojiIds?.length || 0}개 선택
-                          </div>
-                        </div>
-                        <div className="rounded-xl border border-gray-200 bg-white px-3 py-2">
-                          <div className="text-[11px] font-bold uppercase tracking-wide text-gray-400">
-                            배지 스타일
-                          </div>
-                          <div className="mt-1 font-bold text-gray-800">
-                            {badgeStyleLabel}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-bold text-gray-600">
-                      {isOpen ? "접기" : "열기"}
-                    </div>
-                  </div>
-                </button>
-
-                {isOpen && (
-                  <div
-                    id={`point-rank-tier-panel-${tier.code}`}
-                    className="border-t border-blue-100 bg-white px-4 py-4"
+                  <button
+                    type="button"
+                    onClick={() => onSelectTier(tier.code)}
+                    aria-expanded={isOpen}
+                    aria-controls={`point-rank-tier-panel-${tier.code}`}
+                    className="flex w-full flex-col gap-4 px-5 py-5 text-left transition sm:px-6"
                   >
-                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                      <div className="text-xs leading-5 text-gray-500">
-                        등급 허용 이모지는 오른쪽에서 설정합니다.
+                    <div className="flex flex-wrap items-center gap-2">
+                      <PointRankBadge rank={tierPreview} size="sm" showTheme />
+                      <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-gray-500">
+                        {tier.code}
+                      </span>
+                      {isOpen && (
+                        <span className="rounded-full border border-blue-200 bg-blue-100 px-2.5 py-1 text-[11px] font-bold text-blue-700">
+                          편집 중
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="min-w-0">
+                        <div className="text-base font-bold text-gray-900 sm:text-lg">
+                          {tierPreview?.label || `등급 ${tierIndex + 1}`}
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <span className={tierSummaryChipClassName}>
+                            기준 포인트
+                            <span className="ml-1 text-gray-900">
+                              {tier.minPoints}점
+                            </span>
+                          </span>
+                          <span className={tierSummaryChipClassName}>
+                            허용 이모지
+                            <span className="ml-1 text-gray-900">
+                              {tier.allowedEmojiIds?.length || 0}개
+                            </span>
+                          </span>
+                          <span className={tierSummaryChipClassName}>
+                            배지
+                            <span className="ml-1 text-gray-900">
+                              {badgeStyleLabel}
+                            </span>
+                          </span>
+                          {tierPreview?.shortLabel && (
+                            <span className={tierSummaryChipClassName}>
+                              약칭
+                              <span className="ml-1 text-gray-900">
+                                {tierPreview.shortLabel}
+                              </span>
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => onRemoveTier(tier.code)}
-                        disabled={!canManage || !canDelete}
-                        className="inline-flex items-center justify-center rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+
+                      <div
+                        className={[
+                          "inline-flex items-center gap-2 self-start rounded-full border px-3 py-1.5 text-xs font-bold transition",
+                          isOpen
+                            ? "border-blue-200 bg-blue-50 text-blue-700"
+                            : "border-gray-200 bg-white text-gray-600",
+                        ].join(" ")}
                       >
-                        {POINT_RANK_FIELD_LABELS.deleteTier}
-                      </button>
+                        <span>{isOpen ? "접기" : "세부 설정"}</span>
+                        <i
+                          className={`fas ${
+                            isOpen ? "fa-chevron-up" : "fa-chevron-right"
+                          } text-[10px]`}
+                          aria-hidden="true"
+                        ></i>
+                      </div>
                     </div>
+                  </button>
 
-                    <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-                      <label className="block">
-                        <div className="mb-2 text-sm font-bold text-gray-700">
-                          {POINT_RANK_FIELD_LABELS.tierThreshold}
+                  {isOpen && (
+                    <div
+                      id={`point-rank-tier-panel-${tier.code}`}
+                      className="border-t border-blue-100 bg-white px-5 py-5 sm:px-6"
+                    >
+                      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div className="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                          허용 이모지는 오른쪽 패널에서 선택합니다.
                         </div>
-                        <input
-                          type="number"
-                          min="0"
-                          value={tier.minPoints}
-                          onChange={(event) =>
-                            onSetTierField(
-                              tier.code,
-                              "minPoints",
-                              clampNumber(event.target.value, 0),
-                            )
-                          }
-                          className={inputClassName}
-                          disabled={!canManage}
-                        />
-                        <div className="mt-2 text-xs leading-5 text-gray-500">
-                          {POINT_RANK_FIELD_HELPERS.tierThreshold}
-                        </div>
-                      </label>
-
-                      <label className="block">
-                        <div className="mb-2 text-sm font-bold text-gray-700">
-                          {POINT_RANK_FIELD_LABELS.badgeStyleToken}
-                        </div>
-                        <select
-                          value={tier.badgeStyleToken || "stone"}
-                          onChange={(event) =>
-                            onSetTierField(
-                              tier.code,
-                              "badgeStyleToken",
-                              normalizeText(event.target.value) || "stone",
-                            )
-                          }
-                          className={selectClassName}
-                          disabled={!canManage}
+                        <button
+                          type="button"
+                          onClick={() => onRemoveTier(tier.code)}
+                          disabled={!canManage || !canDelete}
+                          className="inline-flex items-center justify-center rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          {POINT_RANK_BADGE_STYLE_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                        <div className="mt-2 text-xs leading-5 text-gray-500">
-                          {POINT_RANK_FIELD_HELPERS.badgeStyleToken}
-                        </div>
-                      </label>
+                          {POINT_RANK_FIELD_LABELS.deleteTier}
+                        </button>
+                      </div>
 
-                      <label className="block">
+                      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                        <label className={fieldCardClassName}>
+                          <div className="mb-2 text-sm font-bold text-gray-700">
+                            {POINT_RANK_FIELD_LABELS.tierThreshold}
+                          </div>
+                          <input
+                            type="number"
+                            min="0"
+                            value={tier.minPoints}
+                            onChange={(event) =>
+                              onSetTierField(
+                                tier.code,
+                                "minPoints",
+                                clampNumber(event.target.value, 0),
+                              )
+                            }
+                            className={inputClassName}
+                            disabled={!canManage}
+                          />
+                          <div className="mt-2 text-xs leading-5 text-gray-500">
+                            {POINT_RANK_FIELD_HELPERS.tierThreshold}
+                          </div>
+                        </label>
+
+                        <label className={fieldCardClassName}>
+                          <div className="mb-2 text-sm font-bold text-gray-700">
+                            {POINT_RANK_FIELD_LABELS.badgeStyleToken}
+                          </div>
+                          <select
+                            value={tier.badgeStyleToken || "stone"}
+                            onChange={(event) =>
+                              onSetTierField(
+                                tier.code,
+                                "badgeStyleToken",
+                                normalizeText(event.target.value) || "stone",
+                              )
+                            }
+                            className={selectClassName}
+                            disabled={!canManage}
+                          >
+                            {POINT_RANK_BADGE_STYLE_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                          <div className="mt-2 text-xs leading-5 text-gray-500">
+                            {POINT_RANK_FIELD_HELPERS.badgeStyleToken}
+                          </div>
+                        </label>
+
+                        <label className={fieldCardClassName}>
+                          <div className="mb-2 text-sm font-bold text-gray-700">
+                            {POINT_RANK_FIELD_LABELS.tierLabel}
+                          </div>
+                          <input
+                            value={
+                              draftRankPolicy.themes?.[
+                                draftRankPolicy.activeThemeId
+                              ]?.tiers?.[tier.code]?.label || ""
+                            }
+                            onChange={(event) =>
+                              onSetActiveThemeTierField(
+                                tier.code,
+                                "label",
+                                event.target.value,
+                              )
+                            }
+                            placeholder={
+                              tierPreview?.label || `등급 ${tierIndex + 1}`
+                            }
+                            className={inputClassName}
+                            disabled={!canManage}
+                          />
+                          <div className="mt-2 text-xs leading-5 text-gray-500">
+                            {POINT_RANK_FIELD_HELPERS.tierLabel}
+                          </div>
+                        </label>
+
+                        <label className={fieldCardClassName}>
+                          <div className="mb-2 text-sm font-bold text-gray-700">
+                            {POINT_RANK_FIELD_LABELS.tierShortLabel}
+                          </div>
+                          <input
+                            value={
+                              draftRankPolicy.themes?.[
+                                draftRankPolicy.activeThemeId
+                              ]?.tiers?.[tier.code]?.shortLabel || ""
+                            }
+                            onChange={(event) =>
+                              onSetActiveThemeTierField(
+                                tier.code,
+                                "shortLabel",
+                                event.target.value,
+                              )
+                            }
+                            placeholder={
+                              tierPreview?.shortLabel ||
+                              tierPreview?.label ||
+                              `등급 ${tierIndex + 1}`
+                            }
+                            className={inputClassName}
+                            disabled={!canManage}
+                          />
+                          <div className="mt-2 text-xs leading-5 text-gray-500">
+                            {POINT_RANK_FIELD_HELPERS.tierShortLabel}
+                          </div>
+                        </label>
+                      </div>
+
+                      <label className={`${fieldCardClassName} mt-4`}>
                         <div className="mb-2 text-sm font-bold text-gray-700">
-                          {POINT_RANK_FIELD_LABELS.tierLabel}
+                          {POINT_RANK_FIELD_LABELS.tierDescription}
                         </div>
-                        <input
+                        <textarea
+                          rows={3}
                           value={
                             draftRankPolicy.themes?.[
                               draftRankPolicy.activeThemeId
-                            ]?.tiers?.[tier.code]?.label || ""
+                            ]?.tiers?.[tier.code]?.description || ""
                           }
                           onChange={(event) =>
                             onSetActiveThemeTierField(
                               tier.code,
-                              "label",
+                              "description",
                               event.target.value,
                             )
                           }
                           placeholder={
-                            tierPreview?.label || `등급 ${tierIndex + 1}`
+                            tierPreview?.description || "등급 설명을 입력하세요."
                           }
                           className={inputClassName}
                           disabled={!canManage}
                         />
                         <div className="mt-2 text-xs leading-5 text-gray-500">
-                          {POINT_RANK_FIELD_HELPERS.tierLabel}
-                        </div>
-                      </label>
-
-                      <label className="block">
-                        <div className="mb-2 text-sm font-bold text-gray-700">
-                          {POINT_RANK_FIELD_LABELS.tierShortLabel}
-                        </div>
-                        <input
-                          value={
-                            draftRankPolicy.themes?.[
-                              draftRankPolicy.activeThemeId
-                            ]?.tiers?.[tier.code]?.shortLabel || ""
-                          }
-                          onChange={(event) =>
-                            onSetActiveThemeTierField(
-                              tier.code,
-                              "shortLabel",
-                              event.target.value,
-                            )
-                          }
-                          placeholder={
-                            tierPreview?.shortLabel ||
-                            tierPreview?.label ||
-                            `등급 ${tierIndex + 1}`
-                          }
-                          className={inputClassName}
-                          disabled={!canManage}
-                        />
-                        <div className="mt-2 text-xs leading-5 text-gray-500">
-                          {POINT_RANK_FIELD_HELPERS.tierShortLabel}
+                          {POINT_RANK_FIELD_HELPERS.tierDescription}
                         </div>
                       </label>
                     </div>
-
-                    <label className="mt-4 block">
-                      <div className="mb-2 text-sm font-bold text-gray-700">
-                        {POINT_RANK_FIELD_LABELS.tierDescription}
-                      </div>
-                      <textarea
-                        rows={3}
-                        value={
-                          draftRankPolicy.themes?.[
-                            draftRankPolicy.activeThemeId
-                          ]?.tiers?.[tier.code]?.description || ""
-                        }
-                        onChange={(event) =>
-                          onSetActiveThemeTierField(
-                            tier.code,
-                            "description",
-                            event.target.value,
-                          )
-                        }
-                        placeholder={
-                          tierPreview?.description || "등급 설명을 입력하세요."
-                        }
-                        className={inputClassName}
-                        disabled={!canManage}
-                      />
-                      <div className="mt-2 text-xs leading-5 text-gray-500">
-                        {POINT_RANK_FIELD_HELPERS.tierDescription}
-                      </div>
-                    </label>
-                  </div>
-                )}
-              </article>
-            );
-          })}
+                  )}
+                </article>
+              );
+            })}
+          </div>
         </div>
       </div>
 
-      <aside className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm xl:sticky xl:top-6 xl:max-h-[calc(100vh-8rem)] xl:overflow-y-auto">
-        <div className="space-y-2 border-b border-gray-200 pb-4">
+      <aside className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm xl:sticky xl:top-8 xl:max-h-[calc(100vh-8rem)] xl:overflow-y-auto">
+        <div className="space-y-2 border-b border-gray-200 px-5 py-5 sm:px-6">
           <h3 className="text-base font-bold text-gray-900">등급별 이모지</h3>
           <p className="text-sm text-gray-500">
             선택한 등급에 허용할 이모지를 바로 고릅니다.
@@ -425,13 +439,15 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
         </div>
 
         {!selectedTier && (
-          <div className="flex min-h-[180px] items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-6 py-10 text-center text-sm leading-6 text-gray-500">
-            왼쪽에서 등급을 선택하면 허용 이모지를 편집할 수 있습니다.
+          <div className="p-5 sm:p-6">
+            <div className="flex min-h-[180px] items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-6 py-10 text-center text-sm leading-6 text-gray-500">
+              왼쪽에서 등급을 선택하면 허용 이모지를 편집할 수 있습니다.
+            </div>
           </div>
         )}
 
         {selectedTier && (
-          <div className="space-y-4 pt-4">
+          <div className="space-y-4 p-5 sm:p-6">
             <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-4">
               <div className="flex flex-wrap items-center gap-2">
                 <PointRankBadge

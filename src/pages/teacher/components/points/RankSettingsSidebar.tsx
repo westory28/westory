@@ -26,21 +26,20 @@ const RankSettingsSidebar: React.FC<RankSettingsSidebarProps> = ({
   onSelect,
 }) => (
   <aside className="w-full shrink-0 lg:w-72">
-    <div className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm lg:sticky lg:top-6">
-      <div className="border-b border-gray-100 px-4 py-4 sm:px-5">
-        <div className="flex items-center gap-2">
-          <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-blue-100 bg-blue-50 text-blue-700">
-            <i className="fas fa-sliders-h text-sm" aria-hidden="true"></i>
-          </div>
-          <div>
-            <h2 className="text-base font-bold text-gray-900">
-              등급 설정 패널
-            </h2>
-          </div>
+    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm lg:sticky lg:top-8">
+      <div className="flex items-center gap-3 border-b border-gray-100 p-4 sm:p-6">
+        <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 text-gray-700">
+          <i className="fas fa-medal text-sm" aria-hidden="true"></i>
+        </div>
+        <div className="min-w-0">
+          <h2 className="text-lg font-extrabold text-gray-800">등급 설정</h2>
+          <p className="mt-0.5 text-xs font-medium text-gray-500">
+            테마 · 등급 · 이모지
+          </p>
         </div>
       </div>
 
-      <nav className="flex gap-2 overflow-x-auto p-3 lg:flex-col lg:gap-1 lg:overflow-visible lg:p-2">
+      <nav className="flex gap-2 overflow-x-auto p-3 lg:flex-col lg:gap-0 lg:overflow-visible lg:p-0">
         {items.map((item) => {
           const selected = activePanel === item.id;
           return (
@@ -49,50 +48,53 @@ const RankSettingsSidebar: React.FC<RankSettingsSidebarProps> = ({
               type="button"
               onClick={() => onSelect(item.id)}
               className={[
-                "min-w-[11rem] rounded-2xl border px-4 py-3 text-left transition lg:min-w-0",
+                "group flex min-w-[12rem] items-start gap-3 rounded-xl border p-3 text-left transition-colors lg:min-w-0 lg:rounded-none lg:border-0 lg:border-l-4 lg:p-4",
                 selected
-                  ? "border-blue-200 bg-blue-50 text-blue-700 shadow-sm"
-                  : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50",
+                  ? "border-blue-200 bg-blue-50 text-blue-700 lg:border-blue-600"
+                  : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 lg:border-transparent",
               ].join(" ")}
             >
-              <div className="flex items-start gap-3">
-                <div
-                  className={[
-                    "mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border text-sm",
-                    selected
-                      ? "border-blue-200 bg-white text-blue-700"
-                      : "border-gray-200 bg-gray-50 text-gray-500",
-                  ].join(" ")}
-                >
-                  <i className={item.iconClassName} aria-hidden="true"></i>
+              <div
+                className={[
+                  "mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border text-sm transition-colors",
+                  selected
+                    ? "border-blue-100 bg-white text-blue-700"
+                    : "border-gray-200 bg-gray-50 text-gray-500 group-hover:bg-white",
+                ].join(" ")}
+              >
+                <i className={item.iconClassName} aria-hidden="true"></i>
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-sm font-bold">{item.label}</span>
+                  {item.badge && (
+                    <span
+                      className={[
+                        "rounded-full px-2 py-0.5 text-[10px] font-bold leading-none",
+                        selected
+                          ? "border border-blue-100 bg-white text-blue-700"
+                          : "bg-gray-100 text-gray-600",
+                      ].join(" ")}
+                    >
+                      {item.badge}
+                    </span>
+                  )}
                 </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-sm font-bold">{item.label}</span>
-                    {item.badge && (
-                      <span
-                        className={[
-                          "rounded-full px-2 py-0.5 text-[10px] font-bold leading-none",
-                          selected
-                            ? "bg-white text-blue-700"
-                            : "bg-gray-100 text-gray-600",
-                        ].join(" ")}
-                      >
-                        {item.badge}
-                      </span>
-                    )}
+                {item.description && (
+                  <p className="mt-1 text-xs leading-5 text-gray-500">
+                    {item.description}
+                  </p>
+                )}
+                {item.meta && (
+                  <div
+                    className={[
+                      "mt-1.5 text-[11px] font-bold",
+                      selected ? "text-blue-600" : "text-gray-400",
+                    ].join(" ")}
+                  >
+                    {item.meta}
                   </div>
-                  {item.description && (
-                    <p className="mt-1 text-xs leading-5 text-gray-500">
-                      {item.description}
-                    </p>
-                  )}
-                  {item.meta && (
-                    <div className="mt-1.5 text-[11px] font-bold text-gray-400">
-                      {item.meta}
-                    </div>
-                  )}
-                </div>
+                )}
               </div>
             </button>
           );

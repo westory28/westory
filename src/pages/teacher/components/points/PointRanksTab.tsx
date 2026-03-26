@@ -520,92 +520,121 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
             meta: `총 ${emojiCollectionPolicy.emojiRegistry.length}개 · 활성 ${emojiEnabledCount}개`,
         },
     ];
+    const activeSidebarItem = sidebarItems.find((item) => item.id === activePanel) || sidebarItems[0];
 
     return (
-        <div className="space-y-5">
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
+        <div className="space-y-6">
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
                 <RankSettingsSidebar
                     activePanel={activePanel}
                     items={sidebarItems}
                     onSelect={setActivePanel}
                 />
 
-                <div className="min-w-0 flex-1 rounded-3xl border border-gray-200 bg-gray-50/80 p-4 shadow-sm sm:p-5">
-                    {activePanel === 'theme_preview' && (
-                        <RankThemePreviewPanel
-                            canManage={canManage}
-                            draftRankPolicy={themePreviewPolicy}
-                            activeThemeName={activeThemeName}
-                            previewThemeId={previewThemeId}
-                            previewThemeName={previewThemeName}
-                            enabledEmojiCount={savedEnabledEmojiCount}
-                            hasUnsavedChanges={themeHasUnsavedChanges}
-                            saveFeedbackMessage={themeSaveFeedbackMessage}
-                            saveFeedbackTone={themeSaveFeedbackTone}
-                            onThemeChange={setActiveThemeId}
-                            onSave={onThemeSave}
-                            getTierPreview={getThemeTierPreview}
-                        />
-                    )}
+                <div className="min-w-0 flex-1 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+                    <div className="border-b border-gray-100 px-4 py-3 sm:px-6">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
+                                <i className={`${activeSidebarItem.iconClassName} text-[11px]`} aria-hidden="true"></i>
+                                {activeSidebarItem.label}
+                            </span>
+                            {activeSidebarItem.meta && (
+                                <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-600">
+                                    {activeSidebarItem.meta}
+                                </span>
+                            )}
+                            {activeSidebarItem.badge && (
+                                <span
+                                    className={[
+                                        'rounded-full px-3 py-1 text-xs font-bold',
+                                        activeSidebarItem.badge === '미저장'
+                                            ? 'border border-amber-200 bg-amber-50 text-amber-800'
+                                            : 'border border-gray-200 bg-gray-50 text-gray-600',
+                                    ].join(' ')}
+                                >
+                                    {activeSidebarItem.badge}
+                                </span>
+                            )}
+                        </div>
+                    </div>
 
-                    {activePanel === 'rank_settings' && (
-                        <RankTierEditorPanel
-                            canManage={canManage}
-                            draftRankPolicy={rankSettingsPolicy}
-                            validationError={rankSettingsValidationError}
-                            selectedTierCode={selectedTierCode}
-                            selectedTier={selectedTier}
-                            selectedTierPreview={selectedTierPreview}
-                            enabledEmojiCount={savedEnabledEmojiCount}
-                            celebrationPreviewTierLabel={celebrationPreviewTierLabel}
-                            celebrationPreviewAvailable={Boolean(celebrationPreview.rank)}
-                            hasUnsavedChanges={rankSettingsHasUnsavedChanges}
-                            saveFeedbackMessage={rankSettingsSaveFeedbackMessage}
-                            saveFeedbackTone={rankSettingsSaveFeedbackTone}
-                            onSave={onRankSettingsSave}
-                            onSelectTier={handleSelectTier}
-                            onAddTier={handleAddTier}
-                            onRemoveTier={handleRemoveTier}
-                            onSetTierField={setTierField}
-                            onSetActiveThemeTierField={setActiveThemeTierField}
-                            onToggleTierEmoji={toggleTierEmoji}
-                            onCelebrationEnabledChange={(enabled) => updateRankSettingsPolicy((prev) => ({
-                                ...prev,
-                                celebrationPolicy: {
-                                    ...prev.celebrationPolicy,
-                                    enabled,
-                                },
-                            }))}
-                            onCelebrationEffectLevelChange={(effectLevel) => updateRankSettingsPolicy((prev) => ({
-                                ...prev,
-                                celebrationPolicy: {
-                                    ...prev.celebrationPolicy,
-                                    effectLevel,
-                                },
-                            }))}
-                            onOpenCelebrationPreview={() => setIsCelebrationPreviewOpen(true)}
-                            getTierPreview={getRankSettingsTierPreview}
-                        />
-                    )}
+                    <div className="space-y-5 bg-gray-50/75 p-4 sm:space-y-6 sm:p-6">
+                        {activePanel === 'theme_preview' && (
+                            <RankThemePreviewPanel
+                                canManage={canManage}
+                                draftRankPolicy={themePreviewPolicy}
+                                activeThemeName={activeThemeName}
+                                previewThemeId={previewThemeId}
+                                previewThemeName={previewThemeName}
+                                enabledEmojiCount={savedEnabledEmojiCount}
+                                hasUnsavedChanges={themeHasUnsavedChanges}
+                                saveFeedbackMessage={themeSaveFeedbackMessage}
+                                saveFeedbackTone={themeSaveFeedbackTone}
+                                onThemeChange={setActiveThemeId}
+                                onSave={onThemeSave}
+                                getTierPreview={getThemeTierPreview}
+                            />
+                        )}
 
-                    {activePanel === 'emoji_collection' && (
-                        <RankEmojiCollectionPanel
-                            canManage={canManage}
-                            draftRankPolicy={emojiCollectionPolicy}
-                            enabledEmojiCount={emojiEnabledCount}
-                            newEmojiValue={newEmojiValue}
-                            hasUnsavedChanges={emojiHasUnsavedChanges}
-                            saveFeedbackMessage={emojiSaveFeedbackMessage}
-                            saveFeedbackTone={emojiSaveFeedbackTone}
-                            onNewEmojiValueChange={setNewEmojiValue}
-                            onAddEmoji={handleAddEmojiRegistryEntry}
-                            onSave={onEmojiSave}
-                            onEmojiValueChange={handleEmojiValueChange}
-                            onToggleEmojiEnabled={handleToggleEmojiEnabled}
-                            onReorderEmojiRegistry={handleReorderEmojiRegistry}
-                            getTierPreview={getEmojiTierPreview}
-                        />
-                    )}
+                        {activePanel === 'rank_settings' && (
+                            <RankTierEditorPanel
+                                canManage={canManage}
+                                draftRankPolicy={rankSettingsPolicy}
+                                validationError={rankSettingsValidationError}
+                                selectedTierCode={selectedTierCode}
+                                selectedTier={selectedTier}
+                                selectedTierPreview={selectedTierPreview}
+                                enabledEmojiCount={savedEnabledEmojiCount}
+                                celebrationPreviewTierLabel={celebrationPreviewTierLabel}
+                                celebrationPreviewAvailable={Boolean(celebrationPreview.rank)}
+                                hasUnsavedChanges={rankSettingsHasUnsavedChanges}
+                                saveFeedbackMessage={rankSettingsSaveFeedbackMessage}
+                                saveFeedbackTone={rankSettingsSaveFeedbackTone}
+                                onSave={onRankSettingsSave}
+                                onSelectTier={handleSelectTier}
+                                onAddTier={handleAddTier}
+                                onRemoveTier={handleRemoveTier}
+                                onSetTierField={setTierField}
+                                onSetActiveThemeTierField={setActiveThemeTierField}
+                                onToggleTierEmoji={toggleTierEmoji}
+                                onCelebrationEnabledChange={(enabled) => updateRankSettingsPolicy((prev) => ({
+                                    ...prev,
+                                    celebrationPolicy: {
+                                        ...prev.celebrationPolicy,
+                                        enabled,
+                                    },
+                                }))}
+                                onCelebrationEffectLevelChange={(effectLevel) => updateRankSettingsPolicy((prev) => ({
+                                    ...prev,
+                                    celebrationPolicy: {
+                                        ...prev.celebrationPolicy,
+                                        effectLevel,
+                                    },
+                                }))}
+                                onOpenCelebrationPreview={() => setIsCelebrationPreviewOpen(true)}
+                                getTierPreview={getRankSettingsTierPreview}
+                            />
+                        )}
+
+                        {activePanel === 'emoji_collection' && (
+                            <RankEmojiCollectionPanel
+                                canManage={canManage}
+                                draftRankPolicy={emojiCollectionPolicy}
+                                enabledEmojiCount={emojiEnabledCount}
+                                newEmojiValue={newEmojiValue}
+                                hasUnsavedChanges={emojiHasUnsavedChanges}
+                                saveFeedbackMessage={emojiSaveFeedbackMessage}
+                                saveFeedbackTone={emojiSaveFeedbackTone}
+                                onNewEmojiValueChange={setNewEmojiValue}
+                                onAddEmoji={handleAddEmojiRegistryEntry}
+                                onSave={onEmojiSave}
+                                onEmojiValueChange={handleEmojiValueChange}
+                                onToggleEmojiEnabled={handleToggleEmojiEnabled}
+                                onReorderEmojiRegistry={handleReorderEmojiRegistry}
+                                getTierPreview={getEmojiTierPreview}
+                            />
+                        )}
+                    </div>
                 </div>
             </div>
 
