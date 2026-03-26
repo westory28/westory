@@ -103,7 +103,7 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
     <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
       <div className="flex flex-col gap-4 p-5 sm:p-6 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h2 className="text-lg font-bold text-gray-900">등급 설정</h2>
+          <h2 className="text-lg font-extrabold text-gray-900">등급 설정</h2>
           <p className="mt-1 text-sm text-gray-500">
             기준 포인트, 이름, 약칭, 허용 이모지와 축하 팝업을 이 탭에서 저장합니다.
           </p>
@@ -144,10 +144,18 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="flex flex-col gap-3 border-b border-gray-100 p-5 sm:flex-row sm:items-start sm:justify-between sm:p-6">
           <div>
-            <h3 className="text-lg font-bold text-gray-900">등급 목록</h3>
+            <h3 className="text-lg font-extrabold text-gray-900">등급 목록</h3>
             <p className="mt-1 text-sm text-gray-500">
               등급 기준, 이름, 설명, 배지 스타일을 이 탭에서 정리합니다.
             </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <span className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-bold text-gray-600">
+                총 {draftRankPolicy.tiers.length}개
+              </span>
+              <span className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
+                활성 이모지 {enabledEmojiCount}개
+              </span>
+            </div>
           </div>
           <button
             type="button"
@@ -187,7 +195,7 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
                   className={[
                     "overflow-hidden rounded-2xl border transition",
                     isOpen
-                      ? "border-blue-200 bg-blue-50/40 ring-1 ring-blue-100"
+                      ? "border-blue-200 bg-blue-50/40 ring-1 ring-blue-100 shadow-[0_18px_34px_-28px_rgba(37,99,235,0.48)]"
                       : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm",
                   ].join(" ")}
                 >
@@ -205,7 +213,7 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
                       </span>
                       {isOpen && (
                         <span className="rounded-full border border-blue-200 bg-blue-100 px-2.5 py-1 text-[11px] font-bold text-blue-700">
-                          편집 중
+                          선택됨
                         </span>
                       )}
                     </div>
@@ -253,7 +261,7 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
                             : "border-gray-200 bg-white text-gray-600",
                         ].join(" ")}
                       >
-                        <span>{isOpen ? "접기" : "세부 설정"}</span>
+                        <span>{isOpen ? "접기" : "상세 설정"}</span>
                         <i
                           className={`fas ${
                             isOpen ? "fa-chevron-up" : "fa-chevron-right"
@@ -432,7 +440,7 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
 
       <aside className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm xl:sticky xl:top-8 xl:max-h-[calc(100vh-8rem)] xl:overflow-y-auto">
         <div className="space-y-2 border-b border-gray-200 px-5 py-5 sm:px-6">
-          <h3 className="text-base font-bold text-gray-900">등급별 이모지</h3>
+          <h3 className="text-base font-extrabold text-gray-900">등급별 이모지</h3>
           <p className="text-sm text-gray-500">
             선택한 등급에 허용할 이모지를 바로 고릅니다.
           </p>
@@ -448,7 +456,7 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
 
         {selectedTier && (
           <div className="space-y-4 p-5 sm:p-6">
-            <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-4">
+            <div className="rounded-2xl border border-blue-100 bg-blue-50/80 px-4 py-4">
               <div className="flex flex-wrap items-center gap-2">
                 <PointRankBadge
                   rank={selectedTierPreview}
@@ -459,48 +467,24 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
                   {selectedTier.code}
                 </span>
               </div>
-              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <div className="rounded-xl border border-white/80 bg-white/80 px-3 py-2">
-                  <div className="text-[11px] font-bold uppercase tracking-wide text-blue-500">
-                    등급명
-                  </div>
-                  <div className="mt-1 font-bold text-gray-900">
-                    {selectedTierPreview?.label || selectedTier.code}
-                  </div>
-                  <div className="mt-1 text-xs text-gray-500">
-                    {selectedTierPreview?.shortLabel || "약칭 없음"}
-                  </div>
-                </div>
-                <div className="rounded-xl border border-white/80 bg-white/80 px-3 py-2">
-                  <div className="text-[11px] font-bold uppercase tracking-wide text-blue-500">
-                    기준 포인트
-                  </div>
-                  <div className="mt-1 font-bold text-gray-900">
-                    {selectedTier.minPoints}점 이상
-                  </div>
-                  <div className="mt-1 text-xs text-gray-500">
-                    {selectedTier.allowedEmojiIds?.length || 0}개 선택됨
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-[repeat(auto-fit,minmax(7.5rem,1fr))]">
-              <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
-                <div className="text-[11px] font-bold uppercase tracking-wide text-gray-400">
-                  선택 수
-                </div>
-                <div className="mt-1 text-lg font-bold text-gray-900">
-                  {selectedTier.allowedEmojiIds?.length || 0}
-                </div>
-              </div>
-              <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
-                <div className="text-[11px] font-bold uppercase tracking-wide text-gray-400">
-                  활성 이모지
-                </div>
-                <div className="mt-1 text-lg font-bold text-gray-900">
-                  {enabledEmojiCount}
-                </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <span className="inline-flex items-center rounded-full border border-white/80 bg-white px-3 py-1 text-xs font-bold text-blue-700">
+                  {selectedTierPreview?.label || selectedTier.code}
+                </span>
+                {selectedTierPreview?.shortLabel && (
+                  <span className="inline-flex items-center rounded-full border border-white/80 bg-white px-3 py-1 text-xs font-bold text-blue-700">
+                    약칭 {selectedTierPreview.shortLabel}
+                  </span>
+                )}
+                <span className="inline-flex items-center rounded-full border border-white/80 bg-white px-3 py-1 text-xs font-bold text-blue-700">
+                  기준 {selectedTier.minPoints}점
+                </span>
+                <span className="inline-flex items-center rounded-full border border-white/80 bg-white px-3 py-1 text-xs font-bold text-blue-700">
+                  선택 {selectedTier.allowedEmojiIds?.length || 0}개
+                </span>
+                <span className="inline-flex items-center rounded-full border border-white/80 bg-white px-3 py-1 text-xs font-bold text-blue-700">
+                  활성 {enabledEmojiCount}개
+                </span>
               </div>
             </div>
 
