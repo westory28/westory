@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import PointRankBadge from '../../../../components/common/PointRankBadge';
+import StudentRankPromotionPopup from '../../../../components/common/StudentRankPromotionPopup';
 import {
-    getPointFeedbackToneClass,
     POINT_RANK_BADGE_STYLE_OPTIONS,
     POINT_RANK_CELEBRATION_EFFECT_LABELS,
     POINT_RANK_FIELD_HELPERS,
@@ -16,6 +16,7 @@ import {
     getPointRankThemeName,
     resolvePointRankPolicyDraft,
 } from '../../../../lib/pointRanks';
+import { buildStudentRankPromotionPreview } from '../../../../lib/pointRankPromotion';
 import type {
     PointPolicy,
     PointRankEmojiRegistryEntry,
@@ -28,19 +29,39 @@ interface PointRanksTabProps {
     policy: PointPolicy;
     canManage: boolean;
     hasUnsavedChanges: boolean;
-    saveFeedback: string;
+    saveFeedbackMessage: string;
+    saveFeedbackTone: 'success' | 'error' | 'warning' | null;
     onPolicyChange: (updater: (prev: PointPolicy) => PointPolicy) => void;
     onSubmit: (event: React.FormEvent) => void;
 }
 
 const inputClassName = 'w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm';
 const selectClassName = 'w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm bg-white';
+const feedbackToneClassName: Record<'success' | 'error' | 'warning', string> = {
+    success: 'border border-emerald-200 bg-emerald-50 text-emerald-700',
+    error: 'border border-red-200 bg-red-50 text-red-700',
+    warning: 'border border-amber-200 bg-amber-50 text-amber-800',
+};
 
 const normalizeText = (value: unknown) => String(value || '').trim();
 
 const clampNumber = (value: unknown, fallback = 0) => {
     const numericValue = Number(value);
     return Number.isFinite(numericValue) ? numericValue : fallback;
+};
+
+const buildEmojiCollectionLabel = (emoji: string, fallbackIndex: number) => {
+    const normalizedEmoji = normalizeText(emoji);
+    return normalizedEmoji ? `${normalizedEmoji} 아이콘` : `이모지 ${fallbackIndex + 1}`;
+};
+
+const isAutoManagedEmojiLabel = (label: string, emoji: string, fallbackIndex: number) => {
+    const normalizedLabel = normalizeText(label);
+    return !normalizedLabel
+        || normalizedLabel === normalizeText(emoji)
+        || normalizedLabel === `${normalizeText(emoji)} 아이콘`
+        || normalizedLabel === `이모지 ${fallbackIndex + 1}`
+        || normalizedLabel === `새 이모지 ${fallbackIndex + 1}`;
 };
 
 const makeTierDraft = (tiers: PointRankPolicyTier[]): PointRankPolicyTier => {
@@ -75,11 +96,10 @@ const makeEmojiRegistryDraft = (entries: PointRankEmojiRegistryEntry[]): PointRa
     return {
         id: nextId,
         emoji: '🙂',
-        label: `새 이모지 ${nextIndex}`,
-        category: '기본',
+        label: buildEmojiCollectionLabel('🙂', nextIndex - 1),
+        category: '기타',
         sortOrder: nextSortOrder,
         enabled: true,
-        unlockTierCode: entries[0]?.unlockTierCode || 'tier_1',
         legacyValues: [],
     };
 };
@@ -88,7 +108,8 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
     policy,
     canManage,
     hasUnsavedChanges,
-    saveFeedback,
+    saveFeedbackMessage,
+    saveFeedbackTone,
     onPolicyChange,
     onSubmit,
 }) => {
@@ -98,7 +119,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
         ? 'world_nobility'
         : 'korean_golpum';
     const [selectedTierCode, setSelectedTierCode] = useState<string | null>(null);
-    const [expandedEmojiRegistryEntryId, setExpandedEmojiRegistryEntryId] = useState<string | null>(null);
+    const [isCelebrationPreviewOpen, setIsCelebrationPreviewOpen] = useState(false);
 
     const updateRankPolicy = (updater: (prev: PointRankPolicy) => PointRankPolicy) => {
         onPolicyChange((prev) => ({
@@ -170,28 +191,6 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
         });
     };
 
-    const moveEmojiToTier = (emojiId: string, tierCode: string) => {
-        updateRankPolicy((prev) => {
-            const nextTiers = prev.tiers.map((tier) => ({
-                ...tier,
-                allowedEmojiIds: (tier.allowedEmojiIds || []).filter((item) => item !== emojiId),
-            }));
-            const targetTier = nextTiers.find((tier) => tier.code === tierCode);
-            if (!targetTier) return prev;
-
-            targetTier.allowedEmojiIds = [...(targetTier.allowedEmojiIds || []), emojiId];
-            return {
-                ...prev,
-                tiers: nextTiers,
-                emojiRegistry: prev.emojiRegistry.map((entry) => (
-                    entry.id === emojiId
-                        ? { ...entry, unlockTierCode: tierCode }
-                        : entry
-                )),
-            };
-        });
-    };
-
     const setActiveThemeId = (themeId: PointRankThemeId) => {
         updateRankPolicy((prev) => ({
             ...prev,
@@ -206,7 +205,6 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
             ...prev,
             emojiRegistry: [...prev.emojiRegistry, nextEntry],
         }));
-        setExpandedEmojiRegistryEntryId(nextEntry.id);
     };
 
     const updateEmojiRegistryEntry = (
@@ -226,14 +224,6 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
             setSelectedTierCode(null);
         }
     }, [draftRankPolicy.tiers, selectedTierCode]);
-
-    useEffect(() => {
-        if (!expandedEmojiRegistryEntryId) return;
-        const exists = draftRankPolicy.emojiRegistry.some((entry) => entry.id === expandedEmojiRegistryEntryId);
-        if (!exists) {
-            setExpandedEmojiRegistryEntryId(null);
-        }
-    }, [draftRankPolicy.emojiRegistry, expandedEmojiRegistryEntryId]);
 
     const getTierPreview = (tier: PointRankPolicyTier, themeId: PointRankThemeId = draftRankPolicy.activeThemeId) => getPointRankDisplay({
         rankPolicy: {
@@ -320,6 +310,16 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
         : null;
     const selectedTierPreview = selectedTier ? getTierPreview(selectedTier) : null;
     const enabledEmojiCount = draftRankPolicy.emojiRegistry.filter((entry) => entry.enabled !== false).length;
+    const celebrationPreview = buildStudentRankPromotionPreview(
+        draftRankPolicy,
+        selectedTierCode as PointRankPolicyTier['code'] | null,
+    );
+    const celebrationPreviewTier = celebrationPreview.targetTierCode
+        ? draftRankPolicy.tiers.find((tier) => tier.code === celebrationPreview.targetTierCode) || null
+        : null;
+    const celebrationPreviewTierLabel = celebrationPreviewTier
+        ? (getTierPreview(celebrationPreviewTier)?.label || celebrationPreviewTier.code)
+        : '샘플 등급';
     const compareThemes: Array<{
         themeId: PointRankThemeId;
         label: string;
@@ -350,7 +350,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
                     <div>
                         <h2 className="text-lg font-bold text-gray-900">등급 설정</h2>
                         <p className="mt-1 max-w-3xl text-sm leading-6 text-gray-500">
-                            현재 활성 테마를 기준으로 등급, 이모지, 축하 효과를 편집합니다. 저장 전에는 실제 정책에 반영되지 않습니다.
+                            현재 활성 테마 기준으로 등급, 이모지 모음, 축하 팝업을 함께 정리합니다.
                         </p>
                     </div>
                 </div>
@@ -369,15 +369,12 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
                             : 'border-gray-200 bg-gray-50 text-gray-600',
                     ].join(' ')}>
                         {hasUnsavedChanges
-                            ? '현재 화면은 draft입니다. 저장 전에는 실제 policy와 학생 반영값이 바뀌지 않습니다.'
-                            : '저장된 등급 정책과 동일합니다.'}
+                            ? '저장 전 변경사항이 있습니다. 저장해야 학생 화면에 반영됩니다.'
+                            : '저장된 등급 설정과 같습니다.'}
                     </div>
-                    <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-                        변경사항은 저장 버튼을 눌러야 반영됩니다. 기준 포인트 순서는 저장 시점에 정리됩니다.
-                    </div>
-                    {saveFeedback && (
-                        <div className={`rounded-xl px-4 py-3 text-sm ${getPointFeedbackToneClass(saveFeedback)}`}>
-                            {saveFeedback}
+                    {saveFeedbackMessage && saveFeedbackTone && (
+                        <div className={`rounded-xl px-4 py-3 text-sm ${feedbackToneClassName[saveFeedbackTone]}`}>
+                            {saveFeedbackMessage}
                         </div>
                     )}
                 </div>
@@ -476,7 +473,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
                     )}
 
                     <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-                        현재 보이는 등급 카드 순서는 draft 편집 순서입니다. 기준 포인트 정렬은 저장 시점에만 정리되며, 저장 전에는 학생 화면에 반영되지 않습니다.
+                        카드 순서는 편집 중 그대로 유지되고, 기준 포인트 정렬은 저장할 때만 정리됩니다.
                     </div>
 
                     <div className="space-y-3">
@@ -545,7 +542,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
                                         >
                                             <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                                                 <div className="text-xs leading-5 text-gray-500">
-                                                    왼쪽에서는 등급 정보만 수정하고, 허용 이모지는 오른쪽 패널에서 관리합니다.
+                                                    이곳에서는 등급 정보만 수정하고, 이모지 해금은 옆 패널에서 정합니다.
                                                 </div>
                                                 <button
                                                     type="button"
@@ -633,9 +630,9 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
 
                 <aside className="rounded-2xl border border-gray-200 bg-white p-5 lg:sticky lg:top-6 lg:max-h-[calc(100vh-9rem)] lg:overflow-y-auto">
                     <div className="space-y-2 border-b border-gray-200 pb-4">
-                        <h3 className="text-base font-bold text-gray-900">이모지 선택</h3>
+                        <h3 className="text-base font-bold text-gray-900">등급별 이모지</h3>
                         <p className="text-sm text-gray-500">
-                            선택한 등급에서 사용할 수 있는 이모지를 지정하세요. 변경사항은 저장 버튼을 눌러야 반영됩니다.
+                            선택한 등급에서 열릴 이모지를 고릅니다. 저장해야 학생 화면에 반영됩니다.
                         </p>
                     </div>
 
@@ -682,18 +679,18 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
                             </div>
 
                             <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-xs leading-5 text-gray-500">
-                                선택한 이모지는 현재 등급으로 이동합니다. 비활성 이모지는 회색으로 표시되며 선택할 수 없습니다.
+                                이곳에서는 등급별 해금만 정합니다. 비활성화된 이모지는 회색으로 표시되며 선택할 수 없습니다.
                             </div>
 
                             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-2 2xl:grid-cols-3">
                                 {draftRankPolicy.emojiRegistry.map((entry) => {
                                     const checked = (selectedTier.allowedEmojiIds || []).includes(entry.id);
                                     const disabled = !canManage || entry.enabled === false;
-                                    const unlockTierCode = draftRankPolicy.tiers.find((tier) => (
+                                    const assignedTierCode = draftRankPolicy.tiers.find((tier) => (
                                         (tier.allowedEmojiIds || []).includes(entry.id)
                                     ))?.code || entry.unlockTierCode || draftRankPolicy.tiers[0]?.code || 'tier_1';
-                                    const unlockTier = draftRankPolicy.tiers.find((tier) => tier.code === unlockTierCode) || null;
-                                    const unlockLabel = unlockTier ? (getTierPreview(unlockTier)?.label || unlockTier.code) : '기본 등급';
+                                    const assignedTier = draftRankPolicy.tiers.find((tier) => tier.code === assignedTierCode) || null;
+                                    const assignedTierLabel = assignedTier ? (getTierPreview(assignedTier)?.label || assignedTier.code) : '등급 미지정';
 
                                     return (
                                         <button
@@ -722,11 +719,12 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
                                                 </span>
                                             </div>
                                             <div className="mt-2 text-sm font-bold">{entry.label}</div>
-                                            <div className="mt-2 flex flex-wrap items-center gap-1 text-[11px] text-gray-500">
-                                                {entry.category && (
-                                                    <span className="rounded-full bg-gray-100 px-2 py-0.5">{entry.category}</span>
-                                                )}
-                                                <span>{checked ? '현재 등급' : `해제 ${unlockLabel}`}</span>
+                                            <div className="mt-2 text-[11px] text-gray-500">
+                                                {checked
+                                                    ? '현재 선택한 등급에서 사용 중'
+                                                    : assignedTier
+                                                        ? `${assignedTierLabel} 등급에서 사용 중`
+                                                        : '아직 등급이 정해지지 않았습니다.'}
                                             </div>
                                         </button>
                                     );
@@ -744,11 +742,11 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
             </section>
 
             <section className="space-y-4 rounded-2xl border border-gray-200 bg-white p-5">
-                <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div>
-                        <h3 className="text-base font-bold text-gray-900">이모지 레지스트리</h3>
+                        <h3 className="text-base font-bold text-gray-900">이모지 모음</h3>
                         <p className="mt-1 text-sm text-gray-500">
-                            자주 바꾸는 정보만 먼저 보여줍니다. 상세 메타데이터는 카드별 고급 설정에서 확인할 수 있습니다.
+                            이곳에서는 이모지만 추가하고 정리합니다. 어느 등급에서 열릴지는 등급별 이모지에서 정합니다.
                         </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -756,7 +754,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
                             등록 {draftRankPolicy.emojiRegistry.length}개
                         </div>
                         <div className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">
-                            활성 {enabledEmojiCount}개
+                            사용 중 {enabledEmojiCount}개
                         </div>
                         <button
                             type="button"
@@ -764,24 +762,21 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
                             disabled={!canManage}
                             className="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                            {POINT_RANK_FIELD_LABELS.addRegistryItem}
+                            이모지 추가
                         </button>
                     </div>
                 </div>
 
                 <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-                    이모지 추가와 수정은 draft로만 반영됩니다. 실제 해제 순서와 정렬값은 저장 시점에 최종 정리됩니다.
+                    저장 전까지는 추가, 수정, 삭제, 비활성화 내용이 학생 화면에 반영되지 않습니다.
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                    {draftRankPolicy.emojiRegistry.map((entry) => {
-                        const isAdvancedOpen = expandedEmojiRegistryEntryId === entry.id;
+                    {draftRankPolicy.emojiRegistry.map((entry, entryIndex) => {
                         const assignedTier = draftRankPolicy.tiers.find((tier) => (
                             (tier.allowedEmojiIds || []).includes(entry.id)
                         )) || null;
-                        const unlockTierCode = assignedTier?.code || entry.unlockTierCode || draftRankPolicy.tiers[0]?.code || 'tier_1';
-                        const unlockTier = draftRankPolicy.tiers.find((tier) => tier.code === unlockTierCode) || null;
-                        const unlockLabel = unlockTier ? (getTierPreview(unlockTier)?.label || unlockTier.code) : '기본 등급';
+                        const assignedTierLabel = assignedTier ? (getTierPreview(assignedTier)?.label || assignedTier.code) : '등급 미지정';
 
                         return (
                             <article
@@ -791,155 +786,83 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
                                     entry.enabled === false ? 'border-gray-200 bg-gray-50 opacity-80' : 'border-gray-200 bg-white',
                                 ].join(' ')}
                             >
-                            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                                <div className="flex min-w-0 items-start gap-3">
-                                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-gray-200 bg-gray-50 text-2xl">
-                                        {entry.emoji}
-                                    </div>
-                                    <div className="min-w-0">
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <h4 className="text-base font-bold text-gray-900">{entry.label}</h4>
-                                            <span className={[
-                                                'rounded-full border px-2 py-0.5 text-[11px] font-bold',
-                                                entry.enabled === false
-                                                    ? 'border-gray-200 bg-gray-100 text-gray-500'
-                                                    : 'border-emerald-200 bg-emerald-50 text-emerald-700',
-                                            ].join(' ')}>
-                                                {entry.enabled === false ? '비활성' : '활성'}
-                                            </span>
+                                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                                    <div className="flex min-w-0 items-start gap-3">
+                                        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-gray-200 bg-gray-50 text-2xl">
+                                            {entry.emoji}
                                         </div>
-                                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500">
-                                            <span className="rounded-full border border-blue-100 bg-blue-50 px-2 py-0.5 font-bold text-blue-700">
-                                                해제 {unlockLabel}
-                                            </span>
-                                            {entry.category && (
-                                                <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5">
-                                                    {entry.category}
+                                        <div className="min-w-0">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <span className={[
+                                                    'rounded-full border px-2 py-0.5 text-[11px] font-bold',
+                                                    entry.enabled === false
+                                                        ? 'border-gray-200 bg-gray-100 text-gray-500'
+                                                        : 'border-emerald-200 bg-emerald-50 text-emerald-700',
+                                                ].join(' ')}>
+                                                    {entry.enabled === false ? '비활성화' : '사용 중'}
                                                 </span>
-                                            )}
-                                            {assignedTier && (
-                                                <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5">
-                                                    현재 배치 {assignedTier.code}
+                                                <span className="rounded-full border border-blue-100 bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-blue-700">
+                                                    {assignedTierLabel}
                                                 </span>
-                                            )}
+                                            </div>
+                                            <p className="mt-2 text-sm text-gray-600">
+                                                {assignedTier
+                                                    ? `${assignedTierLabel} 등급에서 열리도록 설정되어 있습니다.`
+                                                    : '아직 어느 등급에서도 열리지 않습니다.'}
+                                            </p>
                                         </div>
                                     </div>
-                                </div>
 
-                                <label className="flex shrink-0 items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-bold text-gray-700">
-                                    <input
-                                        type="checkbox"
-                                        checked={entry.enabled !== false}
-                                        onChange={(event) => updateEmojiRegistryEntry(entry.id, (current) => ({
+                                    <button
+                                        type="button"
+                                        onClick={() => updateEmojiRegistryEntry(entry.id, (current) => ({
                                             ...current,
-                                            enabled: event.target.checked,
+                                            enabled: current.enabled === false,
                                         }))}
                                         disabled={!canManage}
-                                        className="h-4 w-4"
-                                    />
-                                    {POINT_RANK_FIELD_LABELS.registryEnabled}
-                                </label>
-                            </div>
-
-                            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-[88px_minmax(0,1fr)]">
-                                <label className="block">
-                                    <div className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">{POINT_RANK_FIELD_LABELS.registryEmoji}</div>
-                                    <input
-                                        value={entry.emoji}
-                                        onChange={(event) => updateEmojiRegistryEntry(entry.id, (current) => ({
-                                            ...current,
-                                            emoji: event.target.value,
-                                            value: event.target.value,
-                                            legacyValues: Array.from(new Set([
-                                                ...(current.legacyValues || []),
-                                                current.emoji && current.emoji !== event.target.value ? current.emoji : '',
-                                            ].filter(Boolean))),
-                                        }))}
-                                        className={inputClassName}
-                                        disabled={!canManage}
-                                    />
-                                </label>
-
-                                <label className="block">
-                                    <div className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">{POINT_RANK_FIELD_LABELS.registryLabel}</div>
-                                    <input
-                                        value={entry.label}
-                                        onChange={(event) => updateEmojiRegistryEntry(entry.id, (current) => ({
-                                            ...current,
-                                            label: event.target.value,
-                                        }))}
-                                        className={inputClassName}
-                                        disabled={!canManage}
-                                    />
-                                </label>
-                            </div>
-
-                            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-                                <label className="block">
-                                    <div className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">{POINT_RANK_FIELD_LABELS.registryUnlockTierCode}</div>
-                                    <select
-                                        value={unlockTierCode}
-                                        onChange={(event) => moveEmojiToTier(entry.id, event.target.value)}
-                                        className={selectClassName}
-                                        disabled={!canManage}
+                                        className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-gray-50 px-4 py-2 text-sm font-bold text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
                                     >
-                                        {draftRankPolicy.tiers.map((tier) => (
-                                            <option key={tier.code} value={tier.code}>
-                                                {getTierPreview(tier)?.label || tier.code}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </label>
+                                        {entry.enabled === false ? '다시 사용' : '비활성화'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleRemoveEmojiRegistryEntry(entry.id)}
+                                        disabled={!canManage || draftRankPolicy.emojiRegistry.length <= 1}
+                                        className="inline-flex items-center justify-center rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-bold text-rose-600 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        삭제
+                                    </button>
+                                </div>
 
-                                <button
-                                    type="button"
-                                    onClick={() => setExpandedEmojiRegistryEntryId((prev) => (prev === entry.id ? null : entry.id))}
-                                    className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm font-bold text-gray-700 transition hover:bg-gray-100"
-                                >
-                                    {isAdvancedOpen ? '고급 설정 닫기' : '고급 설정'}
-                                </button>
-                            </div>
-
-                            {isAdvancedOpen && (
-                                <div className="mt-4 grid grid-cols-1 gap-4 border-t border-gray-200 pt-4 lg:grid-cols-2">
+                                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-[88px_minmax(0,1fr)]">
                                     <label className="block">
-                                        <div className="mb-2 text-sm font-bold text-gray-700">{POINT_RANK_FIELD_LABELS.registryCategory}</div>
+                                        <div className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">이모지</div>
                                         <input
-                                            value={entry.category}
-                                            onChange={(event) => updateEmojiRegistryEntry(entry.id, (current) => ({
-                                                ...current,
-                                                category: event.target.value,
-                                            }))}
-                                            className={inputClassName}
+                                            value={entry.emoji}
+                                            onChange={(event) => {
+                                                const nextEmoji = event.target.value;
+                                                updateEmojiRegistryEntry(entry.id, (current) => ({
+                                                    ...current,
+                                                    emoji: nextEmoji,
+                                                    value: nextEmoji,
+                                                    label: isAutoManagedEmojiLabel(current.label, current.emoji, entryIndex)
+                                                        ? buildEmojiCollectionLabel(nextEmoji, entryIndex)
+                                                        : current.label,
+                                                    legacyValues: Array.from(new Set([
+                                                        ...(current.legacyValues || []),
+                                                        current.emoji && current.emoji !== nextEmoji ? current.emoji : '',
+                                                    ].filter(Boolean))),
+                                                }));
+                                            }}
+                                            className={`${inputClassName} text-center text-2xl leading-none`}
                                             disabled={!canManage}
                                         />
-                                        <div className="mt-2 text-xs leading-5 text-gray-500">{POINT_RANK_FIELD_HELPERS.registryCategory}</div>
                                     </label>
 
-                                    <label className="block">
-                                        <div className="mb-2 text-sm font-bold text-gray-700">{POINT_RANK_FIELD_LABELS.registrySortOrder}</div>
-                                        <input
-                                            type="number"
-                                            value={entry.sortOrder}
-                                            onChange={(event) => updateEmojiRegistryEntry(entry.id, (current) => ({
-                                                ...current,
-                                                sortOrder: clampNumber(event.target.value, 0),
-                                            }))}
-                                            className={inputClassName}
-                                            disabled={!canManage}
-                                        />
-                                        <div className="mt-2 text-xs leading-5 text-gray-500">{POINT_RANK_FIELD_HELPERS.registrySortOrder}</div>
-                                    </label>
-
-                                    <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 lg:col-span-2">
-                                        <div className="text-xs font-bold uppercase tracking-wide text-gray-500">{POINT_RANK_FIELD_LABELS.registryId}</div>
-                                        <div className="mt-1 break-all font-mono text-sm text-gray-800">{entry.id}</div>
-                                        <div className="mt-2 text-xs leading-5 text-gray-500">
-                                            {POINT_RANK_FIELD_HELPERS.registryId}
-                                        </div>
+                                    <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4 text-sm leading-6 text-gray-500">
+                                        표시명과 내부 정렬값은 자동으로 관리합니다. 등급 배정은 등급별 이모지에서 조정합니다.
                                     </div>
                                 </div>
-                            )}
                             </article>
                         );
                     })}
@@ -949,13 +872,23 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
             <section className="rounded-2xl border border-gray-200 bg-white p-5">
                 <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                     <div>
-                        <h3 className="text-base font-bold text-gray-900">축하 정책</h3>
+                        <h3 className="text-base font-bold text-gray-900">축하 팝업</h3>
                         <p className="mt-1 text-sm text-gray-500">
-                            등급 상승 시의 축하 효과를 켜고 끌 수 있습니다. 강도는 표준 또는 절제형으로 나눕니다.
+                            등급 상승 시 보여 줄 축하 팝업의 표시 여부와 강도를 정합니다.
                         </p>
                     </div>
-                    <div className="inline-flex rounded-full border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-bold text-gray-500">
-                        {draftRankPolicy.celebrationPolicy.enabled ? '축하 효과 활성화됨' : '축하 효과 비활성화됨'}
+                    <div className="flex flex-wrap items-center gap-2">
+                        <div className="inline-flex rounded-full border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-bold text-gray-500">
+                            {draftRankPolicy.celebrationPolicy.enabled ? '축하 팝업 사용 중' : '축하 팝업 꺼짐'}
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setIsCelebrationPreviewOpen(true)}
+                            disabled={!celebrationPreview.rank}
+                            className="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                            축하 팝업 미리보기
+                        </button>
                     </div>
                 </div>
 
@@ -1000,7 +933,28 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
                         <div className="mt-2 text-xs leading-5 text-gray-500">{POINT_RANK_FIELD_HELPERS.celebrationEffectLevel}</div>
                     </label>
                 </div>
+
+                <div className="mt-4 rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                    {selectedTier
+                        ? `${celebrationPreviewTierLabel} 등급 기준으로 현재 테마와 효과를 미리볼 수 있습니다.`
+                        : `${celebrationPreviewTierLabel} 등급을 샘플로 현재 테마와 효과를 미리봅니다.`}
+                    {!celebrationPreview.celebrationEnabled && (
+                        <div className="mt-1 text-xs text-gray-500">
+                            현재 설정에서는 실제 학생 화면에 축하 팝업이 표시되지 않습니다.
+                        </div>
+                    )}
+                </div>
             </section>
+
+            {celebrationPreview.rank && (
+                <StudentRankPromotionPopup
+                    open={isCelebrationPreviewOpen}
+                    rank={celebrationPreview.rank}
+                    effectLevel={celebrationPreview.effectLevel}
+                    previewEmojiEntries={celebrationPreview.previewEmojiEntries}
+                    onClose={() => setIsCelebrationPreviewOpen(false)}
+                />
+            )}
         </form>
     );
 };

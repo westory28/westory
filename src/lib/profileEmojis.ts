@@ -120,8 +120,8 @@ const normalizeRegistryEntry = (
         category,
         sortOrder,
         enabled: rawEntry?.enabled !== false,
-        unlockTierCode: unlockTierCode || undefined,
         legacyValues: normalizeLegacyValues(rawEntry?.legacyValues, emoji, rawValue),
+        ...(unlockTierCode ? { unlockTierCode } : {}),
     });
 };
 

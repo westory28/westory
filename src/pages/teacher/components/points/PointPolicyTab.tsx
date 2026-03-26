@@ -1,23 +1,30 @@
 import React from 'react';
-import { getPointFeedbackToneClass, POINT_POLICY_FIELD_HELPERS, POINT_POLICY_FIELD_LABELS } from '../../../../constants/pointLabels';
+import { POINT_POLICY_FIELD_HELPERS, POINT_POLICY_FIELD_LABELS } from '../../../../constants/pointLabels';
 import type { PointPolicy } from '../../../../types';
 
 interface PointPolicyTabProps {
     policy: PointPolicy;
     canManage: boolean;
     hasUnsavedChanges: boolean;
-    saveFeedback: string;
+    saveFeedbackMessage: string;
+    saveFeedbackTone: 'success' | 'error' | 'warning' | null;
     onPolicyChange: (updater: (prev: PointPolicy) => PointPolicy) => void;
     onSubmit: (event: React.FormEvent) => void;
 }
 
 const inputClassName = 'w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm';
+const feedbackToneClassName: Record<'success' | 'error' | 'warning', string> = {
+    success: 'border border-emerald-200 bg-emerald-50 text-emerald-700',
+    error: 'border border-red-200 bg-red-50 text-red-700',
+    warning: 'border border-amber-200 bg-amber-50 text-amber-800',
+};
 
 const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
     policy,
     canManage,
     hasUnsavedChanges,
-    saveFeedback,
+    saveFeedbackMessage,
+    saveFeedbackTone,
     onPolicyChange,
     onSubmit,
 }) => (
@@ -26,7 +33,7 @@ const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
             <div>
                 <h2 className="text-lg font-bold text-gray-900">운영 정책</h2>
                 <p className="mt-1 text-sm text-gray-500">
-                    출석, 퀴즈, 수업자료, 수동 조정 같은 운영 규칙만 관리합니다. 등급과 이모지는 등급 탭에서 편집합니다.
+                    학생 활동 포인트만 조정합니다. 등급과 이모지는 등급 설정 탭에서 관리합니다.
                 </p>
             </div>
             <div className="flex flex-col items-start gap-3 md:items-end">
@@ -41,15 +48,15 @@ const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
                     'rounded-xl border px-4 py-3 text-sm',
                     hasUnsavedChanges
                         ? 'border-amber-200 bg-amber-50 text-amber-800'
-                        : 'border-blue-100 bg-blue-50 text-blue-700',
+                        : 'border-gray-200 bg-gray-50 text-gray-600',
                 ].join(' ')}>
                     {hasUnsavedChanges
-                        ? '현재 보이는 값은 draft입니다. 저장 전에는 실제 운영 정책이 바뀌지 않습니다.'
-                        : '저장된 운영 정책과 동일합니다.'}
+                        ? '저장 전 변경사항이 있습니다. 저장해야 실제 운영 정책에 반영됩니다.'
+                        : '저장된 운영 정책과 같습니다.'}
                 </div>
-                {saveFeedback && (
-                    <div className={`rounded-xl px-4 py-3 text-sm ${getPointFeedbackToneClass(saveFeedback)}`}>
-                        {saveFeedback}
+                {saveFeedbackMessage && saveFeedbackTone && (
+                    <div className={`rounded-xl px-4 py-3 text-sm ${feedbackToneClassName[saveFeedbackTone]}`}>
+                        {saveFeedbackMessage}
                     </div>
                 )}
             </div>

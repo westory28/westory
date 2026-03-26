@@ -33,6 +33,7 @@ import PointsOverviewTab from './components/points/PointsOverviewTab';
 
 type TeacherPointTab = keyof typeof TEACHER_POINT_TAB_LABELS;
 type OrderFilter = 'all' | PointOrderStatus;
+type PolicyFeedbackTone = 'success' | 'error' | 'warning';
 type SchoolOption = { value: string; label: string };
 type ProductFormState = {
     id: string;
@@ -121,7 +122,8 @@ const ManagePoints: React.FC = () => {
     const [savedPolicy, setSavedPolicy] = useState<PointPolicy>(EMPTY_POLICY);
     const [policyDraft, setPolicyDraft] = useState<PointPolicy>(EMPTY_POLICY);
     const [policyDirty, setPolicyDirty] = useState(false);
-    const [policyFeedback, setPolicyFeedback] = useState('');
+    const [policyFeedbackMessage, setPolicyFeedbackMessage] = useState('');
+    const [policyFeedbackTone, setPolicyFeedbackTone] = useState<PolicyFeedbackTone | null>(null);
     const [rankManualAdjustEarnedPointsByUid, setRankManualAdjustEarnedPointsByUid] = useState<Record<string, number>>({});
     const [products, setProducts] = useState<PointProduct[]>([]);
     const [orders, setOrders] = useState<PointOrder[]>([]);
@@ -293,7 +295,8 @@ const ManagePoints: React.FC = () => {
             setSavedPolicy(nextPolicy);
             setPolicyDraft(nextPolicy);
             setPolicyDirty(false);
-            setPolicyFeedback('');
+            setPolicyFeedbackMessage('');
+            setPolicyFeedbackTone(null);
             setProducts(nextProducts);
             setOrders(nextOrders);
             setRankManualAdjustEarnedPointsByUid(nextRankManualAdjustEarnedPointsByUid);
@@ -423,6 +426,8 @@ const ManagePoints: React.FC = () => {
 
     const handleTabChange = (tab: TeacherPointTab) => {
         setGrantFeedback('');
+        setPolicyFeedbackMessage('');
+        setPolicyFeedbackTone(null);
         setProductFeedback('');
         setOrderFeedback('');
         setSearchParams(tab === 'overview' ? {} : { tab });
@@ -431,7 +436,8 @@ const ManagePoints: React.FC = () => {
     const updatePolicyDraft = (updater: (prev: PointPolicy) => PointPolicy) => {
         setPolicyDraft((prev) => updater(prev));
         setPolicyDirty(true);
-        setPolicyFeedback('');
+        setPolicyFeedbackMessage('');
+        setPolicyFeedbackTone(null);
     };
 
     const handleSaveGrant = async (event: React.FormEvent) => {
@@ -485,7 +491,9 @@ const ManagePoints: React.FC = () => {
 
         const rankPolicyValidationError = getPointRankPolicyValidationError(policyDraft.rankPolicy);
         if (rankPolicyValidationError) {
-            window.alert(rankPolicyValidationError);
+            console.warn('Blocked point policy save due to validation error:', rankPolicyValidationError);
+            setPolicyFeedbackTone('warning');
+            setPolicyFeedbackMessage(`저장 전에 확인해 주세요. ${rankPolicyValidationError}`);
             return;
         }
 
@@ -503,10 +511,12 @@ const ManagePoints: React.FC = () => {
             setSavedPolicy(confirmedPolicy);
             setPolicyDraft(confirmedPolicy);
             setPolicyDirty(false);
-            setPolicyFeedback(activeTab === 'policy' ? '운영 정책을 저장했습니다.' : '등급 설정을 저장했습니다.');
+            setPolicyFeedbackTone('success');
+            setPolicyFeedbackMessage(activeTab === 'policy' ? '운영 정책이 저장되었습니다.' : '등급 설정이 저장되었습니다.');
         } catch (error: any) {
             console.error('Failed to save point policy:', error);
-            setPolicyFeedback(error?.message || '포인트 정책 저장에 실패했습니다. 기존 저장값은 유지됩니다.');
+            setPolicyFeedbackTone('error');
+            setPolicyFeedbackMessage('저장 중 문제가 발생했습니다. 입력값을 확인한 뒤 다시 시도해 주세요.');
         }
     };
 
@@ -831,7 +841,8 @@ const ManagePoints: React.FC = () => {
                             policy={policyDraft}
                             canManage={canManage}
                             hasUnsavedChanges={policyDirty}
-                            saveFeedback={policyFeedback}
+                            saveFeedbackMessage={policyFeedbackMessage}
+                            saveFeedbackTone={policyFeedbackTone}
                             onPolicyChange={updatePolicyDraft}
                             onSubmit={handleSavePolicy}
                         />
@@ -842,7 +853,8 @@ const ManagePoints: React.FC = () => {
                             policy={policyDraft}
                             canManage={canManage}
                             hasUnsavedChanges={policyDirty}
-                            saveFeedback={policyFeedback}
+                            saveFeedbackMessage={policyFeedbackMessage}
+                            saveFeedbackTone={policyFeedbackTone}
                             onPolicyChange={updatePolicyDraft}
                             onSubmit={handleSavePolicy}
                         />

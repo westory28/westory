@@ -181,6 +181,25 @@ const getBadgeClassByToken = (token: PointRankBadgeStyleToken | string, fallback
     BADGE_STYLE_CLASS_MAP[token] || BADGE_STYLE_CLASS_MAP[normalizeBadgeStyleToken('', fallbackIndex)] || BADGE_STYLE_CLASS_MAP.stone
 );
 
+const isPlainObject = (value: unknown): value is Record<string, unknown> => (
+    Object.prototype.toString.call(value) === '[object Object]'
+);
+
+const stripUndefinedDeep = <T>(value: T): T => {
+    if (Array.isArray(value)) {
+        return value.map((item) => stripUndefinedDeep(item)) as T;
+    }
+    if (!isPlainObject(value)) {
+        return value;
+    }
+
+    return Object.entries(value).reduce<Record<string, unknown>>((accumulator, [key, entryValue]) => {
+        if (entryValue === undefined) return accumulator;
+        accumulator[key] = stripUndefinedDeep(entryValue);
+        return accumulator;
+    }, {}) as T;
+};
+
 export const parsePointRankTierIndex = (tierCode: PointRankTierCode) => {
     const parsed = Number(String(tierCode).replace('tier_', ''));
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
@@ -195,17 +214,26 @@ const normalizeTierCode = (value: unknown, index: number): PointRankTierCode => 
 const normalizeTier = (
     tier: (Partial<PointRankPolicyTier> & { threshold?: unknown }) | null | undefined,
     index: number,
-): PointRankPolicyTier => ({
-    code: normalizeTierCode(tier?.code, index),
-    minPoints: Math.max(0, Number(tier?.minPoints ?? tier?.threshold ?? 0)),
-    label: String(tier?.label || '').trim() || undefined,
-    shortLabel: String(tier?.shortLabel || '').trim() || undefined,
-    description: String(tier?.description || '').trim() || undefined,
-    badgeStyleToken: String(tier?.badgeStyleToken || '').trim() || undefined,
-    allowedEmojiIds: Array.isArray(tier?.allowedEmojiIds)
+): PointRankPolicyTier => {
+    const label = String(tier?.label || '').trim();
+    const shortLabel = String(tier?.shortLabel || '').trim();
+    const description = String(tier?.description || '').trim();
+    const badgeStyleToken = String(tier?.badgeStyleToken || '').trim();
+    const hasAllowedEmojiIds = Array.isArray(tier?.allowedEmojiIds);
+    const allowedEmojiIds = hasAllowedEmojiIds
         ? tier?.allowedEmojiIds.map((value) => String(value || '').trim()).filter(Boolean)
-        : undefined,
-});
+        : [];
+
+    return {
+        code: normalizeTierCode(tier?.code, index),
+        minPoints: Math.max(0, Number(tier?.minPoints ?? tier?.threshold ?? 0)),
+        ...(label ? { label } : {}),
+        ...(shortLabel ? { shortLabel } : {}),
+        ...(description ? { description } : {}),
+        ...(badgeStyleToken ? { badgeStyleToken } : {}),
+        ...(hasAllowedEmojiIds ? { allowedEmojiIds } : {}),
+    };
+};
 
 const isValidBasedOn = (value: unknown): value is PointRankBasedOn => (
     value === 'earnedTotal'
@@ -226,26 +254,31 @@ const normalizeThemeTierOverride = (
     }
 
     return {
-        label: label || undefined,
-        shortLabel: shortLabel || undefined,
-        description: description || undefined,
-        badgeStyleToken: badgeStyleToken ? normalizeBadgeStyleToken(badgeStyleToken, fallbackIndex) : undefined,
+        ...(label ? { label } : {}),
+        ...(shortLabel ? { shortLabel } : {}),
+        ...(description ? { description } : {}),
+        ...(badgeStyleToken ? { badgeStyleToken: normalizeBadgeStyleToken(badgeStyleToken, fallbackIndex) } : {}),
     };
 };
 
 const normalizeThemeOverride = (
     rawTheme: Partial<PointRankThemeOverride> | null | undefined,
     tiers: PointRankPolicyTier[],
-) => ({
-    themeName: String(rawTheme?.themeName || '').trim() || undefined,
-    tiers: tiers.reduce<NonNullable<PointRankThemeOverride['tiers']>>((accumulator, tier, index) => {
+) => {
+    const themeName = String(rawTheme?.themeName || '').trim();
+    const resolvedTiers = tiers.reduce<NonNullable<PointRankThemeOverride['tiers']>>((accumulator, tier, index) => {
         const nextTierOverride = normalizeThemeTierOverride(rawTheme?.tiers?.[tier.code], index);
         if (nextTierOverride) {
             accumulator[tier.code] = nextTierOverride;
         }
         return accumulator;
-    }, {}),
-});
+    }, {});
+
+    return {
+        ...(themeName ? { themeName } : {}),
+        tiers: resolvedTiers,
+    };
+};
 
 const buildLegacyActiveThemeOverrides = (
     rankPolicy: Partial<PointRankPolicy> | null | undefined,
@@ -342,11 +375,15 @@ const buildResolvedTiers = (
             return true;
         });
 
+        const {
+            label: _unusedLabel,
+            shortLabel: _unusedShortLabel,
+            description: _unusedDescription,
+            ...normalizedTier
+        } = tier;
+
         return {
-            ...tier,
-            label: undefined,
-            shortLabel: undefined,
-            description: undefined,
+            ...normalizedTier,
             allowedEmojiIds: nextAllowedEmojiIds,
         };
     });
@@ -450,6 +487,10 @@ export const resolvePointRankPolicyDraft = (rankPolicy?: Partial<PointRankPolicy
         sortTiers: false,
         sortEmojiRegistry: false,
     })
+);
+
+export const buildPointRankPolicySavePayload = (rankPolicy?: Partial<PointRankPolicy> | null) => (
+    stripUndefinedDeep(resolvePointRankPolicy(rankPolicy))
 );
 
 export const getPointRankThemeName = (

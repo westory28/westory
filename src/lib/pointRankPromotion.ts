@@ -11,6 +11,7 @@ import {
     getPointRankNewlyUnlockedEmojiEntries,
     getPointRankTierPosition,
     needsPointRankLegacyFallback,
+    resolvePointRankPolicy,
 } from './pointRanks';
 import { getYearSemester } from './semesterScope';
 import { readLocalOnly, writeLocalOnly } from './safeStorage';
@@ -25,6 +26,15 @@ export interface StudentRankPromotionSnapshot {
     wallet: PointWallet | null;
     rank: PointRankDisplay | null;
     manualAdjustPoints: number;
+}
+
+export interface StudentRankPromotionPreview {
+    rank: PointRankDisplay | null;
+    effectLevel: 'subtle' | 'standard';
+    previewEmojiEntries: ReturnType<typeof getStudentRankPromotionPreviewEmojiEntries>;
+    celebrationEnabled: boolean;
+    targetTierCode: PointRankTierCode | null;
+    previousTierCode: PointRankTierCode | null;
 }
 
 const normalizeTierCode = (value: string | null | undefined): PointRankTierCode | null => {
@@ -66,6 +76,60 @@ export const getStudentRankPromotionPreviewEmojiEntries = (
     previousTierCode: previousTierCode || undefined,
     currentTierCode: currentTierCode || undefined,
 }).slice(0, Math.max(0, limit));
+
+export const buildStudentRankPromotionPreview = (
+    rankPolicy: PointPolicy['rankPolicy'] | null | undefined,
+    requestedTierCode?: PointRankTierCode | null,
+    requestedPreviousTierCode?: PointRankTierCode | null,
+): StudentRankPromotionPreview => {
+    const resolvedPolicy = resolvePointRankPolicy(rankPolicy);
+    const targetTier = resolvedPolicy.tiers.find((tier) => tier.code === requestedTierCode)
+        || resolvedPolicy.tiers[1]
+        || resolvedPolicy.tiers[0]
+        || null;
+    const effectLevel = resolvedPolicy.celebrationPolicy?.effectLevel === 'subtle'
+        ? 'subtle'
+        : 'standard';
+    const celebrationEnabled = resolvedPolicy.celebrationPolicy?.enabled !== false;
+
+    if (!targetTier) {
+        return {
+            rank: null,
+            effectLevel,
+            previewEmojiEntries: [],
+            celebrationEnabled,
+            targetTierCode: null,
+            previousTierCode: null,
+        };
+    }
+
+    const targetIndex = resolvedPolicy.tiers.findIndex((tier) => tier.code === targetTier.code);
+    const previousTier = resolvedPolicy.tiers.find((tier) => tier.code === requestedPreviousTierCode)
+        || resolvedPolicy.tiers[targetIndex - 1]
+        || null;
+    const previewLimit = effectLevel === 'subtle' ? 3 : 5;
+    const rank = getPointRankDisplay({
+        rankPolicy: resolvedPolicy,
+        wallet: {
+            earnedTotal: targetTier.minPoints,
+            rankEarnedTotal: targetTier.minPoints,
+        },
+    });
+
+    return {
+        rank,
+        effectLevel,
+        previewEmojiEntries: getStudentRankPromotionPreviewEmojiEntries(
+            resolvedPolicy,
+            previousTier?.code || null,
+            targetTier.code,
+            previewLimit,
+        ),
+        celebrationEnabled,
+        targetTierCode: targetTier.code,
+        previousTierCode: previousTier?.code || null,
+    };
+};
 
 export const loadStudentRankPromotionSnapshot = async (
     config: ConfigLike,

@@ -12,6 +12,7 @@ import {
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './firebase';
 import {
+    buildPointRankPolicySavePayload,
     buildPointRankEarnedPointsByUid,
     DEFAULT_POINT_RANK_POLICY,
     resolvePointRankPolicy,
@@ -411,13 +412,20 @@ export const adjustPoints = async ({ config, uid, delta, sourceId, sourceLabel, 
 
 export const upsertPointPolicy = async (config: ConfigLike, policy: Partial<PointPolicy>, actor: ActorInfo) => {
     const targetRef = doc(db, getPointPolicyDocPath(config));
-    const payload: PointPolicy = {
-        ...mergePointPolicy(policy),
+    const mergedPolicy = mergePointPolicy(policy);
+    const payload = {
+        attendanceDaily: Math.max(0, Number(mergedPolicy.attendanceDaily || 0)),
+        attendanceMonthlyBonus: Math.max(0, Number(mergedPolicy.attendanceMonthlyBonus || 0)),
+        lessonView: Math.max(0, Number(mergedPolicy.lessonView || 0)),
+        quizSolve: Math.max(0, Number(mergedPolicy.quizSolve || 0)),
+        manualAdjustEnabled: mergedPolicy.manualAdjustEnabled === true,
+        allowNegativeBalance: mergedPolicy.allowNegativeBalance === true,
+        rankPolicy: buildPointRankPolicySavePayload(mergedPolicy.rankPolicy),
         updatedAt: serverTimestamp(),
-        updatedBy: actor.uid,
-    } as PointPolicy;
-    await setDoc(targetRef, payload, { merge: true });
-    return payload;
+        updatedBy: String(actor.uid || '').trim(),
+    };
+    await setDoc(targetRef, payload);
+    return payload as PointPolicy;
 };
 
 export const upsertPointProduct = async (
