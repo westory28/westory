@@ -17,6 +17,7 @@ import {
     DEFAULT_PROFILE_EMOJI_ID,
     DEFAULT_PROFILE_EMOJI_REGISTRY,
     getProfileEmojiEntryById,
+    getProfileEmojiEntryByValue,
     getProfileEmojiRegistry,
     getProfileEmojiValueById,
     resolveProfileEmojiRegistry,
