@@ -249,17 +249,37 @@ const RankEmojiCollectionPanel: React.FC<RankEmojiCollectionPanelProps> = ({
                 </button>
 
                 <div className="flex flex-1 flex-col items-center justify-center pb-2 pt-5 text-center">
-                  <div
-                    className={[
-                      "inline-flex h-16 w-16 items-center justify-center rounded-[1.45rem] border text-[2.5rem] leading-none shadow-inner",
-                      entry.enabled === false
-                        ? "border-gray-200 bg-white text-gray-300"
-                        : "border-slate-200 bg-slate-50 text-slate-900",
-                    ].join(" ")}
-                    aria-hidden="true"
-                    title={entry.label}
-                  >
-                    {entry.emoji}
+                  <div className="relative inline-flex">
+                    <div
+                      className={[
+                        "inline-flex h-16 w-16 items-center justify-center rounded-[1.45rem] border text-[2.5rem] leading-none shadow-inner",
+                        entry.enabled === false
+                          ? "border-gray-200 bg-white text-gray-300"
+                          : "border-slate-200 bg-slate-50 text-slate-900",
+                      ].join(" ")}
+                      aria-hidden="true"
+                      title={entry.label}
+                    >
+                      {entry.emoji}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleOpenEditor(
+                          entry.id,
+                          entryIndex,
+                          entry.emoji,
+                          entry.label,
+                        )
+                      }
+                      disabled={!canManage}
+                      className="absolute -bottom-1 -left-2 inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      aria-label={`${entry.label} 이모지 수정`}
+                      title="이모지 수정"
+                    >
+                      <i className="fas fa-pen text-[10px]" aria-hidden="true"></i>
+                    </button>
                   </div>
 
                   <span
@@ -272,24 +292,6 @@ const RankEmojiCollectionPanel: React.FC<RankEmojiCollectionPanelProps> = ({
                     {assignedTierLabel}
                   </span>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleOpenEditor(
-                      entry.id,
-                      entryIndex,
-                      entry.emoji,
-                      entry.label,
-                    )
-                  }
-                  disabled={!canManage}
-                  className="absolute bottom-4 left-3 inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                  aria-label={`${entry.label} 이모지 수정`}
-                  title="이모지 수정"
-                >
-                  <i className="fas fa-pen text-[10px]" aria-hidden="true"></i>
-                </button>
 
                 <div className="mt-auto flex items-center justify-center border-t border-slate-100 pt-3">
                   <label
