@@ -161,7 +161,7 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
             type="button"
             onClick={onAddTier}
             disabled={!canManage}
-            className="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {POINT_RANK_FIELD_LABELS.addTier}
           </button>

@@ -235,14 +235,17 @@ const RankEmojiCollectionPanel: React.FC<RankEmojiCollectionPanelProps> = ({
                     setDragOverEntryId(null);
                   }}
                   disabled={!canManage}
-                  className="absolute right-3 top-3 inline-flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-400 transition hover:border-gray-300 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="absolute left-1/2 top-3 inline-flex -translate-x-1/2 items-center justify-center gap-1 px-1.5 py-1 text-gray-400 transition hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
                   aria-label={`${entry.emoji} 순서 변경`}
                   title="순서 변경"
                 >
-                  <i
-                    className="fas fa-grip-vertical text-[11px]"
-                    aria-hidden="true"
-                  ></i>
+                  {Array.from({ length: 4 }).map((_, dotIndex) => (
+                    <span
+                      key={`${entry.id}-drag-dot-${dotIndex}`}
+                      className="h-1 w-1 rounded-full bg-current"
+                      aria-hidden="true"
+                    ></span>
+                  ))}
                 </button>
 
                 <div className="flex flex-1 flex-col items-center justify-center pb-2 pt-5 text-center">
@@ -270,25 +273,25 @@ const RankEmojiCollectionPanel: React.FC<RankEmojiCollectionPanelProps> = ({
                   </span>
                 </div>
 
-                <div className="mt-auto flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleOpenEditor(
-                        entry.id,
-                        entryIndex,
-                        entry.emoji,
-                        entry.label,
-                      )
-                    }
-                    disabled={!canManage}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                    aria-label={`${entry.label} 이모지 수정`}
-                    title="이모지 수정"
-                  >
-                    <i className="fas fa-pen text-[11px]" aria-hidden="true"></i>
-                  </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleOpenEditor(
+                      entry.id,
+                      entryIndex,
+                      entry.emoji,
+                      entry.label,
+                    )
+                  }
+                  disabled={!canManage}
+                  className="absolute bottom-4 left-3 inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  aria-label={`${entry.label} 이모지 수정`}
+                  title="이모지 수정"
+                >
+                  <i className="fas fa-pen text-[10px]" aria-hidden="true"></i>
+                </button>
 
+                <div className="mt-auto flex items-center justify-center border-t border-slate-100 pt-3">
                   <label
                     className={[
                       "relative inline-flex items-center",
