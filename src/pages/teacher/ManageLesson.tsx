@@ -576,6 +576,9 @@ const ManageLesson: React.FC = () => {
   );
   const [draftBlankAnswer, setDraftBlankAnswer] = useState("");
   const [draftBlankPrompt, setDraftBlankPrompt] = useState("");
+  const [blankEditorMode, setBlankEditorMode] = useState<
+    "draft" | "existing" | null
+  >(null);
   const [worksheetTool, setWorksheetTool] = useState<
     "ocr" | "box" | "footnote"
   >("box");
@@ -1376,6 +1379,14 @@ const ManageLesson: React.FC = () => {
     );
   }, [teacherPreviewClassId, teacherPreviewRuntimeStatus]);
 
+  const resetBlankEditor = useCallback(() => {
+    setBlankEditorMode(null);
+    setActiveBlankId(null);
+    setDraftBlank(null);
+    setDraftBlankAnswer("");
+    setDraftBlankPrompt("");
+  }, []);
+
   const resetWorksheetState = (revokeExisting = false) => {
     if (revokeExisting) revokeBlobUrls(worksheetPageImages);
     setLessonPdfName("");
@@ -1388,11 +1399,8 @@ const ManageLesson: React.FC = () => {
     setWorksheetFootnoteAnchors([]);
     setPreparedPdf(null);
     setSelectedPdfFile(null);
-    setActiveBlankId(null);
     setActiveFootnoteAnchorId(null);
-    setDraftBlank(null);
-    setDraftBlankAnswer("");
-    setDraftBlankPrompt("");
+    resetBlankEditor();
   };
 
   const resetFootnoteImageDrafts = () => {
@@ -1739,6 +1747,7 @@ const ManageLesson: React.FC = () => {
       setWorksheetTextRegions(processed.regions);
       setWorksheetBlanks([]);
       setWorksheetFootnoteAnchors([]);
+      setBlankEditorMode(null);
       setActiveBlankId(null);
       setActiveFootnoteAnchorId(null);
       setDraftBlank(null);
@@ -1772,6 +1781,7 @@ const ManageLesson: React.FC = () => {
       regionBounds || rect,
       matchedRegions.length ? "ocr" : source,
     );
+    setBlankEditorMode("draft");
     setDraftBlank(blank);
     setDraftBlankAnswer(getBlankAnswerFromRegions(matchedRegions));
     setDraftBlankPrompt("");
@@ -1779,26 +1789,54 @@ const ManageLesson: React.FC = () => {
   };
 
   const handleConfirmDraftBlank = () => {
-    if (!draftBlank) return;
     const answer = draftBlankAnswer.trim();
     if (!answer) return alert("빈칸 정답을 입력해 주세요.");
-    const nextBlank = {
-      ...draftBlank,
-      answer,
-      prompt: draftBlankPrompt.trim(),
-    };
-    setWorksheetBlanks((prev) => [...prev, nextBlank]);
-    setActiveBlankId(nextBlank.id);
-    setDraftBlank(null);
+
+    if (draftBlank) {
+      const nextBlank = {
+        ...draftBlank,
+        answer,
+        prompt: draftBlankPrompt.trim(),
+      };
+      setWorksheetBlanks((prev) => [...prev, nextBlank]);
+      setBlankEditorMode(null);
+      setDraftBlank(null);
+      setDraftBlankAnswer("");
+      setDraftBlankPrompt("");
+      setActiveBlankId(null);
+      return;
+    }
+
+    if (!activeBlankId) return;
+    setWorksheetBlanks((prev) =>
+      prev.map((blank) =>
+        blank.id === activeBlankId
+          ? {
+              ...blank,
+              answer,
+              prompt: draftBlankPrompt.trim(),
+            }
+          : blank,
+      ),
+    );
+    setBlankEditorMode(null);
     setDraftBlankAnswer("");
     setDraftBlankPrompt("");
+    setActiveBlankId(null);
   };
 
   const handleSelectBlank = (blankId: string) => {
+    const targetBlank =
+      worksheetBlanks.find((blank) => blank.id === blankId) || null;
+    if (!targetBlank) {
+      resetBlankEditor();
+      return;
+    }
+    setBlankEditorMode("existing");
     setActiveBlankId(blankId);
     setDraftBlank(null);
-    setDraftBlankAnswer("");
-    setDraftBlankPrompt("");
+    setDraftBlankAnswer(targetBlank.answer);
+    setDraftBlankPrompt(targetBlank.prompt || "");
   };
 
   const updateBlank = (
@@ -1814,7 +1852,12 @@ const ManageLesson: React.FC = () => {
 
   const handleDeleteBlank = (blankId: string) => {
     setWorksheetBlanks((prev) => prev.filter((blank) => blank.id !== blankId));
-    if (activeBlankId === blankId) setActiveBlankId(null);
+    if (activeBlankId === blankId) {
+      setBlankEditorMode(null);
+      setActiveBlankId(null);
+      setDraftBlankAnswer("");
+      setDraftBlankPrompt("");
+    }
   };
 
   const deleteStorageFolderRecursive = async (
@@ -2914,6 +2957,7 @@ const ManageLesson: React.FC = () => {
                         draftBlank={draftBlank}
                         draftBlankAnswer={draftBlankAnswer}
                         draftBlankPrompt={draftBlankPrompt}
+                        blankEditorMode={blankEditorMode}
                         sortedBlanks={sortedBlanks}
                         pdfInputRef={pdfInputRef}
                         onPdfFileChange={handlePdfFileChange}
@@ -2939,11 +2983,7 @@ const ManageLesson: React.FC = () => {
                         onDraftBlankAnswerChange={setDraftBlankAnswer}
                         onDraftBlankPromptChange={setDraftBlankPrompt}
                         onConfirmDraftBlank={handleConfirmDraftBlank}
-                        onCancelDraftBlank={() => {
-                          setDraftBlank(null);
-                          setDraftBlankAnswer("");
-                          setDraftBlankPrompt("");
-                        }}
+                        onCancelDraftBlank={resetBlankEditor}
                         onUpdateBlank={updateBlank}
                         hasUnsavedPdfChanges={hasUnsavedPdfChanges}
                         pdfSaveState={pdfSaveState}

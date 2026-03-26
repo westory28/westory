@@ -103,6 +103,7 @@ type LessonPdfSectionProps = {
   draftBlank: LessonWorksheetBlank | null;
   draftBlankAnswer: string;
   draftBlankPrompt: string;
+  blankEditorMode: "draft" | "existing" | null;
   sortedBlanks: LessonWorksheetBlank[];
   pdfInputRef: React.RefObject<HTMLInputElement>;
   onPdfFileChange: (file: File | null) => void;
@@ -951,6 +952,7 @@ export function LessonPdfSection({
   draftBlank,
   draftBlankAnswer,
   draftBlankPrompt,
+  blankEditorMode,
   sortedBlanks,
   pdfInputRef,
   onPdfFileChange,
@@ -969,7 +971,6 @@ export function LessonPdfSection({
   onDraftBlankPromptChange,
   onConfirmDraftBlank,
   onCancelDraftBlank,
-  onUpdateBlank: _onUpdateBlank,
   hasUnsavedPdfChanges,
   pdfSaveState,
   pdfSaveFeedback,
@@ -994,16 +995,36 @@ export function LessonPdfSection({
     () => sortedBlanks.find((blank) => blank.id === activeBlankId) || null,
     [activeBlankId, sortedBlanks],
   );
+  const blankEditorAnswerInputRef = React.useRef<HTMLInputElement>(null);
+  const blankEditorPage = draftBlank?.page ?? activeBlank?.page ?? null;
+  const isBlankEditorOpen =
+    (blankEditorMode === "draft" && !!draftBlank) ||
+    (blankEditorMode === "existing" && !!activeBlank);
   const visibleBlanks = React.useMemo(
     () => (showAllBlanks ? sortedBlanks : sortedBlanks.slice(0, 5)),
     [showAllBlanks, sortedBlanks],
   );
+
+  const handleApplyBlankEditor = React.useCallback(() => {
+    onConfirmDraftBlank();
+  }, [
+    onConfirmDraftBlank,
+  ]);
 
   React.useEffect(() => {
     if (!isBlankManagerOpen) {
       setShowAllBlanks(false);
     }
   }, [isBlankManagerOpen]);
+
+  React.useEffect(() => {
+    if (!isBlankEditorOpen) return;
+    const frameId = window.requestAnimationFrame(() => {
+      blankEditorAnswerInputRef.current?.focus();
+      blankEditorAnswerInputRef.current?.select();
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [activeBlankId, draftBlank?.id, isBlankEditorOpen]);
 
   return (
     <section className="space-y-6">
@@ -1063,8 +1084,8 @@ export function LessonPdfSection({
           </span>
         )}
         <span>
-          오른쪽 플로팅 아이콘으로 제작 도구, 각주 추가, 키워드 목록을 확인할 수
-          있습니다.
+          오른쪽 플로팅 아이콘으로 제작 도구, 각주 추가, 키워드 목록을 확인하고
+          빈칸을 만들면 작은 팝업에서 바로 정답을 입력할 수 있습니다.
         </span>
       </div>
       {(hasUnsavedPdfChanges || pdfSaveFeedback?.message) && (
@@ -1091,58 +1112,6 @@ export function LessonPdfSection({
         <div className="rounded-2xl border border-blue-100 bg-blue-50/80 px-4 py-3 text-sm text-blue-900">
           원하는 위치를 한 번 눌러 각주 버튼을 찍어 주세요. 바로 작은 편집창이
           열립니다. 각주를 추가한 뒤 저장 버튼을 눌러 보관하세요.
-        </div>
-      )}
-      {draftBlank && (
-        <div className="rounded-3xl border border-blue-200 bg-blue-50/80 p-4">
-          <div className="flex items-center gap-2 text-base font-bold text-slate-900">
-            <i className="fas fa-pencil-alt text-sm"></i>새 키워드 확인
-          </div>
-          <p className="mt-1 text-sm text-slate-600">
-            방금 만든 영역의 정답과 학생 안내 문구를 간단히 확인해 주세요.
-          </p>
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <label className="block">
-              <span className="mb-2 block text-sm font-semibold text-slate-700">
-                정답
-              </span>
-              <input
-                value={draftBlankAnswer}
-                onChange={(event) =>
-                  onDraftBlankAnswerChange(event.target.value)
-                }
-                className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
-              />
-            </label>
-            <label className="block">
-              <span className="mb-2 block text-sm font-semibold text-slate-700">
-                학생 안내 문구
-              </span>
-              <input
-                value={draftBlankPrompt}
-                onChange={(event) =>
-                  onDraftBlankPromptChange(event.target.value)
-                }
-                className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
-              />
-            </label>
-          </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={onConfirmDraftBlank}
-              className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white"
-            >
-              빈칸 추가
-            </button>
-            <button
-              type="button"
-              onClick={onCancelDraftBlank}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600"
-            >
-              취소
-            </button>
-          </div>
         </div>
       )}
       {!!worksheetPageImages.length ? (
@@ -1336,6 +1305,116 @@ export function LessonPdfSection({
       ) : (
         <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-6 py-16 text-center text-sm text-slate-500">
           PDF를 준비하면 여기에서 OCR 결과와 빈칸, 각주를 편집할 수 있습니다.
+        </div>
+      )}
+      {isBlankEditorOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button
+            type="button"
+            aria-label="빈칸 편집 닫기"
+            onClick={onCancelDraftBlank}
+            className="absolute inset-0 bg-slate-950/10 backdrop-blur-[1px]"
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="lesson-blank-editor-title"
+            className="relative z-10 w-full max-w-sm rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(15,23,42,0.16)]"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
+                  {blankEditorMode === "draft" ? "새 빈칸" : "선택한 빈칸"}
+                </div>
+                <h4
+                  id="lesson-blank-editor-title"
+                  className="mt-2 text-lg font-bold text-slate-900"
+                >
+                  {blankEditorMode === "draft"
+                    ? "정답을 바로 입력해 추가합니다"
+                    : "정답과 안내 문구를 수정합니다"}
+                </h4>
+                <p className="mt-1 text-sm text-slate-500">
+                  {blankEditorPage
+                    ? `p.${blankEditorPage} 빈칸에 바로 반영됩니다.`
+                    : "현재 선택한 빈칸에 바로 반영됩니다."}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={onCancelDraftBlank}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50"
+                aria-label="빈칸 편집 닫기"
+              >
+                <i className="fas fa-times text-sm"></i>
+              </button>
+            </div>
+            <div className="mt-4 space-y-4">
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-slate-700">
+                  정답
+                </span>
+                <input
+                  ref={blankEditorAnswerInputRef}
+                  value={draftBlankAnswer}
+                  onChange={(event) =>
+                    onDraftBlankAnswerChange(event.target.value)
+                  }
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") {
+                      event.preventDefault();
+                      onCancelDraftBlank();
+                    }
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      handleApplyBlankEditor();
+                    }
+                  }}
+                  className="w-full rounded-2xl border border-slate-200 px-3 py-3 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
+                  placeholder="정답 입력"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-slate-700">
+                  학생 안내 문구
+                </span>
+                <input
+                  value={draftBlankPrompt}
+                  onChange={(event) =>
+                    onDraftBlankPromptChange(event.target.value)
+                  }
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") {
+                      event.preventDefault();
+                      onCancelDraftBlank();
+                    }
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      handleApplyBlankEditor();
+                    }
+                  }}
+                  className="w-full rounded-2xl border border-slate-200 px-3 py-3 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
+                  placeholder="비워 두면 기본 빈칸 문구를 사용합니다"
+                />
+              </label>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={onCancelDraftBlank}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleApplyBlankEditor}
+                className="rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white"
+              >
+                {blankEditorMode === "draft" ? "적용하고 추가" : "적용"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </section>
