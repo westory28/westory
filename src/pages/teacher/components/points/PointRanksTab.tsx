@@ -55,15 +55,6 @@ const buildEmojiCollectionLabel = (emoji: string, fallbackIndex: number) => {
     return normalizedEmoji ? `${normalizedEmoji} 아이콘` : `이모지 ${fallbackIndex + 1}`;
 };
 
-const isAutoManagedEmojiLabel = (label: string, emoji: string, fallbackIndex: number) => {
-    const normalizedLabel = normalizeText(label);
-    return !normalizedLabel
-        || normalizedLabel === normalizeText(emoji)
-        || normalizedLabel === `${normalizeText(emoji)} 아이콘`
-        || normalizedLabel === `이모지 ${fallbackIndex + 1}`
-        || normalizedLabel === `새 이모지 ${fallbackIndex + 1}`;
-};
-
 const makeTierDraft = (tiers: PointRankPolicyTier[]): PointRankPolicyTier => {
     const highestThreshold = tiers.reduce(
         (maxValue, tier) => Math.max(maxValue, Number(tier.minPoints || 0)),
@@ -845,9 +836,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
                                                     ...current,
                                                     emoji: nextEmoji,
                                                     value: nextEmoji,
-                                                    label: isAutoManagedEmojiLabel(current.label, current.emoji, entryIndex)
-                                                        ? buildEmojiCollectionLabel(nextEmoji, entryIndex)
-                                                        : current.label,
+                                                    label: buildEmojiCollectionLabel(nextEmoji, entryIndex),
                                                     legacyValues: Array.from(new Set([
                                                         ...(current.legacyValues || []),
                                                         current.emoji && current.emoji !== nextEmoji ? current.emoji : '',
