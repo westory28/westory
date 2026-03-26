@@ -208,11 +208,11 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
                   >
                     <div className="flex flex-wrap items-center gap-2">
                       <PointRankBadge rank={tierPreview} size="sm" showTheme />
-                      <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-gray-500">
+                      <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-gray-500 whitespace-nowrap">
                         {tier.code}
                       </span>
                       {isOpen && (
-                        <span className="rounded-full border border-blue-200 bg-blue-100 px-2.5 py-1 text-[11px] font-bold text-blue-700">
+                        <span className="rounded-full border border-blue-200 bg-blue-100 px-2.5 py-1 text-[11px] font-bold text-blue-700 whitespace-nowrap">
                           선택됨
                         </span>
                       )}
@@ -220,18 +220,18 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
 
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <div className="min-w-0">
-                        <div className="text-base font-bold text-gray-900 sm:text-lg">
+                        <div className="max-w-full truncate text-base font-bold text-gray-900 sm:text-lg">
                           {tierPreview?.label || `등급 ${tierIndex + 1}`}
                         </div>
                         <div className="mt-3 flex flex-wrap gap-2">
                           <span className={tierSummaryChipClassName}>
-                            기준 포인트
+                            기준
                             <span className="ml-1 text-gray-900">
-                              {tier.minPoints}점
+                              {tier.minPoints}점+
                             </span>
                           </span>
                           <span className={tierSummaryChipClassName}>
-                            허용 이모지
+                            이모지
                             <span className="ml-1 text-gray-900">
                               {tier.allowedEmojiIds?.length || 0}개
                             </span>
@@ -264,7 +264,7 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
                         <span>{isOpen ? "접기" : "상세 설정"}</span>
                         <i
                           className={`fas ${
-                            isOpen ? "fa-chevron-up" : "fa-chevron-right"
+                            isOpen ? "fa-chevron-up" : "fa-chevron-down"
                           } text-[10px]`}
                           aria-hidden="true"
                         ></i>
@@ -285,7 +285,7 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
                           type="button"
                           onClick={() => onRemoveTier(tier.code)}
                           disabled={!canManage || !canDelete}
-                          className="inline-flex items-center justify-center rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="inline-flex items-center justify-center rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {POINT_RANK_FIELD_LABELS.deleteTier}
                         </button>

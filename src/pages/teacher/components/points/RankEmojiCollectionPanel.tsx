@@ -113,9 +113,9 @@ const RankEmojiCollectionPanel: React.FC<RankEmojiCollectionPanelProps> = ({
   };
 
   return (
-    <section className="space-y-4">
+    <section className="space-y-5">
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <div className="flex flex-col gap-4 p-5 sm:p-6 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex flex-col gap-5 p-5 sm:p-6 xl:flex-row xl:items-start xl:justify-between">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-lg font-extrabold text-gray-900">이모지 모음</h2>
             <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-bold text-gray-600">
@@ -125,7 +125,7 @@ const RankEmojiCollectionPanel: React.FC<RankEmojiCollectionPanelProps> = ({
               활성 {enabledEmojiCount}개
             </span>
           </div>
-          <div className="flex flex-col gap-3 xl:min-w-[360px] xl:items-end">
+          <div className="flex flex-col gap-3 xl:min-w-[380px] xl:items-end">
             <div className="flex w-full flex-wrap items-center gap-2 xl:justify-end">
               <input
                 value={newEmojiValue}
@@ -137,7 +137,7 @@ const RankEmojiCollectionPanel: React.FC<RankEmojiCollectionPanelProps> = ({
                   }
                 }}
                 placeholder="😀"
-                className="h-10 w-20 rounded-lg border border-gray-300 bg-white px-3 text-center text-2xl font-bold text-gray-900"
+                className="h-11 w-24 rounded-xl border border-gray-200 bg-white px-3 text-center text-2xl font-bold text-gray-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
                 maxLength={8}
                 disabled={!canManage}
                 aria-label="새 이모지"
@@ -146,7 +146,7 @@ const RankEmojiCollectionPanel: React.FC<RankEmojiCollectionPanelProps> = ({
                 type="button"
                 onClick={onAddEmoji}
                 disabled={!canManage}
-                className="inline-flex h-10 items-center justify-center rounded-lg border border-gray-200 bg-white px-4 text-sm font-bold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex h-11 items-center justify-center rounded-xl border border-gray-200 bg-white px-4 text-sm font-bold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 추가
               </button>
@@ -154,14 +154,14 @@ const RankEmojiCollectionPanel: React.FC<RankEmojiCollectionPanelProps> = ({
                 type="button"
                 onClick={onSave}
                 disabled={!canManage}
-                className="inline-flex h-10 items-center justify-center rounded-lg bg-blue-600 px-4 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+                className="inline-flex h-11 items-center justify-center rounded-xl bg-blue-600 px-4 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
               >
                 이모지 모음 저장
               </button>
             </div>
             <div
               className={[
-                "w-full rounded-xl border px-4 py-3 text-sm xl:max-w-[360px]",
+                "w-full rounded-2xl border px-4 py-3 text-sm xl:max-w-[380px]",
                 hasUnsavedChanges
                   ? "border-amber-200 bg-amber-50 text-amber-800"
                   : "border-gray-200 bg-gray-50 text-gray-600",
@@ -173,7 +173,7 @@ const RankEmojiCollectionPanel: React.FC<RankEmojiCollectionPanelProps> = ({
             </div>
             {saveFeedbackMessage && saveFeedbackTone && (
               <div
-                className={`w-full rounded-xl px-4 py-3 text-sm xl:max-w-[360px] ${feedbackToneClassName[saveFeedbackTone]}`}
+                className={`w-full rounded-2xl px-4 py-3 text-sm xl:max-w-[380px] ${feedbackToneClassName[saveFeedbackTone]}`}
               >
                 {saveFeedbackMessage}
               </div>
@@ -183,7 +183,7 @@ const RankEmojiCollectionPanel: React.FC<RankEmojiCollectionPanelProps> = ({
       </div>
 
       <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3 sm:p-4">
-        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3">
           {draftRankPolicy.emojiRegistry.map((entry, entryIndex) => {
             const assignedTier =
               draftRankPolicy.tiers.find((tier) =>
@@ -278,7 +278,7 @@ const RankEmojiCollectionPanel: React.FC<RankEmojiCollectionPanelProps> = ({
                   aria-label={`${entry.label} 이모지 수정`}
                   title="이모지 수정"
                 >
-                  <i className="fas fa-pen text-xs" aria-hidden="true"></i>
+                  <i className="fas fa-pencil-alt text-xs" aria-hidden="true"></i>
                 </button>
 
                 <label
@@ -313,7 +313,7 @@ const RankEmojiCollectionPanel: React.FC<RankEmojiCollectionPanelProps> = ({
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/35 p-4">
           <div className="w-full max-w-xs rounded-2xl bg-white p-5 shadow-2xl">
             <div className="flex items-center justify-between gap-3">
-              <h3 className="text-sm font-bold text-gray-900">이모지 수정</h3>
+              <h3 className="text-sm font-bold text-gray-900">이모지 편집</h3>
               <button
                 type="button"
                 onClick={() => setEditingEntry(null)}
