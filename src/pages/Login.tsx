@@ -34,6 +34,7 @@ const ALLOWED_SCHOOL_EMAIL_DOMAIN = 'yongshin-ms.ms.kr';
 const ROLE_SESSION_KEY = 'westoryPortalRole';
 const PENDING_LOGIN_MODE_KEY = 'westoryPendingLoginMode';
 const REDIRECT_ATTEMPT_KEY = 'westoryRedirectAttempt';
+const REDIRECT_ATTEMPT_MAX_AGE_MS = 10 * 60 * 1000;
 type LoginMode = 'student' | 'teacher';
 
 interface SchoolOption {
@@ -325,8 +326,15 @@ const readRedirectAttemptMode = (): LoginMode | null => {
 
     try {
         const parsed = JSON.parse(raw) as { mode?: LoginMode; startedAt?: number };
-        return parsed.mode === 'teacher' || parsed.mode === 'student' ? parsed.mode : null;
+        const mode = parsed.mode === 'teacher' || parsed.mode === 'student' ? parsed.mode : null;
+        const startedAt = typeof parsed.startedAt === 'number' ? parsed.startedAt : 0;
+        if (!mode || !startedAt || Date.now() - startedAt > REDIRECT_ATTEMPT_MAX_AGE_MS) {
+            removeStorage(REDIRECT_ATTEMPT_KEY);
+            return null;
+        }
+        return mode;
     } catch {
+        removeStorage(REDIRECT_ATTEMPT_KEY);
         return null;
     }
 };
@@ -335,8 +343,19 @@ const clearRedirectAttempt = () => {
     removeStorage(REDIRECT_ATTEMPT_KEY);
 };
 
+const shouldReuseCurrentUserForRedirect = (
+    savedMode: LoginMode | null,
+    redirectMode: LoginMode | null,
+): boolean => {
+    if (redirectMode) return true;
+    return !!savedMode && (isIOSDevice() || isSafariBrowser());
+};
+
 const shouldResolveRedirectOnBoot = (): boolean => {
-    return isIOSDevice() || !!readRedirectAttemptMode() || !!readPendingLoginMode();
+    const redirectMode = readRedirectAttemptMode();
+    if (redirectMode) return true;
+    if (isIOSDevice()) return true;
+    return !!readPendingLoginMode() && isSafariBrowser();
 };
 
 const getRedirectStartMessage = (mode: LoginMode): string => {
@@ -847,6 +866,7 @@ const Login: React.FC = () => {
             alert('관리자 로그인은 관리자 계정으로만 가능합니다.');
             clearPendingLoginMode();
             clearRoleCache();
+            clearRedirectAttempt();
             await signOut(auth);
             return;
         }
@@ -873,6 +893,7 @@ const Login: React.FC = () => {
             if (!onboardingResult) {
                 clearPendingLoginMode();
                 clearRoleCache();
+                clearRedirectAttempt();
                 await signOut(auth);
                 return;
             }
@@ -902,6 +923,7 @@ const Login: React.FC = () => {
             if (!onboardingResult) {
                 clearPendingLoginMode();
                 clearRoleCache();
+                clearRedirectAttempt();
                 await signOut(auth);
                 return;
             }
@@ -992,9 +1014,10 @@ const Login: React.FC = () => {
                 const savedMode = getPendingLoginMode();
                 const redirectMode = readRedirectAttemptMode();
                 const hasRedirectBreadcrumb = !!savedMode || !!redirectMode;
-                const redirectedUser = result?.user || (hasRedirectBreadcrumb ? auth.currentUser : null);
+                const redirectedUser = result?.user
+                    || (shouldReuseCurrentUserForRedirect(savedMode, redirectMode) ? auth.currentUser : null);
                 if (!redirectedUser) {
-                    if (readRedirectAttemptMode()) {
+                    if (hasRedirectBreadcrumb) {
                         clearRedirectAttempt();
                         clearPendingLoginMode();
                         setLoginNotice('로그인이 취소되었거나 중간에 돌아왔습니다. 다시 로그인해주세요.');
@@ -1019,7 +1042,7 @@ const Login: React.FC = () => {
             } catch (error) {
                 if (isIgnorableRedirectError(error)) {
                     console.warn('Redirect state unavailable, skipping redirect recovery', error);
-                    if (readRedirectAttemptMode()) {
+                    if (getPendingLoginMode() || readRedirectAttemptMode()) {
                         clearRedirectAttempt();
                         clearPendingLoginMode();
                         setLoginNotice('로그인 화면으로 다시 돌아왔습니다. 학생 로그인 버튼을 다시 눌러주세요.');
@@ -1030,8 +1053,9 @@ const Login: React.FC = () => {
                 console.error('Redirect login failed', error);
                 const savedMode = getPendingLoginMode();
                 const redirectMode = readRedirectAttemptMode();
-                const hasRedirectBreadcrumb = !!savedMode || !!redirectMode;
-                const recoveredUser = hasRedirectBreadcrumb ? auth.currentUser : null;
+                const recoveredUser = shouldReuseCurrentUserForRedirect(savedMode, redirectMode)
+                    ? auth.currentUser
+                    : null;
                 if (recoveredUser) {
                     const effectiveMode: LoginMode = savedMode
                         || redirectMode
@@ -1154,6 +1178,8 @@ const Login: React.FC = () => {
             const setup = await completeStudentOnboarding(currentUser, existing, rosterProfile);
             if (!setup) {
                 clearRoleCache();
+                clearPendingLoginMode();
+                clearRedirectAttempt();
                 await signOut(auth);
                 return;
             }
@@ -1225,6 +1251,8 @@ const Login: React.FC = () => {
             }
         } catch (error) {
             console.error('Failed to continue student onboarding', error);
+            clearPendingLoginMode();
+            clearRedirectAttempt();
             alert(getStudentBootstrapFailureMessage(error));
         } finally {
             authActionLockRef.current = false;
@@ -1307,12 +1335,20 @@ const Login: React.FC = () => {
         setLoginNotice('');
         autoResumeUidRef.current = null;
 
+        let signOutSucceeded = false;
         try {
             await signOut(auth);
+            signOutSucceeded = true;
         } catch (error) {
             console.error('Failed to sign out before switching account', error);
         } finally {
             if (retryMode) {
+                if (!signOutSucceeded) {
+                    authActionLockRef.current = false;
+                    setAuthBusy(false);
+                    setLoginNotice('이전 로그인 상태를 정리하지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해주세요.');
+                    return;
+                }
                 await startGoogleLogin(retryMode);
                 return;
             }
