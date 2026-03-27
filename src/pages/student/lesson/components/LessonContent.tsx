@@ -298,11 +298,15 @@ const LessonContent: React.FC<LessonContentProps> = ({
           }
         }
       }
-      setSaveCompletionPopup({
-        title: "저장 완료",
-        message: popupMessage,
-        detail: popupDetail,
-      });
+      if (isWorksheetCompleted) {
+        setSaveCompletionPopup({
+          title: "저장 완료",
+          message: popupMessage,
+          detail: popupDetail,
+        });
+      } else {
+        setSaveCompletionPopup(null);
+      }
     } catch (saveError) {
       console.error("Failed to save lesson progress:", saveError);
       setSaveMessage("저장 실패");

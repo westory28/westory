@@ -546,12 +546,7 @@ function FootnoteEditorDialog({
                       onChange={(event) =>
                         onFootnoteDraftChange?.({ title: event.target.value })
                       }
-                      onBeforeInput={stopFieldEventPropagation}
                       onKeyDown={handleFieldKeyDown}
-                      onKeyUp={stopFieldEventPropagation}
-                      onCompositionStart={stopFieldEventPropagation}
-                      onCompositionUpdate={stopFieldEventPropagation}
-                      onCompositionEnd={stopFieldEventPropagation}
                       placeholder="예: 독립신문 기사"
                       className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
                     />
@@ -565,12 +560,7 @@ function FootnoteEditorDialog({
                       onChange={(event) =>
                         onFootnoteDraftChange?.({ label: event.target.value })
                       }
-                      onBeforeInput={stopFieldEventPropagation}
                       onKeyDown={handleFieldKeyDown}
-                      onKeyUp={stopFieldEventPropagation}
-                      onCompositionStart={stopFieldEventPropagation}
-                      onCompositionUpdate={stopFieldEventPropagation}
-                      onCompositionEnd={stopFieldEventPropagation}
                       placeholder="예: 기사 보기"
                       className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
                     />
@@ -586,12 +576,7 @@ function FootnoteEditorDialog({
                     onChange={(event) =>
                       onFootnoteDraftChange?.({ bodyHtml: event.target.value })
                     }
-                    onBeforeInput={stopFieldEventPropagation}
                     onKeyDown={handleFieldKeyDown}
-                    onKeyUp={stopFieldEventPropagation}
-                    onCompositionStart={stopFieldEventPropagation}
-                    onCompositionUpdate={stopFieldEventPropagation}
-                    onCompositionEnd={stopFieldEventPropagation}
                     rows={4}
                     placeholder="학생에게 보여 줄 설명이나 해설을 적어 주세요."
                     className="w-full resize-none rounded-2xl border border-slate-200 px-3 py-2.5 text-sm leading-6 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
@@ -610,12 +595,7 @@ function FootnoteEditorDialog({
                           youtubeUrl: event.target.value,
                         })
                       }
-                      onBeforeInput={stopFieldEventPropagation}
                       onKeyDown={handleFieldKeyDown}
-                      onKeyUp={stopFieldEventPropagation}
-                      onCompositionStart={stopFieldEventPropagation}
-                      onCompositionUpdate={stopFieldEventPropagation}
-                      onCompositionEnd={stopFieldEventPropagation}
                       placeholder="https://www.youtube.com/watch?v=..."
                       className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
                     />
