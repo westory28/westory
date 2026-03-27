@@ -1262,37 +1262,16 @@ export function LessonPdfSection({
                       </div>
                     ) : (
                       <>
-                        <div className="mt-4 flex max-h-[min(50vh,360px)] flex-wrap gap-2 overflow-y-auto pr-1">
-                          {visibleBlanks.map((blank) => (
-                            <div
+                        <div className="mt-4 max-h-[min(50vh,360px)] space-y-3 overflow-y-auto pr-1">
+                          {visibleBlanks.map((blank, index) => (
+                            <BlankFloatingListItem
                               key={blank.id}
-                              className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 ${
-                                activeBlankId === blank.id
-                                  ? "border-blue-300 bg-blue-50 text-blue-700"
-                                  : "border-slate-200 bg-slate-50 text-slate-700"
-                              }`}
-                            >
-                              <button
-                                type="button"
-                                onClick={() => onSelectBlank(blank.id)}
-                                className="max-w-[180px] truncate px-1 text-sm font-semibold"
-                                title={blankBadgeLabel(blank)}
-                              >
-                                {blankBadgeLabel(blank)}
-                              </button>
-                              <span className="rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-semibold text-slate-500">
-                                p.{blank.page + 1}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => onDeleteBlank(blank.id)}
-                                className="inline-flex h-5 w-5 items-center justify-center rounded-full text-rose-500 hover:bg-rose-50"
-                                aria-label="빈칸 삭제"
-                                title="빈칸 삭제"
-                              >
-                                <i className="fas fa-times text-[10px]"></i>
-                              </button>
-                            </div>
+                              blank={blank}
+                              index={index}
+                              selected={activeBlankId === blank.id}
+                              onSelect={() => onSelectBlank(blank.id)}
+                              onDelete={() => onDeleteBlank(blank.id)}
+                            />
                           ))}
                         </div>
                         {sortedBlanks.length > 5 && (
@@ -1739,6 +1718,70 @@ function FootnoteFloatingListItem({
         >
           <i className="fas fa-link text-[10px]"></i>
           본문에 넣기
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function BlankFloatingListItem({
+  blank,
+  index,
+  selected = false,
+  onSelect,
+  onDelete,
+}: {
+  blank: LessonWorksheetBlank;
+  index: number;
+  selected?: boolean;
+  onSelect?: () => void;
+  onDelete?: () => void;
+}) {
+  const detailText = [blank.answer?.trim(), blank.prompt?.trim()]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <div
+      className={`rounded-[24px] border bg-white p-4 shadow-sm transition ${
+        selected ? "border-blue-300 ring-2 ring-blue-100" : "border-slate-200"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <button
+          type="button"
+          onClick={onSelect}
+          className="min-w-0 flex-1 text-left"
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <strong className="text-sm font-bold text-slate-900">
+              빈칸 {index + 1}
+            </strong>
+            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
+              p.{blank.page + 1}
+            </span>
+            {selected && (
+              <span className="rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-semibold text-blue-700">
+                선택됨
+              </span>
+            )}
+          </div>
+          <div className="mt-2 truncate text-sm font-semibold text-slate-800">
+            {blankBadgeLabel(blank)}
+          </div>
+          <div className="mt-2 text-xs leading-5 text-slate-500">
+            {detailText ||
+              "정답과 안내 문구를 관리해 학생 빈칸 화면에 반영합니다."}
+          </div>
+        </button>
+        <button
+          type="button"
+          onClick={onDelete}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-rose-100 bg-rose-50 text-rose-600 transition hover:bg-rose-100"
+          aria-label="빈칸 삭제"
+          title="빈칸 삭제"
+        >
+          <i className="fas fa-times text-xs"></i>
         </button>
       </div>
     </div>

@@ -31,6 +31,7 @@ type AnswerStatus = "" | "correct" | "wrong";
 type SaveCompletionPopupState = {
   title: string;
   message: string;
+  detail?: string;
 } | null;
 
 interface LessonContentProps {
@@ -81,7 +82,6 @@ const LessonContent: React.FC<LessonContentProps> = ({
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
-  const [pointMessage, setPointMessage] = useState("");
   const [saveCompletionPopup, setSaveCompletionPopup] =
     useState<SaveCompletionPopupState>(null);
   const [activeFootnote, setActiveFootnote] = useState<LessonFootnote | null>(
@@ -141,7 +141,6 @@ const LessonContent: React.FC<LessonContentProps> = ({
     setStudentAnswers({});
     setHasUnsavedChanges(false);
     setSaveMessage("");
-    setPointMessage("");
     setSaveCompletionPopup(null);
     setActiveFootnote(null);
     setFootnotePanelOpen(false);
@@ -191,7 +190,6 @@ const LessonContent: React.FC<LessonContentProps> = ({
         setStudentAnswers({});
         setHasUnsavedChanges(false);
         setSaveMessage("");
-        setPointMessage("");
         setSaveCompletionPopup(null);
         setActiveFootnote(null);
         setFootnotePanelOpen(false);
@@ -275,6 +273,10 @@ const LessonContent: React.FC<LessonContentProps> = ({
       );
       setHasUnsavedChanges(false);
       setSaveMessage("저장됨");
+      let popupMessage = "저장되었습니다.";
+      const popupDetail = isWorksheetCompleted
+        ? "모든 빈칸 입력 내용이 저장되었습니다."
+        : undefined;
       let awardedPointAmount = 0;
       if (lesson && interactedRef.current && unitId) {
         const elapsedMs = Date.now() - viewStartedAtRef.current;
@@ -284,37 +286,27 @@ const LessonContent: React.FC<LessonContentProps> = ({
               config,
               activityType: "lesson",
               sourceId: `lesson-${unitId}`,
-              sourceLabel: lesson.title || "수업 자료 확인",
+              sourceLabel: lesson.title || "수업 자료 학습",
             });
             if (pointResult.awarded && pointResult.amount > 0) {
               awardedPointAmount =
                 Number(pointResult.totalAwarded || pointResult.amount) || 0;
-              setPointMessage(
-                `수업 자료 학습 포인트가 반영되었습니다. +${awardedPointAmount}점`,
-              );
-            } else if (pointResult.duplicate)
-              setPointMessage("이미 반영된 학습 포인트입니다.");
-            else setPointMessage("");
+              popupMessage = `저장되었습니다. ${awardedPointAmount} 포인트가 지급되었습니다.`;
+            }
           } catch (pointError) {
             console.error("Failed to claim lesson point reward:", pointError);
-            setPointMessage("포인트를 바로 반영하지 못했습니다.");
           }
-        } else {
-          setPointMessage("포인트는 30초 이상 학습 후 저장하면 반영됩니다.");
         }
       }
-      if (isWorksheetCompleted) {
-        setSaveCompletionPopup({
-          title: "저장 완료",
-          message:
-            awardedPointAmount > 0
-              ? `저장되었습니다. ${awardedPointAmount} 포인트가 지급되었습니다.`
-              : "저장되었습니다.",
-        });
-      }
+      setSaveCompletionPopup({
+        title: "저장 완료",
+        message: popupMessage,
+        detail: popupDetail,
+      });
     } catch (saveError) {
       console.error("Failed to save lesson progress:", saveError);
       setSaveMessage("저장 실패");
+      setSaveCompletionPopup(null);
     } finally {
       setIsSaving(false);
     }
@@ -499,6 +491,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
     setStudentAnswers(nextAnswers);
     setHasUnsavedChanges(true);
     setSaveMessage("저장 필요");
+    setSaveCompletionPopup(null);
   };
 
   const handleWorksheetAnswerChange = (
@@ -513,6 +506,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
     interactedRef.current = true;
     setHasUnsavedChanges(true);
     setSaveMessage("저장 필요");
+    setSaveCompletionPopup(null);
   };
 
   if (!unitId && !lessonOverride)
@@ -849,12 +843,6 @@ const LessonContent: React.FC<LessonContentProps> = ({
           )}
         </div>
 
-        {!!pointMessage && (
-          <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            {pointMessage}
-          </div>
-        )}
-
         {saveCompletionPopup && (
           <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
             <div
@@ -875,6 +863,11 @@ const LessonContent: React.FC<LessonContentProps> = ({
               <p className="mt-2 text-center text-sm leading-6 text-slate-600">
                 {saveCompletionPopup.message}
               </p>
+              {saveCompletionPopup.detail && (
+                <p className="mt-1 text-center text-xs leading-5 text-slate-500">
+                  {saveCompletionPopup.detail}
+                </p>
+              )}
               <button
                 type="button"
                 onClick={() => setSaveCompletionPopup(null)}
