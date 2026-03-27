@@ -490,13 +490,6 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
         rankSettingsPolicy,
         selectedTierCode as PointRankPolicyTier['code'] | null,
     );
-    const celebrationPreviewTier = celebrationPreview.targetTierCode
-        ? rankSettingsPolicy.tiers.find((tier) => tier.code === celebrationPreview.targetTierCode) || null
-        : null;
-    const celebrationPreviewTierLabel = celebrationPreviewTier
-        ? (getRankSettingsTierPreview(celebrationPreviewTier)?.label || celebrationPreviewTier.code)
-        : '샘플 등급';
-
     const sidebarItems: RankSettingsSidebarItem[] = [
         {
             id: 'theme_preview',
@@ -585,7 +578,6 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
                                 selectedTier={selectedTier}
                                 selectedTierPreview={selectedTierPreview}
                                 enabledEmojiCount={savedEnabledEmojiCount}
-                                celebrationPreviewTierLabel={celebrationPreviewTierLabel}
                                 celebrationPreviewAvailable={Boolean(celebrationPreview.rank)}
                                 hasUnsavedChanges={rankSettingsHasUnsavedChanges}
                                 saveFeedbackMessage={rankSettingsSaveFeedbackMessage}

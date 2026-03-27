@@ -34,7 +34,6 @@ interface RankTierEditorPanelProps {
   selectedTier: PointRankPolicyTier | null;
   selectedTierPreview: PointRankDisplay | null;
   enabledEmojiCount: number;
-  celebrationPreviewTierLabel: string;
   celebrationPreviewAvailable: boolean;
   hasUnsavedChanges: boolean;
   saveFeedbackMessage: string;
@@ -74,6 +73,8 @@ const feedbackToneClassName: Record<"success" | "error" | "warning", string> = {
 
 const tierSummaryChipClassName =
   "inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-600 whitespace-nowrap";
+const tierActionButtonClassName =
+  "inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border px-3.5 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50";
 
 const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
   canManage,
@@ -81,7 +82,6 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
   validationError,
   selectedTierCode,
   enabledEmojiCount,
-  celebrationPreviewTierLabel,
   celebrationPreviewAvailable,
   hasUnsavedChanges,
   saveFeedbackMessage,
@@ -254,14 +254,8 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
                       </div>
                     </div>
 
-                    <div
-                      className={[
-                        "inline-flex items-center gap-2 self-start rounded-full border px-3 py-1.5 text-xs font-bold transition",
-                        isOpen
-                          ? "border-blue-200 bg-blue-50 text-blue-700"
-                          : "border-gray-200 bg-white text-gray-600",
-                      ].join(" ")}
-                    >
+                    {!isOpen && (
+                      <div className="inline-flex items-center gap-2 self-start rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-600 transition">
                       <span>{isOpen ? "접기" : "상세 설정"}</span>
                       <i
                         className={`fas ${
@@ -269,7 +263,8 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
                         } text-[10px]`}
                         aria-hidden="true"
                       ></i>
-                    </div>
+                      </div>
+                    )}
                   </div>
                 </button>
                 {isOpen && (
@@ -280,20 +275,42 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
-                          좌측 설정 + 우측 이모지 편집
+                          상세 설정 + 허용 이모지
                         </span>
                         <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-600">
                           활성 {enabledEmojiCount}개
                         </span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => onRemoveTier(tier.code)}
-                        disabled={!canManage || !canDelete}
-                        className="inline-flex items-center justify-center rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {POINT_RANK_FIELD_LABELS.deleteTier}
-                      </button>
+                      <div className="flex flex-wrap items-center justify-end gap-2.5">
+                        <button
+                          type="button"
+                          onClick={onOpenCelebrationPreview}
+                          disabled={!celebrationPreviewAvailable}
+                          className={`${tierActionButtonClassName} border-gray-200 bg-gray-50 text-gray-700 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700`}
+                        >
+                          <span>축하 팝업 미리보기</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onSelectTier(tier.code)}
+                          className={`${tierActionButtonClassName} border-gray-200 bg-gray-50 text-gray-700 hover:border-gray-300 hover:bg-white`}
+                          aria-label={`${tierPreview?.label || tier.code} 등급 접기`}
+                        >
+                          <span>접기</span>
+                          <i
+                            className="fas fa-chevron-up text-[10px]"
+                            aria-hidden="true"
+                          ></i>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onRemoveTier(tier.code)}
+                          disabled={!canManage || !canDelete}
+                          className={`${tierActionButtonClassName} border-rose-200 bg-white px-3 text-rose-600 hover:bg-rose-50`}
+                        >
+                          {POINT_RANK_FIELD_LABELS.deleteTier}
+                        </button>
+                      </div>
                     </div>
 
                     <div className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.92fr)]">
@@ -438,31 +455,14 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
                           </div>
                         </label>
                         <section className="rounded-2xl border border-gray-200 bg-gray-50/80 p-4">
-                          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                            <div>
-                              <h4 className="text-sm font-extrabold text-gray-900">
-                                축하 팝업
-                              </h4>
-                              <p className="mt-1 text-sm text-gray-500">
-                                등급 상승 시 보여 줄 축하 팝업의 표시 여부와
-                                강도를 정합니다.
-                              </p>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <div className="inline-flex rounded-full border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-500">
-                                {draftRankPolicy.celebrationPolicy.enabled
-                                  ? "축하 팝업 사용 중"
-                                  : "축하 팝업 꺼짐"}
-                              </div>
-                              <button
-                                type="button"
-                                onClick={onOpenCelebrationPreview}
-                                disabled={!celebrationPreviewAvailable}
-                                className="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
-                              >
-                                축하 팝업 미리보기
-                              </button>
-                            </div>
+                          <div>
+                            <h4 className="text-sm font-extrabold text-gray-900">
+                              축하 팝업
+                            </h4>
+                            <p className="mt-1 text-sm text-gray-500">
+                              등급 상승 시 보여 줄 축하 팝업의 표시 여부와
+                              강도를 정합니다.
+                            </p>
                           </div>
 
                           <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
@@ -524,23 +524,10 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
                               </div>
                             </label>
                           </div>
-
-                          <div className="mt-4 rounded-xl border border-dashed border-gray-200 bg-white px-4 py-3 text-sm text-gray-600">
-                            {(tierPreview?.label || tier.code) ===
-                            celebrationPreviewTierLabel
-                              ? `${celebrationPreviewTierLabel} 등급 기준으로 현재 테마와 효과를 미리볼 수 있습니다.`
-                              : `${tierPreview?.label || tier.code} 카드를 보고 있어도 미리보기는 ${celebrationPreviewTierLabel} 등급 기준으로 현재 테마와 효과를 보여 줍니다.`}
-                            {!draftRankPolicy.celebrationPolicy.enabled && (
-                              <div className="mt-1 text-xs text-gray-500">
-                                현재 설정에서는 실제 학생 화면에 축하 팝업이
-                                표시되지 않습니다.
-                              </div>
-                            )}
-                          </div>
                         </section>
                       </div>
 
-                      <aside className="rounded-2xl border border-gray-200 bg-gray-50/80 p-4">
+                      <aside className="rounded-2xl border border-gray-200 bg-gray-50/80 p-4 sm:p-5">
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div>
                             <h4 className="text-sm font-extrabold text-gray-900">
@@ -560,7 +547,7 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
                             등록된 이모지가 없습니다.
                           </div>
                         ) : (
-                          <div className="mt-4 grid grid-cols-5 gap-y-2 gap-x-4">
+                          <div className="mt-4 grid grid-cols-4 justify-items-center gap-3.5 px-1">
                             {draftRankPolicy.emojiRegistry.map((entry) => {
                               const checked = selectedEmojiIds.has(entry.id);
                               const disabled =
@@ -590,9 +577,9 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
                                         : "선택 가능"
                                   }`}
                                   className={[
-                                    "relative flex aspect-square min-h-[58px] items-center justify-center rounded-xl border text-2xl leading-none transition",
+                                    "relative flex h-[46px] w-[46px] items-center justify-center rounded-[12px] border text-[1.4rem] leading-none transition",
                                     checked
-                                      ? "border-blue-300 bg-blue-50 text-blue-700 ring-1 ring-blue-100 shadow-sm"
+                                      ? "border-blue-200 bg-blue-50/80 text-blue-700 ring-1 ring-blue-100"
                                       : "border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50",
                                     entry.enabled === false
                                       ? "border-gray-200 bg-gray-100 text-gray-300"
@@ -605,7 +592,7 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
                                   <span>{entry.emoji}</span>
                                   <span
                                     className={[
-                                      "absolute right-1.5 top-1.5 inline-flex h-4 w-4 items-center justify-center rounded-full border text-[9px]",
+                                      "absolute right-1 top-1 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border text-[8px]",
                                       checked
                                         ? "border-blue-600 bg-blue-600 text-white"
                                         : "border-gray-300 bg-white text-transparent",
@@ -619,7 +606,7 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
                                   </span>
                                   <span
                                     className={[
-                                      "absolute bottom-1.5 left-1.5 inline-flex h-2.5 w-2.5 rounded-full",
+                                      "absolute bottom-1 left-1 inline-flex h-2.5 w-2.5 rounded-full",
                                       entry.enabled === false
                                         ? "bg-gray-300"
                                         : "bg-emerald-400",
