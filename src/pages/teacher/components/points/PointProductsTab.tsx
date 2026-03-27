@@ -37,9 +37,9 @@ interface PointProductsTabProps {
   onSubmit: (event: React.FormEvent) => void;
 }
 
-const formFieldClassName = "grid min-w-0 gap-2";
+const formFieldClassName = "grid min-w-0 content-start gap-2";
 const inputClassName =
-  "w-full min-w-0 rounded-lg border border-gray-300 px-4 py-2.5 text-sm box-border";
+  "h-11 w-full min-w-0 rounded-lg border border-gray-300 px-4 text-sm box-border";
 const textareaClassName =
   "w-full min-w-0 rounded-lg border border-gray-300 px-4 py-3 text-sm box-border";
 const helperTextClassName = "text-xs leading-5 text-gray-500";
@@ -298,7 +298,7 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
                 className={textareaClassName}
               />
             </label>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+            <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
               <label className={formFieldClassName}>
                 <span className="text-sm font-bold text-gray-700 whitespace-nowrap">
                   가격(위스)
@@ -316,7 +316,7 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
                   placeholder="예: 500"
                   className={inputClassName}
                 />
-                <span className={helperTextClassName}>
+                <span className={`${helperTextClassName} min-h-[2.5rem]`}>
                   학생 상점에는 {formatWisAmount(productForm.price || 0)} 형태로
                   표시됩니다.
                 </span>
@@ -338,6 +338,9 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
                   placeholder="예: 20"
                   className={inputClassName}
                 />
+                <span className={`${helperTextClassName} min-h-[2.5rem]`}>
+                  0 입력 시 학생 화면에서 품절 상태로 표시됩니다.
+                </span>
               </label>
             </div>
             <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4">
@@ -488,16 +491,15 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
                   학생에게 보이는 상품이 없습니다.
                 </div>
               ) : (
-                <div className="pointer-events-none">
-                  <div className={WIS_PRODUCT_CARD_GRID_CLASSNAME}>
-                    {previewProducts.map((product) => (
-                      <WisProductCard
-                        key={`preview-${product.id}`}
-                        product={product}
-                        walletBalance={Math.max(0, Number(product.price || 0))}
-                      />
-                    ))}
-                  </div>
+                <div className={WIS_PRODUCT_CARD_GRID_CLASSNAME}>
+                  {previewProducts.map((product) => (
+                    <WisProductCard
+                      key={`preview-${product.id}`}
+                      product={product}
+                      walletBalance={Math.max(0, Number(product.price || 0))}
+                      previewOnly
+                    />
+                  ))}
                 </div>
               )}
             </div>

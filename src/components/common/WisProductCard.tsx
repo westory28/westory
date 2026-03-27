@@ -5,6 +5,37 @@ import type { PointProduct } from "../../types";
 export const WIS_PRODUCT_CARD_GRID_CLASSNAME =
   "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4";
 
+export const getWisProductCardStatus = (
+  product: PointProduct,
+  walletBalance: number,
+) => {
+  const price = Math.max(0, Number(product.price || 0));
+  const stock = Math.max(0, Number(product.stock || 0));
+  const isVisible = product.isActive !== false;
+  const canAfford = walletBalance >= price;
+  const hasStock = stock > 0;
+
+  return {
+    price,
+    stock,
+    isVisible,
+    canAfford,
+    hasStock,
+    canRequest: isVisible && hasStock && canAfford,
+    statusText: !isVisible
+      ? "학생 화면 비노출"
+      : !hasStock
+        ? "재고 없음"
+        : !canAfford
+          ? "위스 부족"
+          : "구매 가능",
+    statusClassName:
+      !isVisible || !hasStock || !canAfford
+        ? "border-rose-200 bg-rose-50 text-rose-600"
+        : "border-emerald-200 bg-emerald-50 text-emerald-700",
+  };
+};
+
 interface WisProductCardProps {
   product: PointProduct;
   walletBalance: number;
@@ -12,6 +43,7 @@ interface WisProductCardProps {
   actionDisabled?: boolean;
   actionBusy?: boolean;
   onAction?: () => void;
+  onCardClick?: () => void;
   statusNote?: string;
   previewOnly?: boolean;
 }
@@ -23,30 +55,36 @@ const WisProductCard: React.FC<WisProductCardProps> = ({
   actionDisabled = false,
   actionBusy = false,
   onAction,
+  onCardClick,
   statusNote = "",
   previewOnly = false,
 }) => {
-  const price = Math.max(0, Number(product.price || 0));
-  const stock = Math.max(0, Number(product.stock || 0));
-  const isVisible = product.isActive !== false;
-  const canAfford = walletBalance >= price;
-  const hasStock = stock > 0;
-  const canRequest = isVisible && hasStock && canAfford && !actionDisabled;
-
-  const productStatusText = !isVisible
-    ? "학생 화면 비노출"
-    : !hasStock
-      ? "재고 없음"
-      : !canAfford
-        ? "위스 부족"
-        : "구매 가능";
-  const productStatusClass =
-    !isVisible || !hasStock || !canAfford
-      ? "border-rose-200 bg-rose-50 text-rose-600"
-      : "border-emerald-200 bg-emerald-50 text-emerald-700";
+  const { price, stock, canRequest, statusText, statusClassName } =
+    getWisProductCardStatus(product, walletBalance);
+  const isInteractive = Boolean(onCardClick);
 
   return (
-    <article className="flex h-full min-w-0 flex-col overflow-hidden rounded-[1.4rem] border border-gray-200 bg-white shadow-sm">
+    <article
+      className={[
+        "flex h-full min-w-0 flex-col overflow-hidden rounded-[1.4rem] border border-gray-200 bg-white shadow-sm transition",
+        isInteractive
+          ? "cursor-pointer hover:border-gray-300 hover:shadow-md focus-within:ring-4 focus-within:ring-blue-50"
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      onClick={onCardClick}
+      onKeyDown={(event) => {
+        if (!isInteractive) return;
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onCardClick?.();
+        }
+      }}
+      role={isInteractive ? "button" : undefined}
+      tabIndex={isInteractive ? 0 : undefined}
+      aria-label={isInteractive ? `${product.name} 상세 보기` : undefined}
+    >
       {product.previewImageUrl || product.imageUrl ? (
         <div className="aspect-[16/10] bg-gray-100">
           <img
@@ -68,14 +106,9 @@ const WisProductCard: React.FC<WisProductCardProps> = ({
               <h3 className="min-h-[3rem] line-clamp-2 text-sm font-bold leading-6 text-gray-800 sm:text-base">
                 {product.name}
               </h3>
-              <p className="mt-1 min-h-[2.625rem] line-clamp-2 text-sm leading-5 text-gray-500">
-                {product.description || "상품 설명이 아직 없습니다."}
-              </p>
             </div>
             <div className="shrink-0 text-right">
-              <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-gray-400">
-                PRICE
-              </div>
+              <div className="text-[11px] font-bold text-gray-400">가격</div>
               <div className="mt-1 whitespace-nowrap text-base font-black text-blue-700 sm:text-lg">
                 {formatWisAmount(price)}
               </div>
@@ -87,9 +120,9 @@ const WisProductCard: React.FC<WisProductCardProps> = ({
               재고 {stock}개
             </span>
             <span
-              className={`inline-flex whitespace-nowrap rounded-full border px-3 py-1 text-[11px] font-bold sm:text-xs ${productStatusClass}`}
+              className={`inline-flex whitespace-nowrap rounded-full border px-3 py-1 text-[11px] font-bold sm:text-xs ${statusClassName}`}
             >
-              {productStatusText}
+              {statusText}
             </span>
           </div>
 
@@ -103,7 +136,10 @@ const WisProductCard: React.FC<WisProductCardProps> = ({
         {!previewOnly && (
           <button
             type="button"
-            onClick={onAction}
+            onClick={(event) => {
+              event.stopPropagation();
+              onAction?.();
+            }}
             disabled={!canRequest || actionBusy}
             className="mt-4 w-full whitespace-nowrap rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400"
           >

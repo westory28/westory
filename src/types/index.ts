@@ -136,14 +136,19 @@ export interface PointOrder {
 
 export type PointRankTierCode = `tier_${number}`;
 
-export type PointRankThemeId =
-  | "korean_golpum"
-  | "world_nobility";
+export type PointRankThemeId = "korean_golpum" | "world_nobility";
 
 export type PointRankBadgeStyleToken =
   | "stone"
   | "blue"
+  | "sky"
   | "emerald"
+  | "mint"
+  | "yellow"
+  | "orange"
+  | "red"
+  | "pink"
+  | "violet"
   | "amber"
   | "rose";
 
@@ -165,7 +170,9 @@ export interface PointRankEmojiPolicyTier {
   allowedEmojiIds: string[];
 }
 
-export type PointRankEmojiPolicyTiers = Partial<Record<PointRankTierCode, PointRankEmojiPolicyTier>>;
+export type PointRankEmojiPolicyTiers = Partial<
+  Record<PointRankTierCode, PointRankEmojiPolicyTier>
+>;
 
 export interface PointRankEmojiRegistryEntry {
   id: string;
@@ -198,7 +205,9 @@ export interface PointRankThemeOverride {
   tiers?: Partial<Record<PointRankTierCode, PointRankThemeTierOverride>>;
 }
 
-export type PointRankThemeOverrides = Partial<Record<PointRankThemeId, PointRankThemeOverride>>;
+export type PointRankThemeOverrides = Partial<
+  Record<PointRankThemeId, PointRankThemeOverride>
+>;
 
 export interface PointRankCelebrationPolicy {
   enabled: boolean;

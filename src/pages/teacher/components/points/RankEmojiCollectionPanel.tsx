@@ -249,7 +249,7 @@ const RankEmojiCollectionPanel: React.FC<RankEmojiCollectionPanelProps> = ({
                       이 등급에서 처음 해금되는 이모지가 아직 없습니다.
                     </div>
                   ) : (
-                    <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
+                    <div className="grid grid-cols-4 gap-2 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8">
                       {entries.map((entry, entryIndex) => {
                         const registryIndex =
                           draftRankPolicy.emojiRegistry.findIndex(
@@ -272,7 +272,7 @@ const RankEmojiCollectionPanel: React.FC<RankEmojiCollectionPanelProps> = ({
                             }}
                             onDrop={(event) => handleDrop(entry.id, event)}
                             className={[
-                              "group relative flex min-h-[138px] min-w-0 flex-col rounded-[1.1rem] border p-3 transition",
+                              "group relative flex min-h-[116px] min-w-0 flex-col rounded-[0.95rem] border px-2 py-2 transition",
                               entry.enabled === false
                                 ? "border-gray-200 bg-slate-50/95"
                                 : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm",
@@ -284,49 +284,51 @@ const RankEmojiCollectionPanel: React.FC<RankEmojiCollectionPanelProps> = ({
                               .filter(Boolean)
                               .join(" ")}
                           >
-                            <button
-                              type="button"
-                              draggable={canManage}
-                              onDragStart={(event) =>
-                                handleDragStart(entry.id, event)
-                              }
-                              onDragEnd={() => {
-                                setDraggedEntryId(null);
-                                setDragOverEntryId(null);
-                              }}
-                              disabled={!canManage}
-                              className="absolute right-2 top-2 inline-flex h-6 w-6 items-center justify-center rounded-md text-gray-400 transition hover:bg-gray-50 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
-                              aria-label={`${entry.emoji} 순서 변경`}
-                              title="순서 변경"
-                            >
-                              {Array.from({ length: 4 }).map((_, dotIndex) => (
-                                <span
-                                  key={`${entry.id}-drag-dot-${dotIndex}`}
-                                  className="h-1 w-1 rounded-full bg-current"
-                                  aria-hidden="true"
-                                ></span>
-                              ))}
-                            </button>
-
-                            <div className="flex flex-1 flex-col items-center justify-center px-1 text-center">
-                              <div
-                                className={[
-                                  "inline-flex h-11 w-11 items-center justify-center rounded-[1rem] border text-[1.7rem] leading-none shadow-inner",
-                                  entry.enabled === false
-                                    ? "border-gray-200 bg-white text-gray-300"
-                                    : "border-slate-200 bg-slate-50 text-slate-900",
-                                ].join(" ")}
-                                title={entry.label}
+                            <div className="flex justify-center pb-1">
+                              <button
+                                type="button"
+                                draggable={canManage}
+                                onDragStart={(event) =>
+                                  handleDragStart(entry.id, event)
+                                }
+                                onDragEnd={() => {
+                                  setDraggedEntryId(null);
+                                  setDragOverEntryId(null);
+                                }}
+                                disabled={!canManage}
+                                className="inline-flex h-5 w-5 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-50 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
+                                aria-label={`${entry.emoji} 순서 변경`}
+                                title="순서 변경"
                               >
-                                {entry.emoji}
-                              </div>
-                              <div className="mt-2 max-w-full truncate text-xs font-bold text-gray-900 whitespace-nowrap">
-                                {entry.label}
-                              </div>
+                                <span
+                                  className="grid grid-cols-3 gap-[2px]"
+                                  aria-hidden="true"
+                                >
+                                  {Array.from({ length: 6 }).map(
+                                    (_, dotIndex) => (
+                                      <span
+                                        key={`${entry.id}-drag-dot-${dotIndex}`}
+                                        className="h-1 w-1 rounded-full bg-current"
+                                      ></span>
+                                    ),
+                                  )}
+                                </span>
+                              </button>
                             </div>
 
-                            <div className="mt-3 space-y-2 border-t border-slate-100 pt-2">
-                              <div className="grid grid-cols-[28px_minmax(0,1fr)] items-center gap-2">
+                            <div className="flex flex-1 flex-col items-center text-center">
+                              <div className="relative mt-1">
+                                <div
+                                  className={[
+                                    "inline-flex h-11 w-11 items-center justify-center rounded-[0.95rem] border text-[1.62rem] leading-none shadow-inner",
+                                    entry.enabled === false
+                                      ? "border-gray-200 bg-white text-gray-300"
+                                      : "border-slate-200 bg-slate-50 text-slate-900",
+                                  ].join(" ")}
+                                  title={entry.label}
+                                >
+                                  {entry.emoji}
+                                </div>
                                 <button
                                   type="button"
                                   onClick={() =>
@@ -341,7 +343,7 @@ const RankEmojiCollectionPanel: React.FC<RankEmojiCollectionPanelProps> = ({
                                     })
                                   }
                                   disabled={!canManage}
-                                  className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                  className="absolute -bottom-1 -left-1 inline-flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                                   aria-label={`${entry.label} 이모지 수정`}
                                   title="이모지 수정"
                                 >
@@ -350,40 +352,46 @@ const RankEmojiCollectionPanel: React.FC<RankEmojiCollectionPanelProps> = ({
                                     aria-hidden="true"
                                   ></i>
                                 </button>
-                                <select
-                                  value={tier.code}
-                                  onChange={(event) =>
-                                    onMoveEmojiToTier(
-                                      entry.id,
-                                      event.target
-                                        .value as PointRankPolicyTier["code"],
-                                    )
-                                  }
-                                  disabled={!canManage}
-                                  className="min-w-0 truncate whitespace-nowrap rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-gray-700"
-                                >
-                                  {displayTiers.map((optionTier) => {
-                                    const optionPreview =
-                                      getTierPreview(optionTier);
-                                    return (
-                                      <option
-                                        key={`${entry.id}-${optionTier.code}`}
-                                        value={optionTier.code}
-                                      >
-                                        {optionPreview?.shortLabel ||
-                                          optionPreview?.label ||
-                                          "등급"}
-                                      </option>
-                                    );
-                                  })}
-                                </select>
                               </div>
-                              <div className="flex items-center justify-between">
-                                <span className="text-[11px] font-bold text-gray-500 whitespace-nowrap">
-                                  {entry.enabled === false
-                                    ? "비활성"
-                                    : "사용 중"}
-                                </span>
+
+                              <div className="mt-2 w-full max-w-[126px]">
+                                <div className="relative">
+                                  <select
+                                    value={tier.code}
+                                    onChange={(event) =>
+                                      onMoveEmojiToTier(
+                                        entry.id,
+                                        event.target
+                                          .value as PointRankPolicyTier["code"],
+                                      )
+                                    }
+                                    disabled={!canManage}
+                                    className="w-full appearance-none rounded-full border border-gray-200 bg-white px-3 py-1.5 pr-7 text-center text-[11px] font-bold text-gray-700 shadow-sm outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-50 disabled:opacity-60 whitespace-nowrap"
+                                    title={entry.label}
+                                  >
+                                    {displayTiers.map((optionTier) => {
+                                      const optionPreview =
+                                        getTierPreview(optionTier);
+                                      return (
+                                        <option
+                                          key={`${entry.id}-${optionTier.code}`}
+                                          value={optionTier.code}
+                                        >
+                                          {optionPreview?.label ||
+                                            optionPreview?.shortLabel ||
+                                            "등급"}
+                                        </option>
+                                      );
+                                    })}
+                                  </select>
+                                  <i
+                                    className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 fas fa-chevron-down text-[10px] text-gray-400"
+                                    aria-hidden="true"
+                                  ></i>
+                                </div>
+                              </div>
+
+                              <div className="mt-auto flex justify-center pt-2">
                                 <label
                                   className={[
                                     "relative inline-flex items-center",

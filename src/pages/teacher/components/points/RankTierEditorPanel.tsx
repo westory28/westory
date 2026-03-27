@@ -15,7 +15,6 @@ import type {
 
 const inputClassName =
   "w-full min-w-0 rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm transition focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-50";
-const selectClassName = inputClassName;
 const fieldCardClassName =
   "block rounded-2xl border border-gray-200 bg-gray-50/80 p-4";
 const tierSummaryChipClassName =
@@ -29,6 +28,10 @@ const clampNumber = (value: unknown, fallback = 0) => {
   const numericValue = Number(value);
   return Number.isFinite(numericValue) ? numericValue : fallback;
 };
+
+const badgeStyleOptionMap = new Map(
+  POINT_RANK_BADGE_STYLE_OPTIONS.map((option) => [option.value, option]),
+);
 
 interface RankTierEditorPanelProps {
   canManage: boolean;
@@ -189,11 +192,12 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
               const tierPreview = getTierPreview(tier);
               const isOpen = selectedTierCode === tier.code;
               const selectedEmojiIds = new Set(tier.allowedEmojiIds || []);
+              const badgeStyleOption =
+                badgeStyleOptionMap.get(tier.badgeStyleToken || "stone") ||
+                badgeStyleOptionMap.get("stone");
               const badgeStyleLabel =
-                POINT_RANK_BADGE_STYLE_OPTIONS.find(
-                  (option) =>
-                    option.value === (tier.badgeStyleToken || "stone"),
-                )?.label || String(tier.badgeStyleToken || "stone");
+                badgeStyleOption?.label ||
+                String(tier.badgeStyleToken || "stone");
 
               return (
                 <article
@@ -351,31 +355,73 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
                               <div className="mb-2 text-sm font-bold text-gray-700">
                                 {POINT_RANK_FIELD_LABELS.badgeStyleToken}
                               </div>
-                              <select
-                                value={tier.badgeStyleToken || "stone"}
-                                onChange={(event) =>
-                                  onSetTierField(
-                                    tier.code,
-                                    "badgeStyleToken",
-                                    String(
-                                      event.target.value || "stone",
-                                    ) as PointRankPolicyTier["badgeStyleToken"],
-                                  )
-                                }
-                                className={selectClassName}
-                                disabled={!canManage}
-                              >
-                                {POINT_RANK_BADGE_STYLE_OPTIONS.map(
-                                  (option) => (
-                                    <option
-                                      key={option.value}
-                                      value={option.value}
-                                    >
-                                      {option.label}
-                                    </option>
-                                  ),
-                                )}
-                              </select>
+                              <div className="space-y-3">
+                                <div
+                                  className={[
+                                    "inline-flex min-w-0 items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold whitespace-nowrap",
+                                    badgeStyleOption?.toneClassName ||
+                                      "border-stone-200 bg-stone-50 text-stone-700",
+                                  ].join(" ")}
+                                >
+                                  <span
+                                    className={[
+                                      "h-3.5 w-3.5 shrink-0 rounded-full ring-2 ring-white",
+                                      badgeStyleOption?.swatchClassName ||
+                                        "bg-stone-500",
+                                    ].join(" ")}
+                                    aria-hidden="true"
+                                  ></span>
+                                  <span>{badgeStyleLabel}</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+                                  {POINT_RANK_BADGE_STYLE_OPTIONS.map(
+                                    (option) => {
+                                      const isSelected =
+                                        option.value ===
+                                        (tier.badgeStyleToken || "stone");
+                                      return (
+                                        <button
+                                          key={`${tier.code}-${option.value}`}
+                                          type="button"
+                                          onClick={() =>
+                                            onSetTierField(
+                                              tier.code,
+                                              "badgeStyleToken",
+                                              String(
+                                                option.value,
+                                              ) as PointRankPolicyTier["badgeStyleToken"],
+                                            )
+                                          }
+                                          disabled={!canManage}
+                                          className={[
+                                            "inline-flex min-w-0 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold transition whitespace-nowrap",
+                                            isSelected
+                                              ? `${option.toneClassName} ring-2 ring-offset-1 ring-blue-200`
+                                              : "border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50",
+                                            !canManage
+                                              ? "cursor-not-allowed opacity-60"
+                                              : "",
+                                          ]
+                                            .filter(Boolean)
+                                            .join(" ")}
+                                          aria-pressed={isSelected}
+                                        >
+                                          <span
+                                            className={[
+                                              "h-3.5 w-3.5 shrink-0 rounded-full ring-2 ring-white",
+                                              option.swatchClassName,
+                                            ].join(" ")}
+                                            aria-hidden="true"
+                                          ></span>
+                                          <span className="overflow-hidden text-ellipsis">
+                                            {option.label}
+                                          </span>
+                                        </button>
+                                      );
+                                    },
+                                  )}
+                                </div>
+                              </div>
                               <div className="mt-2 text-xs leading-5 text-gray-500">
                                 {POINT_RANK_FIELD_HELPERS.badgeStyleToken}
                               </div>
