@@ -95,6 +95,8 @@ const readPendingLoginMode = (): LoginMode | null => {
     return saved === 'teacher' || saved === 'student' ? saved : null;
 };
 const normalizeEmail = (value: unknown): string => String(value || '').trim().toLowerCase();
+const hasOwnField = (value: object | null | undefined, key: string): boolean => !!value
+    && Object.prototype.hasOwnProperty.call(value, key);
 
 const isAllowedLoginEmail = (email: unknown): boolean => {
     const normalizedEmail = normalizeEmail(email);
@@ -904,16 +906,22 @@ const Login: React.FC = () => {
 
         const shouldPersistStudentProfile = nextRole === 'student' && onboardingResult?.shouldPersistProfile === true;
         const nextTeacherPortalEnabled = resolveTeacherPortalEnabled(nextRole, existing);
+        const nextStaffPermissions = nextRole === 'staff' ? staffPermissions : [];
 
         const basePayload: Record<string, unknown> = {
             uid: user.uid,
             email: user.email || '',
             photoURL: user.photoURL || '',
             role: nextRole,
-            staffPermissions: nextRole === 'staff' ? staffPermissions : [],
-            teacherPortalEnabled: nextTeacherPortalEnabled,
             lastLogin: serverTimestamp(),
         };
+
+        if (!existing || nextRole !== 'student' || hasOwnField(existing, 'staffPermissions')) {
+            basePayload.staffPermissions = nextStaffPermissions;
+        }
+        if (!existing || nextRole !== 'student' || hasOwnField(existing, 'teacherPortalEnabled')) {
+            basePayload.teacherPortalEnabled = nextTeacherPortalEnabled;
+        }
 
         if (resolvedName && (nextRole !== 'student' || shouldPersistStudentProfile)) {
             basePayload.name = resolvedName;
@@ -947,7 +955,7 @@ const Login: React.FC = () => {
         const requiresBlockingWrite = !userSnap.exists() || shouldBlockUserProfileWrite({
             existing,
             nextRole,
-            nextStaffPermissions: nextRole === 'staff' ? staffPermissions : [],
+            nextStaffPermissions,
             nextTeacherPortalEnabled,
             onboardingResult,
         });
@@ -970,7 +978,7 @@ const Login: React.FC = () => {
             uid: user.uid,
             email: user.email || existing?.email || '',
             role: nextRole,
-            staffPermissions: nextRole === 'staff' ? staffPermissions : [],
+            staffPermissions: nextStaffPermissions,
             teacherPortalEnabled: nextTeacherPortalEnabled,
         };
         const targetPath = nextPortalMode === 'teacher'

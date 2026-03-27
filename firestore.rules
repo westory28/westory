@@ -148,11 +148,24 @@ service cloud.firestore {
     }
 
     function protectedUserFieldsUnchanged() {
+      let requestTeacherPortalEnabled = request.resource.data.keys().hasAny(['teacherPortalEnabled'])
+        ? request.resource.data.teacherPortalEnabled
+        : false;
+      let resourceTeacherPortalEnabled = resource.data.keys().hasAny(['teacherPortalEnabled'])
+        ? resource.data.teacherPortalEnabled
+        : false;
+      let requestStaffPermissions = request.resource.data.keys().hasAny(['staffPermissions']) && request.resource.data.staffPermissions is list
+        ? request.resource.data.staffPermissions
+        : [];
+      let resourceStaffPermissions = resource.data.keys().hasAny(['staffPermissions']) && resource.data.staffPermissions is list
+        ? resource.data.staffPermissions
+        : [];
+
       return request.resource.data.uid == resource.data.uid
         && request.resource.data.email == resource.data.email
         && request.resource.data.role == resource.data.role
-        && request.resource.data.teacherPortalEnabled == resource.data.teacherPortalEnabled
-        && request.resource.data.staffPermissions == resource.data.staffPermissions;
+        && requestTeacherPortalEnabled == resourceTeacherPortalEnabled
+        && requestStaffPermissions == resourceStaffPermissions;
     }
 
     function isValidOwnStudentUpdate(userId) {

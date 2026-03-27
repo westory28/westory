@@ -54,7 +54,6 @@ const toCanonicalOptionValue = <T extends SchoolGradeOption | SchoolClassOption>
 
 const STUDENTS_PER_PAGE = 50;
 const ADMIN_EMAIL = 'westoria28@gmail.com';
-const KOREAN_NAME_PATTERN = /^[가-힣]{2,4}$/;
 
 const parseGradeValue = (data: any) => {
     const direct = String(data?.studentGrade ?? data?.grade ?? '').trim();
@@ -89,8 +88,7 @@ const classSortValue = (classValue: string) => {
     return { numeric: false, value: classValue };
 };
 
-const normalizeStudentName = (value: unknown) => String(value || '').trim();
-const isValidKoreanStudentName = (value: unknown) => KOREAN_NAME_PATTERN.test(normalizeStudentName(value));
+const getStudentIdentityLabel = (student: Pick<Student, 'email' | 'userId'>) => student.email || student.userId;
 
 const StudentList: React.FC = () => {
     const { userData, currentUser } = useAuth();
@@ -179,22 +177,6 @@ const StudentList: React.FC = () => {
                     data.customName ||
                     '',
                 ).trim();
-                const hasConfirmedKoreanName =
-                    data.customNameConfirmed === true &&
-                    isValidKoreanStudentName(resolvedName);
-                const hasLegacyKoreanName =
-                    !data.customNameConfirmed &&
-                    isValidKoreanStudentName(resolvedName) &&
-                    (
-                        !!String(data.grade || '').trim() ||
-                        !!String(data.class || '').trim() ||
-                        !!String(data.number || '').trim() ||
-                        !!String(data.studentGrade || '').trim() ||
-                        !!String(data.studentClass || '').trim() ||
-                        !!String(data.studentNumber || '').trim()
-                    );
-
-                if (!hasConfirmedKoreanName && !hasLegacyKoreanName) return;
 
                 list.push({
                     id: item.id,
@@ -451,7 +433,7 @@ const StudentList: React.FC = () => {
                         <div className="flex w-full gap-2 md:w-auto">
                             <input
                                 type="text"
-                                placeholder="이름 검색"
+                                placeholder="이름 또는 이메일 검색"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none md:w-64"
@@ -511,10 +493,17 @@ const StudentList: React.FC = () => {
                                                         setHistoryModalOpen(true);
                                                     }}
                                                     title="현재 학기와 이전 응시 기록 조회"
-                                                    className="flex items-center font-bold text-gray-800 hover:text-blue-600 hover:underline group-hover:text-blue-600"
+                                                    className="w-full text-left font-bold text-gray-800 hover:text-blue-600 hover:underline group-hover:text-blue-600"
                                                 >
-                                                    {student.name || '(이름 없음)'}
-                                                    <i className="fas fa-folder-open ml-2 text-xs text-gray-300 group-hover:text-blue-400"></i>
+                                                    <span className="flex items-center">
+                                                        <span>{student.name || '(이름 없음)'}</span>
+                                                        <i className="fas fa-folder-open ml-2 text-xs text-gray-300 group-hover:text-blue-400"></i>
+                                                    </span>
+                                                    {!student.name && (
+                                                        <span className="mt-1 font-mono text-xs font-normal text-gray-500 group-hover:text-blue-500">
+                                                            {getStudentIdentityLabel(student)}
+                                                        </span>
+                                                    )}
                                                 </button>
                                             </td>
                                             <td className="hidden p-4 font-mono text-xs text-gray-500 lg:table-cell">{student.email}</td>
