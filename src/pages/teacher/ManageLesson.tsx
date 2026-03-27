@@ -912,7 +912,8 @@ const ManageLesson: React.FC = () => {
       footnoteEditorSession.mode === "edit" &&
       footnoteEditorSession.sourceFootnoteId
         ? lessonFootnotes.find(
-            (footnote) => footnote.id === footnoteEditorSession.sourceFootnoteId,
+            (footnote) =>
+              footnote.id === footnoteEditorSession.sourceFootnoteId,
           ) || null
         : null;
     const normalizedDraft = sourceFootnote
@@ -2387,16 +2388,17 @@ const ManageLesson: React.FC = () => {
             params.lessonFootnotes,
           )
         : sanitizeLessonFootnote(session.draft, params.lessonFootnotes);
-      const nextFootnotes = existingFootnote && sourceFootnoteId
-        ? reindexFootnotes(
-            params.lessonFootnotes.map((footnote) =>
-              footnote.id === sourceFootnoteId ? nextFootnote : footnote,
-            ),
-          )
-        : reindexFootnotes([...params.lessonFootnotes, nextFootnote]);
+      const nextFootnotes =
+        existingFootnote && sourceFootnoteId
+          ? reindexFootnotes(
+              params.lessonFootnotes.map((footnote) =>
+                footnote.id === sourceFootnoteId ? nextFootnote : footnote,
+              ),
+            )
+          : reindexFootnotes([...params.lessonFootnotes, nextFootnote]);
       const nextAnchorId = session.pendingAnchorPlacement
         ? `footnote-anchor-${Date.now()}`
-        : null;
+        : "";
       const nextAnchors = session.pendingAnchorPlacement
         ? sortWorksheetFootnoteAnchors([
             ...params.worksheetFootnoteAnchors,
@@ -2429,9 +2431,9 @@ const ManageLesson: React.FC = () => {
         lessonFootnotes: nextFootnotes,
         worksheetFootnoteAnchors: nextAnchors,
         activeFootnoteId: nextFootnote.id,
-        activeFootnoteAnchorId: nextAnchorId,
+        activeFootnoteAnchorId: nextAnchorId || null,
         bodyInsertMessage: session.insertIntoBody
-          ? "본문에 각주 버튼을 넣었습니다. 오른쪽 저장 버튼을 눌러 반영하세요."
+          ? "본문에 각주 버튼을 넣었습니다. 상단 저장 또는 오른쪽 PDF 저장 버튼으로 최종 저장하세요."
           : null,
       };
     },
@@ -2830,7 +2832,19 @@ const ManageLesson: React.FC = () => {
         alert(successMessage);
       }
     } catch (error) {
-      console.error(error);
+      console.error("Failed to save lesson PDF edits:", error, {
+        source,
+        selectedNodeId,
+        shouldSaveMeta,
+        shouldSavePdf,
+        footnoteCount: lessonFootnotesForSave.length,
+        worksheetFootnoteAnchorCount: worksheetFootnoteAnchorsForSave.length,
+        footnoteContentTypes: lessonFootnotesForSave.map((footnote) => ({
+          id: footnote.id,
+          anchorKey: footnote.anchorKey,
+          contentType: footnote.contentType,
+        })),
+      });
       if (shouldSaveMeta) {
         setLessonSaveState(metaSaved ? "saved" : "dirty");
       } else if (hasUnsavedMetaChanges) {

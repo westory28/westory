@@ -106,6 +106,33 @@ export const sanitizeLessonFootnoteAnchorKey = (value: unknown) =>
 export const buildFootnoteToken = (anchorKey: string) =>
   `[fn:${sanitizeLessonFootnoteAnchorKey(anchorKey)}]`;
 
+const isLessonFootnoteContentType = (
+  value: unknown,
+): value is LessonFootnoteContentType =>
+  value === "text" ||
+  value === "image" ||
+  value === "sourceArchiveImage" ||
+  value === "youtube";
+
+const resolveLessonFootnoteContentType = (
+  footnote: Partial<LessonFootnote>,
+): LessonFootnoteContentType => {
+  if (String(footnote.youtubeUrl || "").trim()) return "youtube";
+  if (String(footnote.sourceArchiveImagePath || "").trim()) {
+    return "sourceArchiveImage";
+  }
+  if (
+    String(footnote.imageUrl || "").trim() ||
+    String(footnote.imageStoragePath || "").trim()
+  ) {
+    return "image";
+  }
+  if (isLessonFootnoteContentType(footnote.contentType)) {
+    return footnote.contentType;
+  }
+  return "text";
+};
+
 export const ensureUniqueAnchorKey = (
   candidate: string,
   takenAnchorKeys: Iterable<string>,
@@ -147,13 +174,7 @@ export const createLessonFootnoteDraft = (
     bodyHtml: String(partial.bodyHtml || "").trim(),
     imageUrl: String(partial.imageUrl || "").trim(),
     imageStoragePath: String(partial.imageStoragePath || "").trim(),
-    contentType:
-      partial.contentType === "image" ||
-      partial.contentType === "sourceArchiveImage" ||
-      partial.contentType === "youtube" ||
-      partial.contentType === "text"
-        ? partial.contentType
-        : undefined,
+    contentType: resolveLessonFootnoteContentType(partial),
     youtubeUrl: String(partial.youtubeUrl || "").trim(),
     sourceArchiveAssetId: String(partial.sourceArchiveAssetId || "").trim(),
     sourceArchiveImagePath: String(partial.sourceArchiveImagePath || "").trim(),
@@ -192,13 +213,7 @@ export const sanitizeLessonFootnote = (
     bodyHtml: String(footnote.bodyHtml || "").trim(),
     imageUrl: String(footnote.imageUrl || "").trim(),
     imageStoragePath: String(footnote.imageStoragePath || "").trim(),
-    contentType:
-      footnote.contentType === "image" ||
-      footnote.contentType === "sourceArchiveImage" ||
-      footnote.contentType === "youtube" ||
-      footnote.contentType === "text"
-        ? footnote.contentType
-        : undefined,
+    contentType: resolveLessonFootnoteContentType(footnote),
     youtubeUrl: String(footnote.youtubeUrl || "").trim(),
     sourceArchiveAssetId: String(footnote.sourceArchiveAssetId || "").trim(),
     sourceArchiveImagePath: String(
@@ -421,22 +436,7 @@ export const getLessonFootnoteDisplayTitle = (footnote: LessonFootnote) =>
 
 export const getLessonFootnotePrimaryContentType = (
   footnote: LessonFootnote,
-): LessonFootnoteContentType => {
-  if (
-    footnote.contentType === "text" ||
-    footnote.contentType === "image" ||
-    footnote.contentType === "sourceArchiveImage" ||
-    footnote.contentType === "youtube"
-  ) {
-    return footnote.contentType;
-  }
-  if (String(footnote.youtubeUrl || "").trim()) return "youtube";
-  if (String(footnote.sourceArchiveImagePath || "").trim()) {
-    return "sourceArchiveImage";
-  }
-  if (String(footnote.imageUrl || "").trim()) return "image";
-  return "text";
-};
+): LessonFootnoteContentType => resolveLessonFootnoteContentType(footnote);
 
 export const getLessonFootnoteContentTypes = (
   footnote: LessonFootnote,

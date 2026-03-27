@@ -723,7 +723,7 @@ function FootnoteEditorDialog({
                 className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
               >
                 <i className="fas fa-check text-xs"></i>
-                {session.mode === "create" ? "추가하기" : "저장하기"}
+                {session.mode === "create" ? "추가하기" : "변경 적용"}
               </button>
             </div>
           </div>
@@ -812,8 +812,8 @@ export function LessonBodyEditor({
           )}
         </div>
         <p className="mt-3 text-sm text-slate-600">
-          오른쪽 각주 목록 패널에서 `본문에 넣기`를 누르면 현재 커서 위치에
-          각주 표시가 들어가고, 선택 범위가 없으면 본문 끝에 추가됩니다.
+          오른쪽 각주 목록 패널에서 `본문에 넣기`를 누르면 현재 커서 위치에 각주
+          표시가 들어가고, 선택 범위가 없으면 본문 끝에 추가됩니다.
         </p>
         {!!bodyInsertMessage && (
           <div className="mt-3 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-blue-700">
@@ -913,6 +913,21 @@ export function LessonPdfSection({
     () => getLessonPdfExtractionHelpText(pdfProcessing),
     [pdfProcessing],
   );
+  const pdfSaveStatusTone = React.useMemo(() => {
+    if (pdfSaveFeedback?.tone === "error") return "error";
+    if (hasUnsavedPdfChanges) return "dirty";
+    if (pdfSaveFeedback?.tone === "success") return "success";
+    return null;
+  }, [hasUnsavedPdfChanges, pdfSaveFeedback]);
+  const pdfSaveStatusMessage = React.useMemo(() => {
+    if (pdfSaveFeedback?.tone === "error") {
+      return pdfSaveFeedback.message;
+    }
+    if (hasUnsavedPdfChanges) {
+      return "저장하지 않은 PDF 편집 내용이 있습니다. 상단 저장 버튼이나 오른쪽 저장 버튼을 눌러 반영하세요. 저장 후 학생/수업 화면에 반영됩니다.";
+    }
+    return pdfSaveFeedback?.message || "";
+  }, [hasUnsavedPdfChanges, pdfSaveFeedback]);
   const activeBlank = React.useMemo(
     () => sortedBlanks.find((blank) => blank.id === activeBlankId) || null,
     [activeBlankId, sortedBlanks],
@@ -951,9 +966,7 @@ export function LessonPdfSection({
 
   const handleApplyBlankEditor = React.useCallback(() => {
     onConfirmDraftBlank();
-  }, [
-    onConfirmDraftBlank,
-  ]);
+  }, [onConfirmDraftBlank]);
 
   React.useEffect(() => {
     if (!isKeywordPanelOpen) {
@@ -996,7 +1009,8 @@ export function LessonPdfSection({
   const focusFootnote = React.useCallback(
     (footnoteId: string) => {
       onSelectFootnote?.(footnoteId);
-      const primaryAnchor = footnoteAnchorsByFootnote.get(footnoteId)?.[0] || null;
+      const primaryAnchor =
+        footnoteAnchorsByFootnote.get(footnoteId)?.[0] || null;
       if (primaryAnchor) {
         setTeacherCurrentPage(primaryAnchor.page);
         onSelectFootnoteAnchor?.(primaryAnchor.id);
@@ -1067,19 +1081,17 @@ export function LessonPdfSection({
           빈칸을 만들면 작은 팝업에서 바로 정답을 입력할 수 있습니다.
         </span>
       </div>
-      {(hasUnsavedPdfChanges || pdfSaveFeedback?.message) && (
+      {!!pdfSaveStatusTone && !!pdfSaveStatusMessage && (
         <div
           className={`rounded-2xl border px-4 py-3 text-sm ${
-            hasUnsavedPdfChanges
+            pdfSaveStatusTone === "dirty"
               ? "border-amber-200 bg-amber-50 text-amber-900"
-              : pdfSaveFeedback?.tone === "error"
+              : pdfSaveStatusTone === "error"
                 ? "border-rose-200 bg-rose-50 text-rose-700"
                 : "border-emerald-200 bg-emerald-50 text-emerald-700"
           }`}
         >
-          {hasUnsavedPdfChanges
-            ? "저장하지 않은 PDF 편집 내용이 있습니다. 상단 저장 버튼이나 오른쪽 저장 버튼을 눌러 반영하세요. 저장 후 학생/수업 화면에 반영됩니다."
-            : pdfSaveFeedback?.message}
+          {pdfSaveStatusMessage}
         </div>
       )}
       {!!pdfStatusHelpText && (
@@ -1199,8 +1211,7 @@ export function LessonPdfSection({
                     onClick={onAddFootnote}
                     className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700"
                   >
-                    <i className="fas fa-plus text-[10px]"></i>
-                    새 각주
+                    <i className="fas fa-plus text-[10px]"></i>새 각주
                   </button>
                   <button
                     type="button"
