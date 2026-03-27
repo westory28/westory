@@ -370,11 +370,12 @@ const resolveAutoRewardEnabled = (policy) => {
 
 const resolveQuizBonusInput = (policy) => {
   const nestedRewardPolicy = policy?.rewardPolicy || {};
-  const nestedBonus = nestedRewardPolicy?.quizBonus || policy?.quizBonus || policy?.quizPerfectBonus || {};
+  const legacyBonus = policy?.quizBonus || policy?.quizPerfectBonus || {};
+  const nestedBonus = nestedRewardPolicy?.quizBonus || legacyBonus || {};
   return {
-    enabled: nestedBonus?.enabled ?? policy?.quizBonusEnabled ?? policy?.quizPerfectBonusEnabled,
-    threshold: nestedBonus?.thresholdScore ?? nestedBonus?.threshold ?? policy?.quizBonusThreshold ?? policy?.quizPerfectBonusThreshold,
-    amount: nestedBonus?.amount ?? policy?.quizBonusAmount ?? policy?.quizPerfectBonusAmount,
+    enabled: policy?.quizBonusEnabled ?? policy?.quizPerfectBonusEnabled ?? nestedBonus?.enabled,
+    threshold: policy?.quizBonusThreshold ?? policy?.quizPerfectBonusThreshold ?? nestedBonus?.thresholdScore ?? nestedBonus?.threshold,
+    amount: policy?.quizBonusAmount ?? policy?.quizPerfectBonusAmount ?? nestedBonus?.amount,
   };
 };
 

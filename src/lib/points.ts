@@ -127,12 +127,13 @@ const resolveAutoRewardEnabled = (policy?: Partial<PointPolicy> | null) => {
 
 const resolveQuizBonusInput = (policy?: Partial<PointPolicy> | null) => {
     const nestedRewardPolicy = (policy as any)?.rewardPolicy || {};
-    const nestedBonus = nestedRewardPolicy?.quizBonus || (policy as any)?.quizBonus || (policy as any)?.quizPerfectBonus || {};
+    const legacyBonus = (policy as any)?.quizBonus || (policy as any)?.quizPerfectBonus || {};
+    const nestedBonus = nestedRewardPolicy?.quizBonus || legacyBonus || {};
 
     return {
-        enabled: nestedBonus?.enabled ?? (policy as any)?.quizBonusEnabled ?? (policy as any)?.quizPerfectBonusEnabled,
-        threshold: nestedBonus?.thresholdScore ?? nestedBonus?.threshold ?? (policy as any)?.quizBonusThreshold ?? (policy as any)?.quizPerfectBonusThreshold,
-        amount: nestedBonus?.amount ?? (policy as any)?.quizBonusAmount ?? (policy as any)?.quizPerfectBonusAmount,
+        enabled: (policy as any)?.quizBonusEnabled ?? (policy as any)?.quizPerfectBonusEnabled ?? nestedBonus?.enabled,
+        threshold: (policy as any)?.quizBonusThreshold ?? (policy as any)?.quizPerfectBonusThreshold ?? nestedBonus?.thresholdScore ?? nestedBonus?.threshold,
+        amount: (policy as any)?.quizBonusAmount ?? (policy as any)?.quizPerfectBonusAmount ?? nestedBonus?.amount,
     };
 };
 

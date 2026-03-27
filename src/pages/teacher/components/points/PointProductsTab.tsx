@@ -27,6 +27,9 @@ interface PointProductsTabProps {
   canManage: boolean;
   productImagePreviewUrl: string;
   productImageUploading: boolean;
+  productOrderDirty: boolean;
+  productOrderSaving: boolean;
+  productOrderFeedback: string;
   onProductFormChange: (
     updater: (prev: ProductFormState) => ProductFormState,
   ) => void;
@@ -34,6 +37,8 @@ interface PointProductsTabProps {
   onEditProduct: (product: PointProduct) => void;
   onResetForm: () => void;
   onToggleProduct: (product: PointProduct) => void;
+  onReorderProducts: (sourceId: string, targetId: string) => void;
+  onSaveProductOrder: () => void;
   onSubmit: (event: React.FormEvent) => void;
 }
 
@@ -54,17 +59,27 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
   canManage,
   productImagePreviewUrl,
   productImageUploading,
+  productOrderDirty,
+  productOrderSaving,
+  productOrderFeedback,
   onProductFormChange,
   onProductImageChange,
   onEditProduct,
   onResetForm,
   onToggleProduct,
+  onReorderProducts,
+  onSaveProductOrder,
   onSubmit,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [draggedProductId, setDraggedProductId] = useState<string | null>(null);
+  const [dragOverProductId, setDragOverProductId] = useState<string | null>(
+    null,
+  );
 
   const normalizedSearchQuery = normalizeSearchValue(searchQuery);
+  const canReorderProducts = canManage && !normalizedSearchQuery;
   const filteredProducts = useMemo(() => {
     if (!normalizedSearchQuery) return products;
     return products.filter((product) =>
@@ -77,6 +92,29 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
   const previewProducts = useMemo(() => {
     return filteredProducts.filter((product) => product.isActive !== false);
   }, [filteredProducts]);
+
+  const handleDragStart = (
+    productId: string,
+    event: React.DragEvent<HTMLElement>,
+  ) => {
+    if (!canReorderProducts) return;
+    setDraggedProductId(productId);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", productId);
+  };
+
+  const handleDrop = (
+    targetId: string,
+    event: React.DragEvent<HTMLElement>,
+  ) => {
+    event.preventDefault();
+    const sourceId =
+      draggedProductId || event.dataTransfer.getData("text/plain") || "";
+    setDraggedProductId(null);
+    setDragOverProductId(null);
+    if (!sourceId || sourceId === targetId) return;
+    onReorderProducts(sourceId, targetId);
+  };
 
   useEffect(() => {
     if (!previewOpen) return undefined;
@@ -119,6 +157,26 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
                     ? `검색 결과 ${filteredProducts.length}개 / 전체 ${products.length}개`
                     : `${products.length}개`}
                 </span>
+                {normalizedSearchQuery && (
+                  <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700 whitespace-nowrap">
+                    검색 중에는 순서 변경이 잠시 멈춥니다.
+                  </span>
+                )}
+                {productOrderDirty && !normalizedSearchQuery && (
+                  <span className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 whitespace-nowrap">
+                    순서 변경 저장 대기 중
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={onSaveProductOrder}
+                  disabled={
+                    !canManage || !productOrderDirty || productOrderSaving
+                  }
+                  className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-400 whitespace-nowrap"
+                >
+                  {productOrderSaving ? "순서 저장 중..." : "순서 저장"}
+                </button>
                 <button
                   type="button"
                   onClick={() => setPreviewOpen(true)}
@@ -146,11 +204,19 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
                 </button>
               )}
             </div>
+            {productOrderFeedback && (
+              <div
+                className={`mt-3 rounded-lg px-4 py-3 text-sm font-bold ${getPointFeedbackToneClass(productOrderFeedback)}`}
+              >
+                {productOrderFeedback}
+              </div>
+            )}
           </div>
 
           <div className="min-w-0 overflow-hidden">
             <table className="w-full table-fixed text-sm text-left">
               <colgroup>
+                <col className="w-[52px]" />
                 <col />
                 <col className="w-[108px]" />
                 <col className="w-[78px]" />
@@ -159,6 +225,7 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
               </colgroup>
               <thead className="bg-gray-100 text-xs font-bold uppercase text-gray-600">
                 <tr>
+                  <th className="p-4 text-center whitespace-nowrap">순서</th>
                   <th className="p-4 whitespace-nowrap">상품명</th>
                   <th className="p-4 text-right whitespace-nowrap">가격</th>
                   <th className="p-4 text-right whitespace-nowrap">재고</th>
@@ -169,7 +236,7 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
               <tbody className="divide-y divide-gray-100 bg-white">
                 {filteredProducts.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="p-10 text-center text-gray-400">
+                    <td colSpan={6} className="p-10 text-center text-gray-400">
                       {normalizedSearchQuery
                         ? "검색 조건에 맞는 상품이 없습니다."
                         : "등록된 상품이 없습니다."}
@@ -177,7 +244,59 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
                   </tr>
                 )}
                 {filteredProducts.map((product) => (
-                  <tr key={product.id} className="transition hover:bg-gray-50">
+                  <tr
+                    key={product.id}
+                    onDragOver={(event) => {
+                      if (!canReorderProducts) return;
+                      event.preventDefault();
+                      setDragOverProductId(product.id);
+                    }}
+                    onDragLeave={() => {
+                      if (dragOverProductId === product.id) {
+                        setDragOverProductId(null);
+                      }
+                    }}
+                    onDrop={(event) => handleDrop(product.id, event)}
+                    className={`transition ${
+                      dragOverProductId === product.id &&
+                      draggedProductId !== product.id
+                        ? "bg-blue-50"
+                        : "hover:bg-gray-50"
+                    }`}
+                  >
+                    <td className="p-4 text-center">
+                      <button
+                        type="button"
+                        draggable={canReorderProducts}
+                        onDragStart={(event) =>
+                          handleDragStart(product.id, event)
+                        }
+                        onDragEnd={() => {
+                          setDraggedProductId(null);
+                          setDragOverProductId(null);
+                        }}
+                        disabled={!canReorderProducts}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-400 transition hover:border-gray-300 hover:bg-gray-50 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-40"
+                        aria-label={`${product.name} 순서 변경`}
+                        title={
+                          canReorderProducts
+                            ? "드래그해서 순서를 바꿉니다."
+                            : "검색 중에는 순서 변경을 잠시 멈춥니다."
+                        }
+                      >
+                        <span
+                          className="grid grid-cols-3 gap-[2px]"
+                          aria-hidden="true"
+                        >
+                          {Array.from({ length: 6 }).map((_, dotIndex) => (
+                            <span
+                              key={`${product.id}-drag-dot-${dotIndex}`}
+                              className="h-1 w-1 rounded-full bg-current"
+                            ></span>
+                          ))}
+                        </span>
+                      </button>
+                    </td>
                     <td className="min-w-0 p-4">
                       <div className="flex min-w-0 items-center gap-3">
                         <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-100">
@@ -382,43 +501,20 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-              <label className={formFieldClassName}>
-                <span className="text-sm font-bold text-gray-700 whitespace-nowrap">
-                  목록 표시 순서
-                </span>
-                <input
-                  type="number"
-                  min="0"
-                  value={productForm.sortOrder}
-                  onChange={(event) =>
-                    onProductFormChange((prev) => ({
-                      ...prev,
-                      sortOrder: event.target.value,
-                    }))
-                  }
-                  placeholder="예: 10"
-                  className={inputClassName}
-                />
-                <span className={helperTextClassName}>
-                  숫자가 작을수록 학생 상점에서 먼저 보입니다.
-                </span>
-              </label>
-              <div className="grid min-w-0 gap-2">
-                <span className="text-sm font-bold text-gray-700 whitespace-nowrap">
-                  대표 이미지 상태
-                </span>
-                <div className="min-w-0 rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-xs font-bold leading-5 text-gray-500 break-keep">
-                  {productImageUploading
-                    ? "대표 이미지를 준비하고 있습니다."
-                    : productImagePreviewUrl
-                      ? "대표 이미지가 준비되어 있습니다."
-                      : "아직 등록된 대표 이미지가 없습니다."}
-                </div>
-                <span className={helperTextClassName}>
-                  이미지를 선택한 뒤 저장하면 상품 대표 이미지로 적용됩니다.
-                </span>
+            <div className="grid min-w-0 gap-2">
+              <span className="text-sm font-bold text-gray-700 whitespace-nowrap">
+                대표 이미지 상태
+              </span>
+              <div className="min-w-0 rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-xs font-bold leading-5 text-gray-500 break-keep">
+                {productImageUploading
+                  ? "대표 이미지를 준비하고 있습니다."
+                  : productImagePreviewUrl
+                    ? "대표 이미지가 준비되어 있습니다."
+                    : "아직 등록된 대표 이미지가 없습니다."}
               </div>
+              <span className={helperTextClassName}>
+                이미지를 선택한 뒤 저장하면 상품 대표 이미지로 적용됩니다.
+              </span>
             </div>
             <label className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
               <span className="font-bold text-gray-800 whitespace-nowrap">

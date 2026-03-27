@@ -10,7 +10,7 @@ export const TEACHER_POINT_TAB_LABELS = {
   overview: "위스 현황",
   grant: "지급 및 환수",
   policy: "운영 정책",
-  ranks: "등급 설정",
+  ranks: "등급 관리",
   products: "상품 관리",
   requests: "구매 요청 관리",
 } as const;

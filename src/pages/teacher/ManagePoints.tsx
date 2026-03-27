@@ -73,7 +73,7 @@ type ProductFormState = {
 
 const EMPTY_POLICY: PointPolicy = POINT_POLICY_FALLBACK;
 
-const EMPTY_PRODUCT_FORM: ProductFormState = {
+const createEmptyProductForm = (): ProductFormState => ({
     id: '',
     name: '',
     description: '',
@@ -83,12 +83,55 @@ const EMPTY_PRODUCT_FORM: ProductFormState = {
     previewImageUrl: '',
     imageStoragePath: '',
     previewStoragePath: '',
-    sortOrder: '0',
+    sortOrder: '',
     isActive: true,
-};
+});
 
 const normalizeValue = (value: unknown) => String(value || '').trim();
 const OVERVIEW_PAGE_SIZE = 20;
+
+const sortPointProducts = (items: PointProduct[]) => [...items].sort((left, right) => {
+    const sortGap = Number(left.sortOrder || 0) - Number(right.sortOrder || 0);
+    if (sortGap !== 0) return sortGap;
+    return normalizeValue(left.name).localeCompare(normalizeValue(right.name), 'ko-KR', { numeric: true });
+});
+
+const getNextPointProductSortOrder = (items: PointProduct[]) => (
+    items.reduce((maxValue, item) => Math.max(maxValue, Number(item.sortOrder || 0)), -10) + 10
+);
+
+const resequencePointProducts = (items: PointProduct[]) => items.map((item, index) => ({
+    ...item,
+    sortOrder: (index + 1) * 10,
+}));
+
+const reorderPointProducts = (
+    items: PointProduct[],
+    sourceId: string,
+    targetId: string,
+) => {
+    const orderedItems = sortPointProducts(items);
+    const sourceIndex = orderedItems.findIndex((item) => item.id === sourceId);
+    const targetIndex = orderedItems.findIndex((item) => item.id === targetId);
+    if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) {
+        return items;
+    }
+
+    const nextItems = [...orderedItems];
+    const [movedItem] = nextItems.splice(sourceIndex, 1);
+    nextItems.splice(targetIndex, 0, movedItem);
+    return resequencePointProducts(nextItems);
+};
+
+const mergePointProductIntoList = (
+    items: PointProduct[],
+    nextItem: PointProduct,
+) => {
+    const nextItems = items.some((item) => item.id === nextItem.id)
+        ? items.map((item) => (item.id === nextItem.id ? { ...item, ...nextItem } : item))
+        : [...items, nextItem];
+    return sortPointProducts(nextItems);
+};
 
 const sortOverviewWallets = (
     wallets: PointWallet[],
@@ -276,11 +319,14 @@ const ManagePoints: React.FC = () => {
     const [grantClassOptions, setGrantClassOptions] = useState<SchoolOption[]>(
         Array.from({ length: 12 }, (_, index) => ({ value: String(index + 1), label: `${index + 1}반` })),
     );
-    const [productForm, setProductForm] = useState<ProductFormState>(EMPTY_PRODUCT_FORM);
+    const [productForm, setProductForm] = useState<ProductFormState>(() => createEmptyProductForm());
     const [productImageFile, setProductImageFile] = useState<File | null>(null);
     const [productImagePreviewUrl, setProductImagePreviewUrl] = useState('');
     const [productImageUploading, setProductImageUploading] = useState(false);
     const [productFeedback, setProductFeedback] = useState('');
+    const [productOrderDirty, setProductOrderDirty] = useState(false);
+    const [productOrderSaving, setProductOrderSaving] = useState(false);
+    const [productOrderFeedback, setProductOrderFeedback] = useState('');
     const [orderFilter, setOrderFilter] = useState<OrderFilter>('all');
     const [selectedOrderId, setSelectedOrderId] = useState('');
     const [orderMemo, setOrderMemo] = useState('');
@@ -505,6 +551,9 @@ const ManagePoints: React.FC = () => {
             setRankEmojiFeedbackMessage('');
             setRankEmojiFeedbackTone(null);
             setProducts(nextProducts);
+            setProductOrderDirty(false);
+            setProductOrderSaving(false);
+            setProductOrderFeedback('');
             setOrders(nextOrders);
             setRankManualAdjustEarnedPointsByUid(nextRankManualAdjustEarnedPointsByUid);
 
@@ -710,6 +759,54 @@ const ManagePoints: React.FC = () => {
         setRankEmojiFeedbackTone(null);
     };
 
+    const resolveProductSortOrder = (
+        productId: string,
+        fallbackSortOrder = '',
+    ) => {
+        if (productId) {
+            const existingProduct = products.find((item) => item.id === productId);
+            if (existingProduct) return Number(existingProduct.sortOrder || 0);
+        }
+
+        if (!productId) {
+            return getNextPointProductSortOrder(products);
+        }
+
+        const numericFallback = Number(fallbackSortOrder);
+        return Number.isFinite(numericFallback) ? numericFallback : getNextPointProductSortOrder(products);
+    };
+
+    const handleReorderProducts = (sourceId: string, targetId: string) => {
+        const nextProducts = reorderPointProducts(products, sourceId, targetId);
+        if (nextProducts === products) return;
+        setProducts(nextProducts);
+        setProductOrderDirty(true);
+        setProductOrderFeedback('');
+    };
+
+    const handleSaveProductOrder = async () => {
+        if (!canManage || !productOrderDirty || productOrderSaving) return;
+
+        const orderedProducts = resequencePointProducts(sortPointProducts(products));
+        setProductOrderSaving(true);
+        setProductOrderFeedback('');
+
+        try {
+            await Promise.all(orderedProducts.map((product) => upsertPointProduct(config, {
+                ...product,
+                sortOrder: product.sortOrder,
+            }, actor)));
+            setProducts(orderedProducts);
+            setProductOrderDirty(false);
+            setProductOrderFeedback('상품 순서를 저장했습니다.');
+        } catch (error: any) {
+            console.error('Failed to save product order:', error);
+            setProductOrderFeedback(error?.message || '상품 순서 저장에 실패했습니다.');
+        } finally {
+            setProductOrderSaving(false);
+        }
+    };
+
     const handleSaveGrant = async (event: React.FormEvent, mode: 'grant' | 'reclaim' = 'grant') => {
         event.preventDefault();
         if (!selectedGrantStudent || !canManage) return;
@@ -899,19 +996,27 @@ const ManagePoints: React.FC = () => {
         }
 
         try {
-            await upsertPointProduct(config, {
-                id: productForm.id || undefined,
+            const sortOrder = resolveProductSortOrder(productForm.id, productForm.sortOrder);
+            const savedProduct: PointProduct = {
+                id: productForm.id || crypto.randomUUID(),
                 name: productForm.name.trim(),
                 description: productForm.description.trim(),
                 price: Number(productForm.price || 0),
                 stock: Number(productForm.stock || 0),
                 imageUrl: productForm.imageUrl.trim(),
-                sortOrder: Number(productForm.sortOrder || 0),
+                previewImageUrl: productForm.previewImageUrl.trim(),
+                imageStoragePath: productForm.imageStoragePath.trim(),
+                previewStoragePath: productForm.previewStoragePath.trim(),
+                sortOrder,
                 isActive: productForm.isActive,
+            };
+            await upsertPointProduct(config, {
+                ...savedProduct,
+                id: productForm.id || undefined,
             }, actor);
-            setProductForm(EMPTY_PRODUCT_FORM);
+            setProductForm(createEmptyProductForm());
             setProductFeedback('상품 정보를 저장했습니다.');
-            setProducts(await listPointProducts(config, false));
+            setProducts((prev) => mergePointProductIntoList(prev, savedProduct));
         } catch (error: any) {
             console.error('Failed to save point product:', error);
             setProductFeedback(error?.message || '상품 저장에 실패했습니다.');
@@ -928,6 +1033,7 @@ const ManagePoints: React.FC = () => {
 
         try {
             const productId = productForm.id || crypto.randomUUID();
+            const sortOrder = resolveProductSortOrder(productForm.id, productForm.sortOrder);
             let imagePayload = {
                 imageUrl: productForm.imageUrl.trim(),
                 previewImageUrl: productForm.previewImageUrl.trim(),
@@ -965,14 +1071,26 @@ const ManagePoints: React.FC = () => {
                 previewImageUrl: imagePayload.previewImageUrl,
                 imageStoragePath: imagePayload.imageStoragePath,
                 previewStoragePath: imagePayload.previewStoragePath,
-                sortOrder: Number(productForm.sortOrder || 0),
+                sortOrder,
                 isActive: productForm.isActive,
             }, actor);
-            setProductForm(EMPTY_PRODUCT_FORM);
+            setProductForm(createEmptyProductForm());
             setProductImageFile(null);
             setProductImagePreviewUrl('');
             setProductFeedback('상품 정보를 저장했습니다.');
-            setProducts(await listPointProducts(config, false));
+            setProducts((prev) => mergePointProductIntoList(prev, {
+                id: productId,
+                name: productForm.name.trim(),
+                description: productForm.description.trim(),
+                price: Number(productForm.price || 0),
+                stock: Number(productForm.stock || 0),
+                imageUrl: imagePayload.imageUrl,
+                previewImageUrl: imagePayload.previewImageUrl,
+                imageStoragePath: imagePayload.imageStoragePath,
+                previewStoragePath: imagePayload.previewStoragePath,
+                sortOrder,
+                isActive: productForm.isActive,
+            }));
         } catch (error: any) {
             console.error('Failed to save point product with upload:', error);
             setProductFeedback(error?.message || '상품 저장에 실패했습니다.');
@@ -989,7 +1107,14 @@ const ManagePoints: React.FC = () => {
                 ...product,
                 isActive: !product.isActive,
             }, actor);
-            setProducts(await listPointProducts(config, false));
+            setProducts((prev) => prev.map((item) => (
+                item.id === product.id
+                    ? {
+                        ...item,
+                        isActive: !product.isActive,
+                    }
+                    : item
+            )));
             setProductFeedback(product.isActive ? '상품을 비활성화했습니다.' : '상품을 다시 노출했습니다.');
         } catch (error: any) {
             console.error('Failed to toggle point product:', error);
@@ -1271,12 +1396,17 @@ const ManagePoints: React.FC = () => {
                                 setProductFeedback('');
                             }}
                             onResetForm={() => {
-                                setProductForm(EMPTY_PRODUCT_FORM);
+                                setProductForm(createEmptyProductForm());
                                 setProductImageFile(null);
                                 setProductImagePreviewUrl('');
                                 setProductFeedback('');
                             }}
                             onToggleProduct={(product) => void handleToggleProduct(product)}
+                            productOrderDirty={productOrderDirty}
+                            productOrderSaving={productOrderSaving}
+                            productOrderFeedback={productOrderFeedback}
+                            onReorderProducts={handleReorderProducts}
+                            onSaveProductOrder={handleSaveProductOrder}
                             onSubmit={handleSaveProductWithUpload}
                         />
                     )}

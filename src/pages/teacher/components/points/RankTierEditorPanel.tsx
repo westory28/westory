@@ -254,9 +254,15 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
                           </span>
                           <span className={tierSummaryChipClassName}>
                             배지
-                            <span className="ml-1 text-gray-900">
-                              {badgeStyleLabel}
-                            </span>
+                            <span
+                              className={[
+                                "ml-1 h-3.5 w-3.5 shrink-0 rounded-full",
+                                badgeStyleOption?.swatchClassName ||
+                                  "bg-stone-500",
+                              ].join(" ")}
+                              aria-hidden="true"
+                              title={badgeStyleLabel}
+                            ></span>
                           </span>
                           {tierPreview?.shortLabel && (
                             <span className={tierSummaryChipClassName}>
@@ -355,25 +361,8 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
                               <div className="mb-2 text-sm font-bold text-gray-700">
                                 {POINT_RANK_FIELD_LABELS.badgeStyleToken}
                               </div>
-                              <div className="space-y-3">
-                                <div
-                                  className={[
-                                    "inline-flex min-w-0 items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold whitespace-nowrap",
-                                    badgeStyleOption?.toneClassName ||
-                                      "border-stone-200 bg-stone-50 text-stone-700",
-                                  ].join(" ")}
-                                >
-                                  <span
-                                    className={[
-                                      "h-3.5 w-3.5 shrink-0 rounded-full ring-2 ring-white",
-                                      badgeStyleOption?.swatchClassName ||
-                                        "bg-stone-500",
-                                    ].join(" ")}
-                                    aria-hidden="true"
-                                  ></span>
-                                  <span>{badgeStyleLabel}</span>
-                                </div>
-                                <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+                              <div>
+                                <div className="flex flex-wrap gap-2.5">
                                   {POINT_RANK_BADGE_STYLE_OPTIONS.map(
                                     (option) => {
                                       const isSelected =
@@ -394,10 +383,10 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
                                           }
                                           disabled={!canManage}
                                           className={[
-                                            "inline-flex min-w-0 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold transition whitespace-nowrap",
+                                            "inline-flex h-11 w-11 items-center justify-center rounded-full border-2 bg-white transition",
                                             isSelected
-                                              ? `${option.toneClassName} ring-2 ring-offset-1 ring-blue-200`
-                                              : "border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50",
+                                              ? "border-gray-900 ring-2 ring-blue-200 ring-offset-2"
+                                              : "border-gray-200 hover:border-gray-300 hover:bg-gray-50",
                                             !canManage
                                               ? "cursor-not-allowed opacity-60"
                                               : "",
@@ -405,17 +394,16 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
                                             .filter(Boolean)
                                             .join(" ")}
                                           aria-pressed={isSelected}
+                                          aria-label={option.label}
+                                          title={option.label}
                                         >
                                           <span
                                             className={[
-                                              "h-3.5 w-3.5 shrink-0 rounded-full ring-2 ring-white",
+                                              "h-5 w-5 shrink-0 rounded-full",
                                               option.swatchClassName,
                                             ].join(" ")}
                                             aria-hidden="true"
                                           ></span>
-                                          <span className="overflow-hidden text-ellipsis">
-                                            {option.label}
-                                          </span>
                                         </button>
                                       );
                                     },

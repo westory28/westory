@@ -215,15 +215,8 @@ const RankThemePreviewPanel: React.FC<RankThemePreviewPanelProps> = ({
                                                 : 'border-gray-200 bg-white/85',
                                         ].join(' ')}
                                     >
-                                        <div className="flex flex-wrap items-center justify-between gap-3">
+                                        <div className="flex flex-wrap items-center gap-3">
                                             <PointRankBadge rank={previewRank} size="sm" showTheme />
-                                            <span className={`inline-flex whitespace-nowrap rounded-full border px-3 py-1 text-xs font-bold ${
-                                                isHighest
-                                                    ? 'border-amber-200 bg-amber-50 text-amber-700'
-                                                    : 'border-gray-200 bg-gray-50 text-gray-600'
-                                            }`}>
-                                                {isHighest ? '최상위 등급' : '등급 미리보기'}
-                                            </span>
                                         </div>
                                         <div className="mt-3 text-sm font-bold text-gray-900 whitespace-nowrap">
                                             기준 누적 위스 {formatWisAmount(tier.minPoints)}
