@@ -1001,6 +1001,7 @@ const Login: React.FC = () => {
             'westory-login-bootstrap-start',
             'westory-login-first-route-decided',
         );
+        autoResumeUidRef.current = user.uid;
         forceRoute(targetPath);
 
         if (userSnap.exists() && !requiresBlockingWrite) {
