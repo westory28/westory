@@ -30,10 +30,7 @@ interface RankTierEditorPanelProps {
   draftRankPolicy: PointRankPolicy;
   validationError: string;
   selectedTierCode: PointRankPolicyTier["code"] | null;
-  selectedTier: PointRankPolicyTier | null;
-  selectedTierPreview: PointRankDisplay | null;
   enabledEmojiCount: number;
-  celebrationPreviewAvailable: boolean;
   hasUnsavedChanges: boolean;
   saveFeedbackMessage: string;
   saveFeedbackTone: "success" | "error" | "warning" | null;
@@ -55,9 +52,6 @@ interface RankTierEditorPanelProps {
     tierCode: PointRankPolicyTier["code"],
     emojiId: string,
   ) => void;
-  onCelebrationEnabledChange: (enabled: boolean) => void;
-  onCelebrationEffectLevelChange: (effectLevel: "subtle" | "standard") => void;
-  onOpenCelebrationPreview: () => void;
   getTierPreview: (
     tier: PointRankPolicyTier,
     themeId?: PointRankThemeId,

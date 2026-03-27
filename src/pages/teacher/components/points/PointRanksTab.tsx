@@ -1,7 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import StudentRankPromotionPopup from '../../../../components/common/StudentRankPromotionPopup';
 import { POINT_RANK_BADGE_STYLE_OPTIONS } from '../../../../constants/pointLabels';
-import { buildStudentRankPromotionPreview } from '../../../../lib/pointRankPromotion';
 import {
     createPointRankTierCode,
     getPointRankDisplay,
@@ -206,7 +204,6 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
 }) => {
     const [activePanel, setActivePanel] = useState<RankSettingsPanelId>('theme_preview');
     const [selectedTierCode, setSelectedTierCode] = useState<PointRankPolicyTier['code'] | null>(null);
-    const [isCelebrationPreviewOpen, setIsCelebrationPreviewOpen] = useState(false);
     const [newEmojiValue, setNewEmojiValue] = useState('');
     const [duplicateEmojiDialog, setDuplicateEmojiDialog] = useState<DuplicateEmojiDialogState | null>(null);
 
@@ -480,16 +477,8 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
 
     const activeThemeName = getPointRankThemeName(themePreviewPolicy, themePreviewPolicy.activeThemeId);
     const previewThemeName = getPointRankThemeName(themePreviewPolicy, previewThemeId);
-    const selectedTier = selectedTierCode
-        ? rankSettingsPolicy.tiers.find((tier) => tier.code === selectedTierCode) || null
-        : null;
-    const selectedTierPreview = selectedTier ? getRankSettingsTierPreview(selectedTier) : null;
     const savedEnabledEmojiCount = savedRankPolicy.emojiRegistry.filter((entry) => entry.enabled !== false).length;
     const emojiEnabledCount = emojiCollectionPolicy.emojiRegistry.filter((entry) => entry.enabled !== false).length;
-    const celebrationPreview = buildStudentRankPromotionPreview(
-        rankSettingsPolicy,
-        selectedTierCode as PointRankPolicyTier['code'] | null,
-    );
     const sidebarItems: RankSettingsSidebarItem[] = [
         {
             id: 'theme_preview',
@@ -575,10 +564,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
                                 draftRankPolicy={rankSettingsPolicy}
                                 validationError={rankSettingsValidationError}
                                 selectedTierCode={selectedTierCode}
-                                selectedTier={selectedTier}
-                                selectedTierPreview={selectedTierPreview}
                                 enabledEmojiCount={savedEnabledEmojiCount}
-                                celebrationPreviewAvailable={Boolean(celebrationPreview.rank)}
                                 hasUnsavedChanges={rankSettingsHasUnsavedChanges}
                                 saveFeedbackMessage={rankSettingsSaveFeedbackMessage}
                                 saveFeedbackTone={rankSettingsSaveFeedbackTone}
@@ -589,21 +575,6 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
                                 onSetTierField={setTierField}
                                 onSetActiveThemeTierField={setActiveThemeTierField}
                                 onToggleTierEmoji={toggleTierEmoji}
-                                onCelebrationEnabledChange={(enabled) => updateRankSettingsPolicy((prev) => ({
-                                    ...prev,
-                                    celebrationPolicy: {
-                                        ...prev.celebrationPolicy,
-                                        enabled,
-                                    },
-                                }))}
-                                onCelebrationEffectLevelChange={(effectLevel) => updateRankSettingsPolicy((prev) => ({
-                                    ...prev,
-                                    celebrationPolicy: {
-                                        ...prev.celebrationPolicy,
-                                        effectLevel,
-                                    },
-                                }))}
-                                onOpenCelebrationPreview={() => setIsCelebrationPreviewOpen(true)}
                                 getTierPreview={getRankSettingsTierPreview}
                             />
                         )}
@@ -629,16 +600,6 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
                     </div>
                 </div>
             </div>
-
-            {celebrationPreview.rank && (
-                <StudentRankPromotionPopup
-                    open={isCelebrationPreviewOpen}
-                    rank={celebrationPreview.rank}
-                    effectLevel={celebrationPreview.effectLevel}
-                    previewEmojiEntries={celebrationPreview.previewEmojiEntries}
-                    onClose={() => setIsCelebrationPreviewOpen(false)}
-                />
-            )}
 
             {duplicateEmojiDialog && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
