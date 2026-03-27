@@ -281,6 +281,29 @@ const reindexFootnotes = (footnotes: LessonFootnote[]) =>
     order: index,
   }));
 
+const mergeFootnotePatch = (
+  target: LessonFootnote,
+  patch: Partial<LessonFootnote>,
+  existingFootnotes: LessonFootnote[],
+) => {
+  const merged = {
+    ...target,
+    ...patch,
+  };
+  const resolvedAnchorKey =
+    patch.anchorKey !== undefined
+      ? patch.anchorKey
+      : target.anchorKey || merged.anchorKey;
+
+  return sanitizeLessonFootnote(
+    {
+      ...merged,
+      anchorKey: resolvedAnchorKey || merged.anchorKey,
+    },
+    existingFootnotes.filter((footnote) => footnote.id !== target.id),
+  );
+};
+
 const sortWorksheetBlanks = (blanks: LessonWorksheetBlank[]) =>
   [...blanks].sort((left, right) => {
     if (left.page !== right.page) return left.page - right.page;
@@ -503,6 +526,19 @@ const createPdfEditorSnapshot = (params: {
   selectedPdfFile: File | null;
   preparedPdf: ProcessedPdfMap | null;
   footnoteImageDrafts: Record<string, FootnoteImageDraft>;
+  pendingFootnoteEditor?: {
+    mode: "create" | "edit";
+    sourceFootnoteId: string | null;
+    insertIntoBody: boolean;
+    pendingAnchorPlacement: {
+      page: number;
+      leftRatio: number;
+      topRatio: number;
+      widthRatio: number;
+      heightRatio: number;
+    } | null;
+    draft: LessonFootnote;
+  } | null;
 }) =>
   JSON.stringify({
     selectedNodeId: params.selectedNodeId,
@@ -526,6 +562,7 @@ const createPdfEditorSnapshot = (params: {
         removeExisting: draft.removeExisting,
         hasFile: Boolean(draft.file),
       })),
+    pendingFootnoteEditor: params.pendingFootnoteEditor || null,
     pendingPdfFileName: params.selectedPdfFile?.name || "",
     preparedPdfPageCount: params.preparedPdf?.pageImages.length || 0,
   });
@@ -868,12 +905,44 @@ const ManageLesson: React.FC = () => {
     () => getTeacherPresentationRuntimeBadge(selectedTeacherPreviewSummary),
     [selectedTeacherPreviewSummary],
   );
-  const committedFootnoteImageDrafts = useMemo(() => {
-    if (!footnoteEditorSession) return footnoteImageDrafts;
-    const nextDrafts = { ...footnoteImageDrafts };
-    delete nextDrafts[footnoteEditorSession.draft.id];
-    return nextDrafts;
-  }, [footnoteEditorSession, footnoteImageDrafts]);
+  const pendingFootnoteEditorSnapshot = useMemo(() => {
+    if (!footnoteEditorSession) return null;
+
+    const sourceFootnote =
+      footnoteEditorSession.mode === "edit" &&
+      footnoteEditorSession.sourceFootnoteId
+        ? lessonFootnotes.find(
+            (footnote) => footnote.id === footnoteEditorSession.sourceFootnoteId,
+          ) || null
+        : null;
+    const normalizedDraft = sourceFootnote
+      ? mergeFootnotePatch(
+          sourceFootnote,
+          footnoteEditorSession.draft,
+          lessonFootnotes,
+        )
+      : sanitizeLessonFootnote(footnoteEditorSession.draft, lessonFootnotes);
+
+    return {
+      mode: footnoteEditorSession.mode,
+      sourceFootnoteId: footnoteEditorSession.sourceFootnoteId,
+      insertIntoBody: footnoteEditorSession.insertIntoBody,
+      pendingAnchorPlacement: footnoteEditorSession.pendingAnchorPlacement
+        ? {
+            page: footnoteEditorSession.pendingAnchorPlacement.page,
+            leftRatio:
+              footnoteEditorSession.pendingAnchorPlacement.rect.leftRatio,
+            topRatio:
+              footnoteEditorSession.pendingAnchorPlacement.rect.topRatio,
+            widthRatio:
+              footnoteEditorSession.pendingAnchorPlacement.rect.widthRatio,
+            heightRatio:
+              footnoteEditorSession.pendingAnchorPlacement.rect.heightRatio,
+          }
+        : null,
+      draft: normalizedDraft,
+    };
+  }, [footnoteEditorSession, lessonFootnotes]);
   const currentMetaSnapshot = useMemo(
     () =>
       createGeneralEditorSnapshot({
@@ -900,7 +969,8 @@ const ManageLesson: React.FC = () => {
         worksheetBlanks,
         selectedPdfFile,
         preparedPdf,
-        footnoteImageDrafts: committedFootnoteImageDrafts,
+        footnoteImageDrafts,
+        pendingFootnoteEditor: pendingFootnoteEditorSnapshot,
       }),
     [
       selectedNodeId,
@@ -916,7 +986,8 @@ const ManageLesson: React.FC = () => {
       worksheetBlanks,
       selectedPdfFile,
       preparedPdf,
-      committedFootnoteImageDrafts,
+      footnoteImageDrafts,
+      pendingFootnoteEditorSnapshot,
     ],
   );
   const hasUnsavedMetaChanges =
@@ -1937,33 +2008,6 @@ const ManageLesson: React.FC = () => {
     };
   };
 
-  const mergeFootnotePatch = (
-    target: LessonFootnote,
-    patch: Partial<LessonFootnote>,
-    existingFootnotes: LessonFootnote[],
-  ) => {
-    const merged = {
-      ...target,
-      ...patch,
-    };
-    const labelDrivenAnchorKey =
-      patch.anchorKey !== undefined
-        ? patch.anchorKey
-        : !target.anchorKey || target.anchorKey.startsWith("footnote")
-          ? String(
-              patch.title || patch.label || merged.title || merged.label || "",
-            )
-          : target.anchorKey;
-
-    return sanitizeLessonFootnote(
-      {
-        ...merged,
-        anchorKey: labelDrivenAnchorKey || merged.anchorKey,
-      },
-      existingFootnotes.filter((footnote) => footnote.id !== target.id),
-    );
-  };
-
   const restoreFootnoteImageDraft = (
     footnoteId: string,
     draft: FootnoteImageDraft | null,
@@ -2266,6 +2310,11 @@ const ManageLesson: React.FC = () => {
     setSourceArchivePickerFootnoteId(null);
   };
 
+  const handleSelectFootnote = (footnoteId: string) => {
+    setActiveFootnoteId(footnoteId);
+    setActiveFootnoteAnchorId(null);
+  };
+
   const handleSelectFootnoteAnchor = (anchorId: string) => {
     const matchedAnchor = worksheetFootnoteAnchors.find(
       (anchor) => anchor.id === anchorId,
@@ -2311,6 +2360,84 @@ const ManageLesson: React.FC = () => {
     });
   };
 
+  const commitFootnoteEditorSession = useCallback(
+    (params: {
+      session: FootnoteEditorSession;
+      lessonContent: string;
+      lessonFootnotes: LessonFootnote[];
+      worksheetFootnoteAnchors: LessonWorksheetFootnoteAnchor[];
+      bodySelection: {
+        start: number;
+        end: number;
+      } | null;
+    }) => {
+      const { session } = params;
+      const isEditMode = session.mode === "edit" && session.sourceFootnoteId;
+      const sourceFootnoteId = session.sourceFootnoteId;
+      const existingFootnote =
+        isEditMode && sourceFootnoteId
+          ? params.lessonFootnotes.find(
+              (footnote) => footnote.id === sourceFootnoteId,
+            ) || null
+          : null;
+      const nextFootnote = existingFootnote
+        ? mergeFootnotePatch(
+            existingFootnote,
+            session.draft,
+            params.lessonFootnotes,
+          )
+        : sanitizeLessonFootnote(session.draft, params.lessonFootnotes);
+      const nextFootnotes = existingFootnote && sourceFootnoteId
+        ? reindexFootnotes(
+            params.lessonFootnotes.map((footnote) =>
+              footnote.id === sourceFootnoteId ? nextFootnote : footnote,
+            ),
+          )
+        : reindexFootnotes([...params.lessonFootnotes, nextFootnote]);
+      const nextAnchorId = session.pendingAnchorPlacement
+        ? `footnote-anchor-${Date.now()}`
+        : null;
+      const nextAnchors = session.pendingAnchorPlacement
+        ? sortWorksheetFootnoteAnchors([
+            ...params.worksheetFootnoteAnchors,
+            {
+              id: nextAnchorId,
+              footnoteId: nextFootnote.id,
+              page: session.pendingAnchorPlacement.page,
+              leftRatio: session.pendingAnchorPlacement.rect.leftRatio,
+              topRatio: session.pendingAnchorPlacement.rect.topRatio,
+              widthRatio: session.pendingAnchorPlacement.rect.widthRatio,
+              heightRatio: session.pendingAnchorPlacement.rect.heightRatio,
+            },
+          ])
+        : params.worksheetFootnoteAnchors;
+
+      const nextLessonContent = session.insertIntoBody
+        ? replaceOrInsertFootnoteToken(
+            params.lessonContent,
+            buildFootnoteToken(nextFootnote.anchorKey),
+            {
+              selectionStart: params.bodySelection?.start,
+              selectionEnd: params.bodySelection?.end,
+              insertMode: params.bodySelection ? "cursor" : "end",
+            },
+          )
+        : params.lessonContent;
+
+      return {
+        lessonContent: nextLessonContent,
+        lessonFootnotes: nextFootnotes,
+        worksheetFootnoteAnchors: nextAnchors,
+        activeFootnoteId: nextFootnote.id,
+        activeFootnoteAnchorId: nextAnchorId,
+        bodyInsertMessage: session.insertIntoBody
+          ? "본문에 각주 버튼을 넣었습니다. 오른쪽 저장 버튼을 눌러 반영하세요."
+          : null,
+      };
+    },
+    [],
+  );
+
   const handleFootnoteEditorDraftChange = (patch: Partial<LessonFootnote>) => {
     setFootnoteEditorSession((prev) => {
       if (!prev) return prev;
@@ -2337,66 +2464,21 @@ const ManageLesson: React.FC = () => {
 
   const handleSaveFootnoteEditor = () => {
     if (!footnoteEditorSession) return;
-
-    const isEditMode =
-      footnoteEditorSession.mode === "edit" &&
-      footnoteEditorSession.sourceFootnoteId;
-    const sourceFootnoteId = footnoteEditorSession.sourceFootnoteId;
-    const existingFootnote =
-      isEditMode && sourceFootnoteId
-        ? lessonFootnotes.find(
-            (footnote) => footnote.id === sourceFootnoteId,
-          ) || null
-        : null;
-    const nextFootnote = existingFootnote
-      ? mergeFootnotePatch(
-          existingFootnote,
-          footnoteEditorSession.draft,
-          lessonFootnotes,
-        )
-      : sanitizeLessonFootnote(footnoteEditorSession.draft, lessonFootnotes);
-    let nextAnchorId: string | null = null;
-
-    if (existingFootnote && sourceFootnoteId) {
-      setLessonFootnotes((prev) =>
-        reindexFootnotes(
-          prev.map((footnote) =>
-            footnote.id === sourceFootnoteId ? nextFootnote : footnote,
-          ),
-        ),
-      );
-    } else {
-      setLessonFootnotes((prev) => reindexFootnotes([...prev, nextFootnote]));
+    const committed = commitFootnoteEditorSession({
+      session: footnoteEditorSession,
+      lessonContent,
+      lessonFootnotes,
+      worksheetFootnoteAnchors,
+      bodySelection,
+    });
+    setLessonContent(committed.lessonContent);
+    setLessonFootnotes(committed.lessonFootnotes);
+    setWorksheetFootnoteAnchors(committed.worksheetFootnoteAnchors);
+    if (committed.bodyInsertMessage) {
+      setBodyInsertMessage(committed.bodyInsertMessage);
     }
-
-    if (footnoteEditorSession.pendingAnchorPlacement) {
-      nextAnchorId = `footnote-anchor-${Date.now()}`;
-      setWorksheetFootnoteAnchors((prev) =>
-        sortWorksheetFootnoteAnchors([
-          ...prev,
-          {
-            id: nextAnchorId,
-            footnoteId: nextFootnote.id,
-            page: footnoteEditorSession.pendingAnchorPlacement!.page,
-            leftRatio:
-              footnoteEditorSession.pendingAnchorPlacement!.rect.leftRatio,
-            topRatio:
-              footnoteEditorSession.pendingAnchorPlacement!.rect.topRatio,
-            widthRatio:
-              footnoteEditorSession.pendingAnchorPlacement!.rect.widthRatio,
-            heightRatio:
-              footnoteEditorSession.pendingAnchorPlacement!.rect.heightRatio,
-          },
-        ]),
-      );
-    }
-
-    if (footnoteEditorSession.insertIntoBody) {
-      insertFootnoteTokenIntoContent(nextFootnote.anchorKey);
-    }
-
-    setActiveFootnoteId(nextFootnote.id);
-    setActiveFootnoteAnchorId(nextAnchorId);
+    setActiveFootnoteId(committed.activeFootnoteId);
+    setActiveFootnoteAnchorId(committed.activeFootnoteAnchorId);
     setFootnoteEditorSession(null);
     setSourceArchivePickerFootnoteId(null);
     setSourceArchiveSearch("");
@@ -2466,6 +2548,23 @@ const ManageLesson: React.FC = () => {
       alert("PDF 페이지 추출이 끝날 때까지 기다려 주세요.");
       return;
     }
+
+    const committedFootnoteEditor = footnoteEditorSession
+      ? commitFootnoteEditorSession({
+          session: footnoteEditorSession,
+          lessonContent,
+          lessonFootnotes,
+          worksheetFootnoteAnchors,
+          bodySelection,
+        })
+      : null;
+    const lessonContentForSave =
+      committedFootnoteEditor?.lessonContent ?? lessonContent;
+    const lessonFootnotesForSave =
+      committedFootnoteEditor?.lessonFootnotes ?? lessonFootnotes;
+    const worksheetFootnoteAnchorsForSave =
+      committedFootnoteEditor?.worksheetFootnoteAnchors ??
+      worksheetFootnoteAnchors;
 
     const normalizedGeneralDraft = buildNormalizedGeneralLessonDraft({
       lessonTitle,
@@ -2552,9 +2651,9 @@ const ManageLesson: React.FC = () => {
         }
       }
       const normalizedDraft = buildNormalizedPdfEditorDraft({
-        lessonContent,
-        lessonFootnotes,
-        worksheetFootnoteAnchors,
+        lessonContent: lessonContentForSave,
+        lessonFootnotes: lessonFootnotesForSave,
+        worksheetFootnoteAnchors: worksheetFootnoteAnchorsForSave,
         lessonPdfName,
         lessonPdfUrl,
         lessonPdfStoragePath,
@@ -2652,6 +2751,19 @@ const ManageLesson: React.FC = () => {
       setWorksheetBlanks(savedDraft.worksheetBlanks);
       setWorksheetFootnoteAnchors(savedDraft.worksheetFootnoteAnchors);
       setLessonFootnotes(savedDraft.footnotes);
+      if (committedFootnoteEditor) {
+        setLessonContent(savedDraft.contentHtml);
+        setActiveFootnoteId(committedFootnoteEditor.activeFootnoteId);
+        setActiveFootnoteAnchorId(
+          committedFootnoteEditor.activeFootnoteAnchorId,
+        );
+        if (committedFootnoteEditor.bodyInsertMessage) {
+          setBodyInsertMessage(committedFootnoteEditor.bodyInsertMessage);
+        }
+        setFootnoteEditorSession(null);
+        setSourceArchivePickerFootnoteId(null);
+        setSourceArchiveSearch("");
+      }
       setPreparedPdf(null);
       setSelectedPdfFile(null);
       resetFootnoteImageDrafts();
@@ -2966,14 +3078,21 @@ const ManageLesson: React.FC = () => {
                         onWorksheetToolChange={setWorksheetTool}
                         onSelectBlank={handleSelectBlank}
                         onDeleteBlank={handleDeleteBlank}
-                        onSelectFootnoteAnchor={
-                          handleOpenFootnoteEditorFromAnchor
-                        }
+                        onSelectFootnoteAnchor={handleSelectFootnoteAnchor}
                         onDeleteFootnoteAnchor={handleDeleteFootnoteAnchor}
                         onActivateFootnoteAnchor={
                           handleOpenFootnoteEditorFromAnchor
                         }
                         footnoteTitles={footnoteTitles}
+                        footnotes={lessonFootnotes}
+                        footnoteUsageMap={footnoteUsageMap}
+                        footnoteAnchorCountMap={footnoteAnchorCountMap}
+                        selectedFootnoteId={activeFootnoteId}
+                        onSelectFootnote={handleSelectFootnote}
+                        onAddFootnote={handleAddFootnote}
+                        onAddFootnoteAndInsert={handleAddFootnoteAndInsert}
+                        onOpenFootnoteEditor={openEditFootnoteEditor}
+                        onInsertFootnoteToken={insertFootnoteTokenIntoContent}
                         onCreateBlankFromSelection={
                           handleCreateBlankFromSelection
                         }
