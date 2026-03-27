@@ -152,20 +152,29 @@ const buildEmojiCollectionPolicy = (
     emojiRegistry: cloneRankEmojiRegistry(draft.emojiRegistry),
   });
 
-const makeTierDraft = (tiers: PointRankPolicyTier[]): PointRankPolicyTier => {
-  const lowestThreshold = tiers.reduce(
-    (minValue, tier) => Math.min(minValue, Number(tier.minPoints || 0)),
-    Number.POSITIVE_INFINITY,
+const getNextUniqueTierMinPoints = (tiers: PointRankPolicyTier[]) => {
+  const usedMinPoints = new Set(
+    tiers
+      .map((tier) => Number(tier.minPoints))
+      .filter((minPoints) => Number.isFinite(minPoints) && minPoints >= 0),
   );
+  let candidate = 0;
+
+  while (usedMinPoints.has(candidate)) {
+    candidate += 1;
+  }
+
+  return candidate;
+};
+
+const makeTierDraft = (tiers: PointRankPolicyTier[]): PointRankPolicyTier => {
   const nextIndex = tiers.length + 1;
 
   return {
     code: createPointRankTierCode(tiers),
-    // New tiers should start as the lowest step so teachers can rename and
-    // tune the threshold before saving.
-    minPoints: Number.isFinite(lowestThreshold)
-      ? Math.max(0, lowestThreshold)
-      : 0,
+    // Seed new tiers with a deterministic unique threshold so they can be
+    // saved immediately without tripping duplicate-threshold validation.
+    minPoints: getNextUniqueTierMinPoints(tiers),
     badgeStyleToken:
       POINT_RANK_BADGE_STYLE_OPTIONS[
         (nextIndex - 1) % POINT_RANK_BADGE_STYLE_OPTIONS.length
