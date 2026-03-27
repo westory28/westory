@@ -86,7 +86,7 @@ const StudentRankPromotionPopup: React.FC<StudentRankPromotionPopupProps> = ({
                 aria-labelledby={titleId}
                 aria-describedby={descriptionId}
                 className={[
-                    'relative w-full max-w-md overflow-hidden rounded-[2rem] border border-white/60 bg-white shadow-[0_28px_80px_rgba(15,23,42,0.28)] transition-all duration-300 motion-reduce:transition-none',
+                    'relative flex max-h-[calc(100vh-3rem)] w-full max-w-md flex-col overflow-hidden rounded-[2rem] border border-white/60 bg-white shadow-[0_28px_80px_rgba(15,23,42,0.28)] transition-all duration-300 motion-reduce:transition-none',
                     effectLevel === 'subtle' ? 'sm:max-w-[30rem]' : 'sm:max-w-[34rem]',
                     entered ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-3 scale-[0.98] opacity-0',
                 ].join(' ')}
@@ -109,7 +109,7 @@ const StudentRankPromotionPopup: React.FC<StudentRankPromotionPopupProps> = ({
                     ].join(' ')} />
                 </div>
 
-                <div className="relative p-5 sm:p-6">
+                <div className="relative overflow-y-auto overscroll-contain p-5 sm:p-6">
                     <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0">
                             <p className="text-[10px] font-black uppercase tracking-[0.42em] text-amber-700/80">

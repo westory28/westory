@@ -540,19 +540,19 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
                 <div className="min-w-0 flex-1 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
                     <div className="border-b border-gray-100 px-4 py-3 sm:px-6">
                         <div className="flex flex-wrap items-center gap-2">
-                            <span className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
+                            <span className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 whitespace-nowrap">
                                 <i className={`${activeSidebarItem.iconClassName} text-[11px]`} aria-hidden="true"></i>
                                 {activeSidebarItem.label}
                             </span>
                             {activeSidebarItem.meta && (
-                                <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-600">
+                                <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-600 whitespace-nowrap">
                                     {activeSidebarItem.meta}
                                 </span>
                             )}
                             {activeSidebarItem.badge && (
                                 <span
                                     className={[
-                                        'rounded-full px-3 py-1 text-xs font-bold',
+                                        'rounded-full px-3 py-1 text-xs font-bold whitespace-nowrap',
                                         activeSidebarItem.badge === '미저장'
                                             ? 'border border-amber-200 bg-amber-50 text-amber-800'
                                             : 'border border-gray-200 bg-gray-50 text-gray-600',
