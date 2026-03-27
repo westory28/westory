@@ -560,7 +560,7 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
                             등록된 이모지가 없습니다.
                           </div>
                         ) : (
-                          <div className="mt-4 grid grid-cols-5 gap-y-2 gap-x-3">
+                          <div className="mt-4 grid grid-cols-5 gap-y-2 gap-x-4">
                             {draftRankPolicy.emojiRegistry.map((entry) => {
                               const checked = selectedEmojiIds.has(entry.id);
                               const disabled =
