@@ -352,6 +352,7 @@ const buildLegacyActiveThemeOverrides = (
   activeThemeId: PointRankThemeId,
   tiers: PointRankPolicyTier[],
 ) => {
+  const existingThemeTiers = rankPolicy?.themes?.[activeThemeId]?.tiers || {};
   const overrides = tiers.reduce<NonNullable<PointRankThemeOverride["tiers"]>>(
     (accumulator, tier, index) => {
       const nextTierOverride = normalizeThemeTierOverride(
@@ -364,7 +365,10 @@ const buildLegacyActiveThemeOverrides = (
         index,
       );
       if (nextTierOverride) {
-        accumulator[tier.code] = nextTierOverride;
+        accumulator[tier.code] = {
+          ...(existingThemeTiers[tier.code] || {}),
+          ...nextTierOverride,
+        };
       }
       return accumulator;
     },
