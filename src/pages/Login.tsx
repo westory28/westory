@@ -154,6 +154,10 @@ const isReturningConfirmedStudent = (value?: Partial<UserData> | null) => {
         && hasCompleteStudentProfile(value);
 };
 
+const isStudentBootstrapReadyForRoute = (value?: Partial<UserData> | null) => {
+    return isReturningConfirmedStudent(value);
+};
+
 const shouldLookupStudentRosterProfile = (value?: Partial<UserData> | null) => {
     return !hasCompleteStudentProfile(value);
 };
@@ -507,21 +511,11 @@ const Login: React.FC = () => {
     const redirectHandledRef = useRef(false);
     const autoResumeUidRef = useRef<string | null>(null);
     const authActionLockRef = useRef(false);
+    const latestCurrentUserRef = useRef<User | null>(currentUser);
+    const latestUserDataRef = useRef<UserData | null>(userData);
     const preferredRole = getSavedRole();
     const canUseTeacherPortal = canAccessTeacherPortal(userData, currentUser?.email || '');
     const isTeacherUser = preferredRole === 'teacher' || canUseTeacherPortal;
-
-    const hasResolvedStudentEntry = (uid?: string | null) => {
-        const targetUid = uid || currentUser?.uid || auth.currentUser?.uid || null;
-        if (!targetUid) return false;
-
-        if (userData?.uid === targetUid && isReturningConfirmedStudent(userData)) {
-            return true;
-        }
-
-        if (typeof window === 'undefined') return false;
-        return /^#\/student(?:\/|$)/.test(window.location.hash || '');
-    };
 
     const forceRoute = (targetPath: string) => {
         navigate(targetPath, { replace: true });
@@ -561,6 +555,54 @@ const Login: React.FC = () => {
         autoResumeUidRef.current = null;
         setLoginNotice(getUnauthorizedEmailNotice(email));
         await signOut(auth);
+    };
+
+    useEffect(() => {
+        latestCurrentUserRef.current = currentUser;
+        latestUserDataRef.current = userData;
+    }, [currentUser, userData]);
+
+    const suppressRecoveredStudentBootstrapAlert = async (
+        user: User,
+        source: 'finish-login' | 'redirect-resume' | 'auto-resume',
+        error: unknown,
+    ): Promise<boolean> => {
+        const code = (error as Partial<AuthError>)?.code || '';
+        if (code !== 'permission-denied') return false;
+
+        for (let attempt = 0; attempt < 8; attempt += 1) {
+            const liveUser = latestCurrentUserRef.current;
+            const liveUserData = latestUserDataRef.current;
+            const studentRouteReady = typeof window !== 'undefined'
+                && /^#\/student(?:\/|$)/.test(window.location.hash || '');
+
+            if (liveUser?.uid === user.uid
+                && (
+                    studentRouteReady
+                    || (liveUserData?.uid === user.uid && isStudentBootstrapReadyForRoute(liveUserData))
+                )) {
+                console.warn('[Auth] Suppressing false student bootstrap alert after recovered student session', {
+                    uid: user.uid,
+                    source,
+                    code,
+                });
+                setLoginNotice('');
+                saveRoleCache('student');
+                clearPendingLoginMode();
+                clearRedirectAttempt();
+                autoResumeUidRef.current = user.uid;
+                forceRoute('/student/dashboard');
+                return true;
+            }
+
+            if (attempt < 7) {
+                await new Promise<void>((resolve) => {
+                    window.setTimeout(resolve, 200);
+                });
+            }
+        }
+
+        return false;
     };
 
     useEffect(() => {
@@ -615,30 +657,6 @@ const Login: React.FC = () => {
             }
         };
     }, []);
-
-    useEffect(() => {
-        const pending = pendingStudentBootstrapFailureRef.current;
-        if (!pending) return;
-        if (loading || authBusy || redirectRecoveryPending) return;
-
-        if (!currentUser || currentUser.uid !== pending.uid) {
-            pendingStudentBootstrapFailureRef.current = null;
-            alert(pending.message);
-            return;
-        }
-
-        if (hasResolvedStudentEntry(pending.uid)) {
-            clearPendingStudentBootstrapFailure(pending.uid);
-            return;
-        }
-
-        if (!userData || userData.uid !== pending.uid) {
-            return;
-        }
-
-        clearPendingStudentBootstrapFailure(pending.uid);
-        alert(pending.message);
-    }, [authBusy, currentUser, loading, redirectRecoveryPending, userData]);
 
     const openProfileModal = (initial: StudentProfileForm): Promise<StudentProfileForm | null> => {
         const normalizedNumber = normalizeSchoolField(initial.number);
@@ -1042,7 +1060,6 @@ const Login: React.FC = () => {
             'westory-login-first-route-decided',
         );
         autoResumeUidRef.current = user.uid;
-        clearPendingStudentBootstrapFailure(user.uid);
         forceRoute(targetPath);
 
         if (userSnap.exists() && !requiresBlockingWrite) {
@@ -1112,24 +1129,26 @@ const Login: React.FC = () => {
                         || (recoveredUser.email === TEACHER_EMAIL ? 'teacher' : 'student');
                     try {
                         await finishLoginForRole(recoveredUser, effectiveMode);
-                    } catch (resumeError) {
-                        if (shouldDeferStudentBootstrapAlert(effectiveMode, recoveredUser, resumeError)) {
-                            clearRedirectAttempt();
-                            clearPendingLoginMode();
+                        clearRedirectAttempt();
+                        setLoginNotice('');
+                        markLoginPerf('westory-login-redirect-resume-end', {
+                            recovered: 'fallback',
+                        });
+                        measureLoginPerf(
+                            'westory-redirect-resume',
+                            'westory-login-redirect-resume-start',
+                            'westory-login-redirect-resume-end',
+                        );
+                        return;
+                    } catch (recoveredError) {
+                        if (await suppressRecoveredStudentBootstrapAlert(recoveredUser, 'redirect-resume', recoveredError)) {
                             return;
                         }
-                        throw resumeError;
+                        error = recoveredError;
                     }
-                    clearRedirectAttempt();
-                    setLoginNotice('');
-                    markLoginPerf('westory-login-redirect-resume-end', {
-                        recovered: 'fallback',
-                    });
-                    measureLoginPerf(
-                        'westory-redirect-resume',
-                        'westory-login-redirect-resume-start',
-                        'westory-login-redirect-resume-end',
-                    );
+                }
+                const activeUser = auth.currentUser;
+                if (activeUser && await suppressRecoveredStudentBootstrapAlert(activeUser, 'redirect-resume', error)) {
                     return;
                 }
                 clearRedirectAttempt();
@@ -1303,7 +1322,6 @@ const Login: React.FC = () => {
                 'westory-login-bootstrap-start',
                 'westory-login-first-route-decided',
             );
-            clearPendingStudentBootstrapFailure(currentUser.uid);
             forceRoute('/student/dashboard');
 
             if (userDocExists && !requiresBlockingWrite) {
@@ -1313,10 +1331,10 @@ const Login: React.FC = () => {
             console.error('Failed to continue student onboarding', error);
             clearPendingLoginMode();
             clearRedirectAttempt();
-            if (shouldDeferStudentBootstrapAlert('student', currentUser, error)) {
+            if (await suppressRecoveredStudentBootstrapAlert(currentUser, 'auto-resume', error)) {
                 return;
             }
-            alert(consumeStudentBootstrapFailureMessage(currentUser.uid, error));
+            alert(getStudentBootstrapFailureMessage(error));
         } finally {
             authActionLockRef.current = false;
             setAuthBusy(false);
@@ -1358,7 +1376,8 @@ const Login: React.FC = () => {
             console.error('Login failed', error);
             clearPendingLoginMode();
             clearRedirectAttempt();
-            if (shouldDeferStudentBootstrapAlert(mode, auth.currentUser, error)) {
+            const activeUser = auth.currentUser;
+            if (activeUser && await suppressRecoveredStudentBootstrapAlert(activeUser, 'finish-login', error)) {
                 return;
             }
             alert(getLoginFailureMessage(error));
@@ -1398,7 +1417,6 @@ const Login: React.FC = () => {
         clearRoleCache();
         clearPendingLoginMode();
         clearRedirectAttempt();
-        clearPendingStudentBootstrapFailure();
         setLoginNotice('');
         autoResumeUidRef.current = null;
 
