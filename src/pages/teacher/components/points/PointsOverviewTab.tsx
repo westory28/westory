@@ -5,8 +5,16 @@ import { getPointRankDisplay } from '../../../../lib/pointRanks';
 import { formatPointDateShortTime, formatPointDateTime, formatPointStudentLabel } from '../../../../lib/pointFormatters';
 import type { PointRankPolicy, PointTransaction, PointWallet } from '../../../../types';
 
+type OverviewSortKey = 'none' | 'affiliation' | 'balance' | 'earnedTotal' | 'spentTotal';
+type OverviewSortDirection = 'asc' | 'desc';
+
 interface PointsOverviewTabProps {
     wallets: PointWallet[];
+    totalWalletCount: number;
+    currentPage: number;
+    totalPages: number;
+    sortKey: OverviewSortKey;
+    sortDirection: OverviewSortDirection;
     selectedWallet: PointWallet | null;
     selectedUid: string;
     rankPolicy: PointRankPolicy;
@@ -28,6 +36,8 @@ interface PointsOverviewTabProps {
     onClassFilterChange: (value: string) => void;
     onNumberFilterChange: (value: string) => void;
     onNameSearchChange: (value: string) => void;
+    onSortChange: (sortKey: Exclude<OverviewSortKey, 'none'>) => void;
+    onPageChange: (page: number) => void;
     onSelectWallet: (uid: string) => void;
     onSelectEditableTransaction: (transactionId: string) => void;
     onAdjustmentDraftChange: (value: string) => void;
@@ -35,8 +45,46 @@ interface PointsOverviewTabProps {
     onSubmitAdjustmentCancel: () => void;
 }
 
+const buildPaginationItems = (currentPage: number, totalPages: number) => {
+    if (totalPages <= 7) {
+        return Array.from({ length: totalPages }, (_, index) => index + 1);
+    }
+
+    const visiblePages = new Set<number>([1, totalPages, currentPage - 1, currentPage, currentPage + 1]);
+
+    if (currentPage <= 3) {
+        visiblePages.add(2);
+        visiblePages.add(3);
+        visiblePages.add(4);
+    }
+
+    if (currentPage >= totalPages - 2) {
+        visiblePages.add(totalPages - 1);
+        visiblePages.add(totalPages - 2);
+        visiblePages.add(totalPages - 3);
+    }
+
+    const pages = Array.from(visiblePages)
+        .filter((page) => page >= 1 && page <= totalPages)
+        .sort((left, right) => left - right);
+
+    return pages.flatMap((page, index) => {
+        const previousPage = pages[index - 1];
+        if (index === 0 || page === previousPage + 1) {
+            return [page];
+        }
+
+        return ['ellipsis', page] as const;
+    });
+};
+
 const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
     wallets,
+    totalWalletCount,
+    currentPage,
+    totalPages,
+    sortKey,
+    sortDirection,
     selectedWallet,
     selectedUid,
     rankPolicy,
@@ -58,21 +106,29 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
     onClassFilterChange,
     onNumberFilterChange,
     onNameSearchChange,
+    onSortChange,
+    onPageChange,
     onSelectWallet,
     onSelectEditableTransaction,
     onAdjustmentDraftChange,
     onSubmitAdjustmentUpdate,
     onSubmitAdjustmentCancel,
-}) => (
-    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.2fr_0.95fr]">
-        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-            <div className="border-b border-gray-100 bg-gray-50 p-5">
+}) => {
+    const sortIndicatorClass = (targetKey: Exclude<OverviewSortKey, 'none'>) => {
+        if (sortKey !== targetKey) return 'fa-sort text-gray-300';
+        return sortDirection === 'desc' ? 'fa-sort-down text-blue-600' : 'fa-sort-up text-blue-600';
+    };
+
+    return (
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.2fr_0.95fr]">
+            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                <div className="border-b border-gray-100 bg-gray-50 p-5">
                 <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
                     <div>
                         <h2 className="text-lg font-bold text-gray-800">학생별 포인트 현황</h2>
                         <p className="mt-1 text-sm text-gray-500">학년, 반, 번호, 이름 검색을 조합해 학생 포인트 현황과 최근 거래 내역을 빠르게 확인할 수 있습니다.</p>
                     </div>
-                    <div className="text-sm font-bold text-gray-500">{`검색 결과 ${wallets.length}명`}</div>
+                    <div className="text-sm font-bold text-gray-500">{`검색 결과 ${totalWalletCount}명`}</div>
                 </div>
                 <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
                     <select value={gradeFilter} onChange={(event) => onGradeFilterChange(event.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700">
@@ -94,13 +150,33 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
             <div className="hidden md:block">
                 <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_110px_120px_120px] gap-3 border-b border-gray-100 px-5 py-3 text-xs font-bold uppercase tracking-wide text-gray-500">
                     <div>학생</div>
-                    <div>소속</div>
-                    <div className="text-right">보유</div>
-                    <div className="text-right">누적 적립</div>
-                    <div className="text-right">누적 사용</div>
+                    <div>
+                        <button type="button" onClick={() => onSortChange('affiliation')} className="inline-flex items-center gap-1 transition hover:text-blue-600">
+                            소속
+                            <i className={`fas ${sortIndicatorClass('affiliation')} text-xs`} aria-hidden="true"></i>
+                        </button>
+                    </div>
+                    <div className="text-right">
+                        <button type="button" onClick={() => onSortChange('balance')} className="inline-flex items-center justify-end gap-1 text-right transition hover:text-blue-600">
+                            보유
+                            <i className={`fas ${sortIndicatorClass('balance')} text-xs`} aria-hidden="true"></i>
+                        </button>
+                    </div>
+                    <div className="text-right">
+                        <button type="button" onClick={() => onSortChange('earnedTotal')} className="inline-flex items-center justify-end gap-1 text-right transition hover:text-blue-600">
+                            누적 적립
+                            <i className={`fas ${sortIndicatorClass('earnedTotal')} text-xs`} aria-hidden="true"></i>
+                        </button>
+                    </div>
+                    <div className="text-right">
+                        <button type="button" onClick={() => onSortChange('spentTotal')} className="inline-flex items-center justify-end gap-1 text-right transition hover:text-blue-600">
+                            누적 사용
+                            <i className={`fas ${sortIndicatorClass('spentTotal')} text-xs`} aria-hidden="true"></i>
+                        </button>
+                    </div>
                 </div>
                 <div className="divide-y divide-gray-100">
-                    {wallets.length === 0 && <div className="px-5 py-12 text-center text-sm text-gray-400">조건에 맞는 학생이 없습니다.</div>}
+                    {totalWalletCount === 0 && <div className="px-5 py-12 text-center text-sm text-gray-400">조건에 맞는 학생이 없습니다.</div>}
                     {wallets.map((wallet) => {
                         const rank = getPointRankDisplay({
                             rankPolicy,
@@ -135,14 +211,33 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
                         );
                     })}
                 </div>
+                {totalPages > 1 && (
+                    <div className="flex items-center justify-center gap-1.5 border-t border-gray-100 bg-white px-5 py-3">
+                        {buildPaginationItems(currentPage, totalPages).map((item, index) => (
+                            item === 'ellipsis' ? (
+                                <span key={`ellipsis-${index}`} className="px-1 text-sm font-bold text-gray-400">...</span>
+                            ) : (
+                                <button
+                                    key={item}
+                                    type="button"
+                                    onClick={() => onPageChange(item)}
+                                    aria-current={currentPage === item ? 'page' : undefined}
+                                    className={`h-8 min-w-8 rounded-md px-2 text-xs font-bold transition ${currentPage === item ? 'bg-blue-600 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-blue-600'}`}
+                                >
+                                    {item}
+                                </button>
+                            )
+                        ))}
+                    </div>
+                )}
             </div>
         </div>
 
-        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-            {!selectedWallet ? (
-                <div className="py-16 text-center text-gray-400">왼쪽 목록에서 학생을 선택해 주세요.</div>
-            ) : (
-                <>
+            <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                {!selectedWallet ? (
+                    <div className="py-16 text-center text-gray-400">왼쪽 목록에서 학생을 선택해 주세요.</div>
+                ) : (
+                    <>
                     <div className="flex items-start justify-between gap-4">
                         <div>
                             <div className="flex flex-wrap items-center gap-2">
@@ -255,10 +350,11 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
                             })}
                         </div>
                     </div>
-                </>
-            )}
+                    </>
+                )}
+            </div>
         </div>
-    </div>
-);
+    );
+};
 
 export default PointsOverviewTab;

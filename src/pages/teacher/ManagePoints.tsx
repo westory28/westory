@@ -55,6 +55,8 @@ type TeacherPointTab = keyof typeof TEACHER_POINT_TAB_LABELS;
 type OrderFilter = 'all' | PointOrderStatus;
 type PolicyFeedbackTone = RankPanelSaveTone;
 type SchoolOption = { value: string; label: string };
+type OverviewSortKey = 'none' | 'affiliation' | 'balance' | 'earnedTotal' | 'spentTotal';
+type OverviewSortDirection = 'asc' | 'desc';
 type ProductFormState = {
     id: string;
     name: string;
@@ -86,6 +88,45 @@ const EMPTY_PRODUCT_FORM: ProductFormState = {
 };
 
 const normalizeValue = (value: unknown) => String(value || '').trim();
+const OVERVIEW_PAGE_SIZE = 20;
+
+const sortOverviewWallets = (
+    wallets: PointWallet[],
+    sortKey: OverviewSortKey,
+    sortDirection: OverviewSortDirection,
+) => {
+    if (sortKey === 'none') {
+        return wallets;
+    }
+
+    const direction = sortDirection === 'asc' ? 1 : -1;
+
+    return wallets
+        .map((wallet, index) => ({ wallet, index }))
+        .sort((left, right) => {
+            let comparison = 0;
+
+            if (sortKey === 'affiliation') {
+                comparison = normalizeValue(left.wallet.grade).localeCompare(normalizeValue(right.wallet.grade), 'ko-KR', { numeric: true })
+                    || normalizeValue(left.wallet.class).localeCompare(normalizeValue(right.wallet.class), 'ko-KR', { numeric: true })
+                    || normalizeValue(left.wallet.number).localeCompare(normalizeValue(right.wallet.number), 'ko-KR', { numeric: true })
+                    || normalizeValue(left.wallet.studentName).localeCompare(normalizeValue(right.wallet.studentName), 'ko-KR', { numeric: true });
+            } else if (sortKey === 'balance') {
+                comparison = (left.wallet.balance || 0) - (right.wallet.balance || 0);
+            } else if (sortKey === 'earnedTotal') {
+                comparison = (left.wallet.earnedTotal || 0) - (right.wallet.earnedTotal || 0);
+            } else if (sortKey === 'spentTotal') {
+                comparison = (left.wallet.spentTotal || 0) - (right.wallet.spentTotal || 0);
+            }
+
+            if (comparison !== 0) {
+                return comparison * direction;
+            }
+
+            return left.index - right.index;
+        })
+        .map(({ wallet }) => wallet);
+};
 
 const cloneRankTiers = (tiers: PointRankPolicyTier[] = []) => tiers.map((tier) => ({
     ...tier,
@@ -215,6 +256,9 @@ const ManagePoints: React.FC = () => {
     const [classFilter, setClassFilter] = useState('all');
     const [numberFilter, setNumberFilter] = useState('all');
     const [nameSearch, setNameSearch] = useState('');
+    const [overviewSortKey, setOverviewSortKey] = useState<OverviewSortKey>('none');
+    const [overviewSortDirection, setOverviewSortDirection] = useState<OverviewSortDirection>('desc');
+    const [overviewPage, setOverviewPage] = useState(1);
     const [grantGradeFilter, setGrantGradeFilter] = useState('all');
     const [grantClassFilter, setGrantClassFilter] = useState('all');
     const [grantNumberFilter, setGrantNumberFilter] = useState('all');
@@ -333,6 +377,23 @@ const ManagePoints: React.FC = () => {
         const matchesName = !keyword || normalizeValue(wallet.studentName).includes(keyword);
         return matchesGrade && matchesClass && matchesNumber && matchesName;
     }), [classFilter, gradeFilter, nameSearch, numberFilter, wallets]);
+
+    const sortedWallets = useMemo(
+        () => sortOverviewWallets(filteredWallets, overviewSortKey, overviewSortDirection),
+        [filteredWallets, overviewSortDirection, overviewSortKey],
+    );
+
+    const overviewTotalPages = useMemo(
+        () => Math.max(1, Math.ceil(sortedWallets.length / OVERVIEW_PAGE_SIZE)),
+        [sortedWallets.length],
+    );
+
+    const currentOverviewPage = Math.min(overviewPage, overviewTotalPages);
+
+    const paginatedWallets = useMemo(() => {
+        const startIndex = (currentOverviewPage - 1) * OVERVIEW_PAGE_SIZE;
+        return sortedWallets.slice(startIndex, startIndex + OVERVIEW_PAGE_SIZE);
+    }, [currentOverviewPage, sortedWallets]);
 
     const selectedWallet = useMemo(
         () => wallets.find((wallet) => wallet.uid === selectedUid) || null,
@@ -509,10 +570,35 @@ const ManagePoints: React.FC = () => {
     }, [numberFilter, numberOptions]);
 
     useEffect(() => {
-        if (selectedUid && !filteredWallets.some((wallet) => wallet.uid === selectedUid)) {
-            setSelectedUid(filteredWallets[0]?.uid || '');
+        setOverviewPage(1);
+    }, [classFilter, gradeFilter, nameSearch, numberFilter]);
+
+    useEffect(() => {
+        if (overviewPage > overviewTotalPages) {
+            setOverviewPage(overviewTotalPages);
         }
-    }, [filteredWallets, selectedUid]);
+    }, [overviewPage, overviewTotalPages]);
+
+    useEffect(() => {
+        if (sortedWallets.length === 0) {
+            if (selectedUid) setSelectedUid('');
+            return;
+        }
+
+        if (!selectedUid) {
+            setSelectedUid(paginatedWallets[0]?.uid || sortedWallets[0]?.uid || '');
+            return;
+        }
+
+        if (!filteredWallets.some((wallet) => wallet.uid === selectedUid)) {
+            setSelectedUid(paginatedWallets[0]?.uid || sortedWallets[0]?.uid || '');
+            return;
+        }
+
+        if (!paginatedWallets.some((wallet) => wallet.uid === selectedUid)) {
+            setSelectedUid(paginatedWallets[0]?.uid || '');
+        }
+    }, [filteredWallets, paginatedWallets, selectedUid, sortedWallets]);
 
     useEffect(() => {
         if (grantClassFilter !== 'all' && !grantClassOptions.some((option) => option.value === grantClassFilter)) setGrantClassFilter('all');
@@ -568,6 +654,23 @@ const ManagePoints: React.FC = () => {
             URL.revokeObjectURL(productImagePreviewUrl);
         }
     }, [productImagePreviewUrl]);
+
+    const handleOverviewSortChange = (sortKey: Exclude<OverviewSortKey, 'none'>) => {
+        const nextSortDirection: OverviewSortDirection = overviewSortKey === sortKey
+            ? (overviewSortDirection === 'desc' ? 'asc' : 'desc')
+            : (sortKey === 'affiliation' ? 'asc' : 'desc');
+        const nextSortedWallets = sortOverviewWallets(filteredWallets, sortKey, nextSortDirection);
+        const selectedIndex = nextSortedWallets.findIndex((wallet) => wallet.uid === selectedUid);
+
+        setOverviewSortKey(sortKey);
+        setOverviewSortDirection(nextSortDirection);
+        setOverviewPage(selectedIndex >= 0 ? Math.floor(selectedIndex / OVERVIEW_PAGE_SIZE) + 1 : 1);
+    };
+
+    const handleOverviewPageChange = (page: number) => {
+        const nextPage = Math.min(Math.max(page, 1), overviewTotalPages);
+        setOverviewPage(nextPage);
+    };
 
     const handleTabChange = (tab: TeacherPointTab) => {
         setGrantFeedback('');
@@ -1031,7 +1134,12 @@ const ManagePoints: React.FC = () => {
 
                     {!loading && activeTab === 'overview' && (
                         <PointsOverviewTab
-                            wallets={filteredWallets}
+                            wallets={paginatedWallets}
+                            totalWalletCount={sortedWallets.length}
+                            currentPage={currentOverviewPage}
+                            totalPages={overviewTotalPages}
+                            sortKey={overviewSortKey}
+                            sortDirection={overviewSortDirection}
                             selectedWallet={selectedWallet}
                             selectedUid={selectedUid}
                             rankPolicy={savedPolicy.rankPolicy}
@@ -1053,6 +1161,8 @@ const ManagePoints: React.FC = () => {
                             onClassFilterChange={setClassFilter}
                             onNumberFilterChange={setNumberFilter}
                             onNameSearchChange={setNameSearch}
+                            onSortChange={handleOverviewSortChange}
+                            onPageChange={handleOverviewPageChange}
                             onSelectWallet={setSelectedUid}
                             onSelectEditableTransaction={handleSelectEditableTransaction}
                             onAdjustmentDraftChange={setAdjustmentDraftValue}
