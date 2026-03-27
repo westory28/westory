@@ -17,7 +17,7 @@ interface GradingPlan {
 }
 
 const ScoreDashboard: React.FC = () => {
-    const { userData, config } = useAuth();
+    const { userData, currentUser, config } = useAuth();
     const [loading, setLoading] = useState(true);
     const [plans, setPlans] = useState<GradingPlan[]>([]);
     const [userScores, setUserScores] = useState<{ [key: string]: string }>({});
@@ -225,14 +225,71 @@ const ScoreDashboard: React.FC = () => {
     const handleConfirmWarning = async () => {
         if (!agree || !userData) return;
         setWarningSaving(true);
+        let userDocExists: boolean | null = null;
         try {
-            await setDoc(doc(db, 'users', userData.uid), {
+            const userRef = doc(db, 'users', userData.uid);
+            const userSnap = await getDoc(userRef);
+            userDocExists = userSnap.exists();
+            const warningPayload: Record<string, unknown> = {
                 scoreWarningAcknowledged: true,
-                scoreWarningAcknowledgedAt: serverTimestamp()
-            }, { merge: true });
+                scoreWarningAcknowledgedAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+            };
+
+            if (!userDocExists) {
+                const email = (currentUser?.email || userData.email || '').trim();
+                if (!email) {
+                    throw new Error('Missing authenticated email for score warning consent bootstrap.');
+                }
+
+                warningPayload.uid = userData.uid;
+                warningPayload.email = email;
+                warningPayload.photoURL = currentUser?.photoURL || userData.photoURL || '';
+                warningPayload.role = 'student';
+                warningPayload.staffPermissions = [];
+                warningPayload.teacherPortalEnabled = false;
+                warningPayload.createdAt = serverTimestamp();
+                warningPayload.lastLogin = serverTimestamp();
+
+                if (typeof userData.name === 'string' && userData.name.trim()) {
+                    warningPayload.name = userData.name.trim();
+                }
+                if (typeof userData.grade === 'string' && userData.grade.trim()) {
+                    warningPayload.grade = userData.grade.trim();
+                }
+                if (typeof userData.class === 'string' && userData.class.trim()) {
+                    warningPayload.class = userData.class.trim();
+                }
+                if (typeof userData.number === 'string' && userData.number.trim()) {
+                    warningPayload.number = userData.number.trim();
+                }
+                if (userData.customNameConfirmed === true) {
+                    warningPayload.customNameConfirmed = true;
+                }
+                if (userData.privacyAgreed === true) {
+                    warningPayload.privacyAgreed = true;
+                    if (userData.privacyAgreedAt) {
+                        warningPayload.privacyAgreedAt = userData.privacyAgreedAt;
+                    }
+                }
+                if (Array.isArray(userData.consentAgreedItems) && userData.consentAgreedItems.length > 0) {
+                    warningPayload.consentAgreedItems = userData.consentAgreedItems.filter(
+                        (item): item is string => typeof item === 'string',
+                    );
+                }
+            }
+
+            await setDoc(userRef, warningPayload, { merge: true });
+            setAgree(true);
+            setSaveError(null);
             setShowWarning(false);
         } catch (e) {
-            console.error("Warning agreement save failed", e);
+            console.error("Warning agreement save failed", {
+                uid: userData.uid,
+                userDocPath: `users/${userData.uid}`,
+                hasUserDoc: userDocExists,
+                error: e,
+            });
             alert("동의 상태 저장에 실패했습니다. 다시 시도해 주세요.");
         } finally {
             setWarningSaving(false);
