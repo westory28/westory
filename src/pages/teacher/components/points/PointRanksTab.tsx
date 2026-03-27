@@ -4,7 +4,8 @@ import { POINT_RANK_BADGE_STYLE_OPTIONS } from "../../../../constants/pointLabel
 import { buildStudentRankPromotionPreview } from "../../../../lib/pointRankPromotion";
 import {
   createPointRankTierCode,
-  getPointRankDisplay,
+  getPointRankDisplayByTierCode,
+  getPointRankTierMeta,
   getPointRankPolicyValidationError,
   getPointRankThemeName,
   resolvePointRankPolicyDraft,
@@ -523,16 +524,14 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
       tier: PointRankPolicyTier,
       themeId: PointRankThemeId = rankPolicy.activeThemeId,
     ) =>
-      getPointRankDisplay({
+      getPointRankDisplayByTierCode({
         rankPolicy: {
           ...rankPolicy,
           activeThemeId: themeId,
           themeId,
         },
-        wallet: {
-          earnedTotal: tier.minPoints,
-          rankEarnedTotal: tier.minPoints,
-        },
+        tierCode: tier.code,
+        themeId,
       });
 
   const getThemeTierPreview = buildTierPreviewGetter(themePreviewPolicy);
@@ -551,10 +550,38 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
 
   const handleAddTier = () => {
     const nextTier = makeTierDraft(rankSettingsPolicy.tiers);
-    updateRankSettingsPolicy((prev) => ({
-      ...prev,
-      tiers: [...prev.tiers, nextTier],
-    }));
+    updateRankSettingsPolicy((prev) => {
+      const nextPolicy: PointRankPolicy = {
+        ...prev,
+        tiers: [...prev.tiers, nextTier],
+      };
+      const initialTierMeta = getPointRankTierMeta(
+        nextPolicy,
+        prev.activeThemeId,
+        nextTier.code,
+      );
+
+      return {
+        ...nextPolicy,
+        themes: {
+          ...(nextPolicy.themes || {}),
+          [prev.activeThemeId]: {
+            ...(nextPolicy.themes?.[prev.activeThemeId] || {}),
+            tiers: {
+              ...(nextPolicy.themes?.[prev.activeThemeId]?.tiers || {}),
+              [nextTier.code]: {
+                ...(nextPolicy.themes?.[prev.activeThemeId]?.tiers?.[
+                  nextTier.code
+                ] || {}),
+                label: initialTierMeta.label,
+                shortLabel: initialTierMeta.shortLabel,
+                description: initialTierMeta.description,
+              },
+            },
+          },
+        },
+      };
+    });
     setSelectedTierCode(nextTier.code);
     setActivePanel("rank_settings");
   };
@@ -656,7 +683,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
     },
     {
       id: "rank_settings",
-      label: "등급 설정",
+      label: "등급 관리",
       iconClassName: "fas fa-medal",
       badge: rankSettingsHasUnsavedChanges ? "미저장" : "저장됨",
       meta: `등급 ${rankSettingsPolicy.tiers.length}개`,

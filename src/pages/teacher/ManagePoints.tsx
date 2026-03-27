@@ -933,11 +933,11 @@ const ManagePoints: React.FC = () => {
             applyConfirmedPolicy(confirmedPolicy, { resetRankSettingsDraft: true });
             setRankSettingsDirty(false);
             setRankSettingsFeedbackTone('success');
-            setRankSettingsFeedbackMessage('등급 설정이 저장되었습니다.');
+            setRankSettingsFeedbackMessage('등급 관리가 저장되었습니다.');
         } catch (error: any) {
             console.error('Failed to save rank settings:', error);
             setRankSettingsFeedbackTone('error');
-            setRankSettingsFeedbackMessage('등급 설정 저장에 실패했습니다. 다시 시도해 주세요.');
+            setRankSettingsFeedbackMessage('등급 관리 저장에 실패했습니다. 다시 시도해 주세요.');
         }
     };
 

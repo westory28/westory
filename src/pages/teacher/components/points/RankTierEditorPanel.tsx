@@ -111,9 +111,9 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="flex flex-col gap-4 p-5 sm:p-6 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h2 className="text-lg font-extrabold text-gray-900">등급 설정</h2>
+            <h2 className="text-lg font-extrabold text-gray-900">등급 관리</h2>
             <p className="mt-1 text-sm text-gray-500">
-              화면은 높은 등급부터 보여 주고, 저장 시에는 기준 위스로 안전하게
+              등급 카드를 펼쳐 이름, 기준 위스, 설명과 이모지 연결까지 한 번에
               정리합니다.
             </p>
           </div>
@@ -124,7 +124,7 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
               disabled={!canManage || Boolean(validationError)}
               className="inline-flex items-center justify-center whitespace-nowrap rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
             >
-              등급 설정 저장
+              등급 관리 저장
             </button>
             <div
               className={[
@@ -135,8 +135,8 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
               ].join(" ")}
             >
               {hasUnsavedChanges
-                ? "등급 설정 변경사항이 저장 대기 중입니다."
-                : "저장된 등급 설정과 같습니다."}
+                ? "등급 관리 변경사항이 저장 대기 중입니다."
+                : "저장된 등급 관리와 같습니다."}
             </div>
             {saveFeedbackMessage && saveFeedbackTone && (
               <div

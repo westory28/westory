@@ -6,6 +6,7 @@ import type {
 } from '../types';
 import { getPointPolicy, getPointRankManualAdjustEarnedPointsByUid, getPointWalletByUid } from './points';
 import {
+    getPointRankDisplayByTierCode,
     getPointRankDisplay,
     getPointRankNewlyUnlockedEmojiEntries,
     type PointRankDisplay,
@@ -108,12 +109,9 @@ export const buildStudentRankPromotionPreview = (
         || resolvedPolicy.tiers[targetIndex - 1]
         || null;
     const previewLimit = effectLevel === 'subtle' ? 3 : 5;
-    const rank = getPointRankDisplay({
+    const rank = getPointRankDisplayByTierCode({
         rankPolicy: resolvedPolicy,
-        wallet: {
-            earnedTotal: targetTier.minPoints,
-            rankEarnedTotal: targetTier.minPoints,
-        },
+        tierCode: targetTier.code,
     });
 
     return {

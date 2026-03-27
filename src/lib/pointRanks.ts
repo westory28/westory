@@ -687,6 +687,60 @@ export const getPointRankTierDisplayItems = (
   return options?.descending === false ? items : [...items].reverse();
 };
 
+export const getPointRankDisplayByTierCode = ({
+  rankPolicy,
+  tierCode,
+  themeId,
+}: {
+  rankPolicy?: Partial<PointRankPolicy> | null;
+  tierCode: PointRankTierCode;
+  themeId?: PointRankThemeId;
+}): PointRankDisplay | null => {
+  const resolvedPolicy = resolvePointRankPolicy(rankPolicy);
+  if (!resolvedPolicy.enabled) return null;
+
+  const activeTier = resolvedPolicy.tiers.find(
+    (tier) => tier.code === tierCode,
+  );
+  if (!activeTier) return null;
+
+  const resolvedThemeId = themeId || resolvedPolicy.activeThemeId;
+  const tierIndex = resolvedPolicy.tiers.findIndex(
+    (tier) => tier.code === tierCode,
+  );
+  const nextTier =
+    tierIndex >= 0 ? resolvedPolicy.tiers[tierIndex + 1] || null : null;
+  const tierMeta = getPointRankTierMeta(
+    resolvedPolicy,
+    resolvedThemeId,
+    activeTier.code,
+  );
+  const nextTierMeta = nextTier
+    ? getPointRankTierMeta(resolvedPolicy, resolvedThemeId, nextTier.code)
+    : null;
+  const metricValue = activeTier.minPoints;
+
+  return {
+    themeId: resolvedThemeId,
+    themeName: getResolvedThemeName(resolvedPolicy, resolvedThemeId),
+    tierCode: activeTier.code,
+    label: tierMeta.label,
+    shortLabel: tierMeta.shortLabel,
+    description: tierMeta.description,
+    badgeClass: tierMeta.badgeClass,
+    metricValue,
+    minPoints: activeTier.minPoints,
+    nextLabel: nextTierMeta?.label || null,
+    nextMinPoints: nextTier?.minPoints ?? null,
+    remainingToNext: nextTier
+      ? Math.max(0, nextTier.minPoints - metricValue)
+      : 0,
+    progressPercent: nextTier ? 0 : 100,
+    basedOn: resolvedPolicy.basedOn,
+    enabled: resolvedPolicy.enabled,
+  };
+};
+
 export const getPointRankEmojiRegistry = (
   rankPolicy?: Partial<PointRankPolicy> | null,
   preferredValues?: unknown,
