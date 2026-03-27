@@ -53,39 +53,41 @@ const StudentPointShopTab: React.FC<StudentPointShopTabProps> = ({
         )}
 
         {products.length > 0 && (
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {products.map((product) => {
                     const canAfford = (wallet.balance || 0) >= Number(product.price || 0);
                     const hasStock = Number(product.stock || 0) > 0;
                     const canRequest = canAfford && hasStock;
+                    const productStatusText = !hasStock ? '재고 없음' : !canAfford ? '포인트 부족' : '구매 가능';
+                    const productStatusClass = !hasStock || !canAfford ? 'text-rose-500' : 'text-emerald-600';
 
                     return (
-                        <article key={product.id} className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+                        <article key={product.id} className="flex h-full flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
                             {(product.previewImageUrl || product.imageUrl) ? (
-                                <div className="aspect-[4/3] bg-gray-100">
+                                <div className="aspect-[3/2] bg-gray-100">
                                     <img src={product.previewImageUrl || product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
                                 </div>
                             ) : (
-                                <div className="flex aspect-[4/3] items-center justify-center bg-gray-100 text-4xl text-gray-300">
+                                <div className="flex aspect-[3/2] items-center justify-center bg-gray-100 text-4xl text-gray-300">
                                     <i className="fas fa-gift"></i>
                                 </div>
                             )}
-                            <div className="p-5">
-                                <div className="flex items-start justify-between gap-4">
-                                    <div>
-                                        <h3 className="text-lg font-bold text-gray-800">{product.name}</h3>
-                                        <p className="mt-1 text-sm leading-6 text-gray-500">{product.description || '\uC0C1\uD488 \uC124\uBA85\uC774 \uC544\uC9C1 \uC5C6\uC2B5\uB2C8\uB2E4.'}</p>
+                            <div className="flex flex-1 flex-col p-4">
+                                <div className="flex flex-1 flex-col gap-3">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0 flex-1">
+                                            <h3 className="line-clamp-2 text-base font-bold leading-6 text-gray-800">{product.name}</h3>
+                                            <p className="mt-1 line-clamp-2 min-h-[2.5rem] text-sm leading-5 text-gray-500">{product.description || '\uC0C1\uD488 \uC124\uBA85\uC774 \uC544\uC9C1 \uC5C6\uC2B5\uB2C8\uB2E4.'}</p>
+                                        </div>
+                                        <div className="shrink-0 text-right">
+                                            <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-gray-400">{'\uAC00\uACA9'}</div>
+                                            <div className="mt-1 text-lg font-black text-blue-700">{product.price}</div>
+                                        </div>
                                     </div>
-                                    <div className="text-right">
-                                        <div className="text-xs font-bold text-gray-400">{'\uAC00\uACA9'}</div>
-                                        <div className="text-xl font-black text-blue-700">{product.price}</div>
+                                    <div className="mt-auto flex min-h-[20px] items-center justify-between gap-2 text-sm">
+                                        <span className="font-bold text-gray-500">{`\uC7AC\uACE0 ${product.stock}\uAC1C`}</span>
+                                        <span className={`text-right font-bold whitespace-nowrap ${productStatusClass}`}>{productStatusText}</span>
                                     </div>
-                                </div>
-                                <div className="mt-4 flex items-center justify-between text-sm">
-                                    <span className="font-bold text-gray-500">{`\uC7AC\uACE0 ${product.stock}\uAC1C`}</span>
-                                    {!hasStock && <span className="font-bold text-rose-500">{'\uC7AC\uACE0\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4'}</span>}
-                                    {hasStock && !canAfford && <span className="font-bold text-rose-500">{'\uD3EC\uC778\uD2B8\uAC00 \uBD80\uC871\uD569\uB2C8\uB2E4'}</span>}
-                                    {canRequest && <span className="font-bold text-emerald-600">{'\uAD6C\uB9E4 \uAC00\uB2A5'}</span>}
                                 </div>
                                 <button
                                     type="button"

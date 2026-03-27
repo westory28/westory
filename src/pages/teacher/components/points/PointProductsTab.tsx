@@ -57,7 +57,7 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
                         <col />
                         <col className="w-[96px]" />
                         <col className="w-[88px]" />
-                        <col className="w-[92px]" />
+                        <col className="w-[112px]" />
                         <col className="w-[120px]" />
                     </colgroup>
                     <thead className="bg-gray-100 text-xs font-bold uppercase text-gray-600">
@@ -95,7 +95,7 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
                                 <td className="p-4 text-right font-bold text-gray-800">{product.price}</td>
                                 <td className="p-4 text-right text-gray-700">{product.stock}</td>
                                 <td className="p-4 text-center">
-                                    <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${product.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
+                                    <span className={`inline-flex min-w-[64px] items-center justify-center whitespace-nowrap rounded-full px-3.5 py-1 text-xs font-bold leading-none ${product.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
                                         {product.isActive ? '노출 중' : '숨김'}
                                     </span>
                                 </td>
@@ -130,14 +130,26 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
             </div>
 
             <div className="grid grid-cols-1 gap-4">
-                <input value={productForm.name} onChange={(event) => onProductFormChange((prev) => ({ ...prev, name: event.target.value }))} placeholder="상품명" className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm" />
-                <textarea value={productForm.description} onChange={(event) => onProductFormChange((prev) => ({ ...prev, description: event.target.value }))} rows={3} placeholder="상품 설명" className="rounded-lg border border-gray-300 px-4 py-3 text-sm" />
-                <div className="grid grid-cols-2 gap-4">
-                    <input type="number" min="0" value={productForm.price} onChange={(event) => onProductFormChange((prev) => ({ ...prev, price: event.target.value }))} placeholder="가격" className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm" />
-                    <input type="number" min="0" value={productForm.stock} onChange={(event) => onProductFormChange((prev) => ({ ...prev, stock: event.target.value }))} placeholder="재고" className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm" />
+                <label className="grid gap-2">
+                    <span className="text-sm font-bold text-gray-700">상품명</span>
+                    <input value={productForm.name} onChange={(event) => onProductFormChange((prev) => ({ ...prev, name: event.target.value }))} placeholder="예: 문화상품권 5천원권" className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm" />
+                </label>
+                <label className="grid gap-2">
+                    <span className="text-sm font-bold text-gray-700">상품 설명</span>
+                    <textarea value={productForm.description} onChange={(event) => onProductFormChange((prev) => ({ ...prev, description: event.target.value }))} rows={3} placeholder="학생에게 보여줄 상품 설명을 입력하세요." className="rounded-lg border border-gray-300 px-4 py-3 text-sm" />
+                </label>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <label className="grid gap-2">
+                        <span className="text-sm font-bold text-gray-700">가격(포인트)</span>
+                        <input type="number" min="0" value={productForm.price} onChange={(event) => onProductFormChange((prev) => ({ ...prev, price: event.target.value }))} placeholder="예: 500" className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm" />
+                    </label>
+                    <label className="grid gap-2">
+                        <span className="text-sm font-bold text-gray-700">재고(개)</span>
+                        <input type="number" min="0" value={productForm.stock} onChange={(event) => onProductFormChange((prev) => ({ ...prev, stock: event.target.value }))} placeholder="예: 20" className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm" />
+                    </label>
                 </div>
                 <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4">
-                    <div className="flex items-start gap-4">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
                         <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white shadow-sm">
                             {productImagePreviewUrl ? (
                                 <img src={productImagePreviewUrl} alt="상품 미리보기" className="h-full w-full object-cover" />
@@ -146,24 +158,33 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
                             )}
                         </div>
                         <div className="min-w-0 flex-1">
-                            <div className="text-sm font-bold text-gray-800">상품 이미지 업로드</div>
-                            <p className="mt-1 text-xs leading-5 text-gray-500">업로드 시 자동으로 압축하고, 학생 목록에서는 저해상도 미리보기 이미지를 사용합니다.</p>
-                            <label className="mt-3 inline-flex cursor-pointer items-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50">
+                            <div className="text-sm font-bold text-gray-800">대표 이미지</div>
+                            <p className="mt-1 text-xs leading-5 text-gray-500">학생 상점에 보일 대표 이미지를 등록하세요. 선택한 이미지는 자동으로 압축되어 저장됩니다.</p>
+                            <label className="mt-3 inline-flex w-full cursor-pointer items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 sm:w-auto">
                                 <input
                                     type="file"
                                     accept="image/*"
                                     className="hidden"
                                     onChange={(event) => onProductImageChange(event.target.files?.[0] || null)}
                                 />
-                                이미지 파일 선택
+                                대표 이미지 선택
                             </label>
+                            <p className="mt-2 text-xs text-gray-500">파일을 선택한 뒤 상품 저장을 누르면 대표 이미지로 적용됩니다.</p>
                         </div>
                     </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                    <input type="number" min="0" value={productForm.sortOrder} onChange={(event) => onProductFormChange((prev) => ({ ...prev, sortOrder: event.target.value }))} placeholder="정렬 순서" className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm" />
-                    <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-xs font-bold text-gray-500">
-                        {productImageUploading ? '이미지 처리 중...' : productImagePreviewUrl ? '미리보기 이미지 준비됨' : '이미지 없음'}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <label className="grid gap-2">
+                        <span className="text-sm font-bold text-gray-700">목록 표시 순서</span>
+                        <input type="number" min="0" value={productForm.sortOrder} onChange={(event) => onProductFormChange((prev) => ({ ...prev, sortOrder: event.target.value }))} placeholder="예: 10" className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm" />
+                        <span className="text-xs text-gray-500">숫자가 작을수록 학생 상점에서 먼저 보입니다.</span>
+                    </label>
+                    <div className="grid gap-2">
+                        <span className="text-sm font-bold text-gray-700">대표 이미지 상태</span>
+                        <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-xs font-bold text-gray-500">
+                            {productImageUploading ? '대표 이미지를 준비하고 있습니다.' : productImagePreviewUrl ? '대표 이미지가 준비되어 있습니다.' : '아직 등록된 대표 이미지가 없습니다.'}
+                        </div>
+                        <span className="text-xs text-gray-500">이미지를 선택한 뒤 저장하면 상품 대표 이미지로 적용됩니다.</span>
                     </div>
                 </div>
                 <label className="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
