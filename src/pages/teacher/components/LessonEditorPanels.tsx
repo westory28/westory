@@ -454,15 +454,26 @@ function FootnoteEditorDialog({
   const locationMessage = session.pendingAnchorPlacement
     ? `PDF p.${session.pendingAnchorPlacement.page} 위치를 선택했습니다. 저장 버튼을 누르면 버튼이 생깁니다.`
     : footnoteAnchorBadgeLabel(pdfAnchorCount);
+  const stopEditorEventPropagation = React.useCallback(
+    (
+      event:
+        | React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>
+        | React.CompositionEvent<HTMLInputElement | HTMLTextAreaElement>
+        | React.FormEvent<HTMLInputElement | HTMLTextAreaElement>,
+    ) => {
+      event.stopPropagation();
+    },
+    [],
+  );
   const handleFieldKeyDown = React.useCallback(
     (event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-      event.stopPropagation();
+      stopEditorEventPropagation(event);
       if (event.key === "Escape" && !event.nativeEvent.isComposing) {
         event.preventDefault();
         onCloseFootnoteEditor?.();
       }
     },
-    [onCloseFootnoteEditor],
+    [onCloseFootnoteEditor, stopEditorEventPropagation],
   );
 
   return (
@@ -536,6 +547,11 @@ function FootnoteEditorDialog({
                         onFootnoteDraftChange?.({ title: event.target.value })
                       }
                       onKeyDown={handleFieldKeyDown}
+                      onKeyUp={stopEditorEventPropagation}
+                      onBeforeInput={stopEditorEventPropagation}
+                      onCompositionStart={stopEditorEventPropagation}
+                      onCompositionUpdate={stopEditorEventPropagation}
+                      onCompositionEnd={stopEditorEventPropagation}
                       placeholder="예: 독립신문 기사"
                       className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
                     />
@@ -550,6 +566,11 @@ function FootnoteEditorDialog({
                         onFootnoteDraftChange?.({ label: event.target.value })
                       }
                       onKeyDown={handleFieldKeyDown}
+                      onKeyUp={stopEditorEventPropagation}
+                      onBeforeInput={stopEditorEventPropagation}
+                      onCompositionStart={stopEditorEventPropagation}
+                      onCompositionUpdate={stopEditorEventPropagation}
+                      onCompositionEnd={stopEditorEventPropagation}
                       placeholder="예: 기사 보기"
                       className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
                     />
@@ -566,6 +587,11 @@ function FootnoteEditorDialog({
                       onFootnoteDraftChange?.({ bodyHtml: event.target.value })
                     }
                     onKeyDown={handleFieldKeyDown}
+                    onKeyUp={stopEditorEventPropagation}
+                    onBeforeInput={stopEditorEventPropagation}
+                    onCompositionStart={stopEditorEventPropagation}
+                    onCompositionUpdate={stopEditorEventPropagation}
+                    onCompositionEnd={stopEditorEventPropagation}
                     rows={4}
                     placeholder="학생에게 보여 줄 설명이나 해설을 적어 주세요."
                     className="w-full resize-none rounded-2xl border border-slate-200 px-3 py-2.5 text-sm leading-6 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
@@ -585,6 +611,11 @@ function FootnoteEditorDialog({
                         })
                       }
                       onKeyDown={handleFieldKeyDown}
+                      onKeyUp={stopEditorEventPropagation}
+                      onBeforeInput={stopEditorEventPropagation}
+                      onCompositionStart={stopEditorEventPropagation}
+                      onCompositionUpdate={stopEditorEventPropagation}
+                      onCompositionEnd={stopEditorEventPropagation}
                       placeholder="https://www.youtube.com/watch?v=..."
                       className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
                     />
@@ -830,8 +861,8 @@ export function LessonBodyEditor({
           )}
         </div>
         <p className="mt-3 text-sm text-slate-600">
-          오른쪽 각주 목록 패널에서 `본문에 넣기`를 누르면 현재 커서 위치에 각주
-          표시가 들어가고, 선택 범위가 없으면 본문 끝에 추가됩니다.
+          오른쪽 목록 패널의 `각주` 탭에서 `본문에 넣기`를 누르면 현재 커서
+          위치에 각주 표시가 들어가고, 선택 범위가 없으면 본문 끝에 추가됩니다.
         </p>
         {!!bodyInsertMessage && (
           <div className="mt-3 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-blue-700">
@@ -1411,8 +1442,15 @@ export function LessonPdfSection({
                 </button>
               </div>
               <div className="mt-3 rounded-2xl bg-slate-50 px-3 py-2.5 text-xs text-slate-600">
-                <div className="font-semibold text-slate-800">
-                  현재 도구: {activeToolLabel}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-semibold text-slate-800">
+                    현재 도구: {activeToolLabel}
+                  </div>
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${saveSummaryClassName}`}
+                  >
+                    {saveSummaryLabel}
+                  </span>
                 </div>
                 <div className="mt-1">
                   {hasUnsavedPdfChanges
