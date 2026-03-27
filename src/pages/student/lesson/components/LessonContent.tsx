@@ -28,6 +28,10 @@ import { claimPointActivityReward } from "../../../../lib/points";
 import { getSemesterCollectionPath } from "../../../../lib/semesterScope";
 
 type AnswerStatus = "" | "correct" | "wrong";
+type SaveCompletionPopupState = {
+  title: string;
+  message: string;
+} | null;
 
 interface LessonContentProps {
   unitId: string | null;
@@ -78,6 +82,8 @@ const LessonContent: React.FC<LessonContentProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [pointMessage, setPointMessage] = useState("");
+  const [saveCompletionPopup, setSaveCompletionPopup] =
+    useState<SaveCompletionPopupState>(null);
   const [activeFootnote, setActiveFootnote] = useState<LessonFootnote | null>(
     null,
   );
@@ -136,6 +142,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
     setHasUnsavedChanges(false);
     setSaveMessage("");
     setPointMessage("");
+    setSaveCompletionPopup(null);
     setActiveFootnote(null);
     setFootnotePanelOpen(false);
     setActiveWorksheetFootnoteAnchorId(null);
@@ -185,6 +192,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
         setHasUnsavedChanges(false);
         setSaveMessage("");
         setPointMessage("");
+        setSaveCompletionPopup(null);
         setActiveFootnote(null);
         setFootnotePanelOpen(false);
         setActiveWorksheetFootnoteAnchorId(null);
@@ -210,13 +218,20 @@ const LessonContent: React.FC<LessonContentProps> = ({
     );
   };
 
-  const serializeAnswers = () => {
+  const getAnswerSnapshot = () => {
     const container = contentRef.current;
-    if (!container) return {};
+    if (!container) {
+      return {
+        answers: {} as Record<string, { value: string; status: AnswerStatus }>,
+        totalCount: 0,
+        filledCount: 0,
+      };
+    }
     const inputs = container.querySelectorAll(
       ".cloze-input, .worksheet-blank-input",
     ) as NodeListOf<HTMLInputElement>;
     const answers: Record<string, { value: string; status: AnswerStatus }> = {};
+    let filledCount = 0;
     inputs.forEach((input, index) => {
       const key =
         input.dataset.blankId || input.dataset.blankIndex || String(index);
@@ -225,14 +240,26 @@ const LessonContent: React.FC<LessonContentProps> = ({
         : input.classList.contains("wrong")
           ? "wrong"
           : "";
-      answers[key] = { value: input.value || "", status };
+      const value = input.value || "";
+      if (value.trim()) {
+        filledCount += 1;
+      }
+      answers[key] = { value, status };
     });
-    return answers;
+    return {
+      answers,
+      totalCount: inputs.length,
+      filledCount,
+    };
   };
 
   const saveProgressToFirestore = async () => {
     const progressRef = getProgressRef();
     if (!progressRef || !currentUser?.uid || !unitId) return;
+    const answerSnapshot = getAnswerSnapshot();
+    const isWorksheetCompleted =
+      answerSnapshot.totalCount > 0 &&
+      answerSnapshot.filledCount === answerSnapshot.totalCount;
     try {
       setIsSaving(true);
       await setDoc(
@@ -240,7 +267,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
         {
           userId: currentUser.uid,
           unitId,
-          answers: serializeAnswers(),
+          answers: answerSnapshot.answers,
           annotations: deleteField(),
           updatedAt: serverTimestamp(),
         },
@@ -248,6 +275,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
       );
       setHasUnsavedChanges(false);
       setSaveMessage("저장됨");
+      let awardedPointAmount = 0;
       if (lesson && interactedRef.current && unitId) {
         const elapsedMs = Date.now() - viewStartedAtRef.current;
         if (elapsedMs >= 30000) {
@@ -258,11 +286,13 @@ const LessonContent: React.FC<LessonContentProps> = ({
               sourceId: `lesson-${unitId}`,
               sourceLabel: lesson.title || "수업 자료 확인",
             });
-            if (pointResult.awarded && pointResult.amount > 0)
+            if (pointResult.awarded && pointResult.amount > 0) {
+              awardedPointAmount =
+                Number(pointResult.totalAwarded || pointResult.amount) || 0;
               setPointMessage(
-                `수업 자료 학습 포인트가 반영되었습니다. +${pointResult.amount}점`,
+                `수업 자료 학습 포인트가 반영되었습니다. +${awardedPointAmount}점`,
               );
-            else if (pointResult.duplicate)
+            } else if (pointResult.duplicate)
               setPointMessage("이미 반영된 학습 포인트입니다.");
             else setPointMessage("");
           } catch (pointError) {
@@ -272,6 +302,15 @@ const LessonContent: React.FC<LessonContentProps> = ({
         } else {
           setPointMessage("포인트는 30초 이상 학습 후 저장하면 반영됩니다.");
         }
+      }
+      if (isWorksheetCompleted) {
+        setSaveCompletionPopup({
+          title: "저장 완료",
+          message:
+            awardedPointAmount > 0
+              ? `저장되었습니다. ${awardedPointAmount} 포인트가 지급되었습니다.`
+              : "저장되었습니다.",
+        });
       }
     } catch (saveError) {
       console.error("Failed to save lesson progress:", saveError);
@@ -813,6 +852,37 @@ const LessonContent: React.FC<LessonContentProps> = ({
         {!!pointMessage && (
           <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
             {pointMessage}
+          </div>
+        )}
+
+        {saveCompletionPopup && (
+          <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="lesson-save-completion-title"
+              className="w-full max-w-sm rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_28px_80px_rgba(15,23,42,0.2)]"
+            >
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                <i className="fas fa-check text-lg"></i>
+              </div>
+              <h2
+                id="lesson-save-completion-title"
+                className="mt-4 text-center text-lg font-bold text-slate-900"
+              >
+                {saveCompletionPopup.title}
+              </h2>
+              <p className="mt-2 text-center text-sm leading-6 text-slate-600">
+                {saveCompletionPopup.message}
+              </p>
+              <button
+                type="button"
+                onClick={() => setSaveCompletionPopup(null)}
+                className="mt-5 inline-flex w-full items-center justify-center rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+              >
+                확인
+              </button>
+            </div>
           </div>
         )}
 

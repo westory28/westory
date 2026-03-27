@@ -304,6 +304,14 @@ const mergeFootnotePatch = (
   );
 };
 
+const mergeFootnoteDraftPatch = (
+  target: LessonFootnote,
+  patch: Partial<LessonFootnote>,
+) => ({
+  ...target,
+  ...patch,
+});
+
 const sortWorksheetBlanks = (blanks: LessonWorksheetBlank[]) =>
   [...blanks].sort((left, right) => {
     if (left.page !== right.page) return left.page - right.page;
@@ -908,22 +916,6 @@ const ManageLesson: React.FC = () => {
   const pendingFootnoteEditorSnapshot = useMemo(() => {
     if (!footnoteEditorSession) return null;
 
-    const sourceFootnote =
-      footnoteEditorSession.mode === "edit" &&
-      footnoteEditorSession.sourceFootnoteId
-        ? lessonFootnotes.find(
-            (footnote) =>
-              footnote.id === footnoteEditorSession.sourceFootnoteId,
-          ) || null
-        : null;
-    const normalizedDraft = sourceFootnote
-      ? mergeFootnotePatch(
-          sourceFootnote,
-          footnoteEditorSession.draft,
-          lessonFootnotes,
-        )
-      : sanitizeLessonFootnote(footnoteEditorSession.draft, lessonFootnotes);
-
     return {
       mode: footnoteEditorSession.mode,
       sourceFootnoteId: footnoteEditorSession.sourceFootnoteId,
@@ -941,9 +933,9 @@ const ManageLesson: React.FC = () => {
               footnoteEditorSession.pendingAnchorPlacement.rect.heightRatio,
           }
         : null,
-      draft: normalizedDraft,
+      draft: footnoteEditorSession.draft,
     };
-  }, [footnoteEditorSession, lessonFootnotes]);
+  }, [footnoteEditorSession]);
   const currentMetaSnapshot = useMemo(
     () =>
       createGeneralEditorSnapshot({
@@ -2445,7 +2437,7 @@ const ManageLesson: React.FC = () => {
       if (!prev) return prev;
       return {
         ...prev,
-        draft: mergeFootnotePatch(prev.draft, patch, lessonFootnotes),
+        draft: mergeFootnoteDraftPatch(prev.draft, patch),
       };
     });
   };

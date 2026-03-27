@@ -447,12 +447,23 @@ function FootnoteEditorDialog({
   const previewUrl =
     getFootnotePreviewUrl?.(footnote) || footnote.imageUrl || "";
   const currentIndex = footnotes.findIndex((item) => item.id === footnote.id);
+  const dialogTitleId = "lesson-footnote-editor-title";
   const nestedModalProps = isNestedModalOpen
     ? ({ inert: "" } as React.HTMLAttributes<HTMLDivElement>)
     : {};
   const locationMessage = session.pendingAnchorPlacement
     ? `PDF p.${session.pendingAnchorPlacement.page} 위치를 선택했습니다. 저장 버튼을 누르면 버튼이 생깁니다.`
     : footnoteAnchorBadgeLabel(pdfAnchorCount);
+  const handleFieldKeyDown = React.useCallback(
+    (event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      event.stopPropagation();
+      if (event.key === "Escape" && !event.nativeEvent.isComposing) {
+        event.preventDefault();
+        onCloseFootnoteEditor?.();
+      }
+    },
+    [onCloseFootnoteEditor],
+  );
 
   return (
     <div
@@ -463,7 +474,7 @@ function FootnoteEditorDialog({
       role="dialog"
       aria-modal={isNestedModalOpen ? undefined : true}
       aria-hidden={isNestedModalOpen}
-      aria-label={session.mode === "create" ? "새 각주" : "각주 편집"}
+      aria-labelledby={dialogTitleId}
     >
       <div className="flex h-full items-end justify-center p-3 md:items-center md:p-6">
         <div className="w-full max-w-2xl overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_28px_80px_rgba(15,23,42,0.2)]">
@@ -472,7 +483,10 @@ function FootnoteEditorDialog({
               <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
                 {session.mode === "create" ? "새 각주" : "각주 편집"}
               </div>
-              <h4 className="mt-1 text-lg font-bold text-slate-900">
+              <h4
+                id={dialogTitleId}
+                className="mt-1 text-lg font-bold text-slate-900"
+              >
                 {session.mode === "create"
                   ? "PDF 팝업 내용 입력"
                   : getFootnoteDisplayName(footnote)}
@@ -521,6 +535,7 @@ function FootnoteEditorDialog({
                       onChange={(event) =>
                         onFootnoteDraftChange?.({ title: event.target.value })
                       }
+                      onKeyDown={handleFieldKeyDown}
                       placeholder="예: 독립신문 기사"
                       className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
                     />
@@ -534,6 +549,7 @@ function FootnoteEditorDialog({
                       onChange={(event) =>
                         onFootnoteDraftChange?.({ label: event.target.value })
                       }
+                      onKeyDown={handleFieldKeyDown}
                       placeholder="예: 기사 보기"
                       className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
                     />
@@ -549,6 +565,7 @@ function FootnoteEditorDialog({
                     onChange={(event) =>
                       onFootnoteDraftChange?.({ bodyHtml: event.target.value })
                     }
+                    onKeyDown={handleFieldKeyDown}
                     rows={4}
                     placeholder="학생에게 보여 줄 설명이나 해설을 적어 주세요."
                     className="w-full resize-none rounded-2xl border border-slate-200 px-3 py-2.5 text-sm leading-6 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
@@ -567,6 +584,7 @@ function FootnoteEditorDialog({
                           youtubeUrl: event.target.value,
                         })
                       }
+                      onKeyDown={handleFieldKeyDown}
                       placeholder="https://www.youtube.com/watch?v=..."
                       className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
                     />
@@ -895,8 +913,11 @@ export function LessonPdfSection({
   disablePdfSave,
 }: LessonPdfSectionProps) {
   const [activeFloatingPanel, setActiveFloatingPanel] = React.useState<
-    "keywords" | "footnotes" | null
+    "library" | null
   >(null);
+  const [activeLibraryTab, setActiveLibraryTab] = React.useState<
+    "blanks" | "footnotes"
+  >("blanks");
   const [showAllBlanks, setShowAllBlanks] = React.useState(false);
   const [teacherCurrentPage, setTeacherCurrentPage] = React.useState<
     number | null
@@ -941,8 +962,7 @@ export function LessonPdfSection({
     () => (showAllBlanks ? sortedBlanks : sortedBlanks.slice(0, 5)),
     [showAllBlanks, sortedBlanks],
   );
-  const isKeywordPanelOpen = activeFloatingPanel === "keywords";
-  const isFootnotePanelOpen = activeFloatingPanel === "footnotes";
+  const isLibraryPanelOpen = activeFloatingPanel === "library";
   const footnoteAnchorsByFootnote = React.useMemo(() => {
     const grouped = new Map<string, LessonWorksheetFootnoteAnchor[]>();
     worksheetFootnoteAnchors.forEach((anchor) => {
@@ -969,10 +989,10 @@ export function LessonPdfSection({
   }, [onConfirmDraftBlank]);
 
   React.useEffect(() => {
-    if (!isKeywordPanelOpen) {
+    if (!isLibraryPanelOpen || activeLibraryTab !== "blanks") {
       setShowAllBlanks(false);
     }
-  }, [isKeywordPanelOpen]);
+  }, [activeLibraryTab, isLibraryPanelOpen]);
 
   React.useEffect(() => {
     if (!worksheetPageImages.length) {
@@ -999,15 +1019,39 @@ export function LessonPdfSection({
     return () => window.cancelAnimationFrame(frameId);
   }, [activeBlankId, draftBlank?.id, isBlankEditorOpen]);
 
-  const toggleFloatingPanel = React.useCallback(
-    (panel: "keywords" | "footnotes") => {
-      setActiveFloatingPanel((prev) => (prev === panel ? null : panel));
-    },
-    [],
-  );
+  const toggleFloatingPanel = React.useCallback((panel: "library") => {
+    setActiveFloatingPanel((prev) => (prev === panel ? null : panel));
+  }, []);
+  const openLibraryTab = React.useCallback((tab: "blanks" | "footnotes") => {
+    setActiveLibraryTab(tab);
+    setActiveFloatingPanel("library");
+  }, []);
+  const activeToolLabel = React.useMemo(() => {
+    if (worksheetTool === "ocr") return "OCR 선택";
+    if (worksheetTool === "box") return "빈칸 도구";
+    return "각주 배치";
+  }, [worksheetTool]);
+  const librarySummaryText =
+    activeLibraryTab === "blanks"
+      ? "PDF 빈칸을 빠르게 확인하고 선택하거나 삭제할 수 있습니다."
+      : "각주 위치 확인, 본문 연결, 각주 편집을 한곳에서 관리합니다.";
+  const libraryCount =
+    activeLibraryTab === "blanks" ? sortedBlanks.length : footnotes.length;
+  const floatingButtonClass = (
+    active: boolean,
+    tone: "blue" | "slate" = "slate",
+  ) =>
+    `inline-flex h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-4 ${
+      active
+        ? tone === "blue"
+          ? "bg-blue-600 text-white shadow-sm focus-visible:ring-blue-100"
+          : "bg-slate-900 text-white shadow-sm focus-visible:ring-slate-200"
+        : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 focus-visible:ring-slate-100"
+    }`;
 
   const focusFootnote = React.useCallback(
     (footnoteId: string) => {
+      openLibraryTab("footnotes");
       onSelectFootnote?.(footnoteId);
       const primaryAnchor =
         footnoteAnchorsByFootnote.get(footnoteId)?.[0] || null;
@@ -1016,7 +1060,12 @@ export function LessonPdfSection({
         onSelectFootnoteAnchor?.(primaryAnchor.id);
       }
     },
-    [footnoteAnchorsByFootnote, onSelectFootnote, onSelectFootnoteAnchor],
+    [
+      footnoteAnchorsByFootnote,
+      onSelectFootnote,
+      onSelectFootnoteAnchor,
+      openLibraryTab,
+    ],
   );
 
   return (
@@ -1030,8 +1079,8 @@ export function LessonPdfSection({
             PDF 위에서 빈칸과 각주를 함께 편집합니다
           </h3>
           <p className="mt-2 text-sm text-slate-500">
-            PDF를 준비한 뒤 오른쪽 플로팅 아이콘으로 OCR 선택, 텍스트 박스, 각주
-            버튼 배치를 바로 진행할 수 있습니다.
+            PDF를 준비한 뒤 오른쪽 플로팅 UI에서 목록 패널과 제작 도구를 오가며
+            빈칸 생성, 각주 배치, 저장까지 한 흐름으로 진행할 수 있습니다.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -1077,8 +1126,8 @@ export function LessonPdfSection({
           </span>
         )}
         <span>
-          오른쪽 플로팅 아이콘으로 제작 도구, 각주 추가, 키워드 목록을 확인하고
-          빈칸을 만들면 작은 팝업에서 바로 정답을 입력할 수 있습니다.
+          오른쪽 플로팅 UI에서 목록 패널과 제작 도구를 전환하고, 빈칸을 만들면
+          작은 팝업에서 바로 정답을 입력할 수 있습니다.
         </span>
       </div>
       {!!pdfSaveStatusTone && !!pdfSaveStatusMessage && (
@@ -1108,198 +1157,225 @@ export function LessonPdfSection({
       {!!worksheetPageImages.length ? (
         <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-slate-50">
           <div className="pointer-events-none fixed bottom-6 right-4 z-40 flex flex-col items-end gap-3 md:right-8">
-            {isKeywordPanelOpen && (
-              <div className="pointer-events-auto w-[min(360px,calc(100vw-1.5rem))] rounded-3xl border border-slate-200 bg-white/97 p-4 shadow-[0_18px_40px_rgba(15,23,42,0.14)] backdrop-blur">
-                <div className="flex items-center justify-between gap-3">
+            {isLibraryPanelOpen && (
+              <div className="pointer-events-auto w-[min(392px,calc(100vw-1.5rem))] rounded-[30px] border border-slate-200 bg-white/98 p-4 shadow-[0_18px_40px_rgba(15,23,42,0.14)] backdrop-blur">
+                <div className="flex items-start justify-between gap-3">
                   <div>
-                    <div className="text-sm font-bold text-slate-900">
-                      키워드 목록
+                    <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
+                      목록
+                    </div>
+                    <div className="mt-1 text-base font-bold text-slate-900">
+                      빈칸과 각주를 한곳에서 관리합니다
                     </div>
                     <p className="mt-1 text-xs text-slate-500">
-                      만든 키워드를 빠르게 확인하고 선택하거나 지울 수 있습니다.
+                      {librarySummaryText}
                     </p>
                   </div>
-                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
-                    {sortedBlanks.length}개
-                  </span>
-                </div>
-                {sortedBlanks.length === 0 ? (
-                  <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-500">
-                    아직 만든 키워드가 없습니다.
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                      {libraryCount}개
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setActiveFloatingPanel(null)}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50"
+                      aria-label="목록 패널 닫기"
+                    >
+                      <i className="fas fa-times text-sm"></i>
+                    </button>
                   </div>
+                </div>
+                <div className="mt-4 inline-flex rounded-2xl bg-slate-100 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setActiveLibraryTab("blanks")}
+                    className={`rounded-2xl px-4 py-2 text-sm font-semibold transition ${
+                      activeLibraryTab === "blanks"
+                        ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                    aria-pressed={activeLibraryTab === "blanks"}
+                  >
+                    빈칸 {sortedBlanks.length}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveLibraryTab("footnotes")}
+                    className={`rounded-2xl px-4 py-2 text-sm font-semibold transition ${
+                      activeLibraryTab === "footnotes"
+                        ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                    aria-pressed={activeLibraryTab === "footnotes"}
+                  >
+                    각주 {footnotes.length}
+                  </button>
+                </div>
+                {activeLibraryTab === "blanks" ? (
+                  <>
+                    {sortedBlanks.length === 0 ? (
+                      <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-500">
+                        아직 만든 빈칸이 없습니다.
+                      </div>
+                    ) : (
+                      <>
+                        <div className="mt-4 flex max-h-[min(50vh,360px)] flex-wrap gap-2 overflow-y-auto pr-1">
+                          {visibleBlanks.map((blank) => (
+                            <div
+                              key={blank.id}
+                              className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 ${
+                                activeBlankId === blank.id
+                                  ? "border-blue-300 bg-blue-50 text-blue-700"
+                                  : "border-slate-200 bg-slate-50 text-slate-700"
+                              }`}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => onSelectBlank(blank.id)}
+                                className="max-w-[180px] truncate px-1 text-sm font-semibold"
+                                title={blankBadgeLabel(blank)}
+                              >
+                                {blankBadgeLabel(blank)}
+                              </button>
+                              <span className="rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-semibold text-slate-500">
+                                p.{blank.page + 1}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => onDeleteBlank(blank.id)}
+                                className="inline-flex h-5 w-5 items-center justify-center rounded-full text-rose-500 hover:bg-rose-50"
+                                aria-label="빈칸 삭제"
+                                title="빈칸 삭제"
+                              >
+                                <i className="fas fa-times text-[10px]"></i>
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                        {sortedBlanks.length > 5 && (
+                          <button
+                            type="button"
+                            onClick={() => setShowAllBlanks((prev) => !prev)}
+                            className="mt-4 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                          >
+                            <i
+                              className={`fas ${
+                                showAllBlanks
+                                  ? "fa-chevron-up"
+                                  : "fa-chevron-down"
+                              } text-[10px]`}
+                            ></i>
+                            {showAllBlanks
+                              ? "접기"
+                              : `${sortedBlanks.length - visibleBlanks.length}개 더보기`}
+                          </button>
+                        )}
+                      </>
+                    )}
+                    {activeBlank && (
+                      <div className="mt-4 rounded-2xl bg-slate-50 px-3 py-3 text-sm text-slate-600">
+                        선택한 빈칸:{" "}
+                        <span className="font-semibold text-slate-800">
+                          {blankBadgeLabel(activeBlank)}
+                        </span>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <>
-                    <div className="mt-4 flex max-h-[min(50vh,360px)] flex-wrap gap-2 overflow-y-auto pr-1">
-                      {visibleBlanks.map((blank) => (
-                        <div
-                          key={blank.id}
-                          className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 ${
-                            activeBlankId === blank.id
-                              ? "border-blue-300 bg-blue-50 text-blue-700"
-                              : "border-slate-200 bg-slate-50 text-slate-700"
-                          }`}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => onSelectBlank(blank.id)}
-                            className="max-w-[180px] truncate px-1 text-sm font-semibold"
-                            title={blankBadgeLabel(blank)}
-                          >
-                            {blankBadgeLabel(blank)}
-                          </button>
-                          <span className="rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-semibold text-slate-500">
-                            p.{blank.page + 1}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => onDeleteBlank(blank.id)}
-                            className="inline-flex h-5 w-5 items-center justify-center rounded-full text-rose-500 hover:bg-rose-50"
-                            aria-label="키워드 삭제"
-                            title="키워드 삭제"
-                          >
-                            <i className="fas fa-times text-[10px]"></i>
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                    {sortedBlanks.length > 5 && (
+                    <div className="mt-4 flex flex-wrap gap-2">
                       <button
                         type="button"
-                        onClick={() => setShowAllBlanks((prev) => !prev)}
-                        className="mt-4 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                        onClick={onAddFootnote}
+                        className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700"
                       >
-                        <i
-                          className={`fas ${
-                            showAllBlanks ? "fa-chevron-up" : "fa-chevron-down"
-                          } text-[10px]`}
-                        ></i>
-                        {showAllBlanks
-                          ? "접기"
-                          : `${sortedBlanks.length - visibleBlanks.length}개 더보기`}
+                        <i className="fas fa-plus text-[10px]"></i>새 각주
                       </button>
+                      <button
+                        type="button"
+                        onClick={onAddFootnoteAndInsert}
+                        className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                      >
+                        <i className="fas fa-link text-[10px]"></i>
+                        본문용 각주
+                      </button>
+                    </div>
+                    {footnotes.length === 0 ? (
+                      <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-500">
+                        아직 각주가 없습니다. `새 각주`로 먼저 팝업을 만들어
+                        주세요.
+                      </div>
+                    ) : (
+                      <div className="mt-4 max-h-[min(56vh,460px)] space-y-3 overflow-y-auto pr-1">
+                        {footnotes.map((footnote, index) => {
+                          const anchors =
+                            footnoteAnchorsByFootnote.get(footnote.id) || [];
+                          const primaryAnchor = anchors[0] || null;
+                          return (
+                            <FootnoteFloatingListItem
+                              key={footnote.id}
+                              footnote={footnote}
+                              index={index}
+                              usage={footnoteUsageMap.get(footnote.anchorKey)}
+                              pdfAnchorCount={
+                                footnoteAnchorCountMap.get(footnote.id) ?? 0
+                              }
+                              selected={selectedFootnoteId === footnote.id}
+                              primaryAnchorPage={primaryAnchor?.page ?? null}
+                              onSelect={() => focusFootnote(footnote.id)}
+                              onOpenEditor={() => {
+                                focusFootnote(footnote.id);
+                                onOpenFootnoteEditor?.(footnote.id);
+                              }}
+                              onInsertIntoBody={() =>
+                                onInsertFootnoteToken?.(footnote.anchorKey)
+                              }
+                            />
+                          );
+                        })}
+                      </div>
                     )}
                   </>
                 )}
-                {activeBlank && (
-                  <div className="mt-4 rounded-2xl bg-slate-50 px-3 py-3 text-sm text-slate-600">
-                    선택한 키워드:{" "}
-                    <span className="font-semibold text-slate-800">
-                      {blankBadgeLabel(activeBlank)}
-                    </span>
-                  </div>
-                )}
               </div>
             )}
-            {isFootnotePanelOpen && (
-              <div className="pointer-events-auto w-[min(380px,calc(100vw-1.5rem))] rounded-3xl border border-slate-200 bg-white/97 p-4 shadow-[0_18px_40px_rgba(15,23,42,0.14)] backdrop-blur">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-bold text-slate-900">
-                      각주 목록
-                    </div>
-                    <p className="mt-1 text-xs text-slate-500">
-                      PDF 위치 확인, 본문 연결, 각주 편집을 한곳에서 관리합니다.
-                    </p>
-                  </div>
-                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
-                    {footnotes.length}개
-                  </span>
-                </div>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={onAddFootnote}
-                    className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700"
-                  >
-                    <i className="fas fa-plus text-[10px]"></i>새 각주
-                  </button>
-                  <button
-                    type="button"
-                    onClick={onAddFootnoteAndInsert}
-                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                  >
-                    <i className="fas fa-link text-[10px]"></i>
-                    본문용 각주
-                  </button>
-                </div>
-                {footnotes.length === 0 ? (
-                  <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-500">
-                    아직 각주가 없습니다. `새 각주`로 먼저 팝업을 만들어 주세요.
-                  </div>
-                ) : (
-                  <div className="mt-4 max-h-[min(56vh,460px)] space-y-3 overflow-y-auto pr-1">
-                    {footnotes.map((footnote, index) => {
-                      const anchors =
-                        footnoteAnchorsByFootnote.get(footnote.id) || [];
-                      const primaryAnchor = anchors[0] || null;
-                      return (
-                        <FootnoteFloatingListItem
-                          key={footnote.id}
-                          footnote={footnote}
-                          index={index}
-                          usage={footnoteUsageMap.get(footnote.anchorKey)}
-                          pdfAnchorCount={
-                            footnoteAnchorCountMap.get(footnote.id) ?? 0
-                          }
-                          selected={selectedFootnoteId === footnote.id}
-                          primaryAnchorPage={primaryAnchor?.page ?? null}
-                          onSelect={() => focusFootnote(footnote.id)}
-                          onOpenEditor={() => {
-                            focusFootnote(footnote.id);
-                            onOpenFootnoteEditor?.(footnote.id);
-                          }}
-                          onInsertIntoBody={() =>
-                            onInsertFootnoteToken?.(footnote.anchorKey)
-                          }
-                        />
-                      );
-                    })}
-                  </div>
-                )}
+            <div className="pointer-events-auto w-40 rounded-[30px] border border-slate-200 bg-white/96 p-2 shadow-[0_18px_40px_rgba(15,23,42,0.14)] backdrop-blur">
+              <div className="px-1 pb-2 pt-1 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                관리
               </div>
-            )}
-            <div className="pointer-events-auto w-36 rounded-[30px] border border-slate-200 bg-white/96 p-2 shadow-[0_18px_40px_rgba(15,23,42,0.14)] backdrop-blur sm:w-40">
               <div className="flex flex-col gap-2">
                 <button
                   type="button"
-                  onClick={() => toggleFloatingPanel("keywords")}
-                  className={`inline-flex h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-semibold transition ${
-                    isKeywordPanelOpen
-                      ? "bg-blue-600 text-white shadow-sm"
-                      : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                  }`}
-                  aria-label="키워드 목록"
-                  title="키워드 목록"
+                  onClick={() => toggleFloatingPanel("library")}
+                  className={floatingButtonClass(isLibraryPanelOpen, "blue")}
+                  aria-label="빈칸과 각주 목록"
+                  aria-pressed={isLibraryPanelOpen}
+                  title="빈칸과 각주 목록"
                 >
-                  <i className="fas fa-tags text-sm"></i>
-                  <span className="flex-1 text-left">키워드</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => toggleFloatingPanel("footnotes")}
-                  className={`inline-flex h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-semibold transition ${
-                    isFootnotePanelOpen
-                      ? "bg-blue-600 text-white shadow-sm"
-                      : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                  }`}
-                  aria-label="각주 목록"
-                  title="각주 목록"
-                >
-                  <i className="fas fa-comment-dots text-sm"></i>
-                  <span className="flex-1 text-left">각주</span>
+                  <i className="fas fa-layer-group text-sm"></i>
+                  <span className="flex-1 text-left">목록</span>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                      isLibraryPanelOpen
+                        ? "bg-white/20 text-white"
+                        : "bg-slate-100 text-slate-600"
+                    }`}
+                  >
+                    {sortedBlanks.length + footnotes.length}
+                  </span>
                 </button>
               </div>
               <div className="my-2 h-px bg-slate-200"></div>
+              <div className="px-1 pb-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                도구
+              </div>
               <div className="flex flex-col gap-2">
                 <button
                   type="button"
                   onClick={() => onWorksheetToolChange("ocr")}
-                  className={`inline-flex h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-semibold transition ${
-                    worksheetTool === "ocr"
-                      ? "bg-slate-900 text-white shadow-sm"
-                      : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                  }`}
+                  className={floatingButtonClass(worksheetTool === "ocr")}
                   aria-label="OCR 기반 선택"
+                  aria-pressed={worksheetTool === "ocr"}
                   title="OCR 기반 선택"
                 >
                   <i className="fas fa-wand-magic-sparkles text-sm"></i>
@@ -1307,44 +1383,54 @@ export function LessonPdfSection({
                 </button>
                 <button
                   type="button"
-                  onClick={() => onWorksheetToolChange("box")}
-                  className={`inline-flex h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-semibold transition ${
-                    worksheetTool === "box"
-                      ? "bg-slate-900 text-white shadow-sm"
-                      : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                  }`}
-                  aria-label="박스 생성"
-                  title="박스 생성"
+                  onClick={() => {
+                    onWorksheetToolChange("box");
+                    openLibraryTab("blanks");
+                  }}
+                  className={floatingButtonClass(worksheetTool === "box")}
+                  aria-label="빈칸 도구"
+                  aria-pressed={worksheetTool === "box"}
+                  title="빈칸 도구"
                 >
                   <i className="fas fa-vector-square text-sm"></i>
                   <span className="flex-1 text-left">빈칸 도구</span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => onWorksheetToolChange("footnote")}
-                  className={`inline-flex h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-semibold transition ${
-                    worksheetTool === "footnote"
-                      ? "bg-slate-900 text-white shadow-sm"
-                      : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                  }`}
+                  onClick={() => {
+                    onWorksheetToolChange("footnote");
+                    openLibraryTab("footnotes");
+                  }}
+                  className={floatingButtonClass(worksheetTool === "footnote")}
                   aria-label="각주 위치 추가"
+                  aria-pressed={worksheetTool === "footnote"}
                   title="각주 위치 추가"
                 >
                   <i className="fas fa-location-crosshairs text-sm"></i>
                   <span className="flex-1 text-left">각주 배치</span>
                 </button>
               </div>
+              <div className="mt-3 rounded-2xl bg-slate-50 px-3 py-2.5 text-xs text-slate-600">
+                <div className="font-semibold text-slate-800">
+                  현재 도구: {activeToolLabel}
+                </div>
+                <div className="mt-1">
+                  {hasUnsavedPdfChanges
+                    ? "변경 사항이 있습니다."
+                    : "PDF 편집 내용이 저장된 상태입니다."}
+                </div>
+              </div>
               <div className="my-2 h-px bg-slate-200"></div>
               <button
                 type="button"
                 onClick={onSavePdf}
                 disabled={disablePdfSave}
-                className={`inline-flex h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-semibold transition ${
+                className={`inline-flex h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-4 ${
                   disablePdfSave
                     ? "cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400"
                     : hasUnsavedPdfChanges
-                      ? "bg-blue-600 text-white shadow-lg shadow-blue-200/70 ring-4 ring-blue-100 hover:bg-blue-700"
-                      : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                      ? "bg-blue-600 text-white shadow-lg shadow-blue-200/70 ring-4 ring-blue-100 hover:bg-blue-700 focus-visible:ring-blue-100"
+                      : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 focus-visible:ring-slate-100"
                 }`}
                 aria-label={
                   pdfSaveState === "saving" ? "PDF 저장 중" : "PDF 저장"
