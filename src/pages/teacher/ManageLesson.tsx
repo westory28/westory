@@ -1170,6 +1170,249 @@ const ManageLesson: React.FC = () => {
     [syncSavedMetaState, syncSavedPdfState],
   );
 
+  const findLessonDocRefByUnitId = useCallback(
+    async (unitId: string) => {
+      const scopedRef = collection(
+        db,
+        getSemesterCollectionPath(config, "lessons"),
+      );
+      const scopedSnap = await getDocs(
+        query(scopedRef, where("unitId", "==", unitId), limit(1)),
+      );
+      if (!scopedSnap.empty) {
+        return doc(scopedRef, scopedSnap.docs[0].id);
+      }
+
+      const legacyRef = collection(db, "lessons");
+      const legacySnap = await getDocs(
+        query(legacyRef, where("unitId", "==", unitId), limit(1)),
+      );
+      if (!legacySnap.empty) {
+        return doc(legacyRef, legacySnap.docs[0].id);
+      }
+
+      return null;
+    },
+    [config],
+  );
+
+  const refreshLessonPdfProcessing = useCallback(
+    async (unitId: string) => {
+      const lessonDocRef = await findLessonDocRefByUnitId(unitId);
+      if (!lessonDocRef) return null;
+
+      const lessonSnap = await getDoc(lessonDocRef);
+      if (!lessonSnap.exists()) return null;
+
+      const lessonData = lessonSnap.data() || {};
+      const nextPdfName = String(lessonData.pdfName || lessonPdfName || "").trim();
+      const nextPdfStoragePath = String(
+        lessonData.pdfStoragePath || lessonPdfStoragePath || "",
+      ).trim();
+      const nextProcessing = normalizeLessonPdfProcessingMeta(
+        lessonData.pdfProcessing,
+        {
+          pdfName: nextPdfName,
+          pdfStoragePath: nextPdfStoragePath,
+        },
+      );
+      const currentProcessing = normalizeLessonPdfProcessingMeta(
+        lessonPdfProcessing,
+        {
+          pdfName: lessonPdfName,
+          pdfStoragePath: lessonPdfStoragePath,
+        },
+      );
+
+      if (
+        selectedNodeId === unitId &&
+        JSON.stringify(currentProcessing) !== JSON.stringify(nextProcessing)
+      ) {
+        setLessonPdfProcessing(nextProcessing);
+        syncSavedPdfState({
+          selectedNodeId: unitId,
+          lessonContent,
+          lessonFootnotes,
+          worksheetFootnoteAnchors,
+          lessonPdfName: nextPdfName,
+          lessonPdfUrl: String(lessonData.pdfUrl || lessonPdfUrl || "").trim(),
+          lessonPdfStoragePath: nextPdfStoragePath,
+          lessonPdfProcessing: nextProcessing,
+          worksheetPageImages,
+          worksheetTextRegions,
+          worksheetBlanks,
+          selectedPdfFile: null,
+          preparedPdf: null,
+          footnoteImageDrafts: {},
+        });
+      }
+
+      return nextProcessing;
+    },
+    [
+      findLessonDocRefByUnitId,
+      lessonContent,
+      lessonFootnotes,
+      lessonPdfName,
+      lessonPdfProcessing,
+      lessonPdfStoragePath,
+      lessonPdfUrl,
+      selectedNodeId,
+      syncSavedPdfState,
+      worksheetBlanks,
+      worksheetFootnoteAnchors,
+      worksheetPageImages,
+      worksheetTextRegions,
+    ],
+  );
+
+  const retryLessonPdfExtraction = useCallback(async () => {
+    if (!selectedNodeId || !lessonPdfUrl || !lessonPdfStoragePath) {
+      alert("저장된 원본 PDF가 없어 구조 추출을 다시 요청할 수 없습니다.");
+      return;
+    }
+    if (selectedPdfFile || preparedPdf || hasUnsavedPdfChanges) {
+      alert("저장하지 않은 PDF 편집 내용이 있습니다. 먼저 저장한 뒤 다시 요청해 주세요.");
+      return;
+    }
+
+    let lessonDocRef: ReturnType<typeof doc> | null = null;
+    setPdfBusy(true);
+    setScreenBusyMessage("원본 PDF 구조 추출을 다시 요청하는 중입니다...");
+    setPdfSaveFeedback(null);
+
+    try {
+      lessonDocRef = await findLessonDocRefByUnitId(selectedNodeId);
+      if (!lessonDocRef) {
+        throw new Error("lesson-doc-not-found");
+      }
+
+      const response = await fetch(lessonPdfUrl);
+      if (!response.ok) {
+        throw new Error(`lesson-pdf-fetch-failed:${response.status}`);
+      }
+
+      const originalPdfBlob = await response.blob();
+      const uploadToken = crypto.randomUUID();
+      const basePath = `${getSemesterCollectionPath(config, "lesson_pdfs")}/${selectedNodeId}`;
+      const pendingUploadPath = `${basePath}/incoming/${uploadToken}.pdf`;
+      const queuedProcessing = buildQueuedLessonPdfProcessingMeta({
+        pdfName: lessonPdfName || lessonPdfProcessing.file.originalName || "lesson.pdf",
+        pdfStoragePath: lessonPdfStoragePath,
+        byteSize:
+          originalPdfBlob.size || Number(lessonPdfProcessing.file.byteSize) || 0,
+        pageCount: worksheetPageImages.length || lessonPdfProcessing.pageCount || 0,
+        pendingUploadToken: uploadToken,
+        pendingUploadPath,
+        previous: lessonPdfProcessing,
+      });
+
+      await setDoc(
+        lessonDocRef,
+        {
+          pdfProcessing: queuedProcessing,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+      await uploadBytes(ref(storage, pendingUploadPath), originalPdfBlob, {
+        contentType: originalPdfBlob.type || "application/pdf",
+        cacheControl: "private,no-store,max-age=0",
+        customMetadata: {
+          lessonDocId: lessonDocRef.id,
+          unitId: selectedNodeId,
+        },
+      });
+
+      setLessonPdfProcessing(queuedProcessing);
+      syncSavedPdfState({
+        selectedNodeId,
+        lessonContent,
+        lessonFootnotes,
+        worksheetFootnoteAnchors,
+        lessonPdfName,
+        lessonPdfUrl,
+        lessonPdfStoragePath,
+        lessonPdfProcessing: queuedProcessing,
+        worksheetPageImages,
+        worksheetTextRegions,
+        worksheetBlanks,
+        selectedPdfFile: null,
+        preparedPdf: null,
+        footnoteImageDrafts: {},
+      });
+      setPdfSaveFeedback({
+        tone: "success",
+        message:
+          "원본 PDF 구조 추출을 다시 요청했습니다. 상태가 바뀌면 화면에 자동으로 반영됩니다.",
+      });
+    } catch (error) {
+      console.error("Failed to retry lesson pdf extraction:", error);
+      const failedProcessing = buildFailedLessonPdfProcessingMeta(
+        lessonPdfProcessing,
+        String(
+          (error as { message?: string })?.message ||
+            "lesson-pdf-extraction-retry-failed",
+        ),
+      );
+
+      if (lessonDocRef) {
+        await setDoc(
+          lessonDocRef,
+          {
+            pdfProcessing: failedProcessing,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        ).catch(() => undefined);
+      }
+
+      setLessonPdfProcessing(failedProcessing);
+      syncSavedPdfState({
+        selectedNodeId,
+        lessonContent,
+        lessonFootnotes,
+        worksheetFootnoteAnchors,
+        lessonPdfName,
+        lessonPdfUrl,
+        lessonPdfStoragePath,
+        lessonPdfProcessing: failedProcessing,
+        worksheetPageImages,
+        worksheetTextRegions,
+        worksheetBlanks,
+        selectedPdfFile: null,
+        preparedPdf: null,
+        footnoteImageDrafts: {},
+      });
+      setPdfSaveFeedback({
+        tone: "error",
+        message:
+          "원본 PDF 구조 추출을 다시 요청하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      });
+    } finally {
+      setPdfBusy(false);
+      setScreenBusyMessage(null);
+    }
+  }, [
+    config,
+    findLessonDocRefByUnitId,
+    hasUnsavedPdfChanges,
+    lessonContent,
+    lessonFootnotes,
+    lessonPdfName,
+    lessonPdfProcessing,
+    lessonPdfStoragePath,
+    lessonPdfUrl,
+    preparedPdf,
+    selectedNodeId,
+    selectedPdfFile,
+    syncSavedPdfState,
+    worksheetBlanks,
+    worksheetFootnoteAnchors,
+    worksheetPageImages,
+    worksheetTextRegions,
+  ]);
+
   useEffect(() => {
     void loadTree();
   }, [config]);
@@ -1229,6 +1472,40 @@ const ManageLesson: React.FC = () => {
       setPdfSaveFeedback(null);
     }
   }, [hasUnsavedPdfChanges, pdfSaveFeedback]);
+
+  useEffect(() => {
+    if (
+      !selectedNodeId ||
+      !lessonPdfUrl ||
+      selectedPdfFile ||
+      preparedPdf ||
+      hasUnsavedPdfChanges ||
+      (lessonPdfProcessing.extractionStatus !== "queued" &&
+        lessonPdfProcessing.extractionStatus !== "processing")
+    ) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void refreshLessonPdfProcessing(selectedNodeId).catch((error) => {
+        console.error("Failed to refresh lesson pdf processing state:", error);
+      });
+    }, 4000);
+
+    void refreshLessonPdfProcessing(selectedNodeId).catch((error) => {
+      console.error("Failed to refresh lesson pdf processing state:", error);
+    });
+
+    return () => window.clearInterval(intervalId);
+  }, [
+    hasUnsavedPdfChanges,
+    lessonPdfProcessing.extractionStatus,
+    lessonPdfUrl,
+    preparedPdf,
+    refreshLessonPdfProcessing,
+    selectedNodeId,
+    selectedPdfFile,
+  ]);
   useEffect(() => {
     setCachedTeacherPreviewSummary(
       normalizeTeacherPresentationClassSummary(
@@ -2813,6 +3090,11 @@ const ManageLesson: React.FC = () => {
           ? shouldSaveMeta
             ? "PDF 편집 내용과 제목/공개 설정을 저장했습니다. PDF 구조 추출 등록은 실패했습니다."
             : "PDF 편집 내용을 저장했습니다. PDF 구조 추출 등록은 실패했습니다."
+          : resolvedPdfProcessing.extractionStatus === "queued" ||
+              resolvedPdfProcessing.extractionStatus === "processing"
+            ? shouldSaveMeta
+              ? "PDF 편집 내용과 제목/공개 설정을 저장했습니다. 원본 PDF 구조 추출 상태는 자동으로 다시 표시됩니다."
+              : "PDF 편집 내용을 저장했습니다. 원본 PDF 구조 추출 상태는 자동으로 다시 표시됩니다."
           : shouldSaveMeta
             ? "PDF 편집 내용과 제목/공개 설정을 저장했습니다."
             : "PDF 편집 내용을 저장했습니다.";
@@ -3116,6 +3398,7 @@ const ManageLesson: React.FC = () => {
                         onSavePdf={() =>
                           void saveLesson({ source: "pdf-floating" })
                         }
+                        onRetryPdfExtraction={() => void retryLessonPdfExtraction()}
                         disablePdfSave={
                           !canEdit ||
                           !selectedNodeId ||

@@ -5,6 +5,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 
 initializeApp();
 Object.assign(exports, require('./sourceArchiveBeta'));
+Object.assign(exports, require('./lessonPdfBeta'));
 
 const db = getFirestore();
 const REGION = 'asia-northeast3';
