@@ -454,26 +454,15 @@ function FootnoteEditorDialog({
   const locationMessage = session.pendingAnchorPlacement
     ? `PDF p.${session.pendingAnchorPlacement.page} 위치를 선택했습니다. 저장 버튼을 누르면 버튼이 생깁니다.`
     : footnoteAnchorBadgeLabel(pdfAnchorCount);
-  const stopEditorEventPropagation = React.useCallback(
-    (
-      event:
-        | React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>
-        | React.CompositionEvent<HTMLInputElement | HTMLTextAreaElement>
-        | React.FormEvent<HTMLInputElement | HTMLTextAreaElement>,
-    ) => {
-      event.stopPropagation();
-    },
-    [],
-  );
   const handleFieldKeyDown = React.useCallback(
     (event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-      stopEditorEventPropagation(event);
-      if (event.key === "Escape" && !event.nativeEvent.isComposing) {
-        event.preventDefault();
-        onCloseFootnoteEditor?.();
-      }
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      if (event.nativeEvent.isComposing) return;
+      event.preventDefault();
+      onCloseFootnoteEditor?.();
     },
-    [onCloseFootnoteEditor, stopEditorEventPropagation],
+    [onCloseFootnoteEditor],
   );
 
   return (
@@ -547,11 +536,6 @@ function FootnoteEditorDialog({
                         onFootnoteDraftChange?.({ title: event.target.value })
                       }
                       onKeyDown={handleFieldKeyDown}
-                      onKeyUp={stopEditorEventPropagation}
-                      onBeforeInput={stopEditorEventPropagation}
-                      onCompositionStart={stopEditorEventPropagation}
-                      onCompositionUpdate={stopEditorEventPropagation}
-                      onCompositionEnd={stopEditorEventPropagation}
                       placeholder="예: 독립신문 기사"
                       className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
                     />
@@ -566,11 +550,6 @@ function FootnoteEditorDialog({
                         onFootnoteDraftChange?.({ label: event.target.value })
                       }
                       onKeyDown={handleFieldKeyDown}
-                      onKeyUp={stopEditorEventPropagation}
-                      onBeforeInput={stopEditorEventPropagation}
-                      onCompositionStart={stopEditorEventPropagation}
-                      onCompositionUpdate={stopEditorEventPropagation}
-                      onCompositionEnd={stopEditorEventPropagation}
                       placeholder="예: 기사 보기"
                       className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
                     />
@@ -587,11 +566,6 @@ function FootnoteEditorDialog({
                       onFootnoteDraftChange?.({ bodyHtml: event.target.value })
                     }
                     onKeyDown={handleFieldKeyDown}
-                    onKeyUp={stopEditorEventPropagation}
-                    onBeforeInput={stopEditorEventPropagation}
-                    onCompositionStart={stopEditorEventPropagation}
-                    onCompositionUpdate={stopEditorEventPropagation}
-                    onCompositionEnd={stopEditorEventPropagation}
                     rows={4}
                     placeholder="학생에게 보여 줄 설명이나 해설을 적어 주세요."
                     className="w-full resize-none rounded-2xl border border-slate-200 px-3 py-2.5 text-sm leading-6 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
@@ -611,11 +585,6 @@ function FootnoteEditorDialog({
                         })
                       }
                       onKeyDown={handleFieldKeyDown}
-                      onKeyUp={stopEditorEventPropagation}
-                      onBeforeInput={stopEditorEventPropagation}
-                      onCompositionStart={stopEditorEventPropagation}
-                      onCompositionUpdate={stopEditorEventPropagation}
-                      onCompositionEnd={stopEditorEventPropagation}
                       placeholder="https://www.youtube.com/watch?v=..."
                       className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
                     />
@@ -1062,6 +1031,18 @@ export function LessonPdfSection({
     if (worksheetTool === "box") return "빈칸 도구";
     return "각주 배치";
   }, [worksheetTool]);
+  const saveSummaryLabel =
+    pdfSaveState === "saving"
+      ? "저장 중"
+      : hasUnsavedPdfChanges
+        ? "미저장"
+        : "저장됨";
+  const saveSummaryClassName =
+    pdfSaveState === "saving"
+      ? "bg-blue-100 text-blue-700"
+      : hasUnsavedPdfChanges
+        ? "bg-amber-100 text-amber-700"
+        : "bg-emerald-100 text-emerald-700";
   const librarySummaryText =
     activeLibraryTab === "blanks"
       ? "PDF 빈칸을 빠르게 확인하고 선택하거나 삭제할 수 있습니다."
