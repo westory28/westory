@@ -1,6 +1,6 @@
 import React from 'react';
 import { POINT_ORDER_STATUS_LABELS, getPointFeedbackToneClass } from '../../../../constants/pointLabels';
-import { formatPointDateTime } from '../../../../lib/pointFormatters';
+import { formatPointDateTime, formatWisAmount } from '../../../../lib/pointFormatters';
 import type { PointOrder, PointOrderStatus } from '../../../../types';
 
 interface PointRequestsTabProps {
@@ -47,7 +47,7 @@ const PointRequestsTab: React.FC<PointRequestsTabProps> = ({
                         <tr>
                             <th className="w-[20%] p-4">학생 이름</th>
                             <th className="w-[28%] p-4">상품명</th>
-                            <th className="w-[16%] p-4 text-right">차감 포인트</th>
+                            <th className="w-[16%] p-4 text-right">차감 위스</th>
                             <th className="w-[24%] p-4 text-right">요청 시각</th>
                             <th className="w-[12%] p-4 text-center">상태</th>
                         </tr>
@@ -62,7 +62,7 @@ const PointRequestsTab: React.FC<PointRequestsTabProps> = ({
                             <tr key={order.id} className={`cursor-pointer transition ${selectedOrderId === order.id ? 'bg-blue-50' : 'hover:bg-gray-50'}`} onClick={() => onSelectOrder(order.id)}>
                                 <td className="truncate p-4 font-bold text-gray-800">{order.studentName || '(이름 없음)'}</td>
                                 <td className="truncate p-4 text-gray-700" title={order.productName}>{order.productName}</td>
-                                <td className="p-4 text-right font-bold text-gray-800">{order.priceSnapshot}</td>
+                                <td className="p-4 text-right font-bold text-gray-800 whitespace-nowrap">{formatWisAmount(order.priceSnapshot)}</td>
                                 <td className="p-4 text-right text-gray-500">{formatPointDateTime(order.requestedAt)}</td>
                                 <td className="p-4 text-center">
                                     <span className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-700">{POINT_ORDER_STATUS_LABELS[order.status] || order.status}</span>
@@ -82,7 +82,7 @@ const PointRequestsTab: React.FC<PointRequestsTabProps> = ({
                     <h3 className="text-xl font-extrabold text-gray-900">{selectedOrder.productName}</h3>
                     <div className="mt-1 text-sm text-gray-500">{selectedOrder.studentName} · {selectedOrder.uid}</div>
                     <div className="mt-5 grid grid-cols-1 gap-3">
-                        <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="text-sm text-gray-500">차감 포인트</div><div className="mt-1 font-bold text-gray-900">{selectedOrder.priceSnapshot}점</div></div>
+                        <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="text-sm text-gray-500">차감 위스</div><div className="mt-1 font-bold text-gray-900 whitespace-nowrap">{formatWisAmount(selectedOrder.priceSnapshot)}</div></div>
                         <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="text-sm text-gray-500">현재 상태</div><div className="mt-1 font-bold text-gray-900">{POINT_ORDER_STATUS_LABELS[selectedOrder.status]}</div></div>
                         <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="text-sm text-gray-500">요청 시각</div><div className="mt-1 font-bold text-gray-900">{formatPointDateTime(selectedOrder.requestedAt)}</div></div>
                         <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="text-sm text-gray-500">최근 처리 시각</div><div className="mt-1 font-bold text-gray-900">{formatPointDateTime(selectedOrder.reviewedAt)}</div></div>

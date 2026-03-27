@@ -42,8 +42,24 @@ const DEFAULT_POINT_POLICY = {
     attendanceMonthlyBonus: 20,
     lessonView: 3,
     quizSolve: 10,
+    autoRewardEnabled: true,
+    quizBonusEnabled: false,
+    quizBonusThreshold: 100,
+    quizBonusAmount: 0,
     manualAdjustEnabled: false,
     allowNegativeBalance: false,
+    rewardPolicy: {
+        autoEnabled: true,
+        attendance: { enabled: true, amount: 5 },
+        quiz: { enabled: true, amount: 10 },
+        lesson: { enabled: true, amount: 3 },
+        attendanceMonthlyBonus: { enabled: true, amount: 20 },
+        quizBonus: { enabled: false, thresholdScore: 100, amount: 0 },
+    },
+    controlPolicy: {
+        manualAdjustEnabled: false,
+        allowNegativeBalance: false,
+    },
     rankPolicy: DEFAULT_POINT_RANK_POLICY,
     updatedBy: '',
 };
@@ -153,9 +169,9 @@ const READINESS_ITEM_META: Record<ReadinessListItem['key'], { readyHint: string;
         actionHint: '필수 공지를 한 건 이상 준비해 주세요.',
     },
     pointProducts: {
-        readyHint: '포인트 활용을 바로 이어갈 수 있습니다.',
-        missingHint: '포인트 상품이 없으면 포인트를 지급해도 바로 쓰기 어렵습니다.',
-        actionHint: '기본 포인트 상품을 먼저 등록해 주세요.',
+        readyHint: '위스 활용을 바로 이어갈 수 있습니다.',
+        missingHint: '위스 상품이 없으면 위스를 지급해도 바로 쓰기 어렵습니다.',
+        actionHint: '기본 위스 상품을 먼저 등록해 주세요.',
     },
     quizQuestions: {
         readyHint: '문제은행을 이어서 운영할 수 있습니다.',

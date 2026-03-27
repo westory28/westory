@@ -1,5 +1,10 @@
 import type { PointWallet } from '../types';
 
+const toSafeNumber = (value: unknown) => {
+    const parsed = Number(value || 0);
+    return Number.isFinite(parsed) ? parsed : 0;
+};
+
 export const formatPointDateTime = (value: any) => (
     value?.seconds ? new Date(value.seconds * 1000).toLocaleString('ko-KR') : '-'
 );
@@ -19,6 +24,15 @@ export const formatPointDateShortTime = (value: any) => (
 export const formatPointDateOnly = (value: any) => (
     value?.seconds ? new Date(value.seconds * 1000).toLocaleDateString('ko-KR') : '-'
 );
+
+export const formatWisAmount = (value: unknown) => (
+    `${toSafeNumber(value).toLocaleString('ko-KR')} ₩s`
+);
+
+export const formatWisDelta = (value: unknown) => {
+    const numericValue = toSafeNumber(value);
+    return `${numericValue >= 0 ? '+' : ''}${numericValue.toLocaleString('ko-KR')} ₩s`;
+};
 
 export const formatPointStudentLabel = (wallet: Pick<PointWallet, 'grade' | 'class' | 'number'>) => (
     [

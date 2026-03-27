@@ -177,6 +177,7 @@ const createRankEmojiCollectionDraft = (rankPolicy?: Partial<PointRankPolicy> | 
     const resolvedPolicy = resolvePointRankPolicyDraft(rankPolicy);
     return {
         emojiRegistry: cloneRankEmojiRegistry(resolvedPolicy.emojiRegistry),
+        tiers: cloneRankTiers(resolvedPolicy.tiers),
     };
 };
 
@@ -709,17 +710,17 @@ const ManagePoints: React.FC = () => {
         setRankEmojiFeedbackTone(null);
     };
 
-    const handleSaveGrant = async (event: React.FormEvent) => {
+    const handleSaveGrant = async (event: React.FormEvent, mode: 'grant' | 'reclaim' = 'grant') => {
         event.preventDefault();
         if (!selectedGrantStudent || !canManage) return;
 
         const numericAmount = Number(grantAmount);
         if (!numericAmount || numericAmount < 1) {
-            setGrantFeedback('포인트 수량은 1 이상으로 입력해 주세요.');
+            setGrantFeedback('위스 수량은 1 이상으로 입력해 주세요.');
             return;
         }
         if (!grantReason.trim()) {
-            setGrantFeedback('포인트 부여 사유를 입력해 주세요.');
+            setGrantFeedback(mode === 'grant' ? '위스 지급 사유를 입력해 주세요.' : '위스 환수 사유를 입력해 주세요.');
             return;
         }
 
@@ -727,14 +728,15 @@ const ManagePoints: React.FC = () => {
             await adjustPoints({
                 config,
                 uid: selectedGrantStudent.uid,
-                delta: numericAmount,
+                delta: mode === 'reclaim' ? -numericAmount : numericAmount,
                 sourceId: `manual_${Date.now()}`,
                 sourceLabel: grantReason.trim(),
+                mode,
                 actor,
             });
             setGrantAmount('');
             setGrantReason('');
-            setGrantFeedback('학생 포인트를 반영했습니다.');
+            setGrantFeedback(mode === 'grant' ? '학생 위스를 지급했습니다.' : '학생 위스를 환수했습니다.');
 
             const nextWallets = await listPointWallets(config);
             const nextRankManualAdjustEarnedPointsByUid = nextWallets.some((wallet) => needsPointRankLegacyFallback(wallet))
@@ -750,7 +752,7 @@ const ManagePoints: React.FC = () => {
             await loadTransactionsForWallet(nextSelectedUid);
         } catch (error: any) {
             console.error('Failed to adjust points:', error);
-            setGrantFeedback(error?.message || '포인트 부여에 실패했습니다.');
+            setGrantFeedback(error?.message || (mode === 'grant' ? '위스 지급에 실패했습니다.' : '위스 환수에 실패했습니다.'));
         }
     };
 
@@ -760,10 +762,6 @@ const ManagePoints: React.FC = () => {
         const sanitizedPolicy: PointPolicy = {
             ...savedPolicy,
             ...policyDraft,
-            attendanceDaily: Math.max(0, Number(policyDraft.attendanceDaily || 0)),
-            attendanceMonthlyBonus: Math.max(0, Number(policyDraft.attendanceMonthlyBonus || 0)),
-            quizSolve: Math.max(0, Number(policyDraft.quizSolve || 0)),
-            lessonView: Math.max(0, Number(policyDraft.lessonView || 0)),
             rankPolicy: savedPolicy.rankPolicy,
         };
 
@@ -851,7 +849,11 @@ const ManagePoints: React.FC = () => {
 
         const mergedRankPolicy = resolvePointRankPolicyDraft({
             ...savedRankPolicy,
-            emojiRegistry: cloneRankEmojiRegistry(rankEmojiDraft.emojiRegistry),
+            tiers: cloneRankTiers(rankEmojiDraft.tiers),
+            emojiRegistry: syncRankEmojiUnlockTierCodes(
+                cloneRankTiers(rankEmojiDraft.tiers),
+                cloneRankEmojiRegistry(rankEmojiDraft.emojiRegistry),
+            ),
         });
         const validationError = getPointRankPolicyValidationError(mergedRankPolicy);
         if (validationError) {
@@ -1038,7 +1040,7 @@ const ManagePoints: React.FC = () => {
 
         const nextDelta = Number(adjustmentDraftValue);
         if (!Number.isFinite(nextDelta) || nextDelta === 0) {
-            setAdjustmentFeedback('수정 포인트는 0이 아닌 숫자로 입력해 주세요.');
+            setAdjustmentFeedback('수정 위스는 0이 아닌 숫자로 입력해 주세요.');
             return;
         }
 
@@ -1052,10 +1054,10 @@ const ManagePoints: React.FC = () => {
                 nextDelta,
             });
             await refreshOverviewData();
-            setAdjustmentFeedback('포인트를 수정했습니다.');
+            setAdjustmentFeedback('직접 조정 위스를 수정했습니다.');
         } catch (error: any) {
             console.error('Failed to update point adjustment:', error);
-            setAdjustmentFeedback(error?.message || '포인트 수정에 실패했습니다.');
+            setAdjustmentFeedback(error?.message || '직접 조정 위스 수정에 실패했습니다.');
         } finally {
             setAdjustmentSaving(false);
         }
@@ -1075,10 +1077,10 @@ const ManagePoints: React.FC = () => {
             await refreshOverviewData();
             setSelectedEditableTransactionId('');
             setAdjustmentDraftValue('');
-            setAdjustmentFeedback('포인트 부여를 취소했습니다.');
+            setAdjustmentFeedback('직접 조정 내역을 취소했습니다.');
         } catch (error: any) {
             console.error('Failed to cancel point adjustment:', error);
-            setAdjustmentFeedback(error?.message || '포인트 부여 취소에 실패했습니다.');
+            setAdjustmentFeedback(error?.message || '직접 조정 취소에 실패했습니다.');
         } finally {
             setAdjustmentSaving(false);
         }
@@ -1088,8 +1090,8 @@ const ManagePoints: React.FC = () => {
         return (
             <div className="flex min-h-screen flex-col bg-gray-50">
                 <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">
-                    <div className="rounded-2xl border border-red-200 bg-red-50 px-6 py-5 text-sm font-bold text-red-700">
-                        포인트 관리 화면을 볼 권한이 없습니다.
+                        <div className="rounded-2xl border border-red-200 bg-red-50 px-6 py-5 text-sm font-bold text-red-700">
+                        위스 관리 화면을 볼 권한이 없습니다.
                     </div>
                 </main>
             </div>
@@ -1128,7 +1130,7 @@ const ManagePoints: React.FC = () => {
                             <div className="mb-2 text-2xl">
                                 <i className="fas fa-spinner fa-spin"></i>
                             </div>
-                            <p className="font-bold">포인트 정보를 불러오는 중입니다.</p>
+                            <p className="font-bold">위스 정보를 불러오는 중입니다.</p>
                         </div>
                     )}
 
@@ -1180,6 +1182,7 @@ const ManagePoints: React.FC = () => {
                             rankManualAdjustEarnedPointsByUid={rankManualAdjustEarnedPointsByUid}
                             canManage={canManage}
                             manualAdjustEnabled={savedPolicy.manualAdjustEnabled}
+                            allowNegativeBalance={savedPolicy.allowNegativeBalance}
                             loading={grantLoading}
                             gradeFilter={grantGradeFilter}
                             classFilter={grantClassFilter}

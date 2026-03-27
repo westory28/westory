@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import StudentRankPromotionPopup from '../../../../components/common/StudentRankPromotionPopup';
 import { POINT_RANK_BADGE_STYLE_OPTIONS } from '../../../../constants/pointLabels';
+import { buildStudentRankPromotionPreview } from '../../../../lib/pointRankPromotion';
 import {
     createPointRankTierCode,
     getPointRankDisplay,
@@ -34,6 +36,7 @@ export interface RankSettingsDraft {
 
 export interface RankEmojiCollectionDraft {
     emojiRegistry: PointRankEmojiRegistryEntry[];
+    tiers: PointRankPolicyTier[];
 }
 
 export type RankPanelSaveTone = 'success' | 'error' | 'warning';
@@ -115,6 +118,7 @@ const buildRankSettingsPolicy = (
 
 const extractRankEmojiDraft = (rankPolicy: PointRankPolicy): RankEmojiCollectionDraft => ({
     emojiRegistry: cloneRankEmojiRegistry(rankPolicy.emojiRegistry),
+    tiers: cloneRankTiers(rankPolicy.tiers),
 });
 
 const buildEmojiCollectionPolicy = (
@@ -122,6 +126,7 @@ const buildEmojiCollectionPolicy = (
     draft: RankEmojiCollectionDraft,
 ) => resolvePointRankPolicyDraft({
     ...savedRankPolicy,
+    tiers: cloneRankTiers(draft.tiers),
     emojiRegistry: cloneRankEmojiRegistry(draft.emojiRegistry),
 });
 
@@ -206,6 +211,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
     const [selectedTierCode, setSelectedTierCode] = useState<PointRankPolicyTier['code'] | null>(null);
     const [newEmojiValue, setNewEmojiValue] = useState('');
     const [duplicateEmojiDialog, setDuplicateEmojiDialog] = useState<DuplicateEmojiDialogState | null>(null);
+    const [celebrationPreviewTierCode, setCelebrationPreviewTierCode] = useState<PointRankPolicyTier['code'] | null>(null);
 
     const themePreviewPolicy = resolvePointRankPolicyDraft({
         ...savedRankPolicy,
@@ -365,6 +371,21 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
         }));
     };
 
+    const handleMoveEmojiToTier = (entryId: string, targetTierCode: PointRankPolicyTier['code']) => {
+        updateEmojiCollectionPolicy((prev) => ({
+            ...prev,
+            tiers: prev.tiers.map((tier) => ({
+                ...tier,
+                allowedEmojiIds: tier.code === targetTierCode
+                    ? Array.from(new Set([
+                        ...(tier.allowedEmojiIds || []).filter((item) => item !== entryId),
+                        entryId,
+                    ]))
+                    : (tier.allowedEmojiIds || []).filter((item) => item !== entryId),
+            })),
+        }));
+    };
+
     const handleReorderEmojiRegistry = (sourceId: string, targetId: string) => {
         updateEmojiCollectionPolicy((prev) => {
             const nextRegistry = [...prev.emojiRegistry];
@@ -406,7 +427,10 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
 
     const getThemeTierPreview = buildTierPreviewGetter(themePreviewPolicy);
     const getRankSettingsTierPreview = buildTierPreviewGetter(rankSettingsPolicy);
-    const getEmojiTierPreview = buildTierPreviewGetter(savedRankPolicy);
+    const getEmojiTierPreview = buildTierPreviewGetter(emojiCollectionPolicy);
+    const celebrationPreview = celebrationPreviewTierCode
+        ? buildStudentRankPromotionPreview(rankSettingsPolicy, celebrationPreviewTierCode)
+        : null;
 
     const handleSelectTier = (tierCode: PointRankPolicyTier['code']) => {
         setSelectedTierCode((prev) => (prev === tierCode ? null : tierCode));
@@ -427,8 +451,8 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
         if (tierIndex < 0 || rankSettingsPolicy.tiers.length <= 1) return;
         const removedTier = rankSettingsPolicy.tiers[tierIndex];
         const targetTier = rankSettingsPolicy.tiers[tierIndex - 1] || rankSettingsPolicy.tiers[tierIndex + 1] || null;
-        const removedTierLabel = getRankSettingsTierPreview(removedTier)?.label || removedTier.code;
-        const targetTierLabel = targetTier ? (getRankSettingsTierPreview(targetTier)?.label || targetTier.code) : '';
+        const removedTierLabel = getRankSettingsTierPreview(removedTier)?.label || '선택한 등급';
+        const targetTierLabel = targetTier ? (getRankSettingsTierPreview(targetTier)?.label || '다른 등급') : '';
 
         const confirmed = window.confirm(
             targetTier
@@ -572,6 +596,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
                                 onSelectTier={handleSelectTier}
                                 onAddTier={handleAddTier}
                                 onRemoveTier={handleRemoveTier}
+                                onPreviewCelebration={setCelebrationPreviewTierCode}
                                 onSetTierField={setTierField}
                                 onSetActiveThemeTierField={setActiveThemeTierField}
                                 onToggleTierEmoji={toggleTierEmoji}
@@ -593,6 +618,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
                                 onSave={onEmojiSave}
                                 onEmojiValueChange={handleEmojiValueChange}
                                 onToggleEmojiEnabled={handleToggleEmojiEnabled}
+                                onMoveEmojiToTier={handleMoveEmojiToTier}
                                 onReorderEmojiRegistry={handleReorderEmojiRegistry}
                                 getTierPreview={getEmojiTierPreview}
                             />
@@ -600,6 +626,16 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
                     </div>
                 </div>
             </div>
+
+            {celebrationPreview && celebrationPreview.rank && (
+                <StudentRankPromotionPopup
+                    open={Boolean(celebrationPreviewTierCode)}
+                    rank={celebrationPreview.rank}
+                    effectLevel={celebrationPreview.effectLevel}
+                    previewEmojiEntries={celebrationPreview.previewEmojiEntries}
+                    onClose={() => setCelebrationPreviewTierCode(null)}
+                />
+            )}
 
             {duplicateEmojiDialog && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">

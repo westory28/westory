@@ -173,7 +173,7 @@ const StudentDashboard: React.FC = () => {
                 const attendanceTx = await getPointActivityTransaction(config, userData.uid, 'attendance', todayAttendanceSourceId);
                 if (attendanceTx) {
                     setAttendanceChecked(true);
-                    setAttendanceMessage(`오늘 출석이 이미 반영되었습니다. +${attendanceTx.delta}포인트`);
+                    setAttendanceMessage(`오늘 출석이 이미 반영되었습니다. +${attendanceTx.delta}위스`);
                 } else {
                     setAttendanceChecked(false);
                     setAttendanceMessage('');
@@ -267,9 +267,9 @@ const StudentDashboard: React.FC = () => {
             handleDateClick(todayDate);
 
             if (result.monthlyBonusAwarded && result.monthlyBonusAmount) {
-                setAttendanceMessage(`출석 체크 완료. +${result.amount}포인트, 월간 개근 보너스 +${result.monthlyBonusAmount}포인트`);
+                setAttendanceMessage(`출석 체크 완료. +${result.amount}위스, 월간 개근 보너스 +${result.monthlyBonusAmount}위스`);
             } else if (result.awarded && result.amount > 0) {
-                setAttendanceMessage(`출석 체크가 완료되었습니다. +${result.amount}포인트`);
+                setAttendanceMessage(`출석 체크가 완료되었습니다. +${result.amount}위스`);
             } else {
                 setAttendanceMessage('오늘 출석은 이미 반영되었습니다.');
             }

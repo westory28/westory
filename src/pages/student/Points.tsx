@@ -13,6 +13,7 @@ import {
     listPointTransactionsByUid,
     POINT_POLICY_FALLBACK,
 } from '../../lib/points';
+import { formatWisAmount } from '../../lib/pointFormatters';
 import { getPointRankDisplay, needsPointRankLegacyFallback } from '../../lib/pointRanks';
 import type { PointOrder, PointOrderStatus, PointProduct, PointTransaction, PointWallet } from '../../types';
 import StudentPointHistoryTab from './components/points/StudentPointHistoryTab';
@@ -21,7 +22,7 @@ import StudentPointShopTab from './components/points/StudentPointShopTab';
 import StudentPointSummaryTab from './components/points/StudentPointSummaryTab';
 
 type StudentPointTab = keyof typeof STUDENT_POINT_TAB_LABELS;
-type HistoryFilter = 'all' | 'earned' | 'spent' | 'attendance' | 'attendance_monthly_bonus' | 'quiz' | 'lesson' | 'manual_adjust' | 'purchase';
+type HistoryFilter = 'all' | 'earned' | 'spent' | 'attendance' | 'attendance_monthly_bonus' | 'quiz' | 'quiz_bonus' | 'lesson' | 'manual_adjust' | 'manual_reclaim' | 'purchase';
 type OrderFilter = 'all' | PointOrderStatus;
 
 const DEFAULT_WALLET: PointWallet = {
@@ -104,7 +105,7 @@ const Points: React.FC = () => {
             setRankManualAdjustPoints(loadedRankManualAdjustPoints);
         } catch (error) {
             console.error('Failed to load student point data:', error);
-            setErrorMessage('\uD3EC\uC778\uD2B8 \uC815\uBCF4\uB97C \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4. \uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694.');
+            setErrorMessage('위스 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
         } finally {
             setLoading(false);
         }
@@ -165,16 +166,16 @@ const Points: React.FC = () => {
             setPurchaseMemo('');
             setSelectedProductId('');
             setPurchaseRequestKey('');
-            setPurchaseFeedback('\uAD6C\uB9E4 \uC694\uCCAD\uC774 \uC811\uC218\uB418\uC5C8\uC2B5\uB2C8\uB2E4.');
-            setSearchParams({ tab: 'orders' });
+                setPurchaseFeedback('구매 요청이 접수되었습니다.');
+                setSearchParams({ tab: 'orders' });
         } catch (error: any) {
             console.error('Failed to create point purchase request:', error);
             if (error?.message?.includes('Insufficient point balance')) {
-                setPurchaseFeedback('\uD3EC\uC778\uD2B8\uAC00 \uBD80\uC871\uD569\uB2C8\uB2E4.');
+                setPurchaseFeedback('보유 위스가 부족합니다.');
             } else if (error?.message?.includes('out of stock')) {
-                setPurchaseFeedback('\uC7AC\uACE0\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.');
+                setPurchaseFeedback('재고가 없습니다.');
             } else {
-                setPurchaseFeedback('\uAD6C\uB9E4 \uC694\uCCAD\uC744 \uCC98\uB9AC\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4. \uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694.');
+                setPurchaseFeedback('구매 요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.');
             }
         } finally {
             setPurchaseSubmitting(false);
@@ -187,19 +188,19 @@ const Points: React.FC = () => {
                 <div className="mb-6 rounded-2xl border border-gray-200 bg-white px-6 py-5 shadow-sm">
                     <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                         <div>
-                            <h1 className="text-2xl font-bold text-gray-800">{'\uD3EC\uC778\uD2B8'}</h1>
+                            <h1 className="text-2xl font-bold text-gray-800">위스</h1>
                             <p className="mt-1 text-sm text-gray-500">
-                                {'\uB0B4 \uD3EC\uC778\uD2B8 \uD604\uD669\uC744 \uD655\uC778\uD558\uACE0, \uC0C1\uC810 \uC0C1\uD488\uACFC \uAD6C\uB9E4 \uC9C4\uD589 \uC0C1\uD0DC\uB97C \uD55C\uACF3\uC5D0\uC11C \uBCFC \uC218 \uC788\uC2B5\uB2C8\uB2E4.'}
+                                내 위스 현황, 상점 상품, 구매 진행 상태를 한곳에서 확인할 수 있습니다.
                             </p>
                             <div className="mt-3 flex flex-wrap items-center gap-2">
                                 <span className="text-sm font-bold text-gray-700">{'현재 등급'}</span>
                                 {rank && <PointRankBadge rank={rank} size="md" />}
-                                <span className="text-xs text-gray-500">{'누적 획득 기준으로 유지되며, 구매나 차감으로 내려가지 않습니다.'}</span>
+                                <span className="text-xs text-gray-500">누적 획득 기준으로 유지되며, 구매나 환수로 내려가지 않습니다.</span>
                             </div>
                         </div>
                         <div className="rounded-xl bg-blue-50 px-5 py-3 text-right">
-                            <div className="text-xs font-bold text-blue-500">{'\uD604\uC7AC \uBCF4\uC720 \uD3EC\uC778\uD2B8'}</div>
-                            <div className="mt-1 text-3xl font-black text-blue-700">{safeWallet.balance || 0}</div>
+                            <div className="text-xs font-bold text-blue-500">현재 보유 위스</div>
+                            <div className="mt-1 whitespace-nowrap text-3xl font-black text-blue-700">{formatWisAmount(safeWallet.balance || 0)}</div>
                         </div>
                     </div>
                 </div>
@@ -210,7 +211,7 @@ const Points: React.FC = () => {
                             key={tab}
                             type="button"
                             onClick={() => handleTabChange(tab)}
-                            className={`border-b-2 px-4 py-3 text-sm font-bold transition ${
+                            className={`border-b-2 px-4 py-3 text-sm font-bold transition whitespace-nowrap ${
                                 activeTab === tab ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
                             }`}
                         >
@@ -225,7 +226,7 @@ const Points: React.FC = () => {
                             <div className="mb-2 text-2xl">
                                 <i className="fas fa-spinner fa-spin"></i>
                             </div>
-                            <p className="font-bold">{'\uD3EC\uC778\uD2B8 \uC815\uBCF4\uB97C \uBD88\uB7EC\uC624\uB294 \uC911\uC785\uB2C8\uB2E4.'}</p>
+                            <p className="font-bold">위스 정보를 불러오는 중입니다.</p>
                         </div>
                     )}
 

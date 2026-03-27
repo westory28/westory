@@ -352,13 +352,55 @@ const getAllowedEmojiIdsForTier = (rankPolicy, currentTierCode) => {
 const getCurrentTierCodeForRankTotal = (rankEarnedTotal, rankPolicy) =>
   buildRankSnapshot(rankEarnedTotal, rankPolicy).tierCode;
 
-const DEFAULT_POINT_POLICY = {
+const toFiniteNumber = (value, fallback = 0) => {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : fallback;
+};
+
+const toNonNegativeNumber = (value, fallback = 0) =>
+  Math.max(0, toFiniteNumber(value, fallback));
+
+const toPositiveThreshold = (value, fallback = 100) =>
+  Math.max(0, Math.round(toFiniteNumber(value, fallback)));
+
+const resolveAutoRewardEnabled = (policy) => {
+  const nestedRewardPolicy = policy?.rewardPolicy || {};
+  return nestedRewardPolicy?.autoEnabled ?? policy?.autoRewardEnabled;
+};
+
+const resolveQuizBonusInput = (policy) => {
+  const nestedRewardPolicy = policy?.rewardPolicy || {};
+  const nestedBonus = nestedRewardPolicy?.quizBonus || policy?.quizBonus || policy?.quizPerfectBonus || {};
+  return {
+    enabled: nestedBonus?.enabled ?? policy?.quizBonusEnabled ?? policy?.quizPerfectBonusEnabled,
+    threshold: nestedBonus?.thresholdScore ?? nestedBonus?.threshold ?? policy?.quizBonusThreshold ?? policy?.quizPerfectBonusThreshold,
+    amount: nestedBonus?.amount ?? policy?.quizBonusAmount ?? policy?.quizPerfectBonusAmount,
+  };
+};
+
+const getDefaultPointPolicy = () => ({
   attendanceDaily: 5,
   attendanceMonthlyBonus: 20,
   lessonView: 3,
   quizSolve: 10,
+  autoRewardEnabled: true,
+  quizBonusEnabled: false,
+  quizBonusThreshold: 100,
+  quizBonusAmount: 0,
   manualAdjustEnabled: false,
   allowNegativeBalance: false,
+  rewardPolicy: {
+    autoEnabled: true,
+    attendance: { enabled: true, amount: 5 },
+    quiz: { enabled: true, amount: 10 },
+    lesson: { enabled: true, amount: 3 },
+    attendanceMonthlyBonus: { enabled: true, amount: 20 },
+    quizBonus: { enabled: false, thresholdScore: 100, amount: 0 },
+  },
+  controlPolicy: {
+    manualAdjustEnabled: false,
+    allowNegativeBalance: false,
+  },
   rankPolicy: resolveRankPolicy({
     enabled: true,
     activeThemeId: 'korean_golpum',
@@ -366,6 +408,83 @@ const DEFAULT_POINT_POLICY = {
     tiers: DEFAULT_POINT_RANK_TIERS,
   }),
   updatedBy: '',
+});
+
+const DEFAULT_POINT_POLICY = getDefaultPointPolicy();
+
+const normalizePointPolicy = (policy) => {
+  const defaults = getDefaultPointPolicy();
+  const quizBonus = resolveQuizBonusInput(policy);
+  const autoRewardEnabled = resolveAutoRewardEnabled(policy) !== false;
+  const controlPolicy = policy?.controlPolicy || {};
+  const manualAdjustEnabled = (controlPolicy?.manualAdjustEnabled ?? policy?.manualAdjustEnabled) === true;
+  const allowNegativeBalance = (controlPolicy?.allowNegativeBalance ?? policy?.allowNegativeBalance) === true;
+
+  return {
+    ...defaults,
+    ...(policy || {}),
+    attendanceDaily: toNonNegativeNumber(policy?.attendanceDaily, defaults.attendanceDaily),
+    attendanceMonthlyBonus: toNonNegativeNumber(policy?.attendanceMonthlyBonus, defaults.attendanceMonthlyBonus),
+    lessonView: toNonNegativeNumber(policy?.lessonView, defaults.lessonView),
+    quizSolve: toNonNegativeNumber(policy?.quizSolve, defaults.quizSolve),
+    autoRewardEnabled,
+    quizBonusEnabled: quizBonus.enabled === true,
+    quizBonusThreshold: toPositiveThreshold(quizBonus.threshold, defaults.quizBonusThreshold),
+    quizBonusAmount: toNonNegativeNumber(quizBonus.amount, defaults.quizBonusAmount),
+    manualAdjustEnabled,
+    allowNegativeBalance,
+    rewardPolicy: {
+      autoEnabled: autoRewardEnabled,
+      attendance: {
+        enabled: autoRewardEnabled,
+        amount: toNonNegativeNumber(policy?.attendanceDaily, defaults.attendanceDaily),
+      },
+      quiz: {
+        enabled: autoRewardEnabled,
+        amount: toNonNegativeNumber(policy?.quizSolve, defaults.quizSolve),
+      },
+      lesson: {
+        enabled: autoRewardEnabled,
+        amount: toNonNegativeNumber(policy?.lessonView, defaults.lessonView),
+      },
+      attendanceMonthlyBonus: {
+        enabled: autoRewardEnabled,
+        amount: toNonNegativeNumber(policy?.attendanceMonthlyBonus, defaults.attendanceMonthlyBonus),
+      },
+      quizBonus: {
+        enabled: quizBonus.enabled === true,
+        thresholdScore: toPositiveThreshold(quizBonus.threshold, defaults.quizBonusThreshold),
+        amount: toNonNegativeNumber(quizBonus.amount, defaults.quizBonusAmount),
+      },
+    },
+    controlPolicy: {
+      manualAdjustEnabled,
+      allowNegativeBalance,
+    },
+    rankPolicy: resolveRankPolicy(policy?.rankPolicy),
+    updatedBy: String(policy?.updatedBy || '').trim(),
+  };
+};
+
+const buildPointPolicyPayload = (policy, actorUid) => {
+  const normalizedPolicy = normalizePointPolicy(policy);
+  return {
+    attendanceDaily: normalizedPolicy.attendanceDaily,
+    attendanceMonthlyBonus: normalizedPolicy.attendanceMonthlyBonus,
+    lessonView: normalizedPolicy.lessonView,
+    quizSolve: normalizedPolicy.quizSolve,
+    autoRewardEnabled: normalizedPolicy.autoRewardEnabled,
+    quizBonusEnabled: normalizedPolicy.quizBonusEnabled,
+    quizBonusThreshold: normalizedPolicy.quizBonusThreshold,
+    quizBonusAmount: normalizedPolicy.quizBonusAmount,
+    manualAdjustEnabled: normalizedPolicy.manualAdjustEnabled,
+    allowNegativeBalance: normalizedPolicy.allowNegativeBalance,
+    rewardPolicy: normalizedPolicy.rewardPolicy,
+    controlPolicy: normalizedPolicy.controlPolicy,
+    rankPolicy: resolveRankPolicy(normalizedPolicy.rankPolicy),
+    updatedAt: FieldValue.serverTimestamp(),
+    updatedBy: String(actorUid || '').trim(),
+  };
 };
 
 const getSemesterRoot = (year, semester) => `years/${year}/semesters/${semester}`;
@@ -517,15 +636,10 @@ const loadPolicy = async (transaction, year, semester) => {
   const policyRef = db.doc(getPointPolicyPath(year, semester));
   const policySnap = await transaction.get(policyRef);
   if (!policySnap.exists) {
-    return DEFAULT_POINT_POLICY;
+    return getDefaultPointPolicy();
   }
 
-  const data = policySnap.data() || {};
-  return {
-    ...DEFAULT_POINT_POLICY,
-    ...data,
-    rankPolicy: resolveRankPolicy(data.rankPolicy),
-  };
+  return normalizePointPolicy(policySnap.data() || {});
 };
 
 const createTransactionPayload = ({
@@ -554,6 +668,129 @@ const createTransactionPayload = ({
   targetDate: String(targetDate || '').trim(),
   createdAt: FieldValue.serverTimestamp(),
 });
+
+const extractActivityDocumentId = (sourceId, prefix) => {
+  const normalizedSourceId = String(sourceId || '').trim();
+  const normalizedPrefix = `${prefix}-`;
+  return normalizedSourceId.startsWith(normalizedPrefix)
+    ? normalizedSourceId.slice(normalizedPrefix.length).trim()
+    : '';
+};
+
+const loadQuizActivityScore = async (transaction, year, semester, uid, sourceId) => {
+  const quizResultId = extractActivityDocumentId(sourceId, 'quiz-result');
+  if (quizResultId) {
+    const quizResultRef = db.doc(`${getSemesterRoot(year, semester)}/quiz_results/${quizResultId}`);
+    const quizResultSnap = await transaction.get(quizResultRef);
+    if (!quizResultSnap.exists) {
+      return null;
+    }
+    const data = quizResultSnap.data() || {};
+    if (String(data.uid || '').trim() !== uid) {
+      throw new HttpsError('permission-denied', 'Quiz result does not belong to the caller.');
+    }
+    return toNonNegativeNumber(data.score, 0);
+  }
+
+  const historyResultId = extractActivityDocumentId(sourceId, 'history-classroom');
+  if (historyResultId) {
+    const historyResultRef = db.doc(`${getSemesterRoot(year, semester)}/history_classroom_results/${historyResultId}`);
+    const historyResultSnap = await transaction.get(historyResultRef);
+    if (!historyResultSnap.exists) {
+      return null;
+    }
+    const data = historyResultSnap.data() || {};
+    if (String(data.uid || '').trim() !== uid) {
+      throw new HttpsError('permission-denied', 'History classroom result does not belong to the caller.');
+    }
+    return toNonNegativeNumber(data.percent, 0);
+  }
+
+  return null;
+};
+
+const resolveActivityReward = ({
+  policy,
+  activityType,
+  sourceId,
+  sourceLabel,
+  todayKey,
+  monthKey,
+  score,
+  includeAttendanceMonthlyBonus = false,
+}) => {
+  const normalizedPolicy = normalizePointPolicy(policy);
+  if (!normalizedPolicy.autoRewardEnabled) {
+    return {
+      baseAmount: 0,
+      bonusAmount: 0,
+      totalAmount: 0,
+      items: [],
+    };
+  }
+
+  const baseAmount = activityType === 'attendance'
+    ? normalizedPolicy.attendanceDaily
+    : activityType === 'quiz'
+      ? normalizedPolicy.quizSolve
+      : normalizedPolicy.lessonView;
+  const normalizedSourceLabel = String(sourceLabel || '').trim();
+  const items = [];
+
+  if (baseAmount > 0) {
+    items.push({
+      type: activityType,
+      amount: baseAmount,
+      sourceId,
+      sourceLabel: normalizedSourceLabel || (
+        activityType === 'attendance'
+          ? `${todayKey} 출석 체크`
+          : activityType === 'quiz'
+            ? '문제 풀이'
+            : '수업 자료 확인'
+      ),
+      targetMonth: activityType === 'attendance' ? monthKey : '',
+      targetDate: activityType === 'attendance' ? todayKey : '',
+    });
+  }
+
+  if (activityType === 'attendance' && includeAttendanceMonthlyBonus && normalizedPolicy.attendanceMonthlyBonus > 0) {
+    items.push({
+      type: 'attendance_monthly_bonus',
+      amount: normalizedPolicy.attendanceMonthlyBonus,
+      sourceId: monthKey,
+      sourceLabel: `${monthKey} 월간 개근 보너스`,
+      targetMonth: monthKey,
+      targetDate: todayKey,
+    });
+  }
+
+  if (
+    activityType === 'quiz'
+    && normalizedPolicy.quizBonusEnabled
+    && normalizedPolicy.quizBonusAmount > 0
+    && Number(score || 0) >= normalizedPolicy.quizBonusThreshold
+  ) {
+    items.push({
+      type: 'quiz_bonus',
+      amount: normalizedPolicy.quizBonusAmount,
+      sourceId,
+      sourceLabel: normalizedPolicy.quizBonusThreshold >= 100
+        ? '문제 풀이 만점 보너스'
+        : `문제 풀이 ${normalizedPolicy.quizBonusThreshold}점 이상 보너스`,
+      targetMonth: '',
+      targetDate: '',
+    });
+  }
+
+  const totalAmount = items.reduce((total, item) => total + Number(item.amount || 0), 0);
+  return {
+    baseAmount,
+    bonusAmount: Math.max(0, totalAmount - Math.max(0, baseAmount)),
+    totalAmount,
+    items,
+  };
+};
 
 const sortPointTransactionDocsDesc = (docs) => [...docs].sort((a, b) => {
   const aCreatedAt = a.data()?.createdAt || null;
@@ -588,77 +825,91 @@ exports.applyPointActivityReward = onCall({ region: REGION }, async (request) =>
     const currentRankEarnedTotal = await getCurrentRankEarnedTotal(transaction, year, semester, uid, wallet);
     const todayKey = getKstDateKey();
     const monthKey = todayKey.slice(0, 7);
-    const rewardAmount = activityType === 'attendance'
-      ? Number(policy.attendanceDaily || 0)
-      : activityType === 'quiz'
-        ? Number(policy.quizSolve || 0)
-        : Number(policy.lessonView || 0);
+    const currentBalance = Number(wallet.balance || 0);
+    const currentEarnedTotal = Number(wallet.earnedTotal || 0);
+    const quizScore = activityType === 'quiz'
+      ? await loadQuizActivityScore(transaction, year, semester, uid, sourceId)
+      : null;
 
-    const transactionId = buildActivityTransactionId(uid, activityType, sourceId);
-    const txRef = db.doc(`${getPointCollectionPath(year, semester, 'point_transactions')}/${transactionId}`);
-    const existingTx = await transaction.get(txRef);
-    if (existingTx.exists) {
-      const existing = existingTx.data() || {};
-      return {
-        awarded: false,
-        duplicate: true,
-        amount: Number(existing.delta || 0),
-        balance: Number(existing.balanceAfter || wallet.balance || 0),
-        transactionId,
-        sourceId,
-        policyId: 'current',
-      };
+    let includeAttendanceMonthlyBonus = false;
+    if (
+      activityType === 'attendance'
+      && Number(policy.attendanceMonthlyBonus || 0) > 0
+      && isLastDayOfMonth()
+    ) {
+      const attendanceQuery = db.collection(getPointCollectionPath(year, semester, 'point_transactions'))
+        .where('uid', '==', uid)
+        .where('type', '==', 'attendance')
+        .where('targetMonth', '==', monthKey);
+      const attendanceSnapshot = await transaction.get(attendanceQuery);
+      const attendanceDateSet = new Set(
+        attendanceSnapshot.docs
+          .map((doc) => String(doc.data().targetDate || '').trim())
+          .filter(Boolean),
+      );
+      attendanceDateSet.add(todayKey);
+      includeAttendanceMonthlyBonus = attendanceDateSet.size >= getDaysInMonthFromMonthKey(monthKey);
     }
 
-    if (rewardAmount <= 0) {
+    const rewardPlan = resolveActivityReward({
+      policy,
+      activityType,
+      sourceId,
+      sourceLabel: requestedLabel,
+      todayKey,
+      monthKey,
+      score: quizScore,
+      includeAttendanceMonthlyBonus,
+    });
+
+    const rewardDocs = [];
+    for (const item of rewardPlan.items.filter((candidate) => Number(candidate.amount || 0) > 0)) {
+      const transactionId = buildActivityTransactionId(uid, item.type, item.sourceId);
+      const ref = db.doc(`${getPointCollectionPath(year, semester, 'point_transactions')}/${transactionId}`);
+      const snap = await transaction.get(ref);
+      rewardDocs.push({
+        item,
+        ref,
+        snap,
+        transactionId,
+      });
+    }
+
+    const newRewardDocs = rewardDocs.filter(({ snap }) => !snap.exists);
+    const baseRewardDoc = newRewardDocs.find(({ item }) => item.type === activityType) || null;
+    const newBonusDocs = newRewardDocs.filter(({ item }) => item.type !== activityType);
+    const awardedBaseAmount = baseRewardDoc ? Number(baseRewardDoc.item.amount || 0) : 0;
+    const bonusAmount = newBonusDocs.reduce((total, { item }) => total + Number(item.amount || 0), 0);
+    const totalAwarded = newRewardDocs.reduce((total, { item }) => total + Number(item.amount || 0), 0);
+    const monthlyBonusAmount = newBonusDocs
+      .filter(({ item }) => item.type === 'attendance_monthly_bonus')
+      .reduce((total, { item }) => total + Number(item.amount || 0), 0);
+    const bonusType = newBonusDocs[0]?.item.type || '';
+    const fallbackTransactionId = rewardDocs[0]?.transactionId || buildActivityTransactionId(uid, activityType, sourceId);
+
+    if (totalAwarded <= 0) {
       return {
         awarded: false,
-        duplicate: false,
+        duplicate: rewardDocs.length > 0,
         amount: 0,
-        balance: Number(wallet.balance || 0),
-        transactionId,
+        bonusAwarded: false,
+        bonusAmount: 0,
+        bonusType: '',
+        monthlyBonusAwarded: false,
+        monthlyBonusAmount: 0,
+        totalAwarded: 0,
+        targetMonth: activityType === 'attendance' ? monthKey : '',
+        balance: currentBalance,
+        transactionId: fallbackTransactionId,
         sourceId,
         policyId: 'current',
       };
     }
 
-    let nextBalance = Number(wallet.balance || 0) + rewardAmount;
-    let totalAwarded = rewardAmount;
-    let monthlyBonusAmount = 0;
-    let monthlyBonusAwarded = false;
-    let nextRankEarnedTotal = currentRankEarnedTotal + rewardAmount;
-    let nextEarnedTotal = Number(wallet.earnedTotal || 0) + rewardAmount;
-    let bonusTxRef = null;
+    const nextBalance = currentBalance + totalAwarded;
+    const nextRankEarnedTotal = currentRankEarnedTotal + totalAwarded;
+    const nextEarnedTotal = currentEarnedTotal + totalAwarded;
 
-    if (activityType === 'attendance') {
-      const bonusAmount = Number(policy.attendanceMonthlyBonus || 0);
-      const bonusTransactionId = buildActivityTransactionId(uid, 'attendance_monthly_bonus', monthKey);
-      bonusTxRef = db.doc(`${getPointCollectionPath(year, semester, 'point_transactions')}/${bonusTransactionId}`);
-      const existingBonusTx = await transaction.get(bonusTxRef);
-
-      if (!existingBonusTx.exists && bonusAmount > 0 && isLastDayOfMonth()) {
-        const attendanceQuery = db.collection(getPointCollectionPath(year, semester, 'point_transactions'))
-          .where('uid', '==', uid)
-          .where('type', '==', 'attendance')
-          .where('targetMonth', '==', monthKey);
-        const attendanceSnapshot = await transaction.get(attendanceQuery);
-        const attendanceDateSet = new Set(
-          attendanceSnapshot.docs
-            .map((doc) => String(doc.data().targetDate || '').trim())
-            .filter(Boolean),
-        );
-        attendanceDateSet.add(todayKey);
-
-        if (attendanceDateSet.size >= getDaysInMonthFromMonthKey(monthKey)) {
-          monthlyBonusAmount = bonusAmount;
-          monthlyBonusAwarded = true;
-          totalAwarded += bonusAmount;
-          nextBalance += bonusAmount;
-          nextRankEarnedTotal += bonusAmount;
-          nextEarnedTotal += bonusAmount;
-        }
-      }
-    }
     transaction.set(walletRef, {
       ...buildWalletBase(uid, profile),
       balance: nextBalance,
@@ -669,50 +920,36 @@ exports.applyPointActivityReward = onCall({ region: REGION }, async (request) =>
       lastTransactionAt: FieldValue.serverTimestamp(),
     }, { merge: true });
 
-    transaction.set(txRef, createTransactionPayload({
-      uid,
-      type: activityType,
-      delta: rewardAmount,
-      balanceAfter: Number(wallet.balance || 0) + rewardAmount,
-      sourceId,
-      sourceLabel: requestedLabel || (
-        activityType === 'attendance'
-          ? `${getKstDateKey()} attendance`
-          : activityType === 'quiz'
-            ? 'Quiz completed'
-            : 'Lesson viewed'
-      ),
-      policyId: 'current',
-      createdBy: 'system:auto',
-      targetMonth: activityType === 'attendance' ? monthKey : '',
-      targetDate: activityType === 'attendance' ? todayKey : '',
-    }));
-
-    if (monthlyBonusAwarded && bonusTxRef) {
-      transaction.set(bonusTxRef, createTransactionPayload({
-            uid,
-            type: 'attendance_monthly_bonus',
-            delta: monthlyBonusAmount,
-            balanceAfter: nextBalance,
-            sourceId: monthKey,
-            sourceLabel: `${monthKey} 월간 개근 보너스`,
-            policyId: 'current',
-            createdBy: 'system:auto',
-            targetMonth: monthKey,
-            targetDate: todayKey,
-          }));
-    }
+    let runningBalance = currentBalance;
+    newRewardDocs.forEach(({ item, ref }) => {
+      runningBalance += Number(item.amount || 0);
+      transaction.set(ref, createTransactionPayload({
+        uid,
+        type: item.type,
+        delta: Number(item.amount || 0),
+        balanceAfter: runningBalance,
+        sourceId: item.sourceId,
+        sourceLabel: item.sourceLabel,
+        policyId: 'current',
+        createdBy: 'system:auto',
+        targetMonth: item.targetMonth,
+        targetDate: item.targetDate,
+      }));
+    });
 
     return {
       awarded: true,
       duplicate: false,
-      amount: rewardAmount,
-      monthlyBonusAwarded,
+      amount: awardedBaseAmount,
+      bonusAwarded: bonusAmount > 0,
+      bonusAmount,
+      bonusType,
+      monthlyBonusAwarded: monthlyBonusAmount > 0,
       monthlyBonusAmount,
       totalAwarded,
       targetMonth: activityType === 'attendance' ? monthKey : '',
       balance: nextBalance,
-      transactionId,
+      transactionId: baseRewardDoc?.transactionId || newRewardDocs[0]?.transactionId || fallbackTransactionId,
       sourceId,
       policyId: 'current',
     };
@@ -742,13 +979,18 @@ exports.createPointPurchaseRequest = onCall({ region: REGION }, async (request) 
     }
 
     const product = { id: productSnap.id, ...(productSnap.data() || {}) };
+    const productPrice = toNonNegativeNumber(product.price, 0);
+    const productStock = Math.max(0, Math.floor(toFiniteNumber(product.stock, 0)));
     if (product.isActive === false) {
       throw new HttpsError('failed-precondition', 'Point product is inactive.');
     }
-    if (Number(product.stock || 0) <= 0) {
+    if (productPrice <= 0) {
+      throw new HttpsError('failed-precondition', 'Point product price must be greater than zero.');
+    }
+    if (productStock <= 0) {
       throw new HttpsError('failed-precondition', 'Point product is out of stock.');
     }
-    if (Number(wallet.balance || 0) < Number(product.price || 0)) {
+    if (Number(wallet.balance || 0) < productPrice) {
       throw new HttpsError('failed-precondition', 'Insufficient point balance.');
     }
 
@@ -765,19 +1007,19 @@ exports.createPointPurchaseRequest = onCall({ region: REGION }, async (request) 
       };
     }
 
-    const nextBalance = Number(wallet.balance || 0) - Number(product.price || 0);
+    const nextBalance = Number(wallet.balance || 0) - productPrice;
     transaction.set(walletRef, {
       ...buildWalletBase(uid, profile),
       balance: nextBalance,
       earnedTotal: Number(wallet.earnedTotal || 0),
       ...buildWalletRankState(currentRankEarnedTotal, policy.rankPolicy),
-      spentTotal: Number(wallet.spentTotal || 0) + Number(product.price || 0),
+      spentTotal: Number(wallet.spentTotal || 0) + productPrice,
       adjustedTotal: Number(wallet.adjustedTotal || 0),
       lastTransactionAt: FieldValue.serverTimestamp(),
     }, { merge: true });
 
     transaction.set(productRef, {
-      stock: Math.max(0, Number(product.stock || 0) - 1),
+      stock: Math.max(0, productStock - 1),
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
 
@@ -786,7 +1028,7 @@ exports.createPointPurchaseRequest = onCall({ region: REGION }, async (request) 
       studentName: String(wallet.studentName || profile.name || '').trim(),
       productId,
       productName: String(product.name || '').trim(),
-      priceSnapshot: Number(product.price || 0),
+      priceSnapshot: productPrice,
       status: 'requested',
       requestedAt: FieldValue.serverTimestamp(),
       reviewedAt: null,
@@ -799,7 +1041,7 @@ exports.createPointPurchaseRequest = onCall({ region: REGION }, async (request) 
     transaction.set(txRef, createTransactionPayload({
       uid,
       type: 'purchase_hold',
-      delta: -Number(product.price || 0),
+      delta: -productPrice,
       balanceAfter: nextBalance,
       sourceId: orderId,
       sourceLabel: String(product.name || '').trim(),
@@ -822,9 +1064,18 @@ exports.adjustTeacherPoints = onCall({ region: REGION }, async (request) => {
   const { year, semester } = assertYearSemester(request.data);
   const targetUid = String(request.data?.uid || '').trim();
   const delta = Number(request.data?.delta || 0);
+  const requestedMode = String(request.data?.mode || '').trim();
   const sourceId = String(request.data?.sourceId || `manual_${Date.now()}`).trim();
   const sourceLabel = String(request.data?.sourceLabel || '').trim();
   const policyId = String(request.data?.policyId || '').trim();
+  const mode = requestedMode === 'reclaim'
+    ? 'reclaim'
+    : requestedMode === 'grant'
+      ? 'grant'
+      : delta > 0
+        ? 'grant'
+        : 'reclaim';
+  const transactionType = mode === 'reclaim' ? 'manual_reclaim' : 'manual_adjust';
 
   if (!targetUid) {
     throw new HttpsError('invalid-argument', 'Target uid is required.');
@@ -834,6 +1085,9 @@ exports.adjustTeacherPoints = onCall({ region: REGION }, async (request) => {
   }
   if (!sourceLabel) {
     throw new HttpsError('invalid-argument', 'A reason is required for manual point adjustment.');
+  }
+  if ((mode === 'grant' && delta < 0) || (mode === 'reclaim' && delta > 0)) {
+    throw new HttpsError('invalid-argument', 'Manual adjustment mode does not match the point delta.');
   }
 
   const { profile } = await ensureStudentProfile(targetUid);
@@ -866,7 +1120,7 @@ exports.adjustTeacherPoints = onCall({ region: REGION }, async (request) => {
     const txRef = db.doc(`${getPointCollectionPath(year, semester, 'point_transactions')}/${crypto.randomUUID()}`);
     transaction.set(txRef, createTransactionPayload({
       uid: targetUid,
-      type: 'manual_adjust',
+      type: transactionType,
       delta,
       balanceAfter: nextBalance,
       sourceId,
@@ -879,6 +1133,7 @@ exports.adjustTeacherPoints = onCall({ region: REGION }, async (request) => {
       walletId: walletRef.id,
       transactionId: txRef.id,
       balance: nextBalance,
+      type: transactionType,
     };
   });
 });
@@ -908,7 +1163,7 @@ exports.updateTeacherPointAdjustment = onCall({ region: REGION }, async (request
     }
 
     const pointTransaction = { id: txSnap.id, ...(txSnap.data() || {}) };
-    if (pointTransaction.type !== 'manual_adjust') {
+    if (!['manual_adjust', 'manual_reclaim'].includes(pointTransaction.type)) {
       throw new HttpsError('failed-precondition', 'Only manual point adjustments can be edited.');
     }
 
@@ -931,6 +1186,14 @@ exports.updateTeacherPointAdjustment = onCall({ region: REGION }, async (request
     const currentRankEarnedTotal = await getCurrentRankEarnedTotal(transaction, year, semester, targetUid, wallet);
     const previousDelta = Number(pointTransaction.delta || 0);
     const nextDelta = action === 'cancel' ? 0 : requestedDelta;
+    if (action === 'update') {
+      if (pointTransaction.type === 'manual_adjust' && nextDelta < 0) {
+        throw new HttpsError('failed-precondition', 'Manual grants can only keep a positive delta.');
+      }
+      if (pointTransaction.type === 'manual_reclaim' && nextDelta > 0) {
+        throw new HttpsError('failed-precondition', 'Manual reclaims can only keep a negative delta.');
+      }
+    }
     const deltaDiff = nextDelta - previousDelta;
     const nextBalance = Number(wallet.balance || 0) + deltaDiff;
     const nextRankEarnedTotal = Math.max(

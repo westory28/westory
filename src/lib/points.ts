@@ -32,6 +32,7 @@ import type {
 } from '../types';
 
 type ConfigLike = Pick<SystemConfig, 'year' | 'semester'> | null | undefined;
+type PointActivityRewardType = Extract<PointTransactionType, 'attendance' | 'quiz' | 'lesson'>;
 
 interface ActorInfo {
     uid: string;
@@ -45,6 +46,7 @@ interface AdjustPointsInput {
     sourceId?: string;
     sourceLabel?: string;
     policyId?: string;
+    mode?: 'grant' | 'reclaim';
     actor: ActorInfo;
 }
 
@@ -58,9 +60,27 @@ interface ReviewPointOrderInput {
 
 interface ClaimPointActivityInput {
     config: ConfigLike;
-    activityType: Extract<PointTransactionType, 'attendance' | 'quiz' | 'lesson'>;
+    activityType: PointActivityRewardType;
     sourceId: string;
     sourceLabel?: string;
+    score?: number | null;
+}
+
+export interface ResolvedPointActivityRewardItem {
+    type: PointTransactionType;
+    amount: number;
+    sourceId: string;
+    sourceLabel: string;
+    targetMonth?: string;
+    targetDate?: string;
+}
+
+export interface ResolvedPointActivityReward {
+    activityType: PointActivityRewardType;
+    baseAmount: number;
+    bonusAmount: number;
+    totalAmount: number;
+    items: ResolvedPointActivityRewardItem[];
 }
 
 interface SecurePurchaseRequestInput {
@@ -87,24 +107,121 @@ interface SchoolOption {
     label: string;
 }
 
-const DEFAULT_POINT_POLICY: PointPolicy = {
+const toFiniteNumber = (value: unknown, fallback = 0) => {
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) ? numericValue : fallback;
+};
+
+const toNonNegativeNumber = (value: unknown, fallback = 0) => (
+    Math.max(0, toFiniteNumber(value, fallback))
+);
+
+const toPositiveThreshold = (value: unknown, fallback = 100) => (
+    Math.max(0, Math.round(toFiniteNumber(value, fallback)))
+);
+
+const resolveAutoRewardEnabled = (policy?: Partial<PointPolicy> | null) => {
+    const nestedRewardPolicy = (policy as any)?.rewardPolicy || {};
+    return nestedRewardPolicy?.autoEnabled ?? (policy as any)?.autoRewardEnabled;
+};
+
+const resolveQuizBonusInput = (policy?: Partial<PointPolicy> | null) => {
+    const nestedRewardPolicy = (policy as any)?.rewardPolicy || {};
+    const nestedBonus = nestedRewardPolicy?.quizBonus || (policy as any)?.quizBonus || (policy as any)?.quizPerfectBonus || {};
+
+    return {
+        enabled: nestedBonus?.enabled ?? (policy as any)?.quizBonusEnabled ?? (policy as any)?.quizPerfectBonusEnabled,
+        threshold: nestedBonus?.thresholdScore ?? nestedBonus?.threshold ?? (policy as any)?.quizBonusThreshold ?? (policy as any)?.quizPerfectBonusThreshold,
+        amount: nestedBonus?.amount ?? (policy as any)?.quizBonusAmount ?? (policy as any)?.quizPerfectBonusAmount,
+    };
+};
+
+export const getDefaultPointPolicy = (): PointPolicy => ({
     attendanceDaily: 5,
     attendanceMonthlyBonus: 20,
     lessonView: 3,
     quizSolve: 10,
+    autoRewardEnabled: true,
+    quizBonusEnabled: false,
+    quizBonusThreshold: 100,
+    quizBonusAmount: 0,
     manualAdjustEnabled: false,
     allowNegativeBalance: false,
+    rewardPolicy: {
+        autoEnabled: true,
+        attendance: { enabled: true, amount: 5 },
+        quiz: { enabled: true, amount: 10 },
+        lesson: { enabled: true, amount: 3 },
+        attendanceMonthlyBonus: { enabled: true, amount: 20 },
+        quizBonus: { enabled: false, thresholdScore: 100, amount: 0 },
+    },
+    controlPolicy: {
+        manualAdjustEnabled: false,
+        allowNegativeBalance: false,
+    },
     rankPolicy: resolvePointRankPolicy(DEFAULT_POINT_RANK_POLICY),
     updatedBy: '',
-};
-
-const mergePointPolicy = (policy?: Partial<PointPolicy> | null): PointPolicy => ({
-    ...DEFAULT_POINT_POLICY,
-    ...policy,
-    rankPolicy: resolvePointRankPolicy(policy?.rankPolicy),
 });
 
-export const POINT_POLICY_FALLBACK = mergePointPolicy();
+const DEFAULT_POINT_POLICY = getDefaultPointPolicy();
+
+export const normalizePointPolicy = (policy?: Partial<PointPolicy> | null): PointPolicy => {
+    const defaults = getDefaultPointPolicy();
+    const quizBonus = resolveQuizBonusInput(policy);
+    const autoRewardEnabled = resolveAutoRewardEnabled(policy) !== false;
+    const controlPolicy = (policy as any)?.controlPolicy || {};
+    const manualAdjustEnabled = (controlPolicy?.manualAdjustEnabled ?? policy?.manualAdjustEnabled) === true;
+    const allowNegativeBalance = (controlPolicy?.allowNegativeBalance ?? policy?.allowNegativeBalance) === true;
+
+    return {
+        ...defaults,
+        ...policy,
+        attendanceDaily: toNonNegativeNumber(policy?.attendanceDaily, defaults.attendanceDaily),
+        attendanceMonthlyBonus: toNonNegativeNumber(policy?.attendanceMonthlyBonus, defaults.attendanceMonthlyBonus),
+        lessonView: toNonNegativeNumber(policy?.lessonView, defaults.lessonView),
+        quizSolve: toNonNegativeNumber(policy?.quizSolve, defaults.quizSolve),
+        autoRewardEnabled,
+        quizBonusEnabled: quizBonus.enabled === true,
+        quizBonusThreshold: toPositiveThreshold(quizBonus.threshold, defaults.quizBonusThreshold),
+        quizBonusAmount: toNonNegativeNumber(quizBonus.amount, defaults.quizBonusAmount),
+        manualAdjustEnabled,
+        allowNegativeBalance,
+        rewardPolicy: {
+            autoEnabled: autoRewardEnabled,
+            attendance: {
+                enabled: autoRewardEnabled,
+                amount: toNonNegativeNumber(policy?.attendanceDaily, defaults.attendanceDaily),
+            },
+            quiz: {
+                enabled: autoRewardEnabled,
+                amount: toNonNegativeNumber(policy?.quizSolve, defaults.quizSolve),
+            },
+            lesson: {
+                enabled: autoRewardEnabled,
+                amount: toNonNegativeNumber(policy?.lessonView, defaults.lessonView),
+            },
+            attendanceMonthlyBonus: {
+                enabled: autoRewardEnabled,
+                amount: toNonNegativeNumber(policy?.attendanceMonthlyBonus, defaults.attendanceMonthlyBonus),
+            },
+            quizBonus: {
+                enabled: quizBonus.enabled === true,
+                thresholdScore: toPositiveThreshold(quizBonus.threshold, defaults.quizBonusThreshold),
+                amount: toNonNegativeNumber(quizBonus.amount, defaults.quizBonusAmount),
+            },
+        },
+        controlPolicy: {
+            manualAdjustEnabled,
+            allowNegativeBalance,
+        },
+        rankPolicy: resolvePointRankPolicy(policy?.rankPolicy),
+        updatedBy: String(policy?.updatedBy || '').trim(),
+    };
+};
+
+const mergePointPolicy = (policy?: Partial<PointPolicy> | null): PointPolicy => normalizePointPolicy(policy);
+
+export const POINT_POLICY_FALLBACK = getDefaultPointPolicy();
 
 const sortByTimestampDesc = <T extends { createdAt?: any; requestedAt?: any }>(items: T[], key: 'createdAt' | 'requestedAt') =>
     [...items].sort((a, b) => {
@@ -144,16 +261,101 @@ export const buildAttendanceSourceId = (date = new Date()) => `attendance-${getK
 
 export const buildPointActivityTransactionId = (
     uid: string,
-    type: Extract<PointTransactionType, 'attendance' | 'quiz' | 'lesson'>,
+    type: PointActivityRewardType,
     sourceId: string,
 ) => `activity_${normalizePointKeyPart(uid)}_${type}_${normalizePointKeyPart(sourceId)}`;
 
 export const getPointActivityTransactionPath = (
     config: ConfigLike,
     uid: string,
-    type: Extract<PointTransactionType, 'attendance' | 'quiz' | 'lesson'>,
+    type: PointActivityRewardType,
     sourceId: string,
 ) => `${getPointCollectionPath(config, 'point_transactions')}/${buildPointActivityTransactionId(uid, type, sourceId)}`;
+
+export const resolveActivityReward = ({
+    policy,
+    activityType,
+    sourceId,
+    sourceLabel,
+    todayKey,
+    monthKey,
+    includeAttendanceMonthlyBonus = false,
+    score,
+}: {
+    policy?: Partial<PointPolicy> | null;
+    activityType: PointActivityRewardType;
+    sourceId: string;
+    sourceLabel?: string;
+    todayKey?: string;
+    monthKey?: string;
+    includeAttendanceMonthlyBonus?: boolean;
+    score?: number | null;
+}): ResolvedPointActivityReward => {
+    const normalizedPolicy = normalizePointPolicy(policy);
+    const items: ResolvedPointActivityRewardItem[] = [];
+    if (!normalizedPolicy.autoRewardEnabled) {
+        return {
+            activityType,
+            baseAmount: 0,
+            bonusAmount: 0,
+            totalAmount: 0,
+            items,
+        };
+    }
+
+    const baseAmount = activityType === 'attendance'
+        ? normalizedPolicy.attendanceDaily
+        : activityType === 'quiz'
+            ? normalizedPolicy.quizSolve
+            : normalizedPolicy.lessonView;
+
+    if (baseAmount > 0) {
+        items.push({
+            type: activityType,
+            amount: baseAmount,
+            sourceId,
+            sourceLabel: String(sourceLabel || '').trim(),
+            targetMonth: activityType === 'attendance' ? String(monthKey || '').trim() : '',
+            targetDate: activityType === 'attendance' ? String(todayKey || '').trim() : '',
+        });
+    }
+
+    if (activityType === 'attendance' && includeAttendanceMonthlyBonus && normalizedPolicy.attendanceMonthlyBonus > 0) {
+        items.push({
+            type: 'attendance_monthly_bonus',
+            amount: normalizedPolicy.attendanceMonthlyBonus,
+            sourceId: String(monthKey || '').trim(),
+            sourceLabel: `${String(monthKey || '').trim()} 월간 개근 보너스`,
+            targetMonth: String(monthKey || '').trim(),
+            targetDate: String(todayKey || '').trim(),
+        });
+    }
+
+    if (
+        activityType === 'quiz'
+        && normalizedPolicy.quizBonusEnabled
+        && normalizedPolicy.quizBonusAmount > 0
+        && Number(score || 0) >= normalizedPolicy.quizBonusThreshold
+    ) {
+        items.push({
+            type: 'quiz_bonus',
+            amount: normalizedPolicy.quizBonusAmount,
+            sourceId,
+            sourceLabel: normalizedPolicy.quizBonusThreshold >= 100
+                ? '문제 풀이 만점 보너스'
+                : `문제 풀이 ${normalizedPolicy.quizBonusThreshold}점 이상 보너스`,
+        });
+    }
+
+    const totalAmount = items.reduce((total, item) => total + Number(item.amount || 0), 0);
+    return {
+        activityType,
+        baseAmount,
+        bonusAmount: Math.max(0, totalAmount - Math.max(0, baseAmount)),
+        totalAmount,
+        items,
+    };
+};
 
 // Read helpers
 export const getPointWalletByUid = async (config: ConfigLike, uid: string) => {
@@ -310,7 +512,7 @@ export const listPointStudentTargetsByClass = async (grade: string, className: s
 export const getPointPolicy = async (config: ConfigLike) => {
     const snap = await getDoc(doc(db, getPointPolicyDocPath(config)));
     if (!snap.exists()) return POINT_POLICY_FALLBACK;
-    return mergePointPolicy(snap.data() as Partial<PointPolicy>);
+    return normalizePointPolicy(snap.data() as Partial<PointPolicy>);
 };
 
 export const listPointTransactions = async (config: ConfigLike, options?: { uid?: string; type?: PointTransactionType }) => {
@@ -349,7 +551,7 @@ export const getPointRankManualAdjustEarnedPointsMap = async (config: ConfigLike
 export const getPointActivityTransaction = async (
     config: ConfigLike,
     uid: string,
-    type: Extract<PointTransactionType, 'attendance' | 'quiz' | 'lesson'>,
+    type: PointActivityRewardType,
     sourceId: string,
 ) => {
     const snap = await getDoc(doc(db, getPointActivityTransactionPath(config, uid, type, sourceId)));
@@ -387,7 +589,7 @@ export const listPointOrders = async (config: ConfigLike, options?: { uid?: stri
 // Admin mutations now also use trusted Callable Functions so clients never write wallet/order/ledger
 // state directly. Policy/product management remains direct for now because those documents are
 // teacher-only and do not mutate student balances.
-export const adjustPoints = async ({ config, uid, delta, sourceId, sourceLabel, policyId, actor }: AdjustPointsInput) => {
+export const adjustPoints = async ({ config, uid, delta, sourceId, sourceLabel, policyId, mode, actor }: AdjustPointsInput) => {
     if (!Number.isFinite(delta) || delta === 0) {
         throw new Error('Point delta must be a non-zero finite number.');
     }
@@ -401,29 +603,41 @@ export const adjustPoints = async ({ config, uid, delta, sourceId, sourceLabel, 
         sourceId: String(sourceId || '').trim(),
         sourceLabel: String(sourceLabel || '').trim(),
         policyId: String(policyId || '').trim(),
+        mode: mode || (delta > 0 ? 'grant' : 'reclaim'),
         actorUid: actor.uid,
     });
     return result.data as {
         walletId: string;
         transactionId: string;
         balance: number;
+        type: Extract<PointTransactionType, 'manual_adjust' | 'manual_reclaim'>;
+    };
+};
+
+export const buildPointPolicyPayload = (policy: Partial<PointPolicy>, actor: ActorInfo) => {
+    const normalizedPolicy = normalizePointPolicy(policy);
+    return {
+        attendanceDaily: normalizedPolicy.attendanceDaily,
+        attendanceMonthlyBonus: normalizedPolicy.attendanceMonthlyBonus,
+        lessonView: normalizedPolicy.lessonView,
+        quizSolve: normalizedPolicy.quizSolve,
+        autoRewardEnabled: normalizedPolicy.autoRewardEnabled,
+        quizBonusEnabled: normalizedPolicy.quizBonusEnabled,
+        quizBonusThreshold: normalizedPolicy.quizBonusThreshold,
+        quizBonusAmount: normalizedPolicy.quizBonusAmount,
+        manualAdjustEnabled: normalizedPolicy.manualAdjustEnabled,
+        allowNegativeBalance: normalizedPolicy.allowNegativeBalance,
+        rewardPolicy: normalizedPolicy.rewardPolicy,
+        controlPolicy: normalizedPolicy.controlPolicy,
+        rankPolicy: buildPointRankPolicySavePayload(normalizedPolicy.rankPolicy),
+        updatedAt: serverTimestamp(),
+        updatedBy: String(actor.uid || '').trim(),
     };
 };
 
 export const upsertPointPolicy = async (config: ConfigLike, policy: Partial<PointPolicy>, actor: ActorInfo) => {
     const targetRef = doc(db, getPointPolicyDocPath(config));
-    const mergedPolicy = mergePointPolicy(policy);
-    const payload = {
-        attendanceDaily: Math.max(0, Number(mergedPolicy.attendanceDaily || 0)),
-        attendanceMonthlyBonus: Math.max(0, Number(mergedPolicy.attendanceMonthlyBonus || 0)),
-        lessonView: Math.max(0, Number(mergedPolicy.lessonView || 0)),
-        quizSolve: Math.max(0, Number(mergedPolicy.quizSolve || 0)),
-        manualAdjustEnabled: mergedPolicy.manualAdjustEnabled === true,
-        allowNegativeBalance: mergedPolicy.allowNegativeBalance === true,
-        rankPolicy: buildPointRankPolicySavePayload(mergedPolicy.rankPolicy),
-        updatedAt: serverTimestamp(),
-        updatedBy: String(actor.uid || '').trim(),
-    };
+    const payload = buildPointPolicyPayload(policy, actor);
     await setDoc(targetRef, payload);
     return payload as PointPolicy;
 };
@@ -511,7 +725,7 @@ export const updateStudentProfileIcon = async ({ config, emojiId }: UpdateStuden
 };
 
 // Student trusted-callable wrappers
-export const claimPointActivityReward = async ({ config, activityType, sourceId, sourceLabel }: ClaimPointActivityInput) => {
+export const claimPointActivityReward = async ({ config, activityType, sourceId, sourceLabel, score }: ClaimPointActivityInput) => {
     const { year, semester } = getYearSemester(config);
     const callable = httpsCallable(functions, 'applyPointActivityReward');
     const result = await callable({
@@ -520,11 +734,15 @@ export const claimPointActivityReward = async ({ config, activityType, sourceId,
         activityType,
         sourceId,
         sourceLabel: String(sourceLabel || '').trim(),
+        score: score === null || score === undefined ? undefined : Number(score),
     });
     return result.data as {
         awarded: boolean;
         duplicate: boolean;
         amount: number;
+        bonusAwarded?: boolean;
+        bonusAmount?: number;
+        bonusType?: Extract<PointTransactionType, 'attendance_monthly_bonus' | 'quiz_bonus'> | '';
         monthlyBonusAwarded?: boolean;
         monthlyBonusAmount?: number;
         totalAwarded?: number;

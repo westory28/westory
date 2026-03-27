@@ -291,7 +291,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
             if (pointResult.awarded && pointResult.amount > 0) {
               awardedPointAmount =
                 Number(pointResult.totalAwarded || pointResult.amount) || 0;
-              popupMessage = `저장되었습니다. ${awardedPointAmount} 포인트가 지급되었습니다.`;
+              popupMessage = `저장되었습니다. ${awardedPointAmount}위스가 지급되었습니다.`;
             }
           } catch (pointError) {
             console.error("Failed to claim lesson point reward:", pointError);

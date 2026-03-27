@@ -154,7 +154,7 @@ const StudentRankPromotionPopup: React.FC<StudentRankPromotionPopupProps> = ({
                                 {rank.description}
                             </p>
                             <p className="mt-2 text-xs font-medium text-slate-500">
-                                현재 점수 {rank.metricValue}점 기준으로 도달한 등급이에요.
+                                현재 누적 위스 {rank.metricValue.toLocaleString('ko-KR')} ₩s 기준으로 도달한 등급이에요.
                             </p>
                         </div>
                     </div>

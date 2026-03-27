@@ -61,6 +61,19 @@ export interface PointRankDisplay {
     enabled: boolean;
 }
 
+export interface PointRankTierDisplayItem {
+    code: PointRankTierCode;
+    minPoints: number;
+    label: string;
+    shortLabel: string;
+    description: string;
+    badgeClass: string;
+    badgeStyleToken: PointRankBadgeStyleToken | string;
+    themeId: PointRankThemeId;
+    themeName: string;
+    position: number;
+}
+
 type PointRankInput = {
     rankPolicy?: Partial<PointRankPolicy> | null;
     wallet?: Pick<PointWallet, 'earnedTotal' | 'rankEarnedTotal'> | null;
@@ -95,13 +108,13 @@ export const POINT_RANK_THEME_MAP: Record<PointRankThemeId, PointRankThemeMeta> 
             tier_1: {
                 label: '4두품',
                 shortLabel: '4두품',
-                description: '누적 획득 포인트 성장을 막 시작한 단계입니다.',
+                description: '누적 획득 위스 성장을 막 시작한 단계입니다.',
                 badgeStyleToken: 'stone',
             },
             tier_2: {
                 label: '5두품',
                 shortLabel: '5두품',
-                description: '꾸준히 포인트를 쌓아 가는 단계입니다.',
+                description: '꾸준히 위스를 쌓아 가는 단계입니다.',
                 badgeStyleToken: 'blue',
             },
             tier_3: {
@@ -113,13 +126,13 @@ export const POINT_RANK_THEME_MAP: Record<PointRankThemeId, PointRankThemeMeta> 
             tier_4: {
                 label: '진골',
                 shortLabel: '진골',
-                description: '높은 누적 포인트를 달성한 상위 단계입니다.',
+                description: '높은 누적 위스를 달성한 상위 단계입니다.',
                 badgeStyleToken: 'amber',
             },
             tier_5: {
                 label: '성골',
                 shortLabel: '성골',
-                description: '가장 높은 누적 포인트 등급입니다.',
+                description: '가장 높은 누적 위스 등급입니다.',
                 badgeStyleToken: 'rose',
             },
         },
@@ -130,13 +143,13 @@ export const POINT_RANK_THEME_MAP: Record<PointRankThemeId, PointRankThemeMeta> 
             tier_1: {
                 label: '남작',
                 shortLabel: '남작',
-                description: '누적 획득 포인트 성장을 막 시작한 단계입니다.',
+                description: '누적 획득 위스 성장을 막 시작한 단계입니다.',
                 badgeStyleToken: 'stone',
             },
             tier_2: {
                 label: '자작',
                 shortLabel: '자작',
-                description: '꾸준히 포인트를 쌓아 가는 단계입니다.',
+                description: '꾸준히 위스를 쌓아 가는 단계입니다.',
                 badgeStyleToken: 'blue',
             },
             tier_3: {
@@ -148,13 +161,13 @@ export const POINT_RANK_THEME_MAP: Record<PointRankThemeId, PointRankThemeMeta> 
             tier_4: {
                 label: '후작',
                 shortLabel: '후작',
-                description: '높은 누적 포인트를 달성한 상위 단계입니다.',
+                description: '높은 누적 위스를 달성한 상위 단계입니다.',
                 badgeStyleToken: 'amber',
             },
             tier_5: {
                 label: '공작',
                 shortLabel: '공작',
-                description: '가장 높은 누적 포인트 등급입니다.',
+                description: '가장 높은 누적 위스 등급입니다.',
                 badgeStyleToken: 'rose',
             },
         },
@@ -341,7 +354,7 @@ const getBaseTierMeta = (themeId: PointRankThemeId, tierCode: PointRankTierCode)
     return {
         label: `${theme.themeName} ${tierIndex}단계`,
         shortLabel: `${tierIndex}단계`,
-        description: '누적 획득 포인트를 기준으로 계산한 등급입니다.',
+        description: '누적 획득 위스를 기준으로 계산한 등급입니다.',
         badgeStyleToken: normalizeBadgeStyleToken('', tierIndex - 1),
     };
 };
@@ -528,6 +541,31 @@ export const getPointRankTierMeta = (
     };
 };
 
+export const getPointRankTierDisplayItems = (
+    rankPolicy: Partial<PointRankPolicy> | null | undefined,
+    options?: { themeId?: PointRankThemeId; descending?: boolean },
+): PointRankTierDisplayItem[] => {
+    const resolvedPolicy = resolvePointRankPolicy(rankPolicy);
+    const themeId = options?.themeId || resolvedPolicy.activeThemeId;
+    const items = resolvedPolicy.tiers.map((tier, index) => {
+        const tierMeta = getPointRankTierMeta(resolvedPolicy, themeId, tier.code);
+        return {
+            code: tier.code,
+            minPoints: tier.minPoints,
+            label: tierMeta.label,
+            shortLabel: tierMeta.shortLabel,
+            description: tierMeta.description,
+            badgeClass: tierMeta.badgeClass,
+            badgeStyleToken: tierMeta.badgeStyleToken,
+            themeId,
+            themeName: getResolvedThemeName(resolvedPolicy, themeId),
+            position: index,
+        };
+    });
+
+    return options?.descending === false ? items : [...items].reverse();
+};
+
 export const getPointRankEmojiRegistry = (
     rankPolicy?: Partial<PointRankPolicy> | null,
     preferredValues?: unknown,
@@ -580,14 +618,14 @@ export const getPointRankPolicyValidationError = (rankPolicy?: Partial<PointRank
         usedCodes.add(tier.code);
 
         if (!Number.isFinite(Number(tier.minPoints)) || Number(tier.minPoints) < 0) {
-            return '승급 기준 포인트는 0 이상의 숫자여야 합니다.';
+            return '승급 기준 위스는 0 이상의 숫자여야 합니다.';
         }
     }
 
     const sortedTiers = [...rawTiers].sort((a, b) => a.minPoints - b.minPoints);
     for (let index = 1; index < sortedTiers.length; index += 1) {
         if (Number(sortedTiers[index - 1].minPoints) >= Number(sortedTiers[index].minPoints)) {
-            return '승급 기준 포인트는 서로 다른 값으로 입력해 주세요.';
+            return '승급 기준 위스는 서로 다른 값으로 입력해 주세요.';
         }
     }
 
@@ -601,7 +639,7 @@ export const getPointRankPolicyValidationError = (rankPolicy?: Partial<PointRank
 };
 
 export const isPointRankEarnTransaction = (transaction: Pick<PointTransaction, 'type' | 'delta'>) => (
-    ['attendance', 'attendance_monthly_bonus', 'quiz', 'lesson', 'manual_adjust'].includes(transaction.type)
+    ['attendance', 'attendance_monthly_bonus', 'quiz', 'quiz_bonus', 'lesson', 'manual_adjust'].includes(transaction.type)
     && Number(transaction.delta || 0) > 0
 );
 

@@ -7,141 +7,177 @@ import type {
 } from '../types';
 
 export const TEACHER_POINT_TAB_LABELS = {
-    overview: '\uD3EC\uC778\uD2B8 \uD604\uD669',
-    grant: '\uD3EC\uC778\uD2B8 \uBD80\uC5EC',
-    policy: '\uC6B4\uC601 \uC815\uCC45',
-    ranks: '\uB4F1\uAE09 \uC124\uC815',
-    products: '\uC0C1\uD488 \uAD00\uB9AC',
-    requests: '\uAD6C\uB9E4 \uC694\uCCAD \uAD00\uB9AC',
+    overview: '위스 현황',
+    grant: '지급 및 환수',
+    policy: '운영 정책',
+    ranks: '등급 설정',
+    products: '상품 관리',
+    requests: '구매 요청 관리',
 } as const;
 
 export const POINT_RANK_THEME_LABELS: Record<PointRankThemeId, string> = {
-    korean_golpum: '\uD55C\uAD6D\uC0AC',
-    world_nobility: '\uC138\uACC4\uC0AC',
+    korean_golpum: '한국사',
+    world_nobility: '세계사',
 };
 
 export const POINT_RANK_THEME_DETAIL_LABELS: Record<PointRankThemeId, string> = {
-    korean_golpum: '\uD55C\uAD6D\uC0AC \uACE8\uD488\uC81C',
-    world_nobility: '\uC138\uACC4\uC0AC \uADC0\uC871\uC81C',
+    korean_golpum: '한국사 골품제',
+    world_nobility: '세계사 귀족제',
 };
 
 export const POINT_RANK_BADGE_STYLE_OPTIONS: Array<{ value: PointRankBadgeStyleToken | string; label: string }> = [
-    { value: 'stone', label: '\uAE30\uBCF8 \uC11D\uC0C9' },
-    { value: 'blue', label: '\uBE14\uB8E8' },
-    { value: 'emerald', label: '\uC5D0\uBA54\uB784\uB4DC' },
-    { value: 'amber', label: '\uC554\uBC84' },
-    { value: 'rose', label: '\uB85C\uC988' },
+    { value: 'stone', label: '기본 석색' },
+    { value: 'blue', label: '블루' },
+    { value: 'emerald', label: '에메랄드' },
+    { value: 'amber', label: '앰버' },
+    { value: 'rose', label: '로즈' },
 ];
 
 export const POINT_RANK_CELEBRATION_EFFECT_LABELS = {
-    subtle: '\uC808\uC81C\uD615',
-    standard: '\uD45C\uC900',
+    subtle: '절제형',
+    standard: '표준',
 } as const;
 
 export const POINT_RANK_FIELD_LABELS = {
-    activeThemeId: '\uD65C\uC131 \uD14C\uB9C8',
-    tierThreshold: '\uB4F1\uAE09 \uAE30\uC900 \uD3EC\uC778\uD2B8',
-    tierLabel: '\uB4F1\uAE09 \uC774\uB984',
-    tierShortLabel: '\uC57D\uCE6D',
-    tierDescription: '\uC124\uBA85',
-    badgeStyleToken: '\uBC30\uC9C0 \uC2A4\uD0C0\uC77C',
-    allowedEmojiIds: '\uD5C8\uC6A9 \uC774\uBAA8\uC9C0',
-    addTier: '\uB4F1\uAE09 \uCD94\uAC00',
-    deleteTier: '\uC0AD\uC81C',
-    registryId: '\uC774\uBAA8\uC9C0 ID',
-    registryEmoji: '\uC774\uBAA8\uC9C0',
-    registryLabel: '\uD45C\uC2DC\uBA85',
-    registryCategory: '\uBD84\uB958',
-    registrySortOrder: '\uC815\uB82C\uAC12',
-    registryUnlockTierCode: '\uD574\uC81C \uB4F1\uAE09',
-    registryEnabled: '\uD65C\uC131',
-    addRegistryItem: '\uC774\uBAA8\uC9C0 \uCD94\uAC00',
-    celebrationEnabled: '\uB4F1\uAE09 \uCD95\uD558 \uD6A8\uACFC \uC0AC\uC6A9',
-    celebrationEffectLevel: '\uCD95\uD558 \uAC15\uB3C4',
+    activeThemeId: '활성 테마',
+    tierThreshold: '등급 기준 위스',
+    tierLabel: '등급 이름',
+    tierShortLabel: '약칭',
+    tierDescription: '설명',
+    badgeStyleToken: '배지 스타일',
+    allowedEmojiIds: '허용 이모지',
+    addTier: '등급 추가',
+    deleteTier: '삭제',
+    registryId: '이모지 ID',
+    registryEmoji: '이모지',
+    registryLabel: '표시명',
+    registryCategory: '분류',
+    registrySortOrder: '정렬값',
+    registryUnlockTierCode: '해제 등급',
+    registryEnabled: '활성',
+    addRegistryItem: '이모지 추가',
+    celebrationEnabled: '등급 축하 효과 사용',
+    celebrationEffectLevel: '축하 강도',
 } as const;
 
 export const POINT_RANK_FIELD_HELPERS = {
-    activeThemeId: '\uD604\uC7AC \uC800\uC7A5\uB418\uB294 \uD14C\uB9C8\uC785\uB2C8\uB2E4. \uB098\uBA38\uC9C0 \uD14C\uB9C8\uB294 \uBBF8\uB9AC\uBCF4\uAE30\uC5D0\uC11C \uBE44\uAD50\uD569\uB2C8\uB2E4.',
-    tierThreshold: '\uC785\uB825 \uC911\uC5D0\uB294 \uCE74\uB4DC \uC21C\uC11C\uAC00 \uC720\uC9C0\uB418\uBA70, \uC800\uC7A5 \uC2DC \uAE30\uC900 \uD3EC\uC778\uD2B8 \uC21C\uC11C\uAC00 \uC790\uB3D9\uC73C\uB85C \uC815\uB9AC\uB429\uB2C8\uB2E4.',
-    tierLabel: '\uD654\uBA74\uC5D0 \uBCF4\uC774\uB294 \uC815\uC2DD \uB4F1\uAE09 \uC774\uB984\uC785\uB2C8\uB2E4.',
-    tierShortLabel: '\uB9AC\uC2A4\uD2B8, \uBC30\uC9C0, \uC2A4\uD0C0\uC77C \uD45C\uC2DC\uC5D0 \uC0AC\uC6A9\uD558\uAE30 \uC88B\uC740 \uC57D\uCE6D\uC785\uB2C8\uB2E4.',
-    tierDescription: '\uD604\uC7AC \uB4F1\uAE09\uC774 \uC5B4\uB5A4 \uC758\uBBF8\uC778\uC9C0 \uC124\uBA85\uD569\uB2C8\uB2E4.',
-    badgeStyleToken: '\uBC30\uC9C0 \uC0C9\uC0C1 \uD0A4\uC6CC\uB4DC\uB97C \uC120\uD0DD\uD569\uB2C8\uB2E4.',
-    allowedEmojiIds: '\uC774 \uB4F1\uAE09\uB9CC \uC4F0\uC5D0 \uB3FC \uC788\uB294 \uC774\uBAA8\uC9C0\uB97C \uC120\uD0DD\uD569\uB2C8\uB2E4.',
-    addTier: '\uB4F1\uAE09\uC744 \uCD94\uAC00\uD558\uBA74 \uAE30\uC900 \uD3EC\uC778\uD2B8\uAC00 \uB192\uC740 \uC21C\uC11C\uB85C \uB354\uC90D\uB2C8\uB2E4.',
-    deleteTier: '\uB4F1\uAE09\uC744 \uC0AD\uC81C\uD558\uBA74 \uAD00\uB828 \uD14C\uB9C8 \uBC0F \uC774\uBAA8\uC9C0 \uB3D9\uAE30\uD654\uAC00 \uC81C\uAC70\uB429\uB2C8\uB2E4.',
-    registryId: '\uC774\uBAA8\uC9C0 \uB3D9\uC77C\uC131\uC744 \uC704\uD574 \uACE0\uC720 ID\uB97C \uC0AC\uC6A9\uD569\uB2C8\uB2E4.',
-    registryEmoji: '\uD574\uB2F9 \uB4F1\uAE09\uC744 \uB300\uD45C\uD558\uB294 \uC2E4\uC81C \uC774\uBAA8\uC9C0\uC785\uB2C8\uB2E4.',
-    registryLabel: '\uAD00\uB9AC \uD654\uBA74\uC5D0 \uBCF4\uC77C \uC774\uB984\uC785\uB2C8\uB2E4.',
-    registryCategory: '\uBE44\uC2B7\uD55C \uC774\uBAA8\uC9C0\uB97C \uADF8\uB8F9\uC73C\uB85C \uBAA8\uC558\uC744 \uB54C \uD3B8\uD558\uAC8C \uD569\uB2C8\uB2E4.',
-    registrySortOrder: '\uC774\uBAA8\uC9C0 \uB9AC\uC2A4\uD2B8 \uC21C\uC11C\uB97C \uACB0\uC815\uD569\uB2C8\uB2E4.',
-    registryUnlockTierCode: '\uD574\uB2F9 \uC774\uBAA8\uC9C0\uB97C \uC5B8\uC81C \uC5F4 \uC218 \uC788\uB294\uC9C0 \uC9C0\uC815\uD569\uB2C8\uB2E4.',
-    registryEnabled: '\uBE44\uD65C\uC131\uD654\uD558\uBA74 \uD3B8\uC9D1\uB9CC \uB0A8\uACE0 \uB2E4\uB978 \uD654\uBA74\uC5D0\uC11C\uB294 \uBE60\uC9D1\uB2C8\uB2E4.',
-    addRegistryItem: '\uC0C8 \uC774\uBAA8\uC9C0\uB97C \uCD94\uAC00\uD569\uB2C8\uB2E4.',
-    celebrationEnabled: '\uB4F1\uAE09 \uC0C1\uC2B9 \uC2DC \uD654\uBA74 \uD6A8\uACFC\uB97C \uC0AC\uC6A9\uD569\uB2C8\uB2E4.',
-    celebrationEffectLevel: '\uCD95\uD558 \uD654\uBA74\uC758 \uD654\uB824\uC131\uC744 \uC870\uC808\uD569\uB2C8\uB2E4.',
+    activeThemeId: '현재 저장되는 테마입니다. 나머지 테마는 미리보기에서 비교합니다.',
+    tierThreshold: '편집 중 카드 순서는 유지되고, 저장 시 기준 위스 순서로 자동 정리됩니다.',
+    tierLabel: '화면에 보이는 정식 등급 이름입니다.',
+    tierShortLabel: '리스트, 배지, 짧은 표시에서 쓰기 좋은 약칭입니다.',
+    tierDescription: '현재 등급이 어떤 의미인지 설명합니다.',
+    badgeStyleToken: '배지 색상 키워드를 선택합니다.',
+    allowedEmojiIds: '이 등급에서 처음 열리는 이모지를 선택합니다.',
+    addTier: '등급을 추가하면 기준 위스가 더 높은 단계로 이어집니다.',
+    deleteTier: '등급을 삭제하면 관련 테마와 이모지 연결도 함께 정리됩니다.',
+    registryId: '이모지 동기화를 위해 고유 ID를 사용합니다.',
+    registryEmoji: '해당 등급을 대표하는 실제 이모지입니다.',
+    registryLabel: '관리 화면에 보일 이름입니다.',
+    registryCategory: '비슷한 이모지를 그룹으로 관리할 때 사용합니다.',
+    registrySortOrder: '이모지 표시 순서를 결정합니다.',
+    registryUnlockTierCode: '해당 이모지가 언제 열리는지 지정합니다.',
+    registryEnabled: '비활성화하면 편집만 남고 다른 화면에서는 숨깁니다.',
+    addRegistryItem: '새 이모지를 추가합니다.',
+    celebrationEnabled: '등급 상승 시 학생 화면 축하 효과를 사용합니다.',
+    celebrationEffectLevel: '축하 화면의 연출 강도를 조절합니다.',
 } as const;
 
 export const STUDENT_POINT_TAB_LABELS = {
-    overview: '\uB0B4 \uD3EC\uC778\uD2B8',
-    history: '\uD3EC\uC778\uD2B8 \uB0B4\uC5ED',
-    shop: '\uD3EC\uC778\uD2B8 \uC0C1\uC810',
-    orders: '\uAD6C\uB9E4 \uB0B4\uC5ED',
+    overview: '내 위스',
+    history: '위스 내역',
+    shop: '위스 상점',
+    orders: '구매 내역',
 } as const;
 
 export const POINT_ORDER_STATUS_LABELS: Record<PointOrderStatus, string> = {
-    requested: '\uC694\uCCAD \uC811\uC218',
-    approved: '\uC2B9\uC778 \uC644\uB8CC',
-    rejected: '\uBC18\uB824',
-    fulfilled: '\uC9C0\uAE09 \uC644\uB8CC',
-    cancelled: '\uCDE8\uC18C',
+    requested: '요청 접수',
+    approved: '승인 완료',
+    rejected: '반려',
+    fulfilled: '지급 완료',
+    cancelled: '취소',
 };
 
 export const POINT_TRANSACTION_TYPE_LABELS: Record<PointTransactionType, string> = {
-    attendance: '\uCD9C\uC11D \uCCB4\uD06C',
-    attendance_monthly_bonus: '\uC6D4\uAC04 \uAC1C\uADFC \uBCF4\uB108\uC2A4',
-    quiz: '\uBB38\uC81C \uD480\uC774',
-    lesson: '\uC218\uC5C5 \uC790\uB8CC \uD655\uC778',
-    manual_adjust: '\uAD50\uC0AC \uC9C1\uC811 \uC870\uC815',
-    purchase_hold: '\uAD6C\uB9E4 \uC694\uCCAD',
-    purchase_confirm: '\uAD6C\uB9E4 \uD655\uC815',
-    purchase_cancel: '\uAD6C\uB9E4 \uCDE8\uC18C',
+    attendance: '출석 체크',
+    attendance_monthly_bonus: '월간 개근 보너스',
+    quiz: '문제 풀이',
+    quiz_bonus: '문제 풀이 만점 보너스',
+    lesson: '수업 자료 확인',
+    manual_adjust: '교사 직접 지급',
+    manual_reclaim: '교사 직접 환수',
+    purchase_hold: '구매 요청',
+    purchase_confirm: '구매 확정',
+    purchase_cancel: '구매 취소',
 };
 
 export const POINT_POLICY_FIELD_LABELS: Record<
-    keyof Pick<PointPolicy, 'attendanceDaily' | 'attendanceMonthlyBonus' | 'quizSolve' | 'lessonView' | 'manualAdjustEnabled' | 'allowNegativeBalance'>,
+    keyof Pick<
+        PointPolicy,
+        'attendanceDaily'
+        | 'attendanceMonthlyBonus'
+        | 'quizSolve'
+        | 'lessonView'
+        | 'autoRewardEnabled'
+        | 'quizBonusEnabled'
+        | 'quizBonusThreshold'
+        | 'quizBonusAmount'
+        | 'manualAdjustEnabled'
+        | 'allowNegativeBalance'
+    >,
     string
 > = {
-    attendanceDaily: '\uCD9C\uC11D \uCCB4\uD06C \uD3EC\uC778\uD2B8',
-    attendanceMonthlyBonus: '\uC6D4\uAC04 \uAC1C\uADFC \uBCF4\uB108\uC2A4',
-    quizSolve: '\uBB38\uC81C \uD480\uC774 \uD3EC\uC778\uD2B8',
-    lessonView: '\uC218\uC5C5 \uC790\uB8CC \uD655\uC778 \uD3EC\uC778\uD2B8',
-    manualAdjustEnabled: '\uAD50\uC0AC\uAC00 \uD559\uC0DD\uC5D0\uAC8C \uD3EC\uC778\uD2B8\uB97C \uBD80\uC5EC\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4',
-    allowNegativeBalance: '\uD3EC\uC778\uD2B8 \uBD80\uC871 \uC0C1\uD0DC\uC5D0\uC11C\uB3C4 \uCC28\uAC10 \uD5C8\uC6A9',
+    attendanceDaily: '출석 체크 기본 위스',
+    attendanceMonthlyBonus: '월간 개근 보너스',
+    quizSolve: '문제 풀이 기본 위스',
+    lessonView: '수업 자료 확인 위스',
+    autoRewardEnabled: '자동 지급 정책 활성화',
+    quizBonusEnabled: '문제 풀이 보너스 사용',
+    quizBonusThreshold: '보너스 기준 점수',
+    quizBonusAmount: '보너스 추가 위스',
+    manualAdjustEnabled: '교사 직접 지급 및 환수 허용',
+    allowNegativeBalance: '잔액 부족 상태에서도 차감 허용',
 };
 
 export const POINT_POLICY_FIELD_HELPERS: Record<
-    keyof Pick<PointPolicy, 'attendanceDaily' | 'attendanceMonthlyBonus' | 'quizSolve' | 'lessonView' | 'manualAdjustEnabled' | 'allowNegativeBalance'>,
+    keyof Pick<
+        PointPolicy,
+        'attendanceDaily'
+        | 'attendanceMonthlyBonus'
+        | 'quizSolve'
+        | 'lessonView'
+        | 'autoRewardEnabled'
+        | 'quizBonusEnabled'
+        | 'quizBonusThreshold'
+        | 'quizBonusAmount'
+        | 'manualAdjustEnabled'
+        | 'allowNegativeBalance'
+    >,
     string
 > = {
-    attendanceDaily: '\uD559\uC0DD\uC774 \uD558\uB8E8 \uD55C \uBC88 \uCD9C\uC11D \uCCB4\uD06C\uB97C \uC644\uB8CC\uD588\uC744 \uB54C \uC9C0\uAE09\uB418\uB294 \uAE30\uBCF8 \uD3EC\uC778\uD2B8\uC785\uB2C8\uB2E4.',
-    attendanceMonthlyBonus: '\uD574\uB2F9 \uC6D4\uC758 \uBAA8\uB4E0 \uB0A0\uC9DC\uC5D0 \uCD9C\uC11D\uD55C \uD559\uC0DD\uC5D0\uAC8C \uB9C8\uC9C0\uB9C9 \uCD9C\uC11D \uC2DC\uC810\uC5D0 \uD55C \uBC88\uB9CC \uCD94\uAC00 \uC9C0\uAE09\uB429\uB2C8\uB2E4.',
-    quizSolve: '\uBB38\uC81C \uD480\uC774\uB97C \uC815\uC0C1 \uC81C\uCD9C\uD588\uC744 \uB54C \uC790\uB3D9\uC73C\uB85C \uC801\uB9BD\uB418\uB294 \uD3EC\uC778\uD2B8\uC785\uB2C8\uB2E4.',
-    lessonView: '\uC218\uC5C5 \uC790\uB8CC\uB97C \uCDA9\uBD84\uD788 \uD655\uC778\uD558\uACE0 \uC800\uC7A5\uAE4C\uC9C0 \uB9C8\uCCE4\uC744 \uB54C \uC9C0\uAE09\uB429\uB2C8\uB2E4.',
-    manualAdjustEnabled: '\uB044\uBA74 \uAD50\uC0AC\uC758 \uD3EC\uC778\uD2B8 \uBD80\uC5EC \uAE30\uB2A5\uC774 \uC11C\uBC84\uC5D0\uC11C \uCC28\uB2E8\uB429\uB2C8\uB2E4.',
-    allowNegativeBalance: '\uCF1C\uBA74 \uBCF4\uC720 \uD3EC\uC778\uD2B8\uBCF4\uB2E4 \uB9CE\uC774 \uCC28\uAC10\uD558\uB294 \uC6B4\uC601\uB3C4 \uD5C8\uC6A9\uD569\uB2C8\uB2E4.',
+    attendanceDaily: '학생이 하루 한 번 출석 체크를 완료했을 때 지급되는 기본 위스입니다.',
+    attendanceMonthlyBonus: '해당 월의 모든 날짜에 출석한 학생에게 마지막 출석 시점에 한 번만 추가 지급됩니다.',
+    quizSolve: '문제 풀이를 정상 제출했을 때 자동으로 적립되는 기본 위스입니다.',
+    lessonView: '수업 자료를 충분히 확인하고 저장까지 마쳤을 때 지급됩니다.',
+    autoRewardEnabled: '끄면 출석, 문제 풀이, 수업 자료 확인 자동 지급이 모두 멈춥니다.',
+    quizBonusEnabled: '기본 지급과 별도로 기준 점수 이상일 때 추가 위스를 지급합니다.',
+    quizBonusThreshold: '기본값은 100점이며, 기준 점수 이상부터 보너스를 지급합니다.',
+    quizBonusAmount: '문제 풀이 기본 위스와 별도로 추가 지급할 위스입니다.',
+    manualAdjustEnabled: '끄면 교사의 직접 지급/환수 기능이 서버에서 차단됩니다.',
+    allowNegativeBalance: '켜면 보유 위스보다 많이 환수하는 운영도 허용합니다.',
 };
 
 export const POINT_HISTORY_FILTER_LABELS = {
-    all: '\uC804\uCCB4',
-    earned: '\uC801\uB9BD',
-    spent: '\uC0AC\uC6A9',
-    attendance: '\uCD9C\uC11D',
-    attendance_monthly_bonus: '\uC6D4\uAC04 \uAC1C\uADFC \uBCF4\uB108\uC2A4',
-    quiz: '\uBB38\uC81C \uD480\uC774',
-    lesson: '\uC218\uC5C5 \uC790\uB8CC',
-    manual_adjust: '\uAD50\uC0AC \uC870\uC815',
-    purchase: '\uAD6C\uB9E4 \uAD00\uB828',
+    all: '전체',
+    earned: '적립',
+    spent: '사용',
+    attendance: '출석',
+    attendance_monthly_bonus: '월간 개근 보너스',
+    quiz: '문제 풀이',
+    quiz_bonus: '문제 풀이 보너스',
+    lesson: '수업 자료',
+    manual_adjust: '교사 지급',
+    manual_reclaim: '교사 환수',
+    purchase: '구매 관련',
 } as const;
 
 export const getPointDeltaToneClass = (delta: number) => (
@@ -149,11 +185,11 @@ export const getPointDeltaToneClass = (delta: number) => (
 );
 
 export const getPointFeedbackToneClass = (message: string) => (
-    message.includes('\uC2E4\uD328')
-    || message.includes('\uC624\uB958')
-    || message.includes('\uBD80\uC871')
-    || message.includes('\uC5C6\uC2B5\uB2C8\uB2E4')
-    || message.includes('\uC785\uB825')
+    message.includes('실패')
+    || message.includes('오류')
+    || message.includes('부족')
+    || message.includes('없습니다')
+    || message.includes('입력')
         ? 'border border-red-200 bg-red-50 text-red-700'
         : 'border border-emerald-200 bg-emerald-50 text-emerald-700'
 );

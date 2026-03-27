@@ -40,10 +40,12 @@ import {
     getPointRankEmojiEntryById,
     getPointRankEmojiEntryByValue,
     getPointRankEmojiRegistry,
+    getPointRankTierDisplayItems,
     getPointRankTierMeta,
     getPointRankUnlockTierCodeForEmoji,
     needsPointRankLegacyFallback,
 } from '../../lib/pointRanks';
+import { formatWisAmount } from '../../lib/pointFormatters';
 import { getDefaultProfileEmojiValue } from '../../lib/profileEmojis';
 import { getSemesterCollectionPath } from '../../lib/semesterScope';
 import type { PointPolicy, PointWallet } from '../../types';
@@ -265,7 +267,9 @@ const MyPage: React.FC = () => {
     const [profile, setProfile] = useState<UserProfileDoc | null>(null);
     const [profileIcon, setProfileIcon] = useState('😀');
     const [iconModalOpen, setIconModalOpen] = useState(false);
+    const [rankModalOpen, setRankModalOpen] = useState(false);
     const [savingIcon, setSavingIcon] = useState(false);
+    const [openEmojiTierCodes, setOpenEmojiTierCodes] = useState<string[]>([]);
     const [pointPolicy, setPointPolicy] = useState<PointPolicy>(POINT_POLICY_FALLBACK);
     const [pointWallet, setPointWallet] = useState<PointWallet | null>(null);
     const [rankManualAdjustPoints, setRankManualAdjustPoints] = useState(0);
@@ -609,6 +613,20 @@ const MyPage: React.FC = () => {
             selected: selectedEmojiEntry?.id === entry.id,
         };
     }), [allowedEmojiIds, orderedEmojiEntries, pointPolicy.rankPolicy, selectedEmojiEntry?.id]);
+    const rankGuideItems = useMemo(
+        () => getPointRankTierDisplayItems(pointPolicy.rankPolicy, { descending: true }).map((item) => ({
+            ...item,
+            isCurrent: currentRank?.tierCode === item.code,
+        })),
+        [currentRank?.tierCode, pointPolicy.rankPolicy],
+    );
+    const emojiGroups = useMemo(
+        () => rankGuideItems.map((item) => ({
+            ...item,
+            entries: emojiCards.filter((card) => card.unlockTierCode === item.code),
+        })),
+        [emojiCards, rankGuideItems],
+    );
 
     useEffect(() => {
         const storedProfileIcon = String(profile?.profileIcon || userData?.profileIcon || '').trim();
@@ -622,6 +640,12 @@ const MyPage: React.FC = () => {
         }
         setProfileIcon(defaultProfileEmojiValue);
     }, [defaultProfileEmojiValue, profile?.profileIcon, selectedEmojiEntry?.emoji, userData?.profileIcon]);
+
+    useEffect(() => {
+        if (!iconModalOpen) return;
+        const defaultTierCode = currentRank?.tierCode || emojiGroups[0]?.code || '';
+        setOpenEmojiTierCodes(defaultTierCode ? [defaultTierCode] : []);
+    }, [currentRank?.tierCode, emojiGroups, iconModalOpen]);
 
     const saveGoal = async () => {
         if (!user) return;
@@ -662,6 +686,14 @@ const MyPage: React.FC = () => {
         } finally {
             setSavingIcon(false);
         }
+    };
+
+    const toggleEmojiTierGroup = (tierCode: string) => {
+        setOpenEmojiTierCodes((prev) => (
+            prev.includes(tierCode)
+                ? prev.filter((code) => code !== tierCode)
+                : [...prev, tierCode]
+        ));
     };
 
     const filteredWrongItems = useMemo(
@@ -937,33 +969,53 @@ const MyPage: React.FC = () => {
                         {menu === 'profile' && (
                             <div className="space-y-6">
                                 <h2 className="text-2xl font-bold text-gray-800">나의 기본 정보</h2>
-                                <div className="rounded-2xl bg-gradient-to-br from-blue-600 via-blue-500 to-indigo-500 text-white p-6 md:p-7 shadow-lg">
-                                    <div className="flex items-center gap-5">
-                                    <div className="w-24 h-24 rounded-full bg-white/20 backdrop-blur-sm text-4xl flex items-center justify-center relative border border-white/40">
-                                        {displayProfileIcon}
-                                        <button
-                                            type="button"
-                                            onClick={() => setIconModalOpen(true)}
-                                            className="absolute -bottom-1 -right-1 w-8 h-8 bg-white border border-blue-100 rounded-full text-xs text-blue-700 font-bold"
-                                        >
-                                            변경
-                                        </button>
-                                    </div>
-                                    <div>
-                                            <div className="flex flex-wrap items-center gap-2">
-                                                <div className="text-2xl font-extrabold tracking-tight">{profile?.name || userData?.name || '학생'}</div>
-                                                {currentRank && <PointRankBadge rank={currentRank} size="sm" className="border-white/30 bg-white/15 text-white" />}
-                                            </div>
-                                            <div className="mt-2 text-2xl md:text-3xl font-black tracking-tight">
+                                <div className="rounded-2xl bg-gradient-to-br from-blue-600 via-blue-500 to-indigo-500 p-6 text-white shadow-lg md:p-7">
+                                    <div className="grid gap-5 xl:grid-cols-[auto_minmax(0,1fr)_minmax(240px,280px)] xl:items-center">
+                                        <div className="relative flex h-24 w-24 items-center justify-center rounded-full border border-white/40 bg-white/20 text-4xl backdrop-blur-sm">
+                                            {displayProfileIcon}
+                                            <button
+                                                type="button"
+                                                onClick={() => setIconModalOpen(true)}
+                                                className="absolute -bottom-1 -right-1 inline-flex h-8 min-w-8 items-center justify-center whitespace-nowrap rounded-full border border-blue-100 bg-white px-2 text-[11px] font-bold text-blue-700"
+                                            >
+                                                변경
+                                            </button>
+                                        </div>
+
+                                        <div className="min-w-0">
+                                            <div className="text-2xl font-extrabold tracking-tight">{profile?.name || userData?.name || '학생'}</div>
+                                            <div className="mt-2 text-2xl font-black tracking-tight md:text-3xl">
                                                 <span>{withSuffix(profileGradeLabel, '학년')}</span>
                                                 <span className="mx-2 opacity-80">·</span>
                                                 <span>{withSuffix(profileClassLabel, '반')}</span>
                                                 <span className="mx-2 opacity-80">·</span>
                                                 <span>{profileNumberValue}번</span>
                                             </div>
-                                        <div className="mt-2 text-sm text-blue-100">학년, 반, 번호 정보와 현재 등급이 함께 표시됩니다.</div>
+                                            <div className="mt-3 text-sm text-blue-100">프로필 아이콘은 현재 등급에서 해금된 이모지로만 다시 선택할 수 있습니다.</div>
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => setRankModalOpen(true)}
+                                            className="rounded-2xl border border-white/30 bg-white/12 p-4 text-left backdrop-blur-sm transition hover:bg-white/18"
+                                        >
+                                            <div className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-100">현재 등급</div>
+                                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                                                {currentRank ? (
+                                                    <PointRankBadge rank={currentRank} size="md" className="border-white/30 bg-white/15 text-white" />
+                                                ) : (
+                                                    <span className="inline-flex whitespace-nowrap rounded-full border border-white/30 bg-white/10 px-3 py-1 text-sm font-bold text-white">등급 계산 중</span>
+                                                )}
+                                                <span className="inline-flex whitespace-nowrap rounded-full border border-white/25 bg-white/10 px-3 py-1 text-xs font-bold text-blue-50">
+                                                    누적 {formatWisAmount(currentRank?.metricValue || 0)}
+                                                </span>
+                                            </div>
+                                            <div className="mt-3 text-sm leading-6 text-blue-50">
+                                                {currentRank?.description || '등급 설명을 확인할 수 있습니다.'}
+                                            </div>
+                                            <div className="mt-3 text-xs font-bold text-blue-100 whitespace-nowrap">등급 설명 전체 보기</div>
+                                        </button>
                                     </div>
-                                </div>
                                 </div>
                             </div>
                         )}
@@ -1351,56 +1403,154 @@ const MyPage: React.FC = () => {
                 </section>
             </main>
 
-            {iconModalOpen && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={() => setIconModalOpen(false)}>
-                    <div className="bg-white rounded-2xl shadow-xl p-5 w-full max-w-md" onClick={(event) => event.stopPropagation()}>
-                        <div className="flex items-center justify-between mb-3">
-                            <h3 className="font-bold text-gray-800">프로필 아이콘 선택</h3>
-                            <button type="button" onClick={() => setIconModalOpen(false)} className="text-gray-400 hover:text-gray-600">
-                                <i className="fas fa-times"></i>
+            {rankModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setRankModalOpen(false)}>
+                    <div className="w-full max-w-3xl rounded-[1.9rem] bg-white p-5 shadow-2xl sm:p-6" onClick={(event) => event.stopPropagation()}>
+                        <div className="flex items-start justify-between gap-4 border-b border-gray-100 pb-4">
+                            <div>
+                                <h3 className="text-lg font-bold text-gray-900">등급 설명</h3>
+                                <p className="mt-1 text-sm text-gray-500">높은 등급부터 내려가며 현재 테마 기준 설명을 확인할 수 있습니다.</p>
+                            </div>
+                            <button type="button" onClick={() => setRankModalOpen(false)} className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition hover:bg-gray-50" aria-label="등급 설명 닫기">
+                                <i className="fas fa-times text-sm" aria-hidden="true"></i>
                             </button>
                         </div>
-                        <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+
+                        <div className="mt-5 space-y-3">
+                            {rankGuideItems.map((item) => (
+                                <article
+                                    key={item.code}
+                                    className={`rounded-2xl border px-4 py-4 ${
+                                        item.isCurrent
+                                            ? 'border-blue-200 bg-blue-50/60 ring-1 ring-blue-100'
+                                            : 'border-gray-200 bg-gray-50/60'
+                                    }`}
+                                >
+                                    <div className="flex flex-wrap items-center justify-between gap-3">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <span className={`inline-flex whitespace-nowrap rounded-full px-3 py-1 text-sm font-bold ${item.badgeClass}`}>
+                                                {item.label}
+                                            </span>
+                                            {item.isCurrent && (
+                                                <span className="inline-flex whitespace-nowrap rounded-full border border-blue-200 bg-white px-3 py-1 text-xs font-bold text-blue-700">
+                                                    내 현재 등급
+                                                </span>
+                                            )}
+                                        </div>
+                                        <span className="inline-flex whitespace-nowrap rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-bold text-gray-600">
+                                            기준 누적 {formatWisAmount(item.minPoints)}
+                                        </span>
+                                    </div>
+                                    <p className="mt-3 text-sm leading-6 text-gray-600">{item.description}</p>
+                                </article>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {iconModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setIconModalOpen(false)}>
+                    <div className="w-full max-w-4xl rounded-[1.9rem] bg-white p-5 shadow-2xl sm:p-6" onClick={(event) => event.stopPropagation()}>
+                        <div className="flex items-start justify-between gap-4 border-b border-gray-100 pb-4">
+                            <div>
+                                <h3 className="text-lg font-bold text-gray-900">프로필 아이콘 선택</h3>
+                                <p className="mt-1 text-sm text-gray-500">등급별로 해금되는 이모지를 확인하고 현재 프로필 아이콘을 선택할 수 있습니다.</p>
+                            </div>
+                            <button type="button" onClick={() => setIconModalOpen(false)} className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition hover:bg-gray-50" aria-label="프로필 아이콘 선택 닫기">
+                                <i className="fas fa-times text-sm" aria-hidden="true"></i>
+                            </button>
+                        </div>
+
+                        <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4">
                             <div className="flex flex-wrap items-center gap-2">
                                 <span className="text-sm font-bold text-gray-700">현재 등급</span>
                                 {currentRank && <PointRankBadge rank={currentRank} size="sm" />}
                                 <span className="text-xs text-gray-500">{`선택 가능 ${allowedEmojiIds.length}개 / 전체 ${emojiCards.length}개`}</span>
                             </div>
                             <div className="mt-2 text-xs leading-5 text-gray-500">
-                                잠금 아이콘은 더 높은 등급에서 열립니다. 이미 쓰고 있는 아이콘은 바로 깨지지 않지만, 잠긴 아이콘은 다시 선택할 수 없습니다.
+                                잠금 이모지는 더 높은 등급에서 열립니다. 이미 쓰고 있는 잠금 이모지는 바로 깨지지 않지만, 다른 아이콘으로 바꾸면 다시 선택할 수 없습니다.
                             </div>
                         </div>
+
                         {(hasLegacySelectedEmoji || (selectedEmojiEntry && !selectedEmojiAllowed)) && (
-                            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                            <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                                 <span className="mr-2 text-lg leading-none">{displayProfileIcon}</span>
                                 현재 사용 중인 아이콘은 지금 정책으로는 다시 선택할 수 없습니다. 다른 아이콘으로 바꾸면 이전 아이콘으로 되돌릴 수 없어요.
                             </div>
                         )}
-                        <div className="grid grid-cols-5 gap-2">
-                            {emojiCards.map(({ entry, unlockTierLabel, unlocked, selected }) => (
-                                <button
-                                    key={entry.id}
-                                    type="button"
-                                    disabled={savingIcon || !unlocked}
-                                    onClick={() => void saveProfileIcon(entry.id)}
-                                    title={unlocked ? entry.label : `${unlockTierLabel}에서 해금`}
-                                    className={`relative h-12 rounded border text-2xl transition ${
-                                        selected
-                                            ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-200'
-                                            : unlocked
-                                                ? 'border-gray-200 hover:bg-gray-50'
-                                                : 'cursor-not-allowed border-gray-200 bg-gray-100 text-gray-300'
-                                    }`}
-                                    aria-label={unlocked ? `${entry.label} 아이콘 선택` : `${unlockTierLabel} 등급에서 열리는 잠금 아이콘`}
-                                >
-                                    {entry.value}
-                                    {!unlocked && (
-                                        <span className="absolute right-1 top-1 text-[10px] text-gray-500">
-                                            <i className="fas fa-lock"></i>
-                                        </span>
-                                    )}
-                                </button>
-                            ))}
+
+                        <div className="mt-4 space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+                            {emojiGroups.map((group, groupIndex) => {
+                                const isOpen = openEmojiTierCodes.includes(group.code) || (groupIndex === 0 && openEmojiTierCodes.length === 0);
+                                return (
+                                    <article key={group.code} className="overflow-hidden rounded-2xl border border-gray-200">
+                                        <button
+                                            type="button"
+                                            onClick={() => toggleEmojiTierGroup(group.code)}
+                                            className="flex w-full flex-wrap items-center justify-between gap-3 bg-gray-50/80 px-4 py-3 text-left transition hover:bg-gray-100/80"
+                                        >
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <span className={`inline-flex whitespace-nowrap rounded-full px-3 py-1 text-sm font-bold ${group.badgeClass}`}>
+                                                    {group.label}
+                                                </span>
+                                                {currentRank?.tierCode === group.code && (
+                                                    <span className="inline-flex whitespace-nowrap rounded-full border border-blue-200 bg-white px-3 py-1 text-xs font-bold text-blue-700">
+                                                        현재 등급
+                                                    </span>
+                                                )}
+                                                <span className="inline-flex whitespace-nowrap rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-bold text-gray-600">
+                                                    해금 {group.entries.filter((entry) => entry.unlocked).length}개 / 전체 {group.entries.length}개
+                                                </span>
+                                            </div>
+                                            <div className="inline-flex items-center gap-2 text-xs font-bold text-gray-500 whitespace-nowrap">
+                                                <span>{isOpen ? '접기' : '펼치기'}</span>
+                                                <i className={`fas ${isOpen ? 'fa-chevron-up' : 'fa-chevron-down'} text-[10px]`} aria-hidden="true"></i>
+                                            </div>
+                                        </button>
+
+                                        {isOpen && (
+                                            <div className="p-4">
+                                                {group.entries.length === 0 ? (
+                                                    <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">
+                                                        이 등급에서 해금되는 이모지가 아직 없습니다.
+                                                    </div>
+                                                ) : (
+                                                    <div className="grid grid-cols-4 gap-3 sm:grid-cols-5 lg:grid-cols-6">
+                                                        {group.entries.map(({ entry, unlockTierLabel, unlocked, selected }) => (
+                                                            <button
+                                                                key={entry.id}
+                                                                type="button"
+                                                                disabled={savingIcon || !unlocked}
+                                                                onClick={() => void saveProfileIcon(entry.id)}
+                                                                title={unlocked ? entry.label : `${unlockTierLabel}에서 해금`}
+                                                                className={`relative flex h-16 flex-col items-center justify-center rounded-2xl border text-2xl transition ${
+                                                                    selected
+                                                                        ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-200'
+                                                                        : unlocked
+                                                                            ? 'border-gray-200 hover:bg-gray-50'
+                                                                            : 'cursor-not-allowed border-gray-200 bg-gray-100 text-gray-300'
+                                                                }`}
+                                                                aria-label={unlocked ? `${entry.label} 아이콘 선택` : `${unlockTierLabel} 등급에서 열리는 잠금 아이콘`}
+                                                            >
+                                                                <span className="leading-none">{entry.value}</span>
+                                                                {selected && (
+                                                                    <span className="mt-1 text-[10px] font-bold text-blue-700 whitespace-nowrap">선택됨</span>
+                                                                )}
+                                                                {!unlocked && (
+                                                                    <span className="absolute right-2 top-2 text-[10px] text-gray-500">
+                                                                        <i className="fas fa-lock"></i>
+                                                                    </span>
+                                                                )}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </article>
+                                );
+                            })}
                         </div>
                     </div>
                 </div>

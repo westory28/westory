@@ -1,6 +1,6 @@
 import React from 'react';
 import { POINT_ORDER_STATUS_LABELS } from '../../../../constants/pointLabels';
-import { formatPointDateTime } from '../../../../lib/pointFormatters';
+import { formatPointDateTime, formatWisAmount } from '../../../../lib/pointFormatters';
 import type { PointOrder, PointOrderStatus } from '../../../../types';
 
 interface StudentPointOrdersTabProps {
@@ -65,8 +65,8 @@ const StudentPointOrdersTab: React.FC<StudentPointOrdersTabProps> = ({ orderFilt
                                 </div>
                             </div>
                             <div className="text-right">
-                                <div className="text-xs font-bold text-gray-400">{'\uC0AC\uC6A9 \uD3EC\uC778\uD2B8'}</div>
-                                <div className="text-2xl font-black text-blue-700">{order.priceSnapshot}</div>
+                                <div className="text-xs font-bold text-gray-400">사용 위스</div>
+                                <div className="text-2xl font-black text-blue-700 whitespace-nowrap">{formatWisAmount(order.priceSnapshot)}</div>
                             </div>
                         </div>
                         <div className="mt-4 grid grid-cols-1 gap-3 text-sm md:grid-cols-2">

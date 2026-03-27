@@ -58,8 +58,10 @@ export type PointTransactionType =
   | "attendance"
   | "attendance_monthly_bonus"
   | "quiz"
+  | "quiz_bonus"
   | "lesson"
   | "manual_adjust"
+  | "manual_reclaim"
   | "purchase_hold"
   | "purchase_confirm"
   | "purchase_cancel";
@@ -222,13 +224,44 @@ export interface PointWalletRankSnapshot {
   updatedAt?: any;
 }
 
+export interface PointPolicyRewardRule {
+  enabled: boolean;
+  amount: number;
+}
+
+export interface PointPolicyQuizBonusRule {
+  enabled: boolean;
+  thresholdScore: number;
+  amount: number;
+}
+
+export interface PointRewardPolicy {
+  autoEnabled: boolean;
+  attendance: PointPolicyRewardRule;
+  quiz: PointPolicyRewardRule;
+  lesson: PointPolicyRewardRule;
+  attendanceMonthlyBonus: PointPolicyRewardRule;
+  quizBonus: PointPolicyQuizBonusRule;
+}
+
+export interface PointControlPolicy {
+  manualAdjustEnabled: boolean;
+  allowNegativeBalance: boolean;
+}
+
 export interface PointPolicy {
   attendanceDaily: number;
   attendanceMonthlyBonus: number;
   lessonView: number;
   quizSolve: number;
+  autoRewardEnabled: boolean;
+  quizBonusEnabled: boolean;
+  quizBonusThreshold: number;
+  quizBonusAmount: number;
   manualAdjustEnabled: boolean;
   allowNegativeBalance: boolean;
+  rewardPolicy: PointRewardPolicy;
+  controlPolicy: PointControlPolicy;
   rankPolicy: PointRankPolicy;
   updatedAt?: any;
   updatedBy: string;

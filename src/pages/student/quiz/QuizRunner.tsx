@@ -312,16 +312,21 @@ const QuizRunner: React.FC = () => {
                         sourceId: `quiz-result-${resultRef.id}`,
                         sourceLabel: title || '문제 풀이 완료',
                     });
-                    if (pointResult.awarded && pointResult.amount > 0) {
-                        setPointNotice(`문제 풀이 포인트가 적립되었습니다. +${pointResult.amount}포인트`);
+                    if ((pointResult.totalAwarded || pointResult.amount) > 0) {
+                        const totalAwarded = Number(pointResult.totalAwarded || pointResult.amount || 0);
+                        if (pointResult.bonusAwarded && pointResult.bonusAmount) {
+                            setPointNotice(`문제 풀이 위스가 적립되었습니다. 기본 +${pointResult.amount}위스, 보너스 +${pointResult.bonusAmount}위스`);
+                        } else {
+                            setPointNotice(`문제 풀이 위스가 적립되었습니다. +${totalAwarded}위스`);
+                        }
                     } else if (pointResult.duplicate) {
-                        setPointNotice('이번 문제 풀이 포인트는 이미 반영되었습니다.');
+                        setPointNotice('이번 문제 풀이 위스는 이미 반영되었습니다.');
                     } else {
                         setPointNotice('');
                     }
                 } catch (pointError) {
                     console.error('Failed to claim quiz point reward', pointError);
-                    setPointNotice('문제 풀이 포인트를 바로 반영하지 못했습니다.');
+                    setPointNotice('문제 풀이 위스를 바로 반영하지 못했습니다.');
                 }
             } catch (e) {
                 console.error("Failed to save result", e);
