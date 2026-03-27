@@ -507,10 +507,21 @@ const Login: React.FC = () => {
     const redirectHandledRef = useRef(false);
     const autoResumeUidRef = useRef<string | null>(null);
     const authActionLockRef = useRef(false);
-
     const preferredRole = getSavedRole();
     const canUseTeacherPortal = canAccessTeacherPortal(userData, currentUser?.email || '');
     const isTeacherUser = preferredRole === 'teacher' || canUseTeacherPortal;
+
+    const hasResolvedStudentEntry = (uid?: string | null) => {
+        const targetUid = uid || currentUser?.uid || auth.currentUser?.uid || null;
+        if (!targetUid) return false;
+
+        if (userData?.uid === targetUid && isReturningConfirmedStudent(userData)) {
+            return true;
+        }
+
+        if (typeof window === 'undefined') return false;
+        return /^#\/student(?:\/|$)/.test(window.location.hash || '');
+    };
 
     const forceRoute = (targetPath: string) => {
         navigate(targetPath, { replace: true });
@@ -604,6 +615,30 @@ const Login: React.FC = () => {
             }
         };
     }, []);
+
+    useEffect(() => {
+        const pending = pendingStudentBootstrapFailureRef.current;
+        if (!pending) return;
+        if (loading || authBusy || redirectRecoveryPending) return;
+
+        if (!currentUser || currentUser.uid !== pending.uid) {
+            pendingStudentBootstrapFailureRef.current = null;
+            alert(pending.message);
+            return;
+        }
+
+        if (hasResolvedStudentEntry(pending.uid)) {
+            clearPendingStudentBootstrapFailure(pending.uid);
+            return;
+        }
+
+        if (!userData || userData.uid !== pending.uid) {
+            return;
+        }
+
+        clearPendingStudentBootstrapFailure(pending.uid);
+        alert(pending.message);
+    }, [authBusy, currentUser, loading, redirectRecoveryPending, userData]);
 
     const openProfileModal = (initial: StudentProfileForm): Promise<StudentProfileForm | null> => {
         const normalizedNumber = normalizeSchoolField(initial.number);
@@ -916,10 +951,15 @@ const Login: React.FC = () => {
             lastLogin: serverTimestamp(),
         };
 
-        if (!existing || nextRole !== 'student' || hasOwnField(existing, 'staffPermissions')) {
+        // Existing student docs may carry protected teacher portal flags from an
+        // older state. Students cannot clear those fields themselves, so
+        // rewriting them here turns a successful login into a false
+        // permission-denied alert. Mirror the auto-resume path and only write
+        // these fields for non-students or first-time student docs.
+        if (!existing || nextRole !== 'student') {
             basePayload.staffPermissions = nextStaffPermissions;
         }
-        if (!existing || nextRole !== 'student' || hasOwnField(existing, 'teacherPortalEnabled')) {
+        if (!existing || nextRole !== 'student') {
             basePayload.teacherPortalEnabled = nextTeacherPortalEnabled;
         }
 
@@ -1002,6 +1042,7 @@ const Login: React.FC = () => {
             'westory-login-first-route-decided',
         );
         autoResumeUidRef.current = user.uid;
+        clearPendingStudentBootstrapFailure(user.uid);
         forceRoute(targetPath);
 
         if (userSnap.exists() && !requiresBlockingWrite) {
@@ -1069,7 +1110,16 @@ const Login: React.FC = () => {
                     const effectiveMode: LoginMode = savedMode
                         || redirectMode
                         || (recoveredUser.email === TEACHER_EMAIL ? 'teacher' : 'student');
-                    await finishLoginForRole(recoveredUser, effectiveMode);
+                    try {
+                        await finishLoginForRole(recoveredUser, effectiveMode);
+                    } catch (resumeError) {
+                        if (shouldDeferStudentBootstrapAlert(effectiveMode, recoveredUser, resumeError)) {
+                            clearRedirectAttempt();
+                            clearPendingLoginMode();
+                            return;
+                        }
+                        throw resumeError;
+                    }
                     clearRedirectAttempt();
                     setLoginNotice('');
                     markLoginPerf('westory-login-redirect-resume-end', {
@@ -1253,6 +1303,7 @@ const Login: React.FC = () => {
                 'westory-login-bootstrap-start',
                 'westory-login-first-route-decided',
             );
+            clearPendingStudentBootstrapFailure(currentUser.uid);
             forceRoute('/student/dashboard');
 
             if (userDocExists && !requiresBlockingWrite) {
@@ -1262,7 +1313,10 @@ const Login: React.FC = () => {
             console.error('Failed to continue student onboarding', error);
             clearPendingLoginMode();
             clearRedirectAttempt();
-            alert(getStudentBootstrapFailureMessage(error));
+            if (shouldDeferStudentBootstrapAlert('student', currentUser, error)) {
+                return;
+            }
+            alert(consumeStudentBootstrapFailureMessage(currentUser.uid, error));
         } finally {
             authActionLockRef.current = false;
             setAuthBusy(false);
@@ -1304,6 +1358,9 @@ const Login: React.FC = () => {
             console.error('Login failed', error);
             clearPendingLoginMode();
             clearRedirectAttempt();
+            if (shouldDeferStudentBootstrapAlert(mode, auth.currentUser, error)) {
+                return;
+            }
             alert(getLoginFailureMessage(error));
         } finally {
             authActionLockRef.current = false;
@@ -1341,6 +1398,7 @@ const Login: React.FC = () => {
         clearRoleCache();
         clearPendingLoginMode();
         clearRedirectAttempt();
+        clearPendingStudentBootstrapFailure();
         setLoginNotice('');
         autoResumeUidRef.current = null;
 
