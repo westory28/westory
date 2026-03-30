@@ -47,6 +47,9 @@
 }
 
 .student-calendar-section .student-calendar-event-chip {
+  display: block;
+  width: 100%;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -559,11 +562,16 @@
   .fc
   .fc-daygrid-event-harness {
   margin-top: 0 !important;
+  width: 100%;
+  min-width: 0;
 }
 
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
   .fc
   .fc-daygrid-event {
+  display: block;
+  width: 100%;
+  min-width: 0;
   margin: 0 !important;
   border-radius: 0.45rem;
   font-size: 0.74rem;
