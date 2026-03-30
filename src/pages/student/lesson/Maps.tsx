@@ -1,9 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { collection, getDocs, orderBy, query } from 'firebase/firestore';
+import { useAppToast } from '../../../components/common/AppToastProvider';
 import MapSidebar from '../../../components/common/MapSidebar';
 import MapViewer from '../../../components/common/MapViewer';
 import { useAuth } from '../../../contexts/AuthContext';
+import { notifyPointsUpdated } from '../../../lib/appEvents';
 import { db } from '../../../lib/firebase';
+import {
+    buildMapTagRewardSourceId,
+    claimPointActivityReward,
+} from '../../../lib/points';
 import {
     groupMapResourcesForDisplay,
     getGoogleMapsExternalUrl,
@@ -21,11 +27,13 @@ const getPreferredMapGroup = <T extends { key: string; title: string; items: Arr
 
 const StudentMaps: React.FC = () => {
     const { config } = useAuth();
+    const { showToast } = useAppToast();
     const [items, setItems] = useState<MapResource[]>([]);
     const [selectedGroupKey, setSelectedGroupKey] = useState('');
     const [selectedId, setSelectedId] = useState('');
     const [loading, setLoading] = useState(true);
     const [googleSearchQuery, setGoogleSearchQuery] = useState('');
+    const [mapRewardPending, setMapRewardPending] = useState(false);
 
     const displayGroups = useMemo(() => groupMapResourcesForDisplay(items), [items]);
     const groupMap = useMemo(
@@ -110,6 +118,45 @@ const StudentMaps: React.FC = () => {
         ? (selectedItem.externalUrl || getGoogleMapsExternalUrl(googleSearchQuery || selectedItem.googleQuery || ''))
         : (selectedItem?.externalUrl || selectedItem?.fileUrl || '');
 
+    const handleModalTagClick = async (tag: string) => {
+        if (!selectedItem || mapRewardPending) return;
+        setMapRewardPending(true);
+        try {
+            const pointResult = await claimPointActivityReward({
+                config,
+                activityType: 'map_tag',
+                sourceId: buildMapTagRewardSourceId(selectedItem.id, tag),
+                sourceLabel: `${currentGroup?.title || selectedItem.title} · ${tag} 태그 탐색`,
+            });
+            if (pointResult.awarded && (pointResult.totalAwarded || pointResult.amount)) {
+                notifyPointsUpdated();
+            }
+            if ((pointResult.totalAwarded || pointResult.amount) > 0) {
+                const totalAwarded = Number(pointResult.totalAwarded || pointResult.amount || 0);
+                showToast({
+                    tone: 'success',
+                    title: '지도 태그 탐색 완료',
+                    message: `+${totalAwarded}위스가 반영되었습니다.`,
+                });
+            } else if (pointResult.duplicate) {
+                const duplicateMessage = pointResult.blockedMessage || '이번 지도 태그 위스는 이미 반영되었습니다.';
+                showToast({
+                    tone: 'info',
+                    title: duplicateMessage,
+                });
+            }
+        } catch (error) {
+            console.error('Failed to claim map tag reward:', error);
+            showToast({
+                tone: 'warning',
+                title: '지도 탐색은 완료되었습니다.',
+                message: '위스 반영 상태를 바로 확인하지 못했습니다.',
+            });
+        } finally {
+            setMapRewardPending(false);
+        }
+    };
+
     return (
         <div className="flex min-h-screen flex-col bg-gray-50">
             <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-5 p-4 sm:gap-6 sm:p-6 lg:flex-row lg:gap-8 lg:p-10">
@@ -183,6 +230,7 @@ const StudentMaps: React.FC = () => {
                                     item={selectedItem}
                                     googleSearchQuery={selectedItem.type === 'google' ? googleSearchQuery : undefined}
                                     onGoogleSearchQueryChange={selectedItem.type === 'google' ? setGoogleSearchQuery : undefined}
+                                    onModalTagClick={selectedItem.type === 'pdf' ? handleModalTagClick : undefined}
                                     showShell={false}
                                 />
                             </div>

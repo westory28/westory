@@ -12,7 +12,10 @@ import {
     type HistoryClassroomAssignment,
 } from '../../../lib/historyClassroom';
 import { getSemesterCollectionPath, getSemesterDocPath } from '../../../lib/semesterScope';
-import { claimPointActivityReward } from '../../../lib/points';
+import {
+    buildHistoryClassroomRewardSourceId,
+    claimPointActivityReward,
+} from '../../../lib/points';
 
 const BLANK_SCALE = 1;
 const HISTORY_CLASSROOM_LOCK_PREFIX = 'westoryHistoryClassroomLock';
@@ -184,12 +187,13 @@ const HistoryClassroomRunner: React.FC = () => {
         return { score, total, percent, status, passed, resultId: resultRef.id };
     };
 
-    const applyQuizPointReward = async (resultId: string) => {
+    const applyHistoryClassroomPointReward = async (resultId: string, percent: number) => {
         try {
             const pointResult = await claimPointActivityReward({
                 config,
-                activityType: 'quiz',
-                sourceId: `history-classroom-${resultId}`,
+                activityType: 'history_classroom',
+                sourceId: buildHistoryClassroomRewardSourceId(resultId),
+                score: percent,
                 sourceLabel: assignment?.title || '역사교실 제출 완료',
             });
             if (pointResult.awarded && (pointResult.totalAwarded || pointResult.amount)) {
@@ -198,32 +202,42 @@ const HistoryClassroomRunner: React.FC = () => {
             if ((pointResult.totalAwarded || pointResult.amount) > 0) {
                 const totalAwarded = Number(pointResult.totalAwarded || pointResult.amount || 0);
                 if (pointResult.bonusAwarded && pointResult.bonusAmount) {
-                    setPointNotice(`문제 풀이 위스가 적립되었습니다. 기본 +${pointResult.amount}위스, 보너스 +${pointResult.bonusAmount}위스`);
+                    if (Number(pointResult.amount || 0) <= 0) {
+                        setPointNotice(`역사교실 성과 보너스 +${pointResult.bonusAmount}위스가 반영되었습니다.`);
+                        showToast({
+                            tone: 'success',
+                            title: '역사교실 제출 완료',
+                            message: `성과 보너스 +${pointResult.bonusAmount}위스가 반영되었습니다.`,
+                        });
+                        return;
+                    }
+                    setPointNotice(`역사교실 위스가 적립되었습니다. 기본 +${pointResult.amount}위스, 보너스 +${pointResult.bonusAmount}위스`);
                     showToast({
                         tone: 'success',
                         title: '역사교실 제출 완료',
                         message: `기본 +${pointResult.amount}위스, 보너스 +${pointResult.bonusAmount}위스가 반영되었습니다.`,
                     });
                 } else {
-                    setPointNotice(`문제 풀이 위스가 적립되었습니다. +${totalAwarded}위스`);
+                    setPointNotice(`역사교실 위스가 적립되었습니다. +${totalAwarded}위스`);
                     showToast({
                         tone: 'success',
                         title: '역사교실 제출 완료',
                         message: `+${totalAwarded}위스가 반영되었습니다.`,
                     });
                 }
-            } else if (pointResult.duplicate) {
-                setPointNotice('이번 제출 위스는 이미 반영되었습니다.');
+            } else if (pointResult.duplicate || pointResult.blockedMessage) {
+                const duplicateNotice = pointResult.blockedMessage || '이번 역사교실 위스는 이미 반영되었습니다.';
+                setPointNotice(duplicateNotice);
                 showToast({
                     tone: 'info',
-                    title: '이번 제출 위스는 이미 반영되었습니다.',
+                    title: duplicateNotice,
                 });
             } else {
                 setPointNotice('');
             }
         } catch (pointError) {
             console.error('Failed to claim history classroom point reward:', pointError);
-            setPointNotice('문제 풀이 위스를 바로 반영하지 못했습니다.');
+            setPointNotice('역사교실 위스를 바로 반영하지 못했습니다.');
             showToast({
                 tone: 'warning',
                 title: '제출 결과는 저장되었습니다.',
@@ -263,7 +277,7 @@ const HistoryClassroomRunner: React.FC = () => {
             if (!result) return;
             const statusLabel = result.status === 'passed' ? '통과' : '미통과';
             setResultText(`제한 시간이 종료되어 자동 제출되었습니다. ${result.score}/${result.total} (${result.percent}%) · ${statusLabel}`);
-            await applyQuizPointReward(result.resultId);
+            await applyHistoryClassroomPointReward(result.resultId, result.percent);
         } catch (submitError) {
             console.error(submitError);
             setResultText('시간 초과 제출 처리에 실패했습니다.');
@@ -341,7 +355,7 @@ const HistoryClassroomRunner: React.FC = () => {
             if (!result) return;
             const statusLabel = result.status === 'passed' ? '통과' : '미통과';
             setResultText(`제출 완료: ${result.score}/${result.total} (${result.percent}%) · ${statusLabel}`);
-            await applyQuizPointReward(result.resultId);
+            await applyHistoryClassroomPointReward(result.resultId, result.percent);
         } catch (submitError) {
             console.error(submitError);
             setResultText('제출에 실패했습니다.');

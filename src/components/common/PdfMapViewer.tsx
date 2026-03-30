@@ -26,6 +26,7 @@ interface PdfMapViewerProps {
     pageImages?: PdfMapPageImage[];
     regions?: PdfMapRegion[];
     tagSections?: PdfTagSection[];
+    onModalTagClick?: (tag: string) => void;
     onRenameTagSection?: (sectionId: string) => void;
     onAddTagSection?: () => void;
 }
@@ -170,6 +171,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
     pageImages = [],
     regions = [],
     tagSections: tagSectionConfig = DEFAULT_PDF_TAG_SECTIONS,
+    onModalTagClick,
     onRenameTagSection,
     onAddTagSection,
 }) => {
@@ -532,6 +534,14 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
         }
     };
 
+    const handleTagToggle = (tag: string, context: 'inline' | 'modal') => {
+        const nextTag = selectedTag === tag ? '' : tag;
+        setSelectedTag(nextTag);
+        if (context === 'modal' && nextTag && nextTag !== selectedTag) {
+            onModalTagClick?.(nextTag);
+        }
+    };
+
     const openModal = () => {
         if (loadingPdf) return;
         if (!selectedRegion) {
@@ -624,6 +634,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
     const renderTagFilters = (
         isOpen: boolean,
         setIsOpen: React.Dispatch<React.SetStateAction<boolean>>,
+        context: 'inline' | 'modal',
     ) => resolvedTagSections.length > 0 && (
         <div className="mb-4 space-y-3">
             <div className="flex items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white/80 px-3 py-3">
@@ -688,7 +699,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                                             <button
                                                 key={tag}
                                                 type="button"
-                                                onClick={() => setSelectedTag((prev) => (prev === tag ? '' : tag))}
+                                                onClick={() => handleTagToggle(tag, context)}
                                                 className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold transition ${selectedTag === tag ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
                                             >
                                                 <span>{tag}</span>
@@ -721,7 +732,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
         </div>
     );
 
-    const renderShortcutList = (buttonClassName: string) => (
+    const renderShortcutList = (buttonClassName: string, context: 'inline' | 'modal') => (
         <>
             <div className="mb-2 text-xs font-bold text-gray-500">지역 목차</div>
             {shortcutSections.length > 0 ? (
@@ -739,7 +750,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                                     <div className="mb-2 flex items-center justify-between gap-2">
                                         <button
                                             type="button"
-                                            onClick={() => setSelectedTag((prev) => (prev === section.tag ? '' : section.tag))}
+                                            onClick={() => handleTagToggle(section.tag, context)}
                                             className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold transition ${selectedTag === section.tag ? 'bg-slate-800 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
                                         >
                                             <span>{section.tag}</span>
@@ -940,9 +951,9 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                         <div className={`grid min-h-0 flex-1 ${isMobileViewport ? 'grid-cols-1' : 'lg:grid-cols-[21rem_minmax(0,1fr)]'}`}>
                             {!isMobileViewport && (
                             <aside className="order-2 min-h-0 border-t border-gray-200 bg-gray-50 p-3 lg:order-1 lg:border-r lg:border-t-0 lg:p-4">
-                                {renderTagFilters(isModalTagCatalogOpen, setIsModalTagCatalogOpen)}
+                                {renderTagFilters(isModalTagCatalogOpen, setIsModalTagCatalogOpen, 'modal')}
                                 <div className="max-h-52 overflow-y-auto pr-1 lg:max-h-[calc(90vh-12rem)]">
-                                    {renderShortcutList('rounded-xl px-3 py-2 text-left text-xs font-bold transition')}
+                                    {renderShortcutList('rounded-xl px-3 py-2 text-left text-xs font-bold transition', 'modal')}
                                 </div>
                             </aside>
                             )}
@@ -1001,7 +1012,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                                             </button>
                                         </div>
                                         <div className="max-h-[calc(58vh-4.5rem)] overflow-y-auto p-4">
-                                            {renderShortcutList('rounded-xl px-3 py-2 text-left text-sm font-bold transition')}
+                                            {renderShortcutList('rounded-xl px-3 py-2 text-left text-sm font-bold transition', 'modal')}
                                         </div>
                                     </div>
                                 )}
@@ -1025,12 +1036,12 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                 </div>
                 {visibleRegionHits.length > 0 && (
                     <div className="mb-4">
-                        {renderTagFilters(isInlineTagCatalogOpen, setIsInlineTagCatalogOpen)}
+                        {renderTagFilters(isInlineTagCatalogOpen, setIsInlineTagCatalogOpen, 'inline')}
                     </div>
                 )}
                 {selectedTag && (
                     <div ref={inlineShortcutRef} className="mb-4 rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
-                        {renderShortcutList('rounded-xl px-3 py-2 text-left text-xs font-bold transition')}
+                        {renderShortcutList('rounded-xl px-3 py-2 text-left text-xs font-bold transition', 'inline')}
                     </div>
                 )}
                 {renderPageSurface(true)}

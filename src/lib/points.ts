@@ -32,7 +32,10 @@ import type {
 } from '../types';
 
 type ConfigLike = Pick<SystemConfig, 'year' | 'semester'> | null | undefined;
-type PointActivityRewardType = Extract<PointTransactionType, 'attendance' | 'quiz' | 'lesson'>;
+type PointActivityRewardType = Extract<
+    PointTransactionType,
+    'attendance' | 'quiz' | 'lesson' | 'think_cloud' | 'map_tag' | 'history_classroom'
+>;
 
 interface ActorInfo {
     uid: string;
@@ -72,7 +75,10 @@ export interface PointActivityRewardResult {
     amount: number;
     bonusAwarded?: boolean;
     bonusAmount?: number;
-    bonusType?: Extract<PointTransactionType, 'attendance_monthly_bonus' | 'quiz_bonus'> | '';
+    bonusType?: Extract<
+        PointTransactionType,
+        'attendance_monthly_bonus' | 'attendance_milestone_bonus' | 'quiz_bonus' | 'history_classroom_bonus'
+    > | '';
     monthlyBonusAwarded?: boolean;
     monthlyBonusAmount?: number;
     totalAwarded?: number;
@@ -81,6 +87,11 @@ export interface PointActivityRewardResult {
     transactionId: string;
     sourceId: string;
     policyId: string;
+    blockedReason?: 'duplicate_source' | 'cooldown_active' | 'max_claims_reached' | '';
+    blockedMessage?: string;
+    nextEligibleAt?: string;
+    claimCount?: number;
+    maxClaims?: number;
 }
 
 export interface ResolvedPointActivityRewardItem {
@@ -137,6 +148,14 @@ const toPositiveThreshold = (value: unknown, fallback = 100) => (
     Math.max(0, Math.round(toFiniteNumber(value, fallback)))
 );
 
+const toPositiveInteger = (value: unknown, fallback = 1) => (
+    Math.max(1, Math.round(toFiniteNumber(value, fallback)))
+);
+
+const toNonNegativeInteger = (value: unknown, fallback = 0) => (
+    Math.max(0, Math.round(toFiniteNumber(value, fallback)))
+);
+
 const resolveAutoRewardEnabled = (policy?: Partial<PointPolicy> | null) => {
     const nestedRewardPolicy = (policy as any)?.rewardPolicy || {};
     return nestedRewardPolicy?.autoEnabled ?? (policy as any)?.autoRewardEnabled;
@@ -159,6 +178,22 @@ export const getDefaultPointPolicy = (): PointPolicy => ({
     attendanceMonthlyBonus: 20,
     lessonView: 3,
     quizSolve: 10,
+    thinkCloudEnabled: true,
+    thinkCloudAmount: 20,
+    thinkCloudMaxClaims: 5,
+    mapTagEnabled: true,
+    mapTagAmount: 10,
+    mapTagMaxClaims: 5,
+    historyClassroomEnabled: true,
+    historyClassroomAmount: 50,
+    historyClassroomBonusEnabled: false,
+    historyClassroomBonusThreshold: 100,
+    historyClassroomBonusAmount: 0,
+    attendanceMilestoneBonusEnabled: false,
+    attendanceMilestone50: 0,
+    attendanceMilestone100: 0,
+    attendanceMilestone200: 0,
+    attendanceMilestone300: 0,
     autoRewardEnabled: true,
     quizBonusEnabled: false,
     quizBonusThreshold: 100,
@@ -170,8 +205,21 @@ export const getDefaultPointPolicy = (): PointPolicy => ({
         attendance: { enabled: true, amount: 5 },
         quiz: { enabled: true, amount: 10 },
         lesson: { enabled: true, amount: 3 },
+        thinkCloud: { enabled: true, amount: 20, cooldownHours: 24, maxClaims: 5 },
+        mapTag: { enabled: true, amount: 10, cooldownHours: 24, maxClaims: 5 },
+        historyClassroom: { enabled: true, amount: 50, cooldownHours: 24 },
         attendanceMonthlyBonus: { enabled: true, amount: 20 },
         quizBonus: { enabled: false, thresholdScore: 100, amount: 0 },
+        historyClassroomBonus: { enabled: false, thresholdScore: 100, amount: 0 },
+        attendanceMilestoneBonus: {
+            enabled: false,
+            amounts: {
+                '50': 0,
+                '100': 0,
+                '200': 0,
+                '300': 0,
+            },
+        },
     },
     controlPolicy: {
         manualAdjustEnabled: false,
@@ -188,8 +236,67 @@ export const normalizePointPolicy = (policy?: Partial<PointPolicy> | null): Poin
     const quizBonus = resolveQuizBonusInput(policy);
     const autoRewardEnabled = resolveAutoRewardEnabled(policy) !== false;
     const controlPolicy = (policy as any)?.controlPolicy || {};
+    const rewardPolicy = (policy as any)?.rewardPolicy || {};
     const manualAdjustEnabled = (controlPolicy?.manualAdjustEnabled ?? policy?.manualAdjustEnabled) === true;
     const allowNegativeBalance = (controlPolicy?.allowNegativeBalance ?? policy?.allowNegativeBalance) === true;
+    const thinkCloudRule = rewardPolicy?.thinkCloud || {};
+    const mapTagRule = rewardPolicy?.mapTag || {};
+    const historyClassroomRule = rewardPolicy?.historyClassroom || {};
+    const historyClassroomBonusRule = rewardPolicy?.historyClassroomBonus || {};
+    const attendanceMilestoneBonusRule = rewardPolicy?.attendanceMilestoneBonus || {};
+    const thinkCloudEnabled = ((policy as any)?.thinkCloudEnabled ?? thinkCloudRule?.enabled ?? defaults.thinkCloudEnabled) === true;
+    const thinkCloudAmount = toNonNegativeNumber(
+        (policy as any)?.thinkCloudAmount ?? thinkCloudRule?.amount,
+        defaults.thinkCloudAmount,
+    );
+    const thinkCloudMaxClaims = toPositiveInteger(
+        (policy as any)?.thinkCloudMaxClaims ?? thinkCloudRule?.maxClaims,
+        defaults.thinkCloudMaxClaims,
+    );
+    const mapTagEnabled = ((policy as any)?.mapTagEnabled ?? mapTagRule?.enabled ?? defaults.mapTagEnabled) === true;
+    const mapTagAmount = toNonNegativeNumber(
+        (policy as any)?.mapTagAmount ?? mapTagRule?.amount,
+        defaults.mapTagAmount,
+    );
+    const mapTagMaxClaims = toPositiveInteger(
+        (policy as any)?.mapTagMaxClaims ?? mapTagRule?.maxClaims,
+        defaults.mapTagMaxClaims,
+    );
+    const historyClassroomEnabled = ((policy as any)?.historyClassroomEnabled ?? historyClassroomRule?.enabled ?? defaults.historyClassroomEnabled) === true;
+    const historyClassroomAmount = toNonNegativeNumber(
+        (policy as any)?.historyClassroomAmount ?? historyClassroomRule?.amount,
+        defaults.historyClassroomAmount,
+    );
+    const historyClassroomBonusEnabled = ((policy as any)?.historyClassroomBonusEnabled
+        ?? historyClassroomBonusRule?.enabled
+        ?? defaults.historyClassroomBonusEnabled) === true;
+    const historyClassroomBonusThreshold = toPositiveThreshold(
+        (policy as any)?.historyClassroomBonusThreshold ?? historyClassroomBonusRule?.thresholdScore,
+        defaults.historyClassroomBonusThreshold,
+    );
+    const historyClassroomBonusAmount = toNonNegativeNumber(
+        (policy as any)?.historyClassroomBonusAmount ?? historyClassroomBonusRule?.amount,
+        defaults.historyClassroomBonusAmount,
+    );
+    const attendanceMilestoneBonusEnabled = ((policy as any)?.attendanceMilestoneBonusEnabled
+        ?? attendanceMilestoneBonusRule?.enabled
+        ?? defaults.attendanceMilestoneBonusEnabled) === true;
+    const attendanceMilestone50 = toNonNegativeNumber(
+        (policy as any)?.attendanceMilestone50 ?? attendanceMilestoneBonusRule?.amounts?.['50'],
+        defaults.attendanceMilestone50,
+    );
+    const attendanceMilestone100 = toNonNegativeNumber(
+        (policy as any)?.attendanceMilestone100 ?? attendanceMilestoneBonusRule?.amounts?.['100'],
+        defaults.attendanceMilestone100,
+    );
+    const attendanceMilestone200 = toNonNegativeNumber(
+        (policy as any)?.attendanceMilestone200 ?? attendanceMilestoneBonusRule?.amounts?.['200'],
+        defaults.attendanceMilestone200,
+    );
+    const attendanceMilestone300 = toNonNegativeNumber(
+        (policy as any)?.attendanceMilestone300 ?? attendanceMilestoneBonusRule?.amounts?.['300'],
+        defaults.attendanceMilestone300,
+    );
 
     return {
         ...defaults,
@@ -198,6 +305,22 @@ export const normalizePointPolicy = (policy?: Partial<PointPolicy> | null): Poin
         attendanceMonthlyBonus: toNonNegativeNumber(policy?.attendanceMonthlyBonus, defaults.attendanceMonthlyBonus),
         lessonView: toNonNegativeNumber(policy?.lessonView, defaults.lessonView),
         quizSolve: toNonNegativeNumber(policy?.quizSolve, defaults.quizSolve),
+        thinkCloudEnabled,
+        thinkCloudAmount,
+        thinkCloudMaxClaims,
+        mapTagEnabled,
+        mapTagAmount,
+        mapTagMaxClaims,
+        historyClassroomEnabled,
+        historyClassroomAmount,
+        historyClassroomBonusEnabled,
+        historyClassroomBonusThreshold,
+        historyClassroomBonusAmount,
+        attendanceMilestoneBonusEnabled,
+        attendanceMilestone50,
+        attendanceMilestone100,
+        attendanceMilestone200,
+        attendanceMilestone300,
         autoRewardEnabled,
         quizBonusEnabled: quizBonus.enabled === true,
         quizBonusThreshold: toPositiveThreshold(quizBonus.threshold, defaults.quizBonusThreshold),
@@ -218,6 +341,32 @@ export const normalizePointPolicy = (policy?: Partial<PointPolicy> | null): Poin
                 enabled: autoRewardEnabled,
                 amount: toNonNegativeNumber(policy?.lessonView, defaults.lessonView),
             },
+            thinkCloud: {
+                enabled: autoRewardEnabled && thinkCloudEnabled,
+                amount: thinkCloudAmount,
+                cooldownHours: toPositiveInteger(
+                    thinkCloudRule?.cooldownHours,
+                    defaults.rewardPolicy.thinkCloud.cooldownHours,
+                ),
+                maxClaims: thinkCloudMaxClaims,
+            },
+            mapTag: {
+                enabled: autoRewardEnabled && mapTagEnabled,
+                amount: mapTagAmount,
+                cooldownHours: toPositiveInteger(
+                    mapTagRule?.cooldownHours,
+                    defaults.rewardPolicy.mapTag.cooldownHours,
+                ),
+                maxClaims: mapTagMaxClaims,
+            },
+            historyClassroom: {
+                enabled: autoRewardEnabled && historyClassroomEnabled,
+                amount: historyClassroomAmount,
+                cooldownHours: toPositiveInteger(
+                    historyClassroomRule?.cooldownHours,
+                    defaults.rewardPolicy.historyClassroom.cooldownHours,
+                ),
+            },
             attendanceMonthlyBonus: {
                 enabled: autoRewardEnabled,
                 amount: toNonNegativeNumber(policy?.attendanceMonthlyBonus, defaults.attendanceMonthlyBonus),
@@ -226,6 +375,20 @@ export const normalizePointPolicy = (policy?: Partial<PointPolicy> | null): Poin
                 enabled: quizBonus.enabled === true,
                 thresholdScore: toPositiveThreshold(quizBonus.threshold, defaults.quizBonusThreshold),
                 amount: toNonNegativeNumber(quizBonus.amount, defaults.quizBonusAmount),
+            },
+            historyClassroomBonus: {
+                enabled: historyClassroomBonusEnabled,
+                thresholdScore: historyClassroomBonusThreshold,
+                amount: historyClassroomBonusAmount,
+            },
+            attendanceMilestoneBonus: {
+                enabled: attendanceMilestoneBonusEnabled,
+                amounts: {
+                    '50': attendanceMilestone50,
+                    '100': attendanceMilestone100,
+                    '200': attendanceMilestone200,
+                    '300': attendanceMilestone300,
+                },
             },
         },
         controlPolicy: {
@@ -285,6 +448,22 @@ export const getDaysInMonthFromMonthKey = (monthKey: string) => {
 
 export const buildAttendanceSourceId = (date = new Date()) => `attendance-${getKstDateKey(date)}`;
 
+export const buildThinkCloudRewardSourceId = (sessionId: string, responseId: string) => (
+    `think-cloud:${String(sessionId || '').trim()}:${String(responseId || '').trim()}`
+);
+
+export const buildMapTagRewardSourceId = (
+    mapId: string,
+    tag: string,
+    nonce = `${Date.now()}`,
+) => (
+    `map-tag:${encodeURIComponent(String(mapId || '').trim())}:${encodeURIComponent(String(tag || '').trim())}:${normalizePointKeyPart(String(nonce || ''))}`
+);
+
+export const buildHistoryClassroomRewardSourceId = (resultId: string) => (
+    `history-classroom-${String(resultId || '').trim()}`
+);
+
 export const buildPointActivityTransactionId = (
     uid: string,
     type: PointActivityRewardType,
@@ -306,6 +485,7 @@ export const resolveActivityReward = ({
     todayKey,
     monthKey,
     includeAttendanceMonthlyBonus = false,
+    attendanceMilestoneReached,
     score,
 }: {
     policy?: Partial<PointPolicy> | null;
@@ -315,6 +495,7 @@ export const resolveActivityReward = ({
     todayKey?: string;
     monthKey?: string;
     includeAttendanceMonthlyBonus?: boolean;
+    attendanceMilestoneReached?: 50 | 100 | 200 | 300 | null;
     score?: number | null;
 }): ResolvedPointActivityReward => {
     const normalizedPolicy = normalizePointPolicy(policy);
@@ -333,14 +514,32 @@ export const resolveActivityReward = ({
         ? normalizedPolicy.attendanceDaily
         : activityType === 'quiz'
             ? normalizedPolicy.quizSolve
-            : normalizedPolicy.lessonView;
+            : activityType === 'lesson'
+                ? normalizedPolicy.lessonView
+                : activityType === 'think_cloud'
+                    ? normalizedPolicy.rewardPolicy.thinkCloud.amount
+                    : activityType === 'map_tag'
+                        ? normalizedPolicy.rewardPolicy.mapTag.amount
+                        : normalizedPolicy.rewardPolicy.historyClassroom.amount;
 
     if (baseAmount > 0) {
         items.push({
             type: activityType,
             amount: baseAmount,
             sourceId,
-            sourceLabel: String(sourceLabel || '').trim(),
+            sourceLabel: String(sourceLabel || '').trim() || (
+                activityType === 'attendance'
+                    ? `${String(todayKey || '').trim()} 출석 체크`
+                    : activityType === 'quiz'
+                        ? '문제 풀이'
+                        : activityType === 'lesson'
+                            ? '수업 자료 확인'
+                            : activityType === 'think_cloud'
+                                ? '생각모아 참여'
+                                : activityType === 'map_tag'
+                                    ? '지도 태그 탐색'
+                                    : '역사교실 제출 완료'
+            ),
             targetMonth: activityType === 'attendance' ? String(monthKey || '').trim() : '',
             targetDate: activityType === 'attendance' ? String(todayKey || '').trim() : '',
         });
@@ -358,6 +557,27 @@ export const resolveActivityReward = ({
     }
 
     if (
+        activityType === 'attendance'
+        && attendanceMilestoneReached
+        && normalizedPolicy.rewardPolicy.attendanceMilestoneBonus.enabled
+    ) {
+        const milestoneKey = String(attendanceMilestoneReached) as '50' | '100' | '200' | '300';
+        const milestoneAmount = Number(
+            normalizedPolicy.rewardPolicy.attendanceMilestoneBonus.amounts[milestoneKey] || 0,
+        );
+        if (milestoneAmount > 0) {
+            items.push({
+                type: 'attendance_milestone_bonus',
+                amount: milestoneAmount,
+                sourceId: `attendance-milestone-${attendanceMilestoneReached}`,
+                sourceLabel: `출석 ${attendanceMilestoneReached}회 달성 보너스`,
+                targetMonth: String(monthKey || '').trim(),
+                targetDate: String(todayKey || '').trim(),
+            });
+        }
+    }
+
+    if (
         activityType === 'quiz'
         && normalizedPolicy.quizBonusEnabled
         && normalizedPolicy.quizBonusAmount > 0
@@ -370,6 +590,22 @@ export const resolveActivityReward = ({
             sourceLabel: normalizedPolicy.quizBonusThreshold >= 100
                 ? '문제 풀이 만점 보너스'
                 : `문제 풀이 ${normalizedPolicy.quizBonusThreshold}점 이상 보너스`,
+        });
+    }
+
+    if (
+        activityType === 'history_classroom'
+        && normalizedPolicy.rewardPolicy.historyClassroomBonus.enabled
+        && normalizedPolicy.rewardPolicy.historyClassroomBonus.amount > 0
+        && Number(score || 0) >= normalizedPolicy.rewardPolicy.historyClassroomBonus.thresholdScore
+    ) {
+        items.push({
+            type: 'history_classroom_bonus',
+            amount: normalizedPolicy.rewardPolicy.historyClassroomBonus.amount,
+            sourceId,
+            sourceLabel: normalizedPolicy.rewardPolicy.historyClassroomBonus.thresholdScore >= 100
+                ? '역사교실 성과 보너스'
+                : `역사교실 정답률 ${normalizedPolicy.rewardPolicy.historyClassroomBonus.thresholdScore}% 이상 보너스`,
         });
     }
 
@@ -647,6 +883,22 @@ export const buildPointPolicyPayload = (policy: Partial<PointPolicy>, actor: Act
         attendanceMonthlyBonus: normalizedPolicy.attendanceMonthlyBonus,
         lessonView: normalizedPolicy.lessonView,
         quizSolve: normalizedPolicy.quizSolve,
+        thinkCloudEnabled: normalizedPolicy.thinkCloudEnabled,
+        thinkCloudAmount: normalizedPolicy.thinkCloudAmount,
+        thinkCloudMaxClaims: normalizedPolicy.thinkCloudMaxClaims,
+        mapTagEnabled: normalizedPolicy.mapTagEnabled,
+        mapTagAmount: normalizedPolicy.mapTagAmount,
+        mapTagMaxClaims: normalizedPolicy.mapTagMaxClaims,
+        historyClassroomEnabled: normalizedPolicy.historyClassroomEnabled,
+        historyClassroomAmount: normalizedPolicy.historyClassroomAmount,
+        historyClassroomBonusEnabled: normalizedPolicy.historyClassroomBonusEnabled,
+        historyClassroomBonusThreshold: normalizedPolicy.historyClassroomBonusThreshold,
+        historyClassroomBonusAmount: normalizedPolicy.historyClassroomBonusAmount,
+        attendanceMilestoneBonusEnabled: normalizedPolicy.attendanceMilestoneBonusEnabled,
+        attendanceMilestone50: normalizedPolicy.attendanceMilestone50,
+        attendanceMilestone100: normalizedPolicy.attendanceMilestone100,
+        attendanceMilestone200: normalizedPolicy.attendanceMilestone200,
+        attendanceMilestone300: normalizedPolicy.attendanceMilestone300,
         autoRewardEnabled: normalizedPolicy.autoRewardEnabled,
         quizBonusEnabled: normalizedPolicy.quizBonusEnabled,
         quizBonusThreshold: normalizedPolicy.quizBonusThreshold,
@@ -781,15 +1033,25 @@ export const buildPointRewardFeedback = ({
         monthlyBonusAwarded?: boolean;
         monthlyBonusAmount?: number;
         totalAwarded?: number;
+        blockedMessage?: string;
     };
 }) => {
     const totalAwarded = Number(result.totalAwarded || result.amount || 0);
     if (totalAwarded > 0) {
         if (result.monthlyBonusAwarded && Number(result.monthlyBonusAmount || 0) > 0) {
+            const totalBonusAmount = Number(result.bonusAmount || 0);
+            const monthlyBonusAmount = Number(result.monthlyBonusAmount || 0);
+            if (totalBonusAmount > monthlyBonusAmount) {
+                return {
+                    tone: 'reward' as const,
+                    title: `${actionLabel} 완료`,
+                    message: `기본 +${Number(result.amount || 0)}위스, 보너스 +${totalBonusAmount}위스`,
+                };
+            }
             return {
                 tone: 'reward' as const,
                 title: `${actionLabel} 완료`,
-                message: `+${Number(result.amount || 0)}위스 지급, 월간 개근 보너스 +${Number(result.monthlyBonusAmount || 0)}위스`,
+                message: `+${Number(result.amount || 0)}위스 지급, 월간 개근 보너스 +${monthlyBonusAmount}위스`,
             };
         }
 
@@ -812,7 +1074,7 @@ export const buildPointRewardFeedback = ({
         return {
             tone: 'warning' as const,
             title: `${actionLabel} 안내`,
-            message: duplicateMessage,
+            message: result.blockedMessage || duplicateMessage,
         };
     }
 

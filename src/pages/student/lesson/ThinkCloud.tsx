@@ -8,9 +8,15 @@ import {
     serverTimestamp,
     where,
 } from 'firebase/firestore';
+import { useAppToast } from '../../../components/common/AppToastProvider';
 import { useAuth } from '../../../contexts/AuthContext';
 import WordCloudView from '../../../components/common/WordCloudView';
+import { notifyPointsUpdated } from '../../../lib/appEvents';
 import { db } from '../../../lib/firebase';
+import {
+    buildThinkCloudRewardSourceId,
+    claimPointActivityReward,
+} from '../../../lib/points';
 import {
     buildThinkCloudResponsesCollectionPath,
     buildThinkCloudSessionCollectionPath,
@@ -33,6 +39,7 @@ const BANNED_WORDS = ['욕설', '비속어'];
 
 const ThinkCloud: React.FC = () => {
     const { config, currentUser, userData } = useAuth();
+    const { showToast } = useAppToast();
     const [activeSessionId, setActiveSessionId] = useState('');
     const [sessions, setSessions] = useState<SessionWithId[]>([]);
     const [selectedSessionId, setSelectedSessionId] = useState('');
@@ -211,8 +218,43 @@ const ThinkCloud: React.FC = () => {
                 createdAt: serverTimestamp(),
             };
 
-            await addDoc(collection(db, responsesPath), payload);
+            const responseRef = await addDoc(collection(db, responsesPath), payload);
             setDraftInput('');
+
+            try {
+                const pointResult = await claimPointActivityReward({
+                    config,
+                    activityType: 'think_cloud',
+                    sourceId: buildThinkCloudRewardSourceId(selectedSessionId, responseRef.id),
+                    sourceLabel: selectedSession.title || '생각모아 참여',
+                });
+                if (pointResult.awarded && (pointResult.totalAwarded || pointResult.amount)) {
+                    notifyPointsUpdated();
+                }
+                if ((pointResult.totalAwarded || pointResult.amount) > 0) {
+                    const totalAwarded = Number(pointResult.totalAwarded || pointResult.amount || 0);
+                    showToast({
+                        tone: 'success',
+                        title: '생각모아 참여 완료',
+                        message: pointResult.bonusAwarded && pointResult.bonusAmount
+                            ? `기본 +${pointResult.amount}위스, 보너스 +${pointResult.bonusAmount}위스가 반영되었습니다.`
+                            : `+${totalAwarded}위스가 반영되었습니다.`,
+                    });
+                } else if (pointResult.duplicate) {
+                    const duplicateMessage = pointResult.blockedMessage || '이번 생각모아 위스는 이미 반영되었습니다.';
+                    showToast({
+                        tone: 'info',
+                        title: duplicateMessage,
+                    });
+                }
+            } catch (pointError) {
+                console.error('Failed to claim think cloud point reward:', pointError);
+                showToast({
+                    tone: 'warning',
+                    title: '생각모아 응답은 저장되었습니다.',
+                    message: '위스 반영 상태를 바로 확인하지 못했습니다.',
+                });
+            }
         } catch (error) {
             console.error('Failed to submit think cloud response:', error);
             setSubmitError('제출에 실패했습니다. 잠시 후 다시 시도해 주세요.');

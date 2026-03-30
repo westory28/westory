@@ -149,8 +149,8 @@ const StudentPointSummaryTab: React.FC<StudentPointSummaryTabProps> = ({
         <h2 className="text-lg font-bold text-gray-800">내 위스 안내</h2>
         <div className="mt-4 space-y-3 text-sm leading-6 text-gray-700">
           <div className="rounded-xl bg-white/80 px-4 py-3">
-            출석, 문제 풀이, 수업 자료 확인 같은 활동으로 위스를 받을 수
-            있습니다.
+            출석, 문제 풀이, 수업 자료 확인, 생각모아, 지도 태그 탐색,
+            역사교실 같은 활동으로 위스를 받을 수 있습니다.
           </div>
           <div className="rounded-xl bg-white/80 px-4 py-3">
             한 달 동안 매일 출석하면 월간 개근 보너스가 추가로 지급될 수

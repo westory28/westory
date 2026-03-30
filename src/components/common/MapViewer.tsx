@@ -7,6 +7,7 @@ interface MapViewerProps {
     item: MapResource | null;
     googleSearchQuery?: string;
     onGoogleSearchQueryChange?: (value: string) => void;
+    onModalTagClick?: (tag: string) => void;
     showShell?: boolean;
 }
 
@@ -14,6 +15,7 @@ const MapViewer: React.FC<MapViewerProps> = ({
     item,
     googleSearchQuery,
     onGoogleSearchQueryChange,
+    onModalTagClick,
     showShell = true,
 }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -142,6 +144,7 @@ const MapViewer: React.FC<MapViewerProps> = ({
                     pageImages={item.pdfPageImages}
                     regions={item.pdfRegions}
                     tagSections={item.pdfTagSections}
+                    onModalTagClick={onModalTagClick}
                 />
             )}
         </>

@@ -179,9 +179,14 @@ export const POINT_TRANSACTION_TYPE_LABELS: Record<
 > = {
   attendance: "출석 체크",
   attendance_monthly_bonus: "월간 개근 보너스",
+  attendance_milestone_bonus: "출석 누적 보너스",
   quiz: "문제 풀이",
   quiz_bonus: "문제 풀이 만점 보너스",
   lesson: "수업 자료 확인",
+  think_cloud: "생각모아 참여",
+  map_tag: "지도 태그 탐색",
+  history_classroom: "역사교실 참여",
+  history_classroom_bonus: "역사교실 성과 보너스",
   manual_adjust: "교사 직접 지급",
   manual_reclaim: "교사 직접 환수",
   purchase_hold: "구매 요청",
@@ -196,6 +201,22 @@ export const POINT_POLICY_FIELD_LABELS: Record<
     | "attendanceMonthlyBonus"
     | "quizSolve"
     | "lessonView"
+    | "thinkCloudEnabled"
+    | "thinkCloudAmount"
+    | "thinkCloudMaxClaims"
+    | "mapTagEnabled"
+    | "mapTagAmount"
+    | "mapTagMaxClaims"
+    | "historyClassroomEnabled"
+    | "historyClassroomAmount"
+    | "historyClassroomBonusEnabled"
+    | "historyClassroomBonusThreshold"
+    | "historyClassroomBonusAmount"
+    | "attendanceMilestoneBonusEnabled"
+    | "attendanceMilestone50"
+    | "attendanceMilestone100"
+    | "attendanceMilestone200"
+    | "attendanceMilestone300"
     | "autoRewardEnabled"
     | "quizBonusEnabled"
     | "quizBonusThreshold"
@@ -209,6 +230,22 @@ export const POINT_POLICY_FIELD_LABELS: Record<
   attendanceMonthlyBonus: "월간 개근 보너스",
   quizSolve: "문제 풀이 기본 위스",
   lessonView: "수업 자료 확인 위스",
+  thinkCloudEnabled: "생각모아 자동 지급 사용",
+  thinkCloudAmount: "생각모아 1회 지급 위스",
+  thinkCloudMaxClaims: "생각모아 누적 최대 인정 횟수",
+  mapTagEnabled: "지도 태그 자동 지급 사용",
+  mapTagAmount: "지도 태그 1회 지급 위스",
+  mapTagMaxClaims: "지도 태그 누적 최대 인정 횟수",
+  historyClassroomEnabled: "역사교실 기본 자동 지급 사용",
+  historyClassroomAmount: "역사교실 기본 지급 위스",
+  historyClassroomBonusEnabled: "역사교실 성과 보너스 사용",
+  historyClassroomBonusThreshold: "역사교실 보너스 기준 정답률",
+  historyClassroomBonusAmount: "역사교실 보너스 위스",
+  attendanceMilestoneBonusEnabled: "출석 누적 보너스 사용",
+  attendanceMilestone50: "출석 50회 보너스",
+  attendanceMilestone100: "출석 100회 보너스",
+  attendanceMilestone200: "출석 200회 보너스",
+  attendanceMilestone300: "출석 300회 보너스",
   autoRewardEnabled: "자동 지급 정책 활성화",
   quizBonusEnabled: "문제 풀이 보너스 사용",
   quizBonusThreshold: "보너스 기준 점수",
@@ -224,6 +261,22 @@ export const POINT_POLICY_FIELD_HELPERS: Record<
     | "attendanceMonthlyBonus"
     | "quizSolve"
     | "lessonView"
+    | "thinkCloudEnabled"
+    | "thinkCloudAmount"
+    | "thinkCloudMaxClaims"
+    | "mapTagEnabled"
+    | "mapTagAmount"
+    | "mapTagMaxClaims"
+    | "historyClassroomEnabled"
+    | "historyClassroomAmount"
+    | "historyClassroomBonusEnabled"
+    | "historyClassroomBonusThreshold"
+    | "historyClassroomBonusAmount"
+    | "attendanceMilestoneBonusEnabled"
+    | "attendanceMilestone50"
+    | "attendanceMilestone100"
+    | "attendanceMilestone200"
+    | "attendanceMilestone300"
     | "autoRewardEnabled"
     | "quizBonusEnabled"
     | "quizBonusThreshold"
@@ -239,8 +292,40 @@ export const POINT_POLICY_FIELD_HELPERS: Record<
     "해당 월의 모든 날짜에 출석한 학생에게 마지막 출석 시점에 한 번만 추가 지급됩니다.",
   quizSolve: "문제 풀이를 정상 제출했을 때 자동으로 적립되는 기본 위스입니다.",
   lessonView: "수업 자료를 충분히 확인하고 저장까지 마쳤을 때 지급됩니다.",
+  thinkCloudEnabled:
+    "생각모아 제출 위스를 별도로 운영합니다. 실제 중복 제한은 최근 지급 시점 기준 24시간마다 1회입니다.",
+  thinkCloudAmount:
+    "생각모아 응답 제출이 완료되면 적립되는 기본 위스입니다.",
+  thinkCloudMaxClaims:
+    "학생당 누적 최대 인정 횟수입니다. 24시간 제한과 함께 서버에서 강제됩니다.",
+  mapTagEnabled:
+    "지도 팝업 모달 안에서 태그를 눌렀을 때만 별도 위스를 적립합니다. 최근 지급 시점 기준 24시간마다 1회입니다.",
+  mapTagAmount:
+    "지도 팝업 모달 태그 클릭 1회에 적립할 위스입니다.",
+  mapTagMaxClaims:
+    "학생당 지도 태그 활동으로 인정할 최대 횟수입니다.",
+  historyClassroomEnabled:
+    "역사교실 제출 완료 시 기본 위스를 적립합니다. 최근 지급 시점 기준 24시간마다 1회만 기본 지급됩니다.",
+  historyClassroomAmount:
+    "역사교실 제출 완료 시 기본으로 적립할 위스입니다.",
+  historyClassroomBonusEnabled:
+    "기본 지급과 별도로 정답률 기준을 넘긴 시도에 성과 보너스를 지급합니다.",
+  historyClassroomBonusThreshold:
+    "해당 정답률(%) 이상일 때만 성과 보너스를 지급합니다.",
+  historyClassroomBonusAmount:
+    "역사교실 기본 지급과 별도로 추가할 보너스 위스입니다.",
+  attendanceMilestoneBonusEnabled:
+    "출석 누적 50/100/200/300회 달성 시점에 각 구간 보너스를 1회만 지급합니다.",
+  attendanceMilestone50:
+    "현재 학기 누적 출석 50회에 도달했을 때 지급할 위스입니다.",
+  attendanceMilestone100:
+    "현재 학기 누적 출석 100회에 도달했을 때 지급할 위스입니다.",
+  attendanceMilestone200:
+    "현재 학기 누적 출석 200회에 도달했을 때 지급할 위스입니다.",
+  attendanceMilestone300:
+    "현재 학기 누적 출석 300회에 도달했을 때 지급할 위스입니다.",
   autoRewardEnabled:
-    "끄면 출석, 문제 풀이, 수업 자료 확인 자동 지급이 모두 멈춥니다.",
+    "끄면 출석, 문제 풀이, 수업 자료 확인, 생각모아, 지도 태그, 역사교실 자동 지급이 모두 멈춥니다.",
   quizBonusEnabled:
     "기본 지급과 별도로 기준 점수 이상일 때 추가 위스를 지급합니다.",
   quizBonusThreshold:
@@ -256,9 +341,14 @@ export const POINT_HISTORY_FILTER_LABELS = {
   spent: "사용",
   attendance: "출석",
   attendance_monthly_bonus: "월간 개근 보너스",
+  attendance_milestone_bonus: "출석 누적 보너스",
   quiz: "문제 풀이",
   quiz_bonus: "문제 풀이 보너스",
   lesson: "수업 자료",
+  think_cloud: "생각모아",
+  map_tag: "지도 태그",
+  history_classroom: "역사교실",
+  history_classroom_bonus: "역사교실 성과 보너스",
   manual_adjust: "교사 지급",
   manual_reclaim: "교사 환수",
   purchase: "구매 관련",

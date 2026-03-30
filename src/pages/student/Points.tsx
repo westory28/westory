@@ -2,7 +2,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import PointRankBadge from '../../components/common/PointRankBadge';
 import { useAppToast } from '../../components/common/AppToastProvider';
-import { STUDENT_POINT_TAB_LABELS } from '../../constants/pointLabels';
+import {
+    POINT_HISTORY_FILTER_LABELS,
+    STUDENT_POINT_TAB_LABELS,
+} from '../../constants/pointLabels';
 import { useAuth } from '../../contexts/AuthContext';
 import { subscribePointsUpdated } from '../../lib/appEvents';
 import {
@@ -24,7 +27,7 @@ import StudentPointShopTab from './components/points/StudentPointShopTab';
 import StudentPointSummaryTab from './components/points/StudentPointSummaryTab';
 
 type StudentPointTab = keyof typeof STUDENT_POINT_TAB_LABELS;
-type HistoryFilter = 'all' | 'earned' | 'spent' | 'attendance' | 'attendance_monthly_bonus' | 'quiz' | 'quiz_bonus' | 'lesson' | 'manual_adjust' | 'manual_reclaim' | 'purchase';
+type HistoryFilter = keyof typeof POINT_HISTORY_FILTER_LABELS;
 type OrderFilter = 'all' | PointOrderStatus;
 
 const DEFAULT_WALLET: PointWallet = {

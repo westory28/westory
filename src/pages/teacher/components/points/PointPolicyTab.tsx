@@ -22,6 +22,7 @@ const feedbackToneClassName: Record<'success' | 'error' | 'warning', string> = {
 
 const sectionCardClassName = 'rounded-[1.6rem] border border-gray-200 bg-white p-5 shadow-sm';
 const metricCardClassName = 'rounded-2xl border border-gray-200 bg-gray-50/80 p-4';
+const policyRuleCardClassName = 'rounded-2xl border border-gray-200 bg-white p-4';
 
 const ToggleCard = ({
     title,
@@ -90,6 +91,85 @@ const RewardAmountCard = ({
             </div>
         </div>
     </label>
+);
+
+const InlineMetricField = ({
+    title,
+    description,
+    value,
+    disabled,
+    suffix,
+    onChange,
+}: {
+    title: string;
+    description: string;
+    value: number;
+    disabled?: boolean;
+    suffix: string;
+    onChange: (nextValue: number) => void;
+}) => (
+    <label className="rounded-2xl border border-gray-200 bg-gray-50/70 px-4 py-4">
+        <div className="text-sm font-bold text-gray-900 whitespace-nowrap">{title}</div>
+        <div className="mt-1 text-xs leading-5 text-gray-500">{description}</div>
+        <div className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_112px] sm:items-center">
+            <input
+                type="number"
+                min="0"
+                value={value}
+                onChange={(event) => onChange(Number(event.target.value || 0))}
+                className={inputClassName}
+                disabled={disabled}
+            />
+            <div className="inline-flex h-[50px] items-center justify-center rounded-xl border border-gray-200 bg-white px-3 text-sm font-bold text-gray-700 whitespace-nowrap">
+                {suffix}
+            </div>
+        </div>
+    </label>
+);
+
+const PolicyRuleCard = ({
+    title,
+    description,
+    checked,
+    disabled,
+    summary,
+    footer,
+    onChange,
+    children,
+}: {
+    title: string;
+    description: string;
+    checked: boolean;
+    disabled?: boolean;
+    summary: string;
+    footer: string;
+    onChange: (nextChecked: boolean) => void;
+    children: React.ReactNode;
+}) => (
+    <div className={policyRuleCardClassName}>
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div className="min-w-0">
+                <div className="text-base font-extrabold text-gray-900">{title}</div>
+                <div className="mt-1 text-sm leading-6 text-gray-500">{description}</div>
+            </div>
+            <div className="flex items-center gap-3">
+                <span className="inline-flex whitespace-nowrap rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
+                    {summary}
+                </span>
+                <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(event) => onChange(event.target.checked)}
+                    disabled={disabled}
+                    className="h-4 w-4 shrink-0"
+                />
+            </div>
+        </div>
+        <div className="mt-4 grid grid-cols-1 gap-4">{children}</div>
+        <div className="mt-4 rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-xs font-medium leading-5 text-gray-600">
+            {footer}
+        </div>
+    </div>
 );
 
 const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
@@ -202,6 +282,111 @@ const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
                     }))}
                 />
             </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
+                <PolicyRuleCard
+                    title={POINT_POLICY_FIELD_LABELS.thinkCloudEnabled}
+                    description={POINT_POLICY_FIELD_HELPERS.thinkCloudEnabled}
+                    checked={policy.thinkCloudEnabled}
+                    disabled={!canManage || !policy.autoRewardEnabled}
+                    summary={`총 최대 ${formatWisAmount(policy.thinkCloudAmount * policy.thinkCloudMaxClaims)}`}
+                    footer="생각모아 참여 보상은 마지막 적립 시점 기준 rolling 24시간마다 1회만 인정되고, 학생당 누적 최대 횟수를 넘기면 더 이상 지급되지 않습니다."
+                    onChange={(checked) => onPolicyChange((prev) => ({
+                        ...prev,
+                        thinkCloudEnabled: checked,
+                    }))}
+                >
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <InlineMetricField
+                            title={POINT_POLICY_FIELD_LABELS.thinkCloudAmount}
+                            description={POINT_POLICY_FIELD_HELPERS.thinkCloudAmount}
+                            value={policy.thinkCloudAmount}
+                            disabled={!canManage || !policy.autoRewardEnabled || !policy.thinkCloudEnabled}
+                            suffix={formatWisAmount(policy.thinkCloudAmount)}
+                            onChange={(value) => onPolicyChange((prev) => ({
+                                ...prev,
+                                thinkCloudAmount: value,
+                            }))}
+                        />
+                        <InlineMetricField
+                            title={POINT_POLICY_FIELD_LABELS.thinkCloudMaxClaims}
+                            description={POINT_POLICY_FIELD_HELPERS.thinkCloudMaxClaims}
+                            value={policy.thinkCloudMaxClaims}
+                            disabled={!canManage || !policy.autoRewardEnabled || !policy.thinkCloudEnabled}
+                            suffix={`${policy.thinkCloudMaxClaims}회`}
+                            onChange={(value) => onPolicyChange((prev) => ({
+                                ...prev,
+                                thinkCloudMaxClaims: Math.max(1, Math.round(value || 0)),
+                            }))}
+                        />
+                    </div>
+                </PolicyRuleCard>
+
+                <PolicyRuleCard
+                    title={POINT_POLICY_FIELD_LABELS.mapTagEnabled}
+                    description={POINT_POLICY_FIELD_HELPERS.mapTagEnabled}
+                    checked={policy.mapTagEnabled}
+                    disabled={!canManage || !policy.autoRewardEnabled}
+                    summary={`총 최대 ${formatWisAmount(policy.mapTagAmount * policy.mapTagMaxClaims)}`}
+                    footer="지도 보상은 팝업 모달 안에서 태그를 직접 눌렀을 때만 적립됩니다. 단순 모달 열기만으로는 지급되지 않으며, 마지막 적립 후 24시간이 지나야 다시 인정됩니다."
+                    onChange={(checked) => onPolicyChange((prev) => ({
+                        ...prev,
+                        mapTagEnabled: checked,
+                    }))}
+                >
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <InlineMetricField
+                            title={POINT_POLICY_FIELD_LABELS.mapTagAmount}
+                            description={POINT_POLICY_FIELD_HELPERS.mapTagAmount}
+                            value={policy.mapTagAmount}
+                            disabled={!canManage || !policy.autoRewardEnabled || !policy.mapTagEnabled}
+                            suffix={formatWisAmount(policy.mapTagAmount)}
+                            onChange={(value) => onPolicyChange((prev) => ({
+                                ...prev,
+                                mapTagAmount: value,
+                            }))}
+                        />
+                        <InlineMetricField
+                            title={POINT_POLICY_FIELD_LABELS.mapTagMaxClaims}
+                            description={POINT_POLICY_FIELD_HELPERS.mapTagMaxClaims}
+                            value={policy.mapTagMaxClaims}
+                            disabled={!canManage || !policy.autoRewardEnabled || !policy.mapTagEnabled}
+                            suffix={`${policy.mapTagMaxClaims}회`}
+                            onChange={(value) => onPolicyChange((prev) => ({
+                                ...prev,
+                                mapTagMaxClaims: Math.max(1, Math.round(value || 0)),
+                            }))}
+                        />
+                    </div>
+                </PolicyRuleCard>
+            </div>
+
+            <div className="mt-4">
+                <PolicyRuleCard
+                    title={POINT_POLICY_FIELD_LABELS.historyClassroomEnabled}
+                    description={POINT_POLICY_FIELD_HELPERS.historyClassroomEnabled}
+                    checked={policy.historyClassroomEnabled}
+                    disabled={!canManage || !policy.autoRewardEnabled}
+                    summary="24시간마다 1회"
+                    footer="역사교실 기본 참여 위스는 같은 학생 기준으로 마지막 적립 시점부터 24시간이 지나야 다시 지급됩니다."
+                    onChange={(checked) => onPolicyChange((prev) => ({
+                        ...prev,
+                        historyClassroomEnabled: checked,
+                    }))}
+                >
+                    <InlineMetricField
+                        title={POINT_POLICY_FIELD_LABELS.historyClassroomAmount}
+                        description={POINT_POLICY_FIELD_HELPERS.historyClassroomAmount}
+                        value={policy.historyClassroomAmount}
+                        disabled={!canManage || !policy.autoRewardEnabled || !policy.historyClassroomEnabled}
+                        suffix={formatWisAmount(policy.historyClassroomAmount)}
+                        onChange={(value) => onPolicyChange((prev) => ({
+                            ...prev,
+                            historyClassroomAmount: value,
+                        }))}
+                    />
+                </PolicyRuleCard>
+            </div>
         </section>
 
         <section className={sectionCardClassName}>
@@ -217,7 +402,7 @@ const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
                 </span>
             </div>
 
-            <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.96fr)_minmax(0,1.04fr)]">
+            <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
                 <RewardAmountCard
                     title={POINT_POLICY_FIELD_LABELS.attendanceMonthlyBonus}
                     description={POINT_POLICY_FIELD_HELPERS.attendanceMonthlyBonus}
@@ -291,6 +476,132 @@ const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
                                 </div>
                             </div>
                         </label>
+                    </div>
+                </div>
+
+                <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+                    <ToggleCard
+                        title={POINT_POLICY_FIELD_LABELS.historyClassroomBonusEnabled}
+                        description={POINT_POLICY_FIELD_HELPERS.historyClassroomBonusEnabled}
+                        checked={policy.historyClassroomBonusEnabled}
+                        disabled={!canManage || !policy.autoRewardEnabled}
+                        onChange={(checked) => onPolicyChange((prev) => ({
+                            ...prev,
+                            historyClassroomBonusEnabled: checked,
+                        }))}
+                    />
+                    <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <label className="rounded-2xl border border-amber-100 bg-white px-4 py-4">
+                            <div className="text-sm font-bold text-gray-900 whitespace-nowrap">
+                                {POINT_POLICY_FIELD_LABELS.historyClassroomBonusThreshold}
+                            </div>
+                            <div className="mt-1 text-xs leading-5 text-gray-500">
+                                {POINT_POLICY_FIELD_HELPERS.historyClassroomBonusThreshold}
+                            </div>
+                            <div className="mt-4 grid gap-2">
+                                <input
+                                    type="number"
+                                    min="0"
+                                    value={policy.historyClassroomBonusThreshold}
+                                    onChange={(event) => onPolicyChange((prev) => ({
+                                        ...prev,
+                                        historyClassroomBonusThreshold: Number(event.target.value || 0),
+                                    }))}
+                                    className={inputClassName}
+                                    disabled={!canManage || !policy.historyClassroomBonusEnabled || !policy.autoRewardEnabled}
+                                />
+                                <div className="inline-flex h-[50px] items-center justify-center rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm font-bold text-gray-700 whitespace-nowrap">
+                                    {`${Number(policy.historyClassroomBonusThreshold || 0)}% 이상`}
+                                </div>
+                            </div>
+                        </label>
+
+                        <label className="rounded-2xl border border-amber-100 bg-white px-4 py-4">
+                            <div className="text-sm font-bold text-gray-900 whitespace-nowrap">
+                                {POINT_POLICY_FIELD_LABELS.historyClassroomBonusAmount}
+                            </div>
+                            <div className="mt-1 text-xs leading-5 text-gray-500">
+                                {POINT_POLICY_FIELD_HELPERS.historyClassroomBonusAmount}
+                            </div>
+                            <div className="mt-4 grid gap-2">
+                                <input
+                                    type="number"
+                                    min="0"
+                                    value={policy.historyClassroomBonusAmount}
+                                    onChange={(event) => onPolicyChange((prev) => ({
+                                        ...prev,
+                                        historyClassroomBonusAmount: Number(event.target.value || 0),
+                                    }))}
+                                    className={inputClassName}
+                                    disabled={!canManage || !policy.historyClassroomBonusEnabled || !policy.autoRewardEnabled}
+                                />
+                                <div className="inline-flex h-[50px] items-center justify-center rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm font-bold text-gray-700 whitespace-nowrap">
+                                    {formatWisAmount(policy.historyClassroomBonusAmount)}
+                                </div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 xl:col-span-2">
+                    <ToggleCard
+                        title={POINT_POLICY_FIELD_LABELS.attendanceMilestoneBonusEnabled}
+                        description={POINT_POLICY_FIELD_HELPERS.attendanceMilestoneBonusEnabled}
+                        checked={policy.attendanceMilestoneBonusEnabled}
+                        disabled={!canManage || !policy.autoRewardEnabled}
+                        onChange={(checked) => onPolicyChange((prev) => ({
+                            ...prev,
+                            attendanceMilestoneBonusEnabled: checked,
+                        }))}
+                    />
+                    <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                        <InlineMetricField
+                            title={POINT_POLICY_FIELD_LABELS.attendanceMilestone50}
+                            description={POINT_POLICY_FIELD_HELPERS.attendanceMilestone50}
+                            value={policy.attendanceMilestone50}
+                            disabled={!canManage || !policy.attendanceMilestoneBonusEnabled || !policy.autoRewardEnabled}
+                            suffix={formatWisAmount(policy.attendanceMilestone50)}
+                            onChange={(value) => onPolicyChange((prev) => ({
+                                ...prev,
+                                attendanceMilestone50: value,
+                            }))}
+                        />
+                        <InlineMetricField
+                            title={POINT_POLICY_FIELD_LABELS.attendanceMilestone100}
+                            description={POINT_POLICY_FIELD_HELPERS.attendanceMilestone100}
+                            value={policy.attendanceMilestone100}
+                            disabled={!canManage || !policy.attendanceMilestoneBonusEnabled || !policy.autoRewardEnabled}
+                            suffix={formatWisAmount(policy.attendanceMilestone100)}
+                            onChange={(value) => onPolicyChange((prev) => ({
+                                ...prev,
+                                attendanceMilestone100: value,
+                            }))}
+                        />
+                        <InlineMetricField
+                            title={POINT_POLICY_FIELD_LABELS.attendanceMilestone200}
+                            description={POINT_POLICY_FIELD_HELPERS.attendanceMilestone200}
+                            value={policy.attendanceMilestone200}
+                            disabled={!canManage || !policy.attendanceMilestoneBonusEnabled || !policy.autoRewardEnabled}
+                            suffix={formatWisAmount(policy.attendanceMilestone200)}
+                            onChange={(value) => onPolicyChange((prev) => ({
+                                ...prev,
+                                attendanceMilestone200: value,
+                            }))}
+                        />
+                        <InlineMetricField
+                            title={POINT_POLICY_FIELD_LABELS.attendanceMilestone300}
+                            description={POINT_POLICY_FIELD_HELPERS.attendanceMilestone300}
+                            value={policy.attendanceMilestone300}
+                            disabled={!canManage || !policy.attendanceMilestoneBonusEnabled || !policy.autoRewardEnabled}
+                            suffix={formatWisAmount(policy.attendanceMilestone300)}
+                            onChange={(value) => onPolicyChange((prev) => ({
+                                ...prev,
+                                attendanceMilestone300: value,
+                            }))}
+                        />
+                    </div>
+                    <div className="mt-4 rounded-2xl border border-dashed border-amber-200 bg-white/80 px-4 py-3 text-xs font-medium leading-5 text-gray-600">
+                        누적 출석 50회, 100회, 200회, 300회를 정확히 달성한 시점에만 각 보너스가 학생당 1회씩 지급됩니다.
                     </div>
                 </div>
             </div>

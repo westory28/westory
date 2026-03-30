@@ -1,4 +1,5 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
+import { normalizeProfileEmojiValue } from '../../lib/profileEmojis';
 import type { PointRankDisplay } from '../../lib/pointRanks';
 import type { PointRankEmojiRegistryEntry } from '../../types';
 import PointRankBadge from './PointRankBadge';
@@ -10,6 +11,18 @@ interface StudentRankPromotionPopupProps {
     previewEmojiEntries: PointRankEmojiRegistryEntry[];
     onClose: () => void;
 }
+
+const dedupePreviewEmojiEntries = (entries: PointRankEmojiRegistryEntry[]) => {
+    const seenEmojiValues = new Set<string>();
+    return entries.filter((entry) => {
+        const normalizedEmojiValue = normalizeProfileEmojiValue(entry.emoji);
+        if (!normalizedEmojiValue || seenEmojiValues.has(normalizedEmojiValue)) {
+            return false;
+        }
+        seenEmojiValues.add(normalizedEmojiValue);
+        return true;
+    });
+};
 
 const StudentRankPromotionPopup: React.FC<StudentRankPromotionPopupProps> = ({
     open,
@@ -65,8 +78,12 @@ const StudentRankPromotionPopup: React.FC<StudentRankPromotionPopupProps> = ({
     if (!open) return null;
 
     const previewLimit = effectLevel === 'subtle' ? 3 : 5;
-    const visiblePreviewEmojis = previewEmojiEntries.slice(0, previewLimit);
+    const dedupedPreviewEmojis = dedupePreviewEmojiEntries(previewEmojiEntries);
+    const visiblePreviewEmojis = dedupedPreviewEmojis.slice(0, previewLimit);
     const hasPreviewEmojis = visiblePreviewEmojis.length > 0;
+    const previewCountLabel = dedupedPreviewEmojis.length > visiblePreviewEmojis.length
+        ? `미리보기 ${visiblePreviewEmojis.length}개 / 신규 ${dedupedPreviewEmojis.length}개`
+        : `미리보기 ${visiblePreviewEmojis.length}개`;
 
     return (
         <div className="fixed inset-0 z-[220] flex items-center justify-center px-4 py-6 sm:px-6">
@@ -165,7 +182,7 @@ const StudentRankPromotionPopup: React.FC<StudentRankPromotionPopupProps> = ({
                                 새로 해금된 이모지
                             </h3>
                             <span className="text-xs font-medium text-slate-500">
-                                {effectLevel === 'subtle' ? '미리보기 3개' : '미리보기 5개'}
+                                {previewCountLabel}
                             </span>
                         </div>
 

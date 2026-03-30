@@ -60,9 +60,14 @@ export interface CalendarEvent {
 export type PointTransactionType =
   | "attendance"
   | "attendance_monthly_bonus"
+  | "attendance_milestone_bonus"
   | "quiz"
   | "quiz_bonus"
   | "lesson"
+  | "think_cloud"
+  | "map_tag"
+  | "history_classroom"
+  | "history_classroom_bonus"
   | "manual_adjust"
   | "manual_reclaim"
   | "purchase_hold"
@@ -241,10 +246,25 @@ export interface PointPolicyRewardRule {
   amount: number;
 }
 
+export interface PointPolicyActivityRewardRule extends PointPolicyRewardRule {
+  cooldownHours?: number;
+  maxClaims?: number;
+}
+
 export interface PointPolicyQuizBonusRule {
   enabled: boolean;
   thresholdScore: number;
   amount: number;
+}
+
+export interface PointPolicyAttendanceMilestoneBonusRule {
+  enabled: boolean;
+  amounts: {
+    "50": number;
+    "100": number;
+    "200": number;
+    "300": number;
+  };
 }
 
 export interface PointRewardPolicy {
@@ -252,8 +272,13 @@ export interface PointRewardPolicy {
   attendance: PointPolicyRewardRule;
   quiz: PointPolicyRewardRule;
   lesson: PointPolicyRewardRule;
+  thinkCloud: PointPolicyActivityRewardRule;
+  mapTag: PointPolicyActivityRewardRule;
+  historyClassroom: PointPolicyActivityRewardRule;
   attendanceMonthlyBonus: PointPolicyRewardRule;
   quizBonus: PointPolicyQuizBonusRule;
+  historyClassroomBonus: PointPolicyQuizBonusRule;
+  attendanceMilestoneBonus: PointPolicyAttendanceMilestoneBonusRule;
 }
 
 export interface PointControlPolicy {
@@ -266,6 +291,22 @@ export interface PointPolicy {
   attendanceMonthlyBonus: number;
   lessonView: number;
   quizSolve: number;
+  thinkCloudEnabled: boolean;
+  thinkCloudAmount: number;
+  thinkCloudMaxClaims: number;
+  mapTagEnabled: boolean;
+  mapTagAmount: number;
+  mapTagMaxClaims: number;
+  historyClassroomEnabled: boolean;
+  historyClassroomAmount: number;
+  historyClassroomBonusEnabled: boolean;
+  historyClassroomBonusThreshold: number;
+  historyClassroomBonusAmount: number;
+  attendanceMilestoneBonusEnabled: boolean;
+  attendanceMilestone50: number;
+  attendanceMilestone100: number;
+  attendanceMilestone200: number;
+  attendanceMilestone300: number;
   autoRewardEnabled: boolean;
   quizBonusEnabled: boolean;
   quizBonusThreshold: number;

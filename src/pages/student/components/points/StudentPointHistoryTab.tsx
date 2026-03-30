@@ -11,18 +11,7 @@ import {
 } from "../../../../lib/pointFormatters";
 import type { PointTransaction } from "../../../../types";
 
-type HistoryFilter =
-  | "all"
-  | "earned"
-  | "spent"
-  | "attendance"
-  | "attendance_monthly_bonus"
-  | "quiz"
-  | "quiz_bonus"
-  | "lesson"
-  | "manual_adjust"
-  | "manual_reclaim"
-  | "purchase";
+type HistoryFilter = keyof typeof POINT_HISTORY_FILTER_LABELS;
 
 interface StudentPointHistoryTabProps {
   historyFilter: HistoryFilter;

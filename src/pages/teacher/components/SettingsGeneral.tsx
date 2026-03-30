@@ -4,7 +4,7 @@ import { useAppToast } from '../../../components/common/AppToastProvider';
 import { useAuth } from '../../../contexts/AuthContext';
 import { notifySystemConfigUpdated } from '../../../lib/appEvents';
 import { db } from '../../../lib/firebase';
-import { DEFAULT_POINT_RANK_POLICY } from '../../../lib/pointRanks';
+import { getDefaultPointPolicy } from '../../../lib/points';
 import {
     loadSemesterReadiness,
     type SemesterReadinessResult,
@@ -39,32 +39,7 @@ const DEFAULT_CONFIG: SettingsConfigState = {
     showScore: true,
     showLesson: true,
 };
-const DEFAULT_POINT_POLICY = {
-    attendanceDaily: 5,
-    attendanceMonthlyBonus: 20,
-    lessonView: 3,
-    quizSolve: 10,
-    autoRewardEnabled: true,
-    quizBonusEnabled: false,
-    quizBonusThreshold: 100,
-    quizBonusAmount: 0,
-    manualAdjustEnabled: false,
-    allowNegativeBalance: false,
-    rewardPolicy: {
-        autoEnabled: true,
-        attendance: { enabled: true, amount: 5 },
-        quiz: { enabled: true, amount: 10 },
-        lesson: { enabled: true, amount: 3 },
-        attendanceMonthlyBonus: { enabled: true, amount: 20 },
-        quizBonus: { enabled: false, thresholdScore: 100, amount: 0 },
-    },
-    controlPolicy: {
-        manualAdjustEnabled: false,
-        allowNegativeBalance: false,
-    },
-    rankPolicy: DEFAULT_POINT_RANK_POLICY,
-    updatedBy: '',
-};
+const DEFAULT_POINT_POLICY = getDefaultPointPolicy();
 
 const normalizeYear = (value: unknown) => {
     const next = String(value || '').trim();

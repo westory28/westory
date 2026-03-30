@@ -21,6 +21,7 @@ import {
   getProfileEmojiEntryByValue,
   getProfileEmojiRegistry,
   getProfileEmojiValueById,
+  normalizeProfileEmojiValue,
   resolveProfileEmojiRegistry,
   sanitizeProfileEmojiIds,
 } from "./profileEmojis";
@@ -848,9 +849,14 @@ export const isPointRankEarnTransaction = (
   [
     "attendance",
     "attendance_monthly_bonus",
+    "attendance_milestone_bonus",
     "quiz",
     "quiz_bonus",
     "lesson",
+    "think_cloud",
+    "map_tag",
+    "history_classroom",
+    "history_classroom_bonus",
     "manual_adjust",
   ].includes(transaction.type) && Number(transaction.delta || 0) > 0;
 
@@ -1086,15 +1092,27 @@ export const getPointRankNewlyUnlockedEmojiEntries = ({
   currentTierCode?: PointRankTierCode | null;
 }) => {
   const resolvedPolicy = resolvePointRankPolicy(rankPolicy);
-  const previousIds = new Set(
-    getPointRankAllowedEmojiIds(resolvedPolicy, previousTierCode),
+  const previousEmojiValues = new Set(
+    getPointRankAllowedEmojiIds(resolvedPolicy, previousTierCode)
+      .map((emojiId) =>
+        getProfileEmojiEntryById(emojiId, resolvedPolicy.emojiRegistry),
+      )
+      .filter((entry) => Boolean(entry))
+      .map((entry) => normalizeProfileEmojiValue(entry?.emoji || "")),
   );
+  const seenEmojiValues = new Set(previousEmojiValues);
   return getPointRankAllowedEmojiIds(resolvedPolicy, currentTierCode)
-    .filter((emojiId) => !previousIds.has(emojiId))
     .map((emojiId) =>
       getProfileEmojiEntryById(emojiId, resolvedPolicy.emojiRegistry),
     )
-    .filter((entry): entry is PointRankEmojiRegistryEntry => Boolean(entry));
+    .filter((entry): entry is PointRankEmojiRegistryEntry => {
+      if (!entry) return false;
+      const normalizedEmojiValue = normalizeProfileEmojiValue(entry.emoji);
+      if (!normalizedEmojiValue) return false;
+      if (seenEmojiValues.has(normalizedEmojiValue)) return false;
+      seenEmojiValues.add(normalizedEmojiValue);
+      return true;
+    });
 };
 
 export const getPointRankDefaultEmojiValue = (
