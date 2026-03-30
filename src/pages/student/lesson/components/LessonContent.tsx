@@ -670,6 +670,21 @@ const LessonContent: React.FC<LessonContentProps> = ({
       pulseFootnote(footnote.anchorKey);
     }
   };
+  const saveStatusToneClass = isSaving
+    ? "bg-blue-50 text-blue-700"
+    : hasUnsavedChanges
+      ? "bg-amber-50 text-amber-700"
+      : saveMessage === "저장됨"
+        ? "bg-emerald-50 text-emerald-700"
+        : "bg-slate-100 text-slate-500";
+  const saveStatusLabel = isSaving
+    ? "저장 중..."
+    : saveMessage || (hasUnsavedChanges ? "저장 필요" : "저장 대기");
+  const floatingSaveButtonLabel = isSaving
+    ? "저장 중..."
+    : hasUnsavedChanges
+      ? "저장"
+      : "저장됨";
 
   const content = (
     <div
@@ -686,69 +701,16 @@ const LessonContent: React.FC<LessonContentProps> = ({
           <h1 className="min-w-0 flex-1 text-2xl font-extrabold leading-tight text-slate-900 md:text-3xl">
             {normalizedLesson.title || fallbackTitle || "제목 없음"}
           </h1>
-          <div className="flex items-center gap-2">
-            {canPersist && (
-              <span
-                className={`rounded-full px-4 py-2 text-sm font-bold ${hasUnsavedChanges ? "bg-amber-50 text-amber-700" : saveMessage === "저장됨" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}
-              >
-                {isSaving ? "저장 중..." : saveMessage || "저장 대기"}
-              </span>
-            )}
-            {fullscreenPreview && onClosePreview && (
-              <button
-                type="button"
-                onClick={onClosePreview}
-                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-              >
-                <i className="fas fa-times text-xs"></i>닫기
-              </button>
-            )}
-          </div>
+          {fullscreenPreview && onClosePreview && (
+            <button
+              type="button"
+              onClick={onClosePreview}
+              className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            >
+              <i className="fas fa-times text-xs"></i>닫기
+            </button>
+          )}
         </div>
-
-        {canPersist && (
-          <div className="sticky top-[4.7rem] z-20 mb-5 rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div className="flex flex-wrap items-center gap-2">
-                <span
-                  className={`rounded-full px-4 py-2 text-sm font-bold ${
-                    hasUnsavedChanges
-                      ? "bg-amber-50 text-amber-700"
-                      : saveMessage === "저장됨"
-                        ? "bg-emerald-50 text-emerald-700"
-                        : "bg-slate-100 text-slate-500"
-                  }`}
-                >
-                  {isSaving ? "저장 중..." : saveMessage || "저장 대기"}
-                </span>
-                <span className="text-xs font-semibold text-slate-500">
-                  긴 본문이나 PDF 풀이 중에도 여기서 바로 저장할 수 있습니다.
-                </span>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleReset}
-                  className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
-                >
-                  다시 쓰기
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveAction}
-                  disabled={isSaving || !hasUnsavedChanges}
-                  className={`rounded-xl px-5 py-2.5 text-sm font-bold transition ${
-                    isSaving || !hasUnsavedChanges
-                      ? "cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400"
-                      : "border border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
-                  }`}
-                >
-                  {isSaving ? "저장 중..." : "저장"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {embedUrl && (
           <div
@@ -765,7 +727,10 @@ const LessonContent: React.FC<LessonContentProps> = ({
           </div>
         )}
 
-        <div ref={contentRef} className="space-y-6">
+        <div
+          ref={contentRef}
+          className={canPersist ? "space-y-6 pb-24 md:pb-28" : "space-y-6"}
+        >
           {!!worksheet.pageImages.length &&
             (fullscreenPreview ? (
               <LessonWorksheetStage
@@ -887,22 +852,47 @@ const LessonContent: React.FC<LessonContentProps> = ({
           >
             <i className="fas fa-undo mr-2"></i>다시 쓰기
           </button>
-          {canPersist && (
-            <button
-              type="button"
-              onClick={handleSaveAction}
-              disabled={isSaving || !hasUnsavedChanges}
-              className={`rounded-xl px-6 py-3 font-bold transition ${isSaving || !hasUnsavedChanges ? "cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400" : "border border-blue-600 bg-blue-600 text-white hover:bg-blue-700"}`}
-            >
-              저장
-            </button>
-          )}
           {hasInteractiveBlanks && (
             <span className="rounded-full bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
               빈칸 입력 시 정답 여부가 바로 표시됩니다.
             </span>
           )}
         </div>
+
+        {canPersist && (
+          <div className="pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] right-4 z-[70] flex flex-col items-end gap-3 md:right-6">
+            <div
+              aria-live="polite"
+              className={`pointer-events-auto rounded-full px-4 py-2 text-xs font-bold shadow-sm ${saveStatusToneClass}`}
+            >
+              {saveStatusLabel}
+            </div>
+            <button
+              type="button"
+              onClick={handleSaveAction}
+              disabled={isSaving || !hasUnsavedChanges}
+              className={`pointer-events-auto inline-flex min-h-14 items-center gap-3 rounded-full px-5 text-sm font-bold shadow-[0_18px_38px_rgba(15,23,42,0.18)] transition focus-visible:outline-none focus-visible:ring-4 ${
+                isSaving
+                  ? "bg-blue-600 text-white focus-visible:ring-blue-100"
+                  : hasUnsavedChanges
+                    ? "bg-blue-600 text-white hover:bg-blue-700 focus-visible:ring-blue-100"
+                    : "cursor-default border border-emerald-200 bg-white text-emerald-700 focus-visible:ring-emerald-100"
+              }`}
+              aria-label={floatingSaveButtonLabel}
+            >
+              <i
+                className={`fas ${
+                  isSaving
+                    ? "fa-spinner fa-spin"
+                    : hasUnsavedChanges
+                      ? "fa-floppy-disk"
+                      : "fa-check"
+                } text-sm`}
+              ></i>
+              <span>{floatingSaveButtonLabel}</span>
+            </button>
+          </div>
+        )}
 
         {saveCompletionPopup && (
           <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
