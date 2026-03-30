@@ -5,7 +5,28 @@ import interactionPlugin from "@fullcalendar/interaction";
 import listPlugin from "@fullcalendar/list";
 import { getScheduleCategoryMeta } from "../../../lib/scheduleCategories";
 import type { ScheduleCategory } from "../../../lib/scheduleCategories";
-import { CalendarEvent } from "../../../types";
+import type { CalendarEvent } from "../../../types";
+
+type CalendarViewType = "dayGridMonth" | "listMonth";
+
+const LABELS = {
+  all: "\uc804\uccb4",
+  attendance: "\ucd9c\uc11d",
+  attendanceAction: "\ucd9c\uc11d \uccb4\ud06c",
+  attendanceDone: "\uc624\ub298 \ucd9c\uc11d \uc644\ub8cc",
+  attendanceError: "\ucd9c\uc11d \ud655\uc778 \ud544\uc694",
+  attendanceLoading: "\ucc98\ub9ac \uc911...",
+  calendar: "\ub2ec\ub825",
+  heading: "\ud559\uc0ac \uc77c\uc815",
+  holiday: "\uacf5\ud734\uc77c",
+  list: "\ubaa9\ub85d",
+  nextMonth: "\ub2e4\uc74c \ub2ec",
+  previousMonth: "\uc774\uc804 \ub2ec",
+  search: "\uc77c\uc815 \uac80\uc0c9",
+  schedule: "\uc77c\uc815",
+  thisMonth: "\uc774\ubc88 \ub2ec",
+  today: "\uc624\ub298",
+} as const;
 
 const toExclusiveEnd = (start?: string, end?: string) => {
   if (!start || !end || end <= start) return undefined;
@@ -31,6 +52,66 @@ interface CalendarSectionProps {
   attendanceGoalText?: string;
 }
 
+const ChevronLeftIcon = () => (
+  <svg
+    viewBox="0 0 20 20"
+    fill="none"
+    aria-hidden="true"
+    width="16"
+    height="16"
+  >
+    <path
+      d="M12.5 4.5 7 10l5.5 5.5"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const ChevronRightIcon = () => (
+  <svg
+    viewBox="0 0 20 20"
+    fill="none"
+    aria-hidden="true"
+    width="16"
+    height="16"
+  >
+    <path
+      d="m7.5 4.5 5.5 5.5-5.5 5.5"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const SearchIcon = () => (
+  <svg
+    viewBox="0 0 20 20"
+    fill="none"
+    aria-hidden="true"
+    width="16"
+    height="16"
+  >
+    <circle
+      cx="8.5"
+      cy="8.5"
+      r="4.75"
+      stroke="currentColor"
+      strokeWidth="1.8"
+    />
+    <path
+      d="m12 12 4 4"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
 const CalendarSection: React.FC<CalendarSectionProps> = ({
   categories,
   events,
@@ -44,11 +125,9 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
   attendanceChecked = false,
   attendanceMessage = "",
   attendanceDates = [],
-  attendanceGoalText = "",
 }) => {
-  const [currentViewType, setCurrentViewType] = useState<
-    "dayGridMonth" | "listMonth"
-  >("dayGridMonth");
+  const [currentViewType, setCurrentViewType] =
+    useState<CalendarViewType>("dayGridMonth");
   const [currentTitle, setCurrentTitle] = useState("");
   const [visibleRange, setVisibleRange] = useState<{
     start: string;
@@ -59,28 +138,16 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
     () => new Set(attendanceDates),
     [attendanceDates],
   );
+  const attendanceHasError = /\uc624\ub958|\uc2e4\ud328/.test(
+    attendanceMessage,
+  );
+  const isMonthView = currentViewType === "dayGridMonth";
 
-  const attendanceStatusText = attendanceLoading
-    ? "출석 처리 중"
-    : /오류|실패/.test(attendanceMessage)
-      ? "출석 처리 오류"
-      : attendanceChecked
-        ? "오늘 출석 완료"
-        : "오늘 출석 가능";
-
-  const attendanceStatusClassName = /오류|실패/.test(attendanceMessage)
-    ? "border-rose-200 bg-rose-50 text-rose-700"
-    : attendanceChecked
-      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-      : attendanceLoading
-        ? "border-amber-200 bg-amber-50 text-amber-800"
-        : "border-gray-200 bg-white text-gray-600";
-
-  const attendanceButtonLabel = attendanceChecked
-    ? "오늘 출석 완료"
-    : attendanceLoading
-      ? "처리 중..."
-      : "출석 체크";
+  const attendanceButtonLabel = attendanceLoading
+    ? LABELS.attendanceLoading
+    : attendanceHasError
+      ? LABELS.attendanceError
+      : LABELS.attendanceAction;
 
   const formatEventTargetLabel = (event?: CalendarEvent) => {
     if (
@@ -89,11 +156,12 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
       event.targetType === "all" ||
       event.targetType === "common"
     ) {
-      return "전체";
+      return LABELS.all;
     }
+
     const [gradeValue, classValue] = String(event.targetClass || "").split("-");
-    if (!gradeValue || !classValue) return "전체";
-    return `${gradeValue}학년 ${classValue}반`;
+    if (!gradeValue || !classValue) return LABELS.all;
+    return `${gradeValue}\ud559\ub144 ${classValue}\ubc18`;
   };
 
   const fcEvents = events.map((event) => {
@@ -141,8 +209,11 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
   const formatEventTitle = (event: CalendarEvent) => {
     const rawTitle = String(event.title || "").trim();
     if (rawTitle) return rawTitle;
-    if (event.eventType === "holiday") return "공휴일";
-    return getScheduleCategoryMeta(event.eventType, categories).label || "일정";
+    if (event.eventType === "holiday") return LABELS.holiday;
+    return (
+      getScheduleCategoryMeta(event.eventType, categories).label ||
+      LABELS.schedule
+    );
   };
 
   const listRows = useMemo(() => {
@@ -150,8 +221,9 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
       currentViewType !== "listMonth" ||
       !visibleRange.start ||
       !visibleRange.end
-    )
+    ) {
       return [];
+    }
 
     const filtered = events
       .filter((event) => {
@@ -187,126 +259,155 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
     if (action === "today") api.today();
   };
 
-  const handleViewChange = (viewType: "dayGridMonth" | "listMonth") => {
+  const handleViewChange = (viewType: CalendarViewType) => {
     const api = calendarRef.current?.getApi();
     if (!api || api.view.type === viewType) return;
     api.changeView(viewType);
   };
 
+  const renderDayCellHeader = (date: Date, dayNumberText: string) => {
+    const dateStr = toLocalYmd(date);
+    const dayLabel = dayNumberText.replace(/[^\d]/g, "");
+
+    return (
+      <span className="student-calendar-day-head">
+        <span className="student-calendar-day-label">{dayLabel}</span>
+        {attendanceDateSet.has(dateStr) && (
+          <span className="student-calendar-day-badge">
+            {LABELS.attendance}
+          </span>
+        )}
+      </span>
+    );
+  };
+
   return (
-    <div className="student-calendar-section student-calendar-shell grid h-full min-h-[36rem] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl bg-white p-4 shadow-sm md:min-h-0">
-      <div className="mb-3 border-b border-gray-100 pb-3">
-        <div className="grid gap-3">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div className="min-w-0">
-              <h2 className="text-lg font-bold text-gray-800">
-                <i className="far fa-calendar-alt mr-2 text-blue-600"></i>학사
-                일정
-              </h2>
-              <p className="mt-1 truncate text-sm font-semibold text-gray-500">
-                {currentTitle || "이번 달 일정을 확인하세요."}
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-              <div className="inline-flex items-center overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                <button
-                  type="button"
-                  onClick={() => handleNavigate("prev")}
-                  className="inline-flex h-10 w-10 items-center justify-center border-r border-gray-200 text-gray-600 transition hover:bg-gray-50 hover:text-blue-700"
-                  aria-label="이전 달"
-                >
-                  <i className="fas fa-chevron-left text-xs"></i>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleNavigate("next")}
-                  className="inline-flex h-10 w-10 items-center justify-center text-gray-600 transition hover:bg-gray-50 hover:text-blue-700"
-                  aria-label="다음 달"
-                >
-                  <i className="fas fa-chevron-right text-xs"></i>
-                </button>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => handleNavigate("today")}
-                className="inline-flex h-10 items-center justify-center whitespace-nowrap rounded-xl border border-gray-200 bg-gray-50 px-4 text-sm font-bold text-gray-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
-              >
-                오늘
-              </button>
-
-              <div className="inline-flex items-center rounded-xl border border-gray-200 bg-gray-50 p-1">
-                <button
-                  type="button"
-                  onClick={() => handleViewChange("dayGridMonth")}
-                  aria-pressed={currentViewType === "dayGridMonth"}
-                  className={`inline-flex h-9 items-center justify-center whitespace-nowrap rounded-lg px-3 text-sm font-bold transition ${
-                    currentViewType === "dayGridMonth"
-                      ? "bg-white text-blue-700 shadow-sm"
-                      : "text-gray-600 hover:text-blue-700"
-                  }`}
-                >
-                  달력
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleViewChange("listMonth")}
-                  aria-pressed={currentViewType === "listMonth"}
-                  className={`inline-flex h-9 items-center justify-center whitespace-nowrap rounded-lg px-3 text-sm font-bold transition ${
-                    currentViewType === "listMonth"
-                      ? "bg-white text-blue-700 shadow-sm"
-                      : "text-gray-600 hover:text-blue-700"
-                  }`}
-                >
-                  목록
-                </button>
-              </div>
-            </div>
+    <div
+      className={`student-calendar-section student-calendar-shell ${
+        isMonthView ? "student-calendar-shell--month" : ""
+      }`}
+    >
+      <div className="student-calendar-shell__header">
+        <div className="student-calendar-shell__header-row">
+          <div className="student-calendar-shell__header-copy">
+            <span className="student-calendar-shell__eyebrow">
+              {LABELS.heading}
+            </span>
           </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="student-calendar-shell__titlebar">
+            <button
+              type="button"
+              onClick={() => handleNavigate("prev")}
+              className="student-calendar-shell__nav-button"
+              aria-label={LABELS.previousMonth}
+              title={LABELS.previousMonth}
+            >
+              <ChevronLeftIcon />
+            </button>
+
+            <div className="student-calendar-shell__month-label">
+              <p className="student-calendar-shell__month-caption">
+                {LABELS.thisMonth}
+              </p>
+              <h2 className="student-calendar-shell__month-title">
+                {currentTitle || LABELS.heading}
+              </h2>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => handleNavigate("next")}
+              className="student-calendar-shell__nav-button"
+              aria-label={LABELS.nextMonth}
+              title={LABELS.nextMonth}
+            >
+              <ChevronRightIcon />
+            </button>
+          </div>
+
+          <div className="student-calendar-shell__controls">
+            <button
+              type="button"
+              onClick={() => handleNavigate("today")}
+              className="student-calendar-shell__control-button"
+            >
+              {LABELS.today}
+            </button>
+
+            <div className="student-calendar-shell__view-toggle">
+              <button
+                type="button"
+                onClick={() => handleViewChange("dayGridMonth")}
+                aria-pressed={isMonthView}
+                className={`student-calendar-shell__view-button ${
+                  isMonthView ? "is-active" : ""
+                }`}
+              >
+                {LABELS.calendar}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleViewChange("listMonth")}
+                aria-pressed={currentViewType === "listMonth"}
+                className={`student-calendar-shell__view-button ${
+                  currentViewType === "listMonth" ? "is-active" : ""
+                }`}
+              >
+                {LABELS.list}
+              </button>
+            </div>
+
             <button
               type="button"
               onClick={onSearchClick}
-              className="inline-flex h-10 shrink-0 items-center justify-center gap-2 self-start rounded-xl border border-gray-200 bg-gray-50 px-4 text-sm font-bold text-gray-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
-              title="일정 검색"
+              className="student-calendar-shell__icon-button"
+              title={LABELS.search}
+              aria-label={LABELS.search}
             >
-              <i className="fas fa-search text-xs"></i>
-              일정 검색
+              <SearchIcon />
             </button>
 
-            <div className="flex min-w-0 flex-wrap items-center gap-2 sm:justify-end">
+            {attendanceChecked ? (
               <span
-                className={`inline-flex h-10 items-center rounded-full border px-4 text-sm font-bold ${attendanceStatusClassName}`}
-                title={attendanceMessage || attendanceStatusText}
+                className="student-calendar-shell__attendance-indicator"
+                title={attendanceMessage || LABELS.attendanceDone}
               >
-                {attendanceStatusText}
+                {LABELS.attendanceDone}
               </span>
-              {attendanceGoalText && (
-                <span
-                  className="inline-flex h-10 max-w-full items-center rounded-full border border-amber-200 bg-[#fff7d6] px-4 text-sm font-bold text-amber-800 sm:max-w-[240px]"
-                  title={attendanceGoalText}
-                >
-                  <span className="truncate">{attendanceGoalText}</span>
-                </span>
-              )}
+            ) : (
               <button
                 type="button"
                 onClick={onAttendanceCheck}
-                disabled={attendanceLoading || attendanceChecked}
-                title={attendanceMessage || "출석 체크"}
-                className="inline-flex h-10 items-center justify-center whitespace-nowrap rounded-xl bg-amber-500 px-4 text-sm font-bold text-white shadow-[0_12px_24px_rgba(245,158,11,0.22)] transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:border disabled:border-amber-300 disabled:bg-amber-100 disabled:text-amber-800 disabled:shadow-none"
+                disabled={attendanceLoading}
+                title={attendanceMessage || LABELS.attendanceAction}
+                data-tone={
+                  attendanceHasError
+                    ? "error"
+                    : attendanceLoading
+                      ? "loading"
+                      : "default"
+                }
+                className="student-calendar-shell__attendance-action"
               >
                 {attendanceButtonLabel}
               </button>
-            </div>
+            )}
           </div>
         </div>
+
+        {attendanceHasError && (
+          <p className="student-calendar-shell__error-message">
+            {attendanceMessage}
+          </p>
+        )}
       </div>
 
       <div
-        className={`calendar-wrapper student-calendar-shell__body relative flex-1 min-h-[420px] overflow-hidden md:min-h-0 ${currentViewType === "listMonth" ? "custom-list-active" : ""}`}
+        className={`calendar-wrapper student-calendar-shell__body ${
+          currentViewType === "listMonth" ? "custom-list-active" : ""
+        }`}
+        data-calendar-view={currentViewType}
       >
         <FullCalendar
           ref={calendarRef}
@@ -318,7 +419,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
           headerToolbar={false}
           events={fcEvents}
           datesSet={(arg) => {
-            setCurrentViewType(arg.view.type as "dayGridMonth" | "listMonth");
+            setCurrentViewType(arg.view.type as CalendarViewType);
             setCurrentTitle(arg.view.title);
             setVisibleRange({
               start: toLocalYmd(arg.start),
@@ -329,27 +430,19 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
           eventClick={(arg) =>
             onEventClick(arg.event.extendedProps as CalendarEvent)
           }
-          dayCellContent={(arg) => {
-            const dateStr = toLocalYmd(arg.date);
-            const dayLabel = arg.dayNumberText.replace(/[^\d]/g, "");
-            return (
-              <div className="student-calendar-day-head">
-                <span className="student-calendar-day-number">{dayLabel}</span>
-                {attendanceDateSet.has(dateStr) && (
-                  <span className="student-calendar-day-attendance">출석</span>
-                )}
-              </div>
-            );
-          }}
+          dayCellContent={(arg) =>
+            renderDayCellHeader(arg.date, arg.dayNumberText)
+          }
           eventContent={(arg) => {
             const event = arg.event.extendedProps as CalendarEvent;
             const isHoliday = event?.eventType === "holiday";
             const eventTitle = String(arg.event.title || "").trim();
             const meta = getScheduleCategoryMeta(event?.eventType, categories);
-            const categoryLabel = isHoliday ? "공휴일" : meta.label;
+            const categoryLabel = isHoliday ? LABELS.holiday : meta.label;
             const categoryColor = isHoliday ? "#ef4444" : meta.color;
             const targetLabel = formatEventTargetLabel(event);
-            const safeTitle = eventTitle || (isHoliday ? "공휴일" : "일정");
+            const safeTitle =
+              eventTitle || (isHoliday ? LABELS.holiday : LABELS.schedule);
 
             if (arg.view.type === "listMonth") {
               return (
@@ -367,7 +460,9 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                     </span>
                   </div>
                   <div
-                    className={`fc-list-title-cell ${isHoliday ? "holiday-segment-title" : ""}`}
+                    className={`fc-list-title-cell ${
+                      isHoliday ? "holiday-segment-title" : ""
+                    }`}
                   >
                     {safeTitle}
                   </div>
@@ -376,10 +471,13 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
               );
             }
 
-            if (arg.view.type !== "dayGridMonth") return undefined;
+            if (!isMonthView) return undefined;
+
             return (
               <div
-                className={`student-calendar-event-chip ${isHoliday ? "holiday-segment-title" : ""}`}
+                className={`student-calendar-event-chip ${
+                  isHoliday ? "holiday-segment-title" : ""
+                }`}
                 title={safeTitle}
               >
                 {safeTitle}
@@ -415,7 +513,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                     event.eventType,
                     categories,
                   );
-                  const categoryLabel = isHoliday ? "공휴일" : meta.label;
+                  const categoryLabel = isHoliday ? LABELS.holiday : meta.label;
                   const categoryColor = isHoliday ? "#ef4444" : meta.color;
                   const eventTitle = formatEventTitle(event);
                   const targetLabel = formatEventTargetLabel(event);
