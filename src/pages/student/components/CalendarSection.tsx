@@ -13,7 +13,8 @@ const LABELS = {
   all: "\uc804\uccb4",
   attendance: "\ucd9c\uc11d",
   attendanceAction: "\ucd9c\uc11d \uccb4\ud06c",
-  attendanceDone: "\uc624\ub298 \ucd9c\uc11d \uc644\ub8cc",
+  attendanceDone: "\ucd9c\uc11d \uc644\ub8cc",
+  attendanceDoneTitle: "\uc624\ub298 \ucd9c\uc11d \uc644\ub8cc",
   attendanceError: "\ucd9c\uc11d \ud655\uc778 \ud544\uc694",
   attendanceLoading: "\ucc98\ub9ac \uc911...",
   calendar: "\ub2ec\ub825",
@@ -24,7 +25,6 @@ const LABELS = {
   previousMonth: "\uc774\uc804 \ub2ec",
   search: "\uc77c\uc815 \uac80\uc0c9",
   schedule: "\uc77c\uc815",
-  thisMonth: "\uc774\ubc88 \ub2ec",
   today: "\uc624\ub298",
 } as const;
 
@@ -307,9 +307,6 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             </button>
 
             <div className="student-calendar-shell__month-label">
-              <p className="student-calendar-shell__month-caption">
-                {LABELS.thisMonth}
-              </p>
               <h2 className="student-calendar-shell__month-title">
                 {currentTitle || LABELS.heading}
               </h2>
@@ -371,7 +368,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             {attendanceChecked ? (
               <span
                 className="student-calendar-shell__attendance-indicator"
-                title={attendanceMessage || LABELS.attendanceDone}
+                title={attendanceMessage || LABELS.attendanceDoneTitle}
               >
                 {LABELS.attendanceDone}
               </span>

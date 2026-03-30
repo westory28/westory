@@ -55,26 +55,241 @@
   padding: 0 2px;
 }
 
+.student-calendar-section {
+  height: 100%;
+  min-height: 500px;
+}
+
+.student-calendar-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  height: 100%;
+  min-height: 0;
+}
+
+.student-calendar-shell__header {
+  flex: 0 0 auto;
+}
+
+.student-calendar-shell__header-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 1rem;
+}
+
+.student-calendar-shell__header-copy {
+  min-width: 0;
+  justify-self: start;
+}
+
+.student-calendar-shell__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 0.76rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  padding: 0.45rem 0.78rem;
+}
+
+.student-calendar-shell__titlebar {
+  display: inline-grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  justify-self: center;
+  gap: 0.75rem;
+  min-width: min(100%, 28rem);
+}
+
+.student-calendar-shell__month-label {
+  min-width: 0;
+  text-align: center;
+}
+
+.student-calendar-shell__month-title {
+  margin: 0;
+  color: #0f172a;
+  font-size: clamp(1.8rem, 2.5vw, 2.35rem);
+  font-weight: 900;
+  line-height: 1.04;
+  letter-spacing: -0.035em;
+}
+
+.student-calendar-shell__nav-button,
+.student-calendar-shell__icon-button,
+.student-calendar-shell__control-button,
+.student-calendar-shell__attendance-action {
+  appearance: none;
+  border: 1px solid #dbeafe;
+  background: #ffffff;
+  color: #1e3a8a;
+  border-radius: 9999px;
+  font-weight: 800;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.student-calendar-shell__nav-button,
+.student-calendar-shell__icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  box-shadow: 0 10px 18px rgba(148, 163, 184, 0.14);
+}
+
+.student-calendar-shell__control-button,
+.student-calendar-shell__attendance-action,
+.student-calendar-shell__attendance-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0 0.95rem;
+  white-space: nowrap;
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.student-calendar-shell__nav-button:hover,
+.student-calendar-shell__icon-button:hover,
+.student-calendar-shell__control-button:hover,
+.student-calendar-shell__attendance-action:hover {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  box-shadow: 0 12px 22px rgba(59, 130, 246, 0.14);
+  transform: translateY(-1px);
+}
+
+.student-calendar-shell__nav-button:focus-visible,
+.student-calendar-shell__icon-button:focus-visible,
+.student-calendar-shell__control-button:focus-visible,
+.student-calendar-shell__view-button:focus-visible,
+.student-calendar-shell__attendance-action:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.student-calendar-shell__nav-button:disabled,
+.student-calendar-shell__icon-button:disabled,
+.student-calendar-shell__control-button:disabled,
+.student-calendar-shell__attendance-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.student-calendar-shell__controls {
+  display: flex;
+  align-items: center;
+  justify-self: end;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.student-calendar-shell__view-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  border-radius: 9999px;
+  background: #eff6ff;
+  padding: 0.2rem;
+}
+
+.student-calendar-shell__view-button {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: #475569;
+  border-radius: 9999px;
+  padding: 0.62rem 0.92rem;
+  font-size: 0.84rem;
+  font-weight: 800;
+  line-height: 1;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.student-calendar-shell__view-button.is-active {
+  background: #ffffff;
+  color: #1d4ed8;
+  box-shadow: 0 8px 18px rgba(59, 130, 246, 0.18);
+}
+
+.student-calendar-shell__attendance-action {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.student-calendar-shell__attendance-action[data-tone="error"] {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.student-calendar-shell__attendance-action[data-tone="loading"] {
+  border-color: #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
+}
+
+.student-calendar-shell__attendance-indicator {
+  border: 1px solid #a7f3d0;
+  border-radius: 9999px;
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.student-calendar-shell__error-message {
+  margin: 0.55rem 0 0;
+  color: #b91c1c;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-align: right;
+}
+
+.calendar-wrapper {
+  min-height: 0;
+}
+
+.student-calendar-shell__body {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 1.5rem;
+  background: #ffffff;
+  box-shadow: 0 24px 54px rgba(15, 23, 42, 0.08);
+}
+
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"],
+.student-calendar-shell__body[data-calendar-view="listMonth"] {
+  min-height: 31rem;
+}
+
 .student-calendar-shell__body[data-calendar-view="listMonth"] .fc-view-harness {
   display: none !important;
 }
 
 .student-calendar-shell .custom-schedule-list {
-  height: 100%;
-}
-
-.student-calendar-shell__body .fc,
-.student-calendar-shell__body .fc-view-harness,
-.student-calendar-shell__body .fc-scrollgrid,
-.student-calendar-shell__body .fc-scrollgrid-section,
-.student-calendar-shell__body .fc-scrollgrid-section > td,
-.student-calendar-shell__body .fc-scrollgrid-section > td > div,
-.student-calendar-shell__body .fc-scroller-harness,
-.student-calendar-shell__body .fc-scroller,
-.student-calendar-shell__body .fc-daygrid-body,
-.student-calendar-shell__body .fc-scrollgrid-sync-table,
-.student-calendar-shell__body .fc-scrollgrid-sync-table tbody,
-.student-calendar-shell__body .fc-scrollgrid-sync-table tr {
   height: 100%;
 }
 
@@ -173,13 +388,52 @@
   font-weight: 800 !important;
 }
 
-.student-calendar-section .fc-day-holiday .student-calendar-day-number,
-.student-calendar-section .fc-day-sun .student-calendar-day-number {
+.student-calendar-section .fc-day-holiday .student-calendar-day-label,
+.student-calendar-section .fc-day-sun .student-calendar-day-label {
   color: #ef4444 !important;
 }
 
-.student-calendar-section .fc-day-sat .student-calendar-day-number {
+.student-calendar-section .fc-day-sat .student-calendar-day-label {
   color: #3b82f6 !important;
+}
+
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"] .fc,
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc-view-harness,
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"] .fc-view,
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"] .fc-daygrid,
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc-scrollgrid,
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc-scrollgrid-section,
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc-scrollgrid-section
+  > td,
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc-scrollgrid-section
+  > td
+  > div,
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc-scroller-harness,
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"] .fc-scroller,
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc-daygrid-body,
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc-scrollgrid-sync-table,
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc-scrollgrid-sync-table
+  > tbody {
+  height: 100%;
+  min-height: 0;
+}
+
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-daygrid-body,
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-scrollgrid-sync-table {
+  width: 100% !important;
 }
 
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"] .fc-scroller,
@@ -244,7 +498,6 @@
   padding: 0 !important;
   display: block;
   width: 100%;
-  font-weight: 800;
   text-align: left;
   text-decoration: none !important;
   white-space: nowrap;
@@ -257,13 +510,13 @@
   align-items: flex-start;
   gap: 0.35rem;
   width: 100%;
-  min-height: 2rem;
+  min-height: 2.1rem;
   padding: 0.42rem 0.46rem 0;
 }
 
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
   .fc
-  .student-calendar-day-number {
+  .student-calendar-day-label {
   flex: 0 0 auto;
   font-size: 0.95rem;
   font-weight: 800;
@@ -272,19 +525,21 @@
 
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
   .fc
-  .student-calendar-day-attendance {
+  .student-calendar-day-badge {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  border: 1px solid #bae6fd;
+  min-height: 1.35rem;
+  border: 1px solid #fecaca;
   border-radius: 9999px;
-  background: #e0f2fe;
-  color: #0369a1;
-  font-size: 0.67rem;
+  background: #fef2f2;
+  color: #dc2626;
+  font-size: 0.64rem;
   font-weight: 800;
   line-height: 1;
-  padding: 0.24rem 0.45rem;
+  letter-spacing: -0.01em;
+  padding: 0.2rem 0.42rem;
 }
 
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
@@ -358,7 +613,58 @@
     height: auto !important;
   }
 
-  .calendar-wrapper {
+  .student-calendar-section {
+    min-height: 0;
+  }
+
+  .student-calendar-shell {
+    gap: 0.85rem;
+  }
+
+  .student-calendar-shell__header-row {
+    grid-template-columns: 1fr;
+    gap: 0.85rem;
+  }
+
+  .student-calendar-shell__header-copy {
+    display: none;
+  }
+
+  .student-calendar-shell__titlebar {
+    width: 100%;
+    min-width: 0;
+    gap: 0.6rem;
+  }
+
+  .student-calendar-shell__month-title {
+    font-size: 1.62rem;
+  }
+
+  .student-calendar-shell__controls {
+    display: grid;
+    grid-template-columns: auto auto auto auto;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.45rem;
+  }
+
+  .student-calendar-shell__control-button,
+  .student-calendar-shell__attendance-action,
+  .student-calendar-shell__attendance-indicator {
+    min-height: 2.55rem;
+    padding: 0 0.82rem;
+    font-size: 0.8rem;
+  }
+
+  .student-calendar-shell__nav-button,
+  .student-calendar-shell__icon-button {
+    width: 2.55rem;
+    height: 2.55rem;
+  }
+
+  .calendar-wrapper,
+  .student-calendar-shell__body[data-calendar-view="dayGridMonth"],
+  .student-calendar-shell__body[data-calendar-view="listMonth"] {
     min-height: 420px;
   }
 
@@ -380,71 +686,21 @@
 
   .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
     .fc
-    .student-calendar-day-number {
+    .student-calendar-day-label {
     font-size: 0.88rem;
   }
 
   .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
     .fc
-    .student-calendar-day-attendance {
-    font-size: 0.58rem;
-    padding: 0.2rem 0.38rem;
+    .student-calendar-day-badge {
+    min-height: 1.22rem;
+    font-size: 0.56rem;
+    padding: 0.17rem 0.34rem;
   }
 
   .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
     .fc
-    .fc-daygrid-event {
+  .fc-daygrid-event {
     font-size: 0.7rem;
-  }
-
-  .fc .fc-toolbar {
-    display: grid !important;
-    grid-template-columns: auto minmax(0, 1fr) auto !important;
-    align-items: center !important;
-    gap: 0.35rem;
-  }
-
-  .fc .fc-toolbar-chunk {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    flex-wrap: nowrap !important;
-    gap: 4px;
-  }
-
-  .fc .fc-toolbar-chunk:first-child {
-    justify-content: flex-start;
-  }
-
-  .fc .fc-toolbar-chunk:last-child {
-    justify-content: flex-end;
-  }
-
-  .fc .fc-toolbar-title {
-    font-size: 0.95rem !important;
-    text-align: center;
-    white-space: nowrap;
-  }
-
-  .fc .fc-button {
-    padding: 0.22rem 0.45rem !important;
-    font-size: 0.72rem !important;
-  }
-
-  .fc .fc-button-group {
-    display: inline-flex !important;
-    flex-wrap: nowrap !important;
-  }
-
-  .fc .fc-header-toolbar {
-    margin-bottom: 0.4rem !important;
-    overflow-x: auto;
-    overflow-y: hidden;
-    white-space: nowrap;
-    scrollbar-width: none;
-  }
-
-  .fc .fc-header-toolbar::-webkit-scrollbar {
-    display: none;
   }
 }
