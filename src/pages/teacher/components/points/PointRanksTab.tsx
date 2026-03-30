@@ -122,6 +122,16 @@ const extractRankSettingsDraft = (
   },
 });
 
+const cloneRankSettingsDraft = (
+  draft: RankSettingsDraft,
+): RankSettingsDraft => ({
+  tiers: cloneRankTiers(draft.tiers),
+  themes: cloneRankThemes(draft.themes),
+  celebrationPolicy: {
+    ...draft.celebrationPolicy,
+  },
+});
+
 const buildRankSettingsPolicy = (
   savedRankPolicy: PointRankPolicy,
   draft: RankSettingsDraft,
@@ -281,14 +291,10 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
       ? "world_nobility"
       : "korean_golpum";
 
-  const updateRankSettingsPolicy = (
-    updater: (prev: PointRankPolicy) => PointRankPolicy,
+  const updateRankSettingsDraftState = (
+    updater: (prev: RankSettingsDraft) => RankSettingsDraft,
   ) => {
-    onRankSettingsDraftChange((prev) =>
-      extractRankSettingsDraft(
-        updater(buildRankSettingsPolicy(savedRankPolicy, prev)),
-      ),
-    );
+    onRankSettingsDraftChange((prev) => updater(cloneRankSettingsDraft(prev)));
   };
 
   const updateEmojiCollectionPolicy = (
@@ -305,7 +311,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
     tierCode: PointRankPolicyTier["code"],
     updater: (tier: PointRankPolicyTier) => PointRankPolicyTier,
   ) => {
-    updateRankSettingsPolicy((prev) => ({
+    updateRankSettingsDraftState((prev) => ({
       ...prev,
       tiers: prev.tiers.map((tier) =>
         tier.code === tierCode ? updater(tier) : tier,
@@ -329,16 +335,18 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
     field: "label" | "shortLabel" | "description",
     value: string,
   ) => {
-    updateRankSettingsPolicy((prev) => ({
+    updateRankSettingsDraftState((prev) => ({
       ...prev,
       themes: {
         ...(prev.themes || {}),
-        [prev.activeThemeId]: {
-          ...(prev.themes?.[prev.activeThemeId] || {}),
+        [rankSettingsPolicy.activeThemeId]: {
+          ...(prev.themes?.[rankSettingsPolicy.activeThemeId] || {}),
           tiers: {
-            ...(prev.themes?.[prev.activeThemeId]?.tiers || {}),
+            ...(prev.themes?.[rankSettingsPolicy.activeThemeId]?.tiers || {}),
             [tierCode]: {
-              ...(prev.themes?.[prev.activeThemeId]?.tiers?.[tierCode] || {}),
+              ...(prev.themes?.[rankSettingsPolicy.activeThemeId]?.tiers?.[
+                tierCode
+              ] || {}),
               [field]: value,
             },
           },
@@ -351,7 +359,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
     tierCode: PointRankPolicyTier["code"],
     emojiId: string,
   ) => {
-    updateRankSettingsPolicy((prev) => {
+    updateRankSettingsDraftState((prev) => {
       const nextTiers = prev.tiers.map((tier) => ({
         ...tier,
         allowedEmojiIds: (tier.allowedEmojiIds || []).filter(
@@ -559,27 +567,28 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
 
   const handleAddTier = () => {
     const nextTier = makeTierDraft(rankSettingsPolicy.tiers);
-    updateRankSettingsPolicy((prev) => {
-      const nextPolicy: PointRankPolicy = {
+    updateRankSettingsDraftState((prev) => {
+      const nextDraft: RankSettingsDraft = {
         ...prev,
         tiers: [...prev.tiers, nextTier],
       };
+      const nextPolicy = buildRankSettingsPolicy(savedRankPolicy, nextDraft);
       const initialTierMeta = getPointRankTierMeta(
         nextPolicy,
-        prev.activeThemeId,
+        nextPolicy.activeThemeId,
         nextTier.code,
       );
 
       return {
-        ...nextPolicy,
+        ...nextDraft,
         themes: {
-          ...(nextPolicy.themes || {}),
-          [prev.activeThemeId]: {
-            ...(nextPolicy.themes?.[prev.activeThemeId] || {}),
+          ...(nextDraft.themes || {}),
+          [nextPolicy.activeThemeId]: {
+            ...(nextDraft.themes?.[nextPolicy.activeThemeId] || {}),
             tiers: {
-              ...(nextPolicy.themes?.[prev.activeThemeId]?.tiers || {}),
+              ...(nextDraft.themes?.[nextPolicy.activeThemeId]?.tiers || {}),
               [nextTier.code]: {
-                ...(nextPolicy.themes?.[prev.activeThemeId]?.tiers?.[
+                ...(nextDraft.themes?.[nextPolicy.activeThemeId]?.tiers?.[
                   nextTier.code
                 ] || {}),
                 label: initialTierMeta.label,
@@ -618,7 +627,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
     );
     if (!confirmed) return;
 
-    updateRankSettingsPolicy((prev) => {
+    updateRankSettingsDraftState((prev) => {
       if (prev.tiers.length <= 1) return prev;
       const currentTierIndex = prev.tiers.findIndex(
         (tier) => tier.code === tierCode,
@@ -692,7 +701,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
     },
     {
       id: "rank_settings",
-      label: "등급 관리",
+      label: "설정",
       iconClassName: "fas fa-medal",
       badge: rankSettingsHasUnsavedChanges ? "미저장" : "저장됨",
       meta: `등급 ${rankSettingsPolicy.tiers.length}개`,
@@ -769,6 +778,9 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
               <RankTierEditorPanel
                 canManage={canManage}
                 draftRankPolicy={rankSettingsPolicy}
+                activeThemeId={rankSettingsPolicy.activeThemeId}
+                draftTiers={rankSettingsDraft.tiers}
+                draftThemes={rankSettingsDraft.themes}
                 validationError={rankSettingsValidationError}
                 selectedTierCode={selectedTierCode}
                 enabledEmojiCount={savedEnabledEmojiCount}

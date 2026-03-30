@@ -32,7 +32,7 @@ const RankSettingsSidebar: React.FC<RankSettingsSidebarProps> = ({
           <i className="fas fa-medal text-sm" aria-hidden="true"></i>
         </div>
         <div className="min-w-0">
-          <h2 className="text-lg font-extrabold text-gray-800">등급 관리</h2>
+          <h2 className="text-lg font-extrabold text-gray-800">설정</h2>
           <p className="mt-0.5 text-xs font-medium text-gray-500">
             테마 · 등급 설정 · 이모지
           </p>

@@ -941,7 +941,7 @@ const MyPage: React.FC = () => {
 
     const leftMenus: Array<{ key: MainMenu; title: string; icon: string }> = [
         { key: 'profile', title: '나의 기본 정보', icon: 'fa-id-card' },
-        { key: 'score', title: '성적 계산기', icon: 'fa-chart-column' },
+        { key: 'score', title: '나의 성적표', icon: 'fa-chart-column' },
         { key: 'wrong_note', title: '오답 노트', icon: 'fa-book-open' },
     ];
     const profileGradeValue = normalizeClassValue(profile?.grade ?? userData?.grade);
@@ -1050,7 +1050,7 @@ const MyPage: React.FC = () => {
 
                         {menu === 'score' && (
                             <div className="space-y-6">
-                                <h2 className="text-2xl font-bold text-gray-800">성적 계산기</h2>
+                                <h2 className="text-2xl font-bold text-gray-800">나의 성적표</h2>
 
                                 <div className="rounded-2xl border border-gray-200 bg-white p-4">
                                     <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -1231,7 +1231,7 @@ const MyPage: React.FC = () => {
 
                         {menu === 'score' && false && (
                             <div className="space-y-6">
-                                <h2 className="text-2xl font-bold text-gray-800">성적 계산기</h2>
+                                <h2 className="text-2xl font-bold text-gray-800">나의 성적표</h2>
                                 <div className="h-72">
                                     {scoreChartData ? (
                                         <Bar

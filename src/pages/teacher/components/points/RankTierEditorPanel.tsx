@@ -36,6 +36,9 @@ const badgeStyleOptionMap = new Map(
 interface RankTierEditorPanelProps {
   canManage: boolean;
   draftRankPolicy: PointRankPolicy;
+  activeThemeId: PointRankThemeId;
+  draftTiers: PointRankPolicyTier[];
+  draftThemes?: PointRankPolicy["themes"];
   validationError: string;
   selectedTierCode: PointRankPolicyTier["code"] | null;
   enabledEmojiCount: number;
@@ -76,6 +79,9 @@ const feedbackToneClassName: Record<"success" | "error" | "warning", string> = {
 const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
   canManage,
   draftRankPolicy,
+  activeThemeId,
+  draftTiers,
+  draftThemes,
   validationError,
   selectedTierCode,
   enabledEmojiCount,
@@ -94,7 +100,7 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
 }) => {
   const displayTiers = useMemo(
     () =>
-      [...draftRankPolicy.tiers]
+      [...draftTiers]
         .map((tier, index) => ({ tier, index }))
         .sort((left, right) => {
           const thresholdDiff =
@@ -103,7 +109,7 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
           return thresholdDiff !== 0 ? thresholdDiff : left.index - right.index;
         })
         .map(({ tier }) => tier),
-    [draftRankPolicy.tiers],
+    [draftTiers],
   );
 
   return (
@@ -111,7 +117,7 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="flex flex-col gap-4 p-5 sm:p-6 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h2 className="text-lg font-extrabold text-gray-900">등급 관리</h2>
+            <h2 className="text-lg font-extrabold text-gray-900">설정</h2>
             <p className="mt-1 text-sm text-gray-500">
               등급 카드를 펼쳐 이름, 기준 위스, 설명과 이모지 연결까지 한 번에
               정리합니다.
@@ -420,9 +426,9 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
                               </div>
                               <input
                                 value={
-                                  draftRankPolicy.themes?.[
-                                    draftRankPolicy.activeThemeId
-                                  ]?.tiers?.[tier.code]?.label || ""
+                                  draftThemes?.[activeThemeId]?.tiers?.[
+                                    tier.code
+                                  ]?.label || ""
                                 }
                                 onChange={(event) =>
                                   onSetActiveThemeTierField(
@@ -445,9 +451,9 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
                               </div>
                               <input
                                 value={
-                                  draftRankPolicy.themes?.[
-                                    draftRankPolicy.activeThemeId
-                                  ]?.tiers?.[tier.code]?.shortLabel || ""
+                                  draftThemes?.[activeThemeId]?.tiers?.[
+                                    tier.code
+                                  ]?.shortLabel || ""
                                 }
                                 onChange={(event) =>
                                   onSetActiveThemeTierField(
@@ -477,9 +483,8 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
                             <textarea
                               rows={3}
                               value={
-                                draftRankPolicy.themes?.[
-                                  draftRankPolicy.activeThemeId
-                                ]?.tiers?.[tier.code]?.description || ""
+                                draftThemes?.[activeThemeId]?.tiers?.[tier.code]
+                                  ?.description || ""
                               }
                               onChange={(event) =>
                                 onSetActiveThemeTierField(
