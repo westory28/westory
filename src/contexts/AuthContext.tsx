@@ -6,6 +6,7 @@ import { SystemConfig, InterfaceConfig, UserData } from '../types';
 import { normalizeStaffPermissions } from '../lib/permissions';
 import { markLoginPerf, measureLoginPerf } from '../lib/loginPerf';
 import { readSiteSettingDoc } from '../lib/siteSettings';
+import { subscribeSystemConfigUpdated } from '../lib/appEvents';
 
 interface AuthContextType {
     // Backward-compatible alias for legacy pages.
@@ -18,6 +19,8 @@ interface AuthContextType {
     interfaceConfig: InterfaceConfig | null;
     loading: boolean;
     logout: () => Promise<void>;
+    refreshConfig: () => Promise<void>;
+    refreshInterfaceConfig: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -173,8 +176,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     }, [currentUser, config, interfaceConfig]);
 
+    useEffect(() => subscribeSystemConfigUpdated(() => {
+        if (auth.currentUser) {
+            void loadAuthedSystemConfig(auth.currentUser);
+        }
+    }), []);
+
     const logout = async () => {
         await signOut(auth);
+    };
+
+    const refreshConfig = async () => {
+        await loadAuthedSystemConfig(currentUser);
+    };
+
+    const refreshInterfaceConfig = async () => {
+        await loadPublicInterfaceConfig();
     };
 
     const value = {
@@ -185,7 +202,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         config,
         interfaceConfig,
         loading,
-        logout
+        logout,
+        refreshConfig,
+        refreshInterfaceConfig,
     };
 
     return (

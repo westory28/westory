@@ -68,17 +68,18 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({ isOpen, onClose, onSelect
 
             <aside
                 className={`
-                    fixed lg:static inset-y-0 right-0 left-auto lg:right-auto z-40
-                    w-[80%] max-w-[320px] lg:w-[300px] lg:max-w-none
-                    bg-white border-l border-gray-200 lg:border-l-0 lg:border-r shadow-xl lg:shadow-none
+                    fixed inset-y-0 left-auto right-0 z-40
+                    w-[80%] max-w-[320px]
+                    bg-white border-l border-gray-200 shadow-xl
                     transform transition-transform duration-300 ease-in-out
                     flex flex-col
-                    ${isOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'}
-                    mt-16 lg:mt-0 lg:h-[calc(100vh-64px)]
+                    mt-16
+                    ${isOpen ? 'translate-x-0' : 'translate-x-full'}
+                    lg:static lg:mt-2 lg:h-[calc(100vh-112px)] lg:w-[296px] lg:max-w-none lg:translate-x-0 lg:self-start lg:rounded-[1.6rem] lg:border lg:border-slate-200 lg:shadow-sm
                 `}
                 style={{ right: 0, left: 'auto' }}
             >
-                <div className="p-4 border-b border-gray-100 font-extrabold text-gray-800 flex justify-between items-center bg-white sticky top-0">
+                <div className="sticky top-0 flex items-center justify-between border-b border-gray-100 bg-white p-4 font-extrabold text-gray-800 lg:rounded-t-[1.6rem]">
                     <span>📑 수업 목차</span>
                     <button onClick={onClose} className="lg:hidden text-gray-400 hover:text-gray-600">
                         <i className="fas fa-times"></i>

@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { addDoc, collection, doc, getDoc, getDocs, query, serverTimestamp, where } from 'firebase/firestore';
+import { useAppToast } from '../../../components/common/AppToastProvider';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../contexts/AuthContext';
+import { notifyPointsUpdated } from '../../../lib/appEvents';
 import { db } from '../../../lib/firebase';
 import { readLocalOnly, removeStorage, writeLocalOnly } from '../../../lib/safeStorage';
 import {
@@ -46,6 +48,7 @@ const clearCooldownLock = (assignmentId: string, uid: string) => {
 };
 
 const HistoryClassroomRunner: React.FC = () => {
+    const { showToast } = useAppToast();
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const { userData, config } = useAuth();
@@ -189,21 +192,43 @@ const HistoryClassroomRunner: React.FC = () => {
                 sourceId: `history-classroom-${resultId}`,
                 sourceLabel: assignment?.title || '역사교실 제출 완료',
             });
+            if (pointResult.awarded && (pointResult.totalAwarded || pointResult.amount)) {
+                notifyPointsUpdated();
+            }
             if ((pointResult.totalAwarded || pointResult.amount) > 0) {
                 const totalAwarded = Number(pointResult.totalAwarded || pointResult.amount || 0);
                 if (pointResult.bonusAwarded && pointResult.bonusAmount) {
                     setPointNotice(`문제 풀이 위스가 적립되었습니다. 기본 +${pointResult.amount}위스, 보너스 +${pointResult.bonusAmount}위스`);
+                    showToast({
+                        tone: 'success',
+                        title: '역사교실 제출 완료',
+                        message: `기본 +${pointResult.amount}위스, 보너스 +${pointResult.bonusAmount}위스가 반영되었습니다.`,
+                    });
                 } else {
                     setPointNotice(`문제 풀이 위스가 적립되었습니다. +${totalAwarded}위스`);
+                    showToast({
+                        tone: 'success',
+                        title: '역사교실 제출 완료',
+                        message: `+${totalAwarded}위스가 반영되었습니다.`,
+                    });
                 }
             } else if (pointResult.duplicate) {
                 setPointNotice('이번 제출 위스는 이미 반영되었습니다.');
+                showToast({
+                    tone: 'info',
+                    title: '이번 제출 위스는 이미 반영되었습니다.',
+                });
             } else {
                 setPointNotice('');
             }
         } catch (pointError) {
             console.error('Failed to claim history classroom point reward:', pointError);
             setPointNotice('문제 풀이 위스를 바로 반영하지 못했습니다.');
+            showToast({
+                tone: 'warning',
+                title: '제출 결과는 저장되었습니다.',
+                message: '위스 반영 상태를 바로 확인하지 못했습니다.',
+            });
         }
     };
 

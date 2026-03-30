@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { collection, doc, getDocs, serverTimestamp, setDoc } from 'firebase/firestore';
+import { useAppToast } from '../../../components/common/AppToastProvider';
 import { db } from '../../../lib/firebase';
 import {
     ADMIN_EMAIL,
@@ -33,6 +34,7 @@ const hasGrantedAccess = (user: UserRow) =>
 const TABLE_COLUMN_COUNT = 3 + STAFF_PERMISSION_KEYS.length;
 
 const SettingsAccess: React.FC = () => {
+    const { showToast } = useAppToast();
     const [users, setUsers] = useState<UserRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [savingId, setSavingId] = useState('');
@@ -115,9 +117,18 @@ const SettingsAccess: React.FC = () => {
                     }
                     : item
             )));
+            showToast({
+                tone: 'success',
+                title: '권한 설정이 저장되었습니다.',
+                message: `${nextUser.name || nextUser.email} 계정의 접근 권한을 반영했습니다.`,
+            });
         } catch (error) {
             console.error('Failed to update staff permissions:', error);
-            alert('권한 저장에 실패했습니다.');
+            showToast({
+                tone: 'error',
+                title: '권한 저장에 실패했습니다.',
+                message: '잠시 후 다시 시도해 주세요.',
+            });
         } finally {
             setSavingId('');
         }

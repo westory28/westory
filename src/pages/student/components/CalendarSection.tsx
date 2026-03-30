@@ -28,6 +28,7 @@ interface CalendarSectionProps {
     attendanceChecked?: boolean;
     attendanceMessage?: string;
     attendanceDates?: string[];
+    attendanceGoalText?: string;
 }
 
 const CalendarSection: React.FC<CalendarSectionProps> = ({
@@ -43,6 +44,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
     attendanceChecked = false,
     attendanceMessage = '',
     attendanceDates = [],
+    attendanceGoalText = '',
 }) => {
     const [currentViewType, setCurrentViewType] = useState('dayGridMonth');
     const [visibleRange, setVisibleRange] = useState<{ start: string; end: string }>({ start: '', end: '' });
@@ -268,37 +270,97 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                 height: calc(100% - 1px);
             }
             .fc-attendance-button {
-                border-radius: 0.75rem !important;
-                padding: 0.55rem 0.9rem !important;
+                border-radius: 0.85rem !important;
+                padding: 0.62rem 1rem !important;
+                background-color: #f59e0b !important;
+                border-color: #f59e0b !important;
+                color: #ffffff !important;
+                box-shadow: 0 12px 24px rgba(245, 158, 11, 0.22) !important;
             }
             .fc-attendance-button.fc-button:disabled,
             .fc-attendance-button.fc-button-primary:disabled {
-                background-color: #dbeafe !important;
-                border-color: #bfdbfe !important;
-                color: #2563eb !important;
+                background-color: #fef3c7 !important;
+                border-color: #fcd34d !important;
+                color: #92400e !important;
                 opacity: 1 !important;
+                box-shadow: none !important;
+            }
+            .fc-attendance-goal {
+                display: inline-flex;
+                align-items: center;
+                min-height: 2.7rem;
+                border-radius: 9999px;
+                border: 1px solid #fde68a;
+                background: #fff7d6;
+                color: #92400e;
+                padding: 0.45rem 0.85rem;
+                font-size: 0.78rem;
+                font-weight: 800;
+                letter-spacing: -0.01em;
+                white-space: nowrap;
             }
             .fc-day-attendance .fc-daygrid-day-top::after {
                 content: '출석';
                 display: inline-flex;
-                align-self: flex-end;
-                margin-top: 0.2rem;
+                align-self: flex-start;
                 border: 1px solid #ef4444;
                 border-radius: 0.35rem;
                 background: rgba(254, 242, 242, 0.9);
                 color: #b91c1c;
-                font-size: 0.7rem;
+                font-size: 0.68rem;
                 font-weight: 800;
                 line-height: 1;
                 letter-spacing: -0.01em;
-                padding: 0.18rem 0.45rem;
+                padding: 0.16rem 0.42rem;
                 white-space: nowrap;
             }
-            .fc-day-attendance .fc-daygrid-day-top {
+            .fc .fc-daygrid-day-top {
                 display: flex;
+                flex-direction: row;
+                align-items: flex-start;
+                justify-content: space-between;
+                gap: 0.4rem;
+                padding: 0.35rem 0.4rem 0 0.4rem;
+                min-height: 1.9rem;
+            }
+            .fc .fc-daygrid-day-number {
+                padding: 0 !important;
+                font-weight: 800;
+                text-align: left;
+            }
+            .fc .fc-daygrid-day-frame {
+                display: flex;
+                min-height: 100%;
                 flex-direction: column;
-                align-items: flex-end;
-                gap: 0.05rem;
+            }
+            .fc .fc-daygrid-day-events {
+                margin-top: 0.25rem;
+                padding: 0 0.28rem 0.35rem;
+            }
+            .fc .fc-daygrid-day.fc-day-today {
+                background: rgba(219, 234, 254, 0.24) !important;
+            }
+            .fc .fc-scrollgrid-sync-table {
+                height: 100% !important;
+            }
+            .fc .fc-daygrid-body,
+            .fc .fc-scrollgrid-sync-table tbody,
+            .fc .fc-scrollgrid-sync-table tr {
+                height: 100%;
+            }
+            @media (max-width: 640px) {
+                .fc-attendance-goal {
+                    min-height: 2.45rem;
+                    font-size: 0.72rem;
+                    padding: 0.4rem 0.7rem;
+                }
+                .fc .fc-daygrid-day-top {
+                    padding: 0.28rem 0.28rem 0 0.28rem;
+                }
+                .fc .fc-daygrid-day-top::after {
+                    font-size: 0.62rem;
+                    padding: 0.14rem 0.34rem;
+                }
             }
         `;
         document.head.appendChild(style);
@@ -331,7 +393,21 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
         button.disabled = attendanceLoading || attendanceChecked;
         button.classList.add('fc-attendance-button');
         button.title = attendanceMessage || '출석 체크';
-    }, [attendanceChecked, attendanceLoading, attendanceMessage]);
+        const toolbarChunk = button.closest('.fc-toolbar-chunk');
+        if (!toolbarChunk) return;
+        let goalLabel = toolbarChunk.querySelector<HTMLElement>('.fc-attendance-goal');
+        if (!attendanceGoalText) {
+            goalLabel?.remove();
+            return;
+        }
+        if (!goalLabel) {
+            goalLabel = document.createElement('span');
+            goalLabel.className = 'fc-attendance-goal';
+            toolbarChunk.insertBefore(goalLabel, button.nextSibling);
+        }
+        goalLabel.textContent = attendanceGoalText;
+        goalLabel.title = attendanceGoalText;
+    }, [attendanceChecked, attendanceGoalText, attendanceLoading, attendanceMessage]);
 
     return (
         <div className="flex h-full min-h-[500px] flex-col overflow-hidden rounded-xl bg-white p-4 shadow-sm md:min-h-0">
@@ -422,8 +498,9 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                     }}
                     height="100%"
                     contentHeight="100%"
+                    expandRows
                     dayMaxEvents
-                    fixedWeekCount={false}
+                    fixedWeekCount
                     showNonCurrentDates={false}
                     dayCellClassNames={(arg) => {
                         const dateStr = toLocalYmd(arg.date);

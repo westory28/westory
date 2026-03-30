@@ -1,12 +1,13 @@
 ﻿import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import PointRankBadge from './PointRankBadge';
+import { useAppToast } from './AppToastProvider';
 import { useAuth } from '../../contexts/AuthContext';
 import { MENUS, cloneDefaultMenus, sanitizeMenuConfig, type MenuConfig } from '../../constants/menus';
 import { runWhenIdle } from '../../lib/browserTasks';
 import { getDefaultProfileEmojiValue } from '../../lib/profileEmojis';
 import { loadStudentRankPromotionSnapshot } from '../../lib/pointRankPromotion';
-import { readLocalOnly, readStorage, removeStorage, writeLocalOnly } from '../../lib/safeStorage';
+import { readLocalOnly, removeStorage, writeLocalOnly } from '../../lib/safeStorage';
 import { getPointRankDefaultEmojiValue, type PointRankDisplay } from '../../lib/pointRanks';
 import {
     canAccessTeacherPortal,
@@ -68,6 +69,7 @@ const getResolvedChildUrls = (
 
 const Header: React.FC = () => {
     const { currentUser, userData, logout, config } = useAuth();
+    const { showToast } = useAppToast();
     const location = useLocation();
     const navigate = useNavigate();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -79,8 +81,6 @@ const Header: React.FC = () => {
     const timeoutHandledRef = useRef(false);
 
     const isReady = !!currentUser;
-    const savedRole = readStorage(ROLE_SESSION_KEY);
-    const sessionRole = savedRole === 'teacher' || savedRole === 'student' ? savedRole : null;
     const isTeacherUser = canAccessTeacherPortal(userData, currentUser?.email || '');
     const displayName = (userData?.name || '').trim() || '이름 미설정';
 
@@ -184,7 +184,11 @@ const Header: React.FC = () => {
             removeStorage(SESSION_EXPIRY_KEY);
             removeStorage(ROLE_SESSION_KEY);
             if (isTimeout) {
-                alert('세션이 만료되어 자동 로그아웃됩니다.');
+                showToast({
+                    tone: 'warning',
+                    title: '세션이 만료되었습니다.',
+                    message: '보안을 위해 자동 로그아웃됩니다.',
+                });
             }
             await logout();
             navigate('/', { replace: true });
@@ -210,6 +214,26 @@ const Header: React.FC = () => {
     }, [location.pathname, location.search]);
 
     useEffect(() => {
+        if (!mobileMenuOpen) return undefined;
+
+        const previousBodyOverflow = document.body.style.overflow;
+        const previousBodyOverscroll = document.body.style.overscrollBehavior;
+        const previousHtmlOverflow = document.documentElement.style.overflow;
+        const previousHtmlOverscroll = document.documentElement.style.overscrollBehavior;
+        document.body.style.overflow = 'hidden';
+        document.body.style.overscrollBehavior = 'contain';
+        document.documentElement.style.overflow = 'hidden';
+        document.documentElement.style.overscrollBehavior = 'contain';
+
+        return () => {
+            document.body.style.overflow = previousBodyOverflow;
+            document.body.style.overscrollBehavior = previousBodyOverscroll;
+            document.documentElement.style.overflow = previousHtmlOverflow;
+            document.documentElement.style.overscrollBehavior = previousHtmlOverscroll;
+        };
+    }, [mobileMenuOpen]);
+
+    useEffect(() => {
         const loadMenuConfig = async () => {
             try {
                 const data = await readSiteSettingDoc<MenuConfig>('menu_config');
@@ -224,11 +248,16 @@ const Header: React.FC = () => {
             setMenuConfig(cloneDefaultMenus());
         };
 
-        const cancel = runWhenIdle(() => {
+        const triggerLoad = () => {
             void loadMenuConfig();
-        }, 600);
+        };
+        const cancel = runWhenIdle(triggerLoad, 600);
+        window.addEventListener('westory:menu-config-updated', triggerLoad);
 
-        return cancel;
+        return () => {
+            cancel();
+            window.removeEventListener('westory:menu-config-updated', triggerLoad);
+        };
     }, []);
 
     useEffect(() => {
@@ -308,9 +337,15 @@ const Header: React.FC = () => {
             }
         };
 
-        void loadStudentHeaderRank();
+        const triggerRankLoad = () => {
+            void loadStudentHeaderRank();
+        };
+
+        triggerRankLoad();
+        window.addEventListener('westory:points-updated', triggerRankLoad);
         return () => {
             cancelled = true;
+            window.removeEventListener('westory:points-updated', triggerRankLoad);
         };
     }, [config?.year, config?.semester, currentUser?.uid, isTeacherPortal, location.pathname, location.search]);
 
@@ -384,7 +419,7 @@ const Header: React.FC = () => {
                                 {studentProfileIcon}
                             </span>
                         )}
-                        <span>{profileLabel}</span>
+                        <span className="header-user-name">{profileLabel}</span>
                         {!isTeacherPortal && studentRank && (
                             <PointRankBadge rank={studentRank} size="sm" className="shrink-0" />
                         )}
@@ -411,8 +446,9 @@ const Header: React.FC = () => {
                     </div>
 
 
-                    <button onClick={handleLogout} data-session-ignore="true" className="btn-logout">
-                        로그아웃
+                    <button onClick={handleLogout} data-session-ignore="true" className="btn-logout" aria-label="로그아웃">
+                        <i className="fas fa-right-from-bracket btn-logout-icon" aria-hidden="true"></i>
+                        <span className="btn-logout-label">로그아웃</span>
                     </button>
 
                     <button

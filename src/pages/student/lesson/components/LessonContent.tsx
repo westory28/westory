@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useAppToast } from "../../../../components/common/AppToastProvider";
 import LessonFootnoteDialog from "../../../../components/common/LessonFootnoteDialog";
 import {
   collection,
@@ -14,6 +15,7 @@ import {
 } from "firebase/firestore";
 import LessonWorksheetStage from "../../../../components/common/LessonWorksheetStage";
 import { useAuth } from "../../../../contexts/AuthContext";
+import { notifyPointsUpdated } from "../../../../lib/appEvents";
 import { db } from "../../../../lib/firebase";
 import {
   getLessonFootnoteUsageEntries,
@@ -69,6 +71,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
   allowHiddenAccess = false,
 }) => {
   const { config, currentUser } = useAuth();
+  const { showToast } = useAppToast();
   const [lesson, setLesson] = useState<LessonData | null>(
     lessonOverride ? normalizeLessonData(lessonOverride) : null,
   );
@@ -273,10 +276,10 @@ const LessonContent: React.FC<LessonContentProps> = ({
       );
       setHasUnsavedChanges(false);
       setSaveMessage("저장됨");
-      let popupMessage = "저장되었습니다.";
-      const popupDetail = isWorksheetCompleted
+      let toastTitle = "수업 자료 저장 완료";
+      let toastMessage = isWorksheetCompleted
         ? "모든 빈칸 입력 내용이 저장되었습니다."
-        : undefined;
+        : "현재 입력 내용이 저장되었습니다.";
       let awardedPointAmount = 0;
       if (lesson && interactedRef.current && unitId) {
         const elapsedMs = Date.now() - viewStartedAtRef.current;
@@ -291,28 +294,41 @@ const LessonContent: React.FC<LessonContentProps> = ({
             if (pointResult.awarded && pointResult.amount > 0) {
               awardedPointAmount =
                 Number(pointResult.totalAwarded || pointResult.amount) || 0;
-              popupMessage = `저장되었습니다. ${awardedPointAmount}위스가 지급되었습니다.`;
+              notifyPointsUpdated();
+              toastTitle = "수업 자료 저장 완료";
+              toastMessage = `입력 내용이 저장되고 +${awardedPointAmount}위스가 지급되었습니다.`;
             }
           } catch (pointError) {
             console.error("Failed to claim lesson point reward:", pointError);
+            toastTitle = "수업 자료 저장 완료";
+            toastMessage =
+              "입력 내용은 저장됐지만 위스 반영 상태를 바로 확인하지 못했습니다.";
           }
         }
       }
-      if (isWorksheetCompleted) {
-        setSaveCompletionPopup({
-          title: "저장 완료",
-          message: popupMessage,
-          detail: popupDetail,
-        });
-      } else {
-        setSaveCompletionPopup(null);
-      }
+      setSaveCompletionPopup(null);
+      showToast({
+        tone: awardedPointAmount > 0 ? "success" : "info",
+        title: toastTitle,
+        message: toastMessage,
+      });
     } catch (saveError) {
       console.error("Failed to save lesson progress:", saveError);
       setSaveMessage("저장 실패");
       setSaveCompletionPopup(null);
+      showToast({
+        tone: "error",
+        title: "수업 자료 저장에 실패했습니다.",
+        message: "네트워크 상태를 확인한 뒤 다시 시도해 주세요.",
+      });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSaveAction = () => {
+    if (!isSaving && hasUnsavedChanges) {
+      void saveProgressToFirestore();
     }
   };
 
@@ -690,6 +706,50 @@ const LessonContent: React.FC<LessonContentProps> = ({
           </div>
         </div>
 
+        {canPersist && (
+          <div className="sticky top-[4.7rem] z-20 mb-5 rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className={`rounded-full px-4 py-2 text-sm font-bold ${
+                    hasUnsavedChanges
+                      ? "bg-amber-50 text-amber-700"
+                      : saveMessage === "저장됨"
+                        ? "bg-emerald-50 text-emerald-700"
+                        : "bg-slate-100 text-slate-500"
+                  }`}
+                >
+                  {isSaving ? "저장 중..." : saveMessage || "저장 대기"}
+                </span>
+                <span className="text-xs font-semibold text-slate-500">
+                  긴 본문이나 PDF 풀이 중에도 여기서 바로 저장할 수 있습니다.
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
+                >
+                  다시 쓰기
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveAction}
+                  disabled={isSaving || !hasUnsavedChanges}
+                  className={`rounded-xl px-5 py-2.5 text-sm font-bold transition ${
+                    isSaving || !hasUnsavedChanges
+                      ? "cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400"
+                      : "border border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
+                  }`}
+                >
+                  {isSaving ? "저장 중..." : "저장"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {embedUrl && (
           <div
             className="relative mb-6 h-0 overflow-hidden rounded-2xl bg-black shadow-md"
@@ -830,10 +890,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
           {canPersist && (
             <button
               type="button"
-              onClick={() => {
-                if (!isSaving && hasUnsavedChanges)
-                  void saveProgressToFirestore();
-              }}
+              onClick={handleSaveAction}
               disabled={isSaving || !hasUnsavedChanges}
               className={`rounded-xl px-6 py-3 font-bold transition ${isSaving || !hasUnsavedChanges ? "cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400" : "border border-blue-600 bg-blue-600 text-white hover:bg-blue-700"}`}
             >

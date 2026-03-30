@@ -35,11 +35,11 @@ export const MENUS: MenuConfig = {
             ],
         },
         {
-            name: '성적',
+            name: '성적 계산기',
             url: '/student/score',
             icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
             children: [
-                { name: '내 성적', url: '/student/score' },
+                { name: '성적 계산기', url: '/student/score' },
                 { name: '정기 시험 답안', url: '/student/history' },
             ],
         },

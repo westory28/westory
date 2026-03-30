@@ -16,7 +16,8 @@ const Note: React.FC = () => {
   };
 
   return (
-    <div className="flex h-full bg-gray-50 overflow-hidden relative">
+    <div className="relative h-full overflow-hidden bg-gray-50">
+      <div className="mx-auto flex h-full max-w-7xl gap-3 px-3 py-4 md:gap-4 md:px-4 lg:px-6">
       <LessonSidebar
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
@@ -24,7 +25,7 @@ const Note: React.FC = () => {
         selectedUnitId={unitId}
       />
 
-      <main className="flex-1 w-full relative flex flex-col h-[calc(100vh-64px)] overflow-hidden">
+      <main className="relative flex h-[calc(100vh-64px)] min-w-0 flex-1 flex-col overflow-hidden rounded-[1.5rem] border border-gray-200 bg-white shadow-sm">
         <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scroll">
           <LessonContent unitId={unitId} fallbackTitle={title} />
         </div>
@@ -37,6 +38,7 @@ const Note: React.FC = () => {
           <i className="fas fa-list"></i>
         </button>
       </main>
+      </div>
     </div>
   );
 };

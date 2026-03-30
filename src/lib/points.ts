@@ -66,6 +66,23 @@ interface ClaimPointActivityInput {
     score?: number | null;
 }
 
+export interface PointActivityRewardResult {
+    awarded: boolean;
+    duplicate: boolean;
+    amount: number;
+    bonusAwarded?: boolean;
+    bonusAmount?: number;
+    bonusType?: Extract<PointTransactionType, 'attendance_monthly_bonus' | 'quiz_bonus'> | '';
+    monthlyBonusAwarded?: boolean;
+    monthlyBonusAmount?: number;
+    totalAwarded?: number;
+    targetMonth?: string;
+    balance: number;
+    transactionId: string;
+    sourceId: string;
+    policyId: string;
+}
+
 export interface ResolvedPointActivityRewardItem {
     type: PointTransactionType;
     amount: number;
@@ -256,6 +273,14 @@ export const getKstDateKey = (date = new Date()) => {
         day: '2-digit',
     });
     return formatter.format(date);
+};
+
+export const getDaysInMonthFromMonthKey = (monthKey: string) => {
+    const [year, month] = String(monthKey || '').split('-').map((value) => Number(value));
+    if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+        return 0;
+    }
+    return new Date(year, month, 0).getDate();
 };
 
 export const buildAttendanceSourceId = (date = new Date()) => `attendance-${getKstDateKey(date)}`;
@@ -737,22 +762,61 @@ export const claimPointActivityReward = async ({ config, activityType, sourceId,
         sourceLabel: String(sourceLabel || '').trim(),
         score: score === null || score === undefined ? undefined : Number(score),
     });
-    return result.data as {
-        awarded: boolean;
-        duplicate: boolean;
-        amount: number;
+    return result.data as PointActivityRewardResult;
+};
+
+export const buildPointRewardFeedback = ({
+    actionLabel,
+    duplicateMessage,
+    result,
+}: {
+    actionLabel: string;
+    duplicateMessage: string;
+    result: {
+        awarded?: boolean;
+        duplicate?: boolean;
+        amount?: number;
         bonusAwarded?: boolean;
         bonusAmount?: number;
-        bonusType?: Extract<PointTransactionType, 'attendance_monthly_bonus' | 'quiz_bonus'> | '';
         monthlyBonusAwarded?: boolean;
         monthlyBonusAmount?: number;
         totalAwarded?: number;
-        targetMonth?: string;
-        balance: number;
-        transactionId: string;
-        sourceId: string;
-        policyId: string;
     };
+}) => {
+    const totalAwarded = Number(result.totalAwarded || result.amount || 0);
+    if (totalAwarded > 0) {
+        if (result.monthlyBonusAwarded && Number(result.monthlyBonusAmount || 0) > 0) {
+            return {
+                tone: 'reward' as const,
+                title: `${actionLabel} 완료`,
+                message: `+${Number(result.amount || 0)}위스 지급, 월간 개근 보너스 +${Number(result.monthlyBonusAmount || 0)}위스`,
+            };
+        }
+
+        if (result.bonusAwarded && Number(result.bonusAmount || 0) > 0) {
+            return {
+                tone: 'reward' as const,
+                title: `${actionLabel} 완료`,
+                message: `기본 +${Number(result.amount || 0)}위스, 보너스 +${Number(result.bonusAmount || 0)}위스`,
+            };
+        }
+
+        return {
+            tone: 'reward' as const,
+            title: `${actionLabel} 완료`,
+            message: `+${totalAwarded}위스 지급`,
+        };
+    }
+
+    if (result.duplicate) {
+        return {
+            tone: 'warning' as const,
+            title: `${actionLabel} 안내`,
+            message: duplicateMessage,
+        };
+    }
+
+    return null;
 };
 
 export const createSecurePurchaseRequest = async ({ config, productId, memo, requestKey }: SecurePurchaseRequestInput) => {

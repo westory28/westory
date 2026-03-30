@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import PointRankBadge from '../../components/common/PointRankBadge';
+import { useAppToast } from '../../components/common/AppToastProvider';
 import { STUDENT_POINT_TAB_LABELS } from '../../constants/pointLabels';
 import { useAuth } from '../../contexts/AuthContext';
+import { subscribePointsUpdated } from '../../lib/appEvents';
 import {
     createSecurePurchaseRequest,
     getPointPolicy,
@@ -69,6 +71,7 @@ const Points: React.FC = () => {
     const [purchaseSubmitting, setPurchaseSubmitting] = useState(false);
     const [purchaseFeedback, setPurchaseFeedback] = useState('');
     const [purchaseRequestKey, setPurchaseRequestKey] = useState('');
+    const { showToast } = useAppToast();
 
     const uid = currentUser?.uid || userData?.uid || '';
 
@@ -114,6 +117,13 @@ const Points: React.FC = () => {
     useEffect(() => {
         if (!uid) return;
         void loadPointData();
+    }, [config, uid]);
+
+    useEffect(() => {
+        if (!uid) return undefined;
+        return subscribePointsUpdated(() => {
+            void loadPointData();
+        });
     }, [config, uid]);
 
     const safeWallet = wallet || DEFAULT_WALLET;
@@ -166,16 +176,36 @@ const Points: React.FC = () => {
             setPurchaseMemo('');
             setSelectedProductId('');
             setPurchaseRequestKey('');
-                setPurchaseFeedback('구매 요청이 접수되었습니다.');
-                setSearchParams({ tab: 'orders' });
+            setPurchaseFeedback('구매 요청이 접수되었습니다.');
+            showToast({
+                tone: 'success',
+                title: '구매 요청이 접수되었습니다.',
+                message: `${selectedProduct.name} 요청과 위스 상태가 최신 정보로 반영되었습니다.`,
+            });
+            setSearchParams({ tab: 'orders' });
         } catch (error: any) {
             console.error('Failed to create point purchase request:', error);
             if (error?.message?.includes('Insufficient point balance')) {
                 setPurchaseFeedback('보유 위스가 부족합니다.');
+                showToast({
+                    tone: 'warning',
+                    title: '구매 요청을 보낼 수 없습니다.',
+                    message: '보유 위스가 부족합니다.',
+                });
             } else if (error?.message?.includes('out of stock')) {
                 setPurchaseFeedback('재고가 없습니다.');
+                showToast({
+                    tone: 'warning',
+                    title: '구매 요청을 보낼 수 없습니다.',
+                    message: '선택한 상품의 재고가 없습니다.',
+                });
             } else {
                 setPurchaseFeedback('구매 요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.');
+                showToast({
+                    tone: 'error',
+                    title: '구매 요청에 실패했습니다.',
+                    message: '잠시 후 다시 시도해 주세요.',
+                });
             }
         } finally {
             setPurchaseSubmitting(false);

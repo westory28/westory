@@ -2,6 +2,7 @@ import React, { Suspense } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import MainLayout from './components/layout/MainLayout';
+import { AppToastProvider } from './components/common/AppToastProvider';
 import { lazyWithRetry } from './lib/lazyWithRetry';
 import Login from './pages/Login';
 
@@ -80,10 +81,11 @@ const App: React.FC = () => {
 
     return (
         <AuthProvider>
-            <Router>
-                <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
-                    <div className="bg-gray-50 min-h-screen text-gray-900 font-sans">
-                        <Routes>
+            <AppToastProvider>
+                <Router>
+                    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+                        <div className="bg-gray-50 min-h-screen text-gray-900 font-sans">
+                            <Routes>
                             <Route path="/" element={<Login />} />
                             <Route path="/student/dashboard" element={
                                 renderWithLayout(<StudentDashboard />, '학생 첫 화면을 준비하는 중입니다.')
@@ -220,11 +222,12 @@ const App: React.FC = () => {
                                     <Calendar />
                                 </MainLayout>
                             } />
-                            <Route path="*" element={<Navigate to="/" replace />} />
-                        </Routes>
-                    </div>
-                </Suspense>
-            </Router>
+                                <Route path="*" element={<Navigate to="/" replace />} />
+                            </Routes>
+                        </div>
+                    </Suspense>
+                </Router>
+            </AppToastProvider>
         </AuthProvider>
     );
 };

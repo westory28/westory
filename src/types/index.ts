@@ -18,6 +18,7 @@ export interface InterfaceConfig {
 export interface UserData {
   uid: string;
   email: string;
+  photoURL?: string;
   name?: string;
   profileIcon?: string;
   profileEmojiId?: string;
@@ -31,6 +32,8 @@ export interface UserData {
   privacyAgreed?: boolean;
   privacyAgreedAt?: any;
   consentAgreedItems?: string[];
+  scoreWarningAcknowledged?: boolean;
+  scoreWarningAcknowledgedAt?: any;
 }
 
 export interface PointStudentTarget {

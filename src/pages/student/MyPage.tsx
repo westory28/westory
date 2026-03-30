@@ -25,6 +25,7 @@ import {
 import { Bar, Line } from 'react-chartjs-2';
 import PointRankBadge from '../../components/common/PointRankBadge';
 import { useAuth } from '../../contexts/AuthContext';
+import { subscribePointsUpdated } from '../../lib/appEvents';
 import { db } from '../../lib/firebase';
 import {
     getPointPolicy,
@@ -364,6 +365,13 @@ const MyPage: React.FC = () => {
         setRankManualAdjustPoints(nextRankManualAdjustPoints);
     };
 
+    useEffect(() => {
+        if (!user || !config) return undefined;
+        return subscribePointsUpdated(() => {
+            void loadPointRankState();
+        });
+    }, [user?.uid, config?.year, config?.semester]);
+
     const loadUnitTitles = async () => {
         if (!config) return { exam_prep: '학기 시험 대비' };
 
@@ -620,6 +628,17 @@ const MyPage: React.FC = () => {
         })),
         [currentRank?.tierCode, pointPolicy.rankPolicy],
     );
+    const ascendingRankGuideItems = useMemo(
+        () => [...rankGuideItems].reverse(),
+        [rankGuideItems],
+    );
+    const currentRankIndex = ascendingRankGuideItems.findIndex((item) => item.code === currentRank?.tierCode);
+    const nextRankGuideItem = currentRankIndex >= 0
+        ? ascendingRankGuideItems[currentRankIndex + 1] || null
+        : ascendingRankGuideItems[0] || null;
+    const nextRankGap = nextRankGuideItem
+        ? Math.max(0, Number(nextRankGuideItem.minPoints || 0) - Number(currentRank?.metricValue || 0))
+        : 0;
     const emojiGroups = useMemo(
         () => rankGuideItems.map((item) => ({
             ...item,
@@ -922,7 +941,7 @@ const MyPage: React.FC = () => {
 
     const leftMenus: Array<{ key: MainMenu; title: string; icon: string }> = [
         { key: 'profile', title: '나의 기본 정보', icon: 'fa-id-card' },
-        { key: 'score', title: '나의 성적표', icon: 'fa-chart-column' },
+        { key: 'score', title: '성적 계산기', icon: 'fa-chart-column' },
         { key: 'wrong_note', title: '오답 노트', icon: 'fa-book-open' },
     ];
     const profileGradeValue = normalizeClassValue(profile?.grade ?? userData?.grade);
@@ -1013,7 +1032,16 @@ const MyPage: React.FC = () => {
                                             <div className="mt-3 text-sm leading-6 text-blue-50">
                                                 {currentRank?.description || '등급 설명을 확인할 수 있습니다.'}
                                             </div>
-                                            <div className="mt-3 text-xs font-bold text-blue-100 whitespace-nowrap">등급 설명 전체 보기</div>
+                                            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-bold text-blue-100">
+                                                <span className="whitespace-nowrap">
+                                                    {nextRankGuideItem
+                                                        ? nextRankGap > 0
+                                                            ? `다음 등급까지 ${formatWisAmount(nextRankGap)} 남음`
+                                                            : '다음 등급 기준을 충족했습니다.'
+                                                        : '현재 최고 등급입니다.'}
+                                                </span>
+                                                <span className="whitespace-nowrap">등급 설명 전체 보기</span>
+                                            </div>
                                         </button>
                                     </div>
                                 </div>
@@ -1022,7 +1050,7 @@ const MyPage: React.FC = () => {
 
                         {menu === 'score' && (
                             <div className="space-y-6">
-                                <h2 className="text-2xl font-bold text-gray-800">나의 성적표</h2>
+                                <h2 className="text-2xl font-bold text-gray-800">성적 계산기</h2>
 
                                 <div className="rounded-2xl border border-gray-200 bg-white p-4">
                                     <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -1203,7 +1231,7 @@ const MyPage: React.FC = () => {
 
                         {menu === 'score' && false && (
                             <div className="space-y-6">
-                                <h2 className="text-2xl font-bold text-gray-800">나의 성적표</h2>
+                                <h2 className="text-2xl font-bold text-gray-800">성적 계산기</h2>
                                 <div className="h-72">
                                     {scoreChartData ? (
                                         <Bar
@@ -1405,45 +1433,92 @@ const MyPage: React.FC = () => {
 
             {rankModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setRankModalOpen(false)}>
-                    <div className="w-full max-w-3xl rounded-[1.9rem] bg-white p-5 shadow-2xl sm:p-6" onClick={(event) => event.stopPropagation()}>
-                        <div className="flex items-start justify-between gap-4 border-b border-gray-100 pb-4">
+                    <div className="flex max-h-[min(88vh,820px)] w-full max-w-3xl flex-col overflow-hidden rounded-[1.9rem] bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+                        <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-5 pb-4 pt-5 sm:px-6 sm:pt-6">
                             <div>
-                                <h3 className="text-lg font-bold text-gray-900">등급 설명</h3>
-                                <p className="mt-1 text-sm text-gray-500">높은 등급부터 내려가며 현재 테마 기준 설명을 확인할 수 있습니다.</p>
+                                <h3 className="text-lg font-bold text-gray-900">위스 등급 안내</h3>
+                                <p className="mt-1 text-sm text-gray-500">현재 등급, 다음 등급까지 필요한 누적 위스, 전체 등급 위계를 한 번에 확인할 수 있습니다.</p>
                             </div>
                             <button type="button" onClick={() => setRankModalOpen(false)} className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition hover:bg-gray-50" aria-label="등급 설명 닫기">
                                 <i className="fas fa-times text-sm" aria-hidden="true"></i>
                             </button>
                         </div>
 
-                        <div className="mt-5 space-y-3">
-                            {rankGuideItems.map((item) => (
-                                <article
-                                    key={item.code}
-                                    className={`rounded-2xl border px-4 py-4 ${
-                                        item.isCurrent
-                                            ? 'border-blue-200 bg-blue-50/60 ring-1 ring-blue-100'
-                                            : 'border-gray-200 bg-gray-50/60'
-                                    }`}
-                                >
-                                    <div className="flex flex-wrap items-center justify-between gap-3">
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <span className={`inline-flex whitespace-nowrap rounded-full px-3 py-1 text-sm font-bold ${item.badgeClass}`}>
-                                                {item.label}
-                                            </span>
-                                            {item.isCurrent && (
-                                                <span className="inline-flex whitespace-nowrap rounded-full border border-blue-200 bg-white px-3 py-1 text-xs font-bold text-blue-700">
-                                                    내 현재 등급
-                                                </span>
-                                            )}
-                                        </div>
-                                        <span className="inline-flex whitespace-nowrap rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-bold text-gray-600">
-                                            기준 누적 {formatWisAmount(item.minPoints)}
-                                        </span>
+                        <div className="overflow-y-auto px-5 pb-5 pt-5 sm:px-6 sm:pb-6">
+                            <div className="grid gap-3 md:grid-cols-3">
+                                <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+                                    <div className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">현재 등급</div>
+                                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                                        {currentRank ? <PointRankBadge rank={currentRank} size="md" /> : <span className="text-sm font-bold text-gray-500">계산 중</span>}
                                     </div>
-                                    <p className="mt-3 text-sm leading-6 text-gray-600">{item.description}</p>
-                                </article>
-                            ))}
+                                    <div className="mt-3 text-sm font-bold text-gray-700">
+                                        누적 {formatWisAmount(currentRank?.metricValue || 0)}
+                                    </div>
+                                    <div className="mt-2 text-xs leading-5 text-gray-600">
+                                        등급은 누적 획득 위스를 기준으로 계산되며, 사용하거나 차감돼도 바로 내려가지 않습니다.
+                                    </div>
+                                </div>
+                                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                                    <div className="text-xs font-black uppercase tracking-[0.16em] text-amber-700">다음 등급</div>
+                                    <div className="mt-3 text-lg font-black text-gray-900">
+                                        {nextRankGuideItem ? nextRankGuideItem.label : '최고 등급 유지 중'}
+                                    </div>
+                                    <div className="mt-2 text-sm font-bold text-gray-700">
+                                        {nextRankGuideItem
+                                            ? nextRankGap > 0
+                                                ? `${formatWisAmount(nextRankGap)} 더 모으면 도달`
+                                                : '승급 기준을 충족했습니다.'
+                                            : '추가 승급 단계가 없습니다.'}
+                                    </div>
+                                    <div className="mt-2 text-xs leading-5 text-gray-600">
+                                        {nextRankGuideItem
+                                            ? `기준 누적 ${formatWisAmount(nextRankGuideItem.minPoints)}`
+                                            : '현재 테마 기준 최상위 등급입니다.'}
+                                    </div>
+                                </div>
+                                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                                    <div className="text-xs font-black uppercase tracking-[0.16em] text-gray-500">등급 기준</div>
+                                    <div className="mt-3 text-sm font-bold text-gray-800">높은 등급일수록 더 많은 누적 위스를 뜻합니다.</div>
+                                    <div className="mt-2 text-xs leading-5 text-gray-600">
+                                        아래 카드에서 높은 등급부터 현재 위치까지 순서대로 바로 확인할 수 있습니다.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="mt-5 space-y-3">
+                                {rankGuideItems.map((item) => (
+                                    <article
+                                        key={item.code}
+                                        className={`rounded-2xl border px-4 py-4 ${
+                                            item.isCurrent
+                                                ? 'border-blue-200 bg-blue-50/60 ring-1 ring-blue-100'
+                                                : 'border-gray-200 bg-gray-50/60'
+                                        }`}
+                                    >
+                                        <div className="flex flex-wrap items-center justify-between gap-3">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <span className={`inline-flex whitespace-nowrap rounded-full px-3 py-1 text-sm font-bold ${item.badgeClass}`}>
+                                                    {item.label}
+                                                </span>
+                                                {item.isCurrent && (
+                                                    <span className="inline-flex whitespace-nowrap rounded-full border border-blue-200 bg-white px-3 py-1 text-xs font-bold text-blue-700">
+                                                        내 현재 등급
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <span className="inline-flex whitespace-nowrap rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-bold text-gray-600">
+                                                기준 누적 {formatWisAmount(item.minPoints)}
+                                            </span>
+                                        </div>
+                                        <p className="mt-3 text-sm leading-6 text-gray-600">{item.description}</p>
+                                        {item.isCurrent && (
+                                            <div className="mt-3 rounded-xl border border-blue-200 bg-white px-3 py-3 text-sm font-semibold text-blue-700">
+                                                현재 누적 위스 {formatWisAmount(currentRank?.metricValue || 0)} 기준으로 여기에 도달했습니다.
+                                            </div>
+                                        )}
+                                    </article>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { db } from '../../../lib/firebase';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { useAppToast } from '../../../components/common/AppToastProvider';
 
 interface GradeItem {
     value: string;
@@ -13,6 +14,7 @@ interface ClassItem {
 }
 
 const SettingsSchool: React.FC = () => {
+    const { showToast } = useAppToast();
     const [schoolLevel, setSchoolLevel] = useState('middle');
     const [grades, setGrades] = useState<GradeItem[]>([]);
     const [classes, setClasses] = useState<ClassItem[]>([]);
@@ -67,7 +69,10 @@ const SettingsSchool: React.FC = () => {
 
     const handleRemoveGrade = (index: number) => {
         if (grades.length <= 1) {
-            alert('최소 1개의 학년이 필요합니다.');
+            showToast({
+                tone: 'warning',
+                title: '최소 1개의 학년이 필요합니다.',
+            });
             return;
         }
         if (window.confirm(`'${grades[index].label}'을(를) 삭제하시겠습니까?`)) {
@@ -90,7 +95,10 @@ const SettingsSchool: React.FC = () => {
 
     const handleRemoveClass = (index: number) => {
         if (classes.length <= 1) {
-            alert('최소 1개의 학급이 필요합니다.');
+            showToast({
+                tone: 'warning',
+                title: '최소 1개의 학급이 필요합니다.',
+            });
             return;
         }
         if (window.confirm(`'${classes[index].label}'을(를) 삭제하시겠습니까?`)) {
@@ -115,10 +123,17 @@ const SettingsSchool: React.FC = () => {
                 classes,
                 updatedAt: serverTimestamp()
             });
-            alert('학교급·학년·학급 설정이 저장되었습니다.');
+            showToast({
+                tone: 'success',
+                title: '학교급·학년·학급 설정이 저장되었습니다.',
+            });
         } catch (error: any) {
             console.error("Failed to save school config:", error);
-            alert('저장 실패: ' + error.message);
+            showToast({
+                tone: 'error',
+                title: '학교급 설정 저장에 실패했습니다.',
+                message: error.message,
+            });
         }
     };
 

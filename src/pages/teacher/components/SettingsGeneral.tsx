@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { useAppToast } from '../../../components/common/AppToastProvider';
 import { useAuth } from '../../../contexts/AuthContext';
+import { notifySystemConfigUpdated } from '../../../lib/appEvents';
 import { db } from '../../../lib/firebase';
 import { DEFAULT_POINT_RANK_POLICY } from '../../../lib/pointRanks';
 import {
@@ -191,7 +193,8 @@ const READINESS_ITEM_META: Record<ReadinessListItem['key'], { readyHint: string;
 };
 
 const SettingsGeneral: React.FC = () => {
-    const { currentUser } = useAuth();
+    const { currentUser, refreshConfig } = useAuth();
+    const { showToast } = useAppToast();
     const [config, setConfig] = useState<SettingsConfigState>(DEFAULT_CONFIG);
     const [activeSemester, setActiveSemester] = useState<SemesterSelectionState>({
         year: DEFAULT_YEAR,
@@ -240,7 +243,11 @@ const SettingsGeneral: React.FC = () => {
             }
         } catch (error) {
             console.error("Failed to load config:", error);
-            alert("설정을 불러오는데 실패했습니다.");
+            showToast({
+                tone: 'error',
+                title: '설정을 불러오지 못했습니다.',
+                message: '잠시 후 다시 시도해 주세요.',
+            });
         } finally {
             setLoading(false);
         }
@@ -433,7 +440,11 @@ const SettingsGeneral: React.FC = () => {
         const semester = normalizeSemester(newSemester.semester);
 
         if (!/^\d{4}$/.test(year)) {
-            alert('학년도는 4자리 숫자로 입력해주세요.');
+            showToast({
+                tone: 'warning',
+                title: '학년도 입력 형식을 확인해 주세요.',
+                message: '학년도는 4자리 숫자로 입력해야 합니다.',
+            });
             return;
         }
 
@@ -477,7 +488,11 @@ const SettingsGeneral: React.FC = () => {
             setFeedback(`${buildSemesterLabel(year, semester)}를 준비했습니다. 위 설정 저장을 누르면 활성 학기로 전환됩니다.`);
         } catch (error) {
             console.error("Failed to create semester shell:", error);
-            alert(`새 학기 생성 실패: ${error}`);
+            showToast({
+                tone: 'error',
+                title: '새 학기 생성에 실패했습니다.',
+                message: String(error),
+            });
         } finally {
             setCreating(false);
         }
@@ -499,11 +514,20 @@ const SettingsGeneral: React.FC = () => {
             }, { merge: true });
             setActiveSemester({ year, semester });
             setAvailableSemesters(nextRegistry);
-            alert("기본 설정이 저장되었습니다. 변경 사항을 적용하기 위해 페이지를 새로고침합니다.");
-            window.location.reload();
+            await refreshConfig();
+            notifySystemConfigUpdated();
+            showToast({
+                tone: 'success',
+                title: '기본 설정이 저장되었습니다.',
+                message: `${buildSemesterLabel(year, semester)} 기준으로 최신 설정을 반영했습니다.`,
+            });
         } catch (error) {
             console.error("Failed to save config:", error);
-            alert("설정 저장 실패: " + error);
+            showToast({
+                tone: 'error',
+                title: '기본 설정 저장에 실패했습니다.',
+                message: String(error),
+            });
         } finally {
             setSaving(false);
         }

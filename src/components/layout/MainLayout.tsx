@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { inferToastFromAlertMessage, useAppToast } from '../common/AppToastProvider';
 import Header from '../common/Header';
 import Footer from '../common/Footer';
 import StudentRankPromotionController from '../common/StudentRankPromotionController';
@@ -12,6 +13,7 @@ const ROLE_SESSION_KEY = 'westoryPortalRole';
 
 const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { currentUser, userData, loading } = useAuth();
+    const { showToast } = useAppToast();
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -52,6 +54,21 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             'westory-main-layout-ready',
         );
     }, [currentUser, loading, location.pathname]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return undefined;
+
+        const originalAlert = window.alert.bind(window);
+        window.alert = (message?: unknown) => {
+            const nextToast = inferToastFromAlertMessage(message);
+            if (!nextToast) return;
+            showToast(nextToast);
+        };
+
+        return () => {
+            window.alert = originalAlert;
+        };
+    }, [showToast]);
 
     if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
 

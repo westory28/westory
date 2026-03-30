@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { useAppToast } from '../../../components/common/AppToastProvider';
 import { db } from '../../../lib/firebase';
 import { cloneDefaultMenus, sanitizeMenuConfig, type MenuConfig, type PortalType } from '../../../constants/menus';
+import { useAuth } from '../../../contexts/AuthContext';
+import { notifyMenuConfigUpdated } from '../../../lib/appEvents';
 
 type InterfaceTab = 'landing' | 'sitemap';
 
@@ -40,6 +43,8 @@ const moveInArray = <T,>(items: T[], from: number, to: number): T[] => {
 };
 
 const SettingsInterface: React.FC = () => {
+    const { refreshInterfaceConfig } = useAuth();
+    const { showToast } = useAppToast();
     const [activeTab, setActiveTab] = useState<InterfaceTab>('landing');
     const [activePortal, setActivePortal] = useState<PortalType>('student');
     const [config, setConfig] = useState(DEFAULT_INTERFACE_CONFIG);
@@ -186,7 +191,11 @@ const SettingsInterface: React.FC = () => {
         const url = normalizeMenuUrl(parentDraft[portal].url);
 
         if (!name || !url) {
-            alert('상위 메뉴 이름과 URL을 모두 입력하세요.');
+            showToast({
+                tone: 'warning',
+                title: '상위 메뉴 입력을 확인해 주세요.',
+                message: '상위 메뉴 이름과 URL을 모두 입력해야 합니다.',
+            });
             return;
         }
 
@@ -225,7 +234,11 @@ const SettingsInterface: React.FC = () => {
         const url = normalizeMenuUrl(childDrafts[key]?.url || '');
 
         if (!name || !url) {
-            alert('하위 메뉴 이름과 URL을 모두 입력하세요.');
+            showToast({
+                tone: 'warning',
+                title: '하위 메뉴 입력을 확인해 주세요.',
+                message: '하위 메뉴 이름과 URL을 모두 입력해야 합니다.',
+            });
             return;
         }
 
@@ -247,7 +260,11 @@ const SettingsInterface: React.FC = () => {
 
     const saveInterfaceConfig = async () => {
         if (config.ddayEnabled && (!config.ddayTitle.trim() || !config.ddayDate)) {
-            alert('D-Day를 사용하려면 제목과 날짜를 입력해야 합니다.');
+            showToast({
+                tone: 'warning',
+                title: 'D-Day 입력을 확인해 주세요.',
+                message: 'D-Day 제목과 날짜를 모두 입력해야 합니다.',
+            });
             return;
         }
 
@@ -261,10 +278,19 @@ const SettingsInterface: React.FC = () => {
                 footerText: config.footerText.trim(),
                 updatedAt: serverTimestamp(),
             });
-            alert('인터페이스 설정이 저장되었습니다.');
+            await refreshInterfaceConfig();
+            showToast({
+                tone: 'success',
+                title: '인터페이스 설정이 저장되었습니다.',
+                message: '메인 화면과 푸터에 최신 설정을 반영했습니다.',
+            });
         } catch (error: any) {
             console.error('Failed to save interface config:', error);
-            alert(`저장 실패: ${error.message}`);
+            showToast({
+                tone: 'error',
+                title: '인터페이스 설정 저장에 실패했습니다.',
+                message: error.message,
+            });
         } finally {
             setSavingInterface(false);
         }
@@ -279,10 +305,19 @@ const SettingsInterface: React.FC = () => {
                 updatedAt: serverTimestamp(),
             });
             setMenuConfig(normalized);
-            alert('사이트맵 메뉴 설정이 저장되었습니다.');
+            notifyMenuConfigUpdated();
+            showToast({
+                tone: 'success',
+                title: '사이트맵 메뉴 설정이 저장되었습니다.',
+                message: '학생과 교사 헤더에서 최신 메뉴를 사용할 수 있습니다.',
+            });
         } catch (error: any) {
             console.error('Failed to save menu config:', error);
-            alert(`저장 실패: ${error.message}`);
+            showToast({
+                tone: 'error',
+                title: '사이트맵 메뉴 저장에 실패했습니다.',
+                message: error.message,
+            });
         } finally {
             setSavingMenu(false);
         }

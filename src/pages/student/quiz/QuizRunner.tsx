@@ -2,7 +2,9 @@
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { db } from '../../../lib/firebase';
 import { collection, query, where, getDocs, doc, getDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { useAppToast } from '../../../components/common/AppToastProvider';
 import { useAuth } from '../../../contexts/AuthContext';
+import { notifyPointsUpdated } from '../../../lib/appEvents';
 import Chart from 'chart.js/auto';
 import { getSemesterCollectionPath, getSemesterDocPath } from '../../../lib/semesterScope';
 import { claimPointActivityReward } from '../../../lib/points';
@@ -34,6 +36,7 @@ interface QuizConfig {
 }
 
 const QuizRunner: React.FC = () => {
+    const { showToast } = useAppToast();
     const ORDER_DELIMITER = '||';
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
@@ -312,24 +315,51 @@ const QuizRunner: React.FC = () => {
                         sourceId: `quiz-result-${resultRef.id}`,
                         sourceLabel: title || '문제 풀이 완료',
                     });
+                    if (pointResult.awarded && (pointResult.totalAwarded || pointResult.amount)) {
+                        notifyPointsUpdated();
+                    }
                     if ((pointResult.totalAwarded || pointResult.amount) > 0) {
                         const totalAwarded = Number(pointResult.totalAwarded || pointResult.amount || 0);
                         if (pointResult.bonusAwarded && pointResult.bonusAmount) {
                             setPointNotice(`문제 풀이 위스가 적립되었습니다. 기본 +${pointResult.amount}위스, 보너스 +${pointResult.bonusAmount}위스`);
+                            showToast({
+                                tone: 'success',
+                                title: '문제 풀이 완료',
+                                message: `기본 +${pointResult.amount}위스, 보너스 +${pointResult.bonusAmount}위스가 반영되었습니다.`,
+                            });
                         } else {
                             setPointNotice(`문제 풀이 위스가 적립되었습니다. +${totalAwarded}위스`);
+                            showToast({
+                                tone: 'success',
+                                title: '문제 풀이 완료',
+                                message: `+${totalAwarded}위스가 반영되었습니다.`,
+                            });
                         }
                     } else if (pointResult.duplicate) {
                         setPointNotice('이번 문제 풀이 위스는 이미 반영되었습니다.');
+                        showToast({
+                            tone: 'info',
+                            title: '문제 풀이 위스가 이미 반영되었습니다.',
+                        });
                     } else {
                         setPointNotice('');
                     }
                 } catch (pointError) {
                     console.error('Failed to claim quiz point reward', pointError);
                     setPointNotice('문제 풀이 위스를 바로 반영하지 못했습니다.');
+                    showToast({
+                        tone: 'warning',
+                        title: '문제 풀이 결과는 저장되었습니다.',
+                        message: '위스 반영 상태를 바로 확인하지 못했습니다.',
+                    });
                 }
             } catch (e) {
                 console.error("Failed to save result", e);
+                showToast({
+                    tone: 'error',
+                    title: '문제 풀이 결과 저장에 실패했습니다.',
+                    message: '잠시 후 다시 시도해 주세요.',
+                });
             }
         }
 

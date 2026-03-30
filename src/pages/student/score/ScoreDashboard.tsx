@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { db } from '../../../lib/firebase';
 import { collection, query, orderBy, getDocs, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { useAppToast } from '../../../components/common/AppToastProvider';
 import { useAuth } from '../../../contexts/AuthContext';
 import GradeChart from './components/GradeChart';
 import ScoreCard from './components/ScoreCard';
@@ -18,6 +19,7 @@ interface GradingPlan {
 
 const ScoreDashboard: React.FC = () => {
     const { userData, currentUser, config } = useAuth();
+    const { showToast } = useAppToast();
     const [loading, setLoading] = useState(true);
     const [plans, setPlans] = useState<GradingPlan[]>([]);
     const [userScores, setUserScores] = useState<{ [key: string]: string }>({});
@@ -27,6 +29,8 @@ const ScoreDashboard: React.FC = () => {
     const [saveError, setSaveError] = useState<string | null>(null);
     const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
     const [warningSaving, setWarningSaving] = useState(false);
+    const [warningAcknowledgedLocal, setWarningAcknowledgedLocal] = useState(false);
+    const hasHydratedUserDoc = userData?.uid === currentUser?.uid;
 
     // Filters
     const [semester, setSemester] = useState(config?.semester || '1');
@@ -38,7 +42,7 @@ const ScoreDashboard: React.FC = () => {
 
     const getDraftKey = (targetSemester: string) => {
         const year = config?.year || '2025';
-        const uid = userData?.uid || 'anonymous';
+        const uid = currentUser?.uid || userData?.uid || 'anonymous';
         return `scoreDraft:${uid}:${year}:${targetSemester}`;
     };
 
@@ -82,12 +86,28 @@ const ScoreDashboard: React.FC = () => {
     }, [userData, config]);
 
     useEffect(() => {
-        if (userData) {
+        setWarningAcknowledgedLocal(false);
+    }, [currentUser?.uid]);
+
+    useEffect(() => {
+        if (currentUser?.uid) {
             fetchData(semester);
             return;
         }
         setLoading(false);
-    }, [userData, config, semester]);
+    }, [currentUser?.uid, config?.year, semester]);
+
+    useEffect(() => {
+        if (!currentUser?.uid || !hasHydratedUserDoc) {
+            setShowWarning(false);
+            setAgree(false);
+            return;
+        }
+
+        const warningAcknowledged = warningAcknowledgedLocal || userData?.scoreWarningAcknowledged === true;
+        setShowWarning(!warningAcknowledged);
+        setAgree(warningAcknowledged);
+    }, [currentUser?.uid, hasHydratedUserDoc, userData?.scoreWarningAcknowledged, warningAcknowledgedLocal]);
 
     useEffect(() => {
         return () => {
@@ -123,9 +143,10 @@ const ScoreDashboard: React.FC = () => {
     const fetchData = async (targetSemester: string = semester) => {
         setLoading(true);
         try {
+            const activeYear = config?.year || '2025';
             // 1. Fetch Plans
             const snap = await getDocs(query(
-                collection(db, getSemesterCollectionPath({ year: config?.year || '2026', semester: targetSemester }, 'grading_plans')),
+                collection(db, getSemesterCollectionPath({ year: activeYear, semester: targetSemester }, 'grading_plans')),
                 orderBy('createdAt', 'desc')
             ));
             const loadedPlans: GradingPlan[] = [];
@@ -133,22 +154,15 @@ const ScoreDashboard: React.FC = () => {
             setPlans(loadedPlans);
 
             // 2. Fetch User Scores
-            const year = config?.year || '2025';
-            const scoreDocId = `${year}_${targetSemester}`;
+            const scoreDocId = `${activeYear}_${targetSemester}`;
             // IMPORTANT: Based on previous logic, scores are stored under users/{uid}/academic_records/{scoreDocId}
-            if (userData) {
-                const scoreRef = doc(db, 'users', userData.uid, 'academic_records', scoreDocId);
+            if (currentUser?.uid) {
+                const scoreRef = doc(db, 'users', currentUser.uid, 'academic_records', scoreDocId);
                 const scoreSnap = await getDoc(scoreRef);
                 const remoteScores = scoreSnap.exists() ? (scoreSnap.data().scores || {}) : {};
                 const draftScores = loadDraftScores(targetSemester);
                 const mergedScores = { ...remoteScores, ...draftScores };
                 setUserScores(mergedScores);
-
-                const userRef = doc(db, 'users', userData.uid);
-                const userSnap = await getDoc(userRef);
-                const warningAcknowledged = userSnap.exists() && userSnap.data().scoreWarningAcknowledged === true;
-                setShowWarning(!warningAcknowledged);
-                setAgree(warningAcknowledged);
             }
 
         } catch (error) {
@@ -197,28 +211,46 @@ const ScoreDashboard: React.FC = () => {
         return sanitized;
     };
 
-    const saveScores = async (scoresToSave: { [key: string]: string }, targetSemester: string = semester) => {
-        if (!userData) return;
+    const saveScores = async (
+        scoresToSave: { [key: string]: string },
+        targetSemester: string = semester,
+        options?: { announce?: boolean },
+    ) => {
+        if (!currentUser?.uid) return;
         const year = config?.year || '2025';
         const scoreDocId = `${year}_${targetSemester}`;
         const sanitizedScores = sanitizeScores(scoresToSave);
         try {
-            await setDoc(doc(db, 'users', userData.uid, 'academic_records', scoreDocId), {
+            await setDoc(doc(db, 'users', currentUser.uid, 'academic_records', scoreDocId), {
                 scores: sanitizedScores,
                 updatedAt: serverTimestamp()
             }, { merge: true });
             setLastSavedAt(Date.now());
             setSaveError(null);
             clearDraftScores(targetSemester);
+            if (options?.announce) {
+                showToast({
+                    tone: 'success',
+                    title: '성적 계산기가 저장되었습니다.',
+                    message: `${year}학년도 ${targetSemester}학기 입력값이 반영되었습니다.`,
+                });
+            }
         } catch (e) {
             console.error("Save failed", e);
             setSaveError("저장에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+            if (options?.announce) {
+                showToast({
+                    tone: 'error',
+                    title: '저장에 실패했습니다.',
+                    message: '잠시 후 다시 시도해 주세요.',
+                });
+            }
         }
     };
 
     const handleManualSave = async () => {
         setSaving(true);
-        await saveScores(userScores, semester);
+        await saveScores(userScores, semester, { announce: true });
         setSaving(false);
     };
 
@@ -280,9 +312,15 @@ const ScoreDashboard: React.FC = () => {
             }
 
             await setDoc(userRef, warningPayload, { merge: true });
+            setWarningAcknowledgedLocal(true);
             setAgree(true);
             setSaveError(null);
             setShowWarning(false);
+            showToast({
+                tone: 'success',
+                title: '동의가 저장되었습니다.',
+                message: '이제 성적 계산기를 계속 사용할 수 있습니다.',
+            });
         } catch (e) {
             console.error("Warning agreement save failed", {
                 uid: userData.uid,
@@ -290,7 +328,11 @@ const ScoreDashboard: React.FC = () => {
                 hasUserDoc: userDocExists,
                 error: e,
             });
-            alert("동의 상태 저장에 실패했습니다. 다시 시도해 주세요.");
+            showToast({
+                tone: 'error',
+                title: '동의 저장에 실패했습니다.',
+                message: '네트워크 상태를 확인한 뒤 다시 시도해 주세요.',
+            });
         } finally {
             setWarningSaving(false);
         }
@@ -374,7 +416,7 @@ const ScoreDashboard: React.FC = () => {
     return (
         <div className="max-w-6xl mx-auto px-4 py-8 animate-fadeIn">
             {/* Warning Modal Overlay */}
-            {showWarning && (
+            {hasHydratedUserDoc && showWarning && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center backdrop-blur-sm p-4">
                     <div className="bg-white p-8 rounded-2xl w-full max-w-md text-center shadow-2xl animate-fadeScale">
                         <div className="text-4xl mb-2">⚠️</div>
@@ -384,7 +426,7 @@ const ScoreDashboard: React.FC = () => {
                             정확한 성적은 <u>나이스(NEIS)</u> 및 <u>성적 통지표</u>를 확인하세요.
                         </div>
                         <div className="text-xs text-gray-400 mb-4 bg-gray-50 p-2 rounded">
-                            입력한 점수는 사용자의 계정에 안전하게 저장됩니다.
+                            입력한 점수는 사용자의 계정에 안전하게 저장되며 성적 계산기에서 계속 이어집니다.
                         </div>
                         <div
                             className="flex items-center justify-center gap-2 p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition mb-4"
@@ -412,7 +454,7 @@ const ScoreDashboard: React.FC = () => {
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-end justify-between border-b-2 border-gray-800 pb-4 mb-6">
                 <h1 className="text-2xl font-bold text-gray-900 flex items-baseline">
-                    나의 성적표
+                    성적 계산기
                     <span className="text-lg font-normal text-gray-500 ml-2">({config?.year}학년도)</span>
                 </h1>
                 <div className="text-blue-600 font-bold mt-2 md:mt-0">

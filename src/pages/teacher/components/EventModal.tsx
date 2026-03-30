@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { collection, deleteDoc, doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { useAppToast } from '../../../components/common/AppToastProvider';
 import { useAuth } from '../../../contexts/AuthContext';
 import { db } from '../../../lib/firebase';
 import {
@@ -26,6 +27,7 @@ type SchoolOption = { value: string; label: string };
 const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onSave, initialDate }) => {
     const { config } = useAuth();
     const { categories } = useScheduleCategories();
+    const { showToast } = useAppToast();
 
     const [title, setTitle] = useState('');
     const [start, setStart] = useState('');
@@ -173,16 +175,31 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
         setSavingCategories(true);
         try {
             await persistCategoryDrafts();
+            showToast({
+                tone: 'success',
+                title: '일정 분류가 저장되었습니다.',
+            });
         } catch (error) {
             console.error('Error saving schedule categories:', error);
-            alert('일정 분류 저장에 실패했습니다.');
+            showToast({
+                tone: 'error',
+                title: '일정 분류 저장에 실패했습니다.',
+                message: '잠시 후 다시 시도해 주세요.',
+            });
         } finally {
             setSavingCategories(false);
         }
     };
 
     const handleSave = async () => {
-        if (!config || !title.trim() || !start) return;
+        if (!config) return;
+        if (!title.trim() || !start) {
+            showToast({
+                tone: 'warning',
+                title: '제목과 시작 날짜를 확인해 주세요.',
+            });
+            return;
+        }
         setLoading(true);
 
         try {
@@ -208,10 +225,19 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
 
             await setDoc(docRef, data, { merge: true });
             onSave();
+            showToast({
+                tone: 'success',
+                title: eventData ? '일정이 수정되었습니다.' : '일정이 저장되었습니다.',
+                message: '학사 일정에 최신 내용이 반영되었습니다.',
+            });
             onClose();
         } catch (error) {
             console.error('Error saving event:', error);
-            alert('일정 저장에 실패했습니다.');
+            showToast({
+                tone: 'error',
+                title: '일정 저장에 실패했습니다.',
+                message: '잠시 후 다시 시도해 주세요.',
+            });
         } finally {
             setLoading(false);
         }
@@ -224,10 +250,18 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, eventData, onS
             const path = `years/${config.year}/semesters/${config.semester}/calendar`;
             await deleteDoc(doc(db, path, eventData.id));
             onSave();
+            showToast({
+                tone: 'success',
+                title: '일정이 삭제되었습니다.',
+            });
             onClose();
         } catch (error) {
             console.error('Error deleting event:', error);
-            alert('일정 삭제에 실패했습니다.');
+            showToast({
+                tone: 'error',
+                title: '일정 삭제에 실패했습니다.',
+                message: '잠시 후 다시 시도해 주세요.',
+            });
         } finally {
             setLoading(false);
         }

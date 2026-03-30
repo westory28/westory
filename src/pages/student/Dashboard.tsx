@@ -5,11 +5,13 @@ import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../lib/firebase';
 import { runAfterNextPaint, runWhenIdle } from '../../lib/browserTasks';
 import { markLoginPerf, measureLoginPerf } from '../../lib/loginPerf';
-import { buildAttendanceSourceId, claimPointActivityReward, getPointActivityTransaction } from '../../lib/points';
+import { notifyPointsUpdated } from '../../lib/appEvents';
+import { buildAttendanceSourceId, buildPointRewardFeedback, claimPointActivityReward, getPointActivityTransaction } from '../../lib/points';
 import { useScheduleCategories } from '../../lib/scheduleCategories';
 import { readSiteSettingDoc } from '../../lib/siteSettings';
 import { getYearSemester } from '../../lib/semesterScope';
 import { CalendarEvent } from '../../types';
+import { useAppToast } from '../../components/common/AppToastProvider';
 import EventDetailPanel from './components/EventDetailPanel';
 
 const CalendarSection = lazy(() => import('./components/CalendarSection'));
@@ -59,6 +61,7 @@ const StudentDashboard: React.FC = () => {
     const [attendanceMessage, setAttendanceMessage] = useState('');
     const [attendanceDates, setAttendanceDates] = useState<string[]>([]);
     const [secondaryPanelsReady, setSecondaryPanelsReady] = useState(false);
+    const { showToast } = useAppToast();
 
     const calendarRef = useRef<FullCalendar>(null);
     const { year, semester } = getYearSemester(config);
@@ -93,6 +96,27 @@ const StudentDashboard: React.FC = () => {
         if (attendanceChecked) set.add(todayDate);
         return Array.from(set).sort();
     }, [attendanceChecked, attendanceDates, todayDate]);
+
+    const attendanceGoalText = useMemo(() => {
+        const todayKey = todayAttendanceSourceId.replace(/^attendance-/, '');
+        const [yearValue, monthValue, dayValue] = todayKey.split('-').map((value) => Number(value));
+        if (!yearValue || !monthValue || !dayValue) return '';
+
+        const monthPrefix = `${yearValue}-${String(monthValue).padStart(2, '0')}-`;
+        const monthlyAttendance = new Set(
+            visibleAttendanceDates.filter((date) => date.startsWith(monthPrefix)),
+        );
+        const toDateKey = (day: number) => `${monthPrefix}${String(day).padStart(2, '0')}`;
+        const missedPastDay = Array.from({ length: Math.max(dayValue - 1, 0) }, (_, index) => index + 1)
+            .some((day) => !monthlyAttendance.has(toDateKey(day)));
+        const daysInMonth = new Date(yearValue, monthValue, 0).getDate();
+        const remainingDays = Array.from({ length: Math.max(daysInMonth - dayValue + 1, 0) }, (_, index) => dayValue + index)
+            .filter((day) => !monthlyAttendance.has(toDateKey(day))).length;
+
+        if (missedPastDay) return '이번 달 개근은 다음 달에 다시 도전';
+        if (remainingDays <= 0) return '이번 달 개근 달성';
+        return `개근까지 ${remainingDays}일`;
+    }, [todayAttendanceSourceId, visibleAttendanceDates]);
 
     useEffect(() => {
         const loadSchoolConfig = async () => {
@@ -265,17 +289,32 @@ const StudentDashboard: React.FC = () => {
             setAttendanceChecked(true);
             setSelectedDate(todayDate);
             handleDateClick(todayDate);
+            notifyPointsUpdated();
 
-            if (result.monthlyBonusAwarded && result.monthlyBonusAmount) {
-                setAttendanceMessage(`출석 체크 완료. +${result.amount}위스, 월간 개근 보너스 +${result.monthlyBonusAmount}위스`);
-            } else if (result.awarded && result.amount > 0) {
-                setAttendanceMessage(`출석 체크가 완료되었습니다. +${result.amount}위스`);
+            const rewardFeedback = buildPointRewardFeedback({
+                actionLabel: '출석 체크',
+                duplicateMessage: '오늘 출석은 이미 반영되었습니다.',
+                result,
+            });
+
+            if (rewardFeedback) {
+                setAttendanceMessage(
+                    rewardFeedback.tone === 'warning'
+                        ? rewardFeedback.message
+                        : `${rewardFeedback.title}. ${rewardFeedback.message}`,
+                );
+                showToast(rewardFeedback);
             } else {
-                setAttendanceMessage('오늘 출석은 이미 반영되었습니다.');
+                setAttendanceMessage('출석 상태를 최신 정보로 반영했습니다.');
             }
         } catch (error) {
             console.error('Failed to apply attendance point reward:', error);
             setAttendanceMessage('출석 체크 처리 중 오류가 발생했습니다.');
+            showToast({
+                tone: 'error',
+                title: '출석 체크에 실패했습니다.',
+                message: '네트워크 상태를 확인한 뒤 다시 시도해 주세요.',
+            });
         } finally {
             setAttendanceLoading(false);
         }
@@ -324,6 +363,7 @@ const StudentDashboard: React.FC = () => {
                             attendanceChecked={attendanceChecked}
                             attendanceMessage={attendanceMessage}
                             attendanceDates={visibleAttendanceDates}
+                            attendanceGoalText={attendanceGoalText}
                         />
                     </Suspense>
                 </div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../../lib/firebase';
 import { doc, setDoc, deleteDoc, serverTimestamp, collection } from 'firebase/firestore';
+import { useAppToast } from '../../../components/common/AppToastProvider';
 import { useAuth } from '../../../contexts/AuthContext';
 
 interface NoticeModalProps {
@@ -12,6 +13,7 @@ interface NoticeModalProps {
 
 const NoticeModal: React.FC<NoticeModalProps> = ({ isOpen, onClose, noticeData, onSave }) => {
     const { config } = useAuth();
+    const { showToast } = useAppToast();
     const [category, setCategory] = useState('normal');
     const [content, setContent] = useState('');
     const [targetType, setTargetType] = useState('common');
@@ -45,7 +47,14 @@ const NoticeModal: React.FC<NoticeModalProps> = ({ isOpen, onClose, noticeData, 
     if (!isOpen) return null;
 
     const handleSave = async () => {
-        if (!config || !content.trim()) return;
+        if (!config) return;
+        if (!content.trim()) {
+            showToast({
+                tone: 'warning',
+                title: '알림 내용을 입력해 주세요.',
+            });
+            return;
+        }
         setLoading(true);
 
         try {
@@ -72,10 +81,19 @@ const NoticeModal: React.FC<NoticeModalProps> = ({ isOpen, onClose, noticeData, 
 
             await setDoc(docRef, data, { merge: true });
             onSave();
+            showToast({
+                tone: 'success',
+                title: noticeData ? '알림이 수정되었습니다.' : '알림이 저장되었습니다.',
+                message: '알림장에 최신 내용이 반영되었습니다.',
+            });
             onClose();
         } catch (error) {
             console.error("Error saving notice:", error);
-            alert("알림 저장 실패");
+            showToast({
+                tone: 'error',
+                title: '알림 저장에 실패했습니다.',
+                message: '잠시 후 다시 시도해 주세요.',
+            });
         } finally {
             setLoading(false);
         }
@@ -88,10 +106,18 @@ const NoticeModal: React.FC<NoticeModalProps> = ({ isOpen, onClose, noticeData, 
             const path = `years/${config.year}/semesters/${config.semester}/notices`;
             await deleteDoc(doc(db, path, noticeData.id));
             onSave();
+            showToast({
+                tone: 'success',
+                title: '알림이 삭제되었습니다.',
+            });
             onClose();
         } catch (error) {
             console.error("Error deleting notice:", error);
-            alert("알림 삭제 실패");
+            showToast({
+                tone: 'error',
+                title: '알림 삭제에 실패했습니다.',
+                message: '잠시 후 다시 시도해 주세요.',
+            });
         } finally {
             setLoading(false);
         }
