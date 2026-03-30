@@ -729,7 +729,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
 
         <div
           ref={contentRef}
-          className={canPersist ? "space-y-6 pb-24 md:pb-28" : "space-y-6"}
+          className={canPersist ? "space-y-6 pt-16 md:pt-[4.5rem]" : "space-y-6"}
         >
           {!!worksheet.pageImages.length &&
             (fullscreenPreview ? (
@@ -860,7 +860,13 @@ const LessonContent: React.FC<LessonContentProps> = ({
         </div>
 
         {canPersist && (
-          <div className="pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] right-4 z-[70] flex flex-col items-end gap-3 md:right-6">
+          <div
+            className={`pointer-events-none fixed right-4 z-[70] flex flex-col items-end gap-2 md:right-6 ${
+              fullscreenPreview
+                ? "top-[calc(env(safe-area-inset-top,0px)+0.75rem)] md:top-4"
+                : "top-[calc(env(safe-area-inset-top,0px)+5rem)] md:top-[5.5rem]"
+            }`}
+          >
             <div
               aria-live="polite"
               className={`pointer-events-auto rounded-full px-4 py-2 text-xs font-bold shadow-sm ${saveStatusToneClass}`}
