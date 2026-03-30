@@ -602,6 +602,9 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   const [highlighterColorKey, setHighlighterColorKey] =
     useState<DrawingColor>("yellow");
   const [studentZoom, setStudentZoom] = useState(1);
+  const shouldUseBoundedViewportScroll =
+    isViewportInteractive &&
+    (mode === "teacher-present" || isAnnotationEnabled || studentZoom > 1.02);
   const studentZoomRef = useRef(1);
   const [toolbarVisible, setToolbarVisible] = useState(
     annotationUiMode === "always",
@@ -2302,18 +2305,34 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                 ref={(node) => {
                   scrollHostRefs.current[pageImage.page] = node;
                 }}
-                className="overflow-auto rounded-2xl border border-gray-200 bg-gray-50"
+                className={`rounded-2xl border border-gray-200 bg-gray-50 ${
+                  shouldUseBoundedViewportScroll
+                    ? "overflow-auto"
+                    : "overflow-x-auto overflow-y-visible"
+                }`}
                 style={
                   isViewportInteractive
                     ? {
                         touchAction: "none",
-                        overscrollBehavior: "contain",
-                        maxHeight: "min(78vh, 960px)",
+                        overscrollBehavior: shouldUseBoundedViewportScroll
+                          ? "contain"
+                          : undefined,
+                        maxHeight: shouldUseBoundedViewportScroll
+                          ? "min(78vh, 960px)"
+                          : undefined,
+                        overflowY: shouldUseBoundedViewportScroll
+                          ? "auto"
+                          : "visible",
                       }
                     : undefined
                 }
                 onWheel={(event) => {
-                  if (!isViewportInteractive) return;
+                  if (
+                    !isViewportInteractive ||
+                    !shouldUseBoundedViewportScroll
+                  ) {
+                    return;
+                  }
                   event.preventDefault();
                   const delta = event.deltaY < 0 ? 0.08 : -0.08;
                   applyViewportZoom(studentZoom + delta, {
