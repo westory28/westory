@@ -22,6 +22,7 @@ import {
 } from '../../lib/points';
 import {
     getPointRankPolicyValidationError,
+    getPointWalletCumulativeEarned,
     needsPointRankLegacyFallback,
     resolvePointRankPolicyDraft,
 } from '../../lib/pointRanks';
@@ -158,7 +159,8 @@ const sortOverviewWallets = (
             } else if (sortKey === 'balance') {
                 comparison = (left.wallet.balance || 0) - (right.wallet.balance || 0);
             } else if (sortKey === 'earnedTotal') {
-                comparison = (left.wallet.earnedTotal || 0) - (right.wallet.earnedTotal || 0);
+                comparison = getPointWalletCumulativeEarned(left.wallet)
+                    - getPointWalletCumulativeEarned(right.wallet);
             } else if (sortKey === 'spentTotal') {
                 comparison = (left.wallet.spentTotal || 0) - (right.wallet.spentTotal || 0);
             }

@@ -104,7 +104,12 @@ const normalizeLeaderboardPanelPosition = (
 ): HallOfFameLeaderboardPanelPosition => ({
   leftPercent: clampNumber(value?.leftPercent, 0, 100, fallback.leftPercent),
   topPercent: clampNumber(value?.topPercent, 0, 100, fallback.topPercent),
-  widthPercent: clampNumber(value?.widthPercent, 40, 100, fallback.widthPercent),
+  widthPercent: clampNumber(
+    value?.widthPercent,
+    fallback.widthPercent >= 90 ? 78 : 24,
+    fallback.widthPercent >= 90 ? 100 : 38,
+    fallback.widthPercent,
+  ),
 });
 
 const normalizeLeaderboardPolicy = (

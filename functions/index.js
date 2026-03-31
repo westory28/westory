@@ -741,7 +741,12 @@ const normalizeHallOfFamePodiumPositions = (value, fallback) => ({
 const normalizeHallOfFameLeaderboardPanelPosition = (value, fallback) => ({
   leftPercent: normalizeHallOfFameBoundedNumber(value?.leftPercent, 0, 100, fallback.leftPercent),
   topPercent: normalizeHallOfFameBoundedNumber(value?.topPercent, 0, 100, fallback.topPercent),
-  widthPercent: normalizeHallOfFameBoundedNumber(value?.widthPercent, 40, 100, fallback.widthPercent),
+  widthPercent: normalizeHallOfFameBoundedNumber(
+    value?.widthPercent,
+    fallback.widthPercent >= 90 ? 78 : 24,
+    fallback.widthPercent >= 90 ? 100 : 38,
+    fallback.widthPercent,
+  ),
 });
 
 const normalizeHallOfFameRankLimit = (value, fallback) => {

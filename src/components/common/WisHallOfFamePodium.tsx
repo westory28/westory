@@ -29,26 +29,26 @@ const SLOT_ORDER: HallOfFamePodiumSlotKey[] = ['second', 'first', 'third'];
 const getEntryTone = (slotKey: HallOfFamePodiumSlotKey) => {
     if (slotKey === 'first') {
         return {
-            badgeClassName: 'border-amber-300/90 bg-amber-100/92 text-amber-950 shadow-[0_12px_26px_rgba(217,119,6,0.22)]',
+            badgeClassName: 'border-white/90 bg-amber-200/96 text-amber-950 shadow-[0_18px_34px_rgba(217,119,6,0.3)] ring-1 ring-white/80',
             nameClassName: 'border-white/80 bg-slate-950/82 text-white shadow-[0_20px_36px_rgba(15,23,42,0.3)] ring-1 ring-black/5',
-            scoreClassName: 'border-white/90 bg-white/96 text-slate-900 shadow-[0_14px_28px_rgba(15,23,42,0.22)] ring-1 ring-slate-900/6',
+            scoreClassName: 'border-white/30 bg-[linear-gradient(135deg,_rgba(15,23,42,0.96),_rgba(14,116,144,0.96))] text-white shadow-[0_18px_34px_rgba(15,23,42,0.28)] ring-1 ring-white/15',
             emojiClassName: 'text-[clamp(3.25rem,6.6vw,4.8rem)]',
         };
     }
 
     if (slotKey === 'second') {
         return {
-            badgeClassName: 'border-slate-300/90 bg-slate-100/92 text-slate-900 shadow-[0_10px_22px_rgba(71,85,105,0.18)]',
+            badgeClassName: 'border-white/90 bg-slate-100/96 text-slate-950 shadow-[0_16px_30px_rgba(71,85,105,0.24)] ring-1 ring-white/80',
             nameClassName: 'border-white/80 bg-slate-950/82 text-white shadow-[0_18px_32px_rgba(15,23,42,0.28)] ring-1 ring-black/5',
-            scoreClassName: 'border-white/90 bg-white/96 text-slate-900 shadow-[0_14px_28px_rgba(15,23,42,0.2)] ring-1 ring-slate-900/6',
+            scoreClassName: 'border-white/25 bg-[linear-gradient(135deg,_rgba(15,23,42,0.94),_rgba(51,65,85,0.94))] text-white shadow-[0_16px_30px_rgba(15,23,42,0.26)] ring-1 ring-white/15',
             emojiClassName: 'text-[clamp(2.6rem,5.2vw,3.9rem)]',
         };
     }
 
     return {
-        badgeClassName: 'border-orange-300/90 bg-orange-100/92 text-orange-950 shadow-[0_10px_22px_rgba(194,120,3,0.18)]',
+        badgeClassName: 'border-white/90 bg-orange-200/96 text-orange-950 shadow-[0_16px_30px_rgba(194,120,3,0.24)] ring-1 ring-white/80',
         nameClassName: 'border-white/80 bg-slate-950/82 text-white shadow-[0_18px_32px_rgba(15,23,42,0.28)] ring-1 ring-black/5',
-        scoreClassName: 'border-white/90 bg-white/96 text-slate-900 shadow-[0_14px_28px_rgba(15,23,42,0.2)] ring-1 ring-slate-900/6',
+        scoreClassName: 'border-white/30 bg-[linear-gradient(135deg,_rgba(30,41,59,0.94),_rgba(194,65,12,0.92))] text-white shadow-[0_16px_30px_rgba(15,23,42,0.24)] ring-1 ring-white/15',
         emojiClassName: 'text-[clamp(2.6rem,5.2vw,3.9rem)]',
     };
 };
@@ -105,10 +105,10 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
     const slotEntries = resolveSlotEntries(safeEntries);
 
     const slotPositionClassName = deviceMode === 'desktop'
-        ? 'absolute left-[var(--slot-left)] top-[var(--slot-top)] z-10 w-[var(--slot-width)] -translate-x-1/2 px-1.5'
+        ? 'absolute left-[var(--slot-left)] top-[var(--slot-top)] z-20 w-[var(--slot-width)] -translate-x-1/2 px-1.5'
         : deviceMode === 'mobile'
-            ? 'absolute left-[var(--slot-left-mobile)] top-[var(--slot-top-mobile)] z-10 w-[var(--slot-width-mobile)] -translate-x-1/2 px-1'
-            : 'absolute left-[var(--slot-left-mobile)] top-[var(--slot-top-mobile)] z-10 w-[var(--slot-width-mobile)] -translate-x-1/2 px-1 md:left-[var(--slot-left)] md:top-[var(--slot-top)] md:w-[var(--slot-width)] md:px-1.5';
+            ? 'absolute left-[var(--slot-left-mobile)] top-[var(--slot-top-mobile)] z-20 w-[var(--slot-width-mobile)] -translate-x-1/2 px-1'
+            : 'absolute left-[var(--slot-left-mobile)] top-[var(--slot-top-mobile)] z-20 w-[var(--slot-width-mobile)] -translate-x-1/2 px-1 md:left-[var(--slot-left)] md:top-[var(--slot-top)] md:w-[var(--slot-width)] md:px-1.5';
 
     return (
         <div className="overflow-hidden rounded-[1.85rem] border border-slate-200 bg-white shadow-[0_22px_54px_rgba(15,23,42,0.08)]">
@@ -152,7 +152,7 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                         >
                             <div className="mx-auto flex max-w-full flex-col items-center gap-2.5 text-center">
                                 <div
-                                    className={`inline-flex min-h-9 items-center justify-center whitespace-nowrap rounded-full border px-3 py-1 text-xs font-black tracking-[0.08em] shadow-[0_10px_20px_rgba(15,23,42,0.14)] sm:text-sm ${tone.badgeClassName}`}
+                                    className={`inline-flex min-h-9 min-w-[4.9rem] items-center justify-center whitespace-nowrap rounded-full border px-3.5 py-1.5 text-[11px] font-black tracking-[0.08em] shadow-[0_14px_26px_rgba(15,23,42,0.16)] sm:min-w-[5.75rem] sm:text-sm ${tone.badgeClassName}`}
                                 >
                                     {buildRankLabel(safeEntries, entry)}
                                 </div>
@@ -161,17 +161,17 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                                     {entry.profileIcon || '😀'}
                                 </div>
 
-                                <div className={`w-fit max-w-full min-w-0 rounded-[1.35rem] border px-3.5 py-2.5 backdrop-blur-xl ${tone.nameClassName}`}>
+                                <div className={`w-full max-w-[13rem] min-w-[7.5rem] rounded-[1.35rem] border px-4 py-2.5 backdrop-blur-xl sm:min-w-[8.75rem] ${tone.nameClassName}`}>
                                     <div className="whitespace-nowrap text-[10px] font-bold uppercase tracking-[0.12em] text-white/78">
                                         {entry.grade}학년 {entry.class}반
                                     </div>
-                                    <div className="mt-1 whitespace-pre-line break-keep text-[12px] font-black leading-[1.35] text-white sm:text-sm md:text-base">
+                                    <div className="mt-1 truncate whitespace-nowrap break-keep text-[12px] font-black leading-[1.35] text-white sm:text-sm md:text-base">
                                         {entry.displayName || entry.studentName}
                                     </div>
                                 </div>
 
                                 <div
-                                    className={`inline-flex min-h-[2.25rem] min-w-[6.15rem] shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-4 py-1.5 text-[11px] font-black leading-none backdrop-blur shadow-[0_12px_26px_rgba(15,23,42,0.16)] sm:min-h-[2.4rem] sm:min-w-[6.85rem] sm:px-5 sm:text-sm ${tone.scoreClassName}`}
+                                    className={`inline-flex min-h-[2.35rem] min-w-[6.75rem] shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-4 py-1.5 text-[11px] font-black leading-none backdrop-blur shadow-[0_14px_30px_rgba(15,23,42,0.2)] sm:min-h-[2.5rem] sm:min-w-[7.35rem] sm:px-5 sm:text-sm ${tone.scoreClassName}`}
                                 >
                                     누적 {formatWisAmount(entry.cumulativeEarned)}
                                 </div>

@@ -8,7 +8,6 @@ export interface HallOfFameSettingsSidebarItem {
   id: HallOfFameSettingsPanelId;
   label: string;
   iconClassName: string;
-  badge?: string;
 }
 
 interface HallOfFameSettingsSidebarProps {
@@ -58,23 +57,9 @@ const HallOfFameSettingsSidebar: React.FC<
                 <i className={item.iconClassName} aria-hidden="true"></i>
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-sm font-bold whitespace-nowrap break-keep">
-                    {item.label}
-                  </span>
-                  {item.badge && (
-                    <span
-                      className={[
-                        'rounded-full px-2 py-0.5 text-[10px] font-bold leading-none whitespace-nowrap break-keep',
-                        selected
-                          ? 'border border-blue-100 bg-white text-blue-700'
-                          : 'bg-gray-100 text-gray-600',
-                      ].join(' ')}
-                    >
-                      {item.badge}
-                    </span>
-                  )}
-                </div>
+                <span className="text-sm font-bold whitespace-nowrap break-keep">
+                  {item.label}
+                </span>
               </div>
             </button>
           );

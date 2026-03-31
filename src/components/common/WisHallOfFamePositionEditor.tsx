@@ -1,16 +1,29 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import WisHallOfFameLeaderboardList from './WisHallOfFameLeaderboardList';
+import WisHallOfFamePodium from './WisHallOfFamePodium';
 import {
   DEFAULT_WIS_HALL_OF_FAME_PODIUM_IMAGE_URL,
+  WIS_HALL_OF_FAME_GRADE_KEY,
+  applyHallOfFameRankLimit,
   getDefaultHallOfFameLeaderboardPanelPosition,
   getDefaultHallOfFamePositions,
+  getHallOfFameLeaderboardTailEntries,
+  getWisHallOfFameClassEntries,
+  getWisHallOfFameClassLeaderboardEntries,
+  getWisHallOfFameGradeEntries,
+  getWisHallOfFameGradeLeaderboardEntries,
+  resolveHallOfFameInterfaceConfig,
 } from '../../lib/wisHallOfFame';
 import type {
+  HallOfFameInterfaceConfig,
   HallOfFameLeaderboardPanelPosition,
   HallOfFamePodiumPositions,
   HallOfFamePodiumSlotKey,
+  WisHallOfFameSnapshot,
 } from '../../types';
 
 export type HallOfFameEditorDeviceMode = 'desktop' | 'mobile';
+type HallOfFameEditorPreviewView = 'grade' | 'class';
 type EditableKey = HallOfFamePodiumSlotKey | 'leaderboard';
 
 export interface WisHallOfFamePositionEditorValue {
@@ -27,6 +40,12 @@ export interface WisHallOfFamePositionEditorValue {
 interface WisHallOfFamePositionEditorProps {
   value?: WisHallOfFamePositionEditorValue;
   imageUrl?: string;
+  hallOfFameConfig?: HallOfFameInterfaceConfig | null;
+  snapshot?: WisHallOfFameSnapshot | null;
+  previewView?: HallOfFameEditorPreviewView;
+  gradeKey?: string;
+  currentGrade?: string;
+  currentClass?: string;
   deviceMode: HallOfFameEditorDeviceMode;
   disabled?: boolean;
   showPreviewStage?: boolean;
@@ -43,6 +62,7 @@ type DragState = {
   originTop: number;
   stageWidth: number;
   stageHeight: number;
+  rootFontSize: number;
 };
 
 const DEFAULT_EDITOR_VALUE: WisHallOfFamePositionEditorValue = {
@@ -80,10 +100,31 @@ const PRESET_ITEMS: Array<{
 const clamp = (value: number, minimum: number, maximum: number) =>
   Math.min(maximum, Math.max(minimum, value));
 
-const getWidthBounds = (key: EditableKey) =>
+const DEFAULT_RAIL_CENTER = 71;
+
+const getWidthBounds = (
+  key: EditableKey,
+  deviceMode: HallOfFameEditorDeviceMode,
+) =>
   key === 'leaderboard'
-    ? { min: 40, max: 100 }
+    ? deviceMode === 'desktop'
+      ? { min: 24, max: 38 }
+      : { min: 78, max: 100 }
     : { min: 12, max: 42 };
+
+const normalizeNumberText = (value: unknown) => {
+  const raw = String(value || '').trim();
+  const digits = raw.match(/\d+/)?.[0] || '';
+  if (!digits) return raw;
+  const parsed = Number(digits);
+  return Number.isFinite(parsed) && parsed > 0 ? String(parsed) : raw;
+};
+
+const resolveRailAlignClassName = (leftPercent: number) => {
+  if (leftPercent <= 44) return 'self-start';
+  if (leftPercent >= 56) return 'self-end';
+  return 'self-center';
+};
 
 const cloneEditorValue = (
   value?: WisHallOfFamePositionEditorValue,
@@ -135,6 +176,12 @@ const WisHallOfFamePositionEditor: React.FC<
 > = ({
   value,
   imageUrl,
+  hallOfFameConfig = null,
+  snapshot = null,
+  previewView = 'grade',
+  gradeKey = '',
+  currentGrade = '',
+  currentClass = '',
   deviceMode,
   disabled = false,
   showPreviewStage = true,
@@ -144,8 +191,149 @@ const WisHallOfFamePositionEditor: React.FC<
 }) => {
   const [selectedKey, setSelectedKey] = useState<EditableKey>('first');
   const [dragState, setDragState] = useState<DragState | null>(null);
-  const stageRef = useRef<HTMLDivElement | null>(null);
+  const sceneRef = useRef<HTMLDivElement | null>(null);
+  const podiumStageRef = useRef<HTMLDivElement | null>(null);
   const editorValue = useMemo(() => cloneEditorValue(value), [value]);
+  const normalizedGrade = normalizeNumberText(currentGrade);
+  const normalizedClass = normalizeNumberText(currentClass);
+  const resolvedConfig = useMemo(
+    () =>
+      resolveHallOfFameInterfaceConfig({
+        ...(hallOfFameConfig || {}),
+        podiumImageUrl:
+          (imageUrl || hallOfFameConfig?.podiumImageUrl || '').trim() ||
+          DEFAULT_WIS_HALL_OF_FAME_PODIUM_IMAGE_URL,
+        positions: editorValue.positions,
+        leaderboardPanel: editorValue.leaderboardPanel,
+      }),
+    [editorValue, hallOfFameConfig, imageUrl],
+  );
+  const availableGradeKeys = useMemo(
+    () =>
+      Array.from(
+        new Set([
+          ...Object.keys(snapshot?.gradeLeaderboardByGrade || {}),
+          ...Object.keys(snapshot?.gradeTop3ByGrade || {}),
+        ]),
+      ).sort((left, right) =>
+        left.localeCompare(right, 'ko-KR', { numeric: true }),
+      ),
+    [snapshot],
+  );
+  const requestedGradeKey = String(gradeKey || '').trim();
+  const preferredGradeKey =
+    normalizedGrade && availableGradeKeys.includes(normalizedGrade)
+      ? normalizedGrade
+      : '';
+  const previewGradeKey =
+    preferredGradeKey ||
+    (requestedGradeKey && availableGradeKeys.includes(requestedGradeKey)
+      ? requestedGradeKey
+      : '') ||
+    (snapshot?.primaryGradeKey &&
+    availableGradeKeys.includes(snapshot.primaryGradeKey)
+      ? snapshot.primaryGradeKey
+      : '') ||
+    availableGradeKeys[0] ||
+    normalizedGrade ||
+    WIS_HALL_OF_FAME_GRADE_KEY;
+  const canOpenClassView = Boolean(normalizedGrade && normalizedClass);
+  const effectivePreviewView =
+    previewView === 'class' && canOpenClassView ? 'class' : 'grade';
+  const activePodiumEntries =
+    effectivePreviewView === 'grade'
+      ? getWisHallOfFameGradeEntries(snapshot, previewGradeKey)
+      : getWisHallOfFameClassEntries(snapshot, normalizedGrade, normalizedClass);
+  const activeLeaderboardEntries =
+    effectivePreviewView === 'grade'
+      ? getWisHallOfFameGradeLeaderboardEntries(snapshot, previewGradeKey)
+      : getWisHallOfFameClassLeaderboardEntries(
+          snapshot,
+          normalizedGrade,
+          normalizedClass,
+        );
+  const appliedRankLimit =
+    effectivePreviewView === 'grade'
+      ? resolvedConfig.publicRange.gradeRankLimit
+      : resolvedConfig.publicRange.classRankLimit;
+  const visibleLeaderboardEntries = applyHallOfFameRankLimit(
+    activeLeaderboardEntries,
+    appliedRankLimit,
+    resolvedConfig.publicRange.includeTies,
+  );
+  const rightRailEntries = getHallOfFameLeaderboardTailEntries(
+    visibleLeaderboardEntries,
+    3,
+  );
+  const viewScopeLabel =
+    effectivePreviewView === 'grade'
+      ? `${previewGradeKey}학년 전교`
+      : canOpenClassView
+      ? `${normalizedGrade}학년 ${normalizedClass}반`
+      : '전교';
+  const emptyPodiumMessage =
+    effectivePreviewView === 'grade'
+      ? snapshot
+        ? `${previewGradeKey}학년 전교 랭킹을 집계 중이에요.`
+        : '화랑의 전당을 준비 중이에요. 잠시 후 다시 표시됩니다.'
+      : snapshot
+      ? '아직 우리 학급 랭킹이 없어요.'
+      : '우리 학급 랭킹도 잠시 후 다시 표시됩니다.';
+  const rightRailEmptyMessage =
+    effectivePreviewView === 'grade'
+      ? '전교 추가 랭킹을 집계 중이에요.'
+      : '우리 학급 추가 랭킹을 준비 중이에요.';
+  const desktopRail = resolvedConfig.leaderboardPanel.desktop;
+  const mobileRail = resolvedConfig.leaderboardPanel.mobile;
+  const desktopRailWidth = clamp(
+    Number(desktopRail.widthPercent || 29),
+    24,
+    38,
+  );
+  const desktopPodiumWidth = clamp(100 - desktopRailWidth - 4, 58, 76);
+  const desktopRailTop = `${clamp(
+    Number(desktopRail.topPercent || 0) / 10,
+    0,
+    4.5,
+  )}rem`;
+  const desktopRailShift = `${clamp(
+    (Number(desktopRail.leftPercent || DEFAULT_RAIL_CENTER) -
+      DEFAULT_RAIL_CENTER) /
+      4,
+    -2.5,
+    2.5,
+  )}rem`;
+  const mobileRailWidth = `${clamp(
+    Number(mobileRail.widthPercent || 100),
+    78,
+    100,
+  )}%`;
+  const mobileRailTop = `${clamp(
+    Number(mobileRail.topPercent || 0) / 18,
+    0,
+    1.75,
+  )}rem`;
+  const mobileRailAlignClassName = resolveRailAlignClassName(
+    Number(mobileRail.leftPercent || 50),
+  );
+  const previewStyle = {
+    ['--hall-podium-width' as string]: `${desktopPodiumWidth}%`,
+    ['--hall-rail-width' as string]: `${desktopRailWidth}%`,
+    ['--hall-rail-desktop-top' as string]: desktopRailTop,
+    ['--hall-rail-desktop-shift' as string]: desktopRailShift,
+    ['--hall-rail-mobile-width' as string]: mobileRailWidth,
+    ['--hall-rail-mobile-top' as string]: mobileRailTop,
+  };
+  const previewLayoutClassName =
+    deviceMode === 'desktop'
+      ? 'flex flex-row items-start justify-between gap-5'
+      : 'mx-auto flex max-w-[420px] flex-col gap-5';
+  const podiumContainerClassName =
+    deviceMode === 'desktop' ? 'w-[var(--hall-podium-width)]' : 'w-full';
+  const railContainerClassName =
+    deviceMode === 'desktop'
+      ? 'mt-[var(--hall-rail-desktop-top)] ml-[var(--hall-rail-desktop-shift)] min-w-[18rem] w-[var(--hall-rail-width)]'
+      : `mt-[var(--hall-rail-mobile-top)] w-full max-w-[var(--hall-rail-mobile-width)] ${mobileRailAlignClassName}`;
 
   const getPosition = (key: EditableKey) => {
     if (key === 'leaderboard') {
@@ -177,10 +365,48 @@ const WisHallOfFamePositionEditor: React.FC<
     if (!dragState) return undefined;
 
     const handlePointerMove = (event: PointerEvent) => {
-      const deltaXPercent =
-        ((event.clientX - dragState.startClientX) / dragState.stageWidth) * 100;
-      const deltaYPercent =
-        ((event.clientY - dragState.startClientY) / dragState.stageHeight) * 100;
+      const deltaX = event.clientX - dragState.startClientX;
+      const deltaY = event.clientY - dragState.startClientY;
+
+      if (dragState.key === 'leaderboard') {
+        const nextLeftPercent =
+          deviceMode === 'desktop'
+            ? clamp(
+                dragState.originLeft +
+                  (deltaX / dragState.rootFontSize) * 4,
+                0,
+                100,
+              )
+            : clamp(
+                dragState.originLeft +
+                  (deltaX / dragState.stageWidth) * 100,
+                0,
+                100,
+              );
+        const nextTopPercent =
+          deviceMode === 'desktop'
+            ? clamp(
+                dragState.originTop +
+                  (deltaY / dragState.rootFontSize) * 10,
+                0,
+                100,
+              )
+            : clamp(
+                dragState.originTop +
+                  (deltaY / dragState.rootFontSize) * 18,
+                0,
+                100,
+              );
+        updatePosition(dragState.key, (current) => ({
+          ...current,
+          leftPercent: nextLeftPercent,
+          topPercent: nextTopPercent,
+        }));
+        return;
+      }
+
+      const deltaXPercent = (deltaX / dragState.stageWidth) * 100;
+      const deltaYPercent = (deltaY / dragState.stageHeight) * 100;
 
       updatePosition(dragState.key, (current) => ({
         ...current,
@@ -200,7 +426,7 @@ const WisHallOfFamePositionEditor: React.FC<
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
     };
-  }, [dragState, editorValue, onChange]);
+  }, [deviceMode, dragState, editorValue, onChange]);
 
   const selectedPosition = getPosition(selectedKey);
 
@@ -208,13 +434,19 @@ const WisHallOfFamePositionEditor: React.FC<
     event: React.PointerEvent<HTMLButtonElement>,
     key: EditableKey,
   ) => {
-    if (disabled || !stageRef.current) return;
+    const measurementTarget =
+      key === 'leaderboard' ? sceneRef.current : podiumStageRef.current;
+    if (disabled || !measurementTarget) return;
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture?.(event.pointerId);
 
-    const rect = stageRef.current.getBoundingClientRect();
+    const rect = measurementTarget.getBoundingClientRect();
     const current = getPosition(key);
+    const rootFontSize =
+      Number.parseFloat(
+        window.getComputedStyle(document.documentElement).fontSize || '16',
+      ) || 16;
     setSelectedKey(key);
     setDragState({
       key,
@@ -224,11 +456,12 @@ const WisHallOfFamePositionEditor: React.FC<
       originTop: current.topPercent,
       stageWidth: rect.width || 1,
       stageHeight: rect.height || 1,
+      rootFontSize,
     });
   };
 
   const handleWidthChange = (nextWidth: number) => {
-    const widthBounds = getWidthBounds(selectedKey);
+    const widthBounds = getWidthBounds(selectedKey, deviceMode);
     updatePosition(selectedKey, (current) => ({
       ...current,
       widthPercent: clamp(nextWidth, widthBounds.min, widthBounds.max),
@@ -242,12 +475,14 @@ const WisHallOfFamePositionEditor: React.FC<
     updatePosition(selectedKey, (current) => ({
       ...current,
       [field]: field === 'widthPercent'
-        ? clamp(nextValue, getWidthBounds(selectedKey).min, getWidthBounds(selectedKey).max)
+        ? clamp(
+            nextValue,
+            getWidthBounds(selectedKey, deviceMode).min,
+            getWidthBounds(selectedKey, deviceMode).max,
+          )
         : clamp(nextValue, 0, 100),
     }));
   };
-
-  const resolvedImageUrl = imageUrl || DEFAULT_WIS_HALL_OF_FAME_PODIUM_IMAGE_URL;
 
   const controls = (
     <div className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-[0_18px_48px_rgba(15,23,42,0.08)]">
@@ -282,8 +517,8 @@ const WisHallOfFamePositionEditor: React.FC<
         </div>
         <input
           type="range"
-          min={selectedKey === 'leaderboard' ? 40 : 12}
-          max={selectedKey === 'leaderboard' ? 100 : 42}
+          min={getWidthBounds(selectedKey, deviceMode).min}
+          max={getWidthBounds(selectedKey, deviceMode).max}
           step={1}
           value={Math.round(selectedPosition.widthPercent)}
           onChange={(event) => handleWidthChange(Number(event.target.value))}
@@ -348,8 +583,8 @@ const WisHallOfFamePositionEditor: React.FC<
           <div className="mt-2 flex items-center gap-2">
             <input
               type="number"
-              min={getWidthBounds(selectedKey).min}
-              max={getWidthBounds(selectedKey).max}
+              min={getWidthBounds(selectedKey, deviceMode).min}
+              max={getWidthBounds(selectedKey, deviceMode).max}
               value={Math.round(selectedPosition.widthPercent)}
               onChange={(event) =>
                 handlePositionFieldChange(
@@ -424,86 +659,136 @@ const WisHallOfFamePositionEditor: React.FC<
               {deviceMode === 'desktop' ? '데스크톱' : '모바일'} 미리보기
             </div>
             <div
-              ref={stageRef}
-              className={`relative aspect-[16/9] overflow-hidden bg-slate-100 touch-none select-none xl:aspect-[16/10] ${
+              ref={sceneRef}
+              className={`relative overflow-hidden rounded-[1.85rem] bg-[radial-gradient(circle_at_top_left,_rgba(255,251,235,0.92),_rgba(248,250,252,0.98)_42%,_rgba(255,255,255,1)_100%)] p-4 touch-none select-none sm:p-5 ${
                 disabled ? 'opacity-70' : ''
               }`}
             >
-              <img
-                src={resolvedImageUrl}
-                alt="화랑의 전당 배치 편집 미리보기"
-                className="h-full w-full object-cover"
-              />
-              <div className="absolute inset-0 bg-gradient-to-b from-white/15 via-transparent to-slate-950/10" />
+              <div className="mb-4 flex flex-wrap items-center gap-2 text-xs font-bold text-slate-500">
+                <span className="inline-flex items-center whitespace-nowrap rounded-full bg-slate-900 px-3 py-1 text-white">
+                  {deviceMode === 'desktop' ? '데스크톱 학생 화면' : '모바일 학생 화면'}
+                </span>
+                <span className="inline-flex items-center whitespace-nowrap rounded-full bg-white px-3 py-1 text-slate-700 shadow-[0_8px_18px_rgba(15,23,42,0.05)]">
+                  {viewScopeLabel}
+                </span>
+                <span className="inline-flex items-center whitespace-nowrap rounded-full bg-sky-50 px-3 py-1 text-sky-700">
+                  실제 시상대 + 우측 공개 랭킹
+                </span>
+              </div>
 
-              {PRESET_ITEMS.map((item) => {
-                const position = getPosition(item.key);
-                const isLeaderboard = item.key === 'leaderboard';
-                const isSelected = selectedKey === item.key;
+              <div className={previewLayoutClassName} style={previewStyle}>
+                <div className={podiumContainerClassName}>
+                  <div className="mb-3 flex items-center justify-between px-1">
+                    <div>
+                      <p className="text-[11px] font-black tracking-[0.14em] text-amber-600">
+                        PODIUM
+                      </p>
+                      <p className="mt-1 break-keep text-sm font-bold text-slate-600">
+                        실제 학생 화면과 같은 배지, 이름 배지, 누적 위스 pill을 그대로 보여줍니다.
+                      </p>
+                    </div>
+                  </div>
 
-                return (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onPointerDown={(event) => handlePointerDown(event, item.key)}
-                    onClick={() => setSelectedKey(item.key)}
-                    style={{
-                      left: `${position.leftPercent}%`,
-                      top: `${position.topPercent}%`,
-                      width: `${position.widthPercent}%`,
-                    }}
-                    className={`absolute -translate-x-1/2 touch-none select-none rounded-3xl border px-3 py-3 text-left shadow-[0_16px_32px_rgba(15,23,42,0.14)] backdrop-blur-md transition ${item.toneClassName} ${
-                      isSelected
-                        ? 'ring-4 ring-slate-900/15'
-                        : 'hover:ring-2 hover:ring-slate-900/10'
-                    } ${
-                      disabled ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'
-                    }`}
-                  >
-                    {isLeaderboard ? (
-                      <div className="space-y-2">
-                        <div className="inline-flex whitespace-nowrap rounded-full bg-white/80 px-2.5 py-1 text-[11px] font-black">
-                          오픈 랭킹
-                        </div>
-                        <div className="rounded-2xl bg-white/82 px-3 py-2 text-xs font-bold text-slate-700">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="whitespace-nowrap">4위</span>
-                            <span className="whitespace-nowrap">🐯 김서윤</span>
-                          </div>
-                          <div className="mt-1 flex items-center justify-between gap-2">
-                            <span className="whitespace-nowrap">5위</span>
-                            <span className="whitespace-nowrap">🦊 박도윤</span>
-                          </div>
-                          <div className="mt-1 flex items-center justify-between gap-2">
-                            <span className="whitespace-nowrap">6위</span>
-                            <span className="whitespace-nowrap">🦁 이지후</span>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="space-y-2 text-center">
-                        <div className="inline-flex whitespace-nowrap rounded-full bg-white/80 px-2.5 py-1 text-[11px] font-black">
+                  <div ref={podiumStageRef} className="relative">
+                    <WisHallOfFamePodium
+                      entries={activePodiumEntries}
+                      hallOfFameConfig={resolvedConfig}
+                      imageUrl={resolvedConfig.podiumImageUrl}
+                      emptyMessage={emptyPodiumMessage}
+                      showHeader={false}
+                      deviceMode={deviceMode}
+                    />
+
+                    {PRESET_ITEMS.filter(
+                      (item) => item.key !== 'leaderboard',
+                    ).map((item) => {
+                      const position = getPosition(item.key);
+                      const isSelected = selectedKey === item.key;
+
+                      return (
+                        <button
+                          key={item.key}
+                          type="button"
+                          onPointerDown={(event) =>
+                            handlePointerDown(event, item.key)
+                          }
+                          onClick={() => setSelectedKey(item.key)}
+                          style={{
+                            left: `${position.leftPercent}%`,
+                            top: `${position.topPercent}%`,
+                          }}
+                          className={`absolute -translate-x-1/2 -translate-y-full touch-none select-none rounded-full border px-3 py-1.5 text-[11px] font-black shadow-[0_14px_26px_rgba(15,23,42,0.16)] backdrop-blur transition ${
+                            item.toneClassName
+                          } ${
+                            isSelected
+                              ? 'ring-4 ring-slate-900/15'
+                              : 'hover:ring-2 hover:ring-slate-900/10'
+                          } ${
+                            disabled
+                              ? 'cursor-default'
+                              : 'cursor-grab active:cursor-grabbing'
+                          } whitespace-nowrap`}
+                        >
                           {item.label}
-                        </div>
-                        <div className="text-[30px] leading-none drop-shadow-[0_10px_18px_rgba(15,23,42,0.18)]">
-                          {item.key === 'first'
-                            ? '👑'
-                            : item.key === 'second'
-                              ? '🛡️'
-                              : '🏹'}
-                        </div>
-                        <div className="rounded-2xl bg-white/84 px-3 py-2 text-xs font-black text-slate-800 whitespace-nowrap">
-                          {item.key === 'first'
-                            ? '1위 최유진'
-                            : item.key === 'second'
-                              ? '2위 김현우'
-                              : '3위 박지안'}
-                        </div>
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className={railContainerClassName}>
+                  <div className="mb-3 flex items-center justify-between px-1">
+                    <div>
+                      <p className="text-[11px] font-black tracking-[0.14em] text-sky-700">
+                        OPEN RANKING
+                      </p>
+                      <p className="mt-1 break-keep text-sm font-bold text-slate-600">
+                        우측 패널도 실제 학생 화면과 같은 카드 구조로 미리 보여줍니다.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="relative min-h-[280px]">
+                    <WisHallOfFameLeaderboardList
+                      entries={rightRailEntries}
+                      hallOfFameConfig={resolvedConfig}
+                      title={
+                        effectivePreviewView === 'grade'
+                          ? '전교 추가 공개 랭킹'
+                          : '우리 학급 추가 공개 랭킹'
+                      }
+                      subtitle={
+                        resolvedConfig.publicRange.includeTies
+                          ? '기본은 4위부터 보이고, 같은 순위는 함께 이어서 보여요.'
+                          : '공개 범위 안에서 4위부터 차례대로 보여요.'
+                      }
+                      emptyMessage={rightRailEmptyMessage}
+                      className="h-full"
+                    />
+                    <button
+                      type="button"
+                      onPointerDown={(event) =>
+                        handlePointerDown(event, 'leaderboard')
+                      }
+                      onClick={() => setSelectedKey('leaderboard')}
+                      className={`absolute left-4 top-4 touch-none select-none rounded-full border px-3 py-1.5 text-[11px] font-black shadow-[0_14px_26px_rgba(15,23,42,0.16)] backdrop-blur transition ${
+                        PRESET_ITEMS.find((item) => item.key === 'leaderboard')
+                          ?.toneClassName || ''
+                      } ${
+                        selectedKey === 'leaderboard'
+                          ? 'ring-4 ring-slate-900/15'
+                          : 'hover:ring-2 hover:ring-slate-900/10'
+                      } ${
+                        disabled
+                          ? 'cursor-default'
+                          : 'cursor-grab active:cursor-grabbing'
+                      } whitespace-nowrap`}
+                    >
+                      오른쪽 랭킹 패널
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 

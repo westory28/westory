@@ -520,13 +520,11 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
       id: 'feature_settings',
       label: '기능 설정',
       iconClassName: 'fas fa-sliders-h',
-      badge: featureDirty ? '미저장' : '저장됨',
     },
     {
       id: 'student_view_settings',
       label: '학생 화면 설정',
       iconClassName: 'fas fa-images',
-      badge: viewDirty ? '미저장' : '저장됨',
     },
   ];
 
@@ -1470,6 +1468,12 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
               <WisHallOfFamePositionEditor
                 value={layoutDraft}
                 imageUrl={imageUrl}
+                hallOfFameConfig={previewConfig}
+                snapshot={snapshot}
+                previewView={previewScope}
+                gradeKey={gradeKey}
+                currentGrade={previewClass.grade}
+                currentClass={previewClass.className}
                 deviceMode={editorDeviceMode}
                 onDeviceModeChange={setEditorDeviceMode}
                 onReset={() =>

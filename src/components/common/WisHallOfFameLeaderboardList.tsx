@@ -70,7 +70,7 @@ const WisHallOfFameLeaderboardList: React.FC<WisHallOfFameLeaderboardListProps> 
                                                     {entry.displayName || entry.studentName}
                                                 </span>
                                             </div>
-                                            <div className="mt-2 inline-flex min-h-8 items-center whitespace-nowrap rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-sm font-black leading-none text-sky-900 shadow-[0_8px_18px_rgba(14,116,144,0.12)]">
+                                            <div className="mt-2 inline-flex min-h-8 items-center whitespace-nowrap rounded-full border border-white/15 bg-[linear-gradient(135deg,_rgba(15,23,42,0.96),_rgba(14,116,144,0.94))] px-3.5 py-1 text-sm font-black leading-none text-white shadow-[0_12px_24px_rgba(15,23,42,0.18)]">
                                                 누적 {formatWisAmount(entry.cumulativeEarned)}
                                             </div>
                                         </div>

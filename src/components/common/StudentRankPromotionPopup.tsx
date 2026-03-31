@@ -13,11 +13,22 @@ interface StudentRankPromotionPopupProps {
 }
 
 const dedupePreviewEmojiEntries = (entries: PointRankEmojiRegistryEntry[]) => {
+    const seenEmojiIds = new Set<string>();
     const seenEmojiValues = new Set<string>();
     return entries.filter((entry) => {
-        const normalizedEmojiValue = normalizeProfileEmojiValue(entry.emoji);
-        if (!normalizedEmojiValue || seenEmojiValues.has(normalizedEmojiValue)) {
+        const normalizedEmojiId = String(entry.id || '').trim().toLowerCase();
+        const normalizedEmojiValue = normalizeProfileEmojiValue(entry.value || entry.emoji);
+        if (!normalizedEmojiValue) {
             return false;
+        }
+        if (normalizedEmojiId && seenEmojiIds.has(normalizedEmojiId)) {
+            return false;
+        }
+        if (seenEmojiValues.has(normalizedEmojiValue)) {
+            return false;
+        }
+        if (normalizedEmojiId) {
+            seenEmojiIds.add(normalizedEmojiId);
         }
         seenEmojiValues.add(normalizedEmojiValue);
         return true;
@@ -181,7 +192,7 @@ const StudentRankPromotionPopup: React.FC<StudentRankPromotionPopupProps> = ({
                             <h3 className="text-sm font-extrabold text-slate-900">
                                 새로 해금된 이모지
                             </h3>
-                            <span className="text-xs font-medium text-slate-500">
+                            <span className="whitespace-nowrap text-xs font-medium text-slate-500">
                                 {previewCountLabel}
                             </span>
                         </div>
