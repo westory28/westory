@@ -27,6 +27,9 @@ interface StudentPointHallOfFameTabProps {
 type HallView = 'grade' | 'class';
 
 const PRIMARY_GRADE_KEY = '3';
+const DEFAULT_RAIL_CENTER = 71;
+
+const clamp = (value: number, minimum: number, maximum: number) => Math.min(maximum, Math.max(minimum, value));
 
 const normalizeNumberText = (value: unknown) => {
     const raw = String(value || '').trim();
@@ -39,6 +42,12 @@ const normalizeNumberText = (value: unknown) => {
 const buildStatusText = (snapshot: WisHallOfFameSnapshot | null) => {
     if (!snapshot?.updatedAt) return '화랑의 전당을 준비 중이에요.';
     return `최근 반영 ${formatPointDateShortTime(snapshot.updatedAt)}`;
+};
+
+const resolveRailAlignClassName = (leftPercent: number) => {
+    if (leftPercent <= 44) return 'sm:self-start';
+    if (leftPercent >= 56) return 'sm:self-end';
+    return 'sm:self-center';
 };
 
 const StudentPointHallOfFameTab: React.FC<StudentPointHallOfFameTabProps> = ({
@@ -90,9 +99,26 @@ const StudentPointHallOfFameTab: React.FC<StudentPointHallOfFameTabProps> = ({
 
     const statusText = useMemo(() => buildStatusText(snapshot), [snapshot]);
     const desktopRail = resolvedConfig.leaderboardPanel.desktop;
-    const desktopPodiumWidth = Math.min(78, Math.max(56, desktopRail.leftPercent || 71));
-    const desktopRailWidth = Math.min(40, Math.max(22, desktopRail.widthPercent || 29));
-    const desktopRailTop = `${Math.max(0, Number(desktopRail.topPercent || 0) / 10)}rem`;
+    const mobileRail = resolvedConfig.leaderboardPanel.mobile;
+    const desktopRailWidth = clamp(Number(desktopRail.widthPercent || 29), 24, 38);
+    const desktopPodiumWidth = clamp(100 - desktopRailWidth - 4, 58, 76);
+    const desktopRailTop = `${clamp(Number(desktopRail.topPercent || 0) / 10, 0, 4.5)}rem`;
+    const desktopRailShift = `${clamp((Number(desktopRail.leftPercent || DEFAULT_RAIL_CENTER) - DEFAULT_RAIL_CENTER) / 4, -2.5, 2.5)}rem`;
+    const mobileRailWidth = `${clamp(Number(mobileRail.widthPercent || 100), 78, 100)}%`;
+    const mobileRailTop = `${clamp(Number(mobileRail.topPercent || 0) / 18, 0, 1.75)}rem`;
+    const mobileRailAlignClassName = resolveRailAlignClassName(Number(mobileRail.leftPercent || 50));
+    const viewSummary = activeView === 'grade'
+        ? `${primaryGradeKey}학년 전체 화랑의 전당`
+        : canOpenClassView
+            ? `${normalizedGrade}학년 ${normalizedClass}반 화랑의 전당`
+            : '반 정보가 없어 전교 랭킹만 확인할 수 있어요.';
+    const toggleHint = canOpenClassView
+        ? '전교 보기와 우리 학급 보기가 시상대와 우측 레일에 함께 반영돼요.'
+        : '반 정보가 없어서 지금은 전교 랭킹만 볼 수 있어요.';
+    const railTitle = activeView === 'grade' ? '전교 추가 공개 랭킹' : '우리 학급 추가 공개 랭킹';
+    const railSubtitle = showTieCaption
+        ? '기본은 4위부터 보이고, 같은 순위는 함께 이어서 보여요.'
+        : '공개 범위 안에서 4위부터 차례대로 보여요.';
 
     return (
         <div
@@ -100,7 +126,10 @@ const StudentPointHallOfFameTab: React.FC<StudentPointHallOfFameTabProps> = ({
             style={{
                 ['--hall-podium-width' as string]: `${desktopPodiumWidth}%`,
                 ['--hall-rail-width' as string]: `${desktopRailWidth}%`,
-                ['--hall-rail-top' as string]: desktopRailTop,
+                ['--hall-rail-desktop-top' as string]: desktopRailTop,
+                ['--hall-rail-desktop-shift' as string]: desktopRailShift,
+                ['--hall-rail-mobile-width' as string]: mobileRailWidth,
+                ['--hall-rail-mobile-top' as string]: mobileRailTop,
             }}
         >
             {!snapshot && (
@@ -134,19 +163,22 @@ const StudentPointHallOfFameTab: React.FC<StudentPointHallOfFameTabProps> = ({
                         <button
                             type="button"
                             onClick={() => setActiveView('grade')}
-                            className={`min-h-11 flex-1 rounded-full px-4 text-sm font-black transition sm:min-w-[132px] ${
+                            className={`min-h-11 flex-1 rounded-full px-4 py-2 text-left text-sm font-black transition sm:min-w-[156px] ${
                                 activeView === 'grade'
                                     ? 'bg-slate-900 text-white shadow-[0_10px_20px_rgba(15,23,42,0.16)]'
                                     : 'text-slate-600 hover:text-slate-900'
                             }`}
                         >
-                            전교 랭킹 보기
+                            <span className="block">전교 랭킹 보기</span>
+                            <span className={`mt-0.5 block text-[11px] font-semibold ${activeView === 'grade' ? 'text-white/72' : 'text-slate-500'}`}>
+                                {primaryGradeKey}학년 전체
+                            </span>
                         </button>
                         <button
                             type="button"
                             onClick={() => setActiveView('class')}
                             disabled={!canOpenClassView}
-                            className={`min-h-11 flex-1 rounded-full px-4 text-sm font-black transition sm:min-w-[132px] ${
+                            className={`min-h-11 flex-1 rounded-full px-4 py-2 text-left text-sm font-black transition sm:min-w-[156px] ${
                                 activeView === 'class'
                                     ? 'bg-white text-slate-900 shadow-[0_10px_20px_rgba(15,23,42,0.08)]'
                                     : canOpenClassView
@@ -154,35 +186,80 @@ const StudentPointHallOfFameTab: React.FC<StudentPointHallOfFameTabProps> = ({
                                         : 'cursor-not-allowed text-slate-400'
                             }`}
                         >
-                            우리 학급 보기
+                            <span className="block">우리 학급 보기</span>
+                            <span className={`mt-0.5 block text-[11px] font-semibold ${
+                                activeView === 'class'
+                                    ? 'text-slate-500'
+                                    : canOpenClassView
+                                        ? 'text-slate-500'
+                                        : 'text-slate-400'
+                            }`}>
+                                {canOpenClassView ? `${normalizedGrade}학년 ${normalizedClass}반` : '반 정보 확인 중'}
+                            </span>
                         </button>
                     </div>
                 </div>
+                <div className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-4 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="font-semibold text-slate-600">{viewSummary}</p>
+                    <p>{toggleHint}</p>
+                </div>
             </div>
 
-            <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-                <div className="w-full xl:w-[var(--hall-podium-width)]">
-                    <WisHallOfFamePodium
-                        title={viewTitle}
-                        subtitle={activeView === 'grade' ? '3학년 전교 시상대' : '우리 학급 시상대'}
-                        entries={activePodiumEntries}
-                        hallOfFameConfig={resolvedConfig}
-                        emptyMessage={emptyPodiumMessage}
-                        showHeader={false}
-                    />
+            <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(255,251,235,0.9),_rgba(248,250,252,0.98)_42%,_rgba(255,255,255,1)_100%)] p-4 shadow-[0_22px_54px_rgba(15,23,42,0.08)] sm:p-5 xl:p-6">
+                <div className="mb-4 flex flex-wrap items-center gap-2 text-xs font-bold text-slate-500">
+                    <span className="inline-flex items-center rounded-full bg-white px-3 py-1.5 text-slate-700 shadow-[0_8px_18px_rgba(15,23,42,0.05)]">
+                        현재 보기
+                    </span>
+                    <span className="inline-flex items-center rounded-full bg-slate-900 px-3 py-1.5 text-white shadow-[0_8px_18px_rgba(15,23,42,0.14)]">
+                        {activeView === 'grade' ? `${primaryGradeKey}학년 전교` : canOpenClassView ? `${normalizedGrade}학년 ${normalizedClass}반` : '전교'}
+                    </span>
+                    <span className="inline-flex items-center rounded-full bg-white/80 px-3 py-1.5 text-slate-500">
+                        좌측 시상대 + 우측 공개 랭킹
+                    </span>
                 </div>
 
-                <div className="min-h-[280px] w-full xl:mt-[var(--hall-rail-top)] xl:w-[var(--hall-rail-width)] xl:max-h-[720px]">
-                    <WisHallOfFameLeaderboardList
-                        entries={rightRailEntries}
-                        hallOfFameConfig={resolvedConfig}
-                        title="4위부터 이어지는 랭킹"
-                        subtitle={showTieCaption
-                            ? '공개 범위를 넘기더라도 같은 순위의 친구들은 함께 보여요.'
-                            : '공개 범위 안에서 순서대로 보여요.'}
-                        emptyMessage={rightRailEmptyMessage}
-                        className="h-full"
-                    />
+                <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                    <div className="w-full xl:w-[var(--hall-podium-width)]">
+                        <div className="mb-3 flex items-center justify-between px-1">
+                            <div>
+                                <p className="text-[11px] font-black tracking-[0.14em] text-amber-600">PODIUM</p>
+                                <p className="mt-1 text-sm font-bold text-slate-600">1위부터 3위까지 시상대에 올라와요.</p>
+                            </div>
+                        </div>
+                        <WisHallOfFamePodium
+                            title={viewTitle}
+                            subtitle={activeView === 'grade' ? `${primaryGradeKey}학년 전교 시상대` : '우리 학급 시상대'}
+                            entries={activePodiumEntries}
+                            hallOfFameConfig={resolvedConfig}
+                            emptyMessage={emptyPodiumMessage}
+                            showHeader={false}
+                        />
+                    </div>
+
+                    <div
+                        className={`w-full ${mobileRailAlignClassName} mt-[var(--hall-rail-mobile-top)] sm:max-w-[var(--hall-rail-mobile-width)] xl:mt-[var(--hall-rail-desktop-top)] xl:ml-[var(--hall-rail-desktop-shift)] xl:w-[var(--hall-rail-width)] xl:max-w-none`}
+                    >
+                        <div className="mb-3 flex items-center justify-between px-1">
+                            <div>
+                                <p className="text-[11px] font-black tracking-[0.14em] text-sky-700">OPEN RANKING</p>
+                                <p className="mt-1 text-sm font-bold text-slate-600">우측 레일에서 4위 이후 순위를 이어서 확인해요.</p>
+                            </div>
+                            <span className="inline-flex items-center rounded-full bg-white px-3 py-1 text-xs font-black text-slate-700 shadow-[0_8px_18px_rgba(15,23,42,0.05)]">
+                                {rightRailEntries.length > 0 ? `${rightRailEntries[0].rank}위부터` : '4위부터'}
+                            </span>
+                        </div>
+
+                        <div className="min-h-[280px] xl:max-h-[min(44rem,calc(100vh-16rem))]">
+                            <WisHallOfFameLeaderboardList
+                                entries={rightRailEntries}
+                                hallOfFameConfig={resolvedConfig}
+                                title={railTitle}
+                                subtitle={railSubtitle}
+                                emptyMessage={rightRailEmptyMessage}
+                                className="h-full"
+                            />
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
