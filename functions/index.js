@@ -768,6 +768,13 @@ const buildWisHallOfFameSnapshotKey = (year, semester, snapshot) => {
   return `${year}-${semester}-${digest}`;
 };
 
+const buildSortedHallOfFameMap = (buckets) => Object.keys(buckets)
+  .sort((left, right) => String(left || '').localeCompare(String(right || ''), 'ko', { numeric: true }))
+  .reduce((accumulator, key) => {
+    accumulator[key] = buildRankedWisHallOfFameEntries(buckets[key] || []);
+    return accumulator;
+  }, {});
+
 const buildWisHallOfFamePayload = async (year, semester) => {
   const walletSnapshot = await db.collection(getPointCollectionPath(year, semester, 'point_wallets')).get();
   const wallets = walletSnapshot.docs
@@ -793,18 +800,16 @@ const buildWisHallOfFamePayload = async (year, semester) => {
     classBuckets[entry.classKey] = [...(classBuckets[entry.classKey] || []), entry];
   });
 
-  const gradeTop3ByGrade = Object.entries(gradeBuckets).reduce((accumulator, [grade, items]) => ({
-    ...accumulator,
-    [grade]: buildRankedWisHallOfFameEntries(items),
-  }), {});
-  const classTop3ByClassKey = Object.entries(classBuckets).reduce((accumulator, [classKey, items]) => ({
-    ...accumulator,
-    [classKey]: buildRankedWisHallOfFameEntries(items),
-  }), {});
+  const gradeTop3ByGrade = buildSortedHallOfFameMap(gradeBuckets);
+  const classTop3ByClassKey = buildSortedHallOfFameMap(classBuckets);
+  const updatedAtMs = Date.now();
 
   const snapshot = {
+    year,
+    semester,
     snapshotVersion: WIS_HALL_OF_FAME_SNAPSHOT_VERSION,
     rankingMetric: 'cumulativeEarned',
+    primaryGradeKey: WIS_HALL_OF_FAME_GRADE_KEY,
     gradeTop3ByGrade,
     classTop3ByClassKey,
   };
@@ -813,6 +818,7 @@ const buildWisHallOfFamePayload = async (year, semester) => {
     ...snapshot,
     snapshotKey: buildWisHallOfFameSnapshotKey(year, semester, snapshot),
     updatedAt: FieldValue.serverTimestamp(),
+    updatedAtMs,
   };
 };
 
@@ -831,9 +837,11 @@ const isWisHallOfFameSnapshotStale = (data) => {
   if (Number(data.snapshotVersion || 0) !== WIS_HALL_OF_FAME_SNAPSHOT_VERSION) {
     return true;
   }
-  const updatedAtMs = typeof data.updatedAt?.toMillis === 'function'
-    ? data.updatedAt.toMillis()
-    : Number(data.updatedAt?.seconds || 0) * 1000;
+  const updatedAtMs = Number(data.updatedAtMs || 0) > 0
+    ? Number(data.updatedAtMs || 0)
+    : typeof data.updatedAt?.toMillis === 'function'
+      ? data.updatedAt.toMillis()
+      : Number(data.updatedAt?.seconds || 0) * 1000;
   if (!updatedAtMs) return true;
   return Date.now() - updatedAtMs > WIS_HALL_OF_FAME_STALE_MS;
 };

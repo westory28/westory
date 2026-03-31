@@ -36,6 +36,7 @@ const StudentPointHallOfFameTab: React.FC<StudentPointHallOfFameTabProps> = ({
     const normalizedGrade = normalizeNumberText(currentGrade);
     const normalizedClass = normalizeNumberText(currentClass);
     const classKey = buildWisHallOfFameClassKey(normalizedGrade, normalizedClass);
+    const canOpenClassView = Boolean(classKey);
 
     const gradeEntries = snapshot?.gradeTop3ByGrade[PRIMARY_GRADE_KEY] || [];
     const classEntries = classKey ? (snapshot?.classTop3ByClassKey[classKey] || []) : [];
@@ -60,7 +61,12 @@ const StudentPointHallOfFameTab: React.FC<StudentPointHallOfFameTabProps> = ({
                     <button
                         type="button"
                         onClick={() => setActiveView((prev) => (prev === 'grade' ? 'class' : 'grade'))}
-                        className="inline-flex items-center justify-center rounded-full border border-white/18 bg-white/10 px-4 py-2 text-sm font-bold text-white transition hover:bg-white/16"
+                        disabled={activeView === 'grade' && !canOpenClassView}
+                        className={`inline-flex items-center justify-center rounded-full px-4 py-2 text-sm font-bold transition ${
+                            activeView === 'grade' && !canOpenClassView
+                                ? 'cursor-not-allowed border border-white/12 bg-white/5 text-white/45'
+                                : 'border border-white/18 bg-white/10 text-white hover:bg-white/16'
+                        }`}
                     >
                         {activeView === 'grade' ? '우리 학급 보기' : '전교 랭킹 보기'}
                     </button>

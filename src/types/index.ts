@@ -360,9 +360,12 @@ export interface WisHallOfFameEntry {
 }
 
 export interface WisHallOfFameSnapshot {
+  year?: string;
+  semester?: string;
   snapshotVersion: number;
   snapshotKey: string;
   rankingMetric: "cumulativeEarned";
+  primaryGradeKey?: string;
   gradeTop3ByGrade: Record<string, WisHallOfFameEntry[]>;
   classTop3ByClassKey: Record<string, WisHallOfFameEntry[]>;
   updatedAt?: any;
@@ -374,6 +377,12 @@ export interface WisHallOfFameRecognition {
   scopeKey: string;
   entry: WisHallOfFameEntry;
   snapshotKey: string;
+}
+
+export interface WisHallOfFameEnsureResult {
+  ensured: boolean;
+  snapshotKey: string;
+  snapshotVersion: number;
 }
 
 export type SourceArchiveAssetType =

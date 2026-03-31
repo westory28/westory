@@ -12,6 +12,7 @@ import type {
   SystemConfig,
   UserData,
   WisHallOfFameEntry,
+  WisHallOfFameEnsureResult,
   WisHallOfFameRecognition,
   WisHallOfFameSnapshot,
 } from '../types';
@@ -143,18 +144,35 @@ const normalizeEntryMap = (value: unknown) => {
   );
 };
 
+const resolveSnapshotUpdatedAtMs = (
+  raw: Partial<WisHallOfFameSnapshot> & { updatedAtMs?: unknown },
+) => {
+  const storedUpdatedAtMs = toNonNegativeNumber(raw.updatedAtMs);
+  if (storedUpdatedAtMs > 0) {
+    return storedUpdatedAtMs;
+  }
+  const updatedAt = raw.updatedAt as { toMillis?: () => number; seconds?: number } | undefined;
+  if (typeof updatedAt?.toMillis === 'function') {
+    return updatedAt.toMillis();
+  }
+  return Number(updatedAt?.seconds || 0) * 1000;
+};
+
 export const normalizeWisHallOfFameSnapshot = (
   value: unknown,
 ): WisHallOfFameSnapshot | null => {
   if (!value || typeof value !== 'object') return null;
   const raw = value as Partial<WisHallOfFameSnapshot>;
-  const updatedAtMs = toNonNegativeNumber((raw as { updatedAtMs?: unknown }).updatedAtMs);
+  const updatedAtMs = resolveSnapshotUpdatedAtMs(raw as Partial<WisHallOfFameSnapshot> & { updatedAtMs?: unknown });
   const snapshotKey = toSafeText(raw.snapshotKey) || `${updatedAtMs || Date.now()}`;
 
   return {
+    year: toSafeText(raw.year) || undefined,
+    semester: toSafeText(raw.semester) || undefined,
     snapshotVersion: Math.max(1, Math.round(Number(raw.snapshotVersion || WIS_HALL_OF_FAME_SNAPSHOT_VERSION))),
     snapshotKey,
     rankingMetric: raw.rankingMetric === 'cumulativeEarned' ? 'cumulativeEarned' : 'cumulativeEarned',
+    primaryGradeKey: toSafeText(raw.primaryGradeKey) || WIS_HALL_OF_FAME_GRADE_KEY,
     gradeTop3ByGrade: normalizeEntryMap(raw.gradeTop3ByGrade),
     classTop3ByClassKey: normalizeEntryMap(raw.classTop3ByClassKey),
     updatedAt: raw.updatedAt,
@@ -177,11 +195,7 @@ export const ensureWisHallOfFameSnapshot = async (config: ConfigLike) => {
     year,
     semester,
   });
-  return result.data as {
-    ensured: boolean;
-    snapshotKey: string;
-    snapshotVersion: number;
-  };
+  return result.data as WisHallOfFameEnsureResult;
 };
 
 export const getWisHallOfFame = getWisHallOfFameSnapshot;
@@ -203,7 +217,7 @@ export const isWisHallOfFameSnapshotStale = (
   snapshot: WisHallOfFameSnapshot | null | undefined,
 ) => {
   if (!snapshot) return true;
-  if (Number(snapshot.snapshotVersion || 0) < WIS_HALL_OF_FAME_SNAPSHOT_VERSION) {
+  if (Number(snapshot.snapshotVersion || 0) !== WIS_HALL_OF_FAME_SNAPSHOT_VERSION) {
     return true;
   }
   const updatedAtMs = getSnapshotUpdatedAtMs(snapshot);
@@ -256,7 +270,7 @@ export const getHallOfFameEntryByRank = (
 
 export const getWisHallOfFameGradeEntries = (
   snapshot: WisHallOfFameSnapshot | null | undefined,
-  grade = WIS_HALL_OF_FAME_GRADE_KEY,
+  grade = snapshot?.primaryGradeKey || WIS_HALL_OF_FAME_GRADE_KEY,
 ) => snapshot?.gradeTop3ByGrade?.[toSafeText(grade)] || [];
 
 export const getWisHallOfFameClassEntries = (
@@ -274,13 +288,14 @@ export const findWisHallOfFameRecognition = (
 ): WisHallOfFameRecognition | null => {
   const uid = toSafeText(userData?.uid);
   if (!snapshot || !uid) return null;
+  const primaryGradeKey = snapshot.primaryGradeKey || WIS_HALL_OF_FAME_GRADE_KEY;
 
-  const gradeRecognition = getWisHallOfFameGradeEntries(snapshot, WIS_HALL_OF_FAME_GRADE_KEY)
+  const gradeRecognition = getWisHallOfFameGradeEntries(snapshot, primaryGradeKey)
     .find((entry) => entry.uid === uid);
   if (gradeRecognition) {
     return {
       scope: 'grade',
-      scopeKey: WIS_HALL_OF_FAME_GRADE_KEY,
+      scopeKey: primaryGradeKey,
       entry: gradeRecognition,
       snapshotKey: snapshot.snapshotKey,
     };
