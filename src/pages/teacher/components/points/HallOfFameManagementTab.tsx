@@ -214,11 +214,13 @@ const getHallOfFameImageUploadFailureText = (error: any) => {
 
 const getHallOfFameConfigSaveFailureText = (error: any) => {
   const stage = String(error?.details?.stage || '').trim();
+  const errorCode = String(error?.code || '').trim();
+  const normalizedMessage = String(error?.message || '').trim();
   if (stage === 'config_save') {
     return {
       title: '배치 설정 저장에 실패했습니다.',
       message:
-        error?.message || '학생 화면 설정 저장 중 서버 오류가 발생했습니다.',
+        normalizedMessage || '학생 화면 설정 저장 중 서버 오류가 발생했습니다.',
     };
   }
 
@@ -230,9 +232,31 @@ const getHallOfFameConfigSaveFailureText = (error: any) => {
     };
   }
 
+  if (
+    errorCode === 'functions/not-found'
+    || normalizedMessage.toLowerCase().includes('savewishalloffameconfig')
+  ) {
+    return {
+      title: '학생 화면 설정 저장 중 서버 오류가 발생했습니다.',
+      message:
+        '서버 저장 함수를 찾지 못했습니다. Functions 배포 상태를 확인한 뒤 다시 시도해 주세요.',
+    };
+  }
+
+  if (
+    errorCode === 'functions/internal'
+    || errorCode === 'internal'
+    || normalizedMessage.toLowerCase() === 'internal'
+  ) {
+    return {
+      title: '학생 화면 설정 저장 중 서버 오류가 발생했습니다.',
+      message: '서버 저장 단계에서 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.',
+    };
+  }
+
   return {
     title: '학생 화면 설정 저장 중 서버 오류가 발생했습니다.',
-    message: error?.message || '잠시 후 다시 시도해 주세요.',
+    message: normalizedMessage || '잠시 후 다시 시도해 주세요.',
   };
 };
 
