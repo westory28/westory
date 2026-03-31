@@ -105,13 +105,13 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
         <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.08)]">
             <div className="flex flex-col gap-3 border-b border-slate-100 bg-[linear-gradient(135deg,_#0f172a,_#1e293b)] px-5 py-5 text-white sm:flex-row sm:items-center sm:justify-between sm:px-6">
                 <div className="min-w-0">
-                    <div className="text-[11px] font-black uppercase tracking-[0.22em] text-amber-200/90">Hall Of Fame</div>
+                    <div className="text-[11px] font-black tracking-[0.12em] text-amber-200/90">화랑의 전당</div>
                     <h2 className="mt-2 text-xl font-black leading-tight text-white sm:text-2xl">{title}</h2>
                     {subtitle && (
                         <p className="mt-2 text-sm leading-6 text-slate-200">{subtitle}</p>
                     )}
                 </div>
-                {action && <div className="shrink-0">{action}</div>}
+                {action && <div className="w-full sm:w-auto sm:shrink-0">{action}</div>}
             </div>
             <div className="relative aspect-[36/23] bg-[#f5f7fb]">
                 <img
