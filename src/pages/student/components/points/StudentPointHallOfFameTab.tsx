@@ -62,7 +62,7 @@ const StudentPointHallOfFameTab: React.FC<StudentPointHallOfFameTabProps> = ({
                         type="button"
                         onClick={() => setActiveView((prev) => (prev === 'grade' ? 'class' : 'grade'))}
                         disabled={activeView === 'grade' && !canOpenClassView}
-                        className={`inline-flex items-center justify-center rounded-full px-4 py-2 text-sm font-bold transition ${
+                        className={`inline-flex w-full items-center justify-center rounded-full px-4 py-2 text-sm font-bold transition sm:w-auto ${
                             activeView === 'grade' && !canOpenClassView
                                 ? 'cursor-not-allowed border border-white/12 bg-white/5 text-white/45'
                                 : 'border border-white/18 bg-white/10 text-white hover:bg-white/16'
