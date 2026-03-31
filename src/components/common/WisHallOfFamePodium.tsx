@@ -150,18 +150,18 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                             style={buildSlotStyle(slotKey, normalizedPositions)}
                             className={slotPositionClassName}
                         >
-                            <div className="mx-auto flex max-w-full flex-col items-center text-center">
+                            <div className="mx-auto flex max-w-full flex-col items-center gap-2 text-center">
                                 <div
                                     className={`inline-flex min-h-9 items-center justify-center whitespace-nowrap rounded-full border px-3 py-1 text-xs font-black tracking-[0.08em] sm:text-sm ${tone.badgeClassName}`}
                                 >
                                     {buildRankLabel(safeEntries, entry)}
                                 </div>
 
-                                <div className={`mt-2 leading-none drop-shadow-[0_12px_18px_rgba(15,23,42,0.24)] ${tone.emojiClassName}`}>
+                                <div className={`leading-none drop-shadow-[0_12px_18px_rgba(15,23,42,0.24)] ${tone.emojiClassName}`}>
                                     {entry.profileIcon || '😀'}
                                 </div>
 
-                                <div className={`mt-2 max-w-full rounded-[1.35rem] border px-3.5 py-2.5 backdrop-blur-xl ${tone.nameClassName}`}>
+                                <div className={`max-w-full rounded-[1.35rem] border px-3.5 py-2.5 backdrop-blur-xl ${tone.nameClassName}`}>
                                     <div className="whitespace-nowrap text-[10px] font-bold uppercase tracking-[0.12em] text-white/78">
                                         {entry.grade}학년 {entry.class}반
                                     </div>
@@ -171,7 +171,7 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                                 </div>
 
                                 <div
-                                    className={`mt-2.5 inline-flex min-h-[2rem] max-w-full items-center justify-center rounded-full border px-3.5 py-1.5 text-[11px] font-black backdrop-blur whitespace-nowrap sm:text-sm ${tone.scoreClassName}`}
+                                    className={`inline-flex min-h-[2.15rem] max-w-full items-center justify-center rounded-full border px-4 py-1.5 text-[11px] font-black backdrop-blur whitespace-nowrap sm:text-sm ${tone.scoreClassName}`}
                                 >
                                     누적 {formatWisAmount(entry.cumulativeEarned)}
                                 </div>
