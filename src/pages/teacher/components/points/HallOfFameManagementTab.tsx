@@ -14,6 +14,7 @@ import {
   WIS_HALL_OF_FAME_GRADE_KEY,
   WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS,
   ensureWisHallOfFameSnapshot,
+  getOrEnsureWisHallOfFameSnapshot,
   getDefaultHallOfFameLeaderboardPanelPosition,
   getDefaultHallOfFamePositions,
   getWisHallOfFameSnapshot,
@@ -211,6 +212,30 @@ const getHallOfFameImageUploadFailureText = (error: any) => {
   };
 };
 
+const getHallOfFameConfigSaveFailureText = (error: any) => {
+  const stage = String(error?.details?.stage || '').trim();
+  if (stage === 'config_save') {
+    return {
+      title: '배치 설정 저장에 실패했습니다.',
+      message:
+        error?.message || '학생 화면 설정 저장 중 서버 오류가 발생했습니다.',
+    };
+  }
+
+  if (stage === 'snapshot_refresh') {
+    return {
+      title: '학생 화면 설정은 저장됐지만 공개 랭킹을 새로고침하지 못했습니다.',
+      message:
+        error?.message || '잠시 후 공개 랭킹 스냅샷을 다시 반영해 주세요.',
+    };
+  }
+
+  return {
+    title: '학생 화면 설정 저장 중 서버 오류가 발생했습니다.',
+    message: error?.message || '잠시 후 다시 시도해 주세요.',
+  };
+};
+
 const buildStoredRangeSummary = (draft: FeatureDraft) =>
   `전교 ${draft.publicRange.gradeRankLimit}위 / 학급 ${draft.publicRange.classRankLimit}위`;
 
@@ -346,7 +371,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
       setSnapshotError('');
 
       try {
-        const nextSnapshot = await getWisHallOfFameSnapshot(config);
+        const nextSnapshot = await getOrEnsureWisHallOfFameSnapshot(config);
         if (!cancelled) {
           setSnapshot(nextSnapshot);
         }
@@ -647,10 +672,12 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
               });
               return;
             } catch (saveError: any) {
+              const saveFailure = getHallOfFameConfigSaveFailureText(saveError);
               showToast({
                 tone: 'error',
                 title: '시상대 이미지 업로드와 학생 화면 설정 저장이 모두 완료되지 않았습니다.',
-                message: saveError?.message
+                message:
+                  saveFailure.message
                   || `${uploadFailure.message} 배치 저장도 다시 시도해 주세요.`,
               });
               return;
@@ -676,10 +703,11 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
           : '배경 설정과 배치 편집 결과를 저장했습니다.',
       });
     } catch (error: any) {
+      const failure = getHallOfFameConfigSaveFailureText(error);
       showToast({
         tone: 'error',
-        title: '학생 화면 설정 저장에 실패했습니다.',
-        message: error?.message || '잠시 후 다시 시도해 주세요.',
+        title: failure.title,
+        message: failure.message,
       });
     } finally {
       setViewSaving(false);

@@ -662,7 +662,7 @@ const getPointCollectionPath = (year, semester, collectionName) => `${getSemeste
 const getPointWalletPath = (year, semester, uid) => `${getPointCollectionPath(year, semester, 'point_wallets')}/${uid}`;
 const getPointPolicyPath = (year, semester) => `${getPointCollectionPath(year, semester, 'point_policies')}/current`;
 const WIS_HALL_OF_FAME_DOC_ID = 'hall_of_fame';
-const WIS_HALL_OF_FAME_SNAPSHOT_VERSION = 2;
+const WIS_HALL_OF_FAME_SNAPSHOT_VERSION = 3;
 const WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS = 4;
 const WIS_HALL_OF_FAME_STALE_MS = WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS * 60 * 60 * 1000;
 const WIS_HALL_OF_FAME_GRADE_KEY = '3';
@@ -1647,61 +1647,76 @@ exports.saveWisHallOfFameConfig = onCall({ region: REGION }, async (request) => 
     ? request.data.hallOfFame
     : {};
   const interfaceRef = db.doc('site_settings/interface_config');
-  const interfaceSnap = await interfaceRef.get();
-  const existing = interfaceSnap.exists ? (interfaceSnap.data() || {}) : {};
-  const existingHallOfFame = existing?.hallOfFame && typeof existing.hallOfFame === 'object'
-    ? existing.hallOfFame
-    : {};
-  const mergedHallOfFame = {
-    ...existingHallOfFame,
-    ...hallOfFamePatch,
-    positions: {
-      ...(existingHallOfFame.positions || {}),
-      ...(hallOfFamePatch.positions || {}),
-      desktop: {
-        ...(existingHallOfFame.positions?.desktop || {}),
-        ...(hallOfFamePatch.positions?.desktop || {}),
-      },
-      mobile: {
-        ...(existingHallOfFame.positions?.mobile || {}),
-        ...(hallOfFamePatch.positions?.mobile || {}),
-      },
-    },
-    leaderboardPanel: {
-      ...(existingHallOfFame.leaderboardPanel || {}),
-      ...(hallOfFamePatch.leaderboardPanel || {}),
-      desktop: {
-        ...(existingHallOfFame.leaderboardPanel?.desktop || {}),
-        ...(hallOfFamePatch.leaderboardPanel?.desktop || {}),
-      },
-      mobile: {
-        ...(existingHallOfFame.leaderboardPanel?.mobile || {}),
-        ...(hallOfFamePatch.leaderboardPanel?.mobile || {}),
-      },
-    },
-    publicRange: {
-      ...(existingHallOfFame.publicRange || {}),
-      ...(hallOfFamePatch.publicRange || {}),
-    },
-    recognitionPopup: {
-      ...(existingHallOfFame.recognitionPopup || {}),
-      ...(hallOfFamePatch.recognitionPopup || {}),
-    },
-  };
-  const normalizedHallOfFame = resolveHallOfFameInterfaceConfig(mergedHallOfFame);
+  let normalizedHallOfFame = null;
 
-  await interfaceRef.set({
-    ...existing,
-    hallOfFame: normalizedHallOfFame,
-    updatedAt: FieldValue.serverTimestamp(),
-    updatedBy: uid,
-  }, { merge: true });
+  try {
+    const interfaceSnap = await interfaceRef.get();
+    const existing = interfaceSnap.exists ? (interfaceSnap.data() || {}) : {};
+    const existingHallOfFame = existing?.hallOfFame && typeof existing.hallOfFame === 'object'
+      ? existing.hallOfFame
+      : {};
+    const mergedHallOfFame = {
+      ...existingHallOfFame,
+      ...hallOfFamePatch,
+      positions: {
+        ...(existingHallOfFame.positions || {}),
+        ...(hallOfFamePatch.positions || {}),
+        desktop: {
+          ...(existingHallOfFame.positions?.desktop || {}),
+          ...(hallOfFamePatch.positions?.desktop || {}),
+        },
+        mobile: {
+          ...(existingHallOfFame.positions?.mobile || {}),
+          ...(hallOfFamePatch.positions?.mobile || {}),
+        },
+      },
+      leaderboardPanel: {
+        ...(existingHallOfFame.leaderboardPanel || {}),
+        ...(hallOfFamePatch.leaderboardPanel || {}),
+        desktop: {
+          ...(existingHallOfFame.leaderboardPanel?.desktop || {}),
+          ...(hallOfFamePatch.leaderboardPanel?.desktop || {}),
+        },
+        mobile: {
+          ...(existingHallOfFame.leaderboardPanel?.mobile || {}),
+          ...(hallOfFamePatch.leaderboardPanel?.mobile || {}),
+        },
+      },
+      publicRange: {
+        ...(existingHallOfFame.publicRange || {}),
+        ...(hallOfFamePatch.publicRange || {}),
+      },
+      recognitionPopup: {
+        ...(existingHallOfFame.recognitionPopup || {}),
+        ...(hallOfFamePatch.recognitionPopup || {}),
+      },
+    };
+    normalizedHallOfFame = resolveHallOfFameInterfaceConfig(mergedHallOfFame);
+
+    await interfaceRef.set({
+      hallOfFame: normalizedHallOfFame,
+      updatedAt: FieldValue.serverTimestamp(),
+      updatedBy: uid,
+    }, { merge: true });
+  } catch (error) {
+    console.error('Failed to save hall of fame interface config:', error);
+    throw new HttpsError(
+      'internal',
+      '학생 화면 설정 저장 중 서버 오류가 발생했습니다.',
+      { stage: 'config_save' },
+    );
+  }
 
   if (shouldRefreshSnapshot) {
     try {
       await refreshWisHallOfFame(year, semester);
     } catch (error) {
       console.error('Failed to refresh wis hall of fame snapshot after config save:', error);
+      throw new HttpsError(
+        'internal',
+        '학생 화면 설정 저장 후 공개 랭킹 새로고침에 실패했습니다.',
+        { stage: 'snapshot_refresh' },
+      );
     }
   }
 

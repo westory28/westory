@@ -30,8 +30,8 @@ const getEntryTone = (slotKey: HallOfFamePodiumSlotKey) => {
     if (slotKey === 'first') {
         return {
             badgeClassName: 'border-amber-300/90 bg-amber-100/92 text-amber-950 shadow-[0_12px_26px_rgba(217,119,6,0.22)]',
-            nameClassName: 'border-amber-200/80 bg-slate-950/72 text-white shadow-[0_18px_30px_rgba(15,23,42,0.26)]',
-            scoreClassName: 'border-amber-200/90 bg-white/92 text-amber-900',
+            nameClassName: 'border-white/80 bg-slate-950/82 text-white shadow-[0_20px_36px_rgba(15,23,42,0.3)] ring-1 ring-black/5',
+            scoreClassName: 'border-white/90 bg-white/96 text-slate-900 shadow-[0_14px_28px_rgba(15,23,42,0.22)] ring-1 ring-slate-900/6',
             emojiClassName: 'text-[clamp(3.25rem,6.6vw,4.8rem)]',
         };
     }
@@ -39,16 +39,16 @@ const getEntryTone = (slotKey: HallOfFamePodiumSlotKey) => {
     if (slotKey === 'second') {
         return {
             badgeClassName: 'border-slate-300/90 bg-slate-100/92 text-slate-900 shadow-[0_10px_22px_rgba(71,85,105,0.18)]',
-            nameClassName: 'border-slate-200/75 bg-slate-950/70 text-white shadow-[0_16px_26px_rgba(15,23,42,0.24)]',
-            scoreClassName: 'border-slate-200/90 bg-white/92 text-slate-700',
+            nameClassName: 'border-white/80 bg-slate-950/82 text-white shadow-[0_18px_32px_rgba(15,23,42,0.28)] ring-1 ring-black/5',
+            scoreClassName: 'border-white/90 bg-white/96 text-slate-900 shadow-[0_14px_28px_rgba(15,23,42,0.2)] ring-1 ring-slate-900/6',
             emojiClassName: 'text-[clamp(2.6rem,5.2vw,3.9rem)]',
         };
     }
 
     return {
         badgeClassName: 'border-orange-300/90 bg-orange-100/92 text-orange-950 shadow-[0_10px_22px_rgba(194,120,3,0.18)]',
-        nameClassName: 'border-orange-200/75 bg-slate-950/70 text-white shadow-[0_16px_26px_rgba(15,23,42,0.24)]',
-        scoreClassName: 'border-orange-200/90 bg-white/92 text-orange-800',
+        nameClassName: 'border-white/80 bg-slate-950/82 text-white shadow-[0_18px_32px_rgba(15,23,42,0.28)] ring-1 ring-black/5',
+        scoreClassName: 'border-white/90 bg-white/96 text-slate-900 shadow-[0_14px_28px_rgba(15,23,42,0.2)] ring-1 ring-slate-900/6',
         emojiClassName: 'text-[clamp(2.6rem,5.2vw,3.9rem)]',
     };
 };
@@ -161,8 +161,8 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                                     {entry.profileIcon || '😀'}
                                 </div>
 
-                                <div className={`mt-2 max-w-full rounded-[1.35rem] border px-3 py-2 backdrop-blur-xl ${tone.nameClassName}`}>
-                                    <div className="whitespace-nowrap text-[10px] font-bold uppercase tracking-[0.12em] text-white/72">
+                                <div className={`mt-2 max-w-full rounded-[1.35rem] border px-3.5 py-2.5 backdrop-blur-xl ${tone.nameClassName}`}>
+                                    <div className="whitespace-nowrap text-[10px] font-bold uppercase tracking-[0.12em] text-white/78">
                                         {entry.grade}학년 {entry.class}반
                                     </div>
                                     <div className="mt-1 whitespace-pre-line break-keep text-[12px] font-black leading-[1.35] text-white sm:text-sm md:text-base">
@@ -171,11 +171,9 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                                 </div>
 
                                 <div
-                                    className={`mt-2 inline-flex max-w-full rounded-full border px-3 py-1 text-[10px] font-bold shadow-[0_10px_18px_rgba(15,23,42,0.12)] sm:text-xs ${tone.scoreClassName}`}
+                                    className={`mt-2.5 inline-flex min-h-[2rem] max-w-full items-center justify-center rounded-full border px-3.5 py-1.5 text-[11px] font-black backdrop-blur whitespace-nowrap sm:text-sm ${tone.scoreClassName}`}
                                 >
-                                    <span className="whitespace-nowrap">
-                                        누적 {formatWisAmount(entry.cumulativeEarned)}
-                                    </span>
+                                    누적 {formatWisAmount(entry.cumulativeEarned)}
                                 </div>
                             </div>
                         </div>

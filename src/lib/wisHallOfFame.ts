@@ -24,7 +24,7 @@ type ConfigLike = Pick<SystemConfig, 'year' | 'semester'> | null | undefined;
 
 export const WIS_HALL_OF_FAME_GRADE_KEY = '3';
 export const WIS_HALL_OF_FAME_DOC_ID = 'hall_of_fame';
-export const WIS_HALL_OF_FAME_SNAPSHOT_VERSION = 2;
+export const WIS_HALL_OF_FAME_SNAPSHOT_VERSION = 3;
 export const WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS = 4;
 export const WIS_HALL_OF_FAME_STALE_MS = WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS * 60 * 60 * 1000;
 export const DEFAULT_WIS_HALL_OF_FAME_POSITION_PRESET = 'classic_podium_v1';
@@ -377,11 +377,29 @@ const getSnapshotUpdatedAtMs = (snapshot: WisHallOfFameSnapshot | null | undefin
   return Number(updatedAt?.seconds || 0) * 1000;
 };
 
+const hasHallOfFameSnapshotRankingData = (
+  snapshot: WisHallOfFameSnapshot | null | undefined,
+) => Object.keys(snapshot?.gradeTop3ByGrade || {}).length > 0
+  || Object.keys(snapshot?.classTop3ByClassKey || {}).length > 0
+  || Object.keys(snapshot?.gradeLeaderboardByGrade || {}).length > 0
+  || Object.keys(snapshot?.classLeaderboardByClassKey || {}).length > 0;
+
+const hasHallOfFameSnapshotLeaderboardMeta = (
+  snapshot: WisHallOfFameSnapshot | null | undefined,
+) => Object.keys(snapshot?.gradeLeaderboardMetaByGrade || {}).length > 0
+  || Object.keys(snapshot?.classLeaderboardMetaByClassKey || {}).length > 0;
+
 export const isWisHallOfFameSnapshotStale = (
   snapshot: WisHallOfFameSnapshot | null | undefined,
 ) => {
   if (!snapshot) return true;
   if (Number(snapshot.snapshotVersion || 0) !== WIS_HALL_OF_FAME_SNAPSHOT_VERSION) {
+    return true;
+  }
+  if (
+    hasHallOfFameSnapshotRankingData(snapshot)
+    && !hasHallOfFameSnapshotLeaderboardMeta(snapshot)
+  ) {
     return true;
   }
   const updatedAtMs = getSnapshotUpdatedAtMs(snapshot);
