@@ -2126,7 +2126,7 @@ exports.adjustTeacherPoints = onCall({ region: REGION }, async (request) => {
     transaction.set(walletRef, {
       ...buildWalletBase(targetUid, profile),
       balance: nextBalance,
-      earnedTotal: Number(wallet.earnedTotal || 0),
+      earnedTotal: nextRankEarnedTotal,
       ...buildWalletRankState(nextRankEarnedTotal, policy.rankPolicy),
       spentTotal: Number(wallet.spentTotal || 0),
       adjustedTotal: Number(wallet.adjustedTotal || 0) + delta,
@@ -2231,7 +2231,7 @@ exports.updateTeacherPointAdjustment = onCall({ region: REGION }, async (request
     transaction.set(walletRef, {
       ...buildWalletBase(targetUid, profile),
       balance: nextBalance,
-      earnedTotal: Number(wallet.earnedTotal || 0),
+      earnedTotal: nextRankEarnedTotal,
       ...buildWalletRankState(nextRankEarnedTotal, policy.rankPolicy),
       spentTotal: Number(wallet.spentTotal || 0),
       adjustedTotal: Number(wallet.adjustedTotal || 0) + deltaDiff,

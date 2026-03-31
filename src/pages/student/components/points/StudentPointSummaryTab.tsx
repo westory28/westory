@@ -10,7 +10,10 @@ import {
   formatWisAmount,
   formatWisDelta,
 } from "../../../../lib/pointFormatters";
-import type { PointRankDisplay } from "../../../../lib/pointRanks";
+import {
+  getPointWalletCumulativeEarned,
+  type PointRankDisplay,
+} from "../../../../lib/pointRanks";
 import type { PointTransaction, PointWallet } from "../../../../types";
 
 interface StudentPointSummaryTabProps {
@@ -71,7 +74,7 @@ const StudentPointSummaryTab: React.FC<StudentPointSummaryTabProps> = ({
       <div className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
         <div className="text-sm font-bold text-gray-500">누적 획득 위스</div>
         <div className="mt-2 whitespace-nowrap text-3xl font-black text-emerald-600">
-          {formatWisAmount(wallet.earnedTotal || 0)}
+          {formatWisAmount(getPointWalletCumulativeEarned(wallet))}
         </div>
       </div>
       <div className="rounded-2xl border border-gray-200 bg-gray-50 p-5">

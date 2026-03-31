@@ -897,6 +897,16 @@ const getStoredRankEarnedTotal = (
     ? Math.max(0, Number(wallet?.rankEarnedTotal || 0))
     : null;
 
+export const getPointWalletCumulativeEarned = (
+  wallet?: Pick<PointWallet, "earnedTotal" | "rankEarnedTotal"> | null,
+) => {
+  const storedRankEarnedTotal = getStoredRankEarnedTotal(wallet);
+  if (storedRankEarnedTotal !== null) {
+    return storedRankEarnedTotal;
+  }
+  return Math.max(0, Number(wallet?.earnedTotal || 0));
+};
+
 const getPointRankMetricValue = ({
   wallet,
   rankPolicy,

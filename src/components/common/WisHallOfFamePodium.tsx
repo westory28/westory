@@ -152,7 +152,7 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                         >
                             <div className="mx-auto flex max-w-full flex-col items-center text-center">
                                 <div
-                                    className={`inline-flex min-h-9 items-center justify-center rounded-full border px-3 py-1 text-xs font-black tracking-[0.08em] sm:text-sm ${tone.badgeClassName}`}
+                                    className={`inline-flex min-h-9 items-center justify-center whitespace-nowrap rounded-full border px-3 py-1 text-xs font-black tracking-[0.08em] sm:text-sm ${tone.badgeClassName}`}
                                 >
                                     {buildRankLabel(safeEntries, entry)}
                                 </div>
@@ -162,7 +162,7 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                                 </div>
 
                                 <div className={`mt-2 max-w-full rounded-[1.35rem] border px-3 py-2 backdrop-blur-xl ${tone.nameClassName}`}>
-                                    <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/72">
+                                    <div className="whitespace-nowrap text-[10px] font-bold uppercase tracking-[0.12em] text-white/72">
                                         {entry.grade}학년 {entry.class}반
                                     </div>
                                     <div className="mt-1 whitespace-pre-line break-keep text-[12px] font-black leading-[1.35] text-white sm:text-sm md:text-base">
@@ -173,7 +173,7 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                                 <div
                                     className={`mt-2 inline-flex max-w-full rounded-full border px-3 py-1 text-[10px] font-bold shadow-[0_10px_18px_rgba(15,23,42,0.12)] sm:text-xs ${tone.scoreClassName}`}
                                 >
-                                    <span className="truncate">
+                                    <span className="whitespace-nowrap">
                                         누적 {formatWisAmount(entry.cumulativeEarned)}
                                     </span>
                                 </div>

@@ -220,10 +220,10 @@ const WisHallOfFameStudentPreview: React.FC<
         : 'w-full xl:w-[var(--hall-podium-width)]';
   const railContainerClassName =
     deviceMode === 'desktop'
-      ? 'mt-[var(--hall-rail-desktop-top)] ml-[var(--hall-rail-desktop-shift)] w-[var(--hall-rail-width)]'
+      ? 'mt-[var(--hall-rail-desktop-top)] ml-[var(--hall-rail-desktop-shift)] min-w-[18rem] w-[var(--hall-rail-width)]'
       : deviceMode === 'mobile'
         ? `mt-[var(--hall-rail-mobile-top)] w-full max-w-[var(--hall-rail-mobile-width)] ${mobileRailAlignClassName}`
-        : `mt-[var(--hall-rail-mobile-top)] w-full sm:max-w-[var(--hall-rail-mobile-width)] xl:mt-[var(--hall-rail-desktop-top)] xl:ml-[var(--hall-rail-desktop-shift)] xl:w-[var(--hall-rail-width)] xl:max-w-none ${mobileRailAlignClassName}`;
+        : `mt-[var(--hall-rail-mobile-top)] w-full sm:max-w-[var(--hall-rail-mobile-width)] xl:mt-[var(--hall-rail-desktop-top)] xl:ml-[var(--hall-rail-desktop-shift)] xl:min-w-[18rem] xl:w-[var(--hall-rail-width)] xl:max-w-none ${mobileRailAlignClassName}`;
   const podiumDeviceMode =
     deviceMode === 'responsive' ? 'responsive' : deviceMode;
 
@@ -244,19 +244,19 @@ const WisHallOfFameStudentPreview: React.FC<
             <h2 className="mt-2 text-xl font-black text-slate-900 sm:text-2xl">
               {viewTitle}
             </h2>
-            <p className="mt-2 text-sm text-slate-500">
+            <p className="mt-2 break-keep text-sm text-slate-500">
               누적 획득 위스 기준으로 화랑의 전당이 반영돼요.
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-bold">
-              <span className="inline-flex items-center rounded-full bg-slate-900 px-3 py-1 text-white">
+              <span className="inline-flex items-center whitespace-nowrap rounded-full bg-slate-900 px-3 py-1 text-white">
                 {viewScopeLabel}
               </span>
               {showTieCaption && (
-                <span className="inline-flex items-center rounded-full bg-sky-50 px-3 py-1 text-sky-700">
+                <span className="inline-flex items-center whitespace-nowrap rounded-full bg-sky-50 px-3 py-1 text-sky-700">
                   동점자는 함께 공개
                 </span>
               )}
-              <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-slate-600">
+              <span className="inline-flex items-center whitespace-nowrap rounded-full bg-slate-100 px-3 py-1 text-slate-600">
                 {statusText}
               </span>
             </div>
@@ -272,7 +272,7 @@ const WisHallOfFameStudentPreview: React.FC<
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <span className="block">전교 랭킹 보기</span>
+              <span className="block whitespace-nowrap break-keep">전교 랭킹 보기</span>
               <span
                 className={`mt-0.5 block text-[11px] font-semibold ${
                   effectiveView === 'grade'
@@ -295,7 +295,7 @@ const WisHallOfFameStudentPreview: React.FC<
                     : 'cursor-not-allowed text-slate-400'
               }`}
             >
-              <span className="block">우리 학급 보기</span>
+              <span className="block whitespace-nowrap break-keep">우리 학급 보기</span>
               <span
                 className={`mt-0.5 block text-[11px] font-semibold ${
                   effectiveView === 'class'
@@ -313,24 +313,24 @@ const WisHallOfFameStudentPreview: React.FC<
           </div>
         </div>
         <div className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-4 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-          <p className="font-semibold text-slate-600">{viewSummary}</p>
-          <p>{toggleHint}</p>
+          <p className="font-semibold text-slate-600 break-keep">{viewSummary}</p>
+          <p className="break-keep">{toggleHint}</p>
         </div>
       </div>
 
       <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(255,251,235,0.9),_rgba(248,250,252,0.98)_42%,_rgba(255,255,255,1)_100%)] p-4 shadow-[0_22px_54px_rgba(15,23,42,0.08)] sm:p-5 xl:p-6">
         <div className="mb-4 flex flex-wrap items-center gap-2 text-xs font-bold text-slate-500">
-          <span className="inline-flex items-center rounded-full bg-white px-3 py-1.5 text-slate-700 shadow-[0_8px_18px_rgba(15,23,42,0.05)]">
+          <span className="inline-flex items-center whitespace-nowrap rounded-full bg-white px-3 py-1.5 text-slate-700 shadow-[0_8px_18px_rgba(15,23,42,0.05)]">
             현재 보기
           </span>
-          <span className="inline-flex items-center rounded-full bg-slate-900 px-3 py-1.5 text-white shadow-[0_8px_18px_rgba(15,23,42,0.14)]">
+          <span className="inline-flex items-center whitespace-nowrap rounded-full bg-slate-900 px-3 py-1.5 text-white shadow-[0_8px_18px_rgba(15,23,42,0.14)]">
             {effectiveView === 'grade'
               ? `${previewGradeKey}학년 전교`
               : canOpenClassView
                 ? `${normalizedGrade}학년 ${normalizedClass}반`
                 : '전교'}
           </span>
-          <span className="inline-flex items-center rounded-full bg-white/80 px-3 py-1.5 text-slate-500">
+          <span className="inline-flex items-center whitespace-nowrap rounded-full bg-white/80 px-3 py-1.5 text-slate-500">
             좌측 시상대 + 우측 공개 랭킹
           </span>
         </div>
@@ -342,7 +342,7 @@ const WisHallOfFameStudentPreview: React.FC<
                 <p className="text-[11px] font-black tracking-[0.14em] text-amber-600">
                   PODIUM
                 </p>
-                <p className="mt-1 text-sm font-bold text-slate-600">
+                <p className="mt-1 break-keep text-sm font-bold text-slate-600">
                   1위부터 3위까지 시상대에 올라와요.
                 </p>
               </div>
@@ -368,11 +368,11 @@ const WisHallOfFameStudentPreview: React.FC<
                 <p className="text-[11px] font-black tracking-[0.14em] text-sky-700">
                   OPEN RANKING
                 </p>
-                <p className="mt-1 text-sm font-bold text-slate-600">
+                <p className="mt-1 break-keep text-sm font-bold text-slate-600">
                   우측 레일에서 4위 이후 순위를 이어서 확인해요.
                 </p>
               </div>
-              <span className="inline-flex items-center rounded-full bg-white px-3 py-1 text-xs font-black text-slate-700 shadow-[0_8px_18px_rgba(15,23,42,0.05)]">
+              <span className="inline-flex items-center whitespace-nowrap rounded-full bg-white px-3 py-1 text-xs font-black text-slate-700 shadow-[0_8px_18px_rgba(15,23,42,0.05)]">
                 {rightRailEntries.length > 0
                   ? `${rightRailEntries[0].rank}위부터`
                   : '4위부터'}

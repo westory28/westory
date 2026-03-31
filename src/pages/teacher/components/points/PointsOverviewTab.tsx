@@ -4,7 +4,10 @@ import {
   POINT_TRANSACTION_TYPE_LABELS,
   getPointDeltaToneClass,
 } from "../../../../constants/pointLabels";
-import { getPointRankDisplay } from "../../../../lib/pointRanks";
+import {
+  getPointRankDisplay,
+  getPointWalletCumulativeEarned,
+} from "../../../../lib/pointRanks";
 import {
   formatPointDateShortTime,
   formatPointDateTime,
@@ -299,7 +302,7 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
                     {formatWisAmount(wallet.balance || 0)}
                   </div>
                   <div className="text-right text-sm font-bold text-emerald-600 whitespace-nowrap">
-                    {formatWisAmount(wallet.earnedTotal || 0)}
+                    {formatWisAmount(getPointWalletCumulativeEarned(wallet))}
                   </div>
                   <div className="text-right text-sm font-bold text-rose-500 whitespace-nowrap">
                     {formatWisAmount(wallet.spentTotal || 0)}
@@ -379,7 +382,7 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
                   누적 획득 위스
                 </div>
                 <div className="mt-1 whitespace-nowrap text-lg font-extrabold text-emerald-600">
-                  {formatWisAmount(selectedWallet.earnedTotal || 0)}
+                  {formatWisAmount(getPointWalletCumulativeEarned(selectedWallet))}
                 </div>
               </div>
               <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">

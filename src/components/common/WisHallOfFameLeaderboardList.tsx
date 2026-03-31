@@ -30,12 +30,12 @@ const WisHallOfFameLeaderboardList: React.FC<WisHallOfFameLeaderboardListProps> 
             style={style}
         >
             <div className="border-b border-slate-100 bg-slate-50 px-5 py-4">
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <h3 className="text-base font-black text-slate-900">{title}</h3>
-                        <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
+                        <p className="mt-1 break-keep text-sm text-slate-500">{subtitle}</p>
                     </div>
-                    <span className="inline-flex shrink-0 items-center rounded-full bg-slate-900 px-3 py-1 text-xs font-bold text-white">
+                    <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-slate-900 px-3 py-1 text-xs font-bold text-white">
                         {safeEntries.length}명
                     </span>
                 </div>
@@ -54,7 +54,7 @@ const WisHallOfFameLeaderboardList: React.FC<WisHallOfFameLeaderboardListProps> 
                                 className="rounded-2xl border border-slate-200 bg-slate-50/90 px-4 py-3 shadow-[0_8px_20px_rgba(15,23,42,0.04)]"
                             >
                                 <div className="flex items-start gap-3">
-                                    <div className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-2xl bg-slate-900 px-2 text-sm font-black text-white">
+                                    <div className="inline-flex min-h-10 min-w-[4.25rem] items-center justify-center whitespace-nowrap rounded-2xl bg-slate-900 px-2 text-sm font-black text-white">
                                         {hasTieForRank(entry.rank) ? `공동 ${entry.rank}` : entry.rank}
                                     </div>
                                     <div className="flex min-w-0 flex-1 items-start gap-3">
@@ -63,14 +63,14 @@ const WisHallOfFameLeaderboardList: React.FC<WisHallOfFameLeaderboardListProps> 
                                         </div>
                                         <div className="min-w-0 flex-1">
                                             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                                <span className="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600">
+                                                <span className="inline-flex items-center whitespace-nowrap rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600">
                                                     {entry.grade}학년 {entry.class}반
                                                 </span>
                                                 <span className="min-w-0 truncate text-sm font-black text-slate-900">
                                                     {entry.displayName || entry.studentName}
                                                 </span>
                                             </div>
-                                            <div className="mt-2 text-sm font-bold text-sky-700">
+                                            <div className="mt-2 whitespace-nowrap text-sm font-bold text-sky-700">
                                                 누적 {formatWisAmount(entry.cumulativeEarned)}
                                             </div>
                                         </div>

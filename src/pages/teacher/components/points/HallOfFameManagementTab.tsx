@@ -53,6 +53,8 @@ type ViewDraft = Pick<
   | 'leaderboardPanel'
 >;
 
+type LayoutDraft = Pick<ViewDraft, 'positions' | 'leaderboardPanel'>;
+
 const createDraft = (config?: HallOfFameInterfaceConfig | null) =>
   resolveHallOfFameInterfaceConfig(config);
 
@@ -78,6 +80,25 @@ const pickViewDraft = (
   podiumImageUrl: draft.podiumImageUrl,
   podiumStoragePath: draft.podiumStoragePath,
   positionPreset: draft.positionPreset,
+  positions: {
+    desktop: {
+      first: { ...draft.positions.desktop.first },
+      second: { ...draft.positions.desktop.second },
+      third: { ...draft.positions.desktop.third },
+    },
+    mobile: {
+      first: { ...draft.positions.mobile.first },
+      second: { ...draft.positions.mobile.second },
+      third: { ...draft.positions.mobile.third },
+    },
+  },
+  leaderboardPanel: {
+    desktop: { ...draft.leaderboardPanel.desktop },
+    mobile: { ...draft.leaderboardPanel.mobile },
+  },
+});
+
+const pickLayoutDraft = (draft: ViewDraft | ReturnType<typeof resolveHallOfFameInterfaceConfig>): LayoutDraft => ({
   positions: {
     desktop: {
       first: { ...draft.positions.desktop.first },
@@ -194,13 +215,13 @@ const PanelHeader: React.FC<{
           type="button"
           onClick={onSave}
           disabled={!canManage || !dirty || saving}
-          className="inline-flex items-center justify-center whitespace-nowrap rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+          className="inline-flex min-h-11 items-center justify-center whitespace-nowrap break-keep rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
         >
           {saving ? '저장 중...' : saveLabel}
         </button>
         <div
           className={[
-            'rounded-xl border px-4 py-3 text-sm',
+            'rounded-xl border px-4 py-3 text-sm break-keep',
             dirty
               ? 'border-amber-200 bg-amber-50 text-amber-800'
               : 'border-gray-200 bg-gray-50 text-gray-600',
@@ -236,8 +257,9 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
     useState<HallOfFameSettingsPanelId>('feature_settings');
   const [previewScope, setPreviewScope] =
     useState<HallOfFamePreviewView>('grade');
-  const [deviceMode, setDeviceMode] =
+  const [editorDeviceMode, setEditorDeviceMode] =
     useState<HallOfFameEditorDeviceMode>('desktop');
+  const [layoutEditorOpen, setLayoutEditorOpen] = useState(false);
   const [gradeKey, setGradeKey] = useState('');
   const [classKey, setClassKey] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -253,6 +275,9 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
   );
   const [viewDraft, setViewDraft] = useState<ViewDraft>(() =>
     pickViewDraft(initialDraft),
+  );
+  const [layoutDraft, setLayoutDraft] = useState<LayoutDraft>(() =>
+    pickLayoutDraft(pickViewDraft(initialDraft)),
   );
 
   useEffect(() => {
@@ -275,7 +300,10 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
     if (viewWasClean) {
       setViewDraft(nextViewDraft);
     }
-  }, [interfaceConfig?.hallOfFame]);
+    if (!layoutEditorOpen) {
+      setLayoutDraft(pickLayoutDraft(nextViewDraft));
+    }
+  }, [interfaceConfig?.hallOfFame, layoutEditorOpen]);
 
   useEffect(
     () => () => {
@@ -422,18 +450,12 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
     {
       id: 'feature_settings',
       label: '기능 설정',
-      description: '공개 범위, 팝업, 공개 시간 정책을 관리합니다.',
       iconClassName: 'fas fa-sliders-h',
-      badge: featureDirty ? '미저장' : '저장됨',
-      meta: `${buildStoredRangeSummary(featureDraft)} · ${WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS}시간`,
     },
     {
       id: 'student_view_settings',
       label: '학생 화면 설정',
-      description: '배경 이미지와 시상대/랭킹 배치를 조정합니다.',
       iconClassName: 'fas fa-images',
-      badge: viewDirty ? '미저장' : '저장됨',
-      meta: `${deviceMode === 'desktop' ? '데스크톱' : '모바일'} 배치 편집 가능`,
     },
   ];
 
@@ -580,6 +602,37 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
     }
   };
 
+  const openLayoutEditor = () => {
+    setLayoutDraft(
+      pickLayoutDraft({
+        ...viewDraft,
+        positions: viewDraft.positions,
+        leaderboardPanel: viewDraft.leaderboardPanel,
+      }),
+    );
+    setLayoutEditorOpen(true);
+  };
+
+  const closeLayoutEditor = () => {
+    setLayoutDraft(
+      pickLayoutDraft({
+        ...viewDraft,
+        positions: viewDraft.positions,
+        leaderboardPanel: viewDraft.leaderboardPanel,
+      }),
+    );
+    setLayoutEditorOpen(false);
+  };
+
+  const saveLayoutEditor = () => {
+    setViewDraft((previousValue) => ({
+      ...previousValue,
+      positions: layoutDraft.positions,
+      leaderboardPanel: layoutDraft.leaderboardPanel,
+    }));
+    setLayoutEditorOpen(false);
+  };
+
   const featureSettingsPanel = (
     <div className="space-y-6">
       <PanelHeader
@@ -609,7 +662,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
           <div className="text-xs font-bold text-slate-500">공개 범위 요약</div>
-          <div className="mt-2 text-lg font-black text-slate-900">
+          <div className="mt-2 text-lg font-black text-slate-900 whitespace-nowrap break-keep">
             {buildStoredRangeSummary(featureDraft)}
           </div>
           <div className="mt-1 text-xs font-semibold text-slate-500">
@@ -620,7 +673,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
           <div className="text-xs font-bold text-slate-500">반영 주기</div>
-          <div className="mt-2 text-lg font-black text-slate-900">
+          <div className="mt-2 text-lg font-black text-slate-900 whitespace-nowrap break-keep">
             {WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS}시간마다 자동 반영
           </div>
           <div className="mt-1 text-xs font-semibold text-slate-500">
@@ -638,10 +691,10 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
                 저장값을 한눈에 확인하면서 전교/학급 공개 기준을 정리합니다.
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
-                <span className="inline-flex items-center rounded-full bg-slate-900 px-3 py-1 text-xs font-bold text-white">
+                <span className="inline-flex items-center whitespace-nowrap rounded-full bg-slate-900 px-3 py-1 text-xs font-bold text-white">
                   저장값 {buildStoredRangeSummary(savedFeatureDraft)}
                 </span>
-                <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
+                <span className="inline-flex items-center whitespace-nowrap rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
                   {savedFeatureDraft.publicRange.includeTies
                     ? '동점자 함께 공개'
                     : '동점자 추가 공개 안 함'}
@@ -856,14 +909,14 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="text-sm font-black text-slate-900">
-                    4시간마다 자동 반영
-                  </div>
+                    <div className="text-sm font-black text-slate-900 whitespace-nowrap break-keep">
+                      4시간마다 자동 반영
+                    </div>
                   <p className="mt-1 text-sm text-slate-500">
                     point 변경이 있을 때마다 즉시 재계산하지 않고, 4시간 기준이 지난 뒤에만 다시 계산합니다.
                   </p>
                 </div>
-                <span className="inline-flex items-center rounded-full bg-slate-900 px-3 py-1 text-xs font-bold text-white">
+                <span className="inline-flex items-center whitespace-nowrap rounded-full bg-slate-900 px-3 py-1 text-xs font-bold text-white">
                   자동 정책
                 </span>
               </div>
@@ -900,7 +953,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
               type="button"
               onClick={() => void refreshSnapshot()}
               disabled={!canManage || refreshing}
-              className="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex min-h-11 items-center justify-center whitespace-nowrap break-keep rounded-lg border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {refreshing ? '스냅샷 새로고침 중...' : '스냅샷 새로고침'}
             </button>
@@ -921,57 +974,219 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
         onSave={() => void handleSaveStudentViewSettings()}
       />
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.42fr)_360px]">
-        <div className="space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-              <div>
-                <h3 className="text-lg font-black text-slate-900">
+      <div className="space-y-6">
+        <section className="overflow-hidden rounded-[1.9rem] border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 px-5 py-5 sm:px-6">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+              <div className="min-w-0">
+                <div className="text-[11px] font-black tracking-[0.18em] text-amber-600">
+                  STUDENT PREVIEW
+                </div>
+                <h3 className="mt-2 text-xl font-black text-slate-900 sm:text-2xl">
                   학생 화면 미리보기
                 </h3>
-                <p className="mt-1 text-sm text-slate-500">
-                  좌측 시상대와 우측 4~10위 랭킹까지 포함한 실제 학생 화면 구조를 바로 확인합니다.
+                <p className="mt-2 text-sm leading-6 text-slate-500 break-keep">
+                  교사가 가장 먼저 확인해야 하는 학생 화면을 크게 보여 줍니다. 좌측 시상대와 우측 공개 랭킹,
+                  전교/학급 전환까지 실제 구조에 가깝게 바로 확인할 수 있습니다.
                 </p>
               </div>
-              <div className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
-                {deviceMode === 'desktop' ? '데스크톱 미리보기' : '모바일 미리보기'}
+
+              <div className="flex flex-wrap items-center gap-2 text-xs font-bold xl:max-w-[24rem] xl:justify-end">
+                <span className="inline-flex items-center whitespace-nowrap rounded-full bg-slate-900 px-3 py-1 text-white">
+                  좌측 시상대
+                </span>
+                <span className="inline-flex items-center whitespace-nowrap rounded-full bg-sky-50 px-3 py-1 text-sky-700">
+                  우측 4위 이후 공개 랭킹
+                </span>
+                <span className="inline-flex items-center whitespace-nowrap rounded-full bg-slate-100 px-3 py-1 text-slate-600">
+                  전교/학급 전환
+                </span>
               </div>
             </div>
           </div>
 
-          <WisHallOfFameStudentPreview
-            snapshot={snapshot}
-            hallOfFameConfig={previewConfig}
-            activeView={previewScope}
-            onActiveViewChange={setPreviewScope}
-            gradeKey={gradeKey}
-            currentGrade={previewClass.grade}
-            currentClass={previewClass.className}
-            deviceMode={deviceMode}
-            showSnapshotAlert={!snapshotError}
-          />
-        </div>
+          <div className="bg-slate-50/70 px-3 py-3 sm:px-4 sm:py-4">
+            <WisHallOfFameStudentPreview
+              snapshot={snapshot}
+              hallOfFameConfig={previewConfig}
+              activeView={previewScope}
+              onActiveViewChange={setPreviewScope}
+              gradeKey={gradeKey}
+              currentGrade={previewClass.grade}
+              currentClass={previewClass.className}
+              deviceMode="responsive"
+              showSnapshotAlert={!snapshotError}
+            />
+          </div>
+        </section>
 
-        <div className="space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h3 className="text-sm font-black text-slate-900">미리보기 기준</h3>
-            <p className="mt-1 text-sm text-slate-500">
-              학생 화면처럼 전교/학급 보기 전환을 확인하되, 어떤 학년/학급 데이터를 보여줄지는 여기서 고릅니다.
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
+            <h3 className="text-lg font-black text-slate-900">
+              배경 이미지 설정
+            </h3>
+            <p className="mt-1 text-sm text-slate-500 break-keep">
+              시상대 배경 이미지를 바꾸면 상단 학생 화면 미리보기에 바로 반영됩니다.
             </p>
-            <div className="mt-4 grid grid-cols-1 gap-3">
-              <label className="block">
+          </div>
+
+          <div className="grid grid-cols-1 gap-5 p-5 sm:p-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)]">
+            <div className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-50">
+              <div className="aspect-[16/9] overflow-hidden">
+                <img
+                  src={imageUrl}
+                  alt="화랑의 전당 배경 미리보기"
+                  className="h-full w-full object-cover"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-4 rounded-3xl border border-slate-200 bg-slate-50 p-5">
+              <div>
+                <div className="text-sm font-black text-slate-900">
+                  현재 배경
+                </div>
+                <p className="mt-1 text-sm text-slate-500 break-keep">
+                  업로드 후 저장하면 학생 화면과 배치 편집기에도 같은 이미지가 쓰입니다.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <label className="inline-flex min-h-11 cursor-pointer items-center whitespace-nowrap break-keep rounded-lg bg-slate-900 px-4 text-sm font-bold text-white transition hover:bg-slate-800">
+                  이미지 업로드
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] || null;
+                      if (!file) return;
+                      setImageFile(file);
+                      setImagePreviewUrl((previousValue) => {
+                        if (previousValue.startsWith('blob:')) {
+                          URL.revokeObjectURL(previousValue);
+                        }
+                        return URL.createObjectURL(file);
+                      });
+                      event.target.value = '';
+                    }}
+                    disabled={!canManage}
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setImageFile(null);
+                    setImagePreviewUrl((previousValue) => {
+                      if (previousValue.startsWith('blob:')) {
+                        URL.revokeObjectURL(previousValue);
+                      }
+                      return '';
+                    });
+                    setViewDraft((previousValue) => ({
+                      ...previousValue,
+                      podiumImageUrl: '',
+                      podiumStoragePath: '',
+                    }));
+                  }}
+                  disabled={!canManage}
+                  className="inline-flex min-h-11 items-center whitespace-nowrap break-keep rounded-lg border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  기본 이미지 복원
+                </button>
+              </div>
+
+              {imageFile && (
+                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 break-all">
+                  {imageFile.name}
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <h3 className="text-lg font-black text-slate-900">
+                  배치 편집
+                </h3>
+                <p className="mt-1 text-sm text-slate-500 break-keep">
+                  좁은 카드 안에서 억지로 조정하지 않고, 큰 모달 편집기에서 데스크톱과 모바일 배치를 직접 드래그해 정리합니다.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={openLayoutEditor}
+                disabled={!canManage}
+                className="inline-flex min-h-11 items-center justify-center whitespace-nowrap break-keep rounded-lg bg-slate-900 px-4 text-sm font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                배치 편집 열기
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2 sm:p-6 xl:grid-cols-4">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+              <div className="text-xs font-bold text-slate-500">편집 방식</div>
+              <div className="mt-2 text-base font-black text-slate-900 whitespace-nowrap break-keep">
+                모달 드래그 편집
+              </div>
+              <p className="mt-1 text-sm text-slate-500 break-keep">
+                큰 편집기에서 슬롯을 선택하고 위치를 옮깁니다.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+              <div className="text-xs font-bold text-slate-500">데스크톱 기본</div>
+              <div className="mt-2 text-base font-black text-slate-900 whitespace-nowrap break-keep">
+                {`${Math.round(viewDraft.positions.desktop.first.leftPercent)}% / ${Math.round(viewDraft.leaderboardPanel.desktop.widthPercent)}%`}
+              </div>
+              <p className="mt-1 text-sm text-slate-500 break-keep">
+                1위 중심 위치와 우측 랭킹 패널 너비를 기준으로 확인합니다.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+              <div className="text-xs font-bold text-slate-500">모바일 기본</div>
+              <div className="mt-2 text-base font-black text-slate-900 whitespace-nowrap break-keep">
+                {`${Math.round(viewDraft.positions.mobile.first.leftPercent)}% / ${Math.round(viewDraft.leaderboardPanel.mobile.widthPercent)}%`}
+              </div>
+              <p className="mt-1 text-sm text-slate-500 break-keep">
+                모바일 시상대와 공개 랭킹 정렬을 따로 관리합니다.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+              <div className="text-xs font-bold text-slate-500">복원 가능</div>
+              <div className="mt-2 text-base font-black text-slate-900 whitespace-nowrap break-keep">
+                기본 배치 복원
+              </div>
+              <p className="mt-1 text-sm text-slate-500 break-keep">
+                모달 안에서 데스크톱과 모바일 배치를 기본값으로 되돌릴 수 있습니다.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
+            <h3 className="text-lg font-black text-slate-900">기타 보조 설정</h3>
+            <p className="mt-1 text-sm text-slate-500 break-keep">
+              상단 미리보기 기준을 고르고, 학생 화면 설정 저장 전 알아둘 동작만 아래에서 확인합니다.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 gap-4 p-5 sm:p-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <label className="block rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
                 <div className="mb-2 text-xs font-bold text-slate-500">
                   전교 미리보기 학년
                 </div>
                 <select
                   value={gradeKey}
                   onChange={(event) => setGradeKey(event.target.value)}
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm font-bold text-slate-700"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700"
                 >
                   {gradeOptions.length === 0 && (
-                    <option value={WIS_HALL_OF_FAME_GRADE_KEY}>
-                      학년 없음
-                    </option>
+                    <option value={WIS_HALL_OF_FAME_GRADE_KEY}>학년 없음</option>
                   )}
                   {gradeOptions.map((option) => (
                     <option key={option} value={option}>
@@ -981,7 +1196,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
                 </select>
               </label>
 
-              <label className="block">
+              <label className="block rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
                 <div className="mb-2 text-xs font-bold text-slate-500">
                   학급 미리보기 대상
                 </div>
@@ -989,7 +1204,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
                   value={classKey}
                   onChange={(event) => setClassKey(event.target.value)}
                   disabled={classOptions.length === 0}
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm font-bold text-slate-700 disabled:bg-slate-100 disabled:text-slate-400"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700 disabled:bg-slate-100 disabled:text-slate-400"
                 >
                   {classOptions.length === 0 && <option value="">학급 없음</option>}
                   {classOptions.map((option) => {
@@ -1003,104 +1218,27 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
                 </select>
               </label>
             </div>
-          </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h3 className="text-sm font-black text-slate-900">
-              시상대 배경 이미지
-            </h3>
-            <p className="mt-1 text-sm text-slate-500">
-              배경 이미지를 바꾸면 왼쪽 미리보기에 즉시 반영됩니다.
-            </p>
-
-            <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
-              <div className="aspect-[16/10] overflow-hidden">
-                <img
-                  src={imageUrl}
-                  alt="화랑의 전당 배경 미리보기"
-                  className="h-full w-full object-cover"
-                />
+            <div className="grid grid-cols-1 gap-4">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                <div className="text-sm font-black text-slate-900 whitespace-nowrap break-keep">
+                  탭별 저장 구조 유지
+                </div>
+                <p className="mt-1 text-sm text-slate-500 break-keep">
+                  학생 화면 설정 저장 버튼은 지금 탭의 변경사항만 저장합니다.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                <div className="text-sm font-black text-slate-900 whitespace-nowrap break-keep">
+                  fail-open 유지
+                </div>
+                <p className="mt-1 text-sm text-slate-500 break-keep">
+                  화랑의 전당 스냅샷이 불안정해도 위스 관리 전체는 계속 사용할 수 있습니다.
+                </p>
               </div>
             </div>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              <label className="inline-flex min-h-11 cursor-pointer items-center rounded-lg bg-slate-900 px-4 text-sm font-bold text-white transition hover:bg-slate-800">
-                이미지 업로드
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="sr-only"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0] || null;
-                    if (!file) return;
-                    setImageFile(file);
-                    setImagePreviewUrl((previousValue) => {
-                      if (previousValue.startsWith('blob:')) {
-                        URL.revokeObjectURL(previousValue);
-                      }
-                      return URL.createObjectURL(file);
-                    });
-                    event.target.value = '';
-                  }}
-                  disabled={!canManage}
-                />
-              </label>
-              <button
-                type="button"
-                onClick={() => {
-                  setImageFile(null);
-                  setImagePreviewUrl((previousValue) => {
-                    if (previousValue.startsWith('blob:')) {
-                      URL.revokeObjectURL(previousValue);
-                    }
-                    return '';
-                  });
-                  setViewDraft((previousValue) => ({
-                    ...previousValue,
-                    podiumImageUrl: '',
-                    podiumStoragePath: '',
-                  }));
-                }}
-                disabled={!canManage}
-                className="inline-flex min-h-11 items-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                기본 이미지 복원
-              </button>
-            </div>
-
-            {imageFile && (
-              <div className="mt-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
-                {imageFile.name}
-              </div>
-            )}
           </div>
-
-          <WisHallOfFamePositionEditor
-            value={{
-              positions: viewDraft.positions,
-              leaderboardPanel: viewDraft.leaderboardPanel,
-            }}
-            imageUrl={imageUrl}
-            deviceMode={deviceMode}
-            onDeviceModeChange={setDeviceMode}
-            onReset={() =>
-              setViewDraft((previousValue) => ({
-                ...previousValue,
-                positions: getDefaultHallOfFamePositions(),
-                leaderboardPanel: getDefaultHallOfFameLeaderboardPanelPosition(),
-              }))
-            }
-            onChange={(nextValue) =>
-              setViewDraft((previousValue) => ({
-                ...previousValue,
-                positions: nextValue.positions,
-                leaderboardPanel: nextValue.leaderboardPanel,
-              }))
-            }
-            disabled={!canManage}
-            showPreviewStage={false}
-          />
-        </div>
+        </section>
       </div>
     </div>
   );
@@ -1108,7 +1246,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
   return (
     <div className="space-y-6">
       {snapshotError && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-semibold text-amber-900">
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-semibold text-amber-900 break-keep">
           {snapshotError}
         </div>
       )}
@@ -1132,6 +1270,100 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
             {activePanel === 'feature_settings'
               ? featureSettingsPanel
               : studentViewSettingsPanel}
+          </div>
+        </div>
+      )}
+
+      {layoutEditorOpen && (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm"
+          onClick={closeLayoutEditor}
+        >
+          <div
+            className="flex max-h-[min(94vh,72rem)] w-full max-w-7xl flex-col overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_30px_80px_rgba(15,23,42,0.32)]"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="화랑의 전당 배치 편집"
+          >
+            <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-5 sm:px-6">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="text-[11px] font-black tracking-[0.18em] text-amber-600">
+                    LAYOUT EDITOR
+                  </div>
+                  <h3 className="mt-2 text-xl font-black text-slate-900">
+                    화랑의 전당 배치 편집
+                  </h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-500 break-keep">
+                    1위, 2위, 3위 시상대와 우측 공개 랭킹 패널을 충분히 큰 캔버스에서 직접 움직여 배치합니다.
+                    저장 전까지는 학생 화면 설정에 반영되지 않습니다.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={closeLayoutEditor}
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                  aria-label="배치 편집 닫기"
+                >
+                  <i className="fas fa-times" aria-hidden="true"></i>
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 text-xs font-bold">
+                <span className="inline-flex items-center whitespace-nowrap rounded-full bg-slate-900 px-3 py-1 text-white">
+                  {editorDeviceMode === 'desktop' ? '데스크톱 편집 중' : '모바일 편집 중'}
+                </span>
+                <span className="inline-flex items-center whitespace-nowrap rounded-full bg-slate-100 px-3 py-1 text-slate-600">
+                  드래그 후 저장
+                </span>
+                <span className="inline-flex items-center whitespace-nowrap rounded-full bg-sky-50 px-3 py-1 text-sky-700">
+                  저장 전까지 미리보기는 유지
+                </span>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50/70 p-4 sm:p-5">
+              <WisHallOfFamePositionEditor
+                value={layoutDraft}
+                imageUrl={imageUrl}
+                deviceMode={editorDeviceMode}
+                onDeviceModeChange={setEditorDeviceMode}
+                onReset={() =>
+                  setLayoutDraft({
+                    positions: getDefaultHallOfFamePositions(),
+                    leaderboardPanel: getDefaultHallOfFameLeaderboardPanelPosition(),
+                  })
+                }
+                onChange={setLayoutDraft}
+                disabled={!canManage}
+                showPreviewStage
+              />
+            </div>
+
+            <div className="flex flex-col gap-3 border-t border-slate-100 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+              <p className="text-sm text-slate-500 break-keep">
+                취소하면 이번 모달에서 조정한 배치는 버리고, 저장하면 학생 화면 설정 draft에 반영됩니다.
+              </p>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={closeLayoutEditor}
+                  className="inline-flex min-h-11 items-center whitespace-nowrap break-keep rounded-lg border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-100"
+                >
+                  취소
+                </button>
+                <button
+                  type="button"
+                  onClick={saveLayoutEditor}
+                  disabled={!canManage}
+                  className="inline-flex min-h-11 items-center whitespace-nowrap break-keep rounded-lg bg-blue-600 px-4 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+                >
+                  배치 편집 저장
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
