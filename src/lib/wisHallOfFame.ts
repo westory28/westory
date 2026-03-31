@@ -606,7 +606,17 @@ export const applyHallOfFameRankLimit = (
 export const getHallOfFameLeaderboardTailEntries = (
   entries: WisHallOfFameEntry[] | null | undefined,
   podiumCount = 3,
-) => (entries || []).slice(Math.max(0, Math.floor(podiumCount)));
+) => {
+  const safeEntries = entries || [];
+  const safePodiumCount = Math.max(0, Math.floor(podiumCount));
+  return safeEntries.filter((entry, index) => {
+    const rank = Number(entry.rank || 0);
+    if (Number.isFinite(rank) && rank > 0) {
+      return rank > safePodiumCount;
+    }
+    return index >= safePodiumCount;
+  });
+};
 
 export const isHallOfFameRecognitionEnabled = (
   interfaceConfig?: InterfaceConfig | HallOfFameInterfaceConfig | null,

@@ -51,10 +51,10 @@ const WisHallOfFameLeaderboardList: React.FC<WisHallOfFameLeaderboardListProps> 
                         {safeEntries.map((entry, index) => (
                             <div
                                 key={`${entry.uid}-${entry.rank}-${index}`}
-                                className="rounded-2xl border border-slate-200 bg-slate-50/90 px-4 py-3 shadow-[0_8px_20px_rgba(15,23,42,0.04)]"
+                                className="rounded-2xl border border-slate-200 bg-white px-4 py-3.5 shadow-[0_10px_24px_rgba(15,23,42,0.06)]"
                             >
-                                <div className="flex items-start gap-3">
-                                    <div className="inline-flex min-h-10 min-w-[4.25rem] items-center justify-center whitespace-nowrap rounded-2xl bg-slate-900 px-2 text-sm font-black text-white">
+                                <div className="flex items-start gap-3.5">
+                                    <div className="inline-flex min-h-10 min-w-[4.5rem] items-center justify-center whitespace-nowrap rounded-2xl bg-slate-900 px-2.5 text-sm font-black text-white shadow-[0_10px_20px_rgba(15,23,42,0.18)]">
                                         {hasTieForRank(entry.rank) ? `공동 ${entry.rank}` : entry.rank}
                                     </div>
                                     <div className="flex min-w-0 flex-1 items-start gap-3">
@@ -63,14 +63,14 @@ const WisHallOfFameLeaderboardList: React.FC<WisHallOfFameLeaderboardListProps> 
                                         </div>
                                         <div className="min-w-0 flex-1">
                                             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                                <span className="inline-flex items-center whitespace-nowrap rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600">
+                                                <span className="inline-flex items-center whitespace-nowrap rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-700">
                                                     {entry.grade}학년 {entry.class}반
                                                 </span>
-                                                <span className="min-w-0 truncate text-sm font-black text-slate-900">
+                                                <span className="min-w-0 truncate text-sm font-black leading-5 text-slate-900">
                                                     {entry.displayName || entry.studentName}
                                                 </span>
                                             </div>
-                                            <div className="mt-2 whitespace-nowrap text-sm font-bold text-sky-700">
+                                            <div className="mt-2 inline-flex min-h-8 items-center whitespace-nowrap rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-sm font-black leading-none text-sky-900 shadow-[0_8px_18px_rgba(14,116,144,0.12)]">
                                                 누적 {formatWisAmount(entry.cumulativeEarned)}
                                             </div>
                                         </div>

@@ -105,10 +105,10 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
     const slotEntries = resolveSlotEntries(safeEntries);
 
     const slotPositionClassName = deviceMode === 'desktop'
-        ? 'absolute left-[var(--slot-left)] top-[var(--slot-top)] w-[var(--slot-width)] -translate-x-1/2'
+        ? 'absolute left-[var(--slot-left)] top-[var(--slot-top)] z-10 w-[var(--slot-width)] -translate-x-1/2 px-1.5'
         : deviceMode === 'mobile'
-            ? 'absolute left-[var(--slot-left-mobile)] top-[var(--slot-top-mobile)] w-[var(--slot-width-mobile)] -translate-x-1/2'
-            : 'absolute left-[var(--slot-left-mobile)] top-[var(--slot-top-mobile)] w-[var(--slot-width-mobile)] -translate-x-1/2 md:left-[var(--slot-left)] md:top-[var(--slot-top)] md:w-[var(--slot-width)]';
+            ? 'absolute left-[var(--slot-left-mobile)] top-[var(--slot-top-mobile)] z-10 w-[var(--slot-width-mobile)] -translate-x-1/2 px-1'
+            : 'absolute left-[var(--slot-left-mobile)] top-[var(--slot-top-mobile)] z-10 w-[var(--slot-width-mobile)] -translate-x-1/2 px-1 md:left-[var(--slot-left)] md:top-[var(--slot-top)] md:w-[var(--slot-width)] md:px-1.5';
 
     return (
         <div className="overflow-hidden rounded-[1.85rem] border border-slate-200 bg-white shadow-[0_22px_54px_rgba(15,23,42,0.08)]">
@@ -150,9 +150,9 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                             style={buildSlotStyle(slotKey, normalizedPositions)}
                             className={slotPositionClassName}
                         >
-                            <div className="mx-auto flex max-w-full flex-col items-center gap-2 text-center">
+                            <div className="mx-auto flex max-w-full flex-col items-center gap-2.5 text-center">
                                 <div
-                                    className={`inline-flex min-h-9 items-center justify-center whitespace-nowrap rounded-full border px-3 py-1 text-xs font-black tracking-[0.08em] sm:text-sm ${tone.badgeClassName}`}
+                                    className={`inline-flex min-h-9 items-center justify-center whitespace-nowrap rounded-full border px-3 py-1 text-xs font-black tracking-[0.08em] shadow-[0_10px_20px_rgba(15,23,42,0.14)] sm:text-sm ${tone.badgeClassName}`}
                                 >
                                     {buildRankLabel(safeEntries, entry)}
                                 </div>
@@ -161,7 +161,7 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                                     {entry.profileIcon || '😀'}
                                 </div>
 
-                                <div className={`max-w-full rounded-[1.35rem] border px-3.5 py-2.5 backdrop-blur-xl ${tone.nameClassName}`}>
+                                <div className={`w-fit max-w-full min-w-0 rounded-[1.35rem] border px-3.5 py-2.5 backdrop-blur-xl ${tone.nameClassName}`}>
                                     <div className="whitespace-nowrap text-[10px] font-bold uppercase tracking-[0.12em] text-white/78">
                                         {entry.grade}학년 {entry.class}반
                                     </div>
@@ -171,7 +171,7 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                                 </div>
 
                                 <div
-                                    className={`inline-flex min-h-[2.15rem] max-w-full items-center justify-center rounded-full border px-4 py-1.5 text-[11px] font-black backdrop-blur whitespace-nowrap sm:text-sm ${tone.scoreClassName}`}
+                                    className={`inline-flex min-h-[2.25rem] min-w-[6.15rem] shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-4 py-1.5 text-[11px] font-black leading-none backdrop-blur shadow-[0_12px_26px_rgba(15,23,42,0.16)] sm:min-h-[2.4rem] sm:min-w-[6.85rem] sm:px-5 sm:text-sm ${tone.scoreClassName}`}
                                 >
                                     누적 {formatWisAmount(entry.cumulativeEarned)}
                                 </div>
