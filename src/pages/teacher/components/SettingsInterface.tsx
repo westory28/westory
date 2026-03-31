@@ -1,13 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { useAppToast } from '../../../components/common/AppToastProvider';
-import { db, storage } from '../../../lib/firebase';
+import { db } from '../../../lib/firebase';
 import { cloneDefaultMenus, sanitizeMenuConfig, type MenuConfig, type PortalType } from '../../../constants/menus';
 import { useAuth } from '../../../contexts/AuthContext';
 import { notifyMenuConfigUpdated } from '../../../lib/appEvents';
 import {
-    DEFAULT_WIS_HALL_OF_FAME_PODIUM_IMAGE_URL,
     DEFAULT_WIS_HALL_OF_FAME_PODIUM_POSITIONS,
     DEFAULT_WIS_HALL_OF_FAME_POSITION_PRESET,
     resolveHallOfFameInterfaceConfig,
@@ -60,44 +58,6 @@ const moveInArray = <T,>(items: T[], from: number, to: number): T[] => {
     return next;
 };
 
-const loadImageElement = (file: File) => new Promise<HTMLImageElement>((resolve, reject) => {
-    const objectUrl = URL.createObjectURL(file);
-    const image = new Image();
-    image.onload = () => {
-        URL.revokeObjectURL(objectUrl);
-        resolve(image);
-    };
-    image.onerror = () => {
-        URL.revokeObjectURL(objectUrl);
-        reject(new Error('시상대 이미지를 읽지 못했습니다.'));
-    };
-    image.src = objectUrl;
-});
-
-const canvasToBlob = (canvas: HTMLCanvasElement, quality: number) => new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((blob) => {
-        if (!blob) {
-            reject(new Error('시상대 이미지를 압축하지 못했습니다.'));
-            return;
-        }
-        resolve(blob);
-    }, 'image/jpeg', quality);
-});
-
-const buildResizedImageBlob = async (file: File, maxSize: number, quality: number) => {
-    const image = await loadImageElement(file);
-    const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.round(image.width * scale));
-    canvas.height = Math.max(1, Math.round(image.height * scale));
-    const context = canvas.getContext('2d');
-    if (!context) {
-        throw new Error('시상대 이미지 캔버스를 준비하지 못했습니다.');
-    }
-    context.drawImage(image, 0, 0, canvas.width, canvas.height);
-    return canvasToBlob(canvas, quality);
-};
-
 const SettingsInterface: React.FC = () => {
     const { refreshInterfaceConfig } = useAuth();
     const { showToast } = useAppToast();
@@ -108,17 +68,11 @@ const SettingsInterface: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [savingInterface, setSavingInterface] = useState(false);
     const [savingMenu, setSavingMenu] = useState(false);
-    const [hallOfFameImageFile, setHallOfFameImageFile] = useState<File | null>(null);
-    const [hallOfFamePreviewUrl, setHallOfFamePreviewUrl] = useState('');
     const [parentDraft, setParentDraft] = useState<Record<PortalType, { name: string; url: string }>>({
         student: { name: '', url: '' },
         teacher: { name: '', url: '' },
     });
     const [childDrafts, setChildDrafts] = useState<Record<string, { name: string; url: string }>>({});
-
-    const hallOfFameImageUrl = hallOfFamePreviewUrl
-        || config.hallOfFame.podiumImageUrl
-        || DEFAULT_WIS_HALL_OF_FAME_PODIUM_IMAGE_URL;
 
     const getSitemapHeaderClass = (index: number) =>
         SITEMAP_HEADER_COLORS[index % SITEMAP_HEADER_COLORS.length];
@@ -163,54 +117,11 @@ const SettingsInterface: React.FC = () => {
         void loadSettings();
     }, []);
 
-    useEffect(() => () => {
-        if (hallOfFamePreviewUrl.startsWith('blob:')) {
-            URL.revokeObjectURL(hallOfFamePreviewUrl);
-        }
-    }, [hallOfFamePreviewUrl]);
-
     const handleConfigChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value, type, checked } = e.target;
         setConfig((prev) => ({
             ...prev,
             [name]: type === 'checkbox' ? checked : value,
-        }));
-    };
-
-    const handleHallOfFameImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0] || null;
-        if (!file) return;
-
-        setHallOfFameImageFile(file);
-        setHallOfFamePreviewUrl((prev) => {
-            if (prev.startsWith('blob:')) {
-                URL.revokeObjectURL(prev);
-            }
-            return URL.createObjectURL(file);
-        });
-        event.target.value = '';
-    };
-
-    const resetHallOfFameImage = () => {
-        setHallOfFameImageFile(null);
-        setHallOfFamePreviewUrl((prev) => {
-            if (prev.startsWith('blob:')) {
-                URL.revokeObjectURL(prev);
-            }
-            return '';
-        });
-        setConfig((prev) => ({
-            ...prev,
-            hallOfFame: {
-                ...prev.hallOfFame,
-                podiumImageUrl: '',
-                podiumStoragePath: '',
-                positionPreset: DEFAULT_WIS_HALL_OF_FAME_POSITION_PRESET,
-                positions: {
-                    desktop: { ...DEFAULT_WIS_HALL_OF_FAME_PODIUM_POSITIONS.desktop },
-                    mobile: { ...DEFAULT_WIS_HALL_OF_FAME_PODIUM_POSITIONS.mobile },
-                },
-            },
         }));
     };
 
@@ -379,58 +290,20 @@ const SettingsInterface: React.FC = () => {
 
         setSavingInterface(true);
         try {
-            let hallOfFameImagePayload = {
-                podiumImageUrl: config.hallOfFame.podiumImageUrl.trim(),
-                podiumStoragePath: config.hallOfFame.podiumStoragePath.trim(),
-            };
-
-            if (hallOfFameImageFile) {
-                const resizedBlob = await buildResizedImageBlob(hallOfFameImageFile, 1600, 0.84);
-                const storagePath = `site-settings/interface/hall-of-fame/podium-${Date.now()}.jpg`;
-                const imageRef = ref(storage, storagePath);
-                await uploadBytes(imageRef, resizedBlob, {
-                    contentType: 'image/jpeg',
-                    cacheControl: 'public,max-age=86400',
-                });
-                hallOfFameImagePayload = {
-                    podiumImageUrl: await getDownloadURL(imageRef),
-                    podiumStoragePath: imageRef.fullPath,
-                };
-            }
-
             await setDoc(doc(db, 'site_settings', 'interface_config'), {
-                ...config,
                 mainEmoji: config.mainEmoji.trim() || DEFAULT_INTERFACE_CONFIG.mainEmoji,
                 mainSubtitle: config.mainSubtitle.trim() || DEFAULT_INTERFACE_CONFIG.mainSubtitle,
+                ddayEnabled: config.ddayEnabled,
                 ddayTitle: config.ddayTitle.trim(),
+                ddayDate: config.ddayDate,
                 footerText: config.footerText.trim(),
-                hallOfFame: {
-                    ...config.hallOfFame,
-                    ...hallOfFameImagePayload,
-                    positionPreset: config.hallOfFame.positionPreset || DEFAULT_WIS_HALL_OF_FAME_POSITION_PRESET,
-                    positions: config.hallOfFame.positions,
-                },
                 updatedAt: serverTimestamp(),
-            });
-            setConfig((prev) => ({
-                ...prev,
-                hallOfFame: {
-                    ...prev.hallOfFame,
-                    ...hallOfFameImagePayload,
-                },
-            }));
-            setHallOfFameImageFile(null);
-            setHallOfFamePreviewUrl((prev) => {
-                if (prev.startsWith('blob:')) {
-                    URL.revokeObjectURL(prev);
-                }
-                return '';
-            });
+            }, { merge: true });
             await refreshInterfaceConfig();
             showToast({
                 tone: 'success',
                 title: '인터페이스 설정이 저장되었습니다.',
-                message: '메인 화면과 화랑의 전당 배경에 최신 설정을 반영했습니다.',
+                message: '메인 화면과 일반 인터페이스 설정에 최신 내용을 반영했습니다.',
             });
         } catch (error: any) {
             console.error('Failed to save interface config:', error);
@@ -599,69 +472,17 @@ const SettingsInterface: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="bg-white rounded-xl border border-gray-200 p-6 lg:p-8 shadow-sm">
-                            <div className="border-b border-gray-100 pb-4 mb-6">
-                                <h3 className="text-lg font-bold text-gray-900">
-                                    <i className="fas fa-trophy text-amber-500 mr-2"></i>화랑의 전당 시상대
-                                </h3>
-                                <p className="text-sm text-gray-500 mt-1">학생 위스 화면의 시상대 배경 이미지를 설정합니다.</p>
-                            </div>
-
-                            <div className="space-y-5">
-                                <div className="overflow-hidden rounded-2xl border border-gray-200 bg-slate-50">
-                                    <div className="border-b border-gray-200 bg-white px-4 py-3">
-                                        <div className="flex flex-wrap items-center justify-between gap-2">
-                                            <div>
-                                                <div className="text-sm font-bold text-gray-800">현재 미리보기</div>
-                                                <p className="text-xs text-gray-500 mt-1">시상대 위에 학생 정보가 올라가는 배경입니다.</p>
-                                            </div>
-                                            <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-bold ${config.hallOfFame.podiumImageUrl || hallOfFameImageFile ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
-                                                {config.hallOfFame.podiumImageUrl || hallOfFameImageFile ? '업로드 이미지 사용' : '기본 이미지 사용'}
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <div className="p-4">
-                                        <div className="aspect-[16/10] overflow-hidden rounded-[1.4rem] border border-slate-200 bg-white shadow-sm">
-                                            <img
-                                                src={hallOfFameImageUrl}
-                                                alt="화랑의 전당 시상대 미리보기"
-                                                className="h-full w-full object-cover"
-                                            />
-                                        </div>
-                                    </div>
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                <div>
+                                    <div className="font-bold">화랑의 전당 설정 위치가 이동되었습니다.</div>
+                                    <p className="mt-1 text-amber-800/90">
+                                        시상대 배경, 공개 범위, 미리보기, 배치 편집은 이제 교사 대시보드의 위스 관리 안에서 바로 조정할 수 있습니다.
+                                    </p>
                                 </div>
-
-                                <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-4">
-                                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                                        <div>
-                                            <div className="text-sm font-bold text-gray-800">이미지 변경</div>
-                                            <p className="text-xs text-gray-500 mt-1">가로형 이미지를 권장합니다. 저장 전까지는 현재 화면에서만 미리보기가 바뀝니다.</p>
-                                        </div>
-                                        <div className="flex flex-wrap gap-2">
-                                            <label className="inline-flex cursor-pointer items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-700">
-                                                <i className="fas fa-upload mr-2"></i>이미지 업로드
-                                                <input
-                                                    type="file"
-                                                    accept="image/*"
-                                                    className="sr-only"
-                                                    onChange={handleHallOfFameImageChange}
-                                                />
-                                            </label>
-                                            <button
-                                                type="button"
-                                                onClick={resetHallOfFameImage}
-                                                className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-bold text-gray-700 transition hover:bg-gray-50"
-                                            >
-                                                <i className="fas fa-rotate-left mr-2"></i>기본 이미지로 되돌리기
-                                            </button>
-                                        </div>
-                                    </div>
-                                    {hallOfFameImageFile && (
-                                        <p className="mt-3 text-xs font-medium text-blue-700">
-                                            선택된 파일: {hallOfFameImageFile.name}
-                                        </p>
-                                    )}
-                                </div>
+                                <span className="inline-flex items-center rounded-full bg-white px-3 py-1 text-xs font-bold text-amber-800 shadow-sm">
+                                    위스 관리 &gt; 화랑의 전당 관리
+                                </span>
                             </div>
                         </div>
 

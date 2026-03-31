@@ -50,6 +50,7 @@ import PointRanksTab, {
 import PointProductsTab from './components/points/PointProductsTab';
 import PointRequestsTab from './components/points/PointRequestsTab';
 import PointsOverviewTab from './components/points/PointsOverviewTab';
+import HallOfFameManagementTab from './components/points/HallOfFameManagementTab';
 
 type TeacherPointTab = keyof typeof TEACHER_POINT_TAB_LABELS;
 type OrderFilter = 'all' | PointOrderStatus;
@@ -263,7 +264,7 @@ const buildResizedImageBlob = async (file: File, maxSize: number, quality: numbe
 };
 
 const ManagePoints: React.FC = () => {
-    const { config, currentUser, userData } = useAuth();
+    const { config, currentUser, userData, interfaceConfig, refreshInterfaceConfig } = useAuth();
     const [searchParams, setSearchParams] = useSearchParams();
 
     const canRead = canReadPoints(userData, currentUser?.email);
@@ -568,7 +569,7 @@ const ManagePoints: React.FC = () => {
 
     useEffect(() => {
         const requestedTab = searchParams.get('tab');
-        if (requestedTab === 'grant' || requestedTab === 'policy' || requestedTab === 'ranks' || requestedTab === 'products' || requestedTab === 'requests') {
+        if (requestedTab === 'grant' || requestedTab === 'policy' || requestedTab === 'ranks' || requestedTab === 'hall-of-fame' || requestedTab === 'products' || requestedTab === 'requests') {
             setActiveTab(requestedTab);
             return;
         }
@@ -1223,7 +1224,7 @@ const ManagePoints: React.FC = () => {
         );
     }
 
-    const usesSharedPanelFrame = activeTab !== 'ranks';
+    const usesSharedPanelFrame = activeTab !== 'ranks' && activeTab !== 'hall-of-fame';
 
     return (
         <div className="flex min-h-screen flex-col bg-gray-50">
@@ -1364,6 +1365,15 @@ const ManagePoints: React.FC = () => {
                             emojiSaveFeedbackTone={rankEmojiFeedbackTone}
                             onEmojiDraftChange={updateRankEmojiDraft}
                             onEmojiSave={handleSaveRankEmojiCollection}
+                        />
+                    )}
+
+                    {!loading && activeTab === 'hall-of-fame' && (
+                        <HallOfFameManagementTab
+                            config={config}
+                            interfaceConfig={interfaceConfig}
+                            canManage={canManage}
+                            onInterfaceConfigRefresh={refreshInterfaceConfig}
                         />
                     )}
 

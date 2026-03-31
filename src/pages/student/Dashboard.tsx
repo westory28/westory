@@ -55,7 +55,7 @@ const DashboardCalendarFallback: React.FC = () => (
 );
 
 const StudentDashboard: React.FC = () => {
-    const { user, userData, config } = useAuth();
+    const { user, userData, config, interfaceConfig } = useAuth();
     const navigate = useNavigate();
     const [events, setEvents] = useState<CalendarEvent[]>([]);
     const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -255,7 +255,7 @@ const StudentDashboard: React.FC = () => {
         const cancel = runWhenIdle(() => {
             void (async () => {
                 try {
-                    const recognition = await loadHallOfFameRecognition(config, userData);
+                    const recognition = await loadHallOfFameRecognition(config, userData, interfaceConfig?.hallOfFame);
                     if (!recognition || cancelled) return;
                     setHallOfFameRecognition(recognition);
                 } catch (error) {
@@ -270,7 +270,7 @@ const StudentDashboard: React.FC = () => {
             cancelled = true;
             cancel();
         };
-    }, [config, userData]);
+    }, [config, interfaceConfig?.hallOfFame, userData]);
 
     const handleDateClick = (dateStr: string) => {
         setSelectedDate(dateStr);

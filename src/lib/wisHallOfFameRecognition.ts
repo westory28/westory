@@ -1,8 +1,15 @@
-import type { SystemConfig, UserData, WisHallOfFameRecognition } from '../types';
+import type {
+    HallOfFameInterfaceConfig,
+    InterfaceConfig,
+    SystemConfig,
+    UserData,
+    WisHallOfFameRecognition,
+} from '../types';
 import {
     buildWisHallOfFameSeenStorageKey,
     findWisHallOfFameRecognition,
     getOrEnsureWisHallOfFameSnapshot,
+    isHallOfFameRecognitionEnabled,
 } from './wisHallOfFame';
 import { readLocalOnly, writeLocalOnly } from './safeStorage';
 
@@ -39,11 +46,15 @@ export const markHallOfFameRecognitionSeen = (seenKey: string) => {
 export const loadHallOfFameRecognition = async (
     config: ConfigLike,
     userData: Pick<UserData, 'uid' | 'grade' | 'class'> | null | undefined,
+    hallOfFameConfig?: HallOfFameInterfaceConfig | InterfaceConfig | null,
 ): Promise<HallOfFameRecognition | null> => {
     try {
         const snapshot = await getOrEnsureWisHallOfFameSnapshot(config);
         const recognition = findWisHallOfFameRecognition(snapshot, userData);
         if (!recognition) return null;
+        if (!isHallOfFameRecognitionEnabled(hallOfFameConfig, recognition.scope)) {
+            return null;
+        }
 
         const seenKey = buildWisHallOfFameSeenStorageKey(config, recognition);
         if (readLocalOnly(seenKey) === '1') {

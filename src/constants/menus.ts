@@ -101,6 +101,7 @@ export const MENUS: MenuConfig = {
                 { name: '위스 현황', url: '/teacher/points' },
                 { name: '지급 및 환수', url: '/teacher/points?tab=grant' },
                 { name: '운영 정책', url: '/teacher/points?tab=policy' },
+                { name: '화랑의 전당 관리', url: '/teacher/points?tab=hall-of-fame' },
                 { name: '상품 관리', url: '/teacher/points?tab=products' },
                 { name: '구매 요청 관리', url: '/teacher/points?tab=requests' },
             ],

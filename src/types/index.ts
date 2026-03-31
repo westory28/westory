@@ -30,6 +30,29 @@ export interface HallOfFamePodiumPositions {
   third: HallOfFamePodiumSlotPosition;
 }
 
+export interface HallOfFameLeaderboardPanelPosition {
+  leftPercent: number;
+  topPercent: number;
+  widthPercent: number;
+}
+
+export interface HallOfFameResponsiveLeaderboardPanelPosition {
+  desktop?: Partial<HallOfFameLeaderboardPanelPosition>;
+  mobile?: Partial<HallOfFameLeaderboardPanelPosition>;
+}
+
+export interface HallOfFamePublicRangeConfig {
+  gradeRankLimit?: number;
+  classRankLimit?: number;
+  includeTies?: boolean;
+}
+
+export interface HallOfFameRecognitionPopupConfig {
+  enabled?: boolean;
+  gradeEnabled?: boolean;
+  classEnabled?: boolean;
+}
+
 export interface HallOfFameInterfaceConfig {
   podiumImageUrl?: string;
   podiumStoragePath?: string;
@@ -38,6 +61,9 @@ export interface HallOfFameInterfaceConfig {
     desktop?: Partial<HallOfFamePodiumPositions>;
     mobile?: Partial<HallOfFamePodiumPositions>;
   };
+  leaderboardPanel?: HallOfFameResponsiveLeaderboardPanelPosition;
+  publicRange?: HallOfFamePublicRangeConfig;
+  recognitionPopup?: HallOfFameRecognitionPopupConfig;
 }
 
 export interface UserData {
@@ -347,7 +373,8 @@ export interface PointPolicy {
 
 export interface WisHallOfFameEntry {
   uid: string;
-  rank: 1 | 2 | 3;
+  rank: number;
+  podiumSlot?: 1 | 2 | 3;
   grade: string;
   class: string;
   classKey: string;
@@ -359,6 +386,23 @@ export interface WisHallOfFameEntry {
   profileEmojiId?: string;
 }
 
+export interface WisHallOfFameLeaderboardPolicy {
+  gradeRankLimit: number;
+  classRankLimit: number;
+  includeTies: boolean;
+  storedRankLimit?: number;
+}
+
+export interface WisHallOfFameLeaderboardMeta {
+  storedRankLimit: number;
+  visibleCount: number;
+  totalCandidates: number;
+  cutoffOrdinal: number;
+  cutoffRank: number;
+  cutoffCumulativeEarned: number;
+  includeTies: boolean;
+}
+
 export interface WisHallOfFameSnapshot {
   year?: string;
   semester?: string;
@@ -368,6 +412,11 @@ export interface WisHallOfFameSnapshot {
   primaryGradeKey?: string;
   gradeTop3ByGrade: Record<string, WisHallOfFameEntry[]>;
   classTop3ByClassKey: Record<string, WisHallOfFameEntry[]>;
+  gradeLeaderboardByGrade: Record<string, WisHallOfFameEntry[]>;
+  classLeaderboardByClassKey: Record<string, WisHallOfFameEntry[]>;
+  gradeLeaderboardMetaByGrade?: Record<string, WisHallOfFameLeaderboardMeta>;
+  classLeaderboardMetaByClassKey?: Record<string, WisHallOfFameLeaderboardMeta>;
+  leaderboardPolicy?: WisHallOfFameLeaderboardPolicy;
   updatedAt?: any;
   updatedAtMs?: number;
 }

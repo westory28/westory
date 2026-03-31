@@ -662,10 +662,14 @@ const getPointCollectionPath = (year, semester, collectionName) => `${getSemeste
 const getPointWalletPath = (year, semester, uid) => `${getPointCollectionPath(year, semester, 'point_wallets')}/${uid}`;
 const getPointPolicyPath = (year, semester) => `${getPointCollectionPath(year, semester, 'point_policies')}/current`;
 const WIS_HALL_OF_FAME_DOC_ID = 'hall_of_fame';
-const WIS_HALL_OF_FAME_SNAPSHOT_VERSION = 1;
+const WIS_HALL_OF_FAME_SNAPSHOT_VERSION = 2;
 const WIS_HALL_OF_FAME_STALE_MS = 10 * 60 * 1000;
 const WIS_HALL_OF_FAME_GRADE_KEY = '3';
 const DEFAULT_HALL_OF_FAME_PROFILE_ICON = '😀';
+const DEFAULT_HALL_OF_FAME_GRADE_RANK_LIMIT = 10;
+const DEFAULT_HALL_OF_FAME_CLASS_RANK_LIMIT = 10;
+const DEFAULT_HALL_OF_FAME_STORED_RANK_LIMIT = 20;
+const DEFAULT_HALL_OF_FAME_INCLUDE_TIES = true;
 const getWisHallOfFamePath = (year, semester) => `${getPointCollectionPath(year, semester, 'point_public')}/${WIS_HALL_OF_FAME_DOC_ID}`;
 
 const sanitizeKeyPart = (value) => String(value || '')
@@ -691,6 +695,129 @@ const buildWisHallOfFameClassKey = (grade, className) => {
   if (!normalizedGrade || !normalizedClass) return '';
   return `${normalizedGrade}-${normalizedClass}`;
 };
+
+const DEFAULT_HALL_OF_FAME_POSITION_PRESET = 'classic_podium_v1';
+const DEFAULT_HALL_OF_FAME_POSITIONS = {
+  desktop: {
+    first: { leftPercent: 50, topPercent: 25, widthPercent: 24 },
+    second: { leftPercent: 22, topPercent: 43, widthPercent: 22 },
+    third: { leftPercent: 78, topPercent: 43, widthPercent: 22 },
+  },
+  mobile: {
+    first: { leftPercent: 50, topPercent: 27, widthPercent: 31 },
+    second: { leftPercent: 22, topPercent: 50, widthPercent: 27 },
+    third: { leftPercent: 78, topPercent: 50, widthPercent: 27 },
+  },
+};
+const DEFAULT_HALL_OF_FAME_LEADERBOARD_PANEL = {
+  desktop: { leftPercent: 71, topPercent: 0, widthPercent: 29 },
+  mobile: { leftPercent: 50, topPercent: 0, widthPercent: 100 },
+};
+const DEFAULT_HALL_OF_FAME_RECOGNITION_POPUP = {
+  enabled: true,
+  gradeEnabled: true,
+  classEnabled: true,
+};
+
+const normalizeHallOfFameBoundedNumber = (value, minimum, maximum, fallback) => {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return fallback;
+  return Math.min(maximum, Math.max(minimum, numericValue));
+};
+
+const normalizeHallOfFamePodiumSlotPosition = (value, fallback) => ({
+  leftPercent: normalizeHallOfFameBoundedNumber(value?.leftPercent, 0, 100, fallback.leftPercent),
+  topPercent: normalizeHallOfFameBoundedNumber(value?.topPercent, 0, 100, fallback.topPercent),
+  widthPercent: normalizeHallOfFameBoundedNumber(value?.widthPercent, 8, 72, fallback.widthPercent),
+});
+
+const normalizeHallOfFamePodiumPositions = (value, fallback) => ({
+  first: normalizeHallOfFamePodiumSlotPosition(value?.first, fallback.first),
+  second: normalizeHallOfFamePodiumSlotPosition(value?.second, fallback.second),
+  third: normalizeHallOfFamePodiumSlotPosition(value?.third, fallback.third),
+});
+
+const normalizeHallOfFameLeaderboardPanelPosition = (value, fallback) => ({
+  leftPercent: normalizeHallOfFameBoundedNumber(value?.leftPercent, 0, 100, fallback.leftPercent),
+  topPercent: normalizeHallOfFameBoundedNumber(value?.topPercent, 0, 100, fallback.topPercent),
+  widthPercent: normalizeHallOfFameBoundedNumber(value?.widthPercent, 40, 100, fallback.widthPercent),
+});
+
+const normalizeHallOfFameRankLimit = (value, fallback) => {
+  const parsed = Math.round(Number(value));
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(DEFAULT_HALL_OF_FAME_STORED_RANK_LIMIT, Math.max(4, parsed));
+};
+
+const resolveHallOfFameLeaderboardPolicy = async () => {
+  try {
+    const interfaceSnapshot = await db.doc('site_settings/interface_config').get();
+    const data = interfaceSnapshot.exists ? (interfaceSnapshot.data() || {}) : {};
+    const publicRange = data?.hallOfFame?.publicRange || {};
+    return {
+      gradeRankLimit: normalizeHallOfFameRankLimit(
+        publicRange.gradeRankLimit,
+        DEFAULT_HALL_OF_FAME_GRADE_RANK_LIMIT,
+      ),
+      classRankLimit: normalizeHallOfFameRankLimit(
+        publicRange.classRankLimit,
+        DEFAULT_HALL_OF_FAME_CLASS_RANK_LIMIT,
+      ),
+      includeTies: publicRange.includeTies !== false,
+      storedRankLimit: DEFAULT_HALL_OF_FAME_STORED_RANK_LIMIT,
+    };
+  } catch (error) {
+    console.warn('Failed to read hall of fame public range config, using defaults:', error);
+    return {
+      gradeRankLimit: DEFAULT_HALL_OF_FAME_GRADE_RANK_LIMIT,
+      classRankLimit: DEFAULT_HALL_OF_FAME_CLASS_RANK_LIMIT,
+      includeTies: DEFAULT_HALL_OF_FAME_INCLUDE_TIES,
+      storedRankLimit: DEFAULT_HALL_OF_FAME_STORED_RANK_LIMIT,
+    };
+  }
+};
+
+const resolveHallOfFameInterfaceConfig = (value = {}) => ({
+  podiumImageUrl: normalizeHallOfFameText(value?.podiumImageUrl),
+  podiumStoragePath: normalizeHallOfFameText(value?.podiumStoragePath),
+  positionPreset: normalizeHallOfFameText(value?.positionPreset) || DEFAULT_HALL_OF_FAME_POSITION_PRESET,
+  positions: {
+    desktop: normalizeHallOfFamePodiumPositions(
+      value?.positions?.desktop,
+      DEFAULT_HALL_OF_FAME_POSITIONS.desktop,
+    ),
+    mobile: normalizeHallOfFamePodiumPositions(
+      value?.positions?.mobile,
+      DEFAULT_HALL_OF_FAME_POSITIONS.mobile,
+    ),
+  },
+  leaderboardPanel: {
+    desktop: normalizeHallOfFameLeaderboardPanelPosition(
+      value?.leaderboardPanel?.desktop,
+      DEFAULT_HALL_OF_FAME_LEADERBOARD_PANEL.desktop,
+    ),
+    mobile: normalizeHallOfFameLeaderboardPanelPosition(
+      value?.leaderboardPanel?.mobile,
+      DEFAULT_HALL_OF_FAME_LEADERBOARD_PANEL.mobile,
+    ),
+  },
+  publicRange: {
+    gradeRankLimit: normalizeHallOfFameRankLimit(
+      value?.publicRange?.gradeRankLimit,
+      DEFAULT_HALL_OF_FAME_GRADE_RANK_LIMIT,
+    ),
+    classRankLimit: normalizeHallOfFameRankLimit(
+      value?.publicRange?.classRankLimit,
+      DEFAULT_HALL_OF_FAME_CLASS_RANK_LIMIT,
+    ),
+    includeTies: value?.publicRange?.includeTies !== false,
+  },
+  recognitionPopup: {
+    enabled: value?.recognitionPopup?.enabled !== false,
+    gradeEnabled: value?.recognitionPopup?.gradeEnabled !== false,
+    classEnabled: value?.recognitionPopup?.classEnabled !== false,
+  },
+});
 
 const resolveWisHallOfFameCumulativeEarned = (wallet) => {
   const rankEarnedTotal = Number(wallet?.rankEarnedTotal);
@@ -748,13 +875,86 @@ const compareWisHallOfFameEntries = (left, right) => {
   return String(left.uid || '').localeCompare(String(right.uid || ''), 'en');
 };
 
-const buildRankedWisHallOfFameEntries = (entries) => [...entries]
-  .sort(compareWisHallOfFameEntries)
+const buildPodiumWisHallOfFameEntries = (entries) => buildRankedWisHallOfFameEntries(entries)
   .slice(0, 3)
   .map((entry, index) => ({
     ...entry,
-    rank: index + 1,
+    podiumSlot: index + 1,
   }));
+
+const buildRankedWisHallOfFameEntries = (entries) => {
+  const sortedEntries = [...entries].sort(compareWisHallOfFameEntries);
+  let lastMetric = null;
+  let lastRank = 0;
+
+  return sortedEntries.map((entry, index) => {
+    const currentMetric = Number(entry.cumulativeEarned || 0);
+    if (lastMetric === null || currentMetric !== lastMetric) {
+      lastRank = index + 1;
+      lastMetric = currentMetric;
+    }
+    return {
+      ...entry,
+      rank: lastRank,
+      podiumSlot: index < 3 ? index + 1 : undefined,
+    };
+  });
+};
+
+const buildLeaderboardWisHallOfFameEntries = (rankedEntries, rankLimit, includeTies) => {
+  const safeLimit = normalizeHallOfFameRankLimit(rankLimit, DEFAULT_HALL_OF_FAME_STORED_RANK_LIMIT);
+  if (safeLimit <= 0) {
+    return [];
+  }
+  const visibleEntries = rankedEntries.slice(0, safeLimit);
+  if (!includeTies || visibleEntries.length >= rankedEntries.length) {
+    return visibleEntries;
+  }
+
+  const cutoffEntry = visibleEntries[visibleEntries.length - 1];
+  if (!cutoffEntry) {
+    return visibleEntries;
+  }
+
+  const cutoffMetric = Number(cutoffEntry.cumulativeEarned || 0);
+  let endIndex = visibleEntries.length;
+  while (
+    endIndex < rankedEntries.length
+    && Number(rankedEntries[endIndex]?.cumulativeEarned || 0) === cutoffMetric
+  ) {
+    endIndex += 1;
+  }
+
+  return rankedEntries.slice(0, endIndex);
+};
+
+const buildHallOfFameLeaderboardMeta = (rankedEntries, visibleEntries, rankLimit, includeTies) => {
+  const safeLimit = normalizeHallOfFameRankLimit(rankLimit, DEFAULT_HALL_OF_FAME_STORED_RANK_LIMIT);
+  if (!visibleEntries.length) {
+    return {
+      storedRankLimit: safeLimit,
+      visibleCount: 0,
+      totalCandidates: Array.isArray(rankedEntries) ? rankedEntries.length : 0,
+      cutoffOrdinal: 0,
+      cutoffRank: 0,
+      cutoffCumulativeEarned: 0,
+      includeTies,
+    };
+  }
+
+  const cutoffOrdinal = Math.min(safeLimit, rankedEntries.length);
+  const cutoffEntry = rankedEntries[Math.max(0, cutoffOrdinal - 1)] || null;
+
+  return {
+    storedRankLimit: safeLimit,
+    visibleCount: visibleEntries.length,
+    totalCandidates: Array.isArray(rankedEntries) ? rankedEntries.length : visibleEntries.length,
+    cutoffOrdinal,
+    cutoffRank: Number(cutoffEntry?.rank || 0),
+    cutoffCumulativeEarned: Number(cutoffEntry?.cumulativeEarned || 0),
+    includeTies,
+  };
+};
 
 const buildWisHallOfFameSnapshotKey = (year, semester, snapshot) => {
   const digest = crypto
@@ -762,20 +962,22 @@ const buildWisHallOfFameSnapshotKey = (year, semester, snapshot) => {
     .update(JSON.stringify({
       gradeTop3ByGrade: snapshot.gradeTop3ByGrade,
       classTop3ByClassKey: snapshot.classTop3ByClassKey,
+      gradeLeaderboardByGrade: snapshot.gradeLeaderboardByGrade,
+      classLeaderboardByClassKey: snapshot.classLeaderboardByClassKey,
+      gradeLeaderboardMetaByGrade: snapshot.gradeLeaderboardMetaByGrade,
+      classLeaderboardMetaByClassKey: snapshot.classLeaderboardMetaByClassKey,
+      leaderboardPolicy: snapshot.leaderboardPolicy,
     }))
     .digest('hex')
     .slice(0, 16);
   return `${year}-${semester}-${digest}`;
 };
 
-const buildSortedHallOfFameMap = (buckets) => Object.keys(buckets)
+const getSortedHallOfFameBucketKeys = (buckets) => Object.keys(buckets)
   .sort((left, right) => String(left || '').localeCompare(String(right || ''), 'ko', { numeric: true }))
-  .reduce((accumulator, key) => {
-    accumulator[key] = buildRankedWisHallOfFameEntries(buckets[key] || []);
-    return accumulator;
-  }, {});
 
 const buildWisHallOfFamePayload = async (year, semester) => {
+  const leaderboardPolicy = await resolveHallOfFameLeaderboardPolicy();
   const walletSnapshot = await db.collection(getPointCollectionPath(year, semester, 'point_wallets')).get();
   const wallets = walletSnapshot.docs
     .map((docSnapshot) => ({ uid: docSnapshot.id, ...(docSnapshot.data() || {}) }))
@@ -800,8 +1002,46 @@ const buildWisHallOfFamePayload = async (year, semester) => {
     classBuckets[entry.classKey] = [...(classBuckets[entry.classKey] || []), entry];
   });
 
-  const gradeTop3ByGrade = buildSortedHallOfFameMap(gradeBuckets);
-  const classTop3ByClassKey = buildSortedHallOfFameMap(classBuckets);
+  const gradeTop3ByGrade = {};
+  const classTop3ByClassKey = {};
+  const gradeLeaderboardByGrade = {};
+  const classLeaderboardByClassKey = {};
+  const gradeLeaderboardMetaByGrade = {};
+  const classLeaderboardMetaByClassKey = {};
+
+  getSortedHallOfFameBucketKeys(gradeBuckets).forEach((key) => {
+    const rankedEntries = buildRankedWisHallOfFameEntries(gradeBuckets[key] || []);
+    const visibleEntries = buildLeaderboardWisHallOfFameEntries(
+      rankedEntries,
+      leaderboardPolicy.storedRankLimit,
+      true,
+    );
+    gradeTop3ByGrade[key] = buildPodiumWisHallOfFameEntries(rankedEntries);
+    gradeLeaderboardByGrade[key] = visibleEntries;
+    gradeLeaderboardMetaByGrade[key] = buildHallOfFameLeaderboardMeta(
+      rankedEntries,
+      visibleEntries,
+      leaderboardPolicy.storedRankLimit,
+      true,
+    );
+  });
+
+  getSortedHallOfFameBucketKeys(classBuckets).forEach((key) => {
+    const rankedEntries = buildRankedWisHallOfFameEntries(classBuckets[key] || []);
+    const visibleEntries = buildLeaderboardWisHallOfFameEntries(
+      rankedEntries,
+      leaderboardPolicy.storedRankLimit,
+      true,
+    );
+    classTop3ByClassKey[key] = buildPodiumWisHallOfFameEntries(rankedEntries);
+    classLeaderboardByClassKey[key] = visibleEntries;
+    classLeaderboardMetaByClassKey[key] = buildHallOfFameLeaderboardMeta(
+      rankedEntries,
+      visibleEntries,
+      leaderboardPolicy.storedRankLimit,
+      true,
+    );
+  });
   const updatedAtMs = Date.now();
 
   const snapshot = {
@@ -812,6 +1052,11 @@ const buildWisHallOfFamePayload = async (year, semester) => {
     primaryGradeKey: WIS_HALL_OF_FAME_GRADE_KEY,
     gradeTop3ByGrade,
     classTop3ByClassKey,
+    gradeLeaderboardByGrade,
+    classLeaderboardByClassKey,
+    gradeLeaderboardMetaByGrade,
+    classLeaderboardMetaByClassKey,
+    leaderboardPolicy,
   };
 
   return {
@@ -1347,11 +1592,16 @@ const sortPointTransactionDocsDesc = (docs) => [...docs].sort((a, b) => {
 exports.ensureWisHallOfFame = onCall({ region: REGION }, async (request) => {
   assertAllowedWestoryUser(request);
   const { year, semester } = assertYearSemester(request.data);
+  const forceRefresh = request.data?.force === true;
   const snapshotRef = db.doc(getWisHallOfFamePath(year, semester));
   const snapshot = await snapshotRef.get();
   const data = snapshot.exists ? (snapshot.data() || {}) : null;
 
-  if (!isWisHallOfFameSnapshotStale(data)) {
+  if (forceRefresh) {
+    await assertPointManager(request);
+  }
+
+  if (!forceRefresh && !isWisHallOfFameSnapshotStale(data)) {
     return {
       ensured: false,
       snapshotKey: String(data.snapshotKey || '').trim(),
@@ -1360,6 +1610,72 @@ exports.ensureWisHallOfFame = onCall({ region: REGION }, async (request) => {
   }
 
   return refreshWisHallOfFame(year, semester);
+});
+
+exports.saveWisHallOfFameConfig = onCall({ region: REGION }, async (request) => {
+  const { uid } = await assertPointManager(request);
+  const { year, semester } = assertYearSemester(request.data);
+  const hallOfFame = resolveHallOfFameInterfaceConfig(request.data?.hallOfFame || {});
+  const interfaceRef = db.doc('site_settings/interface_config');
+  const interfaceSnap = await interfaceRef.get();
+  const existing = interfaceSnap.exists ? (interfaceSnap.data() || {}) : {};
+  const existingHallOfFame = existing?.hallOfFame && typeof existing.hallOfFame === 'object'
+    ? existing.hallOfFame
+    : {};
+  const mergedHallOfFame = {
+    ...existingHallOfFame,
+    ...hallOfFame,
+    positions: {
+      ...(existingHallOfFame.positions || {}),
+      ...(hallOfFame.positions || {}),
+      desktop: {
+        ...(existingHallOfFame.positions?.desktop || {}),
+        ...(hallOfFame.positions?.desktop || {}),
+      },
+      mobile: {
+        ...(existingHallOfFame.positions?.mobile || {}),
+        ...(hallOfFame.positions?.mobile || {}),
+      },
+    },
+    leaderboardPanel: {
+      ...(existingHallOfFame.leaderboardPanel || {}),
+      ...(hallOfFame.leaderboardPanel || {}),
+      desktop: {
+        ...(existingHallOfFame.leaderboardPanel?.desktop || {}),
+        ...(hallOfFame.leaderboardPanel?.desktop || {}),
+      },
+      mobile: {
+        ...(existingHallOfFame.leaderboardPanel?.mobile || {}),
+        ...(hallOfFame.leaderboardPanel?.mobile || {}),
+      },
+    },
+    publicRange: {
+      ...(existingHallOfFame.publicRange || {}),
+      ...(hallOfFame.publicRange || {}),
+    },
+    recognitionPopup: {
+      ...(existingHallOfFame.recognitionPopup || {}),
+      ...(hallOfFame.recognitionPopup || {}),
+    },
+  };
+
+  await interfaceRef.set({
+    ...existing,
+    hallOfFame: mergedHallOfFame,
+    updatedAt: FieldValue.serverTimestamp(),
+    updatedBy: uid,
+  }, { merge: true });
+
+  try {
+    await refreshWisHallOfFame(year, semester);
+  } catch (error) {
+    console.error('Failed to refresh wis hall of fame snapshot after config save:', error);
+  }
+
+  return {
+    saved: true,
+    hallOfFame: mergedHallOfFame,
+  };
 });
 
 exports.applyPointActivityReward = onCall({ region: REGION }, async (request) => {

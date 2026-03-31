@@ -11,6 +11,7 @@ export const TEACHER_POINT_TAB_LABELS = {
   grant: "지급 및 환수",
   policy: "운영 정책",
   ranks: "등급 관리",
+  "hall-of-fame": "화랑의 전당 관리",
   products: "상품 관리",
   requests: "구매 요청 관리",
 } as const;
@@ -301,10 +302,8 @@ export const POINT_POLICY_FIELD_HELPERS: Record<
     "학생당 누적 최대 인정 횟수입니다. 24시간 제한과 함께 서버에서 강제됩니다.",
   mapTagEnabled:
     "지도 팝업 모달 안에서 태그를 눌렀을 때만 별도 위스를 적립합니다. 최근 지급 시점 기준 24시간마다 1회입니다.",
-  mapTagAmount:
-    "지도 팝업 모달 태그 클릭 1회에 적립할 위스입니다.",
-  mapTagMaxClaims:
-    "학생당 지도 태그 활동으로 인정할 최대 횟수입니다.",
+  mapTagAmount: "지도 팝업 모달 태그 클릭 1회에 적립할 위스입니다.",
+  mapTagMaxClaims: "학생당 지도 태그 활동으로 인정할 최대 횟수입니다.",
   historyClassroomEnabled:
     "역사교실 제출 완료 시 기본 위스를 적립합니다. 최근 지급 시점 기준 24시간마다 1회만 기본 지급됩니다.",
   historyClassroomAmount:
@@ -332,8 +331,10 @@ export const POINT_POLICY_FIELD_HELPERS: Record<
   quizBonusThreshold:
     "기본값은 100점이며, 기준 점수 이상부터 보너스를 지급합니다.",
   quizBonusAmount: "문제 풀이 기본 위스와 별도로 추가 지급할 위스입니다.",
-  manualAdjustEnabled: "끄면 교사의 직접 지급/환수 기능이 서버에서 차단됩니다.",
-  allowNegativeBalance: "켜면 보유 위스보다 많이 환수하는 운영도 허용합니다.",
+  manualAdjustEnabled:
+    "끄면 교사의 직접 지급/환수 기능이 서버에서 차단됩니다.",
+  allowNegativeBalance:
+    "켜면 보유 위스보다 많이 환수하는 운영도 허용합니다.",
 };
 
 export const POINT_HISTORY_FILTER_LABELS = {
