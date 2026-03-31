@@ -201,7 +201,7 @@ const getHallOfFameImageUploadFailureText = (error: any) => {
   if (isStorageUnauthorizedError(error)) {
     return {
       title: '시상대 이미지 업로드 권한이 없어 저장하지 못했습니다.',
-      message: 'teacher, point manager, admin 권한과 Storage 정책을 확인한 뒤 다시 시도해 주세요.',
+      message: '교사, point manager, admin 권한과 Storage 정책을 확인한 뒤 다시 시도해 주세요.',
     };
   }
 
@@ -471,14 +471,12 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
       label: '기능 설정',
       iconClassName: 'fas fa-sliders-h',
       badge: featureDirty ? '미저장' : '저장됨',
-      meta: featureDirty ? '변경 있음' : '저장 완료',
     },
     {
       id: 'student_view_settings',
       label: '학생 화면 설정',
       iconClassName: 'fas fa-images',
       badge: viewDirty ? '미저장' : '저장됨',
-      meta: viewDirty ? '변경 있음' : '저장 완료',
     },
   ];
 
