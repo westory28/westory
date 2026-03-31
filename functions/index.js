@@ -1210,6 +1210,22 @@ const assertPointManager = async (request) => {
   return { uid, email, profile };
 };
 
+const assertHallOfFameManager = async (request) => {
+  const { uid, email } = assertAllowedWestoryUser(request);
+  if (email === ADMIN_EMAIL) {
+    return { uid, email, profile: null };
+  }
+
+  const { profile } = await getUserProfile(uid);
+  if (profile?.role !== 'teacher' && !hasStaffPermission(profile, 'point_manage')) {
+    throw new HttpsError(
+      'permission-denied',
+      'teacher, admin, or point_manage permission is required.',
+    );
+  }
+  return { uid, email, profile };
+};
+
 const ensureStudentProfile = async (uid) => {
   const { ref, profile } = await getUserProfile(uid);
   return { ref, profile };
@@ -1609,7 +1625,7 @@ exports.ensureWisHallOfFame = onCall({ region: REGION }, async (request) => {
   const data = snapshot.exists ? (snapshot.data() || {}) : null;
 
   if (forceRefresh) {
-    await assertPointManager(request);
+    await assertHallOfFameManager(request);
   }
 
   if (!forceRefresh && !isWisHallOfFameSnapshotStale(data)) {
@@ -1624,7 +1640,7 @@ exports.ensureWisHallOfFame = onCall({ region: REGION }, async (request) => {
 });
 
 exports.saveWisHallOfFameConfig = onCall({ region: REGION }, async (request) => {
-  const { uid } = await assertPointManager(request);
+  const { uid } = await assertHallOfFameManager(request);
   const { year, semester } = assertYearSemester(request.data);
   const shouldRefreshSnapshot = request.data?.refreshSnapshot === true;
   const hallOfFamePatch = request.data?.hallOfFame && typeof request.data.hallOfFame === 'object'

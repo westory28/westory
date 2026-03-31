@@ -55,6 +55,8 @@ type ViewDraft = Pick<
 
 type LayoutDraft = Pick<ViewDraft, 'positions' | 'leaderboardPanel'>;
 
+const HALL_OF_FAME_PODIUM_STORAGE_DIR = 'site-settings/interface/hall-of-fame';
+
 const createDraft = (config?: HallOfFameInterfaceConfig | null) =>
   resolveHallOfFameInterfaceConfig(config);
 
@@ -191,6 +193,23 @@ const formatAdminDateTime = (ms: number) =>
     hour: 'numeric',
     minute: '2-digit',
   });
+
+const isStorageUnauthorizedError = (error: any) =>
+  String(error?.code || '').trim() === 'storage/unauthorized';
+
+const getHallOfFameImageUploadFailureText = (error: any) => {
+  if (isStorageUnauthorizedError(error)) {
+    return {
+      title: '시상대 이미지 업로드 권한이 없어 저장하지 못했습니다.',
+      message: 'teacher, point manager, admin 권한과 Storage 정책을 확인한 뒤 다시 시도해 주세요.',
+    };
+  }
+
+  return {
+    title: '시상대 이미지 업로드에 실패했습니다.',
+    message: error?.message || '잠시 후 다시 시도해 주세요.',
+  };
+};
 
 const buildStoredRangeSummary = (draft: FeatureDraft) =>
   `전교 ${draft.publicRange.gradeRankLimit}위 / 학급 ${draft.publicRange.classRankLimit}위`;
@@ -451,13 +470,66 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
       id: 'feature_settings',
       label: '기능 설정',
       iconClassName: 'fas fa-sliders-h',
+      badge: featureDirty ? '미저장' : '저장됨',
+      meta: featureDirty ? '변경 있음' : '저장 완료',
     },
     {
       id: 'student_view_settings',
       label: '학생 화면 설정',
       iconClassName: 'fas fa-images',
+      badge: viewDirty ? '미저장' : '저장됨',
+      meta: viewDirty ? '변경 있음' : '저장 완료',
     },
   ];
+
+  const clearImageSelection = () => {
+    setImageFile(null);
+    setImagePreviewUrl((previousValue) => {
+      if (previousValue.startsWith('blob:')) {
+        URL.revokeObjectURL(previousValue);
+      }
+      return '';
+    });
+  };
+
+  const applySavedStudentViewDraft = (
+    nextDraft: ReturnType<typeof createDraft>,
+    options?: { preserveImageSelection?: boolean },
+  ) => {
+    const nextViewDraft = pickViewDraft(nextDraft);
+    setSavedViewDraft(nextViewDraft);
+    setViewDraft(nextViewDraft);
+    if (!options?.preserveImageSelection) {
+      clearImageSelection();
+    }
+    return nextViewDraft;
+  };
+
+  const refreshSavedInterfaceConfig = async () => {
+    if (!onInterfaceConfigRefresh) return;
+
+    await onInterfaceConfigRefresh().catch((error) => {
+      console.warn(
+        'Failed to refresh interface config after hall of fame student view save:',
+        error,
+      );
+    });
+  };
+
+  const persistStudentViewSettings = async (
+    nextViewDraft: ViewDraft,
+    options?: { preserveImageSelection?: boolean },
+  ) => {
+    const result = await saveWisHallOfFameConfig(
+      config,
+      buildCombinedConfig(savedFeatureDraft, nextViewDraft),
+      { refreshSnapshot: false },
+    );
+    const nextDraft = createDraft(result.hallOfFame);
+    applySavedStudentViewDraft(nextDraft, options);
+    await refreshSavedInterfaceConfig();
+    return nextDraft;
+  };
 
   const refreshSnapshot = async () => {
     if (!config) return;
@@ -532,64 +604,78 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
 
     setViewSaving(true);
     try {
-      let imagePayload = {
+      const nextViewDraft: ViewDraft = {
+        ...viewDraft,
         podiumImageUrl: viewDraft.podiumImageUrl.trim(),
         podiumStoragePath: viewDraft.podiumStoragePath.trim(),
       };
 
       if (imageFile) {
-        const resizedBlob = await buildResizedImageBlob(imageFile, 1600, 0.84);
-        const imageRef = ref(
-          storage,
-          `site-settings/interface/hall-of-fame/podium-${Date.now()}.jpg`,
-        );
-
-        await uploadBytes(imageRef, resizedBlob, {
-          contentType: 'image/jpeg',
-          cacheControl: 'public,max-age=86400',
-        });
-
-        imagePayload = {
-          podiumImageUrl: await getDownloadURL(imageRef),
-          podiumStoragePath: imageRef.fullPath,
+        const layoutOnlyDraft: ViewDraft = {
+          ...nextViewDraft,
+          podiumImageUrl: savedViewDraft.podiumImageUrl,
+          podiumStoragePath: savedViewDraft.podiumStoragePath,
         };
-      }
+        const hasNonImageChanges =
+          serializeViewDraft(layoutOnlyDraft) !== serializeViewDraft(savedViewDraft);
 
-      const result = await saveWisHallOfFameConfig(
-        config,
-        buildCombinedConfig(savedFeatureDraft, {
-          ...viewDraft,
-          podiumImageUrl: imagePayload.podiumImageUrl,
-          podiumStoragePath: imagePayload.podiumStoragePath,
-        }),
-        { refreshSnapshot: false },
-      );
-      const nextDraft = createDraft(result.hallOfFame);
-      const nextViewDraft = pickViewDraft(nextDraft);
-
-      setSavedViewDraft(nextViewDraft);
-      setViewDraft(nextViewDraft);
-      setImageFile(null);
-      setImagePreviewUrl((previousValue) => {
-        if (previousValue.startsWith('blob:')) {
-          URL.revokeObjectURL(previousValue);
-        }
-        return '';
-      });
-
-      if (onInterfaceConfigRefresh) {
-        await onInterfaceConfigRefresh().catch((error) => {
-          console.warn(
-            'Failed to refresh interface config after hall of fame student view save:',
-            error,
+        try {
+          const resizedBlob = await buildResizedImageBlob(imageFile, 1600, 0.84);
+          const imageRef = ref(
+            storage,
+            `${HALL_OF_FAME_PODIUM_STORAGE_DIR}/podium-${Date.now()}.jpg`,
           );
-        });
+
+          await uploadBytes(imageRef, resizedBlob, {
+            contentType: 'image/jpeg',
+            cacheControl: 'public,max-age=86400',
+          });
+
+          nextViewDraft.podiumImageUrl = await getDownloadURL(imageRef);
+          nextViewDraft.podiumStoragePath = imageRef.fullPath;
+        } catch (imageError: any) {
+          const uploadFailure = getHallOfFameImageUploadFailureText(imageError);
+
+          if (hasNonImageChanges) {
+            try {
+              await persistStudentViewSettings(layoutOnlyDraft, {
+                preserveImageSelection: true,
+              });
+              showToast({
+                tone: 'warning',
+                title: uploadFailure.title,
+                message:
+                  '배치와 다른 학생 화면 설정은 저장했습니다. 이미지는 권한을 확인한 뒤 다시 업로드해 주세요.',
+              });
+              return;
+            } catch (saveError: any) {
+              showToast({
+                tone: 'error',
+                title: '시상대 이미지 업로드와 학생 화면 설정 저장이 모두 완료되지 않았습니다.',
+                message: saveError?.message
+                  || `${uploadFailure.message} 배치 저장도 다시 시도해 주세요.`,
+              });
+              return;
+            }
+          }
+
+          showToast({
+            tone: 'error',
+            title: uploadFailure.title,
+            message: uploadFailure.message,
+          });
+          return;
+        }
       }
+
+      await persistStudentViewSettings(nextViewDraft);
 
       showToast({
         tone: 'success',
         title: '학생 화면 설정이 저장되었습니다.',
-        message: '배경 이미지와 배치 편집 결과를 저장했습니다.',
+        message: imageFile
+          ? '시상대 이미지와 배치 편집 결과를 저장했습니다.'
+          : '배경 설정과 배치 편집 결과를 저장했습니다.',
       });
     } catch (error: any) {
       showToast({
@@ -1086,13 +1172,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    setImageFile(null);
-                    setImagePreviewUrl((previousValue) => {
-                      if (previousValue.startsWith('blob:')) {
-                        URL.revokeObjectURL(previousValue);
-                      }
-                      return '';
-                    });
+                    clearImageSelection();
                     setViewDraft((previousValue) => ({
                       ...previousValue,
                       podiumImageUrl: '',

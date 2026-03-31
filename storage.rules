@@ -63,7 +63,7 @@ service firebase.storage {
 
     match /site-settings/interface/hall-of-fame/{allPaths=**} {
       allow read: if isSignedIn();
-      allow write: if isAdmin() || hasStoragePermission('point_manage');
+      allow write: if isAdmin() || isTeacherRole() || hasStoragePermission('point_manage');
     }
 
     match /site-settings/interface/{allPaths=**} {
