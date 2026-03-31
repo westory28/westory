@@ -12,6 +12,14 @@ interface SiteSettingCacheEntry {
 
 const siteSettingCache = new Map<string, SiteSettingCacheEntry>();
 
+export const invalidateSiteSettingDocCache = (docId?: string) => {
+    if (!docId) {
+        siteSettingCache.clear();
+        return;
+    }
+    siteSettingCache.delete(docId);
+};
+
 export const readSiteSettingDoc = async <T>(docId: string): Promise<T | null> => {
     const now = Date.now();
     const cached = siteSettingCache.get(docId);

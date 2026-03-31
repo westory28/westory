@@ -5,7 +5,7 @@ import { auth, authPersistenceReady, db } from '../lib/firebase';
 import { SystemConfig, InterfaceConfig, UserData } from '../types';
 import { normalizeStaffPermissions } from '../lib/permissions';
 import { markLoginPerf, measureLoginPerf } from '../lib/loginPerf';
-import { readSiteSettingDoc } from '../lib/siteSettings';
+import { invalidateSiteSettingDocCache, readSiteSettingDoc } from '../lib/siteSettings';
 import { subscribeSystemConfigUpdated } from '../lib/appEvents';
 
 interface AuthContextType {
@@ -191,6 +191,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const refreshInterfaceConfig = async () => {
+        invalidateSiteSettingDocCache('interface_config');
         await loadPublicInterfaceConfig();
     };
 
