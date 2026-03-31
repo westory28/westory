@@ -9,7 +9,6 @@ export interface HallOfFameSettingsSidebarItem {
   label: string;
   iconClassName: string;
   badge?: string;
-  meta?: string;
 }
 
 interface HallOfFameSettingsSidebarProps {
@@ -76,16 +75,6 @@ const HallOfFameSettingsSidebar: React.FC<
                     </span>
                   )}
                 </div>
-                {item.meta && (
-                  <div
-                    className={[
-                      'mt-1.5 text-[11px] font-bold whitespace-nowrap break-keep',
-                      selected ? 'text-blue-600' : 'text-gray-400',
-                    ].join(' ')}
-                  >
-                    {item.meta}
-                  </div>
-                )}
               </div>
             </button>
           );
