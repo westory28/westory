@@ -2126,6 +2126,8 @@ exports.adjustTeacherPoints = onCall({ region: REGION }, async (request) => {
     transaction.set(walletRef, {
       ...buildWalletBase(targetUid, profile),
       balance: nextBalance,
+      // Keep cumulative earned aligned with the rank/hall-of-fame metric:
+      // positive manual grants increase it, manual reclaims do not decrease it.
       earnedTotal: nextRankEarnedTotal,
       ...buildWalletRankState(nextRankEarnedTotal, policy.rankPolicy),
       spentTotal: Number(wallet.spentTotal || 0),
@@ -2231,6 +2233,8 @@ exports.updateTeacherPointAdjustment = onCall({ region: REGION }, async (request
     transaction.set(walletRef, {
       ...buildWalletBase(targetUid, profile),
       balance: nextBalance,
+      // Edits and cancellations follow the same cumulative-earned rule so
+      // positive manual grants can be corrected without double counting.
       earnedTotal: nextRankEarnedTotal,
       ...buildWalletRankState(nextRankEarnedTotal, policy.rankPolicy),
       spentTotal: Number(wallet.spentTotal || 0),
