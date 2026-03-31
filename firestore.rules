@@ -463,6 +463,11 @@ service cloud.firestore {
 
     // 학년도/학기 범위 컬렉션 권한
     match /years/{year}/semesters/{semester} {
+      match /point_public/{docId} {
+        allow read: if canUseWestory() && docId == 'hall_of_fame';
+        allow create, update, delete: if false;
+      }
+
       match /point_wallets/{userId} {
         allow read: if canReadOwnPointResource(userId) || canReadPointData();
         allow create, update, delete: if false;

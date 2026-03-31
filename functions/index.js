@@ -661,12 +661,195 @@ const getSemesterRoot = (year, semester) => `years/${year}/semesters/${semester}
 const getPointCollectionPath = (year, semester, collectionName) => `${getSemesterRoot(year, semester)}/${collectionName}`;
 const getPointWalletPath = (year, semester, uid) => `${getPointCollectionPath(year, semester, 'point_wallets')}/${uid}`;
 const getPointPolicyPath = (year, semester) => `${getPointCollectionPath(year, semester, 'point_policies')}/current`;
+const WIS_HALL_OF_FAME_DOC_ID = 'hall_of_fame';
+const WIS_HALL_OF_FAME_SNAPSHOT_VERSION = 1;
+const WIS_HALL_OF_FAME_STALE_MS = 10 * 60 * 1000;
+const WIS_HALL_OF_FAME_GRADE_KEY = '3';
+const DEFAULT_HALL_OF_FAME_PROFILE_ICON = '😀';
+const getWisHallOfFamePath = (year, semester) => `${getPointCollectionPath(year, semester, 'point_public')}/${WIS_HALL_OF_FAME_DOC_ID}`;
 
 const sanitizeKeyPart = (value) => String(value || '')
   .trim()
   .replace(/[^a-zA-Z0-9_-]+/g, '_')
   .replace(/^_+|_+$/g, '')
   .slice(0, 120) || 'empty';
+
+const normalizeHallOfFameText = (value) => String(value || '').trim();
+
+const normalizeHallOfFameSchoolValue = (value) => {
+  const normalized = normalizeHallOfFameText(value);
+  if (!normalized) return '';
+  const digits = normalized.match(/\d+/)?.[0] || '';
+  if (!digits) return normalized;
+  const parsed = Number(digits);
+  return Number.isFinite(parsed) && parsed > 0 ? String(parsed) : normalized;
+};
+
+const buildWisHallOfFameClassKey = (grade, className) => {
+  const normalizedGrade = normalizeHallOfFameSchoolValue(grade);
+  const normalizedClass = normalizeHallOfFameSchoolValue(className);
+  if (!normalizedGrade || !normalizedClass) return '';
+  return `${normalizedGrade}-${normalizedClass}`;
+};
+
+const resolveWisHallOfFameCumulativeEarned = (wallet) => {
+  const rankEarnedTotal = Number(wallet?.rankEarnedTotal);
+  if (Number.isFinite(rankEarnedTotal)) {
+    return Math.max(0, rankEarnedTotal);
+  }
+  return Math.max(0, Number(wallet?.earnedTotal || 0));
+};
+
+const buildWisHallOfFameEntry = (wallet, profile = {}) => {
+  const uid = normalizeHallOfFameText(wallet?.uid);
+  const grade = normalizeHallOfFameSchoolValue(profile?.grade || wallet?.grade);
+  const className = normalizeHallOfFameSchoolValue(profile?.class || wallet?.class);
+  const displayName = normalizeHallOfFameText(
+    profile?.displayName || profile?.customName || profile?.name || wallet?.studentName,
+  );
+  const studentName = normalizeHallOfFameText(profile?.name || wallet?.studentName || displayName);
+  const classKey = buildWisHallOfFameClassKey(grade, className);
+  const emojiEntry = getProfileEmojiEntryById(
+    normalizeHallOfFameText(profile?.profileEmojiId || wallet?.profileEmojiId),
+    PROFILE_EMOJI_REGISTRY,
+  );
+  if (!uid || !grade || !className || !studentName || !displayName || !classKey) {
+    return null;
+  }
+
+  return {
+    uid,
+    rank: 1,
+    grade,
+    class: className,
+    classKey,
+    studentName,
+    displayName,
+    currentBalance: Math.max(0, Number(wallet?.balance || 0)),
+    cumulativeEarned: resolveWisHallOfFameCumulativeEarned(wallet),
+    profileIcon: normalizeHallOfFameText(profile?.profileIcon) || emojiEntry?.emoji || DEFAULT_HALL_OF_FAME_PROFILE_ICON,
+    profileEmojiId: normalizeHallOfFameText(profile?.profileEmojiId),
+  };
+};
+
+const compareWisHallOfFameEntries = (left, right) => {
+  const cumulativeGap = Number(right.cumulativeEarned || 0) - Number(left.cumulativeEarned || 0);
+  if (cumulativeGap !== 0) return cumulativeGap;
+
+  const balanceGap = Number(right.currentBalance || 0) - Number(left.currentBalance || 0);
+  if (balanceGap !== 0) return balanceGap;
+
+  const nameCompare = String(left.displayName || left.studentName || '').localeCompare(
+    String(right.displayName || right.studentName || ''),
+    'ko',
+  );
+  if (nameCompare !== 0) return nameCompare;
+
+  return String(left.uid || '').localeCompare(String(right.uid || ''), 'en');
+};
+
+const buildRankedWisHallOfFameEntries = (entries) => [...entries]
+  .sort(compareWisHallOfFameEntries)
+  .slice(0, 3)
+  .map((entry, index) => ({
+    ...entry,
+    rank: index + 1,
+  }));
+
+const buildWisHallOfFameSnapshotKey = (year, semester, snapshot) => {
+  const digest = crypto
+    .createHash('sha256')
+    .update(JSON.stringify({
+      gradeTop3ByGrade: snapshot.gradeTop3ByGrade,
+      classTop3ByClassKey: snapshot.classTop3ByClassKey,
+    }))
+    .digest('hex')
+    .slice(0, 16);
+  return `${year}-${semester}-${digest}`;
+};
+
+const buildWisHallOfFamePayload = async (year, semester) => {
+  const walletSnapshot = await db.collection(getPointCollectionPath(year, semester, 'point_wallets')).get();
+  const wallets = walletSnapshot.docs
+    .map((docSnapshot) => ({ uid: docSnapshot.id, ...(docSnapshot.data() || {}) }))
+    .filter((wallet) => normalizeHallOfFameText(wallet.uid));
+  const profileSnapshots = await Promise.all(
+    wallets.map((wallet) => db.doc(`users/${wallet.uid}`).get().catch(() => null)),
+  );
+
+  const gradeBuckets = {};
+  const classBuckets = {};
+
+  wallets.forEach((wallet, index) => {
+    const profileSnapshot = profileSnapshots[index];
+    const profile = profileSnapshot?.exists ? (profileSnapshot.data() || {}) : {};
+    if (normalizeHallOfFameText(profile?.role) && normalizeHallOfFameText(profile?.role) !== 'student') {
+      return;
+    }
+    const entry = buildWisHallOfFameEntry(wallet, profile);
+    if (!entry) return;
+
+    gradeBuckets[entry.grade] = [...(gradeBuckets[entry.grade] || []), entry];
+    classBuckets[entry.classKey] = [...(classBuckets[entry.classKey] || []), entry];
+  });
+
+  const gradeTop3ByGrade = Object.entries(gradeBuckets).reduce((accumulator, [grade, items]) => ({
+    ...accumulator,
+    [grade]: buildRankedWisHallOfFameEntries(items),
+  }), {});
+  const classTop3ByClassKey = Object.entries(classBuckets).reduce((accumulator, [classKey, items]) => ({
+    ...accumulator,
+    [classKey]: buildRankedWisHallOfFameEntries(items),
+  }), {});
+
+  const snapshot = {
+    snapshotVersion: WIS_HALL_OF_FAME_SNAPSHOT_VERSION,
+    rankingMetric: 'cumulativeEarned',
+    gradeTop3ByGrade,
+    classTop3ByClassKey,
+  };
+
+  return {
+    ...snapshot,
+    snapshotKey: buildWisHallOfFameSnapshotKey(year, semester, snapshot),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+};
+
+const refreshWisHallOfFame = async (year, semester) => {
+  const payload = await buildWisHallOfFamePayload(year, semester);
+  await db.doc(getWisHallOfFamePath(year, semester)).set(payload);
+  return {
+    ensured: true,
+    snapshotKey: payload.snapshotKey,
+    snapshotVersion: WIS_HALL_OF_FAME_SNAPSHOT_VERSION,
+  };
+};
+
+const isWisHallOfFameSnapshotStale = (data) => {
+  if (!data) return true;
+  if (Number(data.snapshotVersion || 0) !== WIS_HALL_OF_FAME_SNAPSHOT_VERSION) {
+    return true;
+  }
+  const updatedAtMs = typeof data.updatedAt?.toMillis === 'function'
+    ? data.updatedAt.toMillis()
+    : Number(data.updatedAt?.seconds || 0) * 1000;
+  if (!updatedAtMs) return true;
+  return Date.now() - updatedAtMs > WIS_HALL_OF_FAME_STALE_MS;
+};
+
+const tryRefreshWisHallOfFame = async (year, semester) => {
+  try {
+    return await refreshWisHallOfFame(year, semester);
+  } catch (error) {
+    console.error('Failed to refresh wis hall of fame snapshot:', error);
+    return {
+      ensured: false,
+      snapshotKey: '',
+      snapshotVersion: WIS_HALL_OF_FAME_SNAPSHOT_VERSION,
+    };
+  }
+};
 
 const buildActivityTransactionId = (uid, type, sourceId) =>
   `activity_${sanitizeKeyPart(uid)}_${type}_${sanitizeKeyPart(sourceId)}`;
@@ -1153,6 +1336,24 @@ const sortPointTransactionDocsDesc = (docs) => [...docs].sort((a, b) => {
   return Number(bCreatedAt?.nanoseconds || 0) - Number(aCreatedAt?.nanoseconds || 0);
 });
 
+exports.ensureWisHallOfFame = onCall({ region: REGION }, async (request) => {
+  assertAllowedWestoryUser(request);
+  const { year, semester } = assertYearSemester(request.data);
+  const snapshotRef = db.doc(getWisHallOfFamePath(year, semester));
+  const snapshot = await snapshotRef.get();
+  const data = snapshot.exists ? (snapshot.data() || {}) : null;
+
+  if (!isWisHallOfFameSnapshotStale(data)) {
+    return {
+      ensured: false,
+      snapshotKey: String(data.snapshotKey || '').trim(),
+      snapshotVersion: Number(data.snapshotVersion || WIS_HALL_OF_FAME_SNAPSHOT_VERSION),
+    };
+  }
+
+  return refreshWisHallOfFame(year, semester);
+});
+
 exports.applyPointActivityReward = onCall({ region: REGION }, async (request) => {
   const { uid } = assertAllowedWestoryUser(request);
   const { year, semester } = assertYearSemester(request.data);
@@ -1172,7 +1373,7 @@ exports.applyPointActivityReward = onCall({ region: REGION }, async (request) =>
   const requestedLabel = String(request.data?.sourceLabel || '').trim();
   const { profile } = await ensureStudentProfile(uid);
 
-  return db.runTransaction(async (transaction) => {
+  const result = await db.runTransaction(async (transaction) => {
     const { ref: walletRef, wallet } = await ensureWallet(transaction, year, semester, uid, profile);
     const policy = await loadPolicy(transaction, year, semester);
     const currentRankEarnedTotal = await getCurrentRankEarnedTotal(transaction, year, semester, uid, wallet);
@@ -1418,6 +1619,11 @@ exports.applyPointActivityReward = onCall({ region: REGION }, async (request) =>
           : 0,
     };
   });
+
+  if (result.awarded) {
+    await tryRefreshWisHallOfFame(year, semester);
+  }
+  return result;
 });
 
 exports.createPointPurchaseRequest = onCall({ region: REGION }, async (request) => {
@@ -1432,7 +1638,7 @@ exports.createPointPurchaseRequest = onCall({ region: REGION }, async (request) 
 
   const { profile } = await ensureStudentProfile(uid);
 
-  return db.runTransaction(async (transaction) => {
+  const result = await db.runTransaction(async (transaction) => {
     const { ref: walletRef, wallet } = await ensureWallet(transaction, year, semester, uid, profile);
     const policy = await loadPolicy(transaction, year, semester);
     const currentRankEarnedTotal = await getCurrentRankEarnedTotal(transaction, year, semester, uid, wallet);
@@ -1521,6 +1727,11 @@ exports.createPointPurchaseRequest = onCall({ region: REGION }, async (request) 
       balance: nextBalance,
     };
   });
+
+  if (result.created) {
+    await tryRefreshWisHallOfFame(year, semester);
+  }
+  return result;
 });
 
 exports.adjustTeacherPoints = onCall({ region: REGION }, async (request) => {
@@ -1556,7 +1767,7 @@ exports.adjustTeacherPoints = onCall({ region: REGION }, async (request) => {
 
   const { profile } = await ensureStudentProfile(targetUid);
 
-  return db.runTransaction(async (transaction) => {
+  const result = await db.runTransaction(async (transaction) => {
     const { ref: walletRef, wallet } = await ensureWallet(transaction, year, semester, targetUid, profile);
     const policy = await loadPolicy(transaction, year, semester);
     const currentRankEarnedTotal = await getCurrentRankEarnedTotal(transaction, year, semester, targetUid, wallet);
@@ -1600,6 +1811,9 @@ exports.adjustTeacherPoints = onCall({ region: REGION }, async (request) => {
       type: transactionType,
     };
   });
+
+  await tryRefreshWisHallOfFame(year, semester);
+  return result;
 });
 
 exports.updateTeacherPointAdjustment = onCall({ region: REGION }, async (request) => {
@@ -1619,7 +1833,7 @@ exports.updateTeacherPointAdjustment = onCall({ region: REGION }, async (request
     throw new HttpsError('invalid-argument', 'nextDelta must be a non-zero finite number.');
   }
 
-  return db.runTransaction(async (transaction) => {
+  const result = await db.runTransaction(async (transaction) => {
     const txRef = db.doc(`${getPointCollectionPath(year, semester, 'point_transactions')}/${transactionId}`);
     const txSnap = await transaction.get(txRef);
     if (!txSnap.exists) {
@@ -1700,6 +1914,9 @@ exports.updateTeacherPointAdjustment = onCall({ region: REGION }, async (request
       cancelled: action === 'cancel',
     };
   });
+
+  await tryRefreshWisHallOfFame(year, semester);
+  return result;
 });
 
 exports.reviewTeacherPointOrder = onCall({ region: REGION }, async (request) => {
@@ -1716,7 +1933,7 @@ exports.reviewTeacherPointOrder = onCall({ region: REGION }, async (request) => 
     throw new HttpsError('invalid-argument', 'Unsupported nextStatus.');
   }
 
-  return db.runTransaction(async (transaction) => {
+  const result = await db.runTransaction(async (transaction) => {
     const orderRef = db.doc(`${getPointCollectionPath(year, semester, 'point_orders')}/${orderId}`);
     const orderSnap = await transaction.get(orderRef);
     if (!orderSnap.exists) {
@@ -1820,6 +2037,11 @@ exports.reviewTeacherPointOrder = onCall({ region: REGION }, async (request) => 
       duplicate: false,
     };
   });
+
+  if (!result.duplicate) {
+    await tryRefreshWisHallOfFame(year, semester);
+  }
+  return result;
 });
 
 exports.updateStudentProfileIcon = onCall({ region: REGION }, async (request) => {
@@ -1831,7 +2053,7 @@ exports.updateStudentProfileIcon = onCall({ region: REGION }, async (request) =>
     throw new HttpsError('invalid-argument', 'A valid emojiId is required.');
   }
 
-  return db.runTransaction(async (transaction) => {
+  const result = await db.runTransaction(async (transaction) => {
     const { ref: userRef, profile } = await getUserProfile(uid);
     const { wallet } = await ensureWallet(transaction, year, semester, uid, profile);
     const policy = await loadPolicy(transaction, year, semester);
@@ -1861,4 +2083,7 @@ exports.updateStudentProfileIcon = onCall({ region: REGION }, async (request) =>
       tierCode: currentTierCode,
     };
   });
+
+  await tryRefreshWisHallOfFame(year, semester);
+  return result;
 });

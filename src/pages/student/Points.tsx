@@ -20,7 +20,16 @@ import {
 } from '../../lib/points';
 import { formatWisAmount } from '../../lib/pointFormatters';
 import { getPointRankDisplay, needsPointRankLegacyFallback } from '../../lib/pointRanks';
-import type { PointOrder, PointOrderStatus, PointProduct, PointTransaction, PointWallet } from '../../types';
+import { getOrEnsureWisHallOfFameSnapshot } from '../../lib/wisHallOfFame';
+import type {
+    PointOrder,
+    PointOrderStatus,
+    PointProduct,
+    PointTransaction,
+    PointWallet,
+    WisHallOfFameSnapshot,
+} from '../../types';
+import StudentPointHallOfFameTab from './components/points/StudentPointHallOfFameTab';
 import StudentPointHistoryTab from './components/points/StudentPointHistoryTab';
 import StudentPointOrdersTab from './components/points/StudentPointOrdersTab';
 import StudentPointShopTab from './components/points/StudentPointShopTab';
@@ -56,7 +65,7 @@ const getTransactionCategory = (transaction: PointTransaction) => {
 };
 
 const Points: React.FC = () => {
-    const { config, currentUser, userData } = useAuth();
+    const { config, currentUser, userData, interfaceConfig } = useAuth();
     const [searchParams, setSearchParams] = useSearchParams();
     const [activeTab, setActiveTab] = useState<StudentPointTab>('overview');
     const [wallet, setWallet] = useState<PointWallet | null>(null);
@@ -64,6 +73,7 @@ const Points: React.FC = () => {
     const [products, setProducts] = useState<PointProduct[]>([]);
     const [orders, setOrders] = useState<PointOrder[]>([]);
     const [policy, setPolicy] = useState(POINT_POLICY_FALLBACK);
+    const [hallOfFame, setHallOfFame] = useState<WisHallOfFameSnapshot | null>(null);
     const [rankManualAdjustPoints, setRankManualAdjustPoints] = useState(0);
     const [loading, setLoading] = useState(true);
     const [errorMessage, setErrorMessage] = useState('');
@@ -80,7 +90,7 @@ const Points: React.FC = () => {
 
     useEffect(() => {
         const requestedTab = searchParams.get('tab');
-        if (requestedTab === 'history' || requestedTab === 'shop' || requestedTab === 'orders') {
+        if (requestedTab === 'hall-of-fame' || requestedTab === 'history' || requestedTab === 'shop' || requestedTab === 'orders') {
             setActiveTab(requestedTab);
             return;
         }
@@ -93,12 +103,13 @@ const Points: React.FC = () => {
         setLoading(true);
         setErrorMessage('');
         try {
-            const [loadedWallet, loadedTransactions, loadedProducts, loadedOrders, loadedPolicy] = await Promise.all([
+            const [loadedWallet, loadedTransactions, loadedProducts, loadedOrders, loadedPolicy, loadedHallOfFame] = await Promise.all([
                 getPointWalletByUid(config, uid),
                 listPointTransactionsByUid(config, uid, 100),
                 listPointProducts(config, true),
                 listPointOrders(config, { uid, limitCount: 100 }),
                 getPointPolicy(config),
+                getOrEnsureWisHallOfFameSnapshot(config),
             ]);
             const loadedRankManualAdjustPoints = loadedWallet && needsPointRankLegacyFallback(loadedWallet)
                 ? await getPointRankManualAdjustEarnedPointsByUid(config, uid)
@@ -108,6 +119,7 @@ const Points: React.FC = () => {
             setProducts(loadedProducts);
             setOrders(loadedOrders);
             setPolicy(loadedPolicy);
+            setHallOfFame(loadedHallOfFame);
             setRankManualAdjustPoints(loadedRankManualAdjustPoints);
         } catch (error) {
             console.error('Failed to load student point data:', error);
@@ -231,9 +243,18 @@ const Points: React.FC = () => {
                                 <span className="text-xs text-gray-500">누적 획득 기준으로 유지되며, 구매나 환수로 내려가지 않습니다.</span>
                             </div>
                         </div>
-                        <div className="rounded-xl bg-blue-50 px-5 py-3 text-right">
-                            <div className="text-xs font-bold text-blue-500">현재 보유 위스</div>
-                            <div className="mt-1 whitespace-nowrap text-3xl font-black text-blue-700">{formatWisAmount(safeWallet.balance || 0)}</div>
+                        <div className="flex flex-col items-stretch gap-3 md:items-end">
+                            <div className="rounded-xl bg-blue-50 px-5 py-3 text-right">
+                                <div className="text-xs font-bold text-blue-500">현재 보유 위스</div>
+                                <div className="mt-1 whitespace-nowrap text-3xl font-black text-blue-700">{formatWisAmount(safeWallet.balance || 0)}</div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => handleTabChange('hall-of-fame')}
+                                className="inline-flex min-h-11 items-center justify-center rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-black text-amber-900 transition hover:border-amber-300 hover:bg-amber-100"
+                            >
+                                화랑의 전당 보기
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -275,6 +296,15 @@ const Points: React.FC = () => {
                             rank={rank}
                             recentTransactions={recentTransactions}
                             onOpenHistory={() => handleTabChange('history')}
+                        />
+                    )}
+
+                    {!loading && !errorMessage && activeTab === 'hall-of-fame' && (
+                        <StudentPointHallOfFameTab
+                            snapshot={hallOfFame}
+                            hallOfFameConfig={interfaceConfig?.hallOfFame}
+                            currentGrade={userData?.grade}
+                            currentClass={userData?.class}
                         />
                     )}
 

@@ -1099,3 +1099,22 @@ export const createSecurePurchaseRequest = async ({ config, productId, memo, req
         balance: number;
     };
 };
+
+export {
+    buildWisHallOfFameClassKey,
+    DEFAULT_WIS_HALL_OF_FAME_PODIUM_IMAGE_URL,
+    DEFAULT_WIS_HALL_OF_FAME_PODIUM_POSITIONS,
+    DEFAULT_WIS_HALL_OF_FAME_POSITION_PRESET,
+    ensureWisHallOfFameSnapshot,
+    findWisHallOfFameRecognition,
+    getOrEnsureWisHallOfFameSnapshot,
+    getWisHallOfFameClassEntries,
+    getWisHallOfFameDocPath,
+    getWisHallOfFameGradeEntries,
+    getWisHallOfFameSnapshot,
+    hasSeenWisHallOfFameRecognition,
+    markWisHallOfFameRecognitionSeen,
+    resolveHallOfFameInterfaceConfig,
+    WIS_HALL_OF_FAME_DOC_ID,
+    WIS_HALL_OF_FAME_GRADE_KEY,
+} from './wisHallOfFame';

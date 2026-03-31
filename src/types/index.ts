@@ -13,6 +13,31 @@ export interface InterfaceConfig {
   ddayTitle: string;
   ddayDate: string;
   footerText?: string;
+  hallOfFame?: HallOfFameInterfaceConfig;
+}
+
+export type HallOfFamePodiumSlotKey = "first" | "second" | "third";
+
+export interface HallOfFamePodiumSlotPosition {
+  leftPercent: number;
+  topPercent: number;
+  widthPercent: number;
+}
+
+export interface HallOfFamePodiumPositions {
+  first: HallOfFamePodiumSlotPosition;
+  second: HallOfFamePodiumSlotPosition;
+  third: HallOfFamePodiumSlotPosition;
+}
+
+export interface HallOfFameInterfaceConfig {
+  podiumImageUrl?: string;
+  podiumStoragePath?: string;
+  positionPreset?: string;
+  positions?: {
+    desktop?: Partial<HallOfFamePodiumPositions>;
+    mobile?: Partial<HallOfFamePodiumPositions>;
+  };
 }
 
 export interface UserData {
@@ -318,6 +343,37 @@ export interface PointPolicy {
   rankPolicy: PointRankPolicy;
   updatedAt?: any;
   updatedBy: string;
+}
+
+export interface WisHallOfFameEntry {
+  uid: string;
+  rank: 1 | 2 | 3;
+  grade: string;
+  class: string;
+  classKey: string;
+  studentName: string;
+  displayName: string;
+  currentBalance: number;
+  cumulativeEarned: number;
+  profileIcon: string;
+  profileEmojiId?: string;
+}
+
+export interface WisHallOfFameSnapshot {
+  snapshotVersion: number;
+  snapshotKey: string;
+  rankingMetric: "cumulativeEarned";
+  gradeTop3ByGrade: Record<string, WisHallOfFameEntry[]>;
+  classTop3ByClassKey: Record<string, WisHallOfFameEntry[]>;
+  updatedAt?: any;
+  updatedAtMs?: number;
+}
+
+export interface WisHallOfFameRecognition {
+  scope: "grade" | "class";
+  scopeKey: string;
+  entry: WisHallOfFameEntry;
+  snapshotKey: string;
 }
 
 export type SourceArchiveAssetType =

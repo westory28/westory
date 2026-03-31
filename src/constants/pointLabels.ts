@@ -160,6 +160,7 @@ export const POINT_RANK_FIELD_HELPERS = {
 
 export const STUDENT_POINT_TAB_LABELS = {
   overview: "내 위스",
+  "hall-of-fame": "화랑의 전당",
   history: "위스 내역",
   shop: "위스 상점",
   orders: "구매 내역",

@@ -61,6 +61,11 @@ service firebase.storage {
       allow write: if isAdmin();
     }
 
+    match /site-settings/interface/{allPaths=**} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
     match /source-archive/{assetId}/incoming/{fileName} {
       allow read: if false;
       allow write: if canWriteSourceArchive()

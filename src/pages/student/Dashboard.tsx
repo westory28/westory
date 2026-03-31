@@ -1,6 +1,7 @@
 import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import type FullCalendar from '@fullcalendar/react';
 import { collection, doc, onSnapshot, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../lib/firebase';
 import { runAfterNextPaint, runWhenIdle } from '../../lib/browserTasks';
@@ -12,6 +13,12 @@ import { readSiteSettingDoc } from '../../lib/siteSettings';
 import { getYearSemester } from '../../lib/semesterScope';
 import { CalendarEvent } from '../../types';
 import { useAppToast } from '../../components/common/AppToastProvider';
+import WisHallOfFameRecognitionModal from '../../components/common/WisHallOfFameRecognitionModal';
+import {
+    loadHallOfFameRecognition,
+    markHallOfFameRecognitionSeen,
+    type HallOfFameRecognition,
+} from '../../lib/wisHallOfFameRecognition';
 import EventDetailPanel from './components/EventDetailPanel';
 
 const CalendarSection = lazy(() => import('./components/CalendarSection'));
@@ -49,6 +56,7 @@ const DashboardCalendarFallback: React.FC = () => (
 
 const StudentDashboard: React.FC = () => {
     const { user, userData, config } = useAuth();
+    const navigate = useNavigate();
     const [events, setEvents] = useState<CalendarEvent[]>([]);
     const [selectedDate, setSelectedDate] = useState<string | null>(null);
     const [dailyEvents, setDailyEvents] = useState<CalendarEvent[]>([]);
@@ -61,6 +69,7 @@ const StudentDashboard: React.FC = () => {
     const [attendanceMessage, setAttendanceMessage] = useState('');
     const [attendanceDates, setAttendanceDates] = useState<string[]>([]);
     const [secondaryPanelsReady, setSecondaryPanelsReady] = useState(false);
+    const [hallOfFameRecognition, setHallOfFameRecognition] = useState<HallOfFameRecognition | null>(null);
     const { showToast } = useAppToast();
 
     const calendarRef = useRef<FullCalendar>(null);
@@ -236,6 +245,33 @@ const StudentDashboard: React.FC = () => {
         return () => unsubscribe();
     }, [attendanceScope, user]);
 
+    useEffect(() => {
+        if (!userData?.uid) {
+            setHallOfFameRecognition(null);
+            return;
+        }
+
+        let cancelled = false;
+        const cancel = runWhenIdle(() => {
+            void (async () => {
+                try {
+                    const recognition = await loadHallOfFameRecognition(config, userData);
+                    if (!recognition || cancelled) return;
+                    setHallOfFameRecognition(recognition);
+                } catch (error) {
+                    if (!cancelled) {
+                        console.error('Failed to load hall of fame recognition:', error);
+                    }
+                }
+            })();
+        }, 900);
+
+        return () => {
+            cancelled = true;
+            cancel();
+        };
+    }, [config, userData]);
+
     const handleDateClick = (dateStr: string) => {
         setSelectedDate(dateStr);
         const filtered = events.filter((event) => {
@@ -387,6 +423,23 @@ const StudentDashboard: React.FC = () => {
                     />
                 </Suspense>
             )}
+
+            <WisHallOfFameRecognitionModal
+                recognition={hallOfFameRecognition}
+                onClose={() => {
+                    if (hallOfFameRecognition) {
+                        markHallOfFameRecognitionSeen(hallOfFameRecognition.seenKey);
+                    }
+                    setHallOfFameRecognition(null);
+                }}
+                onOpenHallOfFame={() => {
+                    if (hallOfFameRecognition) {
+                        markHallOfFameRecognitionSeen(hallOfFameRecognition.seenKey);
+                    }
+                    setHallOfFameRecognition(null);
+                    navigate('/student/points?tab=hall-of-fame');
+                }}
+            />
         </div>
     );
 };
