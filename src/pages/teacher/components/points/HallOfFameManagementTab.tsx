@@ -335,8 +335,8 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
     Boolean(imageFile) ||
     serializeViewDraft(viewDraft) !== serializeViewDraft(savedViewDraft);
   const combinedDraft = useMemo(
-    () => buildCombinedConfig(featureDraft, viewDraft),
-    [featureDraft, viewDraft],
+    () => buildCombinedConfig(savedFeatureDraft, viewDraft),
+    [savedFeatureDraft, viewDraft],
   );
   const previewConfig = useMemo(
     () =>
@@ -468,12 +468,10 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
 
     setFeatureSaving(true);
     try {
+      const fullDraft = buildCombinedConfig(featureDraft, savedViewDraft);
       const result = await saveWisHallOfFameConfig(
         config,
-        {
-          publicRange: featureDraft.publicRange,
-          recognitionPopup: featureDraft.recognitionPopup,
-        },
+        fullDraft,
         { refreshSnapshot: false },
       );
       const nextDraft = createDraft(result.hallOfFame);
@@ -483,7 +481,12 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
       setFeatureDraft(nextFeatureDraft);
 
       if (onInterfaceConfigRefresh) {
-        await onInterfaceConfigRefresh();
+        await onInterfaceConfigRefresh().catch((error) => {
+          console.warn(
+            'Failed to refresh interface config after hall of fame feature save:',
+            error,
+          );
+        });
       }
 
       showToast({
@@ -532,13 +535,11 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
 
       const result = await saveWisHallOfFameConfig(
         config,
-        {
+        buildCombinedConfig(savedFeatureDraft, {
+          ...viewDraft,
           podiumImageUrl: imagePayload.podiumImageUrl,
           podiumStoragePath: imagePayload.podiumStoragePath,
-          positionPreset: viewDraft.positionPreset,
-          positions: viewDraft.positions,
-          leaderboardPanel: viewDraft.leaderboardPanel,
-        },
+        }),
         { refreshSnapshot: false },
       );
       const nextDraft = createDraft(result.hallOfFame);
@@ -555,7 +556,12 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
       });
 
       if (onInterfaceConfigRefresh) {
-        await onInterfaceConfigRefresh();
+        await onInterfaceConfigRefresh().catch((error) => {
+          console.warn(
+            'Failed to refresh interface config after hall of fame student view save:',
+            error,
+          );
+        });
       }
 
       showToast({
@@ -942,7 +948,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
             currentGrade={previewClass.grade}
             currentClass={previewClass.className}
             deviceMode={deviceMode}
-            showSnapshotAlert={false}
+            showSnapshotAlert={!snapshotError}
           />
         </div>
 
