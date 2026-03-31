@@ -471,12 +471,14 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
       label: '기능 설정',
       iconClassName: 'fas fa-sliders-h',
       badge: featureDirty ? '미저장' : '저장됨',
+      meta: featureDirty ? '변경 있음' : '저장 완료',
     },
     {
       id: 'student_view_settings',
       label: '학생 화면 설정',
       iconClassName: 'fas fa-images',
       badge: viewDirty ? '미저장' : '저장됨',
+      meta: viewDirty ? '변경 있음' : '저장 완료',
     },
   ];
 
