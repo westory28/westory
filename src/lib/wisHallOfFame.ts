@@ -25,7 +25,8 @@ type ConfigLike = Pick<SystemConfig, 'year' | 'semester'> | null | undefined;
 export const WIS_HALL_OF_FAME_GRADE_KEY = '3';
 export const WIS_HALL_OF_FAME_DOC_ID = 'hall_of_fame';
 export const WIS_HALL_OF_FAME_SNAPSHOT_VERSION = 2;
-export const WIS_HALL_OF_FAME_STALE_MS = 10 * 60 * 1000;
+export const WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS = 4;
+export const WIS_HALL_OF_FAME_STALE_MS = WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS * 60 * 60 * 1000;
 export const DEFAULT_WIS_HALL_OF_FAME_POSITION_PRESET = 'classic_podium_v1';
 export const DEFAULT_WIS_HALL_OF_FAME_PODIUM_IMAGE_URL = defaultPodiumImage;
 export const DEFAULT_WIS_HALL_OF_FAME_PUBLIC_RANK_LIMIT = 10;
@@ -335,6 +336,7 @@ export const ensureWisHallOfFame = ensureWisHallOfFameSnapshot;
 export const saveWisHallOfFameConfig = async (
   config: ConfigLike,
   hallOfFame: HallOfFameInterfaceConfig,
+  options?: { refreshSnapshot?: boolean },
 ) => {
   const { year, semester } = getYearSemester(config);
   const callable = httpsCallable(functions, 'saveWisHallOfFameConfig');
@@ -342,6 +344,7 @@ export const saveWisHallOfFameConfig = async (
     year,
     semester,
     hallOfFame,
+    refreshSnapshot: options?.refreshSnapshot === true,
   });
   const payload = result.data as {
     saved?: boolean;

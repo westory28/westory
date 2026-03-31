@@ -663,7 +663,8 @@ const getPointWalletPath = (year, semester, uid) => `${getPointCollectionPath(ye
 const getPointPolicyPath = (year, semester) => `${getPointCollectionPath(year, semester, 'point_policies')}/current`;
 const WIS_HALL_OF_FAME_DOC_ID = 'hall_of_fame';
 const WIS_HALL_OF_FAME_SNAPSHOT_VERSION = 2;
-const WIS_HALL_OF_FAME_STALE_MS = 10 * 60 * 1000;
+const WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS = 4;
+const WIS_HALL_OF_FAME_STALE_MS = WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS * 60 * 60 * 1000;
 const WIS_HALL_OF_FAME_GRADE_KEY = '3';
 const DEFAULT_HALL_OF_FAME_PROFILE_ICON = '😀';
 const DEFAULT_HALL_OF_FAME_GRADE_RANK_LIMIT = 10;
@@ -1093,6 +1094,16 @@ const isWisHallOfFameSnapshotStale = (data) => {
 
 const tryRefreshWisHallOfFame = async (year, semester) => {
   try {
+    const snapshotRef = db.doc(getWisHallOfFamePath(year, semester));
+    const snapshot = await snapshotRef.get();
+    const data = snapshot.exists ? (snapshot.data() || {}) : null;
+    if (!isWisHallOfFameSnapshotStale(data)) {
+      return {
+        ensured: false,
+        snapshotKey: String(data?.snapshotKey || '').trim(),
+        snapshotVersion: Number(data?.snapshotVersion || WIS_HALL_OF_FAME_SNAPSHOT_VERSION),
+      };
+    }
     return await refreshWisHallOfFame(year, semester);
   } catch (error) {
     console.error('Failed to refresh wis hall of fame snapshot:', error);
@@ -1615,7 +1626,10 @@ exports.ensureWisHallOfFame = onCall({ region: REGION }, async (request) => {
 exports.saveWisHallOfFameConfig = onCall({ region: REGION }, async (request) => {
   const { uid } = await assertPointManager(request);
   const { year, semester } = assertYearSemester(request.data);
-  const hallOfFame = resolveHallOfFameInterfaceConfig(request.data?.hallOfFame || {});
+  const shouldRefreshSnapshot = request.data?.refreshSnapshot === true;
+  const hallOfFamePatch = request.data?.hallOfFame && typeof request.data.hallOfFame === 'object'
+    ? request.data.hallOfFame
+    : {};
   const interfaceRef = db.doc('site_settings/interface_config');
   const interfaceSnap = await interfaceRef.get();
   const existing = interfaceSnap.exists ? (interfaceSnap.data() || {}) : {};
@@ -1624,57 +1638,60 @@ exports.saveWisHallOfFameConfig = onCall({ region: REGION }, async (request) => 
     : {};
   const mergedHallOfFame = {
     ...existingHallOfFame,
-    ...hallOfFame,
+    ...hallOfFamePatch,
     positions: {
       ...(existingHallOfFame.positions || {}),
-      ...(hallOfFame.positions || {}),
+      ...(hallOfFamePatch.positions || {}),
       desktop: {
         ...(existingHallOfFame.positions?.desktop || {}),
-        ...(hallOfFame.positions?.desktop || {}),
+        ...(hallOfFamePatch.positions?.desktop || {}),
       },
       mobile: {
         ...(existingHallOfFame.positions?.mobile || {}),
-        ...(hallOfFame.positions?.mobile || {}),
+        ...(hallOfFamePatch.positions?.mobile || {}),
       },
     },
     leaderboardPanel: {
       ...(existingHallOfFame.leaderboardPanel || {}),
-      ...(hallOfFame.leaderboardPanel || {}),
+      ...(hallOfFamePatch.leaderboardPanel || {}),
       desktop: {
         ...(existingHallOfFame.leaderboardPanel?.desktop || {}),
-        ...(hallOfFame.leaderboardPanel?.desktop || {}),
+        ...(hallOfFamePatch.leaderboardPanel?.desktop || {}),
       },
       mobile: {
         ...(existingHallOfFame.leaderboardPanel?.mobile || {}),
-        ...(hallOfFame.leaderboardPanel?.mobile || {}),
+        ...(hallOfFamePatch.leaderboardPanel?.mobile || {}),
       },
     },
     publicRange: {
       ...(existingHallOfFame.publicRange || {}),
-      ...(hallOfFame.publicRange || {}),
+      ...(hallOfFamePatch.publicRange || {}),
     },
     recognitionPopup: {
       ...(existingHallOfFame.recognitionPopup || {}),
-      ...(hallOfFame.recognitionPopup || {}),
+      ...(hallOfFamePatch.recognitionPopup || {}),
     },
   };
+  const normalizedHallOfFame = resolveHallOfFameInterfaceConfig(mergedHallOfFame);
 
   await interfaceRef.set({
     ...existing,
-    hallOfFame: mergedHallOfFame,
+    hallOfFame: normalizedHallOfFame,
     updatedAt: FieldValue.serverTimestamp(),
     updatedBy: uid,
   }, { merge: true });
 
-  try {
-    await refreshWisHallOfFame(year, semester);
-  } catch (error) {
-    console.error('Failed to refresh wis hall of fame snapshot after config save:', error);
+  if (shouldRefreshSnapshot) {
+    try {
+      await refreshWisHallOfFame(year, semester);
+    } catch (error) {
+      console.error('Failed to refresh wis hall of fame snapshot after config save:', error);
+    }
   }
 
   return {
     saved: true,
-    hallOfFame: mergedHallOfFame,
+    hallOfFame: normalizedHallOfFame,
   };
 });
 
