@@ -71,12 +71,31 @@ const WisHallOfFameStudentPreview: React.FC<
   showSnapshotAlert = true,
 }) => {
   const resolvedConfig = resolveHallOfFameInterfaceConfig(hallOfFameConfig);
-  const previewGradeKey =
-    String(gradeKey || '').trim() ||
-    snapshot?.primaryGradeKey ||
-    WIS_HALL_OF_FAME_GRADE_KEY;
   const normalizedGrade = normalizeNumberText(currentGrade);
   const normalizedClass = normalizeNumberText(currentClass);
+  const availableGradeKeys = useMemo(
+    () =>
+      Array.from(
+        new Set([
+          ...Object.keys(snapshot?.gradeLeaderboardByGrade || {}),
+          ...Object.keys(snapshot?.gradeTop3ByGrade || {}),
+        ]),
+      ).sort((left, right) => left.localeCompare(right, 'ko-KR', { numeric: true })),
+    [snapshot],
+  );
+  const requestedGradeKey = String(gradeKey || '').trim();
+  const preferredGradeKey = normalizedGrade && availableGradeKeys.includes(normalizedGrade)
+    ? normalizedGrade
+    : '';
+  const previewGradeKey =
+    preferredGradeKey
+    || (requestedGradeKey && availableGradeKeys.includes(requestedGradeKey) ? requestedGradeKey : '')
+    || (snapshot?.primaryGradeKey && availableGradeKeys.includes(snapshot.primaryGradeKey)
+      ? snapshot.primaryGradeKey
+      : '')
+    || availableGradeKeys[0]
+    || normalizedGrade
+    || WIS_HALL_OF_FAME_GRADE_KEY;
   const classKey = buildWisHallOfFameClassKey(normalizedGrade, normalizedClass);
   const canOpenClassView = Boolean(classKey);
   const effectiveView =

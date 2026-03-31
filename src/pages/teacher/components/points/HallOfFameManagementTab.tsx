@@ -9,6 +9,7 @@ import WisHallOfFameStudentPreview, {
 import { useAppToast } from '../../../../components/common/AppToastProvider';
 import { storage } from '../../../../lib/firebase';
 import { formatPointDateShortTime } from '../../../../lib/pointFormatters';
+import { invalidateSiteSettingDocCache } from '../../../../lib/siteSettings';
 import {
   DEFAULT_WIS_HALL_OF_FAME_PODIUM_IMAGE_URL,
   WIS_HALL_OF_FAME_GRADE_KEY,
@@ -555,6 +556,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
   const refreshSavedInterfaceConfig = async () => {
     if (!onInterfaceConfigRefresh) return;
 
+    invalidateSiteSettingDocCache('interface_config');
     await onInterfaceConfigRefresh().catch((error) => {
       console.warn(
         'Failed to refresh interface config after hall of fame student view save:',
