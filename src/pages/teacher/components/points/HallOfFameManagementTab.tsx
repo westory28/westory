@@ -991,16 +991,26 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
                 </p>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2 text-xs font-bold xl:max-w-[24rem] xl:justify-end">
-                <span className="inline-flex items-center whitespace-nowrap rounded-full bg-slate-900 px-3 py-1 text-white">
-                  좌측 시상대
-                </span>
-                <span className="inline-flex items-center whitespace-nowrap rounded-full bg-sky-50 px-3 py-1 text-sky-700">
-                  우측 4위 이후 공개 랭킹
-                </span>
-                <span className="inline-flex items-center whitespace-nowrap rounded-full bg-slate-100 px-3 py-1 text-slate-600">
-                  전교/학급 전환
-                </span>
+              <div className="flex flex-col items-start gap-3 xl:items-end">
+                <button
+                  type="button"
+                  onClick={openLayoutEditor}
+                  disabled={!canManage}
+                  className="inline-flex min-h-11 min-w-[10rem] items-center justify-center whitespace-nowrap break-keep rounded-lg bg-slate-900 px-4 text-sm font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  배치 편집 열기
+                </button>
+                <div className="flex flex-wrap items-center gap-2 text-xs font-bold xl:max-w-[24rem] xl:justify-end">
+                  <span className="inline-flex items-center whitespace-nowrap rounded-full bg-slate-900 px-3 py-1 text-white">
+                    좌측 시상대
+                  </span>
+                  <span className="inline-flex items-center whitespace-nowrap rounded-full bg-sky-50 px-3 py-1 text-sky-700">
+                    우측 4위 이후 공개 랭킹
+                  </span>
+                  <span className="inline-flex items-center whitespace-nowrap rounded-full bg-slate-100 px-3 py-1 text-slate-600">
+                    전교/학급 전환
+                  </span>
+                </div>
               </div>
             </div>
           </div>
