@@ -33,12 +33,13 @@ const StudentPointHallOfFameTab: React.FC<StudentPointHallOfFameTabProps> = ({
     currentClass,
 }) => {
     const [activeView, setActiveView] = useState<HallView>('grade');
+    const primaryGradeKey = snapshot?.primaryGradeKey || PRIMARY_GRADE_KEY;
     const normalizedGrade = normalizeNumberText(currentGrade);
     const normalizedClass = normalizeNumberText(currentClass);
     const classKey = buildWisHallOfFameClassKey(normalizedGrade, normalizedClass);
     const canOpenClassView = Boolean(classKey);
 
-    const gradeEntries = snapshot?.gradeTop3ByGrade[PRIMARY_GRADE_KEY] || [];
+    const gradeEntries = snapshot?.gradeTop3ByGrade[primaryGradeKey] || [];
     const classEntries = classKey ? (snapshot?.classTop3ByClassKey[classKey] || []) : [];
     const activeEntries = activeView === 'grade' ? gradeEntries : classEntries;
     const classTitle = normalizedGrade && normalizedClass
@@ -52,8 +53,14 @@ const StudentPointHallOfFameTab: React.FC<StudentPointHallOfFameTabProps> = ({
 
     return (
         <div className="space-y-4">
+            {!snapshot && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm font-semibold text-amber-900">
+                    화랑의 전당을 준비 중이에요. 잠시 후 다시 표시됩니다.
+                </div>
+            )}
+
             <WisHallOfFamePodium
-                title={activeView === 'grade' ? '3학년 전교 랭킹' : classTitle}
+                title={activeView === 'grade' ? `${primaryGradeKey}학년 전교 랭킹` : classTitle}
                 subtitle="누적 획득 위스 기준으로 반영돼요."
                 entries={activeEntries}
                 hallOfFameConfig={hallOfFameConfig}
@@ -72,8 +79,8 @@ const StudentPointHallOfFameTab: React.FC<StudentPointHallOfFameTabProps> = ({
                     </button>
                 )}
                 emptyMessage={activeView === 'grade'
-                    ? '3학년 전교 랭킹을 집계 중이에요.'
-                    : '아직 우리 학급 랭킹이 없어요.'}
+                    ? (snapshot ? `${primaryGradeKey}학년 전교 랭킹을 집계 중이에요.` : '화랑의 전당을 준비 중이에요. 잠시 후 다시 표시됩니다.')
+                    : (snapshot ? '아직 우리 학급 랭킹이 없어요.' : '우리 학급 랭킹도 잠시 후 다시 표시됩니다.')}
             />
 
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-4 text-sm">

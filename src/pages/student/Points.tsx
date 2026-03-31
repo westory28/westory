@@ -97,30 +97,59 @@ const Points: React.FC = () => {
         setActiveTab('overview');
     }, [searchParams]);
 
+    const loadCorePointData = async () => {
+        const [loadedWallet, loadedTransactions, loadedProducts, loadedOrders, loadedPolicy] = await Promise.all([
+            getPointWalletByUid(config, uid),
+            listPointTransactionsByUid(config, uid, 100),
+            listPointProducts(config, true),
+            listPointOrders(config, { uid, limitCount: 100 }),
+            getPointPolicy(config),
+        ]);
+        const loadedRankManualAdjustPoints = loadedWallet && needsPointRankLegacyFallback(loadedWallet)
+            ? await getPointRankManualAdjustEarnedPointsByUid(config, uid)
+            : 0;
+
+        return {
+            loadedWallet,
+            loadedTransactions,
+            loadedProducts,
+            loadedOrders,
+            loadedPolicy,
+            loadedRankManualAdjustPoints,
+        };
+    };
+
+    const loadHallOfFameData = async () => {
+        try {
+            const snapshot = await getOrEnsureWisHallOfFameSnapshot(config);
+            setHallOfFame(snapshot);
+        } catch (error) {
+            console.warn('Failed to load wis hall of fame snapshot:', error);
+            setHallOfFame(null);
+        }
+    };
+
     const loadPointData = async () => {
         if (!uid) return;
 
         setLoading(true);
         setErrorMessage('');
         try {
-            const [loadedWallet, loadedTransactions, loadedProducts, loadedOrders, loadedPolicy, loadedHallOfFame] = await Promise.all([
-                getPointWalletByUid(config, uid),
-                listPointTransactionsByUid(config, uid, 100),
-                listPointProducts(config, true),
-                listPointOrders(config, { uid, limitCount: 100 }),
-                getPointPolicy(config),
-                getOrEnsureWisHallOfFameSnapshot(config),
-            ]);
-            const loadedRankManualAdjustPoints = loadedWallet && needsPointRankLegacyFallback(loadedWallet)
-                ? await getPointRankManualAdjustEarnedPointsByUid(config, uid)
-                : 0;
+            const {
+                loadedWallet,
+                loadedTransactions,
+                loadedProducts,
+                loadedOrders,
+                loadedPolicy,
+                loadedRankManualAdjustPoints,
+            } = await loadCorePointData();
             setWallet(loadedWallet);
             setTransactions(loadedTransactions);
             setProducts(loadedProducts);
             setOrders(loadedOrders);
             setPolicy(loadedPolicy);
-            setHallOfFame(loadedHallOfFame);
             setRankManualAdjustPoints(loadedRankManualAdjustPoints);
+            void loadHallOfFameData();
         } catch (error) {
             console.error('Failed to load student point data:', error);
             setErrorMessage('위스 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');

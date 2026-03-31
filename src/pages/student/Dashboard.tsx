@@ -260,7 +260,7 @@ const StudentDashboard: React.FC = () => {
                     setHallOfFameRecognition(recognition);
                 } catch (error) {
                     if (!cancelled) {
-                        console.error('Failed to load hall of fame recognition:', error);
+                        console.warn('Skipping hall of fame recognition modal:', error);
                     }
                 }
             })();

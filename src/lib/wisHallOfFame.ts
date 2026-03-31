@@ -201,6 +201,15 @@ export const ensureWisHallOfFameSnapshot = async (config: ConfigLike) => {
 export const getWisHallOfFame = getWisHallOfFameSnapshot;
 export const ensureWisHallOfFame = ensureWisHallOfFameSnapshot;
 
+const warnHallOfFameSnapshotFailure = (
+  stage: string,
+  config: ConfigLike,
+  error: unknown,
+) => {
+  const { year, semester } = getYearSemester(config);
+  console.warn(`Failed to ${stage} wis hall of fame snapshot (${year}/${semester}):`, error);
+};
+
 const getSnapshotUpdatedAtMs = (snapshot: WisHallOfFameSnapshot | null | undefined) => {
   if (!snapshot) return 0;
   if (Number.isFinite(Number(snapshot.updatedAtMs))) {
@@ -228,12 +237,31 @@ export const isWisHallOfFameSnapshotStale = (
 export const getOrEnsureWisHallOfFameSnapshot = async (
   config: ConfigLike,
 ): Promise<WisHallOfFameSnapshot | null> => {
-  const currentSnapshot = await getWisHallOfFameSnapshot(config);
+  let currentSnapshot: WisHallOfFameSnapshot | null = null;
+  try {
+    currentSnapshot = await getWisHallOfFameSnapshot(config);
+  } catch (error) {
+    warnHallOfFameSnapshotFailure('read', config, error);
+  }
+
   if (currentSnapshot && !isWisHallOfFameSnapshotStale(currentSnapshot)) {
     return currentSnapshot;
   }
-  await ensureWisHallOfFameSnapshot(config);
-  return getWisHallOfFameSnapshot(config);
+
+  try {
+    await ensureWisHallOfFameSnapshot(config);
+  } catch (error) {
+    warnHallOfFameSnapshotFailure('ensure', config, error);
+    return currentSnapshot;
+  }
+
+  try {
+    const refreshedSnapshot = await getWisHallOfFameSnapshot(config);
+    return refreshedSnapshot || currentSnapshot;
+  } catch (error) {
+    warnHallOfFameSnapshotFailure('reload', config, error);
+    return currentSnapshot;
+  }
 };
 
 export const resolveHallOfFameInterfaceConfig = (

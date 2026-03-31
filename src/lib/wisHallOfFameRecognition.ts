@@ -40,24 +40,29 @@ export const loadHallOfFameRecognition = async (
     config: ConfigLike,
     userData: Pick<UserData, 'uid' | 'grade' | 'class'> | null | undefined,
 ): Promise<HallOfFameRecognition | null> => {
-    const snapshot = await getOrEnsureWisHallOfFameSnapshot(config);
-    const recognition = findWisHallOfFameRecognition(snapshot, userData);
-    if (!recognition) return null;
+    try {
+        const snapshot = await getOrEnsureWisHallOfFameSnapshot(config);
+        const recognition = findWisHallOfFameRecognition(snapshot, userData);
+        if (!recognition) return null;
 
-    const seenKey = buildWisHallOfFameSeenStorageKey(config, recognition);
-    if (readLocalOnly(seenKey) === '1') {
+        const seenKey = buildWisHallOfFameSeenStorageKey(config, recognition);
+        if (readLocalOnly(seenKey) === '1') {
+            return null;
+        }
+
+        return {
+            seenKey,
+            rank: recognition.entry.rank,
+            grade: recognition.entry.grade,
+            className: recognition.entry.class,
+            studentName: recognition.entry.displayName || recognition.entry.studentName,
+            profileIcon: recognition.entry.profileIcon,
+            scope: recognition.scope,
+            headline: buildHeadline(recognition.scope),
+            message: buildMessage(recognition.scope),
+        };
+    } catch (error) {
+        console.warn('Failed to load hall of fame recognition:', error);
         return null;
     }
-
-    return {
-        seenKey,
-        rank: recognition.entry.rank,
-        grade: recognition.entry.grade,
-        className: recognition.entry.class,
-        studentName: recognition.entry.displayName || recognition.entry.studentName,
-        profileIcon: recognition.entry.profileIcon,
-        scope: recognition.scope,
-        headline: buildHeadline(recognition.scope),
-        message: buildMessage(recognition.scope),
-    };
 };
