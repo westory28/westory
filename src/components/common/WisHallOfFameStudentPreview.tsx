@@ -33,8 +33,6 @@ interface WisHallOfFameStudentPreviewProps {
   showSnapshotAlert?: boolean;
 }
 
-const DEFAULT_RAIL_CENTER = 71;
-
 const clamp = (value: number, minimum: number, maximum: number) =>
   Math.min(maximum, Math.max(minimum, value));
 
@@ -184,13 +182,6 @@ const WisHallOfFameStudentPreview: React.FC<
     0,
     4.5,
   )}rem`;
-  const desktopRailShift = `${clamp(
-    (Number(desktopRail.leftPercent || DEFAULT_RAIL_CENTER) -
-      DEFAULT_RAIL_CENTER) /
-      8,
-    -1.25,
-    1.25,
-  )}rem`;
   const mobileRailWidth = `${clamp(
     Number(mobileRail.widthPercent || 100),
     78,
@@ -223,28 +214,27 @@ const WisHallOfFameStudentPreview: React.FC<
   const previewStyle = {
     ["--hall-rail-width" as string]: `${desktopRailWidth}%`,
     ["--hall-rail-desktop-top" as string]: desktopRailTop,
-    ["--hall-rail-desktop-shift" as string]: desktopRailShift,
     ["--hall-rail-mobile-width" as string]: mobileRailWidth,
     ["--hall-rail-mobile-top" as string]: mobileRailTop,
   };
   const previewLayoutClassName =
     deviceMode === "desktop"
-      ? "flex flex-row items-start gap-6 overflow-hidden"
+      ? "grid items-start gap-6 overflow-hidden [grid-template-columns:minmax(0,1fr)_minmax(19rem,var(--hall-rail-width))]"
       : deviceMode === "mobile"
         ? "mx-auto flex max-w-[420px] flex-col gap-5 overflow-hidden"
-        : "flex flex-col gap-5 overflow-hidden lg:flex-row lg:items-start lg:gap-6";
+        : "flex flex-col gap-5 overflow-hidden lg:grid lg:items-start lg:gap-6 lg:[grid-template-columns:minmax(0,1fr)_minmax(19rem,var(--hall-rail-width))]";
   const podiumContainerClassName =
     deviceMode === "desktop"
-      ? "min-w-0 flex-1 overflow-hidden"
+      ? "min-w-0 overflow-hidden"
       : deviceMode === "mobile"
         ? "min-w-0 w-full overflow-hidden"
-        : "min-w-0 w-full overflow-hidden lg:flex-1";
+        : "min-w-0 w-full overflow-hidden";
   const railContainerClassName =
     deviceMode === "desktop"
-      ? "relative z-10 mt-[var(--hall-rail-desktop-top)] ml-[var(--hall-rail-desktop-shift)] min-w-[19rem] w-[max(var(--hall-rail-width),19rem)] max-w-full shrink-0"
+      ? "relative z-10 mt-[var(--hall-rail-desktop-top)] min-w-0 w-full self-start"
       : deviceMode === "mobile"
         ? `relative z-10 mt-[var(--hall-rail-mobile-top)] min-w-0 w-full max-w-[var(--hall-rail-mobile-width)] ${mobileRailAlignClassName}`
-        : `relative z-10 mt-[var(--hall-rail-mobile-top)] min-w-0 w-full sm:max-w-[var(--hall-rail-mobile-width)] lg:mt-[var(--hall-rail-desktop-top)] lg:ml-[var(--hall-rail-desktop-shift)] lg:min-w-[19rem] lg:w-[max(var(--hall-rail-width),19rem)] lg:max-w-full lg:shrink-0 ${mobileRailAlignClassName}`;
+        : `relative z-10 mt-[var(--hall-rail-mobile-top)] min-w-0 w-full sm:max-w-[var(--hall-rail-mobile-width)] lg:mt-[var(--hall-rail-desktop-top)] lg:max-w-full lg:self-start ${mobileRailAlignClassName}`;
   const podiumDeviceMode =
     deviceMode === "responsive" ? "responsive" : deviceMode;
 

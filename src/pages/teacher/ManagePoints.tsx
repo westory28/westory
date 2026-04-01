@@ -3,12 +3,14 @@ import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { storage } from '../../lib/firebase';
 import { useSearchParams } from 'react-router-dom';
 import { TEACHER_POINT_TAB_LABELS } from '../../constants/pointLabels';
+import { useAppToast } from '../../components/common/AppToastProvider';
 import { useAuth } from '../../contexts/AuthContext';
 import {
     adjustPoints,
     getPointSchoolOptions,
     getPointPolicy,
     getPointRankManualAdjustEarnedPointsMap,
+    listPointStudentTargets,
     listPointOrders,
     listPointProducts,
     listPointStudentTargetsByClass,
@@ -54,6 +56,7 @@ import PointsOverviewTab from './components/points/PointsOverviewTab';
 import HallOfFameManagementTab from './components/points/HallOfFameManagementTab';
 
 type TeacherPointTab = keyof typeof TEACHER_POINT_TAB_LABELS;
+type GrantMode = 'grant' | 'reclaim';
 type OrderFilter = 'all' | PointOrderStatus;
 type PolicyFeedbackTone = RankPanelSaveTone;
 type SchoolOption = { value: string; label: string };
@@ -90,6 +93,7 @@ const createEmptyProductForm = (): ProductFormState => ({
 });
 
 const normalizeValue = (value: unknown) => String(value || '').trim();
+const normalizeSearchValue = (value: unknown) => normalizeValue(value).toLowerCase();
 const OVERVIEW_PAGE_SIZE = 20;
 
 const sortPointProducts = (items: PointProduct[]) => [...items].sort((left, right) => {
@@ -267,6 +271,7 @@ const buildResizedImageBlob = async (file: File, maxSize: number, quality: numbe
 
 const ManagePoints: React.FC = () => {
     const { config, currentUser, userData, interfaceConfig, refreshInterfaceConfig } = useAuth();
+    const { showToast } = useAppToast();
     const [searchParams, setSearchParams] = useSearchParams();
 
     const canRead = canReadPoints(userData, currentUser?.email);
@@ -314,6 +319,7 @@ const ManagePoints: React.FC = () => {
     const [grantAmount, setGrantAmount] = useState('');
     const [grantReason, setGrantReason] = useState('');
     const [grantFeedback, setGrantFeedback] = useState('');
+    const [grantSubmittingMode, setGrantSubmittingMode] = useState<GrantMode | null>(null);
     const [grantGradeOptions, setGrantGradeOptions] = useState<SchoolOption[]>([
         { value: '1', label: '1학년' },
         { value: '2', label: '2학년' },
@@ -454,14 +460,17 @@ const ManagePoints: React.FC = () => {
         () => new Map(wallets.map((wallet) => [wallet.uid, wallet])),
         [wallets],
     );
+    const isGlobalGrantSearch = grantNameSearch.trim().length > 0;
 
     const grantNumberOptions = useMemo(
         () => Array.from(new Set(
             students
+                .filter((student) => grantGradeFilter === 'all' || normalizeValue(student.grade) === grantGradeFilter)
+                .filter((student) => grantClassFilter === 'all' || normalizeValue(student.class) === grantClassFilter)
                 .map((student) => normalizeValue(student.number))
                 .filter(Boolean),
         )).sort((a, b) => Number(a) - Number(b)),
-        [students],
+        [grantClassFilter, grantGradeFilter, students],
     );
 
     const filteredGrantStudents = useMemo(() => students
@@ -469,8 +478,8 @@ const ManagePoints: React.FC = () => {
             const matchesGrade = grantGradeFilter === 'all' || normalizeValue(student.grade) === grantGradeFilter;
             const matchesClass = grantClassFilter === 'all' || normalizeValue(student.class) === grantClassFilter;
             const matchesNumber = grantNumberFilter === 'all' || normalizeValue(student.number) === grantNumberFilter;
-            const keyword = grantNameSearch.trim();
-            const matchesName = !keyword || normalizeValue(student.studentName).includes(keyword);
+            const keyword = normalizeSearchValue(grantNameSearch);
+            const matchesName = !keyword || normalizeSearchValue(student.studentName).includes(keyword);
             return matchesGrade && matchesClass && matchesNumber && matchesName;
         })
         .map((student) => ({
@@ -668,7 +677,7 @@ const ManagePoints: React.FC = () => {
     }, [filteredGrantStudents, grantSelectedUid]);
 
     useEffect(() => {
-        if (grantGradeFilter === 'all' || grantClassFilter === 'all') {
+        if (!isGlobalGrantSearch && (grantGradeFilter === 'all' || grantClassFilter === 'all')) {
             setStudents([]);
             setGrantSelectedUid('');
             setGrantNumberFilter('all');
@@ -679,7 +688,9 @@ const ManagePoints: React.FC = () => {
         const loadGrantStudents = async () => {
             setGrantLoading(true);
             try {
-                const nextStudents = await listPointStudentTargetsByClass(grantGradeFilter, grantClassFilter);
+                const nextStudents = isGlobalGrantSearch
+                    ? await listPointStudentTargets()
+                    : await listPointStudentTargetsByClass(grantGradeFilter, grantClassFilter);
                 if (cancelled) return;
                 setStudents(nextStudents);
                 setGrantSelectedUid((prev) => (
@@ -696,7 +707,7 @@ const ManagePoints: React.FC = () => {
         return () => {
             cancelled = true;
         };
-    }, [grantClassFilter, grantGradeFilter]);
+    }, [grantClassFilter, grantGradeFilter, isGlobalGrantSearch]);
 
     useEffect(() => {
         setOrderMemo(selectedOrder?.memo || '');
@@ -810,9 +821,82 @@ const ManagePoints: React.FC = () => {
         }
     };
 
-    const handleSaveGrant = async (event: React.FormEvent, mode: 'grant' | 'reclaim' = 'grant') => {
+    const getGrantFailureMessage = (error: any, mode: GrantMode) => {
+        const errorCode = normalizeValue(error?.code).toLowerCase();
+        const rawMessage = normalizeValue(error?.message);
+        const normalizedMessage = rawMessage.toLowerCase();
+
+        if (
+            errorCode === 'functions/permission-denied'
+            || normalizedMessage.includes('permission is required')
+            || normalizedMessage.includes('cannot use westory point functions')
+        ) {
+            return '위스 관리 권한을 확인한 뒤 다시 시도해 주세요.';
+        }
+
+        if (
+            errorCode === 'functions/not-found'
+            || normalizedMessage.includes('user profile is missing')
+            || normalizedMessage.includes('target uid is required')
+        ) {
+            return '학생 정보를 다시 불러온 뒤 다시 시도해 주세요.';
+        }
+
+        if (
+            errorCode === 'functions/failed-precondition'
+            || errorCode === 'functions/invalid-argument'
+        ) {
+            if (normalizedMessage.includes('manual point adjustment is disabled')) {
+                return '현재 위스 정책에서 지급 및 환수가 잠겨 있습니다. 정책 설정을 확인해 주세요.';
+            }
+            if (normalizedMessage.includes('insufficient point balance')) {
+                return '환수할 위스가 부족합니다. 현재 보유 위스를 확인한 뒤 다시 시도해 주세요.';
+            }
+            if (normalizedMessage.includes('reason is required')) {
+                return mode === 'grant'
+                    ? '위스 지급 사유를 입력해 주세요.'
+                    : '위스 환수 사유를 입력해 주세요.';
+            }
+            if (
+                normalizedMessage.includes('point delta must be a non-zero finite number')
+                || normalizedMessage.includes('manual adjustment mode does not match the point delta')
+            ) {
+                return '위스 수량을 다시 확인한 뒤 다시 시도해 주세요.';
+            }
+        }
+
+        if (
+            errorCode === 'functions/unavailable'
+            || errorCode === 'functions/deadline-exceeded'
+        ) {
+            return '서버 응답이 지연되고 있습니다. 잠시 후 다시 시도해 주세요.';
+        }
+
+        if (
+            !rawMessage
+            || normalizedMessage === 'internal'
+            || errorCode === 'functions/internal'
+        ) {
+            return mode === 'grant'
+                ? '위스 지급 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.'
+                : '위스 환수 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.';
+        }
+
+        if (
+            rawMessage.startsWith('functions/')
+            || /^[a-z0-9 _.'-]+$/i.test(rawMessage)
+        ) {
+            return mode === 'grant'
+                ? '위스 지급 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.'
+                : '위스 환수 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.';
+        }
+
+        return rawMessage;
+    };
+
+    const handleSaveGrant = async (event: React.FormEvent, mode: GrantMode = 'grant') => {
         event.preventDefault();
-        if (!selectedGrantStudent || !canManage) return;
+        if (!selectedGrantStudent || !canManage || grantSubmittingMode) return;
 
         const numericAmount = Number(grantAmount);
         if (!numericAmount || numericAmount < 1) {
@@ -824,6 +908,9 @@ const ManagePoints: React.FC = () => {
             return;
         }
 
+        const actionLabel = mode === 'grant' ? '지급' : '환수';
+        setGrantSubmittingMode(mode);
+        setGrantFeedback('');
         try {
             await adjustPoints({
                 config,
@@ -836,7 +923,7 @@ const ManagePoints: React.FC = () => {
             });
             setGrantAmount('');
             setGrantReason('');
-            setGrantFeedback(mode === 'grant' ? '학생 위스를 지급했습니다.' : '학생 위스를 환수했습니다.');
+            setGrantFeedback(mode === 'grant' ? '지급되었습니다.' : '환수되었습니다.');
 
             const nextWallets = await listPointWallets(config);
             const nextRankManualAdjustEarnedPointsByUid = nextWallets.some((wallet) => needsPointRankLegacyFallback(wallet))
@@ -845,14 +932,29 @@ const ManagePoints: React.FC = () => {
             setWallets(nextWallets);
             setRankManualAdjustEarnedPointsByUid(nextRankManualAdjustEarnedPointsByUid);
 
-            const nextSelectedUid = selectedUid && nextWallets.some((wallet) => wallet.uid === selectedUid)
-                ? selectedUid
+            const nextSelectedUid = nextWallets.some((wallet) => wallet.uid === selectedGrantStudent.uid)
+                ? selectedGrantStudent.uid
+                : selectedUid && nextWallets.some((wallet) => wallet.uid === selectedUid)
+                    ? selectedUid
                 : nextWallets[0]?.uid || '';
             setSelectedUid(nextSelectedUid);
             await loadTransactionsForWallet(nextSelectedUid);
+            showToast({
+                tone: 'success',
+                title: `${actionLabel}되었습니다.`,
+                message: `${selectedGrantStudent.studentName} 학생의 위스 현황을 최신 상태로 반영했습니다.`,
+            });
         } catch (error: any) {
             console.error('Failed to adjust points:', error);
-            setGrantFeedback(error?.message || (mode === 'grant' ? '위스 지급에 실패했습니다.' : '위스 환수에 실패했습니다.'));
+            const failureMessage = getGrantFailureMessage(error, mode);
+            setGrantFeedback(failureMessage);
+            showToast({
+                tone: 'error',
+                title: `위스 ${actionLabel}에 실패했습니다.`,
+                message: failureMessage,
+            });
+        } finally {
+            setGrantSubmittingMode(null);
         }
     };
 
@@ -1322,6 +1424,7 @@ const ManagePoints: React.FC = () => {
                             amount={grantAmount}
                             reason={grantReason}
                             feedback={grantFeedback}
+                            submittingMode={grantSubmittingMode}
                             onGradeFilterChange={setGrantGradeFilter}
                             onClassFilterChange={setGrantClassFilter}
                             onNumberFilterChange={setGrantNumberFilter}

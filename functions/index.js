@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { onSchedule } = require('firebase-functions/v2/scheduler');
 
 initializeApp();
 Object.assign(exports, require('./sourceArchiveBeta'));
@@ -1302,6 +1303,16 @@ const assertYearSemester = (data) => {
   return { year, semester };
 };
 
+const getCurrentConfiguredYearSemester = async () => {
+  const configSnap = await db.doc('site_settings/config').get();
+  if (!configSnap.exists) return null;
+  const data = configSnap.data() || {};
+  const year = String(data.year || '').trim();
+  const semester = String(data.semester || '').trim();
+  if (!year || !semester) return null;
+  return { year, semester };
+};
+
 const getUserProfile = async (uid) => {
   const userRef = db.doc(`users/${uid}`);
   const userSnap = await userRef.get();
@@ -1854,6 +1865,29 @@ exports.saveWisHallOfFameConfig = onCall({ region: REGION }, async (request) => 
     hallOfFame: normalizedHallOfFame,
   };
 });
+
+exports.refreshWisHallOfFameOnSchedule = onSchedule(
+  {
+    region: REGION,
+    schedule: '0 */4 * * *',
+    timeZone: 'Asia/Seoul',
+  },
+  async () => {
+    const currentYearSemester = await getCurrentConfiguredYearSemester();
+    if (!currentYearSemester) {
+      console.warn('Skipped scheduled hall of fame refresh because site_settings/config is missing year/semester.');
+      return;
+    }
+
+    const { year, semester } = currentYearSemester;
+    const result = await refreshWisHallOfFame(year, semester);
+    console.log('Scheduled hall of fame refresh completed:', {
+      year,
+      semester,
+      ...result,
+    });
+  },
+);
 
 exports.applyPointActivityReward = onCall({ region: REGION }, async (request) => {
   const { uid } = assertAllowedWestoryUser(request);

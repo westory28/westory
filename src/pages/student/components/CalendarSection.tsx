@@ -167,6 +167,10 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
   const fcEvents = events.map((event) => {
     const meta = getScheduleCategoryMeta(event.eventType, categories);
     const isHoliday = event.eventType === "holiday";
+    const isMultiDayRange =
+      Boolean(event.start) &&
+      Boolean(event.end) &&
+      String(event.end) > String(event.start);
 
     return {
       id: event.id,
@@ -176,7 +180,10 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
       backgroundColor: isHoliday ? "#ef4444" : meta.color,
       borderColor: isHoliday ? "#ef4444" : meta.color,
       textColor: isHoliday ? "#ffffff" : undefined,
-      classNames: isHoliday ? ["holiday-text-event"] : [],
+      classNames: [
+        ...(isHoliday ? ["holiday-text-event"] : []),
+        ...(isMultiDayRange ? ["student-calendar-range-event"] : []),
+      ],
       extendedProps: { ...event },
     };
   });

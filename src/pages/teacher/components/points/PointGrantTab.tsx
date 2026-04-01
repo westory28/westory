@@ -31,6 +31,7 @@ interface PointGrantTabProps {
     amount: string;
     reason: string;
     feedback: string;
+    submittingMode?: GrantMode | null;
     onGradeFilterChange: (value: string) => void;
     onClassFilterChange: (value: string) => void;
     onNumberFilterChange: (value: string) => void;
@@ -61,6 +62,7 @@ const PointGrantTab: React.FC<PointGrantTabProps> = ({
     amount,
     reason,
     feedback,
+    submittingMode = null,
     onGradeFilterChange,
     onClassFilterChange,
     onNumberFilterChange,
@@ -71,6 +73,10 @@ const PointGrantTab: React.FC<PointGrantTabProps> = ({
     onSubmit,
 }) => {
     const [mode, setMode] = useState<GrantMode>('grant');
+    const isGlobalSearchActive = nameSearch.trim().length > 0;
+    const requiresClassSelection = !isGlobalSearchActive && (gradeFilter === 'all' || classFilter === 'all');
+    const isSubmitting = Boolean(submittingMode);
+    const isModeSubmitting = submittingMode === mode;
     const numericAmount = Number(amount || 0);
     const currentBalance = Number(selectedStudent?.wallet?.balance || 0);
     const projectedBalance = useMemo(() => {
@@ -88,39 +94,44 @@ const PointGrantTab: React.FC<PointGrantTabProps> = ({
                         <div>
                             <h2 className="text-lg font-bold text-gray-800">지급 및 환수 대상 선택</h2>
                             <p className="mt-1 text-sm text-gray-500">
-                                학년, 반, 번호, 이름으로 빠르게 찾은 뒤 오른쪽에서 위스를 지급하거나 환수할 수 있습니다.
+                                이름을 입력하면 전 학년, 전 학급에서 찾고 드롭다운으로 범위를 다시 좁힐 수 있습니다.
                             </p>
                         </div>
                         <div className="text-sm font-bold text-gray-500 whitespace-nowrap">{`검색 결과 ${students.length}명`}</div>
                     </div>
                     <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
-                        <select value={gradeFilter} onChange={(event) => onGradeFilterChange(event.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700">
+                        <select value={gradeFilter} onChange={(event) => onGradeFilterChange(event.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700" disabled={isSubmitting}>
                             <option value="all">전체 학년</option>
                             {gradeOptions.map((option) => <option key={option} value={option}>{`${option}학년`}</option>)}
                         </select>
-                        <select value={classFilter} onChange={(event) => onClassFilterChange(event.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700">
+                        <select value={classFilter} onChange={(event) => onClassFilterChange(event.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700" disabled={isSubmitting}>
                             <option value="all">전체 반</option>
                             {classOptions.map((option) => <option key={option} value={option}>{`${option}반`}</option>)}
                         </select>
-                        <select value={numberFilter} onChange={(event) => onNumberFilterChange(event.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700">
+                        <select value={numberFilter} onChange={(event) => onNumberFilterChange(event.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700" disabled={isSubmitting}>
                             <option value="all">전체 번호</option>
                             {numberOptions.map((option) => <option key={option} value={option}>{`${option}번`}</option>)}
                         </select>
-                        <input value={nameSearch} onChange={(event) => onNameSearchChange(event.target.value)} placeholder="이름 또는 일부 검색" className="rounded-lg border border-gray-300 px-4 py-2 text-sm" />
+                        <input value={nameSearch} onChange={(event) => onNameSearchChange(event.target.value)} placeholder="이름 또는 일부 검색" className="rounded-lg border border-gray-300 px-4 py-2 text-sm" disabled={isSubmitting} />
                     </div>
+                    {isGlobalSearchActive && (
+                        <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700">
+                            이름 검색 중에는 전 학년, 전 학급 학생 후보를 모두 확인합니다.
+                        </div>
+                    )}
                 </div>
 
                 <div className="hidden md:block">
                     <div className="grid grid-cols-[minmax(0,1.3fr)_140px_120px] gap-3 border-b border-gray-100 px-5 py-3 text-xs font-bold uppercase tracking-wide text-gray-500">
                         <div>학생</div>
-                        <div>소속</div>
+                        <div>소속 / 번호</div>
                         <div className="text-right">보유 위스</div>
                     </div>
                     <div className="divide-y divide-gray-100">
-                        {gradeFilter === 'all' || classFilter === 'all' ? (
-                            <div className="px-5 py-12 text-center text-sm text-gray-400">학년과 반을 먼저 선택해 주세요.</div>
+                        {requiresClassSelection ? (
+                            <div className="px-5 py-12 text-center text-sm text-gray-400">학년과 반을 먼저 선택하거나 이름으로 전역 검색해 주세요.</div>
                         ) : loading ? (
-                            <div className="px-5 py-12 text-center text-sm text-gray-400">선택한 학급 학생을 불러오는 중입니다.</div>
+                            <div className="px-5 py-12 text-center text-sm text-gray-400">{isGlobalSearchActive ? '전체 학생 후보를 불러오는 중입니다.' : '선택한 학급 학생을 불러오는 중입니다.'}</div>
                         ) : students.length === 0 ? (
                             <div className="px-5 py-12 text-center text-sm text-gray-400">선택한 조건에 맞는 학생이 없습니다.</div>
                         ) : null}
@@ -136,7 +147,8 @@ const PointGrantTab: React.FC<PointGrantTabProps> = ({
                                     key={student.uid}
                                     type="button"
                                     onClick={() => onSelectStudent(student.uid)}
-                                    className={`grid w-full grid-cols-[minmax(0,1.3fr)_140px_120px] gap-3 px-5 py-4 text-left transition ${student.uid === selectedUid ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
+                                    disabled={isSubmitting}
+                                    className={`grid w-full grid-cols-[minmax(0,1.3fr)_140px_120px] gap-3 px-5 py-4 text-left transition disabled:cursor-not-allowed disabled:bg-gray-50 ${student.uid === selectedUid ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
                                 >
                                     <div className="min-w-0">
                                         <div className="flex items-center gap-2">
@@ -149,6 +161,7 @@ const PointGrantTab: React.FC<PointGrantTabProps> = ({
                                         {[
                                             student.grade ? `${student.grade}학년` : '',
                                             student.class ? `${student.class}반` : '',
+                                            student.number ? `${student.number}번` : '',
                                         ].filter(Boolean).join(' ') || '-'}
                                     </div>
                                     <div className="text-right text-lg font-black text-blue-700 whitespace-nowrap">
@@ -198,11 +211,12 @@ const PointGrantTab: React.FC<PointGrantTabProps> = ({
                                             key={item.key}
                                             type="button"
                                             onClick={() => setMode(item.key)}
+                                            disabled={isSubmitting}
                                             className={`rounded-full px-4 py-2 text-sm font-bold whitespace-nowrap transition ${
                                                 mode === item.key
                                                     ? item.tone
                                                     : 'text-gray-600 hover:bg-gray-100'
-                                            }`}
+                                            } disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400`}
                                         >
                                             {item.label}
                                         </button>
@@ -260,7 +274,7 @@ const PointGrantTab: React.FC<PointGrantTabProps> = ({
                                             onChange={(event) => onAmountChange(event.target.value)}
                                             placeholder={mode === 'grant' ? '지급할 위스 수량' : '환수할 위스 수량'}
                                             className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm"
-                                            disabled={!canManage || !manualAdjustEnabled}
+                                            disabled={!canManage || !manualAdjustEnabled || isSubmitting}
                                         />
                                     </label>
                                     <label className="block">
@@ -273,7 +287,7 @@ const PointGrantTab: React.FC<PointGrantTabProps> = ({
                                                 ? '예: 발표 참여 보상, 추가 과제 수행, 행사 참여'
                                                 : '예: 오지급 정정, 미반납 물품, 정책 위반에 따른 환수'}
                                             className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm"
-                                            disabled={!canManage || !manualAdjustEnabled}
+                                            disabled={!canManage || !manualAdjustEnabled || isSubmitting}
                                         />
                                     </label>
                                 </div>
@@ -282,14 +296,16 @@ const PointGrantTab: React.FC<PointGrantTabProps> = ({
 
                                 <button
                                     type="submit"
-                                    disabled={!canManage || !manualAdjustEnabled}
+                                    disabled={!canManage || !manualAdjustEnabled || isSubmitting}
                                     className={`mt-4 w-full rounded-xl px-4 py-3 text-sm font-bold text-white transition disabled:bg-gray-300 ${
                                         mode === 'grant'
                                             ? 'bg-blue-600 hover:bg-blue-700'
                                             : 'bg-rose-500 hover:bg-rose-600'
                                     }`}
                                 >
-                                    {mode === 'grant' ? '위스 지급 실행' : '위스 환수 실행'}
+                                    {isModeSubmitting
+                                        ? (mode === 'grant' ? '지급 중...' : '환수 중...')
+                                        : (mode === 'grant' ? '위스 지급 실행' : '위스 환수 실행')}
                                 </button>
                             </form>
                         </div>

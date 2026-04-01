@@ -288,6 +288,17 @@
   min-height: 31rem;
 }
 
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"] {
+  display: flex;
+  flex-direction: column;
+}
+
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"] .fc,
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"] .fc-view-harness {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .student-calendar-shell__body[data-calendar-view="listMonth"] .fc-view-harness {
   display: none !important;
 }
@@ -580,6 +591,37 @@
 
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
   .fc
+  .fc-daygrid-event.student-calendar-range-event {
+  width: auto;
+  margin-left: -0.22rem !important;
+  margin-right: -0.22rem !important;
+  border-radius: 0 !important;
+}
+
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-daygrid-event.student-calendar-range-event.fc-event-start {
+  margin-left: 0 !important;
+  border-top-left-radius: 0.45rem !important;
+  border-bottom-left-radius: 0.45rem !important;
+}
+
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-daygrid-event.student-calendar-range-event.fc-event-end {
+  margin-right: 0 !important;
+  border-top-right-radius: 0.45rem !important;
+  border-bottom-right-radius: 0.45rem !important;
+}
+
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-daygrid-event.student-calendar-range-event.fc-event-start.fc-event-end {
+  border-radius: 0.45rem !important;
+}
+
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
   .fc-daygrid-day-bottom {
   margin-top: auto;
   min-height: 1rem;
@@ -671,9 +713,13 @@
   }
 
   .calendar-wrapper,
-  .student-calendar-shell__body[data-calendar-view="dayGridMonth"],
   .student-calendar-shell__body[data-calendar-view="listMonth"] {
     min-height: 420px;
+  }
+
+  .student-calendar-shell__body[data-calendar-view="dayGridMonth"] {
+    min-height: 420px;
+    height: 420px;
   }
 
   .student-calendar-shell__body .fc-list-row-grid {

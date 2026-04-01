@@ -202,6 +202,25 @@ const formatAdminDateTime = (ms: number) =>
     minute: "2-digit",
   });
 
+const getNextHallOfFameAutoSyncMs = (fromMs = Date.now()) => {
+  const next = new Date(fromMs);
+  const currentHour = next.getHours();
+  const currentBlock = Math.floor(
+    currentHour / WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS,
+  );
+  const nextHour =
+    (currentBlock + 1) * WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS;
+
+  next.setMinutes(0, 0, 0);
+  if (nextHour >= 24) {
+    next.setDate(next.getDate() + 1);
+    next.setHours(0, 0, 0, 0);
+  } else {
+    next.setHours(nextHour, 0, 0, 0);
+  }
+  return next.getTime();
+};
+
 const isStorageUnauthorizedError = (error: any) =>
   String(error?.code || "").trim() === "storage/unauthorized";
 
@@ -234,9 +253,9 @@ const getHallOfFameConfigSaveFailureText = (error: any) => {
 
   if (stage === "snapshot_refresh") {
     return {
-      title: "학생 화면 설정은 저장됐지만 공개 랭킹을 새로고침하지 못했습니다.",
+      title: "학생 화면 설정은 저장됐지만 공개 랭킹 동기화에 실패했습니다.",
       message:
-        error?.message || "잠시 후 공개 랭킹 스냅샷을 다시 반영해 주세요.",
+        error?.message || "잠시 후 위스 현황과 다시 동기화해 주세요.",
     };
   }
 
@@ -252,6 +271,27 @@ const getHallOfFameConfigSaveFailureText = (error: any) => {
   }
 
   if (
+    errorCode === "functions/permission-denied" ||
+    normalizedMessage.toLowerCase().includes("permission is required") ||
+    normalizedMessage.toLowerCase().includes("cannot use westory point functions")
+  ) {
+    return {
+      title: "학생 화면 설정을 저장할 권한이 없습니다.",
+      message: "화랑의 전당 관리 권한을 확인한 뒤 다시 시도해 주세요.",
+    };
+  }
+
+  if (
+    errorCode === "functions/invalid-argument" ||
+    normalizedMessage.toLowerCase().includes("year and semester are required")
+  ) {
+    return {
+      title: "현재 학기 정보를 확인하지 못했습니다.",
+      message: "학기 설정을 다시 불러온 뒤 다시 시도해 주세요.",
+    };
+  }
+
+  if (
     errorCode === "functions/internal" ||
     errorCode === "internal" ||
     normalizedMessage.toLowerCase() === "internal"
@@ -260,6 +300,16 @@ const getHallOfFameConfigSaveFailureText = (error: any) => {
       title: "학생 화면 설정 저장 중 서버 오류가 발생했습니다.",
       message:
         "서버 저장 단계에서 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+    };
+  }
+
+  if (
+    errorCode === "functions/unavailable" ||
+    errorCode === "functions/deadline-exceeded"
+  ) {
+    return {
+      title: "학생 화면 설정 저장 응답이 지연되고 있습니다.",
+      message: "네트워크 상태를 확인한 뒤 잠시 후 다시 시도해 주세요.",
     };
   }
 
@@ -272,32 +322,72 @@ const getHallOfFameConfigSaveFailureText = (error: any) => {
 const getHallOfFameSnapshotRefreshFailureText = (error: any) => {
   const errorCode = String(error?.code || "").trim();
   const normalizedMessage = String(error?.message || "").trim();
+  const lowerMessage = normalizedMessage.toLowerCase();
 
   if (
     errorCode === "functions/not-found" ||
-    normalizedMessage.toLowerCase().includes("ensurewishalloffame")
+    lowerMessage.includes("ensurewishalloffame")
   ) {
     return {
-      title: "스냅샷 새로고침 함수를 찾지 못했습니다.",
+      title: "위스 현황 동기화 함수를 찾지 못했습니다.",
       message:
         "Functions 배포 상태를 확인한 뒤 다시 시도해 주세요.",
     };
   }
 
   if (
-    errorCode === "functions/internal" ||
-    errorCode === "internal" ||
-    normalizedMessage.toLowerCase() === "internal"
+    errorCode === "functions/permission-denied" ||
+    lowerMessage.includes("permission is required") ||
+    lowerMessage.includes("cannot use westory point functions")
   ) {
     return {
-      title: "스냅샷 새로고침 중 서버 오류가 발생했습니다.",
+      title: "위스 현황과 동기화할 권한이 없습니다.",
+      message: "화랑의 전당 관리 권한을 확인한 뒤 다시 시도해 주세요.",
+    };
+  }
+
+  if (
+    errorCode === "functions/invalid-argument" ||
+    lowerMessage.includes("year and semester are required")
+  ) {
+    return {
+      title: "현재 학기 정보를 확인하지 못했습니다.",
+      message: "학기 설정을 다시 불러온 뒤 다시 시도해 주세요.",
+    };
+  }
+
+  if (errorCode === "functions/failed-precondition") {
+    return {
+      title: "공개 랭킹을 동기화할 준비가 아직 끝나지 않았습니다.",
+      message:
+        "위스 현황 또는 학생 기본 정보가 아직 정리되지 않았습니다. 잠시 후 다시 시도해 주세요.",
+    };
+  }
+
+  if (
+    errorCode === "functions/internal" ||
+    errorCode === "internal" ||
+    lowerMessage === "internal"
+  ) {
+    return {
+      title: "위스 현황 동기화 중 서버 오류가 발생했습니다.",
       message:
         "공개 랭킹 계산 또는 저장 단계에서 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
     };
   }
 
+  if (
+    errorCode === "functions/unavailable" ||
+    errorCode === "functions/deadline-exceeded"
+  ) {
+    return {
+      title: "위스 현황 동기화 응답이 지연되고 있습니다.",
+      message: "네트워크 상태를 확인한 뒤 잠시 후 다시 시도해 주세요.",
+    };
+  }
+
   return {
-    title: "스냅샷을 새로고침하지 못했습니다.",
+    title: "위스 현황과 동기화하지 못했습니다.",
     message: normalizedMessage || "잠시 후 다시 시도해 주세요.",
   };
 };
@@ -392,13 +482,13 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
     setSnapshot(nextSnapshot);
     if (!nextSnapshot) {
       setSnapshotError(
-        "공개 스냅샷 문서를 아직 읽지 못했습니다. 스냅샷 새로고침으로 다시 반영해 주세요.",
+        "공개 랭킹 데이터를 아직 읽지 못했습니다. 위스 현황과 동기화로 다시 반영해 주세요.",
       );
       return;
     }
     if (isWisHallOfFameSnapshotStale(nextSnapshot)) {
       setSnapshotError(
-        "공개 스냅샷이 최신 위스 현황보다 오래되었습니다. 스냅샷 새로고침으로 다시 반영해 주세요.",
+        "공개 랭킹 데이터가 최신 위스 현황보다 오래되었습니다. 위스 현황과 동기화로 다시 반영해 주세요.",
       );
       return;
     }
@@ -464,7 +554,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
         if (!cancelled) {
           setSnapshot(null);
           setSnapshotError(
-            "공개 스냅샷을 읽지 못했습니다. 그래도 위스 관리 전체는 계속 사용할 수 있습니다.",
+            "공개 랭킹 데이터를 읽지 못했습니다. 그래도 위스 관리 전체는 계속 사용할 수 있습니다.",
           );
         }
       } finally {
@@ -562,17 +652,23 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
   const snapshotUpdatedAtLabel = snapshot?.updatedAt
     ? formatPointDateShortTime(snapshot.updatedAt)
     : "아직 없음";
-  const nextAutomaticRefreshLabel = snapshot?.updatedAtMs
-    ? formatAdminDateTime(
-        Number(snapshot.updatedAtMs) +
-          WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS * 60 * 60 * 1000,
-      )
-    : "첫 스냅샷 생성 후 계산됩니다.";
+  const snapshotUpdatedAtMs = Math.max(0, Number(snapshot?.updatedAtMs || 0));
+  const snapshotSourceUpdatedAtMs = Math.max(
+    0,
+    Number(snapshot?.sourceUpdatedAtMs || 0),
+  );
+  const nextAutomaticRefreshLabel = formatAdminDateTime(
+    getNextHallOfFameAutoSyncMs(
+      Math.max(snapshotUpdatedAtMs, snapshotSourceUpdatedAtMs, Date.now()),
+    ),
+  );
   const snapshotStatusLabel = snapshot
     ? isWisHallOfFameSnapshotStale(snapshot)
-      ? "4시간 기준이 지나 다음 갱신 대기 상태입니다."
-      : `마지막 반영 후 ${WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS}시간 이내입니다.`
-    : "공개 스냅샷을 아직 만들지 않았습니다.";
+      ? snapshotSourceUpdatedAtMs > snapshotUpdatedAtMs
+        ? "최신 위스 변동이 있어 공개 랭킹 재동기화를 기다리는 중입니다."
+        : `${WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS}시간 자동 점검 시각이 지나 다시 동기화를 기다리는 중입니다.`
+      : "현재 공개 랭킹이 최신 위스 현황과 동기화된 상태입니다."
+    : "첫 공개 랭킹 동기화를 기다리는 중입니다.";
   const sidebarItems: HallOfFameSettingsSidebarItem[] = [
     {
       id: "feature_settings",
@@ -646,8 +742,8 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
       applySnapshotState(nextSnapshot);
       showToast({
         tone: "success",
-        title: "화랑의 전당 스냅샷을 새로 반영했습니다.",
-        message: "학생 화면 미리보기를 최신 공개 데이터로 다시 읽었습니다.",
+        title: "위스 현황과 화랑의 전당을 동기화했습니다.",
+        message: "학생 화면 미리보기를 최신 공개 랭킹 데이터로 다시 읽었습니다.",
       });
     } catch (error: any) {
       const failure = getHallOfFameSnapshotRefreshFailureText(error);
@@ -665,14 +761,14 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
   const handleSaveFeatureSettings = async () => {
     if (!config || !canManage || !featureDirty) return;
 
-      setFeatureSaving(true);
-      try {
-        const fullDraft = buildCombinedConfig(featureDraft, savedViewDraft);
-        const result = await saveWisHallOfFameConfig(config, fullDraft, {
-          refreshSnapshot: true,
-        });
-        const nextDraft = createDraft(result.hallOfFame);
-        const nextFeatureDraft = pickFeatureDraft(nextDraft);
+    setFeatureSaving(true);
+    try {
+      const fullDraft = buildCombinedConfig(featureDraft, savedViewDraft);
+      const result = await saveWisHallOfFameConfig(config, fullDraft, {
+        refreshSnapshot: true,
+      });
+      const nextDraft = createDraft(result.hallOfFame);
+      const nextFeatureDraft = pickFeatureDraft(nextDraft);
 
       setSavedFeatureDraft(nextFeatureDraft);
       setFeatureDraft(nextFeatureDraft);
@@ -682,23 +778,24 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
           console.warn(
             "Failed to refresh interface config after hall of fame feature save:",
             error,
-            );
-          });
-        }
-
-        applySnapshotState(await getWisHallOfFameSnapshot(config));
-
-        showToast({
-          tone: "success",
-          title: "기능 설정이 저장되었습니다.",
-          message:
-            "공개 범위와 팝업 설정, 최신 공개 랭킹 스냅샷을 함께 반영했습니다.",
+          );
         });
-      } catch (error: any) {
+      }
+
+      applySnapshotState(await getWisHallOfFameSnapshot(config));
+
+      showToast({
+        tone: "success",
+        title: "기능 설정이 저장되었습니다.",
+        message:
+          "공개 범위와 팝업 설정, 최신 공개 랭킹 데이터를 함께 반영했습니다.",
+      });
+    } catch (error: any) {
+      const failure = getHallOfFameConfigSaveFailureText(error);
       showToast({
         tone: "error",
-        title: "기능 설정 저장에 실패했습니다.",
-        message: error?.message || "잠시 후 다시 시도해 주세요.",
+        title: failure.title || "기능 설정 저장에 실패했습니다.",
+        message: failure.message || "잠시 후 다시 시도해 주세요.",
       });
     } finally {
       setFeatureSaving(false);
@@ -838,7 +935,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
     <div className="space-y-6">
       <PanelHeader
         title="기능 설정"
-        description="공개 범위, 팝업, 4시간 반영 정책만 따로 관리합니다."
+        description="공개 범위와 팝업, 즉시 동기화 및 4시간 자동 점검 기준을 함께 관리합니다."
         saveLabel="기능 설정 저장"
         canManage={canManage}
         saving={featureSaving}
@@ -875,10 +972,10 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
         <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
           <div className="text-xs font-bold text-slate-500">반영 주기</div>
           <div className="mt-2 text-lg font-black text-slate-900 whitespace-nowrap break-keep">
-            {WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS}시간마다 자동 반영
+            위스 변동 시 즉시 동기화
           </div>
           <div className="mt-1 text-xs font-semibold text-slate-500">
-            실시간 갱신 대신 주기 반영
+            누락 방지를 위해 {WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS}시간마다 자동 점검
           </div>
         </div>
       </div>
@@ -1106,7 +1203,8 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
           <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
             <h3 className="text-lg font-black text-slate-900">공개 시간</h3>
             <p className="mt-1 text-sm text-slate-500">
-              화랑의 전당 공개 데이터는 실시간이 아니라 4시간 단위로 반영됩니다.
+              위스 변동은 즉시 공개 랭킹에 반영되고, 누락이 있으면 4시간마다 한
+              번 더 자동 점검합니다.
             </p>
           </div>
 
@@ -1115,11 +1213,11 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="text-sm font-black text-slate-900 whitespace-nowrap break-keep">
-                    4시간마다 자동 반영
+                    즉시 동기화 + 4시간 자동 점검
                   </div>
                   <p className="mt-1 text-sm text-slate-500">
-                    point 변경이 있을 때마다 즉시 재계산하지 않고, 4시간 기준이
-                    지난 뒤에만 다시 계산합니다.
+                    지급·환수 등 위스 변경은 바로 반영하고, 누락 여부는
+                    {` ${WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS}시간마다`} 다시 확인합니다.
                   </p>
                 </div>
                 <span className="inline-flex items-center whitespace-nowrap rounded-full bg-slate-900 px-3 py-1 text-xs font-bold text-white">
@@ -1156,7 +1254,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
             </div>
 
             <div className="rounded-2xl border border-dashed border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
-              학생 화면은 여전히 공개 snapshot만 읽고, wallet을 직접 스캔하지
+              학생 화면은 여전히 공개 랭킹 데이터만 읽고, wallet을 직접 스캔하지
               않습니다.
             </div>
 
@@ -1166,7 +1264,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
               disabled={!canManage || refreshing}
               className="inline-flex min-h-11 items-center justify-center whitespace-nowrap break-keep rounded-lg border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {refreshing ? "스냅샷 새로고침 중..." : "스냅샷 새로고침"}
+              {refreshing ? "위스 현황과 동기화 중..." : "위스 현황과 동기화"}
             </button>
           </div>
         </section>
@@ -1462,7 +1560,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
                   fail-open 유지
                 </div>
                 <p className="mt-1 text-sm text-slate-500 break-keep">
-                  화랑의 전당 스냅샷이 불안정해도 위스 관리 전체는 계속 사용할
+                  공개 랭킹 데이터가 일시적으로 불안정해도 위스 관리 전체는 계속 사용할
                   수 있습니다.
                 </p>
               </div>
