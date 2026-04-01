@@ -793,7 +793,6 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
     const result = await saveWisHallOfFameConfig(
       config,
       buildCombinedConfig(savedFeatureDraft, nextViewDraft),
-      { refreshSnapshot: false },
     );
     const nextDraft = createDraft(result.hallOfFame);
     applySavedStudentViewDraft(nextDraft, options);
@@ -834,9 +833,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
     setFeatureSaving(true);
     try {
       const fullDraft = buildCombinedConfig(featureDraft, savedViewDraft);
-      const result = await saveWisHallOfFameConfig(config, fullDraft, {
-        refreshSnapshot: true,
-      });
+      const result = await saveWisHallOfFameConfig(config, fullDraft);
       const nextDraft = createDraft(result.hallOfFame);
       const nextFeatureDraft = pickFeatureDraft(nextDraft);
 
