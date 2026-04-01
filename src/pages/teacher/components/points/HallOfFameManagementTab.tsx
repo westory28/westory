@@ -269,6 +269,39 @@ const getHallOfFameConfigSaveFailureText = (error: any) => {
   };
 };
 
+const getHallOfFameSnapshotRefreshFailureText = (error: any) => {
+  const errorCode = String(error?.code || "").trim();
+  const normalizedMessage = String(error?.message || "").trim();
+
+  if (
+    errorCode === "functions/not-found" ||
+    normalizedMessage.toLowerCase().includes("ensurewishalloffame")
+  ) {
+    return {
+      title: "스냅샷 새로고침 함수를 찾지 못했습니다.",
+      message:
+        "Functions 배포 상태를 확인한 뒤 다시 시도해 주세요.",
+    };
+  }
+
+  if (
+    errorCode === "functions/internal" ||
+    errorCode === "internal" ||
+    normalizedMessage.toLowerCase() === "internal"
+  ) {
+    return {
+      title: "스냅샷 새로고침 중 서버 오류가 발생했습니다.",
+      message:
+        "공개 랭킹 계산 또는 저장 단계에서 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+    };
+  }
+
+  return {
+    title: "스냅샷을 새로고침하지 못했습니다.",
+    message: normalizedMessage || "잠시 후 다시 시도해 주세요.",
+  };
+};
+
 const buildStoredRangeSummary = (draft: FeatureDraft) =>
   `전교 ${draft.publicRange.gradeRankLimit}위 / 학급 ${draft.publicRange.classRankLimit}위`;
 
@@ -355,6 +388,23 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
     pickLayoutDraft(pickViewDraft(initialDraft)),
   );
 
+  const applySnapshotState = (nextSnapshot: WisHallOfFameSnapshot | null) => {
+    setSnapshot(nextSnapshot);
+    if (!nextSnapshot) {
+      setSnapshotError(
+        "공개 스냅샷 문서를 아직 읽지 못했습니다. 스냅샷 새로고침으로 다시 반영해 주세요.",
+      );
+      return;
+    }
+    if (isWisHallOfFameSnapshotStale(nextSnapshot)) {
+      setSnapshotError(
+        "공개 스냅샷이 최신 위스 현황보다 오래되었습니다. 스냅샷 새로고침으로 다시 반영해 주세요.",
+      );
+      return;
+    }
+    setSnapshotError("");
+  };
+
   useEffect(() => {
     const nextDraft = createDraft(interfaceConfig?.hallOfFame);
     const nextFeatureDraft = pickFeatureDraft(nextDraft);
@@ -404,7 +454,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
       try {
         const nextSnapshot = await getOrEnsureWisHallOfFameSnapshot(config);
         if (!cancelled) {
-          setSnapshot(nextSnapshot);
+          applySnapshotState(nextSnapshot);
         }
       } catch (error) {
         console.warn(
@@ -593,19 +643,19 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
     try {
       await ensureWisHallOfFameSnapshot(config, { force: true });
       const nextSnapshot = await getWisHallOfFameSnapshot(config);
-      setSnapshot(nextSnapshot);
-      setSnapshotError("");
+      applySnapshotState(nextSnapshot);
       showToast({
         tone: "success",
         title: "화랑의 전당 스냅샷을 새로 반영했습니다.",
         message: "학생 화면 미리보기를 최신 공개 데이터로 다시 읽었습니다.",
       });
     } catch (error: any) {
-      setSnapshotError("화랑의 전당 스냅샷 새로고침에 실패했습니다.");
+      const failure = getHallOfFameSnapshotRefreshFailureText(error);
+      setSnapshotError(failure.message);
       showToast({
         tone: "warning",
-        title: "스냅샷을 새로고침하지 못했습니다.",
-        message: error?.message || "잠시 후 다시 시도해 주세요.",
+        title: failure.title,
+        message: failure.message,
       });
     } finally {
       setRefreshing(false);
@@ -615,14 +665,14 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
   const handleSaveFeatureSettings = async () => {
     if (!config || !canManage || !featureDirty) return;
 
-    setFeatureSaving(true);
-    try {
-      const fullDraft = buildCombinedConfig(featureDraft, savedViewDraft);
-      const result = await saveWisHallOfFameConfig(config, fullDraft, {
-        refreshSnapshot: false,
-      });
-      const nextDraft = createDraft(result.hallOfFame);
-      const nextFeatureDraft = pickFeatureDraft(nextDraft);
+      setFeatureSaving(true);
+      try {
+        const fullDraft = buildCombinedConfig(featureDraft, savedViewDraft);
+        const result = await saveWisHallOfFameConfig(config, fullDraft, {
+          refreshSnapshot: true,
+        });
+        const nextDraft = createDraft(result.hallOfFame);
+        const nextFeatureDraft = pickFeatureDraft(nextDraft);
 
       setSavedFeatureDraft(nextFeatureDraft);
       setFeatureDraft(nextFeatureDraft);
@@ -632,16 +682,19 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
           console.warn(
             "Failed to refresh interface config after hall of fame feature save:",
             error,
-          );
-        });
-      }
+            );
+          });
+        }
 
-      showToast({
-        tone: "success",
-        title: "기능 설정이 저장되었습니다.",
-        message: "공개 범위, 팝업, 공개 시간 정책 변경을 반영했습니다.",
-      });
-    } catch (error: any) {
+        applySnapshotState(await getWisHallOfFameSnapshot(config));
+
+        showToast({
+          tone: "success",
+          title: "기능 설정이 저장되었습니다.",
+          message:
+            "공개 범위와 팝업 설정, 최신 공개 랭킹 스냅샷을 함께 반영했습니다.",
+        });
+      } catch (error: any) {
       showToast({
         tone: "error",
         title: "기능 설정 저장에 실패했습니다.",

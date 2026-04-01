@@ -211,7 +211,7 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
         : "absolute left-[var(--slot-left-mobile)] top-[var(--slot-top-mobile)] z-30 w-[var(--slot-width-mobile)] -translate-x-1/2 px-0 md:left-[var(--slot-left)] md:top-[var(--slot-top)] md:w-[var(--slot-width)] md:px-0.5";
 
   return (
-    <div className="rounded-[1.85rem] border border-slate-200 bg-white shadow-[0_22px_54px_rgba(15,23,42,0.08)]">
+    <div className="overflow-hidden rounded-[1.85rem] border border-slate-200 bg-white shadow-[0_22px_54px_rgba(15,23,42,0.08)]">
       {showHeader && (
         <div className="overflow-hidden rounded-t-[1.85rem] border-b border-slate-100 bg-[linear-gradient(135deg,_#0f172a,_#1f2d45)] px-5 py-5 text-white sm:flex-row sm:items-end sm:justify-between sm:px-6">
           <div className="min-w-0">

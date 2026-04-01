@@ -20,7 +20,10 @@ import {
 } from '../../lib/points';
 import { formatWisAmount } from '../../lib/pointFormatters';
 import { getPointRankDisplay, needsPointRankLegacyFallback } from '../../lib/pointRanks';
-import { getOrEnsureWisHallOfFameSnapshot } from '../../lib/wisHallOfFame';
+import {
+    findWisHallOfFameEntryByUid,
+    getOrEnsureWisHallOfFameSnapshot,
+} from '../../lib/wisHallOfFame';
 import type {
     PointOrder,
     PointOrderStatus,
@@ -62,6 +65,15 @@ const getTransactionCategory = (transaction: PointTransaction) => {
     if (transaction.delta > 0) return 'earned';
     if (transaction.delta < 0) return 'spent';
     return 'all';
+};
+
+const normalizeSchoolField = (value: unknown) => {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    const digits = raw.match(/\d+/)?.[0] || '';
+    if (!digits) return raw;
+    const parsed = Number(digits);
+    return Number.isFinite(parsed) && parsed > 0 ? String(parsed) : raw;
 };
 
 const Points: React.FC = () => {
@@ -171,6 +183,23 @@ const Points: React.FC = () => {
     }, [config, uid]);
 
     const safeWallet = wallet || DEFAULT_WALLET;
+    const legacyUserData = (userData || null) as Record<string, unknown> | null;
+    const currentHallOfFameEntry = useMemo(
+        () => (currentUser?.uid ? findWisHallOfFameEntryByUid(hallOfFame, currentUser.uid) : null),
+        [currentUser?.uid, hallOfFame],
+    );
+    const currentHallGrade = normalizeSchoolField(
+        userData?.grade
+        || legacyUserData?.studentGrade
+        || safeWallet.grade
+        || currentHallOfFameEntry?.grade,
+    );
+    const currentHallClass = normalizeSchoolField(
+        userData?.class
+        || legacyUserData?.studentClass
+        || safeWallet.class
+        || currentHallOfFameEntry?.class,
+    );
     const rank = getPointRankDisplay({
         rankPolicy: policy.rankPolicy,
         wallet: safeWallet,
@@ -338,8 +367,8 @@ const Points: React.FC = () => {
                         <StudentPointHallOfFameTab
                             snapshot={hallOfFame}
                             hallOfFameConfig={interfaceConfig?.hallOfFame}
-                            currentGrade={userData?.grade}
-                            currentClass={userData?.class}
+                            currentGrade={currentHallGrade}
+                            currentClass={currentHallClass}
                         />
                     )}
 
