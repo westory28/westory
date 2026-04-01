@@ -91,6 +91,11 @@
 }
 
 .student-calendar-shell__month-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
   min-width: 0;
 }
 
@@ -108,6 +113,8 @@
   letter-spacing: 0.02em;
   padding: 0.5rem 0.9rem;
   box-shadow: inset 0 0 0 1px rgba(147, 197, 253, 0.7);
+  width: fit-content;
+  max-width: 100%;
 }
 
 .student-calendar-shell__eyebrow-icon {
@@ -123,6 +130,7 @@
 .student-calendar-shell__month-label {
   min-width: 0;
   text-align: left;
+  flex: 1 1 auto;
 }
 
 .student-calendar-shell__month-title {
@@ -244,11 +252,17 @@
 
 .student-calendar-shell__control-cluster--nav {
   background: #ffffff;
+  flex-shrink: 0;
 }
 
 .student-calendar-shell__control-cluster--view {
   gap: 0.45rem;
   padding-right: 0.32rem;
+}
+
+.student-calendar-shell__attendance-tools {
+  gap: 0.55rem;
+  padding-inline: 0.3rem 0.36rem;
 }
 
 .student-calendar-shell__view-toggle {
@@ -286,6 +300,16 @@
   border-color: #bfdbfe;
   background: #eff6ff;
   color: #1d4ed8;
+}
+
+.student-calendar-shell__attendance-label {
+  color: #475569;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  white-space: nowrap;
+  padding-left: 0.45rem;
 }
 
 .student-calendar-shell__attendance-action[data-tone="error"] {
@@ -614,16 +638,12 @@
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
   .fc
   .fc-daygrid-day-events {
-  display: flex;
+  display: block;
   min-height: 0;
   flex: 1 1 auto;
-  flex-direction: column;
-  gap: 0.18rem;
   margin-top: 0.25rem;
   padding: 0 0.32rem;
   overflow: visible;
-  position: relative;
-  z-index: 1;
 }
 
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
@@ -632,6 +652,14 @@
   margin-top: 0 !important;
   width: auto;
   min-width: 0;
+  overflow: visible;
+}
+
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-daygrid-event-harness
+  + .fc-daygrid-event-harness {
+  margin-top: 0.18rem !important;
 }
 
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
@@ -659,6 +687,8 @@
   margin-left: -0.22rem !important;
   margin-right: -0.22rem !important;
   border-radius: 0 !important;
+  position: relative;
+  z-index: 2;
 }
 
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
@@ -747,6 +777,9 @@
 
   .student-calendar-shell__month-row {
     width: 100%;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.6rem;
   }
 
   .student-calendar-shell__month-title {
@@ -771,6 +804,10 @@
   .student-calendar-shell__attendance-tools {
     flex-wrap: wrap;
     max-width: 100%;
+  }
+
+  .student-calendar-shell__attendance-tools {
+    justify-content: space-between;
   }
 
   .student-calendar-shell__attendance-tools {

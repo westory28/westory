@@ -336,11 +336,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                   {currentTitle || LABELS.heading}
                 </h2>
               </div>
-            </div>
-          </div>
 
-          <div className="student-calendar-shell__toolbar">
-            <div className="student-calendar-shell__calendar-tools">
               <div className="student-calendar-shell__control-cluster student-calendar-shell__control-cluster--nav">
                 <button
                   type="button"
@@ -361,7 +357,13 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                 >
                   <ChevronRightIcon />
                 </button>
+              </div>
+            </div>
+          </div>
 
+          <div className="student-calendar-shell__toolbar">
+            <div className="student-calendar-shell__calendar-tools">
+              <div className="student-calendar-shell__control-cluster">
                 <button
                   type="button"
                   onClick={() => handleNavigate("today")}
@@ -409,6 +411,9 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             </div>
 
             <div className="student-calendar-shell__attendance-tools">
+              <span className="student-calendar-shell__attendance-label">
+                {LABELS.attendance}
+              </span>
               {attendanceChecked ? (
                 <span
                   className="student-calendar-shell__attendance-indicator"
