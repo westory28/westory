@@ -1090,6 +1090,8 @@ const buildWisHallOfFamePayload = async (year, semester) => {
     snapshotKey: buildWisHallOfFameSnapshotKey(year, semester, snapshot),
     updatedAt: FieldValue.serverTimestamp(),
     updatedAtMs,
+    sourceUpdatedAt: FieldValue.serverTimestamp(),
+    sourceUpdatedAtMs: updatedAtMs,
   };
 };
 
@@ -1101,6 +1103,15 @@ const refreshWisHallOfFame = async (year, semester) => {
     snapshotKey: payload.snapshotKey,
     snapshotVersion: WIS_HALL_OF_FAME_SNAPSHOT_VERSION,
   };
+};
+
+const markWisHallOfFameDirty = async (year, semester) => {
+  const sourceUpdatedAtMs = Date.now();
+  await db.doc(getWisHallOfFamePath(year, semester)).set({
+    sourceUpdatedAt: FieldValue.serverTimestamp(),
+    sourceUpdatedAtMs,
+  }, { merge: true });
+  return sourceUpdatedAtMs;
 };
 
 const hasWisHallOfFameSnapshotRankingData = (data) => Object.keys(data?.gradeTop3ByGrade || {}).length > 0
@@ -1195,21 +1206,17 @@ const isWisHallOfFameSnapshotStale = (data) => {
       ? data.updatedAt.toMillis()
       : Number(data.updatedAt?.seconds || 0) * 1000;
   if (!updatedAtMs) return true;
+  const sourceUpdatedAtMs = Number(data.sourceUpdatedAtMs || 0) > 0
+    ? Number(data.sourceUpdatedAtMs || 0)
+    : typeof data.sourceUpdatedAt?.toMillis === 'function'
+      ? data.sourceUpdatedAt.toMillis()
+      : Number(data.sourceUpdatedAt?.seconds || 0) * 1000;
+  if (sourceUpdatedAtMs > updatedAtMs) return true;
   return Date.now() - updatedAtMs > WIS_HALL_OF_FAME_STALE_MS;
 };
 
 const tryRefreshWisHallOfFame = async (year, semester) => {
   try {
-    const snapshotRef = db.doc(getWisHallOfFamePath(year, semester));
-    const snapshot = await snapshotRef.get();
-    const data = snapshot.exists ? (snapshot.data() || {}) : null;
-    if (!isWisHallOfFameSnapshotStale(data)) {
-      return {
-        ensured: false,
-        snapshotKey: String(data?.snapshotKey || '').trim(),
-        snapshotVersion: Number(data?.snapshotVersion || WIS_HALL_OF_FAME_SNAPSHOT_VERSION),
-      };
-    }
     return await refreshWisHallOfFame(year, semester);
   } catch (error) {
     console.error('Failed to refresh wis hall of fame snapshot:', error);
@@ -1219,6 +1226,15 @@ const tryRefreshWisHallOfFame = async (year, semester) => {
       snapshotVersion: WIS_HALL_OF_FAME_SNAPSHOT_VERSION,
     };
   }
+};
+
+const syncWisHallOfFameAfterMutation = async (year, semester) => {
+  try {
+    await markWisHallOfFameDirty(year, semester);
+  } catch (error) {
+    console.error('Failed to mark wis hall of fame snapshot dirty:', error);
+  }
+  return tryRefreshWisHallOfFame(year, semester);
 };
 
 const buildActivityTransactionId = (uid, type, sourceId) =>
@@ -1339,10 +1355,17 @@ const ensureStudentProfile = async (uid) => {
 
 const buildWalletBase = (uid, profile) => ({
   uid,
-  studentName: String(profile.name || '').trim(),
-  grade: String(profile.grade || '').trim(),
-  class: String(profile.class || '').trim(),
-  number: String(profile.number || '').trim(),
+  studentName: String(
+    profile.studentName
+    || profile.name
+    || profile.displayName
+    || profile.customName
+    || profile.nickname
+    || '',
+  ).trim(),
+  grade: String(profile.studentGrade || profile.grade || '').trim(),
+  class: String(profile.studentClass || profile.class || '').trim(),
+  number: String(profile.studentNumber || profile.number || '').trim(),
 });
 
 const ensureWallet = async (transaction, year, semester, uid, profile) => {
@@ -2099,7 +2122,7 @@ exports.applyPointActivityReward = onCall({ region: REGION }, async (request) =>
   });
 
   if (result.awarded) {
-    await tryRefreshWisHallOfFame(year, semester);
+    await syncWisHallOfFameAfterMutation(year, semester);
   }
   return result;
 });
@@ -2207,7 +2230,7 @@ exports.createPointPurchaseRequest = onCall({ region: REGION }, async (request) 
   });
 
   if (result.created) {
-    await tryRefreshWisHallOfFame(year, semester);
+    await syncWisHallOfFameAfterMutation(year, semester);
   }
   return result;
 });
@@ -2292,7 +2315,7 @@ exports.adjustTeacherPoints = onCall({ region: REGION }, async (request) => {
     };
   });
 
-  await tryRefreshWisHallOfFame(year, semester);
+  await syncWisHallOfFameAfterMutation(year, semester);
   return result;
 });
 
@@ -2397,7 +2420,7 @@ exports.updateTeacherPointAdjustment = onCall({ region: REGION }, async (request
     };
   });
 
-  await tryRefreshWisHallOfFame(year, semester);
+  await syncWisHallOfFameAfterMutation(year, semester);
   return result;
 });
 
@@ -2521,7 +2544,7 @@ exports.reviewTeacherPointOrder = onCall({ region: REGION }, async (request) => 
   });
 
   if (!result.duplicate) {
-    await tryRefreshWisHallOfFame(year, semester);
+    await syncWisHallOfFameAfterMutation(year, semester);
   }
   return result;
 });
@@ -2566,6 +2589,6 @@ exports.updateStudentProfileIcon = onCall({ region: REGION }, async (request) =>
     };
   });
 
-  await tryRefreshWisHallOfFame(year, semester);
+  await syncWisHallOfFameAfterMutation(year, semester);
   return result;
 });

@@ -102,18 +102,6 @@ const clamp = (value: number, minimum: number, maximum: number) =>
   Math.min(maximum, Math.max(minimum, value));
 
 const DEFAULT_RAIL_CENTER = 71;
-const SLOT_DISPLAY_SAFE_AREA = {
-  desktop: {
-    first: { leftMin: 44, leftMax: 56, topMin: 20, topMax: 34 },
-    second: { leftMin: 27, leftMax: 38, topMin: 30, topMax: 39 },
-    third: { leftMin: 62, leftMax: 73, topMin: 30, topMax: 39 },
-  },
-  mobile: {
-    first: { leftMin: 44, leftMax: 56, topMin: 22, topMax: 35 },
-    second: { leftMin: 29, leftMax: 39, topMin: 34, topMax: 43 },
-    third: { leftMin: 61, leftMax: 71, topMin: 34, topMax: 43 },
-  },
-} as const;
 
 const getWidthBounds = (
   key: EditableKey,
@@ -183,26 +171,6 @@ const cloneEditorValue = (
     },
   },
 });
-
-const getDisplayHandlePosition = (
-  key: EditableKey,
-  deviceMode: HallOfFameEditorDeviceMode,
-  leftPercent: number,
-  topPercent: number,
-) => {
-  if (key === "leaderboard") {
-    return {
-      leftPercent,
-      topPercent,
-    };
-  }
-
-  const bounds = SLOT_DISPLAY_SAFE_AREA[deviceMode][key];
-  return {
-    leftPercent: clamp(leftPercent, bounds.leftMin, bounds.leftMax),
-    topPercent: clamp(topPercent, bounds.topMin, bounds.topMax),
-  };
-};
 
 const WisHallOfFamePositionEditor: React.FC<
   WisHallOfFamePositionEditorProps
@@ -328,7 +296,6 @@ const WisHallOfFamePositionEditor: React.FC<
     24,
     38,
   );
-  const desktopPodiumWidth = clamp(100 - desktopRailWidth - 4, 58, 76);
   const desktopRailTop = `${clamp(
     Number(desktopRail.topPercent || 0) / 10,
     0,
@@ -337,9 +304,9 @@ const WisHallOfFamePositionEditor: React.FC<
   const desktopRailShift = `${clamp(
     (Number(desktopRail.leftPercent || DEFAULT_RAIL_CENTER) -
       DEFAULT_RAIL_CENTER) /
-      4,
-    -2.5,
-    2.5,
+      8,
+    -1.25,
+    1.25,
   )}rem`;
   const mobileRailWidth = `${clamp(
     Number(mobileRail.widthPercent || 100),
@@ -355,7 +322,6 @@ const WisHallOfFamePositionEditor: React.FC<
     Number(mobileRail.leftPercent || 50),
   );
   const previewStyle = {
-    ["--hall-podium-width" as string]: `${desktopPodiumWidth}%`,
     ["--hall-rail-width" as string]: `${desktopRailWidth}%`,
     ["--hall-rail-desktop-top" as string]: desktopRailTop,
     ["--hall-rail-desktop-shift" as string]: desktopRailShift,
@@ -364,16 +330,16 @@ const WisHallOfFamePositionEditor: React.FC<
   };
   const previewLayoutClassName =
     deviceMode === "desktop"
-      ? "flex flex-row items-start justify-between gap-6"
-      : "mx-auto flex max-w-[420px] flex-col gap-5";
+      ? "flex flex-row items-start gap-6 overflow-hidden"
+      : "mx-auto flex max-w-[420px] flex-col gap-5 overflow-hidden";
   const podiumContainerClassName =
     deviceMode === "desktop"
-      ? "min-w-0 w-[var(--hall-podium-width)]"
-      : "min-w-0 w-full";
+      ? "min-w-0 flex-1 overflow-hidden"
+      : "min-w-0 w-full overflow-hidden";
   const railContainerClassName =
     deviceMode === "desktop"
-      ? "mt-[var(--hall-rail-desktop-top)] ml-[var(--hall-rail-desktop-shift)] min-w-[19rem] w-[var(--hall-rail-width)]"
-      : `mt-[var(--hall-rail-mobile-top)] min-w-0 w-full max-w-[var(--hall-rail-mobile-width)] ${mobileRailAlignClassName}`;
+      ? "relative z-10 mt-[var(--hall-rail-desktop-top)] ml-[var(--hall-rail-desktop-shift)] min-w-[19rem] w-[max(var(--hall-rail-width),19rem)] max-w-full shrink-0"
+      : `relative z-10 mt-[var(--hall-rail-mobile-top)] min-w-0 w-full max-w-[var(--hall-rail-mobile-width)] ${mobileRailAlignClassName}`;
 
   const getPosition = (key: EditableKey) => {
     if (key === "leaderboard") {
@@ -657,14 +623,62 @@ const WisHallOfFamePositionEditor: React.FC<
     </div>
   );
 
+  const podiumSlotControls = {
+    first: {
+      active: selectedKey === "first",
+      disabled,
+      dragLabel: "1위 시상대 위치 이동",
+      onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) =>
+        handlePointerDown(event, "first"),
+      onClick: () => setSelectedKey("first"),
+    },
+    second: {
+      active: selectedKey === "second",
+      disabled,
+      dragLabel: "2위 시상대 위치 이동",
+      onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) =>
+        handlePointerDown(event, "second"),
+      onClick: () => setSelectedKey("second"),
+    },
+    third: {
+      active: selectedKey === "third",
+      disabled,
+      dragLabel: "3위 시상대 위치 이동",
+      onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) =>
+        handlePointerDown(event, "third"),
+      onClick: () => setSelectedKey("third"),
+    },
+  } as const;
+  const leaderboardHeaderAccessory = (
+    <button
+      type="button"
+      aria-label="오른쪽 랭킹 패널 위치 이동"
+      onPointerDown={(event) => handlePointerDown(event, "leaderboard")}
+      onClick={() => setSelectedKey("leaderboard")}
+      disabled={disabled}
+      className={`inline-flex min-h-9 items-center justify-center whitespace-nowrap rounded-full border px-3 py-1 text-xs font-black shadow-[0_12px_24px_rgba(15,23,42,0.14)] transition ${
+        PRESET_ITEMS.find((item) => item.key === "leaderboard")?.toneClassName ||
+        ""
+      } ${
+        selectedKey === "leaderboard"
+          ? "ring-4 ring-slate-900/15"
+          : "hover:ring-2 hover:ring-slate-900/10"
+      } ${
+        disabled ? "cursor-default" : "cursor-grab active:cursor-grabbing"
+      }`}
+    >
+      패널 이동
+    </button>
+  );
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h4 className="text-base font-black text-slate-900">배치 편집</h4>
           <p className="mt-1 text-sm text-slate-500 break-keep">
-            항목을 드래그해 위치를 옮기고, 넓이를 조절해 배경 이미지에 맞춰
-            보세요.
+            1위, 2위, 3위 배지와 우측 패널 헤더를 직접 드래그해 위치를 옮기고,
+            넓이를 조절해 배경 이미지에 맞춰 보세요.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -710,7 +724,7 @@ const WisHallOfFamePositionEditor: React.FC<
             </div>
             <div
               ref={sceneRef}
-              className={`relative overflow-visible rounded-[1.85rem] bg-[radial-gradient(circle_at_top_left,_rgba(255,251,235,0.92),_rgba(248,250,252,0.98)_42%,_rgba(255,255,255,1)_100%)] p-4 touch-none select-none sm:p-5 lg:p-6 ${
+              className={`relative overflow-hidden rounded-[1.85rem] bg-[radial-gradient(circle_at_top_left,_rgba(255,251,235,0.92),_rgba(248,250,252,0.98)_42%,_rgba(255,255,255,1)_100%)] p-4 touch-none select-none sm:p-5 lg:p-6 ${
                 disabled ? "opacity-70" : ""
               } ${
                 deviceMode === "desktop"
@@ -747,7 +761,7 @@ const WisHallOfFamePositionEditor: React.FC<
                   </div>
 
                   <div ref={podiumStageRef} className="relative overflow-visible">
-                    <div className="pointer-events-none select-none">
+                    <div className="select-none">
                       <WisHallOfFamePodium
                         entries={activePodiumEntries}
                         hallOfFameConfig={resolvedConfig}
@@ -755,51 +769,8 @@ const WisHallOfFamePositionEditor: React.FC<
                         emptyMessage={emptyPodiumMessage}
                         showHeader={false}
                         deviceMode={deviceMode}
+                        slotControls={podiumSlotControls}
                       />
-                    </div>
-
-                    <div className="pointer-events-none absolute inset-0 z-40">
-                      {PRESET_ITEMS.filter(
-                        (item) => item.key !== "leaderboard",
-                      ).map((item) => {
-                        const position = getPosition(item.key);
-                        const displayPosition = getDisplayHandlePosition(
-                          item.key,
-                          deviceMode,
-                          position.leftPercent,
-                          position.topPercent,
-                        );
-                        const isSelected = selectedKey === item.key;
-
-                        return (
-                          <button
-                            key={item.key}
-                            type="button"
-                            onPointerDown={(event) =>
-                              handlePointerDown(event, item.key)
-                            }
-                            onClick={() => setSelectedKey(item.key)}
-                            style={{
-                              left: `${displayPosition.leftPercent}%`,
-                              top: `${displayPosition.topPercent}%`,
-                            }}
-                            className={`pointer-events-auto absolute z-40 inline-flex min-h-10 min-w-[7.75rem] items-center justify-center gap-1.5 -translate-x-1/2 -translate-y-1/2 touch-none select-none rounded-full border px-4 py-2 text-[11px] font-black shadow-[0_16px_30px_rgba(15,23,42,0.2)] backdrop-blur transition ${
-                              item.toneClassName
-                            } ${
-                              isSelected
-                                ? "ring-4 ring-slate-900/15"
-                                : "hover:ring-2 hover:ring-slate-900/10"
-                            } ${
-                              disabled
-                                ? "cursor-default"
-                                : "cursor-grab active:cursor-grabbing"
-                            } whitespace-nowrap`}
-                          >
-                            <span aria-hidden="true">⋮⋮</span>
-                            <span>{item.label}</span>
-                          </button>
-                        );
-                      })}
                     </div>
                   </div>
                 </div>
@@ -818,7 +789,7 @@ const WisHallOfFamePositionEditor: React.FC<
                   </div>
 
                   <div className="relative min-h-[320px] overflow-visible">
-                    <div className="pointer-events-none select-none">
+                    <div className="select-none">
                       <WisHallOfFameLeaderboardList
                         entries={rightRailEntries}
                         hallOfFameConfig={resolvedConfig}
@@ -834,30 +805,9 @@ const WisHallOfFamePositionEditor: React.FC<
                         }
                         emptyMessage={rightRailEmptyMessage}
                         className="h-full"
+                        headerAccessory={leaderboardHeaderAccessory}
                       />
                     </div>
-                    <button
-                      type="button"
-                      onPointerDown={(event) =>
-                        handlePointerDown(event, "leaderboard")
-                      }
-                      onClick={() => setSelectedKey("leaderboard")}
-                      className={`pointer-events-auto absolute left-4 top-4 z-40 inline-flex min-h-10 min-w-[8.5rem] items-center justify-center gap-1.5 touch-none select-none rounded-full border px-4 py-2 text-[11px] font-black shadow-[0_16px_30px_rgba(15,23,42,0.2)] backdrop-blur transition ${
-                        PRESET_ITEMS.find((item) => item.key === "leaderboard")
-                          ?.toneClassName || ""
-                      } ${
-                        selectedKey === "leaderboard"
-                          ? "ring-4 ring-slate-900/15"
-                          : "hover:ring-2 hover:ring-slate-900/10"
-                      } ${
-                        disabled
-                          ? "cursor-default"
-                          : "cursor-grab active:cursor-grabbing"
-                      } whitespace-nowrap`}
-                    >
-                      <span aria-hidden="true">⋮⋮</span>
-                      <span>오른쪽 랭킹 패널</span>
-                    </button>
                   </div>
                 </div>
               </div>

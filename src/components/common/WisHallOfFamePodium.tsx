@@ -22,6 +22,18 @@ interface WisHallOfFamePodiumProps {
   action?: React.ReactNode;
   showHeader?: boolean;
   deviceMode?: "responsive" | "desktop" | "mobile";
+  slotControls?: Partial<
+    Record<
+      HallOfFamePodiumSlotKey,
+      {
+        active?: boolean;
+        disabled?: boolean;
+        dragLabel?: string;
+        onPointerDown?: (event: React.PointerEvent<HTMLButtonElement>) => void;
+        onClick?: () => void;
+      }
+    >
+  >;
 }
 
 const SLOT_ORDER: HallOfFamePodiumSlotKey[] = ["second", "first", "third"];
@@ -180,6 +192,7 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
   action = null,
   showHeader = true,
   deviceMode = "responsive",
+  slotControls,
 }) => {
   const safeEntries = entries || [];
   const normalizedConfig = normalizeHallOfFameInterfaceConfig(hallOfFameConfig);
@@ -221,7 +234,7 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
       )}
 
       <div className="relative px-2 pb-4 pt-2 sm:px-3 sm:pb-5 sm:pt-3">
-        <div className="relative aspect-[80/52] min-h-[26rem] overflow-visible rounded-[1.65rem] bg-[#f5f7fb] sm:min-h-[30rem] lg:min-h-[34rem] xl:min-h-[37rem]">
+        <div className="relative aspect-[80/52] min-h-[26rem] overflow-hidden rounded-[1.65rem] bg-[#f5f7fb] sm:min-h-[30rem] lg:min-h-[34rem] xl:min-h-[37rem]">
           <div className="absolute inset-0 overflow-hidden rounded-[1.65rem]">
             <img
               src={resolvedImageUrl}
@@ -250,6 +263,9 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
               if (!entry) return null;
 
               const tone = getEntryTone(slotKey);
+              const control = slotControls?.[slotKey];
+              const rankLabel = buildRankLabel(safeEntries, entry);
+              const badgeClassName = `inline-flex min-h-9 max-w-full items-center justify-center whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-black tracking-[0.08em] shadow-[0_14px_26px_rgba(15,23,42,0.16)] sm:min-h-10 sm:px-3 sm:py-1.25 sm:text-sm ${tone.badgeClassName}`;
               return (
                 <div
                   key={`${slotKey}-${entry.uid}`}
@@ -257,11 +273,30 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                   className={`${slotPositionClassName} overflow-visible`}
                 >
                   <div className="mx-auto flex w-full max-w-[var(--slot-card-max-width)] flex-col items-center gap-1.5 overflow-visible text-center sm:gap-2">
-                    <div
-                      className={`inline-flex min-h-9 max-w-full items-center justify-center whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-black tracking-[0.08em] shadow-[0_14px_26px_rgba(15,23,42,0.16)] sm:min-h-10 sm:px-3 sm:py-1.25 sm:text-sm ${tone.badgeClassName}`}
-                    >
-                      {buildRankLabel(safeEntries, entry)}
-                    </div>
+                    {control ? (
+                      <button
+                        type="button"
+                        aria-label={
+                          control.dragLabel || `${rankLabel} 시상대 위치 이동`
+                        }
+                        onPointerDown={control.onPointerDown}
+                        onClick={control.onClick}
+                        disabled={control.disabled}
+                        className={`${badgeClassName} touch-none select-none transition ${
+                          control.active
+                            ? "ring-4 ring-slate-900/15"
+                            : "hover:ring-2 hover:ring-slate-900/10"
+                        } ${
+                          control.disabled
+                            ? "cursor-default"
+                            : "cursor-grab active:cursor-grabbing"
+                        }`}
+                      >
+                        {rankLabel}
+                      </button>
+                    ) : (
+                      <div className={badgeClassName}>{rankLabel}</div>
+                    )}
 
                     <div
                       className={`relative z-10 leading-none drop-shadow-[0_12px_18px_rgba(15,23,42,0.24)] ${tone.emojiClassName}`}

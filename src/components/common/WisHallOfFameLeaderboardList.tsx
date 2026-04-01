@@ -10,6 +10,7 @@ interface WisHallOfFameLeaderboardListProps {
     emptyMessage?: string;
     className?: string;
     style?: React.CSSProperties;
+    headerAccessory?: React.ReactNode;
 }
 
 const WisHallOfFameLeaderboardList: React.FC<WisHallOfFameLeaderboardListProps> = ({
@@ -20,6 +21,7 @@ const WisHallOfFameLeaderboardList: React.FC<WisHallOfFameLeaderboardListProps> 
     emptyMessage = '아직 공개된 추가 랭킹이 없어요.',
     className = '',
     style,
+    headerAccessory = null,
 }) => {
     const safeEntries = entries || [];
     const hasTieForRank = (rank: number) => safeEntries.filter((entry) => entry.rank === rank).length > 1;
@@ -35,9 +37,12 @@ const WisHallOfFameLeaderboardList: React.FC<WisHallOfFameLeaderboardListProps> 
                         <h3 className="text-base font-black text-slate-900">{title}</h3>
                         <p className="mt-1 break-keep text-sm text-slate-500">{subtitle}</p>
                     </div>
-                    <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-slate-900 px-3 py-1 text-xs font-bold text-white">
-                        {safeEntries.length}명
-                    </span>
+                    <div className="flex shrink-0 items-center gap-2">
+                        {headerAccessory}
+                        <span className="inline-flex items-center whitespace-nowrap rounded-full bg-slate-900 px-3 py-1 text-xs font-bold text-white">
+                            {safeEntries.length}명
+                        </span>
+                    </div>
                 </div>
             </div>
 

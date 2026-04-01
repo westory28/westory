@@ -176,10 +176,9 @@ const WisHallOfFameStudentPreview: React.FC<
   const mobileRail = resolvedConfig.leaderboardPanel.mobile;
   const desktopRailWidth = clamp(
     Number(desktopRail.widthPercent || 29),
-    22,
-    34,
+    24,
+    38,
   );
-  const desktopPodiumWidth = clamp(100 - desktopRailWidth - 2, 63, 80);
   const desktopRailTop = `${clamp(
     Number(desktopRail.topPercent || 0) / 10,
     0,
@@ -188,9 +187,9 @@ const WisHallOfFameStudentPreview: React.FC<
   const desktopRailShift = `${clamp(
     (Number(desktopRail.leftPercent || DEFAULT_RAIL_CENTER) -
       DEFAULT_RAIL_CENTER) /
-      4,
-    -2.5,
-    2.5,
+      8,
+    -1.25,
+    1.25,
   )}rem`;
   const mobileRailWidth = `${clamp(
     Number(mobileRail.widthPercent || 100),
@@ -222,7 +221,6 @@ const WisHallOfFameStudentPreview: React.FC<
     ? "기본은 4위부터 보이고, 같은 순위는 함께 이어서 보여요."
     : "공개 범위 안에서 4위부터 차례대로 보여요.";
   const previewStyle = {
-    ["--hall-podium-width" as string]: `${desktopPodiumWidth}%`,
     ["--hall-rail-width" as string]: `${desktopRailWidth}%`,
     ["--hall-rail-desktop-top" as string]: desktopRailTop,
     ["--hall-rail-desktop-shift" as string]: desktopRailShift,
@@ -231,22 +229,22 @@ const WisHallOfFameStudentPreview: React.FC<
   };
   const previewLayoutClassName =
     deviceMode === "desktop"
-      ? "flex flex-row items-start justify-between gap-5"
+      ? "flex flex-row items-start gap-6 overflow-hidden"
       : deviceMode === "mobile"
-        ? "mx-auto flex max-w-[420px] flex-col gap-5"
-        : "flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between lg:gap-5";
+        ? "mx-auto flex max-w-[420px] flex-col gap-5 overflow-hidden"
+        : "flex flex-col gap-5 overflow-hidden lg:flex-row lg:items-start lg:gap-6";
   const podiumContainerClassName =
     deviceMode === "desktop"
-      ? "min-w-0 w-[var(--hall-podium-width)] overflow-visible"
+      ? "min-w-0 flex-1 overflow-hidden"
       : deviceMode === "mobile"
-        ? "min-w-0 w-full overflow-visible"
-        : "min-w-0 w-full overflow-visible lg:w-[var(--hall-podium-width)]";
+        ? "min-w-0 w-full overflow-hidden"
+        : "min-w-0 w-full overflow-hidden lg:flex-1";
   const railContainerClassName =
     deviceMode === "desktop"
-      ? "mt-[var(--hall-rail-desktop-top)] ml-[var(--hall-rail-desktop-shift)] min-w-[18rem] w-[var(--hall-rail-width)]"
+      ? "relative z-10 mt-[var(--hall-rail-desktop-top)] ml-[var(--hall-rail-desktop-shift)] min-w-[19rem] w-[max(var(--hall-rail-width),19rem)] max-w-full shrink-0"
       : deviceMode === "mobile"
-        ? `mt-[var(--hall-rail-mobile-top)] min-w-0 w-full max-w-[var(--hall-rail-mobile-width)] ${mobileRailAlignClassName}`
-        : `mt-[var(--hall-rail-mobile-top)] min-w-0 w-full sm:max-w-[var(--hall-rail-mobile-width)] lg:mt-[var(--hall-rail-desktop-top)] lg:ml-[var(--hall-rail-desktop-shift)] lg:min-w-[18rem] lg:w-[var(--hall-rail-width)] lg:max-w-none ${mobileRailAlignClassName}`;
+        ? `relative z-10 mt-[var(--hall-rail-mobile-top)] min-w-0 w-full max-w-[var(--hall-rail-mobile-width)] ${mobileRailAlignClassName}`
+        : `relative z-10 mt-[var(--hall-rail-mobile-top)] min-w-0 w-full sm:max-w-[var(--hall-rail-mobile-width)] lg:mt-[var(--hall-rail-desktop-top)] lg:ml-[var(--hall-rail-desktop-shift)] lg:min-w-[19rem] lg:w-[max(var(--hall-rail-width),19rem)] lg:max-w-full lg:shrink-0 ${mobileRailAlignClassName}`;
   const podiumDeviceMode =
     deviceMode === "responsive" ? "responsive" : deviceMode;
 
@@ -345,7 +343,7 @@ const WisHallOfFameStudentPreview: React.FC<
         </div>
       </div>
 
-      <div className="overflow-visible rounded-[2rem] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(255,251,235,0.9),_rgba(248,250,252,0.98)_42%,_rgba(255,255,255,1)_100%)] p-4 shadow-[0_22px_54px_rgba(15,23,42,0.08)] sm:p-5 xl:p-6">
+      <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(255,251,235,0.9),_rgba(248,250,252,0.98)_42%,_rgba(255,255,255,1)_100%)] p-4 shadow-[0_22px_54px_rgba(15,23,42,0.08)] sm:p-5 xl:p-6">
         <div className="mb-4 flex flex-wrap items-center gap-2 text-xs font-bold text-slate-500">
           <span className="inline-flex items-center whitespace-nowrap rounded-full bg-white px-3 py-1.5 text-slate-700 shadow-[0_8px_18px_rgba(15,23,42,0.05)]">
             현재 보기

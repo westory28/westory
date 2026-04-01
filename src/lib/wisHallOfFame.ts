@@ -35,15 +35,15 @@ export const DEFAULT_WIS_HALL_OF_FAME_STORED_RANK_LIMIT = 20;
 const WIS_HALL_OF_FAME_SEEN_KEY_PREFIX = 'wisHallOfFameSeen';
 
 const DEFAULT_DESKTOP_POSITIONS: HallOfFamePodiumPositions = {
-  first: { leftPercent: 50, topPercent: 23, widthPercent: 20 },
-  second: { leftPercent: 30, topPercent: 35, widthPercent: 16 },
-  third: { leftPercent: 70, topPercent: 35, widthPercent: 16 },
+  first: { leftPercent: 50, topPercent: 26, widthPercent: 21 },
+  second: { leftPercent: 26.5, topPercent: 40.5, widthPercent: 18 },
+  third: { leftPercent: 73.5, topPercent: 40.5, widthPercent: 18 },
 };
 
 const DEFAULT_MOBILE_POSITIONS: HallOfFamePodiumPositions = {
-  first: { leftPercent: 50, topPercent: 25, widthPercent: 25 },
-  second: { leftPercent: 31, topPercent: 39, widthPercent: 18.5 },
-  third: { leftPercent: 69, topPercent: 39, widthPercent: 18.5 },
+  first: { leftPercent: 50, topPercent: 28, widthPercent: 28 },
+  second: { leftPercent: 28, topPercent: 46, widthPercent: 21 },
+  third: { leftPercent: 72, topPercent: 46, widthPercent: 21 },
 };
 
 const DEFAULT_DESKTOP_LEADERBOARD_PANEL: HallOfFameLeaderboardPanelPosition = {
@@ -245,6 +245,29 @@ const resolveSnapshotUpdatedAtMs = (
   return Number(updatedAt?.seconds || 0) * 1000;
 };
 
+const resolveSnapshotSourceUpdatedAtMs = (
+  raw: Partial<WisHallOfFameSnapshot> & {
+    sourceUpdatedAtMs?: unknown;
+    sourceUpdatedAt?: unknown;
+  },
+) => {
+  const storedSourceUpdatedAtMs = toNonNegativeNumber(raw.sourceUpdatedAtMs);
+  if (storedSourceUpdatedAtMs > 0) {
+    return storedSourceUpdatedAtMs;
+  }
+  const sourceUpdatedAt = raw.sourceUpdatedAt as
+    | { toMillis?: () => number; seconds?: number }
+    | undefined;
+  if (typeof sourceUpdatedAt?.toMillis === 'function') {
+    return sourceUpdatedAt.toMillis();
+  }
+  const sourceUpdatedAtSeconds = Number(sourceUpdatedAt?.seconds || 0);
+  if (sourceUpdatedAtSeconds > 0) {
+    return sourceUpdatedAtSeconds * 1000;
+  }
+  return resolveSnapshotUpdatedAtMs(raw);
+};
+
 const buildPodiumEntriesFromLeaderboard = (entries: WisHallOfFameEntry[]) => entries
   .slice(0, 3)
   .map((entry, index) => ({
@@ -291,6 +314,12 @@ export const normalizeWisHallOfFameSnapshot = (
   if (!value || typeof value !== 'object') return null;
   const raw = value as Partial<WisHallOfFameSnapshot> & Record<string, unknown>;
   const updatedAtMs = resolveSnapshotUpdatedAtMs(raw as Partial<WisHallOfFameSnapshot> & { updatedAtMs?: unknown });
+  const sourceUpdatedAtMs = resolveSnapshotSourceUpdatedAtMs(
+    raw as Partial<WisHallOfFameSnapshot> & {
+      sourceUpdatedAtMs?: unknown;
+      sourceUpdatedAt?: unknown;
+    },
+  );
   const snapshotKey = toSafeText(raw.snapshotKey) || `${updatedAtMs || Date.now()}`;
   const legacyLeaderboard = pickRecordCandidate(raw.leaderboard);
   const legacyLeaderboardMeta = pickRecordCandidate(raw.leaderboardMeta);
@@ -350,6 +379,7 @@ export const normalizeWisHallOfFameSnapshot = (
     leaderboardPolicy: normalizeLeaderboardPolicy(raw.leaderboardPolicy),
     updatedAt: raw.updatedAt,
     updatedAtMs,
+    sourceUpdatedAtMs,
   };
 };
 
@@ -524,6 +554,10 @@ export const isWisHallOfFameSnapshotStale = (
   }
   const updatedAtMs = getSnapshotUpdatedAtMs(snapshot);
   if (!updatedAtMs) return true;
+  const sourceUpdatedAtMs = Math.max(0, Number(snapshot?.sourceUpdatedAtMs || 0));
+  if (sourceUpdatedAtMs > updatedAtMs) {
+    return true;
+  }
   return (Date.now() - updatedAtMs) > WIS_HALL_OF_FAME_STALE_MS;
 };
 
@@ -654,6 +688,38 @@ export const getHallOfFameEntryByRank = (
   entries: WisHallOfFameEntry[] | null | undefined,
   rank: number,
 ) => (entries || []).find((entry) => entry.podiumSlot === rank || entry.rank === rank) || null;
+
+const findHallOfFameEntryByUidInMap = (
+  entryMap: Record<string, WisHallOfFameEntry[]> | null | undefined,
+  uid: string,
+) => {
+  const normalizedUid = toSafeText(uid);
+  if (!normalizedUid) return null;
+
+  for (const entries of Object.values(entryMap || {})) {
+    const matchedEntry = (entries || []).find((entry) => entry.uid === normalizedUid);
+    if (matchedEntry) {
+      return matchedEntry;
+    }
+  }
+
+  return null;
+};
+
+export const findWisHallOfFameEntryByUid = (
+  snapshot: WisHallOfFameSnapshot | null | undefined,
+  uid: string,
+) => {
+  const normalizedUid = toSafeText(uid);
+  if (!snapshot || !normalizedUid) return null;
+
+  return (
+    findHallOfFameEntryByUidInMap(snapshot.gradeLeaderboardByGrade, normalizedUid)
+    || findHallOfFameEntryByUidInMap(snapshot.gradeTop3ByGrade, normalizedUid)
+    || findHallOfFameEntryByUidInMap(snapshot.classLeaderboardByClassKey, normalizedUid)
+    || findHallOfFameEntryByUidInMap(snapshot.classTop3ByClassKey, normalizedUid)
+  );
+};
 
 export const getWisHallOfFameGradeEntries = (
   snapshot: WisHallOfFameSnapshot | null | undefined,

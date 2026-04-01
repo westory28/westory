@@ -419,6 +419,7 @@ export interface WisHallOfFameSnapshot {
   leaderboardPolicy?: WisHallOfFameLeaderboardPolicy;
   updatedAt?: any;
   updatedAtMs?: number;
+  sourceUpdatedAtMs?: number;
 }
 
 export interface WisHallOfFameRecognition {
