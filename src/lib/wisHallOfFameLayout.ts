@@ -49,7 +49,7 @@ export const buildHallOfFamePreviewLayout = (
     0,
     1.75,
   )}rem`;
-  const desktopTrackWidth = `clamp(18rem, ${desktopRailWidthPercent}%, 22rem)`;
+  const desktopTrackWidth = `clamp(18rem, ${desktopRailWidthPercent}%, 21.5rem)`;
   const mobileRailAlignClassName = resolveRailAlignClassName(
     Number(mobileRail.leftPercent || 50),
   );
