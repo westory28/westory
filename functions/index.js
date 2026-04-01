@@ -1322,33 +1322,12 @@ const isWisHallOfFameSnapshotStale = (data) => {
   return Date.now() - updatedAtMs > WIS_HALL_OF_FAME_STALE_MS;
 };
 
-const tryRefreshWisHallOfFame = async (year, semester) => {
-  try {
-    return await refreshWisHallOfFame(year, semester, { source: 'mutation' });
-  } catch (error) {
-    const failure = normalizeHallOfFameRefreshError(error);
-    console.error('Failed to refresh wis hall of fame snapshot after point mutation:', {
-      year,
-      semester,
-      stage: failure.stage || 'unknown',
-      message: failure.message,
-      cause: failure.cause || null,
-    });
-    return {
-      ensured: false,
-      snapshotKey: '',
-      snapshotVersion: WIS_HALL_OF_FAME_SNAPSHOT_VERSION,
-    };
-  }
-};
-
-const syncWisHallOfFameAfterMutation = async (year, semester) => {
+const markWisHallOfFameDirtySafely = async (year, semester) => {
   try {
     await markWisHallOfFameDirty(year, semester);
   } catch (error) {
     console.error('Failed to mark wis hall of fame snapshot dirty:', error);
   }
-  return tryRefreshWisHallOfFame(year, semester);
 };
 
 const buildActivityTransactionId = (uid, type, sourceId) =>
@@ -2360,7 +2339,7 @@ exports.applyPointActivityReward = onCall({ region: REGION }, async (request) =>
   });
 
   if (result.awarded) {
-    await syncWisHallOfFameAfterMutation(year, semester);
+    await markWisHallOfFameDirtySafely(year, semester);
   }
   return result;
 });
@@ -2468,7 +2447,7 @@ exports.createPointPurchaseRequest = onCall({ region: REGION }, async (request) 
   });
 
   if (result.created) {
-    await syncWisHallOfFameAfterMutation(year, semester);
+    await markWisHallOfFameDirtySafely(year, semester);
   }
   return result;
 });
@@ -2553,7 +2532,7 @@ exports.adjustTeacherPoints = onCall({ region: REGION }, async (request) => {
     };
   });
 
-  await syncWisHallOfFameAfterMutation(year, semester);
+  await markWisHallOfFameDirtySafely(year, semester);
   return result;
 });
 
@@ -2658,7 +2637,7 @@ exports.updateTeacherPointAdjustment = onCall({ region: REGION }, async (request
     };
   });
 
-  await syncWisHallOfFameAfterMutation(year, semester);
+  await markWisHallOfFameDirtySafely(year, semester);
   return result;
 });
 
@@ -2782,7 +2761,7 @@ exports.reviewTeacherPointOrder = onCall({ region: REGION }, async (request) => 
   });
 
   if (!result.duplicate) {
-    await syncWisHallOfFameAfterMutation(year, semester);
+    await markWisHallOfFameDirtySafely(year, semester);
   }
   return result;
 });
@@ -2827,6 +2806,6 @@ exports.updateStudentProfileIcon = onCall({ region: REGION }, async (request) =>
     };
   });
 
-  await syncWisHallOfFameAfterMutation(year, semester);
+  await markWisHallOfFameDirtySafely(year, semester);
   return result;
 });
