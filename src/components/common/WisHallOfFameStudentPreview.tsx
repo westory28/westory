@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { formatPointDateShortTime } from "../../lib/pointFormatters";
 import {
   WIS_HALL_OF_FAME_GRADE_KEY,
@@ -11,6 +11,7 @@ import {
   getWisHallOfFameGradeLeaderboardEntries,
   resolveHallOfFameInterfaceConfig,
 } from "../../lib/wisHallOfFame";
+import { buildHallOfFamePreviewLayout } from "../../lib/wisHallOfFameLayout";
 import type {
   HallOfFameInterfaceConfig,
   WisHallOfFameSnapshot,
@@ -33,10 +34,10 @@ interface WisHallOfFameStudentPreviewProps {
   showSnapshotAlert?: boolean;
 }
 
-const clamp = (value: number, minimum: number, maximum: number) =>
-  Math.min(maximum, Math.max(minimum, value));
+const SPLIT_LAYOUT_MIN_WIDTH = 1180;
 
-const DEFAULT_RAIL_CENTER = 71;
+const readElementWidth = (element: HTMLElement | null) =>
+  Math.max(0, Math.round(element?.getBoundingClientRect().width || 0));
 
 const normalizeNumberText = (value: unknown) => {
   const raw = String(value || "").trim();
@@ -49,12 +50,6 @@ const normalizeNumberText = (value: unknown) => {
 const buildStatusText = (snapshot: WisHallOfFameSnapshot | null) => {
   if (!snapshot?.updatedAt) return "화랑의 전당을 준비 중이에요.";
   return `최근 반영 ${formatPointDateShortTime(snapshot.updatedAt)}`;
-};
-
-const resolveRailAlignClassName = (leftPercent: number) => {
-  if (leftPercent <= 44) return "self-start";
-  if (leftPercent >= 56) return "self-end";
-  return "self-center";
 };
 
 const WisHallOfFameStudentPreview: React.FC<
@@ -70,6 +65,8 @@ const WisHallOfFameStudentPreview: React.FC<
   deviceMode = "responsive",
   showSnapshotAlert = true,
 }) => {
+  const previewRootRef = useRef<HTMLDivElement | null>(null);
+  const [previewWidth, setPreviewWidth] = useState(0);
   const resolvedConfig = resolveHallOfFameInterfaceConfig(hallOfFameConfig);
   const normalizedGrade = normalizeNumberText(currentGrade);
   const normalizedClass = normalizeNumberText(currentClass);
@@ -174,36 +171,38 @@ const WisHallOfFameStudentPreview: React.FC<
   const statusText = useMemo(() => buildStatusText(snapshot), [snapshot]);
   const desktopRail = resolvedConfig.leaderboardPanel.desktop;
   const mobileRail = resolvedConfig.leaderboardPanel.mobile;
-  const desktopRailWidth = clamp(
-    Number(desktopRail.widthPercent || 29),
-    24,
-    38,
-  );
-  const desktopRailTop = `${clamp(
-    Number(desktopRail.topPercent || 0) / 10,
-    0,
-    4.5,
-  )}rem`;
-  const desktopRailShift = `${clamp(
-    (Number(desktopRail.leftPercent || DEFAULT_RAIL_CENTER) -
-      DEFAULT_RAIL_CENTER) /
-      8,
-    -1.25,
-    1.25,
-  )}rem`;
-  const mobileRailWidth = `${clamp(
-    Number(mobileRail.widthPercent || 100),
-    78,
-    100,
-  )}%`;
-  const mobileRailTop = `${clamp(
-    Number(mobileRail.topPercent || 0) / 18,
-    0,
-    1.75,
-  )}rem`;
-  const mobileRailAlignClassName = resolveRailAlignClassName(
-    Number(mobileRail.leftPercent || 50),
-  );
+  const usesSplitLayout =
+    deviceMode === "desktop" ||
+    (deviceMode === "responsive" && previewWidth >= SPLIT_LAYOUT_MIN_WIDTH);
+  const usesStackedLayout =
+    deviceMode === "mobile" ||
+    (deviceMode === "responsive" && !usesSplitLayout);
+
+  useEffect(() => {
+    const rootElement = previewRootRef.current;
+    if (!rootElement) return undefined;
+
+    const updateWidth = () => {
+      const nextWidth = readElementWidth(rootElement);
+      setPreviewWidth((previousWidth) =>
+        previousWidth === nextWidth ? previousWidth : nextWidth,
+      );
+    };
+
+    updateWidth();
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(rootElement);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  const {
+    previewStyle,
+    mobileRailAlignClassName,
+    desktopRailJustifyClassName,
+  } = buildHallOfFamePreviewLayout(desktopRail, mobileRail);
   const viewSummary =
     effectiveView === "grade"
       ? `${previewGradeKey}학년 전체 화랑의 전당`
@@ -220,36 +219,24 @@ const WisHallOfFameStudentPreview: React.FC<
   const railSubtitle = showTieCaption
     ? "기본은 4위부터 보이고, 같은 순위는 함께 이어서 보여요."
     : "공개 범위 안에서 4위부터 차례대로 보여요.";
-  const previewStyle = {
-    ["--hall-rail-width" as string]: `${desktopRailWidth}%`,
-    ["--hall-rail-desktop-top" as string]: desktopRailTop,
-    ["--hall-rail-desktop-shift" as string]: desktopRailShift,
-    ["--hall-rail-mobile-width" as string]: mobileRailWidth,
-    ["--hall-rail-mobile-top" as string]: mobileRailTop,
-  };
-  const previewLayoutClassName =
-    deviceMode === "desktop"
-      ? "flex flex-row items-start gap-6"
-      : deviceMode === "mobile"
-        ? "mx-auto flex max-w-[420px] flex-col gap-5 overflow-visible"
-        : "flex flex-col gap-5 overflow-visible lg:flex-row lg:items-start lg:gap-6";
-  const podiumContainerClassName =
-    deviceMode === "desktop"
-      ? "min-w-0 flex-1 self-start overflow-visible"
-      : deviceMode === "mobile"
-        ? "min-w-0 w-full overflow-visible"
-        : "min-w-0 w-full overflow-visible lg:flex-1";
-  const railContainerClassName =
-    deviceMode === "desktop"
-      ? "relative z-10 mt-[var(--hall-rail-desktop-top)] ml-[var(--hall-rail-desktop-shift)] min-w-[20rem] w-[max(var(--hall-rail-width),20rem)] max-w-full shrink-0 self-start"
-      : deviceMode === "mobile"
-        ? `relative z-10 mt-[var(--hall-rail-mobile-top)] min-w-0 w-full max-w-[var(--hall-rail-mobile-width)] ${mobileRailAlignClassName}`
-        : `relative z-10 mt-[var(--hall-rail-mobile-top)] min-w-0 w-full max-w-[var(--hall-rail-mobile-width)] ${mobileRailAlignClassName} lg:mt-[var(--hall-rail-desktop-top)] lg:ml-[var(--hall-rail-desktop-shift)] lg:min-w-[20rem] lg:w-[max(var(--hall-rail-width),20rem)] lg:max-w-full lg:shrink-0 lg:self-start`;
+  const previewLayoutClassName = usesSplitLayout
+    ? "grid grid-cols-[minmax(0,1fr)_minmax(18rem,var(--hall-rail-desktop-track))] items-start gap-7 overflow-visible"
+    : "mx-auto flex w-full max-w-[420px] flex-col gap-5 overflow-visible sm:max-w-none";
+  const podiumContainerClassName = usesSplitLayout
+    ? "min-w-0 self-start overflow-visible"
+    : "min-w-0 w-full overflow-visible";
+  const railContainerClassName = usesSplitLayout
+    ? `relative z-10 mt-[var(--hall-rail-desktop-top)] w-[var(--hall-rail-desktop-track)] max-w-full translate-x-[var(--hall-rail-desktop-nudge)] self-start ${desktopRailJustifyClassName}`
+    : `relative z-10 mt-[var(--hall-rail-mobile-top)] min-w-0 w-full max-w-[var(--hall-rail-mobile-width)] ${mobileRailAlignClassName}`;
   const podiumDeviceMode =
-    deviceMode === "responsive" ? "responsive" : deviceMode;
+    deviceMode === "responsive"
+      ? usesStackedLayout
+        ? "mobile"
+        : "desktop"
+      : deviceMode;
 
   return (
-    <div className="space-y-5" style={previewStyle}>
+    <div ref={previewRootRef} className="space-y-5" style={previewStyle}>
       {showSnapshotAlert && !snapshot && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm font-semibold text-amber-900">
           화랑의 전당을 준비 중이에요. 잠시 후 다시 표시됩니다.
@@ -404,7 +391,7 @@ const WisHallOfFameStudentPreview: React.FC<
               </span>
             </div>
 
-            <div className="min-h-[31rem] sm:min-h-[33rem] lg:min-h-[38rem]">
+            <div className="min-h-[18rem] sm:min-h-[20rem] lg:min-h-[23rem]">
               <WisHallOfFameLeaderboardList
                 entries={rightRailEntries}
                 hallOfFameConfig={resolvedConfig}

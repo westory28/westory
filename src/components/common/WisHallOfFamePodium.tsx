@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { formatWisAmount } from "../../lib/pointFormatters";
 import {
   DEFAULT_WIS_HALL_OF_FAME_PODIUM_IMAGE_URL,
@@ -40,39 +40,51 @@ const SLOT_ORDER: HallOfFamePodiumSlotKey[] = ["second", "first", "third"];
 
 type SlotLayoutMode = "desktop" | "mobile";
 
+const DESKTOP_PODIUM_SCALE_BOUNDS = {
+  baselineWidth: 860,
+  min: 0.72,
+  max: 1,
+} as const;
+
+const MOBILE_PODIUM_SCALE_BOUNDS = {
+  baselineWidth: 420,
+  min: 0.8,
+  max: 0.98,
+} as const;
+
 const SLOT_SAFE_AREA = {
   desktop: {
     centerRangePercentBySlot: {
-      first: { min: 43, max: 57 },
-      second: { min: 24, max: 39 },
-      third: { min: 61, max: 76 },
+      first: { min: 44, max: 56 },
+      second: { min: 25, max: 38 },
+      third: { min: 62, max: 74 },
     },
     topPercentRangeBySlot: {
-      first: { min: 18, max: 35 },
-      second: { min: 28, max: 46 },
-      third: { min: 28, max: 46 },
+      first: { min: 18, max: 33 },
+      second: { min: 29, max: 45 },
+      third: { min: 29, max: 45 },
     },
     widthPercentBySlot: {
-      first: { min: 20, max: 24 },
-      second: { min: 16, max: 20 },
-      third: { min: 16, max: 20 },
+      first: { min: 19, max: 22 },
+      second: { min: 15, max: 18.5 },
+      third: { min: 15, max: 18.5 },
     },
   },
   mobile: {
     centerRangePercentBySlot: {
-      first: { min: 42, max: 58 },
-      second: { min: 25, max: 40 },
-      third: { min: 60, max: 75 },
+      first: { min: 43, max: 57 },
+      second: { min: 26, max: 39 },
+      third: { min: 61, max: 74 },
     },
     topPercentRangeBySlot: {
-      first: { min: 20, max: 37 },
-      second: { min: 31, max: 48 },
-      third: { min: 31, max: 48 },
+      first: { min: 21, max: 35 },
+      second: { min: 32, max: 47 },
+      third: { min: 32, max: 47 },
     },
     widthPercentBySlot: {
-      first: { min: 25, max: 31 },
-      second: { min: 19, max: 23 },
-      third: { min: 19, max: 23 },
+      first: { min: 24, max: 29 },
+      second: { min: 18, max: 21.5 },
+      third: { min: 18, max: 21.5 },
     },
   },
 } as const;
@@ -124,6 +136,9 @@ const resolveSlotEntries = (entries: WisHallOfFameEntry[]) => {
   return slotEntries;
 };
 
+const readElementWidth = (element: HTMLElement | null) =>
+  Math.max(0, Math.round(element?.getBoundingClientRect().width || 0));
+
 const buildSlotStyle = (
   slotKey: HallOfFamePodiumSlotKey,
   positions: {
@@ -159,7 +174,7 @@ const buildSlotStyle = (
 
   const desktop = resolveLayout("desktop");
   const mobile = resolveLayout("mobile");
-  const cardMaxWidth = slotKey === "first" ? "12.5rem" : "10.75rem";
+  const cardBaseWidth = slotKey === "first" ? 10.9 : 9.45;
 
   return {
     ["--slot-left" as string]: `${desktop.leftPercent}%`,
@@ -168,7 +183,7 @@ const buildSlotStyle = (
     ["--slot-left-mobile" as string]: `${mobile.leftPercent}%`,
     ["--slot-top-mobile" as string]: `${mobile.topPercent}%`,
     ["--slot-width-mobile" as string]: `${mobile.widthPercent}%`,
-    ["--slot-card-max-width" as string]: cardMaxWidth,
+    ["--slot-card-max-width" as string]: `${cardBaseWidth}rem`,
   } as React.CSSProperties;
 };
 
@@ -194,6 +209,8 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
   deviceMode = "responsive",
   slotControls,
 }) => {
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const [stageWidth, setStageWidth] = useState(0);
   const safeEntries = entries || [];
   const normalizedConfig = normalizeHallOfFameInterfaceConfig(hallOfFameConfig);
   const resolvedImageUrl =
@@ -202,16 +219,80 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
   const normalizedPositions =
     normalizedConfig.positions || getDefaultHallOfFamePositions();
   const slotEntries = resolveSlotEntries(safeEntries);
+  const resolvedDeviceMode: SlotLayoutMode =
+    deviceMode === "mobile"
+      ? "mobile"
+      : deviceMode === "desktop"
+        ? "desktop"
+        : stageWidth > 0 && stageWidth < 600
+          ? "mobile"
+          : "desktop";
+  const scaleBounds =
+    resolvedDeviceMode === "desktop"
+      ? DESKTOP_PODIUM_SCALE_BOUNDS
+      : MOBILE_PODIUM_SCALE_BOUNDS;
+  const podiumScale =
+    stageWidth > 0
+      ? Math.min(
+          scaleBounds.max,
+          Math.max(scaleBounds.min, stageWidth / scaleBounds.baselineWidth),
+        )
+      : 1;
+  const stageMinHeight =
+    resolvedDeviceMode === "desktop"
+      ? `${Math.min(34, Math.max(24, 29.5 * podiumScale))}rem`
+      : `${Math.min(26, Math.max(20.5, 22.8 * podiumScale))}rem`;
+  const contentPaddingX =
+    resolvedDeviceMode === "desktop"
+      ? `${Math.min(1.65, Math.max(0.9, 1.2 * podiumScale))}rem`
+      : `${Math.min(1.15, Math.max(0.75, 0.95 * podiumScale))}rem`;
+  const contentPaddingTop =
+    resolvedDeviceMode === "desktop"
+      ? `${Math.min(2.4, Math.max(1.55, 1.95 * podiumScale))}rem`
+      : `${Math.min(1.85, Math.max(1.2, 1.5 * podiumScale))}rem`;
+  const contentPaddingBottom =
+    resolvedDeviceMode === "desktop"
+      ? `${Math.min(12.4, Math.max(8.2, 10.2 * podiumScale))}rem`
+      : `${Math.min(9.4, Math.max(6.6, 7.8 * podiumScale))}rem`;
+
+  useEffect(() => {
+    const stageElement = stageRef.current;
+    if (!stageElement) return undefined;
+
+    const updateWidth = () => {
+      const nextWidth = readElementWidth(stageElement);
+      setStageWidth((previousWidth) =>
+        previousWidth === nextWidth ? previousWidth : nextWidth,
+      );
+    };
+
+    updateWidth();
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(stageElement);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
 
   const slotPositionClassName =
-    deviceMode === "desktop"
-      ? "absolute left-[var(--slot-left)] top-[var(--slot-top)] z-30 w-[var(--slot-width)] -translate-x-1/2 px-0.5"
-      : deviceMode === "mobile"
-        ? "absolute left-[var(--slot-left-mobile)] top-[var(--slot-top-mobile)] z-30 w-[var(--slot-width-mobile)] -translate-x-1/2 px-0"
-        : "absolute left-[var(--slot-left-mobile)] top-[var(--slot-top-mobile)] z-30 w-[var(--slot-width-mobile)] -translate-x-1/2 px-0 lg:left-[var(--slot-left)] lg:top-[var(--slot-top)] lg:w-[var(--slot-width)] lg:px-0.5";
+    resolvedDeviceMode === "desktop"
+      ? "absolute left-[var(--slot-left)] top-[var(--slot-top)] z-30 w-[var(--slot-width)] -translate-x-1/2 px-0"
+      : "absolute left-[var(--slot-left-mobile)] top-[var(--slot-top-mobile)] z-30 w-[var(--slot-width-mobile)] -translate-x-1/2 px-0";
+
+  const podiumStyle = {
+    ["--hall-podium-scale" as string]: `${podiumScale}`,
+    ["--hall-podium-stage-min-height" as string]: stageMinHeight,
+    ["--hall-podium-content-px" as string]: contentPaddingX,
+    ["--hall-podium-content-pt" as string]: contentPaddingTop,
+    ["--hall-podium-content-pb" as string]: contentPaddingBottom,
+  } as React.CSSProperties;
 
   return (
-    <div className="overflow-visible rounded-[1.85rem] border border-slate-200 bg-white shadow-[0_22px_54px_rgba(15,23,42,0.08)]">
+    <div
+      className="overflow-visible rounded-[1.85rem] border border-slate-200 bg-white shadow-[0_22px_54px_rgba(15,23,42,0.08)]"
+      style={podiumStyle}
+    >
       {showHeader && (
         <div className="overflow-hidden rounded-t-[1.85rem] border-b border-slate-100 bg-[linear-gradient(135deg,_#0f172a,_#1f2d45)] px-5 py-5 text-white sm:flex-row sm:items-end sm:justify-between sm:px-6">
           <div className="min-w-0">
@@ -234,7 +315,10 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
       )}
 
       <div className="relative overflow-visible px-2 pb-4 pt-2 sm:px-3 sm:pb-5 sm:pt-3">
-        <div className="relative aspect-[78/58] min-h-[30rem] overflow-visible rounded-[1.65rem] bg-[#f5f7fb] sm:min-h-[34rem] lg:min-h-[39rem] xl:min-h-[42rem]">
+        <div
+          ref={stageRef}
+          className="relative aspect-[79/58] min-h-[var(--hall-podium-stage-min-height)] overflow-visible rounded-[1.65rem] bg-[#f5f7fb]"
+        >
           <div className="absolute inset-0 overflow-hidden rounded-[1.65rem]">
             <img
               src={resolvedImageUrl}
@@ -251,7 +335,7 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
             <div className="absolute inset-0 bg-gradient-to-b from-white/12 via-transparent to-slate-950/12" />
           </div>
 
-          <div className="relative z-10 h-full overflow-visible px-4 pb-[10.5rem] pt-8 sm:px-6 sm:pb-[12rem] sm:pt-9 lg:px-7 lg:pb-[13.5rem] lg:pt-10 xl:px-8 xl:pb-[14.5rem] xl:pt-11">
+          <div className="relative z-10 h-full overflow-visible px-[var(--hall-podium-content-px)] pb-[var(--hall-podium-content-pb)] pt-[var(--hall-podium-content-pt)]">
             {safeEntries.length === 0 && (
               <div className="absolute inset-x-6 top-1/2 z-20 -translate-y-1/2 rounded-3xl border border-white/70 bg-white/88 px-6 py-5 text-center text-sm font-semibold text-slate-600 shadow-[0_18px_44px_rgba(15,23,42,0.08)] backdrop-blur">
                 {emptyMessage}
@@ -265,14 +349,14 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
               const tone = getEntryTone(slotKey);
               const control = slotControls?.[slotKey];
               const rankLabel = buildRankLabel(safeEntries, entry);
-              const badgeClassName = `inline-flex min-h-9 max-w-full items-center justify-center whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-black tracking-[0.08em] shadow-[0_14px_26px_rgba(15,23,42,0.16)] sm:min-h-10 sm:px-3 sm:py-1.25 sm:text-sm ${tone.badgeClassName}`;
+              const badgeClassName = `inline-flex min-h-8 max-w-full items-center justify-center whitespace-nowrap rounded-full border px-2.25 py-1 text-[9px] font-black tracking-[0.08em] shadow-[0_14px_26px_rgba(15,23,42,0.16)] sm:min-h-9 sm:px-2.75 sm:text-[13px] ${tone.badgeClassName}`;
               return (
                 <div
                   key={`${slotKey}-${entry.uid}`}
                   style={buildSlotStyle(slotKey, normalizedPositions)}
                   className={`${slotPositionClassName} overflow-visible`}
                 >
-                  <div className="mx-auto flex w-full max-w-[var(--slot-card-max-width)] flex-col items-center gap-1.5 overflow-visible text-center sm:gap-2">
+                  <div className="mx-auto flex w-full max-w-[var(--slot-card-max-width)] origin-top flex-col items-center gap-1.25 overflow-visible text-center [transform:scale(var(--hall-podium-scale))] sm:gap-1.5">
                     {control ? (
                       <button
                         type="button"
@@ -305,18 +389,18 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                     </div>
 
                     <div
-                      className={`relative z-10 w-full max-w-full rounded-[1.35rem] border px-2.5 py-2.5 backdrop-blur-xl sm:px-3.5 sm:py-3 ${tone.nameClassName}`}
+                      className={`relative z-10 w-full max-w-full rounded-[1.2rem] border px-2.25 py-2.25 backdrop-blur-xl sm:px-3 sm:py-2.75 ${tone.nameClassName}`}
                     >
-                      <div className="whitespace-nowrap text-[9px] font-bold uppercase tracking-[0.12em] text-white/80 [text-shadow:0_1px_2px_rgba(15,23,42,0.46)] sm:text-[10px]">
+                      <div className="whitespace-nowrap text-[8px] font-bold uppercase tracking-[0.12em] text-white/80 [text-shadow:0_1px_2px_rgba(15,23,42,0.46)] sm:text-[9px]">
                         {entry.grade}학년 {entry.class}반
                       </div>
-                      <div className="mt-1 whitespace-normal break-keep text-[11px] font-black leading-[1.3] text-white [text-shadow:0_1px_3px_rgba(15,23,42,0.72)] sm:text-sm lg:text-[15px]">
+                      <div className="mt-1 whitespace-normal break-keep text-[10px] font-black leading-[1.28] text-white [text-shadow:0_1px_3px_rgba(15,23,42,0.72)] sm:text-[13px] lg:text-[14px]">
                         {entry.displayName || entry.studentName}
                       </div>
                     </div>
 
                     <div
-                      className={`relative z-10 inline-flex min-h-[2.2rem] max-w-full shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-black leading-none backdrop-blur shadow-[0_14px_30px_rgba(15,23,42,0.2)] sm:min-h-[2.4rem] sm:px-3 sm:py-1.25 sm:text-sm ${tone.scoreClassName}`}
+                      className={`relative z-10 inline-flex min-h-[2rem] max-w-full shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-2.25 py-1 text-[9px] font-black leading-none backdrop-blur shadow-[0_14px_30px_rgba(15,23,42,0.2)] sm:min-h-[2.2rem] sm:px-2.75 sm:text-[13px] ${tone.scoreClassName}`}
                     >
                       누적 {formatWisAmount(entry.cumulativeEarned)}
                     </div>

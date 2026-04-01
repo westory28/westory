@@ -14,6 +14,7 @@ import {
   getWisHallOfFameGradeLeaderboardEntries,
   resolveHallOfFameInterfaceConfig,
 } from "../../lib/wisHallOfFame";
+import { buildHallOfFamePreviewLayout } from "../../lib/wisHallOfFameLayout";
 import type {
   HallOfFameInterfaceConfig,
   HallOfFameLeaderboardPanelPosition,
@@ -101,8 +102,6 @@ const PRESET_ITEMS: Array<{
 const clamp = (value: number, minimum: number, maximum: number) =>
   Math.min(maximum, Math.max(minimum, value));
 
-const DEFAULT_RAIL_CENTER = 71;
-
 const getWidthBounds = (
   key: EditableKey,
   deviceMode: HallOfFameEditorDeviceMode,
@@ -119,12 +118,6 @@ const normalizeNumberText = (value: unknown) => {
   if (!digits) return raw;
   const parsed = Number(digits);
   return Number.isFinite(parsed) && parsed > 0 ? String(parsed) : raw;
-};
-
-const resolveRailAlignClassName = (leftPercent: number) => {
-  if (leftPercent <= 44) return "self-start";
-  if (leftPercent >= 56) return "self-end";
-  return "self-center";
 };
 
 const cloneEditorValue = (
@@ -291,54 +284,22 @@ const WisHallOfFamePositionEditor: React.FC<
       : "우리 학급 추가 랭킹을 준비 중이에요.";
   const desktopRail = resolvedConfig.leaderboardPanel.desktop;
   const mobileRail = resolvedConfig.leaderboardPanel.mobile;
-  const desktopRailWidth = clamp(
-    Number(desktopRail.widthPercent || 29),
-    24,
-    38,
-  );
-  const desktopRailTop = `${clamp(
-    Number(desktopRail.topPercent || 0) / 10,
-    0,
-    4.5,
-  )}rem`;
-  const desktopRailShift = `${clamp(
-    (Number(desktopRail.leftPercent || DEFAULT_RAIL_CENTER) -
-      DEFAULT_RAIL_CENTER) /
-      8,
-    -1.25,
-    1.25,
-  )}rem`;
-  const mobileRailWidth = `${clamp(
-    Number(mobileRail.widthPercent || 100),
-    78,
-    100,
-  )}%`;
-  const mobileRailTop = `${clamp(
-    Number(mobileRail.topPercent || 0) / 18,
-    0,
-    1.75,
-  )}rem`;
-  const mobileRailAlignClassName = resolveRailAlignClassName(
-    Number(mobileRail.leftPercent || 50),
-  );
-  const previewStyle = {
-    ["--hall-rail-width" as string]: `${desktopRailWidth}%`,
-    ["--hall-rail-desktop-top" as string]: desktopRailTop,
-    ["--hall-rail-desktop-shift" as string]: desktopRailShift,
-    ["--hall-rail-mobile-width" as string]: mobileRailWidth,
-    ["--hall-rail-mobile-top" as string]: mobileRailTop,
-  };
+  const {
+    previewStyle,
+    mobileRailAlignClassName,
+    desktopRailJustifyClassName,
+  } = buildHallOfFamePreviewLayout(desktopRail, mobileRail);
   const previewLayoutClassName =
     deviceMode === "desktop"
-      ? "flex flex-row items-start gap-6 overflow-visible"
-      : "mx-auto flex max-w-[420px] flex-col gap-5 overflow-visible";
+      ? "grid grid-cols-[minmax(0,1fr)_minmax(18rem,var(--hall-rail-desktop-track))] items-start gap-7 overflow-visible"
+      : "mx-auto flex max-w-[420px] flex-col gap-5 overflow-visible sm:max-w-none";
   const podiumContainerClassName =
     deviceMode === "desktop"
-      ? "min-w-0 flex-1 self-start overflow-visible"
+      ? "min-w-0 self-start overflow-visible"
       : "min-w-0 w-full overflow-visible";
   const railContainerClassName =
     deviceMode === "desktop"
-      ? "relative z-10 mt-[var(--hall-rail-desktop-top)] ml-[var(--hall-rail-desktop-shift)] min-w-[20rem] w-[max(var(--hall-rail-width),20rem)] max-w-full shrink-0 self-start"
+      ? `relative z-10 mt-[var(--hall-rail-desktop-top)] w-[var(--hall-rail-desktop-track)] max-w-full translate-x-[var(--hall-rail-desktop-nudge)] self-start ${desktopRailJustifyClassName}`
       : `relative z-10 mt-[var(--hall-rail-mobile-top)] min-w-0 w-full max-w-[var(--hall-rail-mobile-width)] ${mobileRailAlignClassName}`;
 
   const getPosition = (key: EditableKey) => {
@@ -728,8 +689,8 @@ const WisHallOfFamePositionEditor: React.FC<
                 disabled ? "opacity-70" : ""
               } ${
                 deviceMode === "desktop"
-                  ? "min-h-[46rem] xl:min-h-[50rem]"
-                  : "min-h-[34rem]"
+                  ? "min-h-[42rem] xl:min-h-[46rem]"
+                  : "min-h-[30rem]"
               }`}
             >
               <div className="mb-4 flex flex-wrap items-center gap-2 text-xs font-bold text-slate-500">
@@ -788,7 +749,7 @@ const WisHallOfFamePositionEditor: React.FC<
                     </div>
                   </div>
 
-                  <div className="relative min-h-[320px] overflow-visible">
+                  <div className="relative min-h-[18rem] overflow-visible sm:min-h-[20rem] lg:min-h-[23rem]">
                     <div className="select-none">
                       <WisHallOfFameLeaderboardList
                         entries={rightRailEntries}
