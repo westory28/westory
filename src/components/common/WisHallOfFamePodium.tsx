@@ -317,7 +317,7 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
       <div className="relative overflow-visible px-2 pb-4 pt-2 sm:px-3 sm:pb-5 sm:pt-3">
         <div
           ref={stageRef}
-          className="relative aspect-[79/58] min-h-[var(--hall-podium-stage-min-height)] overflow-visible rounded-[1.65rem] bg-[#f5f7fb]"
+          className="relative aspect-[79/58] w-full min-h-[var(--hall-podium-stage-min-height)] max-w-full overflow-visible rounded-[1.65rem] bg-[#f5f7fb]"
         >
           <div className="absolute inset-0 overflow-hidden rounded-[1.65rem]">
             <img
