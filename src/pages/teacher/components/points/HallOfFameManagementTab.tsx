@@ -15,7 +15,6 @@ import {
   WIS_HALL_OF_FAME_GRADE_KEY,
   WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS,
   ensureWisHallOfFameSnapshot,
-  getOrEnsureWisHallOfFameSnapshot,
   getDefaultHallOfFameLeaderboardPanelPosition,
   getDefaultHallOfFamePositions,
   getWisHallOfFameSnapshot,
@@ -554,13 +553,13 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
     setSnapshot(nextSnapshot);
     if (!nextSnapshot) {
       setSnapshotError(
-        "공개 랭킹 데이터를 아직 읽지 못했습니다. 위스 현황과 동기화로 다시 반영해 주세요.",
+        "현재 학기 공개 랭킹 snapshot을 아직 읽지 못했습니다. 교사 수동 동기화나 다음 자동 갱신 이후 다시 확인해 주세요.",
       );
       return;
     }
     if (isWisHallOfFameSnapshotStale(nextSnapshot)) {
       setSnapshotError(
-        "공개 랭킹 데이터가 최신 위스 현황보다 오래되었습니다. 위스 현황과 동기화로 다시 반영해 주세요.",
+        "공개 랭킹 snapshot이 최신 위스 현황보다 오래되었습니다. 수동 동기화 또는 다음 4시간 자동 갱신에서 다시 계산됩니다.",
       );
       return;
     }
@@ -614,7 +613,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
       setSnapshotError("");
 
       try {
-        const nextSnapshot = await getOrEnsureWisHallOfFameSnapshot(config);
+        const nextSnapshot = await getWisHallOfFameSnapshot(config);
         if (!cancelled) {
           applySnapshotState(nextSnapshot);
         }
@@ -730,17 +729,15 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
     Number(snapshot?.sourceUpdatedAtMs || 0),
   );
   const nextAutomaticRefreshLabel = formatAdminDateTime(
-    getNextHallOfFameAutoSyncMs(
-      Math.max(snapshotUpdatedAtMs, snapshotSourceUpdatedAtMs, Date.now()),
-    ),
+    getNextHallOfFameAutoSyncMs(),
   );
   const snapshotStatusLabel = snapshot
     ? isWisHallOfFameSnapshotStale(snapshot)
       ? snapshotSourceUpdatedAtMs > snapshotUpdatedAtMs
-        ? "최신 위스 변동이 있어 공개 랭킹 재동기화를 기다리는 중입니다."
-        : `${WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS}시간 자동 점검 시각이 지나 다시 동기화를 기다리는 중입니다.`
-      : "현재 공개 랭킹이 최신 위스 현황과 동기화된 상태입니다."
-    : "첫 공개 랭킹 동기화를 기다리는 중입니다.";
+        ? "최신 위스 현황과 공개 랭킹 snapshot 사이에 차이가 있습니다. 교사 수동 동기화나 다음 자동 갱신에서 다시 계산됩니다."
+        : `${WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS}시간 주기 안에서 다음 자동 갱신 또는 수동 동기화를 기다리는 상태입니다.`
+      : "현재 공개 랭킹 snapshot이 최신 반영 시각 기준으로 유지되고 있습니다."
+    : "첫 공개 랭킹 snapshot 생성을 기다리는 중입니다.";
   const sidebarItems: HallOfFameSettingsSidebarItem[] = [
     {
       id: "feature_settings",
@@ -815,7 +812,8 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
       showToast({
         tone: "success",
         title: "위스 현황과 화랑의 전당을 동기화했습니다.",
-        message: "학생 화면 미리보기를 최신 공개 랭킹 데이터로 다시 읽었습니다.",
+        message:
+          "현재 학기 point_wallets 기준으로 1~3위와 4~10위 공개 snapshot을 다시 계산했습니다.",
       });
     } catch (error: any) {
       const failure = getHallOfFameSnapshotRefreshFailureText(error);
@@ -860,7 +858,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
         tone: "success",
         title: "기능 설정이 저장되었습니다.",
         message:
-          "공개 범위와 팝업 설정, 최신 공개 랭킹 데이터를 함께 반영했습니다.",
+          "공개 범위와 팝업 설정을 저장했습니다. 공개 랭킹 snapshot은 수동 동기화 또는 다음 자동 갱신에서 다시 계산됩니다.",
       });
     } catch (error: any) {
       const failure = getHallOfFameConfigSaveFailureText(error);
@@ -1007,7 +1005,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
     <div className="space-y-6">
       <PanelHeader
         title="기능 설정"
-        description="공개 범위와 팝업, 즉시 동기화 및 4시간 자동 점검 기준을 함께 관리합니다."
+        description="공개 범위와 팝업 정책을 저장하고, 공개 snapshot은 수동 동기화 또는 4시간 자동 갱신 정책에 맞춰 운영합니다."
         saveLabel="기능 설정 저장"
         canManage={canManage}
         saving={featureSaving}
@@ -1044,10 +1042,10 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
         <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
           <div className="text-xs font-bold text-slate-500">반영 주기</div>
           <div className="mt-2 text-lg font-black text-slate-900 whitespace-nowrap break-keep">
-            위스 변동 시 즉시 동기화
+            교사 수동 + 4시간 자동 갱신
           </div>
           <div className="mt-1 text-xs font-semibold text-slate-500">
-            누락 방지를 위해 {WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS}시간마다 자동 점검
+            wallet 변경 시 즉시 반영하지 않고 {WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS}시간 주기와 수동 동기화만 사용합니다.
           </div>
         </div>
       </div>
@@ -1273,10 +1271,9 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
 
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
-            <h3 className="text-lg font-black text-slate-900">공개 시간</h3>
+            <h3 className="text-lg font-black text-slate-900">동기화 정책</h3>
             <p className="mt-1 text-sm text-slate-500">
-              위스 변동은 즉시 공개 랭킹에 반영되고, 누락이 있으면 4시간마다 한
-              번 더 자동 점검합니다.
+              공개 랭킹 snapshot은 교사 수동 동기화와 {WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS}시간마다 한 번 실행되는 자동 갱신만 사용합니다.
             </p>
           </div>
 
@@ -1285,15 +1282,15 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="text-sm font-black text-slate-900 whitespace-nowrap break-keep">
-                    즉시 동기화 + 4시간 자동 점검
+                    수동 동기화 + 4시간 자동 갱신
                   </div>
                   <p className="mt-1 text-sm text-slate-500">
-                    지급·환수 등 위스 변경은 바로 반영하고, 누락 여부는
-                    {` ${WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS}시간마다`} 다시 확인합니다.
+                    학생 화면은 공개 snapshot만 읽고, 현재 학기 point_wallets 기준 재계산은 교사 수동 동기화와
+                    {` ${WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS}시간 자동 갱신에서만`} 실행됩니다.
                   </p>
                 </div>
                 <span className="inline-flex items-center whitespace-nowrap rounded-full bg-slate-900 px-3 py-1 text-xs font-bold text-white">
-                  자동 정책
+                  운영 정책
                 </span>
               </div>
             </div>
@@ -1326,8 +1323,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
             </div>
 
             <div className="rounded-2xl border border-dashed border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
-              학생 화면은 여전히 공개 랭킹 데이터만 읽고, wallet을 직접 스캔하지
-              않습니다.
+              학생 화면과 교사 미리보기는 현재 학기 공개 snapshot만 읽고, point_wallets를 직접 조회해 즉시 재계산하지 않습니다.
             </div>
 
             <button
@@ -1336,7 +1332,9 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
               disabled={!canManage || refreshing}
               className="inline-flex min-h-11 items-center justify-center whitespace-nowrap break-keep rounded-lg border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {refreshing ? "위스 현황과 동기화 중..." : "위스 현황과 동기화"}
+              {refreshing
+                ? "현재 학기 위스 기준으로 동기화 중..."
+                : "현재 학기 위스 기준 수동 동기화"}
             </button>
           </div>
         </section>
