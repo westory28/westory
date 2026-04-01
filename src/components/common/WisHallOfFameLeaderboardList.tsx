@@ -26,7 +26,7 @@ const WisHallOfFameLeaderboardList: React.FC<WisHallOfFameLeaderboardListProps> 
 
     return (
         <div
-            className={`flex h-full min-h-[280px] flex-col overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-[0_18px_48px_rgba(15,23,42,0.08)] ${className}`}
+            className={`flex h-full min-h-[25rem] flex-col overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-[0_18px_48px_rgba(15,23,42,0.08)] sm:min-h-[28rem] ${className}`}
             style={style}
         >
             <div className="border-b border-slate-100 bg-slate-50 px-5 py-4">
@@ -46,7 +46,7 @@ const WisHallOfFameLeaderboardList: React.FC<WisHallOfFameLeaderboardListProps> 
                     {emptyMessage}
                 </div>
             ) : (
-                <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+                <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
                     <div className="space-y-3">
                         {safeEntries.map((entry, index) => (
                             <div

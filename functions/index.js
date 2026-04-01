@@ -662,7 +662,7 @@ const getPointCollectionPath = (year, semester, collectionName) => `${getSemeste
 const getPointWalletPath = (year, semester, uid) => `${getPointCollectionPath(year, semester, 'point_wallets')}/${uid}`;
 const getPointPolicyPath = (year, semester) => `${getPointCollectionPath(year, semester, 'point_policies')}/current`;
 const WIS_HALL_OF_FAME_DOC_ID = 'hall_of_fame';
-const WIS_HALL_OF_FAME_SNAPSHOT_VERSION = 3;
+const WIS_HALL_OF_FAME_SNAPSHOT_VERSION = 4;
 const WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS = 4;
 const WIS_HALL_OF_FAME_STALE_MS = WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS * 60 * 60 * 1000;
 const WIS_HALL_OF_FAME_GRADE_KEY = '3';
@@ -1083,9 +1083,29 @@ const refreshWisHallOfFame = async (year, semester) => {
   };
 };
 
+const hasWisHallOfFameSnapshotRankingData = (data) => Object.keys(data?.gradeTop3ByGrade || {}).length > 0
+  || Object.keys(data?.classTop3ByClassKey || {}).length > 0
+  || Object.keys(data?.gradeLeaderboardByGrade || {}).length > 0
+  || Object.keys(data?.classLeaderboardByClassKey || {}).length > 0;
+
+const hasWisHallOfFameSnapshotLeaderboardData = (data) => Object.keys(data?.gradeLeaderboardByGrade || {}).length > 0
+  || Object.keys(data?.classLeaderboardByClassKey || {}).length > 0;
+
+const hasWisHallOfFameSnapshotLeaderboardMeta = (data) => Object.keys(data?.gradeLeaderboardMetaByGrade || {}).length > 0
+  || Object.keys(data?.classLeaderboardMetaByClassKey || {}).length > 0;
+
 const isWisHallOfFameSnapshotStale = (data) => {
   if (!data) return true;
   if (Number(data.snapshotVersion || 0) !== WIS_HALL_OF_FAME_SNAPSHOT_VERSION) {
+    return true;
+  }
+  if (
+    hasWisHallOfFameSnapshotRankingData(data)
+    && (
+      !hasWisHallOfFameSnapshotLeaderboardData(data)
+      || !hasWisHallOfFameSnapshotLeaderboardMeta(data)
+    )
+  ) {
     return true;
   }
   const updatedAtMs = Number(data.updatedAtMs || 0) > 0

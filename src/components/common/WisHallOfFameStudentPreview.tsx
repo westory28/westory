@@ -398,7 +398,7 @@ const WisHallOfFameStudentPreview: React.FC<
               </span>
             </div>
 
-            <div className="min-h-[280px] xl:max-h-[min(44rem,calc(100vh-16rem))]">
+            <div className="min-h-[25rem] sm:min-h-[28rem] xl:min-h-[31rem] xl:max-h-[min(52rem,calc(100vh-12rem))]">
               <WisHallOfFameLeaderboardList
                 entries={rightRailEntries}
                 hallOfFameConfig={resolvedConfig}
