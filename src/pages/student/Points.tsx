@@ -256,9 +256,13 @@ const Points: React.FC = () => {
         }
     };
 
+    const isHallOfFameTab = activeTab === 'hall-of-fame';
+
     return (
         <div className="flex min-h-screen flex-col bg-gray-50">
-            <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">
+            <main className={`mx-auto w-full flex-1 px-4 py-8 ${
+                isHallOfFameTab ? 'max-w-7xl' : 'max-w-6xl'
+            }`}>
                 <div className="mb-6 rounded-2xl border border-gray-200 bg-white px-6 py-5 shadow-sm">
                     <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                         <div>
@@ -303,7 +307,9 @@ const Points: React.FC = () => {
                     ))}
                 </div>
 
-                <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+                <div className={`rounded-2xl border border-gray-200 bg-white shadow-sm ${
+                    isHallOfFameTab ? 'p-4 sm:p-5 xl:p-6' : 'p-6'
+                }`}>
                     {loading && (
                         <div className="py-16 text-center text-gray-400">
                             <div className="mb-2 text-2xl">
