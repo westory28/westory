@@ -808,9 +808,6 @@
 
   .student-calendar-shell__attendance-tools {
     justify-content: space-between;
-  }
-
-  .student-calendar-shell__attendance-tools {
     align-self: flex-start;
   }
 
