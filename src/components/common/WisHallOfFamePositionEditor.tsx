@@ -56,6 +56,7 @@ interface WisHallOfFamePositionEditorProps {
 
 type DragState = {
   key: EditableKey;
+  pointerId: number;
   startClientX: number;
   startClientY: number;
   originLeft: number;
@@ -101,6 +102,18 @@ const clamp = (value: number, minimum: number, maximum: number) =>
   Math.min(maximum, Math.max(minimum, value));
 
 const DEFAULT_RAIL_CENTER = 71;
+const SLOT_DISPLAY_SAFE_AREA = {
+  desktop: {
+    first: { leftMin: 44, leftMax: 56, topMin: 20, topMax: 34 },
+    second: { leftMin: 27, leftMax: 38, topMin: 30, topMax: 39 },
+    third: { leftMin: 62, leftMax: 73, topMin: 30, topMax: 39 },
+  },
+  mobile: {
+    first: { leftMin: 44, leftMax: 56, topMin: 22, topMax: 35 },
+    second: { leftMin: 29, leftMax: 39, topMin: 34, topMax: 43 },
+    third: { leftMin: 61, leftMax: 71, topMin: 34, topMax: 43 },
+  },
+} as const;
 
 const getWidthBounds = (
   key: EditableKey,
@@ -171,6 +184,26 @@ const cloneEditorValue = (
   },
 });
 
+const getDisplayHandlePosition = (
+  key: EditableKey,
+  deviceMode: HallOfFameEditorDeviceMode,
+  leftPercent: number,
+  topPercent: number,
+) => {
+  if (key === "leaderboard") {
+    return {
+      leftPercent,
+      topPercent,
+    };
+  }
+
+  const bounds = SLOT_DISPLAY_SAFE_AREA[deviceMode][key];
+  return {
+    leftPercent: clamp(leftPercent, bounds.leftMin, bounds.leftMax),
+    topPercent: clamp(topPercent, bounds.topMin, bounds.topMax),
+  };
+};
+
 const WisHallOfFamePositionEditor: React.FC<
   WisHallOfFamePositionEditorProps
 > = ({
@@ -193,6 +226,7 @@ const WisHallOfFamePositionEditor: React.FC<
   const [dragState, setDragState] = useState<DragState | null>(null);
   const sceneRef = useRef<HTMLDivElement | null>(null);
   const podiumStageRef = useRef<HTMLDivElement | null>(null);
+  const activeHandleRef = useRef<HTMLButtonElement | null>(null);
   const editorValue = useMemo(() => cloneEditorValue(value), [value]);
   const normalizedGrade = normalizeNumberText(currentGrade);
   const normalizedClass = normalizeNumberText(currentClass);
@@ -333,11 +367,13 @@ const WisHallOfFamePositionEditor: React.FC<
       ? "flex flex-row items-start justify-between gap-6"
       : "mx-auto flex max-w-[420px] flex-col gap-5";
   const podiumContainerClassName =
-    deviceMode === "desktop" ? "w-[var(--hall-podium-width)]" : "w-full";
+    deviceMode === "desktop"
+      ? "min-w-0 w-[var(--hall-podium-width)]"
+      : "min-w-0 w-full";
   const railContainerClassName =
     deviceMode === "desktop"
-      ? "mt-[var(--hall-rail-desktop-top)] ml-[var(--hall-rail-desktop-shift)] min-w-[18rem] w-[var(--hall-rail-width)]"
-      : `mt-[var(--hall-rail-mobile-top)] w-full max-w-[var(--hall-rail-mobile-width)] ${mobileRailAlignClassName}`;
+      ? "mt-[var(--hall-rail-desktop-top)] ml-[var(--hall-rail-desktop-shift)] min-w-[19rem] w-[var(--hall-rail-width)]"
+      : `mt-[var(--hall-rail-mobile-top)] min-w-0 w-full max-w-[var(--hall-rail-mobile-width)] ${mobileRailAlignClassName}`;
 
   const getPosition = (key: EditableKey) => {
     if (key === "leaderboard") {
@@ -416,17 +452,25 @@ const WisHallOfFamePositionEditor: React.FC<
     };
 
     const handlePointerUp = () => {
+      if (
+        activeHandleRef.current?.hasPointerCapture?.(dragState.pointerId)
+      ) {
+        activeHandleRef.current.releasePointerCapture(dragState.pointerId);
+      }
+      activeHandleRef.current = null;
       setDragState(null);
     };
 
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
 
     return () => {
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
     };
-  }, [deviceMode, dragState, editorValue, onChange]);
+  }, [deviceMode, dragState, onChange]);
 
   const selectedPosition = getPosition(selectedKey);
 
@@ -439,6 +483,7 @@ const WisHallOfFamePositionEditor: React.FC<
     if (disabled || !measurementTarget) return;
     event.preventDefault();
     event.stopPropagation();
+    activeHandleRef.current = event.currentTarget;
     event.currentTarget.setPointerCapture?.(event.pointerId);
 
     const rect = measurementTarget.getBoundingClientRect();
@@ -450,6 +495,7 @@ const WisHallOfFamePositionEditor: React.FC<
     setSelectedKey(key);
     setDragState({
       key,
+      pointerId: event.pointerId,
       startClientX: event.clientX,
       startClientY: event.clientY,
       originLeft: current.leftPercent,
@@ -658,14 +704,18 @@ const WisHallOfFamePositionEditor: React.FC<
 
       {showPreviewStage ? (
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.9fr)_minmax(24rem,28rem)]">
-          <div className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-[0_18px_48px_rgba(15,23,42,0.08)]">
+          <div className="overflow-visible rounded-[1.75rem] border border-slate-200 bg-white shadow-[0_18px_48px_rgba(15,23,42,0.08)]">
             <div className="border-b border-slate-100 px-4 py-3 text-sm font-bold text-slate-600 whitespace-nowrap">
               {deviceMode === "desktop" ? "데스크톱" : "모바일"} 미리보기
             </div>
             <div
               ref={sceneRef}
-              className={`relative overflow-hidden rounded-[1.85rem] bg-[radial-gradient(circle_at_top_left,_rgba(255,251,235,0.92),_rgba(248,250,252,0.98)_42%,_rgba(255,255,255,1)_100%)] p-4 touch-none select-none sm:p-5 lg:p-6 ${
+              className={`relative overflow-visible rounded-[1.85rem] bg-[radial-gradient(circle_at_top_left,_rgba(255,251,235,0.92),_rgba(248,250,252,0.98)_42%,_rgba(255,255,255,1)_100%)] p-4 touch-none select-none sm:p-5 lg:p-6 ${
                 disabled ? "opacity-70" : ""
+              } ${
+                deviceMode === "desktop"
+                  ? "min-h-[46rem] xl:min-h-[50rem]"
+                  : "min-h-[34rem]"
               }`}
             >
               <div className="mb-4 flex flex-wrap items-center gap-2 text-xs font-bold text-slate-500">
@@ -696,7 +746,7 @@ const WisHallOfFamePositionEditor: React.FC<
                     </div>
                   </div>
 
-                  <div ref={podiumStageRef} className="relative">
+                  <div ref={podiumStageRef} className="relative overflow-visible">
                     <div className="pointer-events-none select-none">
                       <WisHallOfFamePodium
                         entries={activePodiumEntries}
@@ -760,7 +810,7 @@ const WisHallOfFamePositionEditor: React.FC<
                     </div>
                   </div>
 
-                  <div className="relative min-h-[280px]">
+                  <div className="relative min-h-[320px] overflow-visible">
                     <div className="pointer-events-none select-none">
                       <WisHallOfFameLeaderboardList
                         entries={rightRailEntries}

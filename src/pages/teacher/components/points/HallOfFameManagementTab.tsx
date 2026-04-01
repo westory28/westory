@@ -1459,7 +1459,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
           onClick={closeLayoutEditor}
         >
           <div
-            className="flex max-h-[min(95vh,74rem)] w-full max-w-[min(96vw,110rem)] flex-col overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_30px_80px_rgba(15,23,42,0.32)]"
+            className="flex max-h-[min(96vh,78rem)] w-full max-w-[min(96vw,118rem)] flex-col overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_30px_80px_rgba(15,23,42,0.32)]"
             onClick={(event) => event.stopPropagation()}
             role="dialog"
             aria-modal="true"
@@ -1506,7 +1506,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50/70 p-4 sm:p-5 lg:p-6">
+            <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50/70 p-5 sm:p-6 lg:p-7">
               <WisHallOfFamePositionEditor
                 value={layoutDraft}
                 imageUrl={imageUrl}

@@ -247,9 +247,9 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                 <div
                   key={`${slotKey}-${entry.uid}`}
                   style={buildSlotStyle(slotKey, normalizedPositions)}
-                  className={slotPositionClassName}
+                  className={`${slotPositionClassName} overflow-visible`}
                 >
-                  <div className="mx-auto flex w-full max-w-[var(--slot-card-max-width)] flex-col items-center gap-1.5 text-center sm:gap-2">
+                  <div className="mx-auto flex w-full max-w-[var(--slot-card-max-width)] flex-col items-center gap-1.5 overflow-visible text-center sm:gap-2">
                     <div
                       className={`inline-flex min-h-9 max-w-full items-center justify-center whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-black tracking-[0.08em] shadow-[0_14px_26px_rgba(15,23,42,0.16)] sm:min-h-10 sm:px-3 sm:py-1.25 sm:text-sm ${tone.badgeClassName}`}
                     >
@@ -257,24 +257,24 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                     </div>
 
                     <div
-                      className={`leading-none drop-shadow-[0_12px_18px_rgba(15,23,42,0.24)] ${tone.emojiClassName}`}
+                      className={`relative z-10 leading-none drop-shadow-[0_12px_18px_rgba(15,23,42,0.24)] ${tone.emojiClassName}`}
                     >
                       {entry.profileIcon || "🙂"}
                     </div>
 
                     <div
-                      className={`w-full max-w-full rounded-[1.35rem] border px-2.5 py-2.5 backdrop-blur-xl sm:px-3.5 sm:py-3 ${tone.nameClassName}`}
+                      className={`relative z-10 w-full max-w-full rounded-[1.35rem] border px-2.5 py-2.5 backdrop-blur-xl sm:px-3.5 sm:py-3 ${tone.nameClassName}`}
                     >
                       <div className="whitespace-nowrap text-[9px] font-bold uppercase tracking-[0.12em] text-white/80 [text-shadow:0_1px_2px_rgba(15,23,42,0.46)] sm:text-[10px]">
                         {entry.grade}학년 {entry.class}반
                       </div>
-                      <div className="mt-1 whitespace-nowrap break-keep text-[11px] font-black leading-[1.3] text-white [text-shadow:0_1px_3px_rgba(15,23,42,0.64)] sm:text-sm md:text-[15px]">
+                      <div className="mt-1 whitespace-normal break-keep text-[11px] font-black leading-[1.3] text-white [text-shadow:0_1px_3px_rgba(15,23,42,0.72)] sm:text-sm md:text-[15px]">
                         {entry.displayName || entry.studentName}
                       </div>
                     </div>
 
                     <div
-                      className={`inline-flex min-h-[2.2rem] max-w-full shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-black leading-none backdrop-blur shadow-[0_14px_30px_rgba(15,23,42,0.2)] sm:min-h-[2.4rem] sm:px-3 sm:py-1.25 sm:text-sm ${tone.scoreClassName}`}
+                      className={`relative z-10 inline-flex min-h-[2.2rem] max-w-full shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-black leading-none backdrop-blur shadow-[0_14px_30px_rgba(15,23,42,0.2)] sm:min-h-[2.4rem] sm:px-3 sm:py-1.25 sm:text-sm ${tone.scoreClassName}`}
                     >
                       누적 {formatWisAmount(entry.cumulativeEarned)}
                     </div>

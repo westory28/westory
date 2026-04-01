@@ -176,10 +176,10 @@ const WisHallOfFameStudentPreview: React.FC<
   const mobileRail = resolvedConfig.leaderboardPanel.mobile;
   const desktopRailWidth = clamp(
     Number(desktopRail.widthPercent || 29),
-    23,
-    36,
+    22,
+    34,
   );
-  const desktopPodiumWidth = clamp(100 - desktopRailWidth - 3, 60, 78);
+  const desktopPodiumWidth = clamp(100 - desktopRailWidth - 2, 63, 80);
   const desktopRailTop = `${clamp(
     Number(desktopRail.topPercent || 0) / 10,
     0,
@@ -234,19 +234,19 @@ const WisHallOfFameStudentPreview: React.FC<
       ? "flex flex-row items-start justify-between gap-5"
       : deviceMode === "mobile"
         ? "mx-auto flex max-w-[420px] flex-col gap-5"
-        : "flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between xl:gap-5";
+        : "flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between lg:gap-5";
   const podiumContainerClassName =
     deviceMode === "desktop"
-      ? "w-[var(--hall-podium-width)]"
+      ? "min-w-0 w-[var(--hall-podium-width)] overflow-visible"
       : deviceMode === "mobile"
-        ? "w-full"
-        : "w-full xl:w-[var(--hall-podium-width)]";
+        ? "min-w-0 w-full overflow-visible"
+        : "min-w-0 w-full overflow-visible lg:w-[var(--hall-podium-width)]";
   const railContainerClassName =
     deviceMode === "desktop"
       ? "mt-[var(--hall-rail-desktop-top)] ml-[var(--hall-rail-desktop-shift)] min-w-[18rem] w-[var(--hall-rail-width)]"
       : deviceMode === "mobile"
-        ? `mt-[var(--hall-rail-mobile-top)] w-full max-w-[var(--hall-rail-mobile-width)] ${mobileRailAlignClassName}`
-        : `mt-[var(--hall-rail-mobile-top)] w-full sm:max-w-[var(--hall-rail-mobile-width)] xl:mt-[var(--hall-rail-desktop-top)] xl:ml-[var(--hall-rail-desktop-shift)] xl:min-w-[18rem] xl:w-[var(--hall-rail-width)] xl:max-w-none ${mobileRailAlignClassName}`;
+        ? `mt-[var(--hall-rail-mobile-top)] min-w-0 w-full max-w-[var(--hall-rail-mobile-width)] ${mobileRailAlignClassName}`
+        : `mt-[var(--hall-rail-mobile-top)] min-w-0 w-full sm:max-w-[var(--hall-rail-mobile-width)] lg:mt-[var(--hall-rail-desktop-top)] lg:ml-[var(--hall-rail-desktop-shift)] lg:min-w-[18rem] lg:w-[var(--hall-rail-width)] lg:max-w-none ${mobileRailAlignClassName}`;
   const podiumDeviceMode =
     deviceMode === "responsive" ? "responsive" : deviceMode;
 
@@ -345,7 +345,7 @@ const WisHallOfFameStudentPreview: React.FC<
         </div>
       </div>
 
-      <div className="rounded-[2rem] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(255,251,235,0.9),_rgba(248,250,252,0.98)_42%,_rgba(255,255,255,1)_100%)] p-4 shadow-[0_22px_54px_rgba(15,23,42,0.08)] sm:p-5 xl:p-6">
+      <div className="overflow-visible rounded-[2rem] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(255,251,235,0.9),_rgba(248,250,252,0.98)_42%,_rgba(255,255,255,1)_100%)] p-4 shadow-[0_22px_54px_rgba(15,23,42,0.08)] sm:p-5 xl:p-6">
         <div className="mb-4 flex flex-wrap items-center gap-2 text-xs font-bold text-slate-500">
           <span className="inline-flex items-center whitespace-nowrap rounded-full bg-white px-3 py-1.5 text-slate-700 shadow-[0_8px_18px_rgba(15,23,42,0.05)]">
             현재 보기
@@ -406,7 +406,7 @@ const WisHallOfFameStudentPreview: React.FC<
               </span>
             </div>
 
-            <div className="min-h-[25rem] sm:min-h-[28rem] xl:min-h-[31rem] xl:max-h-[min(52rem,calc(100vh-12rem))]">
+            <div className="min-h-[25rem] sm:min-h-[28rem] lg:min-h-[31rem] lg:max-h-[min(52rem,calc(100vh-12rem))]">
               <WisHallOfFameLeaderboardList
                 entries={rightRailEntries}
                 hallOfFameConfig={resolvedConfig}
