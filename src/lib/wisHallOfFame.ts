@@ -24,7 +24,7 @@ type ConfigLike = Pick<SystemConfig, 'year' | 'semester'> | null | undefined;
 
 export const WIS_HALL_OF_FAME_GRADE_KEY = '3';
 export const WIS_HALL_OF_FAME_DOC_ID = 'hall_of_fame';
-export const WIS_HALL_OF_FAME_SNAPSHOT_VERSION = 4;
+export const WIS_HALL_OF_FAME_SNAPSHOT_VERSION = 5;
 export const WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS = 4;
 export const WIS_HALL_OF_FAME_STALE_MS = WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS * 60 * 60 * 1000;
 export const DEFAULT_WIS_HALL_OF_FAME_POSITION_PRESET = 'classic_podium_v1';
@@ -35,15 +35,15 @@ export const DEFAULT_WIS_HALL_OF_FAME_STORED_RANK_LIMIT = 20;
 const WIS_HALL_OF_FAME_SEEN_KEY_PREFIX = 'wisHallOfFameSeen';
 
 const DEFAULT_DESKTOP_POSITIONS: HallOfFamePodiumPositions = {
-  first: { leftPercent: 50, topPercent: 25, widthPercent: 24 },
-  second: { leftPercent: 22, topPercent: 43, widthPercent: 22 },
-  third: { leftPercent: 78, topPercent: 43, widthPercent: 22 },
+  first: { leftPercent: 50, topPercent: 26, widthPercent: 21 },
+  second: { leftPercent: 26.5, topPercent: 40.5, widthPercent: 18 },
+  third: { leftPercent: 73.5, topPercent: 40.5, widthPercent: 18 },
 };
 
 const DEFAULT_MOBILE_POSITIONS: HallOfFamePodiumPositions = {
-  first: { leftPercent: 50, topPercent: 27, widthPercent: 31 },
-  second: { leftPercent: 22, topPercent: 50, widthPercent: 27 },
-  third: { leftPercent: 78, topPercent: 50, widthPercent: 27 },
+  first: { leftPercent: 50, topPercent: 28, widthPercent: 28 },
+  second: { leftPercent: 28, topPercent: 46, widthPercent: 21 },
+  third: { leftPercent: 72, topPercent: 46, widthPercent: 21 },
 };
 
 const DEFAULT_DESKTOP_LEADERBOARD_PANEL: HallOfFameLeaderboardPanelPosition = {
@@ -150,13 +150,15 @@ const normalizeEntry = (value: unknown): WisHallOfFameEntry | null => {
   const podiumSlot = podiumSlotRaw === 1 || podiumSlotRaw === 2 || podiumSlotRaw === 3
     ? podiumSlotRaw
     : undefined;
-  const grade = normalizeSchoolValue(raw.grade);
-  const className = normalizeSchoolValue(raw.class);
-  const classKey = toSafeText(raw.classKey) || buildWisHallOfFameClassKey(grade, className);
-  const studentName = toSafeText(raw.studentName);
+  const classKey = toSafeText(raw.classKey);
+  const [classKeyGrade = '', classKeyClass = ''] = classKey.split('-');
+  const grade = normalizeSchoolValue(raw.grade) || normalizeSchoolValue(classKeyGrade);
+  const className = normalizeSchoolValue(raw.class) || normalizeSchoolValue(classKeyClass);
+  const resolvedClassKey = classKey || buildWisHallOfFameClassKey(grade, className);
+  const studentName = toSafeText(raw.studentName) || toSafeText(raw.displayName);
   const displayName = toSafeText(raw.displayName) || studentName;
 
-  if (!uid || !rank || !grade || !className || !displayName) {
+  if (!uid || !rank || !grade || !className || !studentName) {
     return null;
   }
 
@@ -166,7 +168,7 @@ const normalizeEntry = (value: unknown): WisHallOfFameEntry | null => {
     podiumSlot,
     grade,
     class: className,
-    classKey,
+    classKey: resolvedClassKey,
     studentName: studentName || displayName,
     displayName,
     currentBalance: toNonNegativeNumber(raw.currentBalance),
@@ -212,6 +214,21 @@ const normalizeMetaMap = (value: unknown) => {
     },
     {},
   );
+};
+
+const toRecordObject = (value: unknown): Record<string, unknown> | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+};
+
+const pickRecordCandidate = (...candidates: unknown[]) => {
+  for (const candidate of candidates) {
+    const record = toRecordObject(candidate);
+    if (record) {
+      return record;
+    }
+  }
+  return null;
 };
 
 const resolveSnapshotUpdatedAtMs = (
@@ -272,13 +289,43 @@ export const normalizeWisHallOfFameSnapshot = (
   value: unknown,
 ): WisHallOfFameSnapshot | null => {
   if (!value || typeof value !== 'object') return null;
-  const raw = value as Partial<WisHallOfFameSnapshot>;
+  const raw = value as Partial<WisHallOfFameSnapshot> & Record<string, unknown>;
   const updatedAtMs = resolveSnapshotUpdatedAtMs(raw as Partial<WisHallOfFameSnapshot> & { updatedAtMs?: unknown });
   const snapshotKey = toSafeText(raw.snapshotKey) || `${updatedAtMs || Date.now()}`;
+  const legacyLeaderboard = pickRecordCandidate(raw.leaderboard);
+  const legacyLeaderboardMeta = pickRecordCandidate(raw.leaderboardMeta);
+  const rawGradeLeaderboardByGrade = pickRecordCandidate(
+    raw.gradeLeaderboardByGrade,
+    raw.gradeLeadersByGrade,
+    legacyLeaderboard?.gradeLeaderboardByGrade,
+    legacyLeaderboard?.gradeLeadersByGrade,
+    legacyLeaderboard?.gradeByGrade,
+  );
+  const rawClassLeaderboardByClassKey = pickRecordCandidate(
+    raw.classLeaderboardByClassKey,
+    raw.classLeadersByClassKey,
+    legacyLeaderboard?.classLeaderboardByClassKey,
+    legacyLeaderboard?.classLeadersByClassKey,
+    legacyLeaderboard?.classByClassKey,
+  );
+  const rawGradeLeaderboardMetaByGrade = pickRecordCandidate(
+    raw.gradeLeaderboardMetaByGrade,
+    raw.gradeLeadersMetaByGrade,
+    legacyLeaderboardMeta?.gradeLeaderboardMetaByGrade,
+    legacyLeaderboardMeta?.gradeLeadersByGrade,
+    legacyLeaderboardMeta?.gradeByGrade,
+  );
+  const rawClassLeaderboardMetaByClassKey = pickRecordCandidate(
+    raw.classLeaderboardMetaByClassKey,
+    raw.classLeadersMetaByClassKey,
+    legacyLeaderboardMeta?.classLeaderboardMetaByClassKey,
+    legacyLeaderboardMeta?.classLeadersByClassKey,
+    legacyLeaderboardMeta?.classByClassKey,
+  );
   const normalizedGradeTop3ByGrade = normalizeEntryMap(raw.gradeTop3ByGrade, 3);
   const normalizedClassTop3ByClassKey = normalizeEntryMap(raw.classTop3ByClassKey, 3);
-  const normalizedGradeLeaderboardByGrade = normalizeEntryMap(raw.gradeLeaderboardByGrade);
-  const normalizedClassLeaderboardByClassKey = normalizeEntryMap(raw.classLeaderboardByClassKey);
+  const normalizedGradeLeaderboardByGrade = normalizeEntryMap(rawGradeLeaderboardByGrade);
+  const normalizedClassLeaderboardByClassKey = normalizeEntryMap(rawClassLeaderboardByClassKey);
   const gradeLeaderboardByGrade = Object.keys(normalizedGradeLeaderboardByGrade).length > 0
     ? normalizedGradeLeaderboardByGrade
     : normalizedGradeTop3ByGrade;
@@ -305,8 +352,8 @@ export const normalizeWisHallOfFameSnapshot = (
       ),
     gradeLeaderboardByGrade,
     classLeaderboardByClassKey,
-    gradeLeaderboardMetaByGrade: normalizeMetaMap(raw.gradeLeaderboardMetaByGrade),
-    classLeaderboardMetaByClassKey: normalizeMetaMap(raw.classLeaderboardMetaByClassKey),
+    gradeLeaderboardMetaByGrade: normalizeMetaMap(rawGradeLeaderboardMetaByGrade),
+    classLeaderboardMetaByClassKey: normalizeMetaMap(rawClassLeaderboardMetaByClassKey),
     leaderboardPolicy: normalizeLeaderboardPolicy(raw.leaderboardPolicy),
     updatedAt: raw.updatedAt,
     updatedAtMs,
@@ -399,6 +446,48 @@ const hasHallOfFameSnapshotLeaderboardMeta = (
 ) => Object.keys(snapshot?.gradeLeaderboardMetaByGrade || {}).length > 0
   || Object.keys(snapshot?.classLeaderboardMetaByClassKey || {}).length > 0;
 
+const hasCompleteHallOfFameLeaderboardEntries = (
+  leaderboardMap: Record<string, WisHallOfFameEntry[]> | null | undefined,
+  metaMap: Record<string, WisHallOfFameLeaderboardMeta> | null | undefined,
+) => Object.entries(metaMap || {}).every(([key, meta]) => {
+  const expectedVisibleCount = Math.max(0, Number(meta?.visibleCount || 0));
+  const actualVisibleCount = Array.isArray(leaderboardMap?.[key])
+    ? leaderboardMap?.[key].length
+    : 0;
+  return actualVisibleCount >= expectedVisibleCount;
+});
+
+const hasCompleteHallOfFameLeaderboardScopes = (
+  podiumMap: Record<string, WisHallOfFameEntry[]> | null | undefined,
+  leaderboardMap: Record<string, WisHallOfFameEntry[]> | null | undefined,
+  metaMap: Record<string, WisHallOfFameLeaderboardMeta> | null | undefined,
+) => {
+  const scopeKeys = new Set([
+    ...Object.keys(podiumMap || {}),
+    ...Object.keys(leaderboardMap || {}),
+    ...Object.keys(metaMap || {}),
+  ]);
+
+  return Array.from(scopeKeys).every((key) => {
+    const podiumEntries = podiumMap?.[key] || [];
+    const leaderboardEntries = leaderboardMap?.[key] || [];
+    const scopeMeta = metaMap?.[key] || null;
+    const hasPodiumEntries = podiumEntries.length > 0;
+    const hasLeaderboardEntries = leaderboardEntries.length > 0;
+
+    if ((hasPodiumEntries || hasLeaderboardEntries) && !scopeMeta) {
+      return false;
+    }
+    if (hasPodiumEntries && !hasLeaderboardEntries) {
+      return false;
+    }
+    if (!scopeMeta) {
+      return true;
+    }
+    return leaderboardEntries.length >= Math.max(0, Number(scopeMeta.visibleCount || 0));
+  });
+};
+
 export const isWisHallOfFameSnapshotStale = (
   snapshot: WisHallOfFameSnapshot | null | undefined,
 ) => {
@@ -411,6 +500,24 @@ export const isWisHallOfFameSnapshotStale = (
     && (
       !hasHallOfFameSnapshotLeaderboardData(snapshot)
       || !hasHallOfFameSnapshotLeaderboardMeta(snapshot)
+      || !hasCompleteHallOfFameLeaderboardEntries(
+        snapshot?.gradeLeaderboardByGrade,
+        snapshot?.gradeLeaderboardMetaByGrade,
+      )
+      || !hasCompleteHallOfFameLeaderboardEntries(
+        snapshot?.classLeaderboardByClassKey,
+        snapshot?.classLeaderboardMetaByClassKey,
+      )
+      || !hasCompleteHallOfFameLeaderboardScopes(
+        snapshot?.gradeTop3ByGrade,
+        snapshot?.gradeLeaderboardByGrade,
+        snapshot?.gradeLeaderboardMetaByGrade,
+      )
+      || !hasCompleteHallOfFameLeaderboardScopes(
+        snapshot?.classTop3ByClassKey,
+        snapshot?.classLeaderboardByClassKey,
+        snapshot?.classLeaderboardMetaByClassKey,
+      )
     )
   ) {
     return true;

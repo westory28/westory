@@ -662,7 +662,7 @@ const getPointCollectionPath = (year, semester, collectionName) => `${getSemeste
 const getPointWalletPath = (year, semester, uid) => `${getPointCollectionPath(year, semester, 'point_wallets')}/${uid}`;
 const getPointPolicyPath = (year, semester) => `${getPointCollectionPath(year, semester, 'point_policies')}/current`;
 const WIS_HALL_OF_FAME_DOC_ID = 'hall_of_fame';
-const WIS_HALL_OF_FAME_SNAPSHOT_VERSION = 4;
+const WIS_HALL_OF_FAME_SNAPSHOT_VERSION = 5;
 const WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS = 4;
 const WIS_HALL_OF_FAME_STALE_MS = WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS * 60 * 60 * 1000;
 const WIS_HALL_OF_FAME_GRADE_KEY = '3';
@@ -690,6 +690,14 @@ const normalizeHallOfFameSchoolValue = (value) => {
   return Number.isFinite(parsed) && parsed > 0 ? String(parsed) : normalized;
 };
 
+const resolveHallOfFameProfileField = (profile, keys) => {
+  for (const key of keys) {
+    const value = normalizeHallOfFameText(profile?.[key]);
+    if (value) return value;
+  }
+  return '';
+};
+
 const buildWisHallOfFameClassKey = (grade, className) => {
   const normalizedGrade = normalizeHallOfFameSchoolValue(grade);
   const normalizedClass = normalizeHallOfFameSchoolValue(className);
@@ -700,14 +708,14 @@ const buildWisHallOfFameClassKey = (grade, className) => {
 const DEFAULT_HALL_OF_FAME_POSITION_PRESET = 'classic_podium_v1';
 const DEFAULT_HALL_OF_FAME_POSITIONS = {
   desktop: {
-    first: { leftPercent: 50, topPercent: 25, widthPercent: 24 },
-    second: { leftPercent: 22, topPercent: 43, widthPercent: 22 },
-    third: { leftPercent: 78, topPercent: 43, widthPercent: 22 },
+    first: { leftPercent: 50, topPercent: 26, widthPercent: 21 },
+    second: { leftPercent: 26.5, topPercent: 40.5, widthPercent: 18 },
+    third: { leftPercent: 73.5, topPercent: 40.5, widthPercent: 18 },
   },
   mobile: {
-    first: { leftPercent: 50, topPercent: 27, widthPercent: 31 },
-    second: { leftPercent: 22, topPercent: 50, widthPercent: 27 },
-    third: { leftPercent: 78, topPercent: 50, widthPercent: 27 },
+    first: { leftPercent: 50, topPercent: 28, widthPercent: 28 },
+    second: { leftPercent: 28, topPercent: 46, widthPercent: 21 },
+    third: { leftPercent: 72, topPercent: 46, widthPercent: 21 },
   },
 };
 const DEFAULT_HALL_OF_FAME_LEADERBOARD_PANEL = {
@@ -835,18 +843,30 @@ const resolveWisHallOfFameCumulativeEarned = (wallet) => {
 
 const buildWisHallOfFameEntry = (wallet, profile = {}) => {
   const uid = normalizeHallOfFameText(wallet?.uid);
-  const grade = normalizeHallOfFameSchoolValue(profile?.grade || wallet?.grade);
-  const className = normalizeHallOfFameSchoolValue(profile?.class || wallet?.class);
-  const displayName = normalizeHallOfFameText(
-    profile?.displayName || profile?.customName || profile?.name || wallet?.studentName,
+  const grade = normalizeHallOfFameSchoolValue(
+    resolveHallOfFameProfileField(profile, ['studentGrade', 'grade']) || wallet?.grade,
   );
-  const studentName = normalizeHallOfFameText(profile?.name || wallet?.studentName || displayName);
+  const className = normalizeHallOfFameSchoolValue(
+    resolveHallOfFameProfileField(profile, ['studentClass', 'class']) || wallet?.class,
+  );
+  const displayName = normalizeHallOfFameText(
+    resolveHallOfFameProfileField(
+      profile,
+      ['displayName', 'customName', 'studentName', 'name', 'nickname'],
+    ) || wallet?.studentName,
+  );
+  const studentName = normalizeHallOfFameText(
+    resolveHallOfFameProfileField(
+      profile,
+      ['studentName', 'name', 'displayName', 'nickname', 'customName'],
+    ) || wallet?.studentName || displayName,
+  );
   const classKey = buildWisHallOfFameClassKey(grade, className);
   const emojiEntry = getProfileEmojiEntryById(
     normalizeHallOfFameText(profile?.profileEmojiId || wallet?.profileEmojiId),
     PROFILE_EMOJI_REGISTRY,
   );
-  if (!uid || !grade || !className || !studentName || !displayName || !classKey) {
+  if (!uid || !grade || !className || !studentName || !classKey) {
     return null;
   }
 
@@ -1094,6 +1114,42 @@ const hasWisHallOfFameSnapshotLeaderboardData = (data) => Object.keys(data?.grad
 const hasWisHallOfFameSnapshotLeaderboardMeta = (data) => Object.keys(data?.gradeLeaderboardMetaByGrade || {}).length > 0
   || Object.keys(data?.classLeaderboardMetaByClassKey || {}).length > 0;
 
+const hasCompleteHallOfFameLeaderboardEntries = (leaderboardMap, metaMap) => Object.entries(metaMap || {})
+  .every(([key, meta]) => {
+    const expectedVisibleCount = Math.max(0, Number(meta?.visibleCount || 0));
+    const actualVisibleCount = Array.isArray(leaderboardMap?.[key])
+      ? leaderboardMap[key].length
+      : 0;
+    return actualVisibleCount >= expectedVisibleCount;
+  });
+
+const hasCompleteHallOfFameLeaderboardScopes = (podiumMap, leaderboardMap, metaMap) => {
+  const scopeKeys = new Set([
+    ...Object.keys(podiumMap || {}),
+    ...Object.keys(leaderboardMap || {}),
+    ...Object.keys(metaMap || {}),
+  ]);
+
+  return Array.from(scopeKeys).every((key) => {
+    const podiumEntries = podiumMap?.[key] || [];
+    const leaderboardEntries = leaderboardMap?.[key] || [];
+    const scopeMeta = metaMap?.[key] || null;
+    const hasPodiumEntries = podiumEntries.length > 0;
+    const hasLeaderboardEntries = leaderboardEntries.length > 0;
+
+    if ((hasPodiumEntries || hasLeaderboardEntries) && !scopeMeta) {
+      return false;
+    }
+    if (hasPodiumEntries && !hasLeaderboardEntries) {
+      return false;
+    }
+    if (!scopeMeta) {
+      return true;
+    }
+    return leaderboardEntries.length >= Math.max(0, Number(scopeMeta.visibleCount || 0));
+  });
+};
+
 const isWisHallOfFameSnapshotStale = (data) => {
   if (!data) return true;
   if (Number(data.snapshotVersion || 0) !== WIS_HALL_OF_FAME_SNAPSHOT_VERSION) {
@@ -1104,6 +1160,24 @@ const isWisHallOfFameSnapshotStale = (data) => {
     && (
       !hasWisHallOfFameSnapshotLeaderboardData(data)
       || !hasWisHallOfFameSnapshotLeaderboardMeta(data)
+      || !hasCompleteHallOfFameLeaderboardEntries(
+        data?.gradeLeaderboardByGrade,
+        data?.gradeLeaderboardMetaByGrade,
+      )
+      || !hasCompleteHallOfFameLeaderboardEntries(
+        data?.classLeaderboardByClassKey,
+        data?.classLeaderboardMetaByClassKey,
+      )
+      || !hasCompleteHallOfFameLeaderboardScopes(
+        data?.gradeTop3ByGrade,
+        data?.gradeLeaderboardByGrade,
+        data?.gradeLeaderboardMetaByGrade,
+      )
+      || !hasCompleteHallOfFameLeaderboardScopes(
+        data?.classTop3ByClassKey,
+        data?.classLeaderboardByClassKey,
+        data?.classLeaderboardMetaByClassKey,
+      )
     )
   ) {
     return true;
