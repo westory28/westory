@@ -763,6 +763,12 @@ const WisHallOfFamePositionEditor: React.FC<
                         (item) => item.key !== "leaderboard",
                       ).map((item) => {
                         const position = getPosition(item.key);
+                        const displayPosition = getDisplayHandlePosition(
+                          item.key,
+                          deviceMode,
+                          position.leftPercent,
+                          position.topPercent,
+                        );
                         const isSelected = selectedKey === item.key;
 
                         return (
@@ -774,10 +780,10 @@ const WisHallOfFamePositionEditor: React.FC<
                             }
                             onClick={() => setSelectedKey(item.key)}
                             style={{
-                              left: `${position.leftPercent}%`,
-                              top: `${position.topPercent}%`,
+                              left: `${displayPosition.leftPercent}%`,
+                              top: `${displayPosition.topPercent}%`,
                             }}
-                            className={`absolute z-40 -translate-x-1/2 -translate-y-full touch-none select-none rounded-full border px-3.5 py-2 text-[11px] font-black shadow-[0_16px_30px_rgba(15,23,42,0.2)] backdrop-blur transition ${
+                            className={`absolute z-40 min-h-10 -translate-x-1/2 -translate-y-1/2 touch-none select-none rounded-full border px-4 py-2 text-[11px] font-black shadow-[0_16px_30px_rgba(15,23,42,0.2)] backdrop-blur transition ${
                               item.toneClassName
                             } ${
                               isSelected
@@ -835,7 +841,7 @@ const WisHallOfFamePositionEditor: React.FC<
                         handlePointerDown(event, "leaderboard")
                       }
                       onClick={() => setSelectedKey("leaderboard")}
-                      className={`absolute left-4 top-4 z-40 touch-none select-none rounded-full border px-3.5 py-2 text-[11px] font-black shadow-[0_16px_30px_rgba(15,23,42,0.2)] backdrop-blur transition ${
+                      className={`absolute left-4 top-4 z-40 min-h-10 touch-none select-none rounded-full border px-4 py-2 text-[11px] font-black shadow-[0_16px_30px_rgba(15,23,42,0.2)] backdrop-blur transition ${
                         PRESET_ITEMS.find((item) => item.key === "leaderboard")
                           ?.toneClassName || ""
                       } ${
