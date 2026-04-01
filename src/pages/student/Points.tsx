@@ -22,7 +22,7 @@ import { formatWisAmount } from '../../lib/pointFormatters';
 import { getPointRankDisplay, needsPointRankLegacyFallback } from '../../lib/pointRanks';
 import {
     findWisHallOfFameEntryByUid,
-    getOrEnsureWisHallOfFameSnapshot,
+    getWisHallOfFameSnapshot,
 } from '../../lib/wisHallOfFame';
 import type {
     PointOrder,
@@ -137,7 +137,7 @@ const Points: React.FC = () => {
             return;
         }
         try {
-            const snapshot = await getOrEnsureWisHallOfFameSnapshot(config);
+            const snapshot = await getWisHallOfFameSnapshot(config);
             setHallOfFame(snapshot);
         } catch (error) {
             console.warn('Failed to load wis hall of fame snapshot:', error);

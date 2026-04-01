@@ -423,7 +423,6 @@ export const ensureWisHallOfFame = ensureWisHallOfFameSnapshot;
 export const saveWisHallOfFameConfig = async (
   config: ConfigLike,
   hallOfFame: HallOfFameInterfaceConfig,
-  options?: { refreshSnapshot?: boolean },
 ) => {
   const targetYearSemester = resolveHallOfFameYearSemester(config);
   if (!targetYearSemester) {
@@ -435,7 +434,6 @@ export const saveWisHallOfFameConfig = async (
     year,
     semester,
     hallOfFame,
-    refreshSnapshot: options?.refreshSnapshot === true,
   });
   const payload = result.data as {
     saved?: boolean;
@@ -583,30 +581,11 @@ export const isWisHallOfFameSnapshotStale = (
 export const getOrEnsureWisHallOfFameSnapshot = async (
   config: ConfigLike,
 ): Promise<WisHallOfFameSnapshot | null> => {
-  let currentSnapshot: WisHallOfFameSnapshot | null = null;
   try {
-    currentSnapshot = await getWisHallOfFameSnapshot(config);
+    return await getWisHallOfFameSnapshot(config);
   } catch (error) {
     warnHallOfFameSnapshotFailure('read', config, error);
-  }
-
-  if (currentSnapshot && !isWisHallOfFameSnapshotStale(currentSnapshot)) {
-    return currentSnapshot;
-  }
-
-  try {
-    await ensureWisHallOfFameSnapshot(config);
-  } catch (error) {
-    warnHallOfFameSnapshotFailure('ensure', config, error);
-    return currentSnapshot;
-  }
-
-  try {
-    const refreshedSnapshot = await getWisHallOfFameSnapshot(config);
-    return refreshedSnapshot || currentSnapshot;
-  } catch (error) {
-    warnHallOfFameSnapshotFailure('reload', config, error);
-    return currentSnapshot;
+    return null;
   }
 };
 

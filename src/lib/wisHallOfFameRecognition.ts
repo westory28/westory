@@ -8,7 +8,7 @@ import type {
 import {
     buildWisHallOfFameSeenStorageKey,
     findWisHallOfFameRecognition,
-    getOrEnsureWisHallOfFameSnapshot,
+    getWisHallOfFameSnapshot,
     isHallOfFameRecognitionEnabled,
 } from './wisHallOfFame';
 import { readLocalOnly, writeLocalOnly } from './safeStorage';
@@ -49,7 +49,7 @@ export const loadHallOfFameRecognition = async (
     hallOfFameConfig?: HallOfFameInterfaceConfig | InterfaceConfig | null,
 ): Promise<HallOfFameRecognition | null> => {
     try {
-        const snapshot = await getOrEnsureWisHallOfFameSnapshot(config);
+        const snapshot = await getWisHallOfFameSnapshot(config);
         const recognition = findWisHallOfFameRecognition(snapshot, userData);
         if (!recognition) return null;
         if (!isHallOfFameRecognitionEnabled(hallOfFameConfig, recognition.scope)) {
