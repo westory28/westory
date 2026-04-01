@@ -132,6 +132,10 @@ const Points: React.FC = () => {
     };
 
     const loadHallOfFameData = async () => {
+        if (!config?.year || !config?.semester) {
+            setHallOfFame(null);
+            return;
+        }
         try {
             const snapshot = await getOrEnsureWisHallOfFameSnapshot(config);
             setHallOfFame(snapshot);

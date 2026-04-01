@@ -886,6 +886,32 @@ const buildWisHallOfFameEntry = (wallet, profile = {}) => {
   };
 };
 
+const sanitizeWisHallOfFameEntryForStorage = (entry) => {
+  const sanitized = {
+    uid: normalizeHallOfFameText(entry?.uid),
+    rank: Math.max(1, Number(entry?.rank || 0)),
+    grade: normalizeHallOfFameSchoolValue(entry?.grade),
+    class: normalizeHallOfFameSchoolValue(entry?.class),
+    classKey: normalizeHallOfFameText(entry?.classKey),
+    studentName: normalizeHallOfFameText(entry?.studentName),
+    displayName: normalizeHallOfFameText(entry?.displayName || entry?.studentName),
+    currentBalance: Math.max(0, Number(entry?.currentBalance || 0)),
+    cumulativeEarned: Math.max(0, Number(entry?.cumulativeEarned || 0)),
+    profileIcon: normalizeHallOfFameText(entry?.profileIcon) || DEFAULT_HALL_OF_FAME_PROFILE_ICON,
+  };
+  const profileEmojiId = normalizeHallOfFameText(entry?.profileEmojiId);
+  const podiumSlot = Number(entry?.podiumSlot || 0);
+
+  if (profileEmojiId) {
+    sanitized.profileEmojiId = profileEmojiId;
+  }
+  if (podiumSlot === 1 || podiumSlot === 2 || podiumSlot === 3) {
+    sanitized.podiumSlot = podiumSlot;
+  }
+
+  return sanitized;
+};
+
 const compareWisHallOfFameEntries = (left, right) => {
   const cumulativeGap = Number(right.cumulativeEarned || 0) - Number(left.cumulativeEarned || 0);
   if (cumulativeGap !== 0) return cumulativeGap;
@@ -905,7 +931,7 @@ const compareWisHallOfFameEntries = (left, right) => {
 const buildPodiumWisHallOfFameEntries = (entries) => buildRankedWisHallOfFameEntries(entries)
   .slice(0, 3)
   .map((entry, index) => ({
-    ...entry,
+    ...sanitizeWisHallOfFameEntryForStorage(entry),
     podiumSlot: index + 1,
   }));
 
@@ -920,11 +946,11 @@ const buildRankedWisHallOfFameEntries = (entries) => {
       lastRank = index + 1;
       lastMetric = currentMetric;
     }
-    return {
+    return sanitizeWisHallOfFameEntryForStorage({
       ...entry,
       rank: lastRank,
       podiumSlot: index < 3 ? index + 1 : undefined,
-    };
+    });
   });
 };
 
@@ -1003,14 +1029,58 @@ const buildWisHallOfFameSnapshotKey = (year, semester, snapshot) => {
 const getSortedHallOfFameBucketKeys = (buckets) => Object.keys(buckets)
   .sort((left, right) => String(left || '').localeCompare(String(right || ''), 'ko', { numeric: true }))
 
+const createHallOfFameRefreshError = (stage, message, cause) => {
+  const error = new Error(String(message || 'Failed to refresh wis hall of fame snapshot.'));
+  error.stage = String(stage || 'unknown').trim() || 'unknown';
+  if (cause) {
+    error.cause = cause;
+  }
+  return error;
+};
+
+const normalizeHallOfFameRefreshError = (error, fallbackStage = 'unknown') => {
+  if (error?.stage) {
+    return error;
+  }
+  return createHallOfFameRefreshError(
+    fallbackStage,
+    error?.message || 'Failed to refresh wis hall of fame snapshot.',
+    error,
+  );
+};
+
+const runHallOfFameRefreshStage = async (stage, runner, message) => {
+  try {
+    return await runner();
+  } catch (error) {
+    throw createHallOfFameRefreshError(
+      stage,
+      message || error?.message || 'Failed to refresh wis hall of fame snapshot.',
+      error,
+    );
+  }
+};
+
 const buildWisHallOfFamePayload = async (year, semester) => {
-  const leaderboardPolicy = await resolveHallOfFameLeaderboardPolicy();
-  const walletSnapshot = await db.collection(getPointCollectionPath(year, semester, 'point_wallets')).get();
+  const leaderboardPolicy = await runHallOfFameRefreshStage(
+    'policy_load',
+    () => resolveHallOfFameLeaderboardPolicy(),
+    'Failed to read hall of fame leaderboard policy.',
+  );
+  const walletSnapshot = await runHallOfFameRefreshStage(
+    'wallet_read',
+    () => db.collection(getPointCollectionPath(year, semester, 'point_wallets')).get(),
+    'Failed to read point_wallets for the selected semester.',
+  );
   const wallets = walletSnapshot.docs
     .map((docSnapshot) => ({ uid: docSnapshot.id, ...(docSnapshot.data() || {}) }))
     .filter((wallet) => normalizeHallOfFameText(wallet.uid));
-  const profileSnapshots = await Promise.all(
-    wallets.map((wallet) => db.doc(`users/${wallet.uid}`).get().catch(() => null)),
+  const profileSnapshots = await runHallOfFameRefreshStage(
+    'profile_read',
+    () => Promise.all(
+      wallets.map((wallet) => db.doc(`users/${wallet.uid}`).get().catch(() => null)),
+    ),
+    'Failed to read student profiles for hall of fame ranking.',
   );
 
   const gradeBuckets = {};
@@ -1096,14 +1166,50 @@ const buildWisHallOfFamePayload = async (year, semester) => {
   };
 };
 
-const refreshWisHallOfFame = async (year, semester) => {
+const refreshWisHallOfFame = async (year, semester, options = {}) => {
   const payload = await buildWisHallOfFamePayload(year, semester);
-  await db.doc(getWisHallOfFamePath(year, semester)).set(payload);
+  await runHallOfFameRefreshStage(
+    'snapshot_write',
+    () => db.doc(getWisHallOfFamePath(year, semester)).set(payload),
+    'Failed to write the public hall of fame snapshot.',
+  );
   return {
     ensured: true,
     snapshotKey: payload.snapshotKey,
     snapshotVersion: WIS_HALL_OF_FAME_SNAPSHOT_VERSION,
+    source: String(options.source || '').trim() || undefined,
   };
+};
+
+const refreshWisHallOfFameOrThrowHttps = async (
+  year,
+  semester,
+  options = {},
+) => {
+  try {
+    return await refreshWisHallOfFame(year, semester, options);
+  } catch (error) {
+    const failure = normalizeHallOfFameRefreshError(error);
+    console.error('Failed to refresh wis hall of fame snapshot:', {
+      year,
+      semester,
+      source: String(options.source || '').trim() || 'unknown',
+      stage: failure.stage || 'unknown',
+      message: failure.message,
+      cause: failure.cause || null,
+    });
+    throw new HttpsError(
+      'internal',
+      'Failed to refresh wis hall of fame snapshot.',
+      {
+        stage: failure.stage || 'unknown',
+        detail: String(failure.message || '').trim(),
+        source: String(options.source || '').trim() || 'unknown',
+        year,
+        semester,
+      },
+    );
+  }
 };
 
 const markWisHallOfFameDirty = async (year, semester) => {
@@ -1218,9 +1324,16 @@ const isWisHallOfFameSnapshotStale = (data) => {
 
 const tryRefreshWisHallOfFame = async (year, semester) => {
   try {
-    return await refreshWisHallOfFame(year, semester);
+    return await refreshWisHallOfFame(year, semester, { source: 'mutation' });
   } catch (error) {
-    console.error('Failed to refresh wis hall of fame snapshot:', error);
+    const failure = normalizeHallOfFameRefreshError(error);
+    console.error('Failed to refresh wis hall of fame snapshot after point mutation:', {
+      year,
+      semester,
+      stage: failure.stage || 'unknown',
+      message: failure.message,
+      cause: failure.cause || null,
+    });
     return {
       ensured: false,
       snapshotKey: '',
@@ -1311,6 +1424,56 @@ const getCurrentConfiguredYearSemester = async () => {
   const semester = String(data.semester || '').trim();
   if (!year || !semester) return null;
   return { year, semester };
+};
+
+const getOptionalYearSemester = (data) => {
+  const year = String(data?.year || '').trim();
+  const semester = String(data?.semester || '').trim();
+  if (!year || !semester) return null;
+  return { year, semester };
+};
+
+const resolveHallOfFameTargetYearSemester = async (data, options = {}) => {
+  const providedYearSemester = getOptionalYearSemester(data);
+  const preferConfiguredCurrent = options.preferConfiguredCurrent === true;
+  const configuredYearSemester = (preferConfiguredCurrent || !providedYearSemester)
+    ? await getCurrentConfiguredYearSemester()
+    : null;
+
+  if (preferConfiguredCurrent && configuredYearSemester) {
+    if (
+      providedYearSemester
+      && (
+        providedYearSemester.year !== configuredYearSemester.year
+        || providedYearSemester.semester !== configuredYearSemester.semester
+      )
+    ) {
+      console.warn('Hall of fame refresh request semester differed from current configured semester. Using configured semester instead.', {
+        requested: providedYearSemester,
+        configured: configuredYearSemester,
+        source: String(options.source || '').trim() || 'unknown',
+      });
+    }
+    return configuredYearSemester;
+  }
+
+  if (providedYearSemester) {
+    return providedYearSemester;
+  }
+
+  if (configuredYearSemester) {
+    return configuredYearSemester;
+  }
+
+  if (options.allowMissing === true) {
+    return null;
+  }
+
+  throw new HttpsError(
+    'failed-precondition',
+    'Current year/semester is not configured.',
+    { stage: 'current_semester' },
+  );
 };
 
 const getUserProfile = async (uid) => {
@@ -1758,8 +1921,14 @@ const sortPointTransactionDocsDesc = (docs) => [...docs].sort((a, b) => {
 
 exports.ensureWisHallOfFame = onCall({ region: REGION }, async (request) => {
   assertAllowedWestoryUser(request);
-  const { year, semester } = assertYearSemester(request.data);
   const forceRefresh = request.data?.force === true;
+  const { year, semester } = await resolveHallOfFameTargetYearSemester(
+    request.data,
+    {
+      preferConfiguredCurrent: forceRefresh,
+      source: forceRefresh ? 'manual' : 'ensure',
+    },
+  );
   const snapshotRef = db.doc(getWisHallOfFamePath(year, semester));
   const snapshot = await snapshotRef.get();
   const data = snapshot.exists ? (snapshot.data() || {}) : null;
@@ -1776,12 +1945,20 @@ exports.ensureWisHallOfFame = onCall({ region: REGION }, async (request) => {
     };
   }
 
-  return refreshWisHallOfFame(year, semester);
+  return refreshWisHallOfFameOrThrowHttps(year, semester, {
+    source: forceRefresh ? 'manual' : 'ensure',
+  });
 });
 
 exports.saveWisHallOfFameConfig = onCall({ region: REGION }, async (request) => {
   const { uid } = await assertHallOfFameManager(request);
-  const { year, semester } = assertYearSemester(request.data);
+  const { year, semester } = await resolveHallOfFameTargetYearSemester(
+    request.data,
+    {
+      preferConfiguredCurrent: true,
+      source: 'config_save',
+    },
+  );
   const shouldRefreshSnapshot = request.data?.refreshSnapshot === true;
   const hallOfFamePatch = request.data?.hallOfFame && typeof request.data.hallOfFame === 'object'
     ? request.data.hallOfFame
@@ -1849,13 +2026,19 @@ exports.saveWisHallOfFameConfig = onCall({ region: REGION }, async (request) => 
 
   if (shouldRefreshSnapshot) {
     try {
-      await refreshWisHallOfFame(year, semester);
+      await refreshWisHallOfFameOrThrowHttps(year, semester, {
+        source: 'config_save',
+      });
     } catch (error) {
       console.error('Failed to refresh wis hall of fame snapshot after config save:', error);
       throw new HttpsError(
         'internal',
         '학생 화면 설정 저장 후 공개 랭킹 새로고침에 실패했습니다.',
-        { stage: 'snapshot_refresh' },
+        {
+          stage: 'snapshot_refresh',
+          refreshStage: String(error?.details?.stage || '').trim(),
+          refreshDetail: String(error?.details?.detail || '').trim(),
+        },
       );
     }
   }
@@ -1873,19 +2056,40 @@ exports.refreshWisHallOfFameOnSchedule = onSchedule(
     timeZone: 'Asia/Seoul',
   },
   async () => {
-    const currentYearSemester = await getCurrentConfiguredYearSemester();
+    const currentYearSemester = await resolveHallOfFameTargetYearSemester(
+      null,
+      {
+        preferConfiguredCurrent: true,
+        allowMissing: true,
+        source: 'schedule',
+      },
+    );
     if (!currentYearSemester) {
       console.warn('Skipped scheduled hall of fame refresh because site_settings/config is missing year/semester.');
       return;
     }
 
     const { year, semester } = currentYearSemester;
-    const result = await refreshWisHallOfFame(year, semester);
-    console.log('Scheduled hall of fame refresh completed:', {
-      year,
-      semester,
-      ...result,
-    });
+    try {
+      const result = await refreshWisHallOfFame(year, semester, {
+        source: 'schedule',
+      });
+      console.log('Scheduled hall of fame refresh completed:', {
+        year,
+        semester,
+        ...result,
+      });
+    } catch (error) {
+      const failure = normalizeHallOfFameRefreshError(error);
+      console.error('Scheduled hall of fame refresh failed:', {
+        year,
+        semester,
+        stage: failure.stage || 'unknown',
+        message: failure.message,
+        cause: failure.cause || null,
+      });
+      throw error;
+    }
   },
 );
 

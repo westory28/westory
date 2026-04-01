@@ -239,8 +239,62 @@ const getHallOfFameImageUploadFailureText = (error: any) => {
   };
 };
 
+const getHallOfFameRefreshStageMessage = (stage: string, detail: string) => {
+  if (stage === "current_semester") {
+    return {
+      title: "현재 학기 정보를 확인하지 못했습니다.",
+      message:
+        "site_settings/config에 year와 semester가 설정되어 있는지 확인한 뒤 다시 시도해 주세요.",
+    };
+  }
+  if (stage === "policy_load") {
+    return {
+      title: "공개 랭킹 기준을 읽지 못했습니다.",
+      message:
+        "화랑의 전당 공개 범위 설정을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
+    };
+  }
+
+  if (stage === "wallet_read") {
+    return {
+      title: "현재 학기 위스 현황을 읽지 못했습니다.",
+      message:
+        "현재 학기 point_wallets 경로를 읽는 중 실패했습니다. 학기 설정과 위스 현황 데이터를 확인해 주세요.",
+    };
+  }
+
+  if (stage === "profile_read") {
+    return {
+      title: "학생 기본 정보를 합치는 중 오류가 났습니다.",
+      message:
+        "위스 현황은 읽었지만 학생 이름, 학년, 반 정보를 모으는 단계에서 실패했습니다. 사용자 문서 상태를 확인해 주세요.",
+    };
+  }
+
+  if (stage === "snapshot_write") {
+    return {
+      title: "계산한 공개 랭킹을 저장하지 못했습니다.",
+      message:
+        "화랑의 전당 공개 snapshot을 쓰는 단계에서 실패했습니다. Firestore 권한 또는 배포 상태를 확인해 주세요.",
+    };
+  }
+
+  return {
+    title: "위스 현황과 동기화하지 못했습니다.",
+    message:
+      detail ||
+      "공개 랭킹을 다시 계산하는 중 서버 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+  };
+};
+
 const getHallOfFameConfigSaveFailureText = (error: any) => {
   const stage = String(error?.details?.stage || "").trim();
+  const errorStage = String(
+    error?.details?.refreshStage || error?.details?.stage || "",
+  ).trim();
+  const errorDetail = String(
+    error?.details?.refreshDetail || error?.details?.detail || "",
+  ).trim();
   const errorCode = String(error?.code || "").trim();
   const normalizedMessage = String(error?.message || "").trim();
   if (stage === "config_save") {
@@ -252,6 +306,9 @@ const getHallOfFameConfigSaveFailureText = (error: any) => {
   }
 
   if (stage === "snapshot_refresh") {
+    if (errorStage) {
+      return getHallOfFameRefreshStageMessage(errorStage, errorDetail);
+    }
     return {
       title: "학생 화면 설정은 저장됐지만 공개 랭킹 동기화에 실패했습니다.",
       message:
@@ -291,6 +348,15 @@ const getHallOfFameConfigSaveFailureText = (error: any) => {
     };
   }
 
+  if (errorStage === "snapshot_write") {
+    return {
+      title: "怨듦컻 ??궧 ??ν떎?먯꽌 臾몄젣媛 諛쒖깮?덉뒿?덈떎.",
+      message:
+        errorDetail ||
+        "?꾩뒪 ?꾪솴???쎄린???깃났?덉?留?怨듦컻 ?붾옉???꾨떦 ?곗씠?곕? ??μ븯吏 紐삵뻽?듬땲?? Functions 諛고룷 ?곹깭瑜??뺤씤?????ㅼ떆 ?쒕룄??二쇱꽭??",
+    };
+  }
+
   if (
     errorCode === "functions/internal" ||
     errorCode === "internal" ||
@@ -320,9 +386,15 @@ const getHallOfFameConfigSaveFailureText = (error: any) => {
 };
 
 const getHallOfFameSnapshotRefreshFailureText = (error: any) => {
+  const stage = String(error?.details?.stage || "").trim();
+  const detail = String(error?.details?.detail || "").trim();
   const errorCode = String(error?.code || "").trim();
   const normalizedMessage = String(error?.message || "").trim();
   const lowerMessage = normalizedMessage.toLowerCase();
+
+  if (stage) {
+    return getHallOfFameRefreshStageMessage(stage, detail);
+  }
 
   if (
     errorCode === "functions/not-found" ||
@@ -1284,7 +1356,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
       />
 
       <div className="space-y-6">
-        <section className="overflow-hidden rounded-[1.9rem] border border-slate-200 bg-white shadow-sm">
+        <section className="overflow-visible rounded-[1.9rem] border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 px-5 py-5 sm:px-6">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
               <div className="min-w-0">

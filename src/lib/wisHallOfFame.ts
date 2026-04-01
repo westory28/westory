@@ -303,6 +303,13 @@ export const buildWisHallOfFameClassKey = (grade: unknown, className: unknown) =
   return normalizedGrade && normalizedClass ? `${normalizedGrade}-${normalizedClass}` : '';
 };
 
+const resolveHallOfFameYearSemester = (config: ConfigLike) => {
+  const year = toSafeText(config?.year);
+  const semester = toSafeText(config?.semester);
+  if (!year || !semester) return null;
+  return { year, semester };
+};
+
 export const getWisHallOfFameDocPath = (config: ConfigLike) => {
   const { year, semester } = getYearSemester(config);
   return `years/${year}/semesters/${semester}/point_public/${WIS_HALL_OF_FAME_DOC_ID}`;
@@ -386,6 +393,7 @@ export const normalizeWisHallOfFameSnapshot = (
 export const getWisHallOfFameSnapshot = async (
   config: ConfigLike,
 ): Promise<WisHallOfFameSnapshot | null> => {
+  if (!resolveHallOfFameYearSemester(config)) return null;
   const snapshot = await getDoc(doc(db, getWisHallOfFameDocPath(config)));
   if (!snapshot.exists()) return null;
   return normalizeWisHallOfFameSnapshot(snapshot.data());
@@ -395,7 +403,11 @@ export const ensureWisHallOfFameSnapshot = async (
   config: ConfigLike,
   options?: { force?: boolean },
 ) => {
-  const { year, semester } = getYearSemester(config);
+  const targetYearSemester = resolveHallOfFameYearSemester(config);
+  if (!targetYearSemester) {
+    throw new Error('Hall of fame requires current year/semester config.');
+  }
+  const { year, semester } = targetYearSemester;
   const callable = httpsCallable(functions, 'ensureWisHallOfFame');
   const result = await callable({
     year,
@@ -413,7 +425,11 @@ export const saveWisHallOfFameConfig = async (
   hallOfFame: HallOfFameInterfaceConfig,
   options?: { refreshSnapshot?: boolean },
 ) => {
-  const { year, semester } = getYearSemester(config);
+  const targetYearSemester = resolveHallOfFameYearSemester(config);
+  if (!targetYearSemester) {
+    throw new Error('Hall of fame requires current year/semester config.');
+  }
+  const { year, semester } = targetYearSemester;
   const callable = httpsCallable(functions, 'saveWisHallOfFameConfig');
   const result = await callable({
     year,
@@ -436,8 +452,11 @@ const warnHallOfFameSnapshotFailure = (
   config: ConfigLike,
   error: unknown,
 ) => {
-  const { year, semester } = getYearSemester(config);
-  console.warn(`Failed to ${stage} wis hall of fame snapshot (${year}/${semester}):`, error);
+  const targetYearSemester = resolveHallOfFameYearSemester(config);
+  const scopeLabel = targetYearSemester
+    ? `${targetYearSemester.year}/${targetYearSemester.semester}`
+    : 'missing-year-semester';
+  console.warn(`Failed to ${stage} wis hall of fame snapshot (${scopeLabel}):`, error);
 };
 
 const getSnapshotUpdatedAtMs = (snapshot: WisHallOfFameSnapshot | null | undefined) => {

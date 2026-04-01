@@ -330,15 +330,15 @@ const WisHallOfFamePositionEditor: React.FC<
   };
   const previewLayoutClassName =
     deviceMode === "desktop"
-      ? "flex flex-row items-start gap-6 overflow-hidden"
-      : "mx-auto flex max-w-[420px] flex-col gap-5 overflow-hidden";
+      ? "flex flex-row items-start gap-6 overflow-visible"
+      : "mx-auto flex max-w-[420px] flex-col gap-5 overflow-visible";
   const podiumContainerClassName =
     deviceMode === "desktop"
-      ? "min-w-0 flex-1 overflow-hidden"
-      : "min-w-0 w-full overflow-hidden";
+      ? "min-w-0 flex-1 self-start overflow-visible"
+      : "min-w-0 w-full overflow-visible";
   const railContainerClassName =
     deviceMode === "desktop"
-      ? "relative z-10 mt-[var(--hall-rail-desktop-top)] ml-[var(--hall-rail-desktop-shift)] min-w-[19rem] w-[max(var(--hall-rail-width),19rem)] max-w-full shrink-0"
+      ? "relative z-10 mt-[var(--hall-rail-desktop-top)] ml-[var(--hall-rail-desktop-shift)] min-w-[20rem] w-[max(var(--hall-rail-width),20rem)] max-w-full shrink-0 self-start"
       : `relative z-10 mt-[var(--hall-rail-mobile-top)] min-w-0 w-full max-w-[var(--hall-rail-mobile-width)] ${mobileRailAlignClassName}`;
 
   const getPosition = (key: EditableKey) => {
@@ -717,14 +717,14 @@ const WisHallOfFamePositionEditor: React.FC<
       </div>
 
       {showPreviewStage ? (
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.9fr)_minmax(24rem,28rem)]">
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,2.9fr)_minmax(18rem,22rem)]">
           <div className="overflow-visible rounded-[1.75rem] border border-slate-200 bg-white shadow-[0_18px_48px_rgba(15,23,42,0.08)]">
             <div className="border-b border-slate-100 px-4 py-3 text-sm font-bold text-slate-600 whitespace-nowrap">
               {deviceMode === "desktop" ? "데스크톱" : "모바일"} 미리보기
             </div>
             <div
               ref={sceneRef}
-              className={`relative overflow-hidden rounded-[1.85rem] bg-[radial-gradient(circle_at_top_left,_rgba(255,251,235,0.92),_rgba(248,250,252,0.98)_42%,_rgba(255,255,255,1)_100%)] p-4 touch-none select-none sm:p-5 lg:p-6 ${
+              className={`relative overflow-visible rounded-[1.85rem] bg-[radial-gradient(circle_at_top_left,_rgba(255,251,235,0.92),_rgba(248,250,252,0.98)_42%,_rgba(255,255,255,1)_100%)] p-4 touch-none select-none sm:p-5 lg:p-6 ${
                 disabled ? "opacity-70" : ""
               } ${
                 deviceMode === "desktop"

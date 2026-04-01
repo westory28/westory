@@ -36,6 +36,8 @@ interface WisHallOfFameStudentPreviewProps {
 const clamp = (value: number, minimum: number, maximum: number) =>
   Math.min(maximum, Math.max(minimum, value));
 
+const DEFAULT_RAIL_CENTER = 71;
+
 const normalizeNumberText = (value: unknown) => {
   const raw = String(value || "").trim();
   const digits = raw.match(/\d+/)?.[0] || "";
@@ -182,6 +184,13 @@ const WisHallOfFameStudentPreview: React.FC<
     0,
     4.5,
   )}rem`;
+  const desktopRailShift = `${clamp(
+    (Number(desktopRail.leftPercent || DEFAULT_RAIL_CENTER) -
+      DEFAULT_RAIL_CENTER) /
+      8,
+    -1.25,
+    1.25,
+  )}rem`;
   const mobileRailWidth = `${clamp(
     Number(mobileRail.widthPercent || 100),
     78,
@@ -214,27 +223,28 @@ const WisHallOfFameStudentPreview: React.FC<
   const previewStyle = {
     ["--hall-rail-width" as string]: `${desktopRailWidth}%`,
     ["--hall-rail-desktop-top" as string]: desktopRailTop,
+    ["--hall-rail-desktop-shift" as string]: desktopRailShift,
     ["--hall-rail-mobile-width" as string]: mobileRailWidth,
     ["--hall-rail-mobile-top" as string]: mobileRailTop,
   };
   const previewLayoutClassName =
     deviceMode === "desktop"
-      ? "grid items-start gap-6 overflow-hidden [grid-template-columns:minmax(0,1fr)_minmax(19rem,var(--hall-rail-width))]"
+      ? "flex flex-row items-start gap-6"
       : deviceMode === "mobile"
-        ? "mx-auto flex max-w-[420px] flex-col gap-5 overflow-hidden"
-        : "flex flex-col gap-5 overflow-hidden lg:grid lg:items-start lg:gap-6 lg:[grid-template-columns:minmax(0,1fr)_minmax(19rem,var(--hall-rail-width))]";
+        ? "mx-auto flex max-w-[420px] flex-col gap-5 overflow-visible"
+        : "flex flex-col gap-5 overflow-visible lg:flex-row lg:items-start lg:gap-6";
   const podiumContainerClassName =
     deviceMode === "desktop"
-      ? "min-w-0 overflow-hidden"
+      ? "min-w-0 flex-1 self-start overflow-visible"
       : deviceMode === "mobile"
-        ? "min-w-0 w-full overflow-hidden"
-        : "min-w-0 w-full overflow-hidden";
+        ? "min-w-0 w-full overflow-visible"
+        : "min-w-0 w-full overflow-visible lg:flex-1";
   const railContainerClassName =
     deviceMode === "desktop"
-      ? "relative z-10 mt-[var(--hall-rail-desktop-top)] min-w-0 w-full self-start"
+      ? "relative z-10 mt-[var(--hall-rail-desktop-top)] ml-[var(--hall-rail-desktop-shift)] min-w-[20rem] w-[max(var(--hall-rail-width),20rem)] max-w-full shrink-0 self-start"
       : deviceMode === "mobile"
         ? `relative z-10 mt-[var(--hall-rail-mobile-top)] min-w-0 w-full max-w-[var(--hall-rail-mobile-width)] ${mobileRailAlignClassName}`
-        : `relative z-10 mt-[var(--hall-rail-mobile-top)] min-w-0 w-full sm:max-w-[var(--hall-rail-mobile-width)] lg:mt-[var(--hall-rail-desktop-top)] lg:max-w-full lg:self-start ${mobileRailAlignClassName}`;
+        : `relative z-10 mt-[var(--hall-rail-mobile-top)] min-w-0 w-full max-w-[var(--hall-rail-mobile-width)] ${mobileRailAlignClassName} lg:mt-[var(--hall-rail-desktop-top)] lg:ml-[var(--hall-rail-desktop-shift)] lg:min-w-[20rem] lg:w-[max(var(--hall-rail-width),20rem)] lg:max-w-full lg:shrink-0 lg:self-start`;
   const podiumDeviceMode =
     deviceMode === "responsive" ? "responsive" : deviceMode;
 
@@ -333,7 +343,7 @@ const WisHallOfFameStudentPreview: React.FC<
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(255,251,235,0.9),_rgba(248,250,252,0.98)_42%,_rgba(255,255,255,1)_100%)] p-4 shadow-[0_22px_54px_rgba(15,23,42,0.08)] sm:p-5 xl:p-6">
+      <div className="overflow-visible rounded-[2rem] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(255,251,235,0.9),_rgba(248,250,252,0.98)_42%,_rgba(255,255,255,1)_100%)] p-4 shadow-[0_22px_54px_rgba(15,23,42,0.08)] sm:p-5 xl:p-6">
         <div className="mb-4 flex flex-wrap items-center gap-2 text-xs font-bold text-slate-500">
           <span className="inline-flex items-center whitespace-nowrap rounded-full bg-white px-3 py-1.5 text-slate-700 shadow-[0_8px_18px_rgba(15,23,42,0.05)]">
             현재 보기
@@ -394,7 +404,7 @@ const WisHallOfFameStudentPreview: React.FC<
               </span>
             </div>
 
-            <div className="min-h-[25rem] sm:min-h-[28rem] lg:min-h-[31rem] lg:max-h-[min(52rem,calc(100vh-12rem))]">
+            <div className="min-h-[31rem] sm:min-h-[33rem] lg:min-h-[38rem]">
               <WisHallOfFameLeaderboardList
                 entries={rightRailEntries}
                 hallOfFameConfig={resolvedConfig}
