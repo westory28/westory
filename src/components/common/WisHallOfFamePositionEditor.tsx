@@ -758,7 +758,7 @@ const WisHallOfFamePositionEditor: React.FC<
                       />
                     </div>
 
-                    <div className="absolute inset-0 z-40">
+                    <div className="pointer-events-none absolute inset-0 z-40">
                       {PRESET_ITEMS.filter(
                         (item) => item.key !== "leaderboard",
                       ).map((item) => {
@@ -783,7 +783,7 @@ const WisHallOfFamePositionEditor: React.FC<
                               left: `${displayPosition.leftPercent}%`,
                               top: `${displayPosition.topPercent}%`,
                             }}
-                            className={`absolute z-40 min-h-10 -translate-x-1/2 -translate-y-1/2 touch-none select-none rounded-full border px-4 py-2 text-[11px] font-black shadow-[0_16px_30px_rgba(15,23,42,0.2)] backdrop-blur transition ${
+                            className={`pointer-events-auto absolute z-40 inline-flex min-h-10 min-w-[7.75rem] items-center justify-center gap-1.5 -translate-x-1/2 -translate-y-1/2 touch-none select-none rounded-full border px-4 py-2 text-[11px] font-black shadow-[0_16px_30px_rgba(15,23,42,0.2)] backdrop-blur transition ${
                               item.toneClassName
                             } ${
                               isSelected
@@ -795,7 +795,8 @@ const WisHallOfFamePositionEditor: React.FC<
                                 : "cursor-grab active:cursor-grabbing"
                             } whitespace-nowrap`}
                           >
-                            {item.label}
+                            <span aria-hidden="true">⋮⋮</span>
+                            <span>{item.label}</span>
                           </button>
                         );
                       })}
@@ -841,7 +842,7 @@ const WisHallOfFamePositionEditor: React.FC<
                         handlePointerDown(event, "leaderboard")
                       }
                       onClick={() => setSelectedKey("leaderboard")}
-                      className={`absolute left-4 top-4 z-40 min-h-10 touch-none select-none rounded-full border px-4 py-2 text-[11px] font-black shadow-[0_16px_30px_rgba(15,23,42,0.2)] backdrop-blur transition ${
+                      className={`pointer-events-auto absolute left-4 top-4 z-40 inline-flex min-h-10 min-w-[8.5rem] items-center justify-center gap-1.5 touch-none select-none rounded-full border px-4 py-2 text-[11px] font-black shadow-[0_16px_30px_rgba(15,23,42,0.2)] backdrop-blur transition ${
                         PRESET_ITEMS.find((item) => item.key === "leaderboard")
                           ?.toneClassName || ""
                       } ${
@@ -854,7 +855,8 @@ const WisHallOfFamePositionEditor: React.FC<
                           : "cursor-grab active:cursor-grabbing"
                       } whitespace-nowrap`}
                     >
-                      오른쪽 랭킹 패널
+                      <span aria-hidden="true">⋮⋮</span>
+                      <span>오른쪽 랭킹 패널</span>
                     </button>
                   </div>
                 </div>

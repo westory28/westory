@@ -31,36 +31,36 @@ type SlotLayoutMode = "desktop" | "mobile";
 const SLOT_SAFE_AREA = {
   desktop: {
     centerRangePercentBySlot: {
-      first: { min: 43, max: 57 },
-      second: { min: 25, max: 36 },
-      third: { min: 64, max: 75 },
+      first: { min: 44, max: 56 },
+      second: { min: 27, max: 38 },
+      third: { min: 62, max: 73 },
     },
     topPercentRangeBySlot: {
-      first: { min: 23, max: 41 },
-      second: { min: 27, max: 45 },
-      third: { min: 27, max: 45 },
+      first: { min: 20, max: 34 },
+      second: { min: 30, max: 39 },
+      third: { min: 30, max: 39 },
     },
     widthPercentBySlot: {
       first: { min: 18.5, max: 20.5 },
-      second: { min: 14.5, max: 16.25 },
-      third: { min: 14.5, max: 16.25 },
+      second: { min: 14.5, max: 17 },
+      third: { min: 14.5, max: 17 },
     },
   },
   mobile: {
     centerRangePercentBySlot: {
-      first: { min: 43, max: 57 },
-      second: { min: 28, max: 39 },
-      third: { min: 61, max: 72 },
+      first: { min: 44, max: 56 },
+      second: { min: 29, max: 39 },
+      third: { min: 61, max: 71 },
     },
     topPercentRangeBySlot: {
-      first: { min: 26, max: 44 },
-      second: { min: 30, max: 48 },
-      third: { min: 30, max: 48 },
+      first: { min: 22, max: 35 },
+      second: { min: 34, max: 43 },
+      third: { min: 34, max: 43 },
     },
     widthPercentBySlot: {
-      first: { min: 23.5, max: 26 },
-      second: { min: 17.25, max: 19.25 },
-      third: { min: 17.25, max: 19.25 },
+      first: { min: 22.5, max: 25.5 },
+      second: { min: 17, max: 19.5 },
+      third: { min: 17, max: 19.5 },
     },
   },
 } as const;
@@ -71,10 +71,10 @@ const getEntryTone = (slotKey: HallOfFamePodiumSlotKey) => {
       badgeClassName:
         "border-amber-300/95 bg-white text-amber-950 shadow-[0_20px_38px_rgba(217,119,6,0.3)] ring-2 ring-amber-300/75",
       nameClassName:
-        "border-white/14 bg-[linear-gradient(135deg,_rgba(15,23,42,0.9),_rgba(15,23,42,0.72))] text-white shadow-[0_22px_40px_rgba(15,23,42,0.34)] ring-1 ring-white/14",
+        "border-white/20 bg-[linear-gradient(135deg,_rgba(2,6,23,0.94),_rgba(15,23,42,0.84))] text-white shadow-[0_22px_40px_rgba(15,23,42,0.34)] ring-1 ring-white/12",
       scoreClassName:
         "border-white/30 bg-[linear-gradient(135deg,_rgba(15,23,42,0.96),_rgba(14,116,144,0.96))] text-white shadow-[0_18px_34px_rgba(15,23,42,0.28)] ring-1 ring-white/15",
-      emojiClassName: "text-[clamp(3.25rem,6.6vw,4.8rem)]",
+      emojiClassName: "text-[clamp(2.95rem,6vw,4.25rem)]",
     };
   }
 
@@ -83,10 +83,10 @@ const getEntryTone = (slotKey: HallOfFamePodiumSlotKey) => {
       badgeClassName:
         "border-slate-200/95 bg-slate-50 text-slate-950 shadow-[0_16px_30px_rgba(71,85,105,0.24)] ring-1 ring-white/80",
       nameClassName:
-        "border-white/14 bg-[linear-gradient(135deg,_rgba(15,23,42,0.88),_rgba(15,23,42,0.7))] text-white shadow-[0_20px_36px_rgba(15,23,42,0.32)] ring-1 ring-white/14",
+        "border-white/20 bg-[linear-gradient(135deg,_rgba(2,6,23,0.92),_rgba(15,23,42,0.82))] text-white shadow-[0_18px_34px_rgba(15,23,42,0.32)] ring-1 ring-white/12",
       scoreClassName:
         "border-white/25 bg-[linear-gradient(135deg,_rgba(15,23,42,0.94),_rgba(51,65,85,0.94))] text-white shadow-[0_16px_30px_rgba(15,23,42,0.26)] ring-1 ring-white/15",
-      emojiClassName: "text-[clamp(2.6rem,5.2vw,3.9rem)]",
+      emojiClassName: "text-[clamp(2.35rem,4.9vw,3.45rem)]",
     };
   }
 
@@ -94,10 +94,10 @@ const getEntryTone = (slotKey: HallOfFamePodiumSlotKey) => {
     badgeClassName:
       "border-orange-200/95 bg-orange-100 text-orange-950 shadow-[0_16px_30px_rgba(194,120,3,0.24)] ring-1 ring-white/80",
     nameClassName:
-      "border-white/14 bg-[linear-gradient(135deg,_rgba(15,23,42,0.88),_rgba(15,23,42,0.7))] text-white shadow-[0_20px_36px_rgba(15,23,42,0.32)] ring-1 ring-white/14",
+      "border-white/20 bg-[linear-gradient(135deg,_rgba(2,6,23,0.92),_rgba(30,41,59,0.8))] text-white shadow-[0_18px_34px_rgba(15,23,42,0.32)] ring-1 ring-white/12",
     scoreClassName:
       "border-white/30 bg-[linear-gradient(135deg,_rgba(30,41,59,0.94),_rgba(194,65,12,0.92))] text-white shadow-[0_16px_30px_rgba(15,23,42,0.24)] ring-1 ring-white/15",
-    emojiClassName: "text-[clamp(2.6rem,5.2vw,3.9rem)]",
+    emojiClassName: "text-[clamp(2.35rem,4.9vw,3.45rem)]",
   };
 };
 
@@ -221,17 +221,24 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
       )}
 
       <div className="relative px-2 pb-4 pt-2 sm:px-3 sm:pb-5 sm:pt-3">
-        <div className="relative aspect-[80/52] min-h-[26rem] overflow-visible rounded-[1.65rem] bg-[#f5f7fb] sm:min-h-[30rem] lg:min-h-[35rem] xl:min-h-[39rem]">
+        <div className="relative aspect-[80/52] min-h-[26rem] overflow-visible rounded-[1.65rem] bg-[#f5f7fb] sm:min-h-[30rem] lg:min-h-[34rem] xl:min-h-[37rem]">
           <div className="absolute inset-0 overflow-hidden rounded-[1.65rem]">
             <img
               src={resolvedImageUrl}
               alt="화랑의 전당 시상대"
-              className="absolute inset-0 h-full w-full object-cover"
+              className="absolute inset-0 h-full w-full scale-[1.03] object-cover object-center opacity-35 blur-xl"
+              aria-hidden="true"
             />
+            <img
+              src={resolvedImageUrl}
+              alt=""
+              className="absolute inset-x-0 bottom-0 h-full w-full object-contain object-bottom"
+            />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.18),_rgba(255,255,255,0.03)_36%,_rgba(15,23,42,0.18)_100%)]" />
             <div className="absolute inset-0 bg-gradient-to-b from-white/12 via-transparent to-slate-950/12" />
           </div>
 
-          <div className="relative z-10 h-full">
+          <div className="relative z-10 h-full px-4 pt-6 pb-[8.5rem] sm:px-6 sm:pt-7 sm:pb-[9.75rem] lg:px-7 lg:pb-[11rem] xl:px-8 xl:pb-[12rem]">
             {safeEntries.length === 0 && (
               <div className="absolute inset-x-6 top-1/2 z-20 -translate-y-1/2 rounded-3xl border border-white/70 bg-white/88 px-6 py-5 text-center text-sm font-semibold text-slate-600 shadow-[0_18px_44px_rgba(15,23,42,0.08)] backdrop-blur">
                 {emptyMessage}
