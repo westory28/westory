@@ -35,15 +35,15 @@ export const DEFAULT_WIS_HALL_OF_FAME_STORED_RANK_LIMIT = 20;
 const WIS_HALL_OF_FAME_SEEN_KEY_PREFIX = 'wisHallOfFameSeen';
 
 const DEFAULT_DESKTOP_POSITIONS: HallOfFamePodiumPositions = {
-  first: { leftPercent: 50, topPercent: 26, widthPercent: 21 },
-  second: { leftPercent: 26.5, topPercent: 40.5, widthPercent: 18 },
-  third: { leftPercent: 73.5, topPercent: 40.5, widthPercent: 18 },
+  first: { leftPercent: 50, topPercent: 23, widthPercent: 20 },
+  second: { leftPercent: 30, topPercent: 35, widthPercent: 16 },
+  third: { leftPercent: 70, topPercent: 35, widthPercent: 16 },
 };
 
 const DEFAULT_MOBILE_POSITIONS: HallOfFamePodiumPositions = {
-  first: { leftPercent: 50, topPercent: 28, widthPercent: 28 },
-  second: { leftPercent: 28, topPercent: 46, widthPercent: 21 },
-  third: { leftPercent: 72, topPercent: 46, widthPercent: 21 },
+  first: { leftPercent: 50, topPercent: 25, widthPercent: 25 },
+  second: { leftPercent: 31, topPercent: 39, widthPercent: 18.5 },
+  third: { leftPercent: 69, topPercent: 39, widthPercent: 18.5 },
 };
 
 const DEFAULT_DESKTOP_LEADERBOARD_PANEL: HallOfFameLeaderboardPanelPosition = {

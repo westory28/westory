@@ -1,15 +1,15 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import React, { useEffect, useMemo, useState } from "react";
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import WisHallOfFamePositionEditor, {
   type HallOfFameEditorDeviceMode,
-} from '../../../../components/common/WisHallOfFamePositionEditor';
+} from "../../../../components/common/WisHallOfFamePositionEditor";
 import WisHallOfFameStudentPreview, {
   type HallOfFamePreviewView,
-} from '../../../../components/common/WisHallOfFameStudentPreview';
-import { useAppToast } from '../../../../components/common/AppToastProvider';
-import { storage } from '../../../../lib/firebase';
-import { formatPointDateShortTime } from '../../../../lib/pointFormatters';
-import { invalidateSiteSettingDocCache } from '../../../../lib/siteSettings';
+} from "../../../../components/common/WisHallOfFameStudentPreview";
+import { useAppToast } from "../../../../components/common/AppToastProvider";
+import { storage } from "../../../../lib/firebase";
+import { formatPointDateShortTime } from "../../../../lib/pointFormatters";
+import { invalidateSiteSettingDocCache } from "../../../../lib/siteSettings";
 import {
   DEFAULT_WIS_HALL_OF_FAME_PODIUM_IMAGE_URL,
   WIS_HALL_OF_FAME_GRADE_KEY,
@@ -22,17 +22,17 @@ import {
   isWisHallOfFameSnapshotStale,
   resolveHallOfFameInterfaceConfig,
   saveWisHallOfFameConfig,
-} from '../../../../lib/wisHallOfFame';
+} from "../../../../lib/wisHallOfFame";
 import type {
   HallOfFameInterfaceConfig,
   InterfaceConfig,
   SystemConfig,
   WisHallOfFameSnapshot,
-} from '../../../../types';
+} from "../../../../types";
 import HallOfFameSettingsSidebar, {
   type HallOfFameSettingsPanelId,
   type HallOfFameSettingsSidebarItem,
-} from './HallOfFameSettingsSidebar';
+} from "./HallOfFameSettingsSidebar";
 
 interface HallOfFameManagementTabProps {
   config: SystemConfig | null;
@@ -43,27 +43,27 @@ interface HallOfFameManagementTabProps {
 
 type FeatureDraft = Pick<
   ReturnType<typeof resolveHallOfFameInterfaceConfig>,
-  'publicRange' | 'recognitionPopup'
+  "publicRange" | "recognitionPopup"
 >;
 
 type ViewDraft = Pick<
   ReturnType<typeof resolveHallOfFameInterfaceConfig>,
-  | 'podiumImageUrl'
-  | 'podiumStoragePath'
-  | 'positionPreset'
-  | 'positions'
-  | 'leaderboardPanel'
+  | "podiumImageUrl"
+  | "podiumStoragePath"
+  | "positionPreset"
+  | "positions"
+  | "leaderboardPanel"
 >;
 
-type LayoutDraft = Pick<ViewDraft, 'positions' | 'leaderboardPanel'>;
+type LayoutDraft = Pick<ViewDraft, "positions" | "leaderboardPanel">;
 
-const HALL_OF_FAME_PODIUM_STORAGE_DIR = 'site-settings/interface/hall-of-fame';
+const HALL_OF_FAME_PODIUM_STORAGE_DIR = "site-settings/interface/hall-of-fame";
 
 const createDraft = (config?: HallOfFameInterfaceConfig | null) =>
   resolveHallOfFameInterfaceConfig(config);
 
 const parseClassKey = (value: string) => {
-  const [grade = '', className = ''] = String(value || '').split('-');
+  const [grade = "", className = ""] = String(value || "").split("-");
   return { grade, className };
 };
 
@@ -102,7 +102,9 @@ const pickViewDraft = (
   },
 });
 
-const pickLayoutDraft = (draft: ViewDraft | ReturnType<typeof resolveHallOfFameInterfaceConfig>): LayoutDraft => ({
+const pickLayoutDraft = (
+  draft: ViewDraft | ReturnType<typeof resolveHallOfFameInterfaceConfig>,
+): LayoutDraft => ({
   positions: {
     desktop: {
       first: { ...draft.positions.desktop.first },
@@ -156,7 +158,7 @@ const loadImageElement = (file: File) =>
     };
     image.onerror = () => {
       URL.revokeObjectURL(objectUrl);
-      reject(new Error('화랑의 전당 배경 이미지를 읽지 못했습니다.'));
+      reject(new Error("화랑의 전당 배경 이미지를 읽지 못했습니다."));
     };
     image.src = objectUrl;
   });
@@ -168,96 +170,102 @@ const buildResizedImageBlob = async (
 ) => {
   const image = await loadImageElement(file);
   const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
-  const canvas = document.createElement('canvas');
+  const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(image.width * scale));
   canvas.height = Math.max(1, Math.round(image.height * scale));
-  const context = canvas.getContext('2d');
+  const context = canvas.getContext("2d");
   if (!context) {
-    throw new Error('화랑의 전당 배경 캔버스를 준비하지 못했습니다.');
+    throw new Error("화랑의 전당 배경 캔버스를 준비하지 못했습니다.");
   }
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
   return new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (!blob) {
-        reject(new Error('화랑의 전당 배경 이미지를 압축하지 못했습니다.'));
-        return;
-      }
-      resolve(blob);
-    }, 'image/jpeg', quality);
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(new Error("화랑의 전당 배경 이미지를 압축하지 못했습니다."));
+          return;
+        }
+        resolve(blob);
+      },
+      "image/jpeg",
+      quality,
+    );
   });
 };
 
 const formatAdminDateTime = (ms: number) =>
-  new Date(ms).toLocaleString('ko-KR', {
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
+  new Date(ms).toLocaleString("ko-KR", {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
   });
 
 const isStorageUnauthorizedError = (error: any) =>
-  String(error?.code || '').trim() === 'storage/unauthorized';
+  String(error?.code || "").trim() === "storage/unauthorized";
 
 const getHallOfFameImageUploadFailureText = (error: any) => {
   if (isStorageUnauthorizedError(error)) {
     return {
-      title: '시상대 이미지 업로드 권한이 없어 저장하지 못했습니다.',
-      message: '교사, point manager, admin 권한과 Storage 정책을 확인한 뒤 다시 시도해 주세요.',
+      title: "시상대 이미지 업로드 권한이 없어 저장하지 못했습니다.",
+      message:
+        "교사, point manager, admin 권한과 Storage 정책을 확인한 뒤 다시 시도해 주세요.",
     };
   }
 
   return {
-    title: '시상대 이미지 업로드에 실패했습니다.',
-    message: error?.message || '잠시 후 다시 시도해 주세요.',
+    title: "시상대 이미지 업로드에 실패했습니다.",
+    message: error?.message || "잠시 후 다시 시도해 주세요.",
   };
 };
 
 const getHallOfFameConfigSaveFailureText = (error: any) => {
-  const stage = String(error?.details?.stage || '').trim();
-  const errorCode = String(error?.code || '').trim();
-  const normalizedMessage = String(error?.message || '').trim();
-  if (stage === 'config_save') {
+  const stage = String(error?.details?.stage || "").trim();
+  const errorCode = String(error?.code || "").trim();
+  const normalizedMessage = String(error?.message || "").trim();
+  if (stage === "config_save") {
     return {
-      title: '배치 설정 저장에 실패했습니다.',
+      title: "배치 설정 저장에 실패했습니다.",
       message:
-        normalizedMessage || '학생 화면 설정 저장 중 서버 오류가 발생했습니다.',
+        normalizedMessage || "학생 화면 설정 저장 중 서버 오류가 발생했습니다.",
     };
   }
 
-  if (stage === 'snapshot_refresh') {
+  if (stage === "snapshot_refresh") {
     return {
-      title: '학생 화면 설정은 저장됐지만 공개 랭킹을 새로고침하지 못했습니다.',
+      title: "학생 화면 설정은 저장됐지만 공개 랭킹을 새로고침하지 못했습니다.",
       message:
-        error?.message || '잠시 후 공개 랭킹 스냅샷을 다시 반영해 주세요.',
-    };
-  }
-
-  if (
-    errorCode === 'functions/not-found'
-    || normalizedMessage.toLowerCase().includes('savewishalloffameconfig')
-  ) {
-    return {
-      title: '학생 화면 설정 저장 중 서버 오류가 발생했습니다.',
-      message:
-        '서버 저장 함수를 찾지 못했습니다. Functions 배포 상태를 확인한 뒤 다시 시도해 주세요.',
+        error?.message || "잠시 후 공개 랭킹 스냅샷을 다시 반영해 주세요.",
     };
   }
 
   if (
-    errorCode === 'functions/internal'
-    || errorCode === 'internal'
-    || normalizedMessage.toLowerCase() === 'internal'
+    errorCode === "functions/not-found" ||
+    normalizedMessage.toLowerCase().includes("savewishalloffameconfig")
   ) {
     return {
-      title: '학생 화면 설정 저장 중 서버 오류가 발생했습니다.',
-      message: '서버 저장 단계에서 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.',
+      title: "학생 화면 설정 저장 중 서버 오류가 발생했습니다.",
+      message:
+        "서버 저장 함수를 찾지 못했습니다. Functions 배포 상태를 확인한 뒤 다시 시도해 주세요.",
+    };
+  }
+
+  if (
+    errorCode === "functions/internal" ||
+    errorCode === "internal" ||
+    normalizedMessage.toLowerCase() === "internal"
+  ) {
+    return {
+      title: "학생 화면 설정 저장 중 서버 오류가 발생했습니다.",
+      message:
+        "서버 저장 단계에서 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
     };
   }
 
   return {
-    title: '학생 화면 설정 저장 중 서버 오류가 발생했습니다.',
-    message: normalizedMessage || '잠시 후 다시 시도해 주세요.',
+    title: "학생 화면 설정 저장 중 서버 오류가 발생했습니다.",
+    message: normalizedMessage || "잠시 후 다시 시도해 주세요.",
   };
 };
 
@@ -286,19 +294,17 @@ const PanelHeader: React.FC<{
           disabled={!canManage || !dirty || saving}
           className="inline-flex min-h-11 items-center justify-center whitespace-nowrap break-keep rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
         >
-          {saving ? '저장 중...' : saveLabel}
+          {saving ? "저장 중..." : saveLabel}
         </button>
         <div
           className={[
-            'rounded-xl border px-4 py-3 text-sm break-keep',
+            "rounded-xl border px-4 py-3 text-sm break-keep",
             dirty
-              ? 'border-amber-200 bg-amber-50 text-amber-800'
-              : 'border-gray-200 bg-gray-50 text-gray-600',
-          ].join(' ')}
+              ? "border-amber-200 bg-amber-50 text-amber-800"
+              : "border-gray-200 bg-gray-50 text-gray-600",
+          ].join(" ")}
         >
-          {dirty
-            ? '변경사항이 저장 대기 중입니다.'
-            : '저장된 설정과 같습니다.'}
+          {dirty ? "변경사항이 저장 대기 중입니다." : "저장된 설정과 같습니다."}
         </div>
       </div>
     </div>
@@ -317,22 +323,22 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
     [interfaceConfig?.hallOfFame],
   );
   const [snapshot, setSnapshot] = useState<WisHallOfFameSnapshot | null>(null);
-  const [snapshotError, setSnapshotError] = useState('');
+  const [snapshotError, setSnapshotError] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [featureSaving, setFeatureSaving] = useState(false);
   const [viewSaving, setViewSaving] = useState(false);
   const [activePanel, setActivePanel] =
-    useState<HallOfFameSettingsPanelId>('feature_settings');
+    useState<HallOfFameSettingsPanelId>("feature_settings");
   const [previewScope, setPreviewScope] =
-    useState<HallOfFamePreviewView>('grade');
+    useState<HallOfFamePreviewView>("grade");
   const [editorDeviceMode, setEditorDeviceMode] =
-    useState<HallOfFameEditorDeviceMode>('desktop');
+    useState<HallOfFameEditorDeviceMode>("desktop");
   const [layoutEditorOpen, setLayoutEditorOpen] = useState(false);
-  const [gradeKey, setGradeKey] = useState('');
-  const [classKey, setClassKey] = useState('');
+  const [gradeKey, setGradeKey] = useState("");
+  const [classKey, setClassKey] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreviewUrl, setImagePreviewUrl] = useState('');
+  const [imagePreviewUrl, setImagePreviewUrl] = useState("");
   const [savedFeatureDraft, setSavedFeatureDraft] = useState<FeatureDraft>(() =>
     pickFeatureDraft(initialDraft),
   );
@@ -376,7 +382,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
 
   useEffect(
     () => () => {
-      if (imagePreviewUrl.startsWith('blob:')) {
+      if (imagePreviewUrl.startsWith("blob:")) {
         URL.revokeObjectURL(imagePreviewUrl);
       }
     },
@@ -393,7 +399,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
       }
 
       setLoading(true);
-      setSnapshotError('');
+      setSnapshotError("");
 
       try {
         const nextSnapshot = await getOrEnsureWisHallOfFameSnapshot(config);
@@ -402,13 +408,13 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
         }
       } catch (error) {
         console.warn(
-          'Failed to load hall of fame snapshot for teacher management:',
+          "Failed to load hall of fame snapshot for teacher management:",
           error,
         );
         if (!cancelled) {
           setSnapshot(null);
           setSnapshotError(
-            '공개 스냅샷을 읽지 못했습니다. 그래도 위스 관리 전체는 계속 사용할 수 있습니다.',
+            "공개 스냅샷을 읽지 못했습니다. 그래도 위스 관리 전체는 계속 사용할 수 있습니다.",
           );
         }
       } finally {
@@ -456,7 +462,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
           ...Object.keys(snapshot?.gradeTop3ByGrade || {}),
         ]),
       ).sort((left, right) =>
-        left.localeCompare(right, 'ko-KR', { numeric: true }),
+        left.localeCompare(right, "ko-KR", { numeric: true }),
       ),
     [snapshot],
   );
@@ -471,7 +477,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
       )
         .filter((value) => !gradeKey || parseClassKey(value).grade === gradeKey)
         .sort((left, right) =>
-          left.localeCompare(right, 'ko-KR', { numeric: true }),
+          left.localeCompare(right, "ko-KR", { numeric: true }),
         ),
     [gradeKey, snapshot],
   );
@@ -479,62 +485,64 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
   useEffect(() => {
     if (!gradeKey || !gradeOptions.includes(gradeKey)) {
       setGradeKey(
-        snapshot?.primaryGradeKey || gradeOptions[0] || WIS_HALL_OF_FAME_GRADE_KEY,
+        snapshot?.primaryGradeKey ||
+          gradeOptions[0] ||
+          WIS_HALL_OF_FAME_GRADE_KEY,
       );
     }
   }, [gradeKey, gradeOptions, snapshot?.primaryGradeKey]);
 
   useEffect(() => {
     if (!classOptions.length) {
-      setClassKey('');
+      setClassKey("");
       return;
     }
     if (!classKey || !classOptions.includes(classKey)) {
-      setClassKey(classOptions[0] || '');
+      setClassKey(classOptions[0] || "");
     }
   }, [classKey, classOptions]);
 
   useEffect(() => {
-    if (previewScope === 'class' && !classKey) {
-      setPreviewScope('grade');
+    if (previewScope === "class" && !classKey) {
+      setPreviewScope("grade");
     }
   }, [classKey, previewScope]);
 
   const previewClass = parseClassKey(classKey);
   const snapshotUpdatedAtLabel = snapshot?.updatedAt
     ? formatPointDateShortTime(snapshot.updatedAt)
-    : '아직 없음';
+    : "아직 없음";
   const nextAutomaticRefreshLabel = snapshot?.updatedAtMs
     ? formatAdminDateTime(
         Number(snapshot.updatedAtMs) +
           WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS * 60 * 60 * 1000,
       )
-    : '첫 스냅샷 생성 후 계산됩니다.';
+    : "첫 스냅샷 생성 후 계산됩니다.";
   const snapshotStatusLabel = snapshot
     ? isWisHallOfFameSnapshotStale(snapshot)
-      ? '4시간 기준이 지나 다음 갱신 대기 상태입니다.'
+      ? "4시간 기준이 지나 다음 갱신 대기 상태입니다."
       : `마지막 반영 후 ${WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS}시간 이내입니다.`
-    : '공개 스냅샷을 아직 만들지 않았습니다.';
+    : "공개 스냅샷을 아직 만들지 않았습니다.";
   const sidebarItems: HallOfFameSettingsSidebarItem[] = [
     {
-      id: 'feature_settings',
-      label: '기능 설정',
-      iconClassName: 'fas fa-sliders-h',
+      id: "feature_settings",
+      label: "기능 설정",
+      iconClassName: "fas fa-sliders-h",
     },
     {
-      id: 'student_view_settings',
-      label: '학생 화면 설정',
-      iconClassName: 'fas fa-images',
+      id: "student_view_settings",
+      label: "학생 화면 설정",
+      iconClassName: "fas fa-images",
     },
   ];
 
   const clearImageSelection = () => {
     setImageFile(null);
     setImagePreviewUrl((previousValue) => {
-      if (previousValue.startsWith('blob:')) {
+      if (previousValue.startsWith("blob:")) {
         URL.revokeObjectURL(previousValue);
       }
-      return '';
+      return "";
     });
   };
 
@@ -554,10 +562,10 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
   const refreshSavedInterfaceConfig = async () => {
     if (!onInterfaceConfigRefresh) return;
 
-    invalidateSiteSettingDocCache('interface_config');
+    invalidateSiteSettingDocCache("interface_config");
     await onInterfaceConfigRefresh().catch((error) => {
       console.warn(
-        'Failed to refresh interface config after hall of fame student view save:',
+        "Failed to refresh interface config after hall of fame student view save:",
         error,
       );
     });
@@ -586,18 +594,18 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
       await ensureWisHallOfFameSnapshot(config, { force: true });
       const nextSnapshot = await getWisHallOfFameSnapshot(config);
       setSnapshot(nextSnapshot);
-      setSnapshotError('');
+      setSnapshotError("");
       showToast({
-        tone: 'success',
-        title: '화랑의 전당 스냅샷을 새로 반영했습니다.',
-        message: '학생 화면 미리보기를 최신 공개 데이터로 다시 읽었습니다.',
+        tone: "success",
+        title: "화랑의 전당 스냅샷을 새로 반영했습니다.",
+        message: "학생 화면 미리보기를 최신 공개 데이터로 다시 읽었습니다.",
       });
     } catch (error: any) {
-      setSnapshotError('화랑의 전당 스냅샷 새로고침에 실패했습니다.');
+      setSnapshotError("화랑의 전당 스냅샷 새로고침에 실패했습니다.");
       showToast({
-        tone: 'warning',
-        title: '스냅샷을 새로고침하지 못했습니다.',
-        message: error?.message || '잠시 후 다시 시도해 주세요.',
+        tone: "warning",
+        title: "스냅샷을 새로고침하지 못했습니다.",
+        message: error?.message || "잠시 후 다시 시도해 주세요.",
       });
     } finally {
       setRefreshing(false);
@@ -610,11 +618,9 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
     setFeatureSaving(true);
     try {
       const fullDraft = buildCombinedConfig(featureDraft, savedViewDraft);
-      const result = await saveWisHallOfFameConfig(
-        config,
-        fullDraft,
-        { refreshSnapshot: false },
-      );
+      const result = await saveWisHallOfFameConfig(config, fullDraft, {
+        refreshSnapshot: false,
+      });
       const nextDraft = createDraft(result.hallOfFame);
       const nextFeatureDraft = pickFeatureDraft(nextDraft);
 
@@ -624,22 +630,22 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
       if (onInterfaceConfigRefresh) {
         await onInterfaceConfigRefresh().catch((error) => {
           console.warn(
-            'Failed to refresh interface config after hall of fame feature save:',
+            "Failed to refresh interface config after hall of fame feature save:",
             error,
           );
         });
       }
 
       showToast({
-        tone: 'success',
-        title: '기능 설정이 저장되었습니다.',
-        message: '공개 범위, 팝업, 공개 시간 정책 변경을 반영했습니다.',
+        tone: "success",
+        title: "기능 설정이 저장되었습니다.",
+        message: "공개 범위, 팝업, 공개 시간 정책 변경을 반영했습니다.",
       });
     } catch (error: any) {
       showToast({
-        tone: 'error',
-        title: '기능 설정 저장에 실패했습니다.',
-        message: error?.message || '잠시 후 다시 시도해 주세요.',
+        tone: "error",
+        title: "기능 설정 저장에 실패했습니다.",
+        message: error?.message || "잠시 후 다시 시도해 주세요.",
       });
     } finally {
       setFeatureSaving(false);
@@ -664,18 +670,23 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
           podiumStoragePath: savedViewDraft.podiumStoragePath,
         };
         const hasNonImageChanges =
-          serializeViewDraft(layoutOnlyDraft) !== serializeViewDraft(savedViewDraft);
+          serializeViewDraft(layoutOnlyDraft) !==
+          serializeViewDraft(savedViewDraft);
 
         try {
-          const resizedBlob = await buildResizedImageBlob(imageFile, 1600, 0.84);
+          const resizedBlob = await buildResizedImageBlob(
+            imageFile,
+            1600,
+            0.84,
+          );
           const imageRef = ref(
             storage,
             `${HALL_OF_FAME_PODIUM_STORAGE_DIR}/podium-${Date.now()}.jpg`,
           );
 
           await uploadBytes(imageRef, resizedBlob, {
-            contentType: 'image/jpeg',
-            cacheControl: 'public,max-age=86400',
+            contentType: "image/jpeg",
+            cacheControl: "public,max-age=86400",
           });
 
           nextViewDraft.podiumImageUrl = await getDownloadURL(imageRef);
@@ -689,27 +700,28 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
                 preserveImageSelection: true,
               });
               showToast({
-                tone: 'warning',
+                tone: "warning",
                 title: uploadFailure.title,
                 message:
-                  '배치와 다른 학생 화면 설정은 저장했습니다. 이미지는 권한을 확인한 뒤 다시 업로드해 주세요.',
+                  "배치와 다른 학생 화면 설정은 저장했습니다. 이미지는 권한을 확인한 뒤 다시 업로드해 주세요.",
               });
               return;
             } catch (saveError: any) {
               const saveFailure = getHallOfFameConfigSaveFailureText(saveError);
               showToast({
-                tone: 'error',
-                title: '시상대 이미지 업로드와 학생 화면 설정 저장이 모두 완료되지 않았습니다.',
+                tone: "error",
+                title:
+                  "시상대 이미지 업로드와 학생 화면 설정 저장이 모두 완료되지 않았습니다.",
                 message:
-                  saveFailure.message
-                  || `${uploadFailure.message} 배치 저장도 다시 시도해 주세요.`,
+                  saveFailure.message ||
+                  `${uploadFailure.message} 배치 저장도 다시 시도해 주세요.`,
               });
               return;
             }
           }
 
           showToast({
-            tone: 'error',
+            tone: "error",
             title: uploadFailure.title,
             message: uploadFailure.message,
           });
@@ -720,16 +732,16 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
       await persistStudentViewSettings(nextViewDraft);
 
       showToast({
-        tone: 'success',
-        title: '학생 화면 설정이 저장되었습니다.',
+        tone: "success",
+        title: "학생 화면 설정이 저장되었습니다.",
         message: imageFile
-          ? '시상대 이미지와 배치 편집 결과를 저장했습니다.'
-          : '배경 설정과 배치 편집 결과를 저장했습니다.',
+          ? "시상대 이미지와 배치 편집 결과를 저장했습니다."
+          : "배경 설정과 배치 편집 결과를 저장했습니다.",
       });
     } catch (error: any) {
       const failure = getHallOfFameConfigSaveFailureText(error);
       showToast({
-        tone: 'error',
+        tone: "error",
         title: failure.title,
         message: failure.message,
       });
@@ -785,8 +797,8 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
         <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
           <div className="text-xs font-bold text-slate-500">현재 학기</div>
           <div className="mt-2 text-lg font-black text-slate-900">
-            {`${snapshot?.year || config?.year || '-'}학년도 ${
-              snapshot?.semester || config?.semester || '-'
+            {`${snapshot?.year || config?.year || "-"}학년도 ${
+              snapshot?.semester || config?.semester || "-"
             }학기`}
           </div>
         </div>
@@ -803,8 +815,8 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
           </div>
           <div className="mt-1 text-xs font-semibold text-slate-500">
             {featureDraft.publicRange.includeTies
-              ? '동점자는 함께 공개'
-              : '동점자는 추가 공개하지 않음'}
+              ? "동점자는 함께 공개"
+              : "동점자는 추가 공개하지 않음"}
           </div>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
@@ -832,8 +844,8 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
                 </span>
                 <span className="inline-flex items-center whitespace-nowrap rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
                   {savedFeatureDraft.publicRange.includeTies
-                    ? '동점자 함께 공개'
-                    : '동점자 추가 공개 안 함'}
+                    ? "동점자 함께 공개"
+                    : "동점자 추가 공개 안 함"}
                 </span>
               </div>
             </div>
@@ -995,7 +1007,9 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
                       }))
                     }
                     className="h-5 w-5"
-                    disabled={!canManage || !featureDraft.recognitionPopup.enabled}
+                    disabled={
+                      !canManage || !featureDraft.recognitionPopup.enabled
+                    }
                   />
                 </label>
 
@@ -1021,7 +1035,9 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
                       }))
                     }
                     className="h-5 w-5"
-                    disabled={!canManage || !featureDraft.recognitionPopup.enabled}
+                    disabled={
+                      !canManage || !featureDraft.recognitionPopup.enabled
+                    }
                   />
                 </label>
               </div>
@@ -1045,11 +1061,12 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                    <div className="text-sm font-black text-slate-900 whitespace-nowrap break-keep">
-                      4시간마다 자동 반영
-                    </div>
+                  <div className="text-sm font-black text-slate-900 whitespace-nowrap break-keep">
+                    4시간마다 자동 반영
+                  </div>
                   <p className="mt-1 text-sm text-slate-500">
-                    point 변경이 있을 때마다 즉시 재계산하지 않고, 4시간 기준이 지난 뒤에만 다시 계산합니다.
+                    point 변경이 있을 때마다 즉시 재계산하지 않고, 4시간 기준이
+                    지난 뒤에만 다시 계산합니다.
                   </p>
                 </div>
                 <span className="inline-flex items-center whitespace-nowrap rounded-full bg-slate-900 px-3 py-1 text-xs font-bold text-white">
@@ -1060,7 +1077,9 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
 
             <div className="grid grid-cols-1 gap-3">
               <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
-                <div className="text-xs font-bold text-slate-500">최근 반영 시각</div>
+                <div className="text-xs font-bold text-slate-500">
+                  최근 반영 시각
+                </div>
                 <div className="mt-2 text-base font-black text-slate-900">
                   {snapshotUpdatedAtLabel}
                 </div>
@@ -1074,7 +1093,9 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
                 </div>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
-                <div className="text-xs font-bold text-slate-500">현재 상태</div>
+                <div className="text-xs font-bold text-slate-500">
+                  현재 상태
+                </div>
                 <div className="mt-2 text-base font-black text-slate-900">
                   {snapshotStatusLabel}
                 </div>
@@ -1082,7 +1103,8 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
             </div>
 
             <div className="rounded-2xl border border-dashed border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
-              학생 화면은 여전히 공개 snapshot만 읽고, wallet을 직접 스캔하지 않습니다.
+              학생 화면은 여전히 공개 snapshot만 읽고, wallet을 직접 스캔하지
+              않습니다.
             </div>
 
             <button
@@ -1091,7 +1113,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
               disabled={!canManage || refreshing}
               className="inline-flex min-h-11 items-center justify-center whitespace-nowrap break-keep rounded-lg border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {refreshing ? '스냅샷 새로고침 중...' : '스냅샷 새로고침'}
+              {refreshing ? "스냅샷 새로고침 중..." : "스냅샷 새로고침"}
             </button>
           </div>
         </section>
@@ -1122,8 +1144,9 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
                   학생 화면 미리보기
                 </h3>
                 <p className="mt-2 text-sm leading-6 text-slate-500 break-keep">
-                  교사가 가장 먼저 확인해야 하는 학생 화면을 크게 보여 줍니다. 좌측 시상대와 우측 공개 랭킹,
-                  전교/학급 전환까지 실제 구조에 가깝게 바로 확인할 수 있습니다.
+                  교사가 가장 먼저 확인해야 하는 학생 화면을 크게 보여 줍니다.
+                  좌측 시상대와 우측 공개 랭킹, 전교/학급 전환까지 실제 구조에
+                  가깝게 바로 확인할 수 있습니다.
                 </p>
               </div>
 
@@ -1172,7 +1195,8 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
               배경 이미지 설정
             </h3>
             <p className="mt-1 text-sm text-slate-500 break-keep">
-              시상대 배경 이미지를 바꾸면 상단 학생 화면 미리보기에 바로 반영됩니다.
+              시상대 배경 이미지를 바꾸면 상단 학생 화면 미리보기에 바로
+              반영됩니다.
             </p>
           </div>
 
@@ -1193,7 +1217,8 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
                   현재 배경
                 </div>
                 <p className="mt-1 text-sm text-slate-500 break-keep">
-                  업로드 후 저장하면 학생 화면과 배치 편집기에도 같은 이미지가 쓰입니다.
+                  업로드 후 저장하면 학생 화면과 배치 편집기에도 같은 이미지가
+                  쓰입니다.
                 </p>
               </div>
 
@@ -1209,12 +1234,12 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
                       if (!file) return;
                       setImageFile(file);
                       setImagePreviewUrl((previousValue) => {
-                        if (previousValue.startsWith('blob:')) {
+                        if (previousValue.startsWith("blob:")) {
                           URL.revokeObjectURL(previousValue);
                         }
                         return URL.createObjectURL(file);
                       });
-                      event.target.value = '';
+                      event.target.value = "";
                     }}
                     disabled={!canManage}
                   />
@@ -1225,8 +1250,8 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
                     clearImageSelection();
                     setViewDraft((previousValue) => ({
                       ...previousValue,
-                      podiumImageUrl: '',
-                      podiumStoragePath: '',
+                      podiumImageUrl: "",
+                      podiumStoragePath: "",
                     }));
                   }}
                   disabled={!canManage}
@@ -1249,11 +1274,10 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
           <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
               <div>
-                <h3 className="text-lg font-black text-slate-900">
-                  배치 편집
-                </h3>
+                <h3 className="text-lg font-black text-slate-900">배치 편집</h3>
                 <p className="mt-1 text-sm text-slate-500 break-keep">
-                  좁은 카드 안에서 억지로 조정하지 않고, 큰 모달 편집기에서 데스크톱과 모바일 배치를 직접 드래그해 정리합니다.
+                  좁은 카드 안에서 억지로 조정하지 않고, 큰 모달 편집기에서
+                  데스크톱과 모바일 배치를 직접 드래그해 정리합니다.
                 </p>
               </div>
               <button
@@ -1278,7 +1302,9 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
               </p>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-              <div className="text-xs font-bold text-slate-500">데스크톱 기본</div>
+              <div className="text-xs font-bold text-slate-500">
+                데스크톱 기본
+              </div>
               <div className="mt-2 text-base font-black text-slate-900 whitespace-nowrap break-keep">
                 {`${Math.round(viewDraft.positions.desktop.first.leftPercent)}% / ${Math.round(viewDraft.leaderboardPanel.desktop.widthPercent)}%`}
               </div>
@@ -1287,7 +1313,9 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
               </p>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-              <div className="text-xs font-bold text-slate-500">모바일 기본</div>
+              <div className="text-xs font-bold text-slate-500">
+                모바일 기본
+              </div>
               <div className="mt-2 text-base font-black text-slate-900 whitespace-nowrap break-keep">
                 {`${Math.round(viewDraft.positions.mobile.first.leftPercent)}% / ${Math.round(viewDraft.leaderboardPanel.mobile.widthPercent)}%`}
               </div>
@@ -1301,7 +1329,8 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
                 기본 배치 복원
               </div>
               <p className="mt-1 text-sm text-slate-500 break-keep">
-                모달 안에서 데스크톱과 모바일 배치를 기본값으로 되돌릴 수 있습니다.
+                모달 안에서 데스크톱과 모바일 배치를 기본값으로 되돌릴 수
+                있습니다.
               </p>
             </div>
           </div>
@@ -1309,9 +1338,12 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
 
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
-            <h3 className="text-lg font-black text-slate-900">기타 보조 설정</h3>
+            <h3 className="text-lg font-black text-slate-900">
+              기타 보조 설정
+            </h3>
             <p className="mt-1 text-sm text-slate-500 break-keep">
-              상단 미리보기 기준을 고르고, 학생 화면 설정 저장 전 알아둘 동작만 아래에서 확인합니다.
+              상단 미리보기 기준을 고르고, 학생 화면 설정 저장 전 알아둘 동작만
+              아래에서 확인합니다.
             </p>
           </div>
           <div className="grid grid-cols-1 gap-4 p-5 sm:p-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
@@ -1326,7 +1358,9 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
                   className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700"
                 >
                   {gradeOptions.length === 0 && (
-                    <option value={WIS_HALL_OF_FAME_GRADE_KEY}>학년 없음</option>
+                    <option value={WIS_HALL_OF_FAME_GRADE_KEY}>
+                      학년 없음
+                    </option>
                   )}
                   {gradeOptions.map((option) => (
                     <option key={option} value={option}>
@@ -1346,7 +1380,9 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
                   disabled={classOptions.length === 0}
                   className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700 disabled:bg-slate-100 disabled:text-slate-400"
                 >
-                  {classOptions.length === 0 && <option value="">학급 없음</option>}
+                  {classOptions.length === 0 && (
+                    <option value="">학급 없음</option>
+                  )}
                   {classOptions.map((option) => {
                     const parsed = parseClassKey(option);
                     return (
@@ -1373,7 +1409,8 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
                   fail-open 유지
                 </div>
                 <p className="mt-1 text-sm text-slate-500 break-keep">
-                  화랑의 전당 스냅샷이 불안정해도 위스 관리 전체는 계속 사용할 수 있습니다.
+                  화랑의 전당 스냅샷이 불안정해도 위스 관리 전체는 계속 사용할
+                  수 있습니다.
                 </p>
               </div>
             </div>
@@ -1396,7 +1433,9 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
           <div className="mb-2 text-2xl">
             <i className="fas fa-spinner fa-spin"></i>
           </div>
-          <p className="font-bold">화랑의 전당 관리 데이터를 불러오는 중입니다.</p>
+          <p className="font-bold">
+            화랑의 전당 관리 데이터를 불러오는 중입니다.
+          </p>
         </div>
       ) : (
         <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
@@ -1407,7 +1446,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
           />
 
           <div className="min-w-0 flex-1 space-y-5">
-            {activePanel === 'feature_settings'
+            {activePanel === "feature_settings"
               ? featureSettingsPanel
               : studentViewSettingsPanel}
           </div>
@@ -1420,7 +1459,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
           onClick={closeLayoutEditor}
         >
           <div
-            className="flex max-h-[min(94vh,72rem)] w-full max-w-7xl flex-col overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_30px_80px_rgba(15,23,42,0.32)]"
+            className="flex max-h-[min(95vh,74rem)] w-full max-w-[min(96vw,110rem)] flex-col overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_30px_80px_rgba(15,23,42,0.32)]"
             onClick={(event) => event.stopPropagation()}
             role="dialog"
             aria-modal="true"
@@ -1436,8 +1475,9 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
                     화랑의 전당 배치 편집
                   </h3>
                   <p className="mt-2 text-sm leading-6 text-slate-500 break-keep">
-                    1위, 2위, 3위 시상대와 우측 공개 랭킹 패널을 충분히 큰 캔버스에서 직접 움직여 배치합니다.
-                    저장 전까지는 학생 화면 설정에 반영되지 않습니다.
+                    1위, 2위, 3위 시상대와 우측 공개 랭킹 패널을 충분히 큰
+                    캔버스에서 직접 움직여 배치합니다. 저장 전까지는 학생 화면
+                    설정에 반영되지 않습니다.
                   </p>
                 </div>
 
@@ -1453,7 +1493,9 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
 
               <div className="flex flex-wrap items-center gap-2 text-xs font-bold">
                 <span className="inline-flex items-center whitespace-nowrap rounded-full bg-slate-900 px-3 py-1 text-white">
-                  {editorDeviceMode === 'desktop' ? '데스크톱 편집 중' : '모바일 편집 중'}
+                  {editorDeviceMode === "desktop"
+                    ? "데스크톱 편집 중"
+                    : "모바일 편집 중"}
                 </span>
                 <span className="inline-flex items-center whitespace-nowrap rounded-full bg-slate-100 px-3 py-1 text-slate-600">
                   드래그 후 저장
@@ -1464,7 +1506,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50/70 p-4 sm:p-5">
+            <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50/70 p-4 sm:p-5 lg:p-6">
               <WisHallOfFamePositionEditor
                 value={layoutDraft}
                 imageUrl={imageUrl}
@@ -1479,7 +1521,8 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
                 onReset={() =>
                   setLayoutDraft({
                     positions: getDefaultHallOfFamePositions(),
-                    leaderboardPanel: getDefaultHallOfFameLeaderboardPanelPosition(),
+                    leaderboardPanel:
+                      getDefaultHallOfFameLeaderboardPanelPosition(),
                   })
                 }
                 onChange={setLayoutDraft}
@@ -1490,7 +1533,8 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
 
             <div className="flex flex-col gap-3 border-t border-slate-100 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
               <p className="text-sm text-slate-500 break-keep">
-                취소하면 이번 모달에서 조정한 배치는 버리고, 저장하면 학생 화면 설정 draft에 반영됩니다.
+                취소하면 이번 모달에서 조정한 배치는 버리고, 저장하면 학생 화면
+                설정 draft에 반영됩니다.
               </p>
               <div className="flex flex-wrap items-center justify-end gap-2">
                 <button
