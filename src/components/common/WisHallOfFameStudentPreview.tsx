@@ -172,10 +172,10 @@ const WisHallOfFameStudentPreview: React.FC<
   const mobileRail = resolvedConfig.leaderboardPanel.mobile;
   const desktopRailWidth = clamp(
     Number(desktopRail.widthPercent || 29),
-    24,
-    38,
+    23,
+    36,
   );
-  const desktopPodiumWidth = clamp(100 - desktopRailWidth - 4, 58, 76);
+  const desktopPodiumWidth = clamp(100 - desktopRailWidth - 3, 60, 78);
   const desktopRailTop = `${clamp(
     Number(desktopRail.topPercent || 0) / 10,
     0,
@@ -227,10 +227,10 @@ const WisHallOfFameStudentPreview: React.FC<
   };
   const previewLayoutClassName =
     deviceMode === 'desktop'
-      ? 'flex flex-row items-start justify-between gap-5'
+      ? 'flex flex-row items-start justify-between gap-4'
       : deviceMode === 'mobile'
         ? 'mx-auto flex max-w-[420px] flex-col gap-5'
-        : 'flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between';
+        : 'flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between xl:gap-4';
   const podiumContainerClassName =
     deviceMode === 'desktop'
       ? 'w-[var(--hall-podium-width)]'
@@ -239,10 +239,10 @@ const WisHallOfFameStudentPreview: React.FC<
         : 'w-full xl:w-[var(--hall-podium-width)]';
   const railContainerClassName =
     deviceMode === 'desktop'
-      ? 'mt-[var(--hall-rail-desktop-top)] ml-[var(--hall-rail-desktop-shift)] min-w-[18rem] w-[var(--hall-rail-width)]'
+      ? 'mt-[var(--hall-rail-desktop-top)] ml-[var(--hall-rail-desktop-shift)] min-w-[17rem] w-[var(--hall-rail-width)]'
       : deviceMode === 'mobile'
         ? `mt-[var(--hall-rail-mobile-top)] w-full max-w-[var(--hall-rail-mobile-width)] ${mobileRailAlignClassName}`
-        : `mt-[var(--hall-rail-mobile-top)] w-full sm:max-w-[var(--hall-rail-mobile-width)] xl:mt-[var(--hall-rail-desktop-top)] xl:ml-[var(--hall-rail-desktop-shift)] xl:min-w-[18rem] xl:w-[var(--hall-rail-width)] xl:max-w-none ${mobileRailAlignClassName}`;
+        : `mt-[var(--hall-rail-mobile-top)] w-full sm:max-w-[var(--hall-rail-mobile-width)] xl:mt-[var(--hall-rail-desktop-top)] xl:ml-[var(--hall-rail-desktop-shift)] xl:min-w-[17rem] xl:w-[var(--hall-rail-width)] xl:max-w-none ${mobileRailAlignClassName}`;
   const podiumDeviceMode =
     deviceMode === 'responsive' ? 'responsive' : deviceMode;
 

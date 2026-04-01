@@ -326,13 +326,6 @@ export const normalizeWisHallOfFameSnapshot = (
   const normalizedClassTop3ByClassKey = normalizeEntryMap(raw.classTop3ByClassKey, 3);
   const normalizedGradeLeaderboardByGrade = normalizeEntryMap(rawGradeLeaderboardByGrade);
   const normalizedClassLeaderboardByClassKey = normalizeEntryMap(rawClassLeaderboardByClassKey);
-  const gradeLeaderboardByGrade = Object.keys(normalizedGradeLeaderboardByGrade).length > 0
-    ? normalizedGradeLeaderboardByGrade
-    : normalizedGradeTop3ByGrade;
-  const classLeaderboardByClassKey = Object.keys(normalizedClassLeaderboardByClassKey).length > 0
-    ? normalizedClassLeaderboardByClassKey
-    : normalizedClassTop3ByClassKey;
-
   return {
     year: toSafeText(raw.year) || undefined,
     semester: toSafeText(raw.semester) || undefined,
@@ -343,15 +336,15 @@ export const normalizeWisHallOfFameSnapshot = (
     gradeTop3ByGrade: Object.keys(normalizedGradeTop3ByGrade).length > 0
       ? normalizedGradeTop3ByGrade
       : Object.fromEntries(
-        Object.entries(gradeLeaderboardByGrade).map(([key, entries]) => [key, buildPodiumEntriesFromLeaderboard(entries)]),
+        Object.entries(normalizedGradeLeaderboardByGrade).map(([key, entries]) => [key, buildPodiumEntriesFromLeaderboard(entries)]),
       ),
     classTop3ByClassKey: Object.keys(normalizedClassTop3ByClassKey).length > 0
       ? normalizedClassTop3ByClassKey
       : Object.fromEntries(
-        Object.entries(classLeaderboardByClassKey).map(([key, entries]) => [key, buildPodiumEntriesFromLeaderboard(entries)]),
+        Object.entries(normalizedClassLeaderboardByClassKey).map(([key, entries]) => [key, buildPodiumEntriesFromLeaderboard(entries)]),
       ),
-    gradeLeaderboardByGrade,
-    classLeaderboardByClassKey,
+    gradeLeaderboardByGrade: normalizedGradeLeaderboardByGrade,
+    classLeaderboardByClassKey: normalizedClassLeaderboardByClassKey,
     gradeLeaderboardMetaByGrade: normalizeMetaMap(rawGradeLeaderboardMetaByGrade),
     classLeaderboardMetaByClassKey: normalizeMetaMap(rawClassLeaderboardMetaByClassKey),
     leaderboardPolicy: normalizeLeaderboardPolicy(raw.leaderboardPolicy),
@@ -451,10 +444,17 @@ const hasCompleteHallOfFameLeaderboardEntries = (
   metaMap: Record<string, WisHallOfFameLeaderboardMeta> | null | undefined,
 ) => Object.entries(metaMap || {}).every(([key, meta]) => {
   const expectedVisibleCount = Math.max(0, Number(meta?.visibleCount || 0));
+  const totalCandidates = Math.max(0, Number(meta?.totalCandidates || 0));
   const actualVisibleCount = Array.isArray(leaderboardMap?.[key])
     ? leaderboardMap?.[key].length
     : 0;
-  return actualVisibleCount >= expectedVisibleCount;
+  if (expectedVisibleCount > 0 && actualVisibleCount < expectedVisibleCount) {
+    return false;
+  }
+  if (totalCandidates > 3 && actualVisibleCount <= 3) {
+    return false;
+  }
+  return true;
 });
 
 const hasCompleteHallOfFameLeaderboardScopes = (

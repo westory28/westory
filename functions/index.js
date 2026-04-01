@@ -1117,10 +1117,17 @@ const hasWisHallOfFameSnapshotLeaderboardMeta = (data) => Object.keys(data?.grad
 const hasCompleteHallOfFameLeaderboardEntries = (leaderboardMap, metaMap) => Object.entries(metaMap || {})
   .every(([key, meta]) => {
     const expectedVisibleCount = Math.max(0, Number(meta?.visibleCount || 0));
+    const totalCandidates = Math.max(0, Number(meta?.totalCandidates || 0));
     const actualVisibleCount = Array.isArray(leaderboardMap?.[key])
       ? leaderboardMap[key].length
       : 0;
-    return actualVisibleCount >= expectedVisibleCount;
+    if (expectedVisibleCount > 0 && actualVisibleCount < expectedVisibleCount) {
+      return false;
+    }
+    if (totalCandidates > 3 && actualVisibleCount <= 3) {
+      return false;
+    }
+    return true;
   });
 
 const hasCompleteHallOfFameLeaderboardScopes = (podiumMap, leaderboardMap, metaMap) => {

@@ -30,21 +30,21 @@ type SlotLayoutMode = 'desktop' | 'mobile';
 
 const SLOT_SAFE_AREA = {
     desktop: {
-        inlineInsetPercent: 8,
-        topPercentRange: { min: 24, max: 46 },
+        inlineInsetPercent: 10,
+        topPercentRange: { min: 24, max: 43 },
         widthPercentBySlot: {
-            first: { min: 19, max: 22 },
-            second: { min: 15.5, max: 18 },
-            third: { min: 15.5, max: 18 },
+            first: { min: 19, max: 21.5 },
+            second: { min: 15, max: 17 },
+            third: { min: 15, max: 17 },
         },
     },
     mobile: {
-        inlineInsetPercent: 9,
-        topPercentRange: { min: 27, max: 50 },
+        inlineInsetPercent: 11,
+        topPercentRange: { min: 27, max: 47 },
         widthPercentBySlot: {
-            first: { min: 25, max: 28 },
-            second: { min: 18.5, max: 21.5 },
-            third: { min: 18.5, max: 21.5 },
+            first: { min: 24.5, max: 27 },
+            second: { min: 18, max: 20 },
+            third: { min: 18, max: 20 },
         },
     },
 } as const;
@@ -115,7 +115,7 @@ const buildSlotStyle = (
 
     const desktop = resolveLayout('desktop');
     const mobile = resolveLayout('mobile');
-    const cardMaxWidth = slotKey === 'first' ? '12.5rem' : '11.25rem';
+    const cardMaxWidth = slotKey === 'first' ? '12.25rem' : '10.75rem';
 
     return {
         ['--slot-left' as string]: `${desktop.leftPercent}%`,
@@ -180,7 +180,7 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                 />
                 <div className="absolute inset-0 bg-gradient-to-b from-white/12 via-transparent to-slate-950/12" />
 
-                <div className="relative z-10 h-full px-4 pt-5 pb-24 sm:px-5 sm:pt-6 sm:pb-28 lg:px-6 lg:pb-[7.25rem] xl:pb-32">
+                <div className="relative z-10 h-full px-4 pt-5 pb-28 sm:px-5 sm:pt-6 sm:pb-32 lg:px-6 lg:pb-36 xl:pb-40">
                     {safeEntries.length === 0 && (
                         <div className="absolute inset-x-6 top-1/2 -translate-y-1/2 rounded-3xl border border-white/70 bg-white/88 px-6 py-5 text-center text-sm font-semibold text-slate-600 shadow-[0_18px_44px_rgba(15,23,42,0.08)] backdrop-blur">
                             {emptyMessage}
@@ -198,9 +198,9 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                                 style={buildSlotStyle(slotKey, normalizedPositions)}
                                 className={slotPositionClassName}
                             >
-                                <div className="mx-auto flex w-full max-w-[var(--slot-card-max-width)] flex-col items-center gap-2 text-center">
+                                <div className="mx-auto flex w-full max-w-[var(--slot-card-max-width)] flex-col items-center gap-1.5 text-center sm:gap-2">
                                     <div
-                                        className={`inline-flex min-h-9 max-w-full items-center justify-center whitespace-nowrap rounded-full border px-3 py-1.5 text-[10px] font-black tracking-[0.08em] shadow-[0_14px_26px_rgba(15,23,42,0.16)] sm:min-h-10 sm:px-3.5 sm:text-sm ${tone.badgeClassName}`}
+                                        className={`inline-flex min-h-9 max-w-full items-center justify-center whitespace-nowrap rounded-full border px-3 py-1.5 text-[10px] font-black tracking-[0.08em] shadow-[0_14px_26px_rgba(15,23,42,0.16)] sm:min-h-10 sm:px-3 sm:text-sm ${tone.badgeClassName}`}
                                     >
                                         {buildRankLabel(safeEntries, entry)}
                                     </div>
@@ -209,7 +209,7 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                                         {entry.profileIcon || '🙂'}
                                     </div>
 
-                                    <div className={`w-full max-w-full rounded-[1.3rem] border px-3 py-2.5 backdrop-blur-xl sm:px-4 ${tone.nameClassName}`}>
+                                    <div className={`w-full max-w-full rounded-[1.3rem] border px-3 py-2 backdrop-blur-xl sm:px-3.5 sm:py-2.5 ${tone.nameClassName}`}>
                                         <div className="whitespace-nowrap text-[9px] font-bold uppercase tracking-[0.12em] text-white/78 sm:text-[10px]">
                                             {entry.grade}학년 {entry.class}반
                                         </div>
@@ -219,7 +219,7 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                                     </div>
 
                                     <div
-                                        className={`inline-flex min-h-[2.3rem] max-w-full shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-3 py-1.5 text-[10px] font-black leading-none backdrop-blur shadow-[0_14px_30px_rgba(15,23,42,0.2)] sm:min-h-[2.6rem] sm:px-4 sm:py-1.5 sm:text-sm ${tone.scoreClassName}`}
+                                        className={`inline-flex min-h-[2.3rem] max-w-full shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-3 py-1.5 text-[10px] font-black leading-none backdrop-blur shadow-[0_14px_30px_rgba(15,23,42,0.2)] sm:min-h-[2.5rem] sm:px-3.5 sm:py-1.5 sm:text-sm ${tone.scoreClassName}`}
                                     >
                                         누적 {formatWisAmount(entry.cumulativeEarned)}
                                     </div>
