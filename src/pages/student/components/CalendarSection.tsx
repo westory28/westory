@@ -112,6 +112,32 @@ const SearchIcon = () => (
   </svg>
 );
 
+const CalendarBadgeIcon = () => (
+  <svg
+    viewBox="0 0 20 20"
+    fill="none"
+    aria-hidden="true"
+    width="16"
+    height="16"
+  >
+    <rect
+      x="3"
+      y="4.5"
+      width="14"
+      height="12.5"
+      rx="2.5"
+      stroke="currentColor"
+      strokeWidth="1.7"
+    />
+    <path
+      d="M6.5 3v3M13.5 3v3M3 8.25h14"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
 const CalendarSection: React.FC<CalendarSectionProps> = ({
   categories,
   events,
@@ -295,108 +321,120 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
       }`}
     >
       <div className="student-calendar-shell__header">
-        <div className="student-calendar-shell__header-row">
-          <div className="student-calendar-shell__header-copy">
+        <div className="student-calendar-shell__header-main">
+          <div className="student-calendar-shell__heading-group">
             <span className="student-calendar-shell__eyebrow">
+              <span className="student-calendar-shell__eyebrow-icon">
+                <CalendarBadgeIcon />
+              </span>
               {LABELS.heading}
             </span>
+
+            <div className="student-calendar-shell__month-row">
+              <div className="student-calendar-shell__month-label">
+                <h2 className="student-calendar-shell__month-title">
+                  {currentTitle || LABELS.heading}
+                </h2>
+              </div>
+            </div>
           </div>
 
-          <div className="student-calendar-shell__titlebar">
-            <button
-              type="button"
-              onClick={() => handleNavigate("prev")}
-              className="student-calendar-shell__nav-button"
-              aria-label={LABELS.previousMonth}
-              title={LABELS.previousMonth}
-            >
-              <ChevronLeftIcon />
-            </button>
+          <div className="student-calendar-shell__toolbar">
+            <div className="student-calendar-shell__calendar-tools">
+              <div className="student-calendar-shell__control-cluster student-calendar-shell__control-cluster--nav">
+                <button
+                  type="button"
+                  onClick={() => handleNavigate("prev")}
+                  className="student-calendar-shell__nav-button"
+                  aria-label={LABELS.previousMonth}
+                  title={LABELS.previousMonth}
+                >
+                  <ChevronLeftIcon />
+                </button>
 
-            <div className="student-calendar-shell__month-label">
-              <h2 className="student-calendar-shell__month-title">
-                {currentTitle || LABELS.heading}
-              </h2>
+                <button
+                  type="button"
+                  onClick={() => handleNavigate("next")}
+                  className="student-calendar-shell__nav-button"
+                  aria-label={LABELS.nextMonth}
+                  title={LABELS.nextMonth}
+                >
+                  <ChevronRightIcon />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleNavigate("today")}
+                  className="student-calendar-shell__control-button"
+                >
+                  {LABELS.today}
+                </button>
+              </div>
+
+              <div className="student-calendar-shell__control-cluster student-calendar-shell__control-cluster--view">
+                <div className="student-calendar-shell__view-toggle">
+                  <button
+                    type="button"
+                    onClick={() => handleViewChange("dayGridMonth")}
+                    aria-pressed={isMonthView}
+                    className={`student-calendar-shell__view-button ${
+                      isMonthView ? "is-active" : ""
+                    }`}
+                  >
+                    {LABELS.calendar}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleViewChange("listMonth")}
+                    aria-pressed={currentViewType === "listMonth"}
+                    className={`student-calendar-shell__view-button ${
+                      currentViewType === "listMonth" ? "is-active" : ""
+                    }`}
+                  >
+                    {LABELS.list}
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={onSearchClick}
+                  className="student-calendar-shell__search-button"
+                  title={LABELS.search}
+                  aria-label={LABELS.search}
+                >
+                  <SearchIcon />
+                  <span>{LABELS.search}</span>
+                </button>
+              </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => handleNavigate("next")}
-              className="student-calendar-shell__nav-button"
-              aria-label={LABELS.nextMonth}
-              title={LABELS.nextMonth}
-            >
-              <ChevronRightIcon />
-            </button>
-          </div>
-
-          <div className="student-calendar-shell__controls">
-            <button
-              type="button"
-              onClick={() => handleNavigate("today")}
-              className="student-calendar-shell__control-button"
-            >
-              {LABELS.today}
-            </button>
-
-            <div className="student-calendar-shell__view-toggle">
-              <button
-                type="button"
-                onClick={() => handleViewChange("dayGridMonth")}
-                aria-pressed={isMonthView}
-                className={`student-calendar-shell__view-button ${
-                  isMonthView ? "is-active" : ""
-                }`}
-              >
-                {LABELS.calendar}
-              </button>
-              <button
-                type="button"
-                onClick={() => handleViewChange("listMonth")}
-                aria-pressed={currentViewType === "listMonth"}
-                className={`student-calendar-shell__view-button ${
-                  currentViewType === "listMonth" ? "is-active" : ""
-                }`}
-              >
-                {LABELS.list}
-              </button>
+            <div className="student-calendar-shell__attendance-tools">
+              {attendanceChecked ? (
+                <span
+                  className="student-calendar-shell__attendance-indicator"
+                  title={attendanceMessage || LABELS.attendanceDoneTitle}
+                >
+                  {LABELS.attendanceDone}
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onAttendanceCheck}
+                  disabled={attendanceLoading}
+                  title={attendanceMessage || LABELS.attendanceAction}
+                  data-tone={
+                    attendanceHasError
+                      ? "error"
+                      : attendanceLoading
+                        ? "loading"
+                        : "default"
+                  }
+                  className="student-calendar-shell__attendance-action"
+                >
+                  {attendanceButtonLabel}
+                </button>
+              )}
             </div>
-
-            <button
-              type="button"
-              onClick={onSearchClick}
-              className="student-calendar-shell__icon-button"
-              title={LABELS.search}
-              aria-label={LABELS.search}
-            >
-              <SearchIcon />
-            </button>
-
-            {attendanceChecked ? (
-              <span
-                className="student-calendar-shell__attendance-indicator"
-                title={attendanceMessage || LABELS.attendanceDoneTitle}
-              >
-                {LABELS.attendanceDone}
-              </span>
-            ) : (
-              <button
-                type="button"
-                onClick={onAttendanceCheck}
-                disabled={attendanceLoading}
-                title={attendanceMessage || LABELS.attendanceAction}
-                data-tone={
-                  attendanceHasError
-                    ? "error"
-                    : attendanceLoading
-                      ? "loading"
-                      : "default"
-                }
-                className="student-calendar-shell__attendance-action"
-              >
-                {attendanceButtonLabel}
-              </button>
-            )}
           </div>
         </div>
 
@@ -479,7 +517,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
 
             return (
               <div
-                className={`student-calendar-event-chip ${
+                className={`student-calendar-segment-title fc-segment-title ${
                   isHoliday ? "holiday-segment-title" : ""
                 }`}
                 title={safeTitle}
