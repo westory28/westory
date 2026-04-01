@@ -291,7 +291,7 @@ const WisHallOfFamePositionEditor: React.FC<
   } = buildHallOfFamePreviewLayout(desktopRail, mobileRail);
   const previewLayoutClassName =
     deviceMode === "desktop"
-      ? "grid grid-cols-[minmax(0,1fr)_minmax(18rem,var(--hall-rail-desktop-track))] items-start gap-7 overflow-visible"
+      ? "grid grid-cols-[minmax(0,1fr)_minmax(18rem,var(--hall-rail-desktop-track))] items-start gap-5 overflow-visible xl:gap-6"
       : "mx-auto flex max-w-[420px] flex-col gap-5 overflow-visible sm:max-w-none";
   const podiumContainerClassName =
     deviceMode === "desktop"
@@ -379,9 +379,7 @@ const WisHallOfFamePositionEditor: React.FC<
     };
 
     const handlePointerUp = () => {
-      if (
-        activeHandleRef.current?.hasPointerCapture?.(dragState.pointerId)
-      ) {
+      if (activeHandleRef.current?.hasPointerCapture?.(dragState.pointerId)) {
         activeHandleRef.current.releasePointerCapture(dragState.pointerId);
       }
       activeHandleRef.current = null;
@@ -618,15 +616,13 @@ const WisHallOfFamePositionEditor: React.FC<
       onClick={() => setSelectedKey("leaderboard")}
       disabled={disabled}
       className={`inline-flex min-h-9 items-center justify-center whitespace-nowrap rounded-full border px-3 py-1 text-xs font-black shadow-[0_12px_24px_rgba(15,23,42,0.14)] transition ${
-        PRESET_ITEMS.find((item) => item.key === "leaderboard")?.toneClassName ||
-        ""
+        PRESET_ITEMS.find((item) => item.key === "leaderboard")
+          ?.toneClassName || ""
       } ${
         selectedKey === "leaderboard"
           ? "ring-4 ring-slate-900/15"
           : "hover:ring-2 hover:ring-slate-900/10"
-      } ${
-        disabled ? "cursor-default" : "cursor-grab active:cursor-grabbing"
-      }`}
+      } ${disabled ? "cursor-default" : "cursor-grab active:cursor-grabbing"}`}
     >
       패널 이동
     </button>
@@ -689,8 +685,8 @@ const WisHallOfFamePositionEditor: React.FC<
                 disabled ? "opacity-70" : ""
               } ${
                 deviceMode === "desktop"
-                  ? "min-h-[42rem] xl:min-h-[46rem]"
-                  : "min-h-[30rem]"
+                  ? "min-h-[36rem] xl:min-h-[39rem]"
+                  : "min-h-[25rem]"
               }`}
             >
               <div className="mb-4 flex flex-wrap items-center gap-2 text-xs font-bold text-slate-500">
@@ -721,7 +717,10 @@ const WisHallOfFamePositionEditor: React.FC<
                     </div>
                   </div>
 
-                  <div ref={podiumStageRef} className="relative overflow-visible">
+                  <div
+                    ref={podiumStageRef}
+                    className="relative overflow-visible"
+                  >
                     <div className="select-none">
                       <WisHallOfFamePodium
                         entries={activePodiumEntries}
@@ -749,7 +748,7 @@ const WisHallOfFamePositionEditor: React.FC<
                     </div>
                   </div>
 
-                  <div className="relative min-h-[18rem] overflow-visible sm:min-h-[20rem] lg:min-h-[23rem]">
+                  <div className="relative min-h-[14rem] overflow-visible sm:min-h-[15.5rem] lg:min-h-[17.5rem]">
                     <div className="select-none">
                       <WisHallOfFameLeaderboardList
                         entries={rightRailEntries}

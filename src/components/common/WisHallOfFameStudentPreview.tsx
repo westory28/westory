@@ -220,7 +220,7 @@ const WisHallOfFameStudentPreview: React.FC<
     ? "기본은 4위부터 보이고, 같은 순위는 함께 이어서 보여요."
     : "공개 범위 안에서 4위부터 차례대로 보여요.";
   const previewLayoutClassName = usesSplitLayout
-    ? "grid grid-cols-[minmax(0,1fr)_minmax(18rem,var(--hall-rail-desktop-track))] items-start gap-7 overflow-visible"
+    ? "grid grid-cols-[minmax(0,1fr)_minmax(18rem,var(--hall-rail-desktop-track))] items-start gap-5 overflow-visible xl:gap-6"
     : "mx-auto flex w-full max-w-[420px] flex-col gap-5 overflow-visible sm:max-w-none";
   const podiumContainerClassName = usesSplitLayout
     ? "min-w-0 self-start overflow-visible"
@@ -391,7 +391,7 @@ const WisHallOfFameStudentPreview: React.FC<
               </span>
             </div>
 
-            <div className="min-h-[18rem] sm:min-h-[20rem] lg:min-h-[23rem]">
+            <div className="min-h-[14rem] sm:min-h-[15.5rem] lg:min-h-[17.5rem]">
               <WisHallOfFameLeaderboardList
                 entries={rightRailEntries}
                 hallOfFameConfig={resolvedConfig}

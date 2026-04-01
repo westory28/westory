@@ -240,20 +240,20 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
       : 1;
   const stageMinHeight =
     resolvedDeviceMode === "desktop"
-      ? `${Math.min(34, Math.max(24, 29.5 * podiumScale))}rem`
-      : `${Math.min(26, Math.max(20.5, 22.8 * podiumScale))}rem`;
+      ? `${Math.min(28.5, Math.max(21, 23.8 * podiumScale))}rem`
+      : `${Math.min(22.5, Math.max(17.25, 18.9 * podiumScale))}rem`;
   const contentPaddingX =
     resolvedDeviceMode === "desktop"
       ? `${Math.min(1.65, Math.max(0.9, 1.2 * podiumScale))}rem`
       : `${Math.min(1.15, Math.max(0.75, 0.95 * podiumScale))}rem`;
   const contentPaddingTop =
     resolvedDeviceMode === "desktop"
-      ? `${Math.min(2.4, Math.max(1.55, 1.95 * podiumScale))}rem`
-      : `${Math.min(1.85, Math.max(1.2, 1.5 * podiumScale))}rem`;
+      ? `${Math.min(1.95, Math.max(1.25, 1.52 * podiumScale))}rem`
+      : `${Math.min(1.45, Math.max(0.95, 1.15 * podiumScale))}rem`;
   const contentPaddingBottom =
     resolvedDeviceMode === "desktop"
-      ? `${Math.min(12.4, Math.max(8.2, 10.2 * podiumScale))}rem`
-      : `${Math.min(9.4, Math.max(6.6, 7.8 * podiumScale))}rem`;
+      ? `${Math.min(8.4, Math.max(5.1, 6.2 * podiumScale))}rem`
+      : `${Math.min(6.15, Math.max(3.9, 4.85 * podiumScale))}rem`;
 
   useEffect(() => {
     const stageElement = stageRef.current;
@@ -314,10 +314,10 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
         </div>
       )}
 
-      <div className="relative overflow-visible px-2 pb-4 pt-2 sm:px-3 sm:pb-5 sm:pt-3">
+      <div className="relative overflow-visible px-2 pb-3 pt-2 sm:px-3 sm:pb-4 sm:pt-2.5">
         <div
           ref={stageRef}
-          className="relative aspect-[79/58] w-full min-h-[var(--hall-podium-stage-min-height)] max-w-full overflow-visible rounded-[1.65rem] bg-[#f5f7fb]"
+          className="relative aspect-[80/49] w-full min-h-[var(--hall-podium-stage-min-height)] max-w-full overflow-visible rounded-[1.65rem] bg-[#f5f7fb]"
         >
           <div className="absolute inset-0 overflow-hidden rounded-[1.65rem]">
             <img
