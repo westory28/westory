@@ -98,7 +98,7 @@ const getEntryTone = (slotKey: HallOfFamePodiumSlotKey) => {
         "border-white/20 bg-[linear-gradient(135deg,_rgba(2,6,23,0.94),_rgba(15,23,42,0.84))] text-white shadow-[0_22px_40px_rgba(15,23,42,0.34)] ring-1 ring-white/12",
       scoreClassName:
         "border-white/30 bg-[linear-gradient(135deg,_rgba(15,23,42,0.96),_rgba(14,116,144,0.96))] text-white shadow-[0_18px_34px_rgba(15,23,42,0.28)] ring-1 ring-white/15",
-      emojiClassName: "text-[clamp(2.95rem,6vw,4.25rem)]",
+      emojiClassName: "text-[3.55rem]",
     };
   }
 
@@ -110,7 +110,7 @@ const getEntryTone = (slotKey: HallOfFamePodiumSlotKey) => {
         "border-white/20 bg-[linear-gradient(135deg,_rgba(2,6,23,0.92),_rgba(15,23,42,0.82))] text-white shadow-[0_18px_34px_rgba(15,23,42,0.32)] ring-1 ring-white/12",
       scoreClassName:
         "border-white/25 bg-[linear-gradient(135deg,_rgba(15,23,42,0.94),_rgba(51,65,85,0.94))] text-white shadow-[0_16px_30px_rgba(15,23,42,0.26)] ring-1 ring-white/15",
-      emojiClassName: "text-[clamp(2.35rem,4.9vw,3.45rem)]",
+      emojiClassName: "text-[2.95rem]",
     };
   }
 
@@ -121,7 +121,7 @@ const getEntryTone = (slotKey: HallOfFamePodiumSlotKey) => {
       "border-white/20 bg-[linear-gradient(135deg,_rgba(2,6,23,0.92),_rgba(30,41,59,0.8))] text-white shadow-[0_18px_34px_rgba(15,23,42,0.32)] ring-1 ring-white/12",
     scoreClassName:
       "border-white/30 bg-[linear-gradient(135deg,_rgba(30,41,59,0.94),_rgba(194,65,12,0.92))] text-white shadow-[0_16px_30px_rgba(15,23,42,0.24)] ring-1 ring-white/15",
-    emojiClassName: "text-[clamp(2.35rem,4.9vw,3.45rem)]",
+    emojiClassName: "text-[2.95rem]",
   };
 };
 

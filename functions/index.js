@@ -1914,19 +1914,20 @@ exports.ensureWisHallOfFame = onCall({ region: REGION }, async (request) => {
 
   if (forceRefresh) {
     await assertHallOfFameManager(request);
+    return refreshWisHallOfFameOrThrowHttps(year, semester, {
+      source: 'manual',
+    });
   }
 
-  if (!forceRefresh && !isWisHallOfFameSnapshotStale(data)) {
-    return {
-      ensured: false,
-      snapshotKey: String(data.snapshotKey || '').trim(),
-      snapshotVersion: Number(data.snapshotVersion || WIS_HALL_OF_FAME_SNAPSHOT_VERSION),
-    };
-  }
-
-  return refreshWisHallOfFameOrThrowHttps(year, semester, {
-    source: forceRefresh ? 'manual' : 'ensure',
-  });
+  return {
+    ensured: false,
+    available: snapshot.exists,
+    stale: isWisHallOfFameSnapshotStale(data),
+    snapshotKey: String(data?.snapshotKey || '').trim(),
+    snapshotVersion: Number(
+      data?.snapshotVersion || WIS_HALL_OF_FAME_SNAPSHOT_VERSION,
+    ),
+  };
 });
 
 exports.saveWisHallOfFameConfig = onCall({ region: REGION }, async (request) => {
@@ -1938,7 +1939,7 @@ exports.saveWisHallOfFameConfig = onCall({ region: REGION }, async (request) => 
       source: 'config_save',
     },
   );
-  const shouldRefreshSnapshot = request.data?.refreshSnapshot === true;
+  const shouldRefreshSnapshot = false;
   const hallOfFamePatch = request.data?.hallOfFame && typeof request.data.hallOfFame === 'object'
     ? request.data.hallOfFame
     : {};
