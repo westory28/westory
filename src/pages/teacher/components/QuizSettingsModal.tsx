@@ -219,8 +219,8 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
               <h3 className="mt-1.5 text-lg font-extrabold text-gray-900 sm:text-xl">
                 {nodeTitle || "선택한 단원"} · {categoryLabel}
               </h3>
-              <p className="mt-1 text-sm text-gray-500">
-                공개, 초기화, 응시 조건을 한곳에서 조정합니다.
+                    <p className="mt-1 text-sm text-gray-500">
+                      공개와 응시 조건을 빠르게 조정합니다.
               </p>
             </div>
             <button
@@ -374,14 +374,14 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                                 {classId}
                               </div>
                               <div
-                                className={`mt-0.5 text-[11px] font-semibold ${
+                                className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${
                                   settings.active
                                     ? checked
-                                      ? "text-blue-700"
-                                      : "text-gray-500"
+                                      ? "bg-blue-100 text-blue-700"
+                                      : "bg-gray-100 text-gray-500"
                                     : checked
-                                      ? "text-amber-700"
-                                      : "text-gray-500"
+                                      ? "bg-amber-100 text-amber-700"
+                                      : "bg-gray-100 text-gray-500"
                                 }`}
                               >
                                 {settings.active
@@ -440,14 +440,13 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                           </div>
 
                           {confirmResetClassId === classId && (
-                            <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-3">
+                            <div className="mt-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-3">
                               <div className="text-xs font-bold text-rose-800">
-                                {classId} 학생의 {categoryLabel} 응시 기록을
-                                초기화합니다.
+                                {classId} 응시 기록을 초기화합니다.
                               </div>
                               <p className="mt-1.5 text-[11px] leading-5 text-rose-700">
-                                삭제 대상: 응시 기록, 제출 상태, 재응시 제한,
-                                해당 평가 포인트 거래
+                                응시 기록, 제출 상태, 재응시 제한, 해당 평가
+                                포인트 거래를 정리합니다.
                               </p>
                               <div className="mt-3 flex flex-wrap justify-end gap-2">
                                 <button
@@ -674,19 +673,19 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
 
         <div className="border-t border-gray-200 bg-white px-5 py-3 sm:px-6">
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-xl px-4 py-3 text-sm font-bold text-gray-600 transition hover:bg-gray-100"
-            >
-              닫기
-            </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-xl px-4 py-2.5 text-sm font-bold text-gray-600 transition hover:bg-gray-100"
+              >
+                닫기
+              </button>
             {canEdit && (
               <button
                 type="button"
                 onClick={() => void handleSave()}
                 disabled={loading || saving || Boolean(resettingClassId)}
-                className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+                className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
               >
                 {saving ? "저장 중..." : "설정 저장하기"}
               </button>

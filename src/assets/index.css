@@ -761,6 +761,15 @@
 
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
   .fc
+  .fc-daygrid-event.student-calendar-single-event {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+}
+
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
   .fc-daygrid-event.student-calendar-range-event {
   width: 100%;
   max-width: none;
