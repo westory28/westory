@@ -22,6 +22,25 @@ interface CalendarEvent {
     classNames?: string[];
 }
 
+const toDateKey = (value?: string) =>
+    String(value || '')
+        .split('T')[0]
+        .trim();
+
+const getInclusiveSpanDays = (start?: string, end?: string) => {
+    const startDateKey = toDateKey(start);
+    if (!startDateKey) return 1;
+    const endDateKey = toDateKey(end);
+    const resolvedEndDateKey =
+        endDateKey && endDateKey > startDateKey ? endDateKey : startDateKey;
+    const startDate = new Date(`${startDateKey}T00:00:00`);
+    const endDate = new Date(`${resolvedEndDateKey}T00:00:00`);
+    const diffDays = Math.round(
+        (endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000),
+    );
+    return diffDays + 1;
+};
+
 const Calendar = () => {
     const { user } = useAuth();
     const [events, setEvents] = useState<any[]>([]);
@@ -136,6 +155,9 @@ const Calendar = () => {
 
                     if (isVisible) {
                         const isHoliday = d.eventType === 'holiday';
+                        const inclusiveSpanDays = getInclusiveSpanDays(d.start, d.end);
+                        const isMultiDayRange = inclusiveSpanDays > 1;
+
                         loadedEvents.push({
                             id: d.id,
                             title: d.title,
@@ -144,8 +166,17 @@ const Calendar = () => {
                             backgroundColor: isHoliday ? '#ef4444' : (colorMap[d.eventType] || '#6b7280'),
                             borderColor: isHoliday ? '#ef4444' : (colorMap[d.eventType] || '#6b7280'),
                             textColor: isHoliday ? '#ffffff' : undefined,
-                            classNames: isHoliday ? ['holiday-text-event'] : [],
-                            extendedProps: d // Store full data
+                            classNames: [
+                                ...(isHoliday ? ['holiday-text-event'] : []),
+                                ...(isMultiDayRange
+                                    ? ['student-calendar-page-range-event']
+                                    : ['student-calendar-page-single-event']),
+                            ],
+                            extendedProps: {
+                                ...d,
+                                inclusiveSpanDays,
+                                isMultiDayRange,
+                            },
                         });
                     }
                 });
@@ -160,7 +191,10 @@ const Calendar = () => {
     }, [currentConfig, userClass]);
 
     const handleEventClick = (info: any) => {
-        const props = info.event.extendedProps.extendedProps; // Inherited from above structure
+        const props = info.event.extendedProps as CalendarEvent & {
+            inclusiveSpanDays?: number;
+            isMultiDayRange?: boolean;
+        };
         if (props.eventType === 'holiday') return; // Skip holidays
         setSelectedEvent(props);
         setModalOpen(true);
@@ -199,6 +233,28 @@ const Calendar = () => {
                             events={events}
                             dateClick={handleDateClick}
                             eventClick={handleEventClick}
+                            eventDidMount={(arg) => {
+                                const event = arg.event.extendedProps as CalendarEvent & {
+                                    inclusiveSpanDays?: number;
+                                    isMultiDayRange?: boolean;
+                                };
+                                const isRangeEvent =
+                                    typeof event.inclusiveSpanDays === 'number'
+                                        ? event.inclusiveSpanDays > 1
+                                        : Boolean(event.isMultiDayRange);
+                                const harness = arg.el.closest(
+                                    '.fc-daygrid-event-harness, .fc-daygrid-event-harness-abs',
+                                );
+                                if (!harness) return;
+                                harness.classList.toggle(
+                                    'student-calendar-page-event-harness--range',
+                                    isRangeEvent,
+                                );
+                                harness.classList.toggle(
+                                    'student-calendar-page-event-harness--single',
+                                    !isRangeEvent,
+                                );
+                            }}
                             eventContent={(arg) => {
                                 if (arg.view.type !== 'dayGridMonth') return undefined;
                                 return (
@@ -265,13 +321,72 @@ const Calendar = () => {
                 .fc-toolbar-title { font-size: 1.25em !important; font-weight: 700; color: #1f2937; }
                 .fc-button { background-color: #2563eb !important; border-color: #2563eb !important; font-weight: 600 !important; }
                 .fc-daygrid-event { cursor: pointer; border-radius: 4px; padding: 2px 4px; font-size: 0.8rem; font-weight: 600; border: none; }
+                .fc-daygrid-event-harness.student-calendar-page-event-harness--single,
+                .fc-daygrid-event-harness-abs.student-calendar-page-event-harness--single {
+                    width: 100% !important;
+                    max-width: 100% !important;
+                    min-width: 0 !important;
+                    overflow: hidden !important;
+                }
+                .fc-daygrid-event-harness-abs.student-calendar-page-event-harness--single {
+                    left: 0 !important;
+                    right: 0 !important;
+                    inset-inline: 0 !important;
+                }
+                .fc-daygrid-event-harness.student-calendar-page-event-harness--range,
+                .fc-daygrid-event-harness-abs.student-calendar-page-event-harness--range {
+                    width: 100% !important;
+                    min-width: 100% !important;
+                    max-width: none !important;
+                    overflow: visible !important;
+                }
+                .fc-daygrid-event.student-calendar-page-single-event,
+                .fc-daygrid-event.student-calendar-page-single-event .fc-event-main,
+                .fc-daygrid-event.student-calendar-page-single-event .fc-event-main-frame,
+                .fc-daygrid-event.student-calendar-page-single-event .fc-event-title-container {
+                    min-width: 0;
+                    width: 100%;
+                    max-width: 100%;
+                    overflow: hidden;
+                }
+                .fc-daygrid-event.student-calendar-page-range-event,
+                .fc-daygrid-event.student-calendar-page-range-event .fc-event-main,
+                .fc-daygrid-event.student-calendar-page-range-event .fc-event-main-frame,
+                .fc-daygrid-event.student-calendar-page-range-event .fc-event-title-container {
+                    min-width: 0;
+                    width: 100%;
+                    max-width: none;
+                    overflow: visible;
+                }
+                .fc-daygrid-event.student-calendar-page-range-event {
+                    width: 100% !important;
+                    min-width: 100% !important;
+                    max-width: none !important;
+                    overflow: visible !important;
+                    margin-left: 0 !important;
+                    margin-right: 0 !important;
+                    border-radius: 0 !important;
+                    position: relative;
+                    z-index: 2;
+                }
+                .fc-daygrid-event.student-calendar-page-range-event.fc-event-start {
+                    border-top-left-radius: 4px !important;
+                    border-bottom-left-radius: 4px !important;
+                }
+                .fc-daygrid-event.student-calendar-page-range-event.fc-event-end {
+                    border-top-right-radius: 4px !important;
+                    border-bottom-right-radius: 4px !important;
+                }
+                .fc-daygrid-event.student-calendar-page-range-event.fc-event-start.fc-event-end {
+                    border-radius: 4px !important;
+                }
                 .fc-day-sun a { color: #ef4444 !important; text-decoration: none; font-weight: 700 !important; }
                 .fc-day-sat a { color: #3b82f6 !important; text-decoration: none; font-weight: 700 !important; }
                 .fc-day-holiday a { color: #ef4444 !important; text-decoration: none; font-weight: 700 !important; }
                 .fc-day-holiday .fc-daygrid-day-number { color: #ef4444 !important; font-weight: 700 !important; }
                 .fc-day-selected { background-color: #eff6ff !important; outline: 2px solid #3b82f6 !important; outline-offset: -2px !important; }
                 .fc-daygrid-event.holiday-text-event { background-color: #ef4444 !important; border-color: #ef4444 !important; }
-                .fc-daygrid-event.holiday-text-event .fc-event-title { color: #ffffff !important; font-size: 0.75rem; font-weight: 800; }
+                .fc-daygrid-event.holiday-text-event .fc-segment-title { color: #ffffff !important; font-size: 0.75rem; font-weight: 800; }
                 .fc-list-event.holiday-text-event { background-color: transparent !important; border: none !important; }
                 .fc-list-event.holiday-text-event .fc-list-event-title a { color: #ef4444 !important; font-weight: 800 !important; }
                 .fc-segment-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; padding: 0 2px; }
