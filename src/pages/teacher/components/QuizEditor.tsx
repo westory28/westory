@@ -46,6 +46,8 @@ interface CascadingFilter {
 }
 
 const ORDER_DELIMITER = '||';
+const DEFAULT_OPTION_COUNT = 4;
+const createDefaultOptionItems = () => Array.from({ length: DEFAULT_OPTION_COUNT }, () => '');
 const TYPE_LABEL: Record<QuestionType, string> = {
     choice: '객관식',
     ox: 'O/X',
@@ -75,11 +77,11 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
     const [formExp, setFormExp] = useState('');
     const [formImage, setFormImage] = useState<string | null>(null);
     const [formSubUnit, setFormSubUnit] = useState('');
-    const [choiceOptions, setChoiceOptions] = useState<string[]>(['', '']);
+    const [choiceOptions, setChoiceOptions] = useState<string[]>(createDefaultOptionItems());
     const [choiceAnswerIndex, setChoiceAnswerIndex] = useState<number | null>(null);
     const [oxAnswer, setOxAnswer] = useState<'O' | 'X' | ''>('');
     const [wordAnswer, setWordAnswer] = useState('');
-    const [orderItems, setOrderItems] = useState<string[]>(['', '']);
+    const [orderItems, setOrderItems] = useState<string[]>(createDefaultOptionItems());
     const [hintEnabled, setHintEnabled] = useState(false);
     const [hintText, setHintText] = useState('');
 
@@ -177,11 +179,11 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
         setFormText('');
         setFormExp('');
         setFormImage(null);
-        setChoiceOptions(['', '']);
+        setChoiceOptions(createDefaultOptionItems());
         setChoiceAnswerIndex(null);
         setOxAnswer('');
         setWordAnswer('');
-        setOrderItems(['', '']);
+        setOrderItems(createDefaultOptionItems());
         setHintEnabled(false);
         setHintText('');
         setPreviewOpen(false);
@@ -205,6 +207,12 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
         setFormType(nextType);
         setPreviewOpen(false);
         resetPreview();
+        if (nextType === 'choice' && trimList(choiceOptions).length === 0) {
+            setChoiceOptions(createDefaultOptionItems());
+        }
+        if (nextType === 'order' && trimList(orderItems).length === 0) {
+            setOrderItems(createDefaultOptionItems());
+        }
     };
 
     const handleVerticalFocus = (e: React.KeyboardEvent<HTMLElement>) => {
@@ -254,31 +262,31 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
 
         if (question.type === 'choice') {
             const options = (question.options || []).filter(Boolean);
-            const normalizedOptions = options.length >= 2 ? options : ['', ''];
+            const normalizedOptions = options.length >= 2 ? options : createDefaultOptionItems();
             setChoiceOptions(normalizedOptions);
             const answerIndex = normalizedOptions.findIndex((opt) => opt.trim() === String(question.answer).trim());
             setChoiceAnswerIndex(answerIndex >= 0 ? answerIndex : null);
             setOxAnswer('');
             setWordAnswer('');
-            setOrderItems(['', '']);
+            setOrderItems(createDefaultOptionItems());
             return;
         }
 
         if (question.type === 'ox') {
-            setChoiceOptions(['', '']);
+            setChoiceOptions(createDefaultOptionItems());
             setChoiceAnswerIndex(null);
             setOxAnswer(question.answer === 'O' || question.answer === 'X' ? question.answer : '');
             setWordAnswer('');
-            setOrderItems(['', '']);
+            setOrderItems(createDefaultOptionItems());
             return;
         }
 
         if (question.type === 'word') {
-            setChoiceOptions(['', '']);
+            setChoiceOptions(createDefaultOptionItems());
             setChoiceAnswerIndex(null);
             setOxAnswer('');
             setWordAnswer(String(question.answer || ''));
-            setOrderItems(['', '']);
+            setOrderItems(createDefaultOptionItems());
             return;
         }
 
@@ -287,11 +295,11 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
             : String(question.answer || '')
                 .split(ORDER_DELIMITER)
                 .filter(Boolean);
-        setChoiceOptions(['', '']);
+        setChoiceOptions(createDefaultOptionItems());
         setChoiceAnswerIndex(null);
         setOxAnswer('');
         setWordAnswer('');
-        setOrderItems(orderOptions.length >= 2 ? orderOptions : ['', '']);
+        setOrderItems(orderOptions.length >= 2 ? orderOptions : createDefaultOptionItems());
     };
 
     const addChoiceOption = () => setChoiceOptions((prev) => [...prev, '']);

@@ -1501,10 +1501,352 @@ const assertHallOfFameManager = async (request) => {
   return { uid, email, profile };
 };
 
+const normalizeSchoolToken = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const digits = raw.match(/\d+/)?.[0];
+  return digits || raw;
+};
+
+const buildQuizClassId = (grade, className) => {
+  const normalizedGrade = normalizeSchoolToken(grade);
+  const normalizedClass = normalizeSchoolToken(className);
+  if (!normalizedGrade || !normalizedClass) return '';
+  return `${normalizedGrade}-${normalizedClass}`;
+};
+
+const assertQuizManager = async (request) => {
+  const { uid, email } = assertAllowedWestoryUser(request);
+  if (email === ADMIN_EMAIL) {
+    return { uid, email, profile: null };
+  }
+
+  const { profile } = await getUserProfile(uid);
+  if (String(profile?.role || '').trim() !== 'teacher') {
+    throw new HttpsError(
+      'permission-denied',
+      'teacher or admin permission is required.',
+    );
+  }
+  return { uid, email, profile };
+};
+
 const ensureStudentProfile = async (uid) => {
   const { ref, profile } = await getUserProfile(uid);
   return { ref, profile };
 };
+
+const isQuizStudentProfile = (profile = {}) => {
+  const role = String(profile.role || '').trim();
+  return role === 'student';
+};
+
+const shouldCountTowardsEarnedTotal = (pointTransaction = {}) => {
+  const type = String(pointTransaction.type || '').trim();
+  const delta = Number(pointTransaction.delta || 0);
+  if (delta <= 0) return false;
+  if (type === 'manual_adjust') return true;
+  if (type === 'manual_reclaim') return false;
+  if (type.startsWith('purchase_')) return false;
+  return true;
+};
+
+const buildQuizResetWalletSnapshot = ({ uid, profile, transactionDocs, rankPolicy }) => {
+  const sortedDocs = sortPointTransactionDocsDesc(transactionDocs);
+  const balance = transactionDocs.reduce(
+    (total, docSnap) => total + Number(docSnap.data()?.delta || 0),
+    0,
+  );
+  const earnedTotal = transactionDocs.reduce((total, docSnap) => {
+    const pointTransaction = docSnap.data() || {};
+    return shouldCountTowardsEarnedTotal(pointTransaction)
+      ? total + Number(pointTransaction.delta || 0)
+      : total;
+  }, 0);
+  const spentTotal = transactionDocs.reduce((total, docSnap) => {
+    const pointTransaction = docSnap.data() || {};
+    const type = String(pointTransaction.type || '').trim();
+    if (type !== 'purchase_hold' && type !== 'purchase_cancel') {
+      return total;
+    }
+    return total - Number(pointTransaction.delta || 0);
+  }, 0);
+  const adjustedTotal = transactionDocs.reduce((total, docSnap) => {
+    const pointTransaction = docSnap.data() || {};
+    const type = String(pointTransaction.type || '').trim();
+    if (type !== 'manual_adjust' && type !== 'manual_reclaim') {
+      return total;
+    }
+    return total + Number(pointTransaction.delta || 0);
+  }, 0);
+  const latestCreatedAt = sortedDocs[0]?.data()?.createdAt || null;
+
+  return {
+    ...buildWalletBase(uid, profile),
+    balance,
+    earnedTotal,
+    ...buildWalletRankState(earnedTotal, rankPolicy),
+    spentTotal: Math.max(0, spentTotal),
+    adjustedTotal,
+    lastTransactionAt: latestCreatedAt,
+  };
+};
+
+const rebuildQuizResetWallet = async ({ year, semester, uid, rankPolicy }) => {
+  const { profile } = await ensureStudentProfile(uid);
+  const pointTransactionsSnapshot = await db
+    .collection(getPointCollectionPath(year, semester, 'point_transactions'))
+    .where('uid', '==', uid)
+    .get();
+
+  const nextWallet = buildQuizResetWalletSnapshot({
+    uid,
+    profile,
+    transactionDocs: pointTransactionsSnapshot.docs,
+    rankPolicy,
+  });
+
+  await db.doc(getPointWalletPath(year, semester, uid)).set(nextWallet, { merge: true });
+  return nextWallet;
+};
+
+const commitDeleteRefsInChunks = async (refs) => {
+  const uniqueRefs = Array.from(
+    new Map(
+      refs
+        .filter(Boolean)
+        .map((ref) => [ref.path, ref]),
+    ).values(),
+  );
+  for (let index = 0; index < uniqueRefs.length; index += 400) {
+    const batch = db.batch();
+    uniqueRefs.slice(index, index + 400).forEach((ref) => batch.delete(ref));
+    await batch.commit();
+  }
+  return uniqueRefs.length;
+};
+
+const filterExistingRefs = async (refs) => {
+  const uniqueRefs = Array.from(
+    new Map(
+      refs
+        .filter(Boolean)
+        .map((ref) => [ref.path, ref]),
+    ).values(),
+  );
+  const existingRefs = [];
+  for (let index = 0; index < uniqueRefs.length; index += 100) {
+    const snapshotBatch = await Promise.all(
+      uniqueRefs.slice(index, index + 100).map((ref) => ref.get().catch(() => null)),
+    );
+    snapshotBatch.forEach((snapshot, snapshotIndex) => {
+      if (!snapshot?.exists) return;
+      existingRefs.push(uniqueRefs[index + snapshotIndex]);
+    });
+  }
+  return existingRefs;
+};
+
+const resetAssessmentAttemptsByClassHandler = onCall(
+  { region: REGION, timeoutSeconds: 180 },
+  async (request) => {
+    const { uid, email } = await assertQuizManager(request);
+    const { year, semester } = assertYearSemester(request.data || {});
+    const unitId = String(request.data?.unitId || '').trim();
+    const category = String(request.data?.category || '').trim();
+    const classId = String(request.data?.classId || '').trim();
+
+    if (!unitId || !category || !classId) {
+      throw new HttpsError(
+        'invalid-argument',
+        'unitId, category, and classId are required.',
+      );
+    }
+
+    const [grade, className] = classId
+      .split('-')
+      .map((value) => normalizeSchoolToken(value));
+    const normalizedClassId = buildQuizClassId(grade, className);
+    if (!normalizedClassId) {
+      throw new HttpsError(
+        'invalid-argument',
+        'classId must follow the {grade}-{class} format.',
+      );
+    }
+
+    const semesterRoot = getSemesterRoot(year, semester);
+    const auditRef = db.collection(`${semesterRoot}/quiz_reset_audits`).doc();
+    await auditRef.set({
+      actorUid: uid,
+      actorEmail: email,
+      unitId,
+      category,
+      requestedClassId: classId,
+      resolvedClassId: normalizedClassId,
+      status: 'started',
+      startedAt: FieldValue.serverTimestamp(),
+    });
+
+    try {
+      const userQueryCombos = [
+        ['studentGrade', 'studentClass'],
+        ['studentGrade', 'class'],
+        ['grade', 'studentClass'],
+        ['grade', 'class'],
+      ];
+      const userSnapshots = await Promise.all(
+        userQueryCombos.map(([gradeField, classField]) =>
+          db
+            .collection('users')
+            .where(gradeField, '==', grade)
+            .where(classField, '==', className)
+            .get()
+            .catch(() => null),
+        ),
+      );
+
+      const studentUids = new Set();
+      userSnapshots.forEach((snapshot) => {
+        snapshot?.forEach((docSnap) => {
+          const profile = docSnap.data() || {};
+          if (!isQuizStudentProfile(profile)) return;
+          const profileClassId = buildQuizClassId(
+            profile.studentGrade || profile.grade,
+            profile.studentClass || profile.class,
+          );
+          if (profileClassId === normalizedClassId) {
+            studentUids.add(docSnap.id);
+          }
+        });
+      });
+
+      const quizResultsCollection = db.collection(`${semesterRoot}/quiz_results`);
+      const quizSubmissionsCollection = db.collection(`${semesterRoot}/quiz_submissions`);
+      const resultRefs = [];
+      const submissionRefs = [];
+      const pointTransactionRefs = [];
+      const affectedStudentUids = new Set();
+
+      for (const studentUid of studentUids) {
+        const [resultSnap, submissionSnap] = await Promise.all([
+          quizResultsCollection.where('uid', '==', studentUid).get(),
+          quizSubmissionsCollection.where('uid', '==', studentUid).get().catch(() => null),
+        ]);
+
+        resultSnap.forEach((docSnap) => {
+          const data = docSnap.data() || {};
+          if (
+            String(data.uid || '').trim() !== studentUid
+            || String(data.unitId || '').trim() !== unitId
+            || String(data.category || '').trim() !== category
+          ) {
+            return;
+          }
+          resultRefs.push(docSnap.ref);
+          affectedStudentUids.add(studentUid);
+
+          const sourceId = `quiz-result-${docSnap.id}`;
+          pointTransactionRefs.push(
+            db.doc(
+              `${getPointCollectionPath(year, semester, 'point_transactions')}/${buildActivityTransactionId(studentUid, 'quiz', sourceId)}`,
+            ),
+          );
+          pointTransactionRefs.push(
+            db.doc(
+              `${getPointCollectionPath(year, semester, 'point_transactions')}/${buildActivityTransactionId(studentUid, 'quiz_bonus', sourceId)}`,
+            ),
+          );
+        });
+
+        submissionSnap?.forEach((docSnap) => {
+          const data = docSnap.data() || {};
+          if (
+            String(data.uid || '').trim() !== studentUid
+            || String(data.unitId || '').trim() !== unitId
+            || String(data.category || '').trim() !== category
+          ) {
+            return;
+          }
+          submissionRefs.push(docSnap.ref);
+          affectedStudentUids.add(studentUid);
+        });
+      }
+
+      const deletedQuizResultCount = await commitDeleteRefsInChunks(resultRefs);
+      const deletedSubmissionCount = await commitDeleteRefsInChunks(submissionRefs);
+      const existingPointTransactionRefs = await filterExistingRefs(pointTransactionRefs);
+      const deletedPointTransactionCount = await commitDeleteRefsInChunks(existingPointTransactionRefs);
+
+      const affectedStudentList = Array.from(affectedStudentUids);
+      const pointPolicy = await db.runTransaction((transaction) =>
+        loadPolicy(transaction, year, semester),
+      );
+      for (const studentUid of affectedStudentList) {
+        await rebuildQuizResetWallet({
+          year,
+          semester,
+          uid: studentUid,
+          rankPolicy: pointPolicy.rankPolicy,
+        });
+      }
+
+      if (deletedPointTransactionCount > 0) {
+        await markWisHallOfFameDirtySafely(year, semester);
+      }
+
+      await auditRef.set(
+        {
+          status: 'completed',
+          targetStudentCount: studentUids.size,
+          affectedStudentCount: affectedStudentList.length,
+          deletedQuizResultCount,
+          deletedSubmissionCount,
+          deletedPointTransactionCount,
+          recalculatedWalletCount: affectedStudentList.length,
+          completedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      console.info('Assessment attempts reset for class.', {
+        actorUid: uid,
+        year,
+        semester,
+        unitId,
+        category,
+        classId: normalizedClassId,
+        targetStudentCount: studentUids.size,
+        affectedStudentCount: affectedStudentList.length,
+        deletedQuizResultCount,
+        deletedSubmissionCount,
+        deletedPointTransactionCount,
+      });
+
+      return {
+        classId: normalizedClassId,
+        targetStudentCount: studentUids.size,
+        affectedStudentCount: affectedStudentList.length,
+        deletedQuizResultCount,
+        deletedSubmissionCount,
+        deletedPointTransactionCount,
+        recalculatedWalletCount: affectedStudentList.length,
+      };
+    } catch (error) {
+      await auditRef.set(
+        {
+          status: 'failed',
+          errorMessage: String(error?.message || 'reset-failed').slice(0, 240),
+          completedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      ).catch(() => undefined);
+      throw error;
+    }
+  },
+);
+
+exports.resetAssessmentAttemptsByClass = resetAssessmentAttemptsByClassHandler;
+exports.resetQuizAttemptsForClass = resetAssessmentAttemptsByClassHandler;
 
 const buildWalletBase = (uid, profile) => ({
   uid,

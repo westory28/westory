@@ -1,208 +1,665 @@
-﻿import React, { useEffect, useState } from 'react';
-import { db } from '../../../lib/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { useAuth } from '../../../contexts/AuthContext';
-import { getSemesterDocPath } from '../../../lib/semesterScope';
+import React, { useEffect, useMemo, useState } from "react";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { db } from "../../../lib/firebase";
+import { useAuth } from "../../../contexts/AuthContext";
+import {
+  getAssessmentConfigKey,
+  getGrade3ClassIdsFromSchoolConfig,
+  normalizeAssessmentConfigEntry,
+  normalizeGrade3ClassId,
+  resetAssessmentAttemptsByClass,
+} from "../../../lib/assessmentConfig";
+import { getSemesterDocPath } from "../../../lib/semesterScope";
 
 interface QuizSettingsModalProps {
-    isOpen: boolean;
-    onClose: () => void;
-    nodeId: string;
-    category: string;
-    canEdit: boolean;
+  isOpen: boolean;
+  onClose: () => void;
+  nodeId: string;
+  nodeTitle?: string;
+  category: string;
+  canEdit: boolean;
 }
 
-const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({ isOpen, onClose, nodeId, category, canEdit }) => {
-    const { config } = useAuth();
-    const [settings, setSettings] = useState({
-        active: false,
-        questionCount: 10,
-        randomOrder: true,
-        timeLimitMinutes: 1,
-        allowRetake: true,
-        cooldown: 0,
-        hintLimit: 2
+interface QuizSettingsFormState {
+  active: boolean;
+  questionCount: number;
+  randomOrder: boolean;
+  timeLimitMinutes: number;
+  allowRetake: boolean;
+  cooldown: number;
+  hintLimit: number;
+  visibleClassIds: string[];
+}
+
+const CATEGORY_LABELS: Record<string, string> = {
+  diagnostic: "진단평가",
+  formative: "형성평가",
+  exam_prep: "학기 시험 대비",
+};
+
+const createDefaultFormState = (classIds: string[]): QuizSettingsFormState => ({
+  active: false,
+  questionCount: 10,
+  randomOrder: true,
+  timeLimitMinutes: 1,
+  allowRetake: true,
+  cooldown: 0,
+  hintLimit: 2,
+  visibleClassIds: [...classIds],
+});
+
+const sectionCardClassName =
+  "rounded-2xl border border-gray-200 bg-white p-5 shadow-sm";
+
+const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
+  isOpen,
+  onClose,
+  nodeId,
+  nodeTitle,
+  category,
+  canEdit,
+}) => {
+  const { config } = useAuth();
+  const [settings, setSettings] = useState<QuizSettingsFormState>(
+    createDefaultFormState([]),
+  );
+  const [grade3ClassIds, setGrade3ClassIds] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [resettingClassId, setResettingClassId] = useState("");
+  const [confirmResetClassId, setConfirmResetClassId] = useState("");
+
+  const categoryLabel = CATEGORY_LABELS[category] || "평가";
+  const normalizedSelectedClassIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          settings.visibleClassIds
+            .map((classId) => normalizeGrade3ClassId(classId))
+            .filter(Boolean),
+        ),
+      ),
+    [settings.visibleClassIds],
+  );
+
+  useEffect(() => {
+    if (!isOpen || !nodeId) return;
+    void loadSettings();
+  }, [config, isOpen, nodeId, category]);
+
+  const loadSettings = async () => {
+    setLoading(true);
+    try {
+      const key = getAssessmentConfigKey(nodeId, category);
+      const [classIds, settingsSnap, legacyStatusSnap] = await Promise.all([
+        getGrade3ClassIdsFromSchoolConfig(),
+        getDoc(doc(db, getSemesterDocPath(config, "assessment_config", "settings"))),
+        getDoc(doc(db, getSemesterDocPath(config, "assessment_config", "status"))),
+      ]);
+      const legacyStatus = legacyStatusSnap.exists()
+        ? (legacyStatusSnap.data() as Record<string, unknown>)
+        : {};
+      const settingsMap = settingsSnap.exists()
+        ? (settingsSnap.data() as Record<string, unknown>)
+        : {};
+      const normalizedEntry = normalizeAssessmentConfigEntry(
+        settingsMap[key] ?? { active: legacyStatus[key] === true },
+        classIds,
+      );
+
+      setGrade3ClassIds(classIds);
+      setSettings({
+        active: normalizedEntry.active,
+        questionCount: normalizedEntry.questionCount,
+        randomOrder: normalizedEntry.randomOrder,
+        timeLimitMinutes: Math.max(
+          1,
+          Math.round(normalizedEntry.timeLimit / 60),
+        ),
+        allowRetake: normalizedEntry.allowRetake,
+        cooldown: normalizedEntry.cooldown,
+        hintLimit: normalizedEntry.hintLimit,
+        visibleClassIds:
+          normalizedEntry.hasExplicitClassVisibility
+            ? normalizedEntry.visibleClassIds
+            : [...classIds],
+      });
+      setConfirmResetClassId("");
+    } catch (error) {
+      console.error("Failed to load assessment settings:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleToggleClass = (classId: string) => {
+    if (!canEdit) return;
+    setSettings((prev) => {
+      const nextSet = new Set(prev.visibleClassIds);
+      if (nextSet.has(classId)) {
+        nextSet.delete(classId);
+      } else {
+        nextSet.add(classId);
+      }
+      return {
+        ...prev,
+        visibleClassIds: grade3ClassIds.filter((id) => nextSet.has(id)),
+      };
     });
-    const [loading, setLoading] = useState(false);
+  };
 
-    useEffect(() => {
-        if (isOpen && nodeId) {
-            loadSettings();
-        }
-    }, [config, isOpen, nodeId, category]);
+  const handleSave = async () => {
+    if (!canEdit || !nodeId) return;
+    setSaving(true);
+    try {
+      const key = getAssessmentConfigKey(nodeId, category);
+      await setDoc(
+        doc(db, getSemesterDocPath(config, "assessment_config", "settings")),
+        {
+          [key]: {
+            active: settings.active,
+            questionCount: Math.max(1, settings.questionCount),
+            randomOrder: settings.randomOrder,
+            timeLimit: Math.max(1, settings.timeLimitMinutes) * 60,
+            allowRetake: settings.allowRetake,
+            cooldown: Math.max(0, settings.cooldown),
+            hintLimit: Math.max(0, settings.hintLimit),
+            visibleTargetGrade: "3",
+            visibleClassIds: normalizedSelectedClassIds,
+            visibilityVersion: 2,
+          },
+        },
+        { merge: true },
+      );
+      alert("설정을 저장했습니다.");
+      onClose();
+    } catch (error) {
+      console.error("Failed to save assessment settings:", error);
+      alert("설정 저장에 실패했습니다.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
-    const loadSettings = async () => {
-        setLoading(true);
-        try {
-            const key = `${nodeId}_${category}`;
-            const snap = await getDoc(doc(db, getSemesterDocPath(config, 'assessment_config', 'settings')));
+  const handleResetAttempts = async (classId: string) => {
+    if (!canEdit || !nodeId) return;
+    setResettingClassId(classId);
+    try {
+      const result = await resetAssessmentAttemptsByClass({
+        config,
+        unitId: nodeId,
+        category,
+        classId,
+      });
+      setConfirmResetClassId("");
+      alert(
+        `${classId} 응시 초기화를 완료했습니다.\n응시 기록 ${result.deletedQuizResultCount}건, 포인트 거래 ${result.deletedPointTransactionCount}건을 정리했습니다.`,
+      );
+    } catch (error) {
+      console.error("Failed to reset assessment attempts by class:", error);
+      alert("학급별 응시 초기화에 실패했습니다.");
+    } finally {
+      setResettingClassId("");
+    }
+  };
 
-            if (snap.exists()) {
-                const data = snap.data() as Record<string, any>;
-                if (data[key]) {
-                    setSettings({
-                        active: data[key].active ?? false,
-                        questionCount: data[key].questionCount ?? 10,
-                        randomOrder: data[key].randomOrder ?? true,
-                        timeLimitMinutes: Math.max(1, Math.round((data[key].timeLimit ?? 60) / 60)),
-                        allowRetake: data[key].allowRetake ?? true,
-                        cooldown: data[key].cooldown ?? 0,
-                        hintLimit: data[key].hintLimit ?? 2
-                    });
-                } else {
-                    // Default
-                    setSettings({ active: false, questionCount: 10, randomOrder: true, timeLimitMinutes: 1, allowRetake: true, cooldown: 0, hintLimit: 2 });
-                }
-            } else {
-                setSettings({ active: false, questionCount: 10, randomOrder: true, timeLimitMinutes: 1, allowRetake: true, cooldown: 0, hintLimit: 2 });
-            }
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setLoading(false);
-        }
-    };
+  if (!isOpen) return null;
 
-    const handleSave = async () => {
-        if (!canEdit) return;
-        try {
-            const key = `${nodeId}_${category}`;
-            const payload = {
-                ...settings,
-                timeLimit: Math.max(1, settings.timeLimitMinutes) * 60,
-            } as any;
-            delete payload.timeLimitMinutes;
-            await setDoc(doc(db, getSemesterDocPath(config, 'assessment_config', 'settings')), {
-                [key]: payload
-            }, { merge: true });
-            alert('설정이 저장되었습니다.');
-            onClose();
-        } catch (e) {
-            console.error(e);
-            alert('저장에 실패했습니다.');
-        }
-    };
-
-    if (!isOpen) return null;
-
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
-            <div className="bg-white rounded-xl shadow-2xl z-10 w-96 p-6 mx-4 animate-fadeScale">
-                <h3 className="font-bold text-lg text-gray-800 mb-4 border-b pb-2 flex items-center gap-2">
-                    <i className="fas fa-sliders-h text-blue-500"></i>평가 상세 설정
-                </h3>
-
-                {loading ? (
-                    <div className="p-8 text-center text-gray-400">로딩 중...</div>
-                ) : (
-                    <div className="space-y-5">
-                        <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
-                            <span className="text-sm font-bold text-gray-600">학생에게 공개</span>
-                            <label className="relative inline-flex items-center cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={settings.active}
-                                    onChange={(e) => setSettings({ ...settings, active: e.target.checked })}
-                                    className="sr-only peer"
-                                />
-                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                            </label>
-                        </div>
-
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 mb-1">한 번에 출제할 문항 수</label>
-                            <div className="flex items-center gap-2">
-                                <input
-                                    type="number"
-                                    value={settings.questionCount}
-                                    onChange={(e) => setSettings({ ...settings, questionCount: parseInt(e.target.value) || 10 })}
-                                    className="flex-1 border rounded p-2 text-center font-bold text-blue-600 text-lg"
-                                />
-                                <span className="text-sm font-bold text-gray-600">개</span>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 mb-1">문항 출제 순서</label>
-                            <div className="grid grid-cols-2 gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => setSettings({ ...settings, randomOrder: true })}
-                                    className={`py-2 rounded border font-bold text-sm transition ${settings.randomOrder ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 text-gray-500 hover:border-blue-300'}`}
-                                >
-                                    랜덤 순서
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setSettings({ ...settings, randomOrder: false })}
-                                    className={`py-2 rounded border font-bold text-sm transition ${!settings.randomOrder ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 text-gray-500 hover:border-blue-300'}`}
-                                >
-                                    등록 순서
-                                </button>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 mb-1">제한 시간 (분)</label>
-                            <input
-                                type="number"
-                                value={settings.timeLimitMinutes}
-                                onChange={(e) => setSettings({ ...settings, timeLimitMinutes: Math.max(1, parseInt(e.target.value, 10) || 1) })}
-                                className="w-full border rounded p-2 text-center font-bold text-lg"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 mb-1">힌트 사용 가능 횟수</label>
-                            <input
-                                type="number"
-                                min={0}
-                                max={20}
-                                value={settings.hintLimit}
-                                onChange={(e) => setSettings({ ...settings, hintLimit: Math.max(0, parseInt(e.target.value, 10) || 0) })}
-                                className="w-full border rounded p-2 text-center font-bold text-lg"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="flex items-center justify-between cursor-pointer p-3 bg-gray-50 rounded-lg border border-gray-200 mb-2">
-                                <span className="text-sm font-bold text-gray-600">재응시 허용</span>
-                                <input
-                                    type="checkbox"
-                                    checked={settings.allowRetake}
-                                    onChange={(e) => setSettings({ ...settings, allowRetake: e.target.checked })}
-                                    className="w-5 h-5 text-blue-600 rounded"
-                                />
-                            </label>
-                            <div className={`transition-opacity ${settings.allowRetake ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
-                                <label className="block text-xs font-bold text-gray-500 mb-1">재응시 대기 시간 (분)</label>
-                                <input
-                                    type="number"
-                                    value={settings.cooldown}
-                                    onChange={(e) => setSettings({ ...settings, cooldown: parseInt(e.target.value) || 0 })}
-                                    disabled={!settings.allowRetake}
-                                    className="w-full border rounded p-2 text-center font-bold text-lg"
-                                />
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                <div className="mt-8 flex justify-end gap-2">
-                    <button onClick={onClose} className="px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-100 font-bold transition">닫기</button>
-                    {canEdit && (
-                        <button
-                            onClick={handleSave}
-                            className="flex-1 bg-blue-600 text-white px-4 py-3 rounded-lg font-bold hover:bg-blue-700 shadow-lg transition transform active:scale-95"
-                        >
-                            설정 저장하기
-                        </button>
-                    )}
-                </div>
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
+      <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-[28px] border border-gray-200 bg-gray-50 shadow-2xl">
+        <div className="border-b border-gray-200 bg-white px-6 py-5 sm:px-7">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 text-sm font-bold text-blue-600">
+                <i className="fas fa-sliders-h"></i>
+                <span>평가 상세 설정</span>
+              </div>
+              <h3 className="mt-2 text-xl font-extrabold text-gray-900">
+                {nodeTitle || "선택한 단원"} · {categoryLabel}
+              </h3>
+              <p className="mt-2 text-sm text-gray-500">
+                공개 범위, 출제 방식, 재응시와 학급별 초기화를 한곳에서
+                관리합니다.
+              </p>
             </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+              aria-label="설정 모달 닫기"
+            >
+              <i className="fas fa-times"></i>
+            </button>
+          </div>
         </div>
-    );
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6 sm:px-7">
+          {loading ? (
+            <div className="rounded-2xl border border-gray-200 bg-white px-6 py-14 text-center text-sm font-semibold text-gray-400">
+              설정을 불러오는 중입니다...
+            </div>
+          ) : (
+            <div className="space-y-5">
+              <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
+                <section className={sectionCardClassName}>
+                  <div className="mb-4">
+                    <h4 className="text-base font-extrabold text-gray-900">
+                      공개 설정
+                    </h4>
+                    <p className="mt-1 text-sm text-gray-500">
+                      학생 공개 여부와 3학년 공개 학급 범위를 함께
+                      조정합니다.
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4">
+                    <label className="flex items-center justify-between gap-4">
+                      <div>
+                        <div className="text-sm font-bold text-gray-800">
+                          학생에게 공개
+                        </div>
+                        <div className="mt-1 text-xs text-gray-500">
+                          공개를 끄면 어떤 학급에도 보이지 않습니다.
+                        </div>
+                      </div>
+                      <span className="relative inline-flex cursor-pointer items-center">
+                        <input
+                          type="checkbox"
+                          checked={settings.active}
+                          onChange={(event) =>
+                            setSettings((prev) => ({
+                              ...prev,
+                              active: event.target.checked,
+                            }))
+                          }
+                          className="peer sr-only"
+                        />
+                        <span className="h-6 w-11 rounded-full bg-gray-300 transition peer-checked:bg-blue-600"></span>
+                        <span className="pointer-events-none absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition peer-checked:translate-x-5"></span>
+                      </span>
+                    </label>
+                  </div>
+
+                  <div className="mt-4 rounded-2xl border border-gray-200 bg-white px-4 py-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-bold text-gray-800">
+                          공개 학급 설정
+                        </div>
+                        <div className="mt-1 text-xs text-gray-500">
+                          3학년 실제 학급만 표시합니다.
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSettings((prev) => ({
+                              ...prev,
+                              visibleClassIds: [...grade3ClassIds],
+                            }))
+                          }
+                          disabled={!canEdit || grade3ClassIds.length === 0}
+                          className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          전체 선택
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSettings((prev) => ({
+                              ...prev,
+                              visibleClassIds: [],
+                            }))
+                          }
+                          disabled={!canEdit || grade3ClassIds.length === 0}
+                          className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          전체 해제
+                        </button>
+                      </div>
+                    </div>
+
+                    <div
+                      className={`mt-4 grid gap-2 sm:grid-cols-3 ${
+                        settings.active ? "" : "pointer-events-none opacity-55"
+                      }`}
+                    >
+                      {grade3ClassIds.length > 0 ? (
+                        grade3ClassIds.map((classId) => {
+                          const checked =
+                            normalizedSelectedClassIds.includes(classId);
+                          return (
+                            <label
+                              key={classId}
+                              className={`flex cursor-pointer items-center gap-3 rounded-2xl border px-3 py-3 text-sm font-semibold transition ${
+                                checked
+                                  ? "border-blue-200 bg-blue-50 text-blue-800"
+                                  : "border-gray-200 bg-white text-gray-700 hover:border-blue-200 hover:bg-blue-50/60"
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => handleToggleClass(classId)}
+                                className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                              />
+                              <span>{classId}</span>
+                            </label>
+                          );
+                        })
+                      ) : (
+                        <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-4 text-sm text-gray-500 sm:col-span-3">
+                          학교 반 목록을 아직 불러오지 못했습니다.
+                        </div>
+                      )}
+                    </div>
+
+                    {settings.active && normalizedSelectedClassIds.length === 0 && (
+                      <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                        학생 공개는 켜져 있지만 선택된 3학년 학급이 없습니다.
+                      </div>
+                    )}
+                  </div>
+                </section>
+
+                <section className={sectionCardClassName}>
+                  <div className="mb-4">
+                    <h4 className="text-base font-extrabold text-gray-900">
+                      출제/응시 설정
+                    </h4>
+                    <p className="mt-1 text-sm text-gray-500">
+                      학생이 실제로 푸는 문항 수와 제한 시간을 조정합니다.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <label className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4">
+                      <span className="text-xs font-bold text-gray-500">
+                        한 번에 출제할 문항 수
+                      </span>
+                      <input
+                        type="number"
+                        min={1}
+                        value={settings.questionCount}
+                        onChange={(event) =>
+                          setSettings((prev) => ({
+                            ...prev,
+                            questionCount: Math.max(
+                              1,
+                              parseInt(event.target.value, 10) || 1,
+                            ),
+                          }))
+                        }
+                        className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-3 py-3 text-center text-lg font-extrabold text-blue-700"
+                      />
+                    </label>
+
+                    <label className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4">
+                      <span className="text-xs font-bold text-gray-500">
+                        제한 시간 (분)
+                      </span>
+                      <input
+                        type="number"
+                        min={1}
+                        value={settings.timeLimitMinutes}
+                        onChange={(event) =>
+                          setSettings((prev) => ({
+                            ...prev,
+                            timeLimitMinutes: Math.max(
+                              1,
+                              parseInt(event.target.value, 10) || 1,
+                            ),
+                          }))
+                        }
+                        className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-3 py-3 text-center text-lg font-extrabold text-gray-800"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4">
+                    <div className="text-xs font-bold text-gray-500">
+                      문항 출제 순서
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSettings((prev) => ({
+                            ...prev,
+                            randomOrder: true,
+                          }))
+                        }
+                        className={`rounded-xl border px-4 py-3 text-sm font-bold transition ${
+                          settings.randomOrder
+                            ? "border-blue-200 bg-blue-50 text-blue-700"
+                            : "border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:text-blue-700"
+                        }`}
+                      >
+                        랜덤 순서
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSettings((prev) => ({
+                            ...prev,
+                            randomOrder: false,
+                          }))
+                        }
+                        className={`rounded-xl border px-4 py-3 text-sm font-bold transition ${
+                          !settings.randomOrder
+                            ? "border-blue-200 bg-blue-50 text-blue-700"
+                            : "border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:text-blue-700"
+                        }`}
+                      >
+                        등록 순서
+                      </button>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
+                <section className={sectionCardClassName}>
+                  <div className="mb-4">
+                    <h4 className="text-base font-extrabold text-gray-900">
+                      힌트/재응시 설정
+                    </h4>
+                    <p className="mt-1 text-sm text-gray-500">
+                      힌트 횟수와 재응시 제한 규칙을 조정합니다.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <label className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4">
+                      <span className="text-xs font-bold text-gray-500">
+                        힌트 사용 가능 횟수
+                      </span>
+                      <input
+                        type="number"
+                        min={0}
+                        value={settings.hintLimit}
+                        onChange={(event) =>
+                          setSettings((prev) => ({
+                            ...prev,
+                            hintLimit: Math.max(
+                              0,
+                              parseInt(event.target.value, 10) || 0,
+                            ),
+                          }))
+                        }
+                        className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-3 py-3 text-center text-lg font-extrabold text-gray-800"
+                      />
+                    </label>
+
+                    <label className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4">
+                      <span className="text-xs font-bold text-gray-500">
+                        재응시 대기 시간 (분)
+                      </span>
+                      <input
+                        type="number"
+                        min={0}
+                        value={settings.cooldown}
+                        disabled={!settings.allowRetake}
+                        onChange={(event) =>
+                          setSettings((prev) => ({
+                            ...prev,
+                            cooldown: Math.max(
+                              0,
+                              parseInt(event.target.value, 10) || 0,
+                            ),
+                          }))
+                        }
+                        className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-3 py-3 text-center text-lg font-extrabold text-gray-800 disabled:cursor-not-allowed disabled:bg-gray-100"
+                      />
+                    </label>
+                  </div>
+
+                  <label className="mt-4 flex items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-white px-4 py-4">
+                    <div>
+                      <div className="text-sm font-bold text-gray-800">
+                        재응시 허용
+                      </div>
+                      <div className="mt-1 text-xs text-gray-500">
+                        허용을 끄면 이미 응시한 학생은 다시 시작할 수 없습니다.
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.allowRetake}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          allowRetake: event.target.checked,
+                          cooldown: event.target.checked ? prev.cooldown : 0,
+                        }))
+                      }
+                      className="h-5 w-5 rounded border-gray-300 text-blue-600"
+                    />
+                  </label>
+                </section>
+
+                <section className={sectionCardClassName}>
+                  <div className="mb-4">
+                    <h4 className="text-base font-extrabold text-gray-900">
+                      학급별 응시 초기화
+                    </h4>
+                    <p className="mt-1 text-sm text-gray-500">
+                      선택한 3학년 반만 응시 기록과 해당 평가 포인트를
+                      초기화합니다.
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                    특정 반의 응시 기록, 제출 상태, 재응시 제한과 해당 평가로
+                    적립된 위스를 함께 정리합니다. 다른 반은 유지됩니다.
+                  </div>
+
+                  <div className="mt-4 space-y-3">
+                    {grade3ClassIds.length > 0 ? (
+                      grade3ClassIds.map((classId) => (
+                        <div
+                          key={`reset-${classId}`}
+                          className="rounded-2xl border border-gray-200 bg-white px-4 py-4"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <div className="text-sm font-bold text-gray-800">
+                                {classId}
+                              </div>
+                              <div className="mt-1 text-xs text-gray-500">
+                                {nodeTitle || "선택한 단원"} · {categoryLabel}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setConfirmResetClassId((prev) =>
+                                  prev === classId ? "" : classId,
+                                )
+                              }
+                              disabled={
+                                !canEdit ||
+                                Boolean(resettingClassId) ||
+                                Boolean(saving)
+                              }
+                              className="rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm font-bold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              응시 초기화
+                            </button>
+                          </div>
+
+                          {confirmResetClassId === classId && (
+                            <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4">
+                              <div className="text-sm font-bold text-rose-800">
+                                {classId} 학생의 {categoryLabel} 응시 기록을
+                                초기화합니다.
+                              </div>
+                              <p className="mt-2 text-xs leading-5 text-rose-700">
+                                삭제 대상: 응시 기록, 제출 상태, 재응시 제한,
+                                해당 평가 포인트 거래
+                              </p>
+                              <div className="mt-4 flex flex-wrap justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmResetClassId("")}
+                                  disabled={resettingClassId === classId}
+                                  className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  취소
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleResetAttempts(classId)}
+                                  disabled={resettingClassId === classId}
+                                  className="rounded-xl bg-rose-600 px-3 py-2 text-sm font-bold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-rose-300"
+                                >
+                                  {resettingClassId === classId
+                                    ? "초기화 중..."
+                                    : `${classId} 초기화 실행`}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-sm text-gray-500">
+                        초기화할 3학년 학급 목록을 아직 불러오지 못했습니다.
+                      </div>
+                    )}
+                  </div>
+                </section>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="border-t border-gray-200 bg-white px-6 py-4 sm:px-7">
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl px-4 py-3 text-sm font-bold text-gray-600 transition hover:bg-gray-100"
+            >
+              닫기
+            </button>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => void handleSave()}
+                disabled={loading || saving || Boolean(resettingClassId)}
+                className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+              >
+                {saving ? "저장 중..." : "설정 저장하기"}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default QuizSettingsModal;
-

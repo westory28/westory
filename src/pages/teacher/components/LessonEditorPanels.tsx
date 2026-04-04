@@ -1112,7 +1112,7 @@ export function LessonPdfSection({
     activeLibraryTab === "blanks" ? sortedBlanks.length : footnotes.length;
   const canRetryPdfExtraction =
     Boolean(onRetryPdfExtraction) &&
-    Boolean(lessonPdfUrl) &&
+    Boolean(lessonPdfUrl || pdfProcessing.file.storagePath) &&
     pdfStatusTone !== "emerald";
   const floatingButtonClass = (
     active: boolean,

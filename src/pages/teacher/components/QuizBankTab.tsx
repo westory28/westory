@@ -44,6 +44,8 @@ interface BankFilterState {
     small: string;
 }
 const ORDER_DELIMITER = '||';
+const DEFAULT_OPTION_COUNT = 4;
+const createDefaultOptionItems = () => Array.from({ length: DEFAULT_OPTION_COUNT }, () => '');
 
 const QUESTION_TYPE_LABEL: Record<string, string> = {
     choice: '객관식',
@@ -81,11 +83,11 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     const [editQuestionText, setEditQuestionText] = useState('');
     const [editExplanationText, setEditExplanationText] = useState('');
     const [editImage, setEditImage] = useState<string | null>(null);
-    const [editChoiceOptions, setEditChoiceOptions] = useState<string[]>(['', '']);
+    const [editChoiceOptions, setEditChoiceOptions] = useState<string[]>(createDefaultOptionItems());
     const [editChoiceAnswerIndex, setEditChoiceAnswerIndex] = useState<number | null>(null);
     const [editOxAnswer, setEditOxAnswer] = useState<'O' | 'X' | ''>('');
     const [editWordAnswer, setEditWordAnswer] = useState('');
-    const [editOrderItems, setEditOrderItems] = useState<string[]>(['', '']);
+    const [editOrderItems, setEditOrderItems] = useState<string[]>(createDefaultOptionItems());
     const [editHintEnabled, setEditHintEnabled] = useState(false);
     const [editHintText, setEditHintText] = useState('');
     const [previewOpen, setPreviewOpen] = useState(false);
@@ -448,6 +450,21 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         }
     };
 
+    const handleEditTypeChange = (nextType: QuestionType) => {
+        setEditType(nextType);
+        setPreviewOpen(false);
+        setPreviewChoiceAnswer('');
+        setPreviewOxAnswer('');
+        setPreviewWordAnswer('');
+        setPreviewOrderAnswer([]);
+        if (nextType === 'choice' && trimList(editChoiceOptions).length === 0) {
+            setEditChoiceOptions(createDefaultOptionItems());
+        }
+        if (nextType === 'order' && trimList(editOrderItems).length === 0) {
+            setEditOrderItems(createDefaultOptionItems());
+        }
+    };
+
     const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -495,31 +512,31 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
 
         if (normalizedType === 'choice') {
             const options = (question.options || []).filter(Boolean);
-            const normalizedOptions = options.length >= 2 ? options : ['', ''];
+            const normalizedOptions = options.length >= 2 ? options : createDefaultOptionItems();
             setEditChoiceOptions(normalizedOptions);
             const answerIndex = normalizedOptions.findIndex((opt) => opt.trim() === String(question.answer).trim());
             setEditChoiceAnswerIndex(answerIndex >= 0 ? answerIndex : null);
             setEditOxAnswer('');
             setEditWordAnswer('');
-            setEditOrderItems(['', '']);
+            setEditOrderItems(createDefaultOptionItems());
             return;
         }
 
         if (normalizedType === 'ox') {
-            setEditChoiceOptions(['', '']);
+            setEditChoiceOptions(createDefaultOptionItems());
             setEditChoiceAnswerIndex(null);
             setEditOxAnswer(question.answer === 'O' || question.answer === 'X' ? question.answer : '');
             setEditWordAnswer('');
-            setEditOrderItems(['', '']);
+            setEditOrderItems(createDefaultOptionItems());
             return;
         }
 
         if (normalizedType === 'word') {
-            setEditChoiceOptions(['', '']);
+            setEditChoiceOptions(createDefaultOptionItems());
             setEditChoiceAnswerIndex(null);
             setEditOxAnswer('');
             setEditWordAnswer(String(question.answer || ''));
-            setEditOrderItems(['', '']);
+            setEditOrderItems(createDefaultOptionItems());
             return;
         }
 
@@ -528,11 +545,11 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
             : String(question.answer || '')
                 .split(ORDER_DELIMITER)
                 .filter(Boolean);
-        setEditChoiceOptions(['', '']);
+        setEditChoiceOptions(createDefaultOptionItems());
         setEditChoiceAnswerIndex(null);
         setEditOxAnswer('');
         setEditWordAnswer('');
-        setEditOrderItems(orderOptions.length >= 2 ? orderOptions : ['', '']);
+        setEditOrderItems(orderOptions.length >= 2 ? orderOptions : createDefaultOptionItems());
     };
 
     const buildCurrentEditSnapshot = () => {
@@ -637,11 +654,11 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         setEditQuestionText('');
         setEditExplanationText('');
         setEditImage(null);
-        setEditChoiceOptions(['', '']);
+        setEditChoiceOptions(createDefaultOptionItems());
         setEditChoiceAnswerIndex(null);
         setEditOxAnswer('');
         setEditWordAnswer('');
-        setEditOrderItems(['', '']);
+        setEditOrderItems(createDefaultOptionItems());
         setEditHintEnabled(false);
         setEditHintText('');
         setPreviewOpen(false);
@@ -892,7 +909,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
 
                             <div className="space-y-4">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    <select value={editType} onChange={(e) => setEditType(e.target.value as QuestionType)} className="border p-2 rounded text-sm bg-gray-50">
+                                    <select value={editType} onChange={(e) => handleEditTypeChange(e.target.value as QuestionType)} className="border p-2 rounded text-sm bg-gray-50">
                                         <option value="choice">객관식</option>
                                         <option value="ox">O/X</option>
                                         <option value="word">단답형</option>

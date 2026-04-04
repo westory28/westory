@@ -15,6 +15,7 @@ import {
 } from "firebase/firestore";
 import {
   deleteObject,
+  getBlob,
   getDownloadURL,
   listAll,
   ref,
@@ -1212,6 +1213,47 @@ const ManageLesson: React.FC = () => {
     [config, findLessonDocRefByUnitId],
   );
 
+  const loadStoredLessonPdfBlob = useCallback(async () => {
+    const normalizedProcessing = normalizeLessonPdfProcessingMeta(
+      lessonPdfProcessing,
+      {
+        pdfName: lessonPdfName,
+        pdfStoragePath: lessonPdfStoragePath,
+      },
+    );
+    const candidatePaths = [
+      normalizedProcessing.file.storagePath,
+      lessonPdfStoragePath,
+    ].filter(Boolean);
+
+    for (const storagePath of candidatePaths) {
+      try {
+        return await getBlob(ref(storage, storagePath));
+      } catch (error) {
+        console.error("Failed to load lesson PDF from storage path:", error, {
+          selectedNodeId,
+          storagePath,
+        });
+      }
+    }
+
+    if (lessonPdfUrl) {
+      const response = await fetch(lessonPdfUrl);
+      if (!response.ok) {
+        throw new Error(`lesson-pdf-fetch-failed:${response.status}`);
+      }
+      return response.blob();
+    }
+
+    throw new Error("lesson-pdf-source-missing");
+  }, [
+    lessonPdfName,
+    lessonPdfProcessing,
+    lessonPdfStoragePath,
+    lessonPdfUrl,
+    selectedNodeId,
+  ]);
+
   const refreshLessonPdfProcessing = useCallback(
     async (unitId: string) => {
       const lessonDocRef = await findLessonDocRefByUnitId(unitId);
@@ -1222,11 +1264,23 @@ const ManageLesson: React.FC = () => {
 
       const lessonData = lessonSnap.data() || {};
       const nextPdfName = String(lessonData.pdfName || lessonPdfName || "").trim();
+      const normalizedNextProcessing = normalizeLessonPdfProcessingMeta(
+        lessonData.pdfProcessing,
+        {
+          pdfName: nextPdfName,
+          pdfStoragePath: String(
+            lessonData.pdfStoragePath || lessonPdfStoragePath || "",
+          ).trim(),
+        },
+      );
       const nextPdfStoragePath = String(
-        lessonData.pdfStoragePath || lessonPdfStoragePath || "",
+        normalizedNextProcessing.file.storagePath ||
+          lessonData.pdfStoragePath ||
+          lessonPdfStoragePath ||
+          "",
       ).trim();
       const nextProcessing = normalizeLessonPdfProcessingMeta(
-        lessonData.pdfProcessing,
+        normalizedNextProcessing,
         {
           pdfName: nextPdfName,
           pdfStoragePath: nextPdfStoragePath,
@@ -1283,7 +1337,17 @@ const ManageLesson: React.FC = () => {
   );
 
   const retryLessonPdfExtraction = useCallback(async () => {
-    if (!selectedNodeId || !lessonPdfUrl || !lessonPdfStoragePath) {
+    const normalizedProcessing = normalizeLessonPdfProcessingMeta(
+      lessonPdfProcessing,
+      {
+        pdfName: lessonPdfName,
+        pdfStoragePath: lessonPdfStoragePath,
+      },
+    );
+    const retryPdfStoragePath =
+      normalizedProcessing.file.storagePath || lessonPdfStoragePath;
+
+    if (!selectedNodeId || !retryPdfStoragePath) {
       alert("저장된 원본 PDF가 없어 구조 추출을 다시 요청할 수 없습니다.");
       return;
     }
@@ -1304,18 +1368,13 @@ const ManageLesson: React.FC = () => {
         throw new Error("lesson-doc-not-found");
       }
 
-      const response = await fetch(lessonPdfUrl);
-      if (!response.ok) {
-        throw new Error(`lesson-pdf-fetch-failed:${response.status}`);
-      }
-
-      const originalPdfBlob = await response.blob();
+      const originalPdfBlob = await loadStoredLessonPdfBlob();
       const uploadToken = crypto.randomUUID();
       const basePath = `${getSemesterCollectionPath(config, "lesson_pdfs")}/${selectedNodeId}`;
       const pendingUploadPath = `${basePath}/incoming/${uploadToken}.pdf`;
       const queuedProcessing = buildQueuedLessonPdfProcessingMeta({
         pdfName: lessonPdfName || lessonPdfProcessing.file.originalName || "lesson.pdf",
-        pdfStoragePath: lessonPdfStoragePath,
+        pdfStoragePath: retryPdfStoragePath,
         byteSize:
           originalPdfBlob.size || Number(lessonPdfProcessing.file.byteSize) || 0,
         pageCount: worksheetPageImages.length || lessonPdfProcessing.pageCount || 0,
@@ -1420,6 +1479,7 @@ const ManageLesson: React.FC = () => {
     lessonPdfProcessing,
     lessonPdfStoragePath,
     lessonPdfUrl,
+    loadStoredLessonPdfBlob,
     preparedPdf,
     selectedNodeId,
     selectedPdfFile,
@@ -1491,9 +1551,20 @@ const ManageLesson: React.FC = () => {
   }, [hasUnsavedPdfChanges, pdfSaveFeedback]);
 
   useEffect(() => {
+    const normalizedProcessing = normalizeLessonPdfProcessingMeta(
+      lessonPdfProcessing,
+      {
+        pdfName: lessonPdfName,
+        pdfStoragePath: lessonPdfStoragePath,
+      },
+    );
+    const hasStoredPdfSource = Boolean(
+      normalizedProcessing.file.storagePath || lessonPdfStoragePath || lessonPdfUrl,
+    );
+
     if (
       !selectedNodeId ||
-      !lessonPdfUrl ||
+      !hasStoredPdfSource ||
       selectedPdfFile ||
       preparedPdf ||
       hasUnsavedPdfChanges ||
@@ -1516,7 +1587,9 @@ const ManageLesson: React.FC = () => {
     return () => window.clearInterval(intervalId);
   }, [
     hasUnsavedPdfChanges,
-    lessonPdfProcessing.extractionStatus,
+    lessonPdfName,
+    lessonPdfProcessing,
+    lessonPdfStoragePath,
     lessonPdfUrl,
     preparedPdf,
     refreshLessonPdfProcessing,

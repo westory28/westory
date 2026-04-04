@@ -531,6 +531,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                   "fc-segment-title",
                   isHoliday ? "is-holiday" : "",
                   isRangeEvent ? "is-range" : "",
+                  !isRangeEvent ? "is-single" : "",
                   arg.isStart ? "is-start" : "",
                   arg.isEnd ? "is-end" : "",
                   !arg.isStart && !arg.isEnd ? "is-middle" : "",

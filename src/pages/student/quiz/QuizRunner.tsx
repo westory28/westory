@@ -1,14 +1,21 @@
 ﻿import React, { useEffect, useState, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { db } from '../../../lib/firebase';
-import { collection, query, where, getDocs, doc, getDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useAppToast } from '../../../components/common/AppToastProvider';
 import { useAuth } from '../../../contexts/AuthContext';
 import { notifyPointsUpdated } from '../../../lib/appEvents';
 import Chart from 'chart.js/auto';
-import { getSemesterCollectionPath, getSemesterDocPath } from '../../../lib/semesterScope';
+import { getSemesterCollectionPath } from '../../../lib/semesterScope';
 import { claimPointActivityReward } from '../../../lib/points';
 import { emitSessionActivity } from '../../../lib/sessionActivity';
+import {
+    createDefaultAssessmentConfigEntry,
+    getAssessmentConfigKey,
+    getGrade3ClassIdsFromSchoolConfig,
+    isAssessmentVisibleToStudent,
+    readAssessmentConfigMap,
+} from '../../../lib/assessmentConfig';
 
 // Interfaces
 interface Question {
@@ -83,16 +90,27 @@ const QuizRunner: React.FC = () => {
 
     const initializeQuiz = async () => {
         try {
+            setErrorMsg(null);
+            setBlockReason(null);
             // 1. Fetch Config
-            const settingsDoc = await getDoc(doc(db, getSemesterDocPath(config, 'assessment_config', 'settings')));
-            const key = `${unitId}_${category}`;
-            const settingsData = settingsDoc.exists() ? settingsDoc.data() : {};
-            const quizConfig: QuizConfig = settingsData[key] || { active: true, timeLimit: 60, allowRetake: true, cooldown: 0, questionCount: 10, hintLimit: 2, randomOrder: true };
+            const grade3ClassIds = await getGrade3ClassIdsFromSchoolConfig();
+            const assessmentConfigMap = await readAssessmentConfigMap(config, grade3ClassIds);
+            const key = getAssessmentConfigKey(unitId || '', category || '');
+            const quizConfig: QuizConfig = assessmentConfigMap[key]
+                || createDefaultAssessmentConfigEntry(grade3ClassIds);
 
             setQuizConfig(quizConfig);
 
-            if (!quizConfig.active && unitId !== 'exam_prep') {
-                throw new Error('현재 비활성화된 평가입니다.');
+            if (!quizConfig.active) {
+                setBlockReason("현재 비활성화된 평가입니다.");
+                setView('intro');
+                return;
+            }
+
+            if (!isAssessmentVisibleToStudent(assessmentConfigMap[key], userData)) {
+                setBlockReason("현재 학급에는 공개되지 않은 평가입니다.");
+                setView('intro');
+                return;
             }
 
             // 2. Fetch Questions
@@ -301,6 +319,8 @@ const QuizRunner: React.FC = () => {
                     uid: userData.uid,
                     name: userData.name || 'Student',
                     email: userData.email || '',
+                    studentGrade: userData.grade || '',
+                    studentClass: userData.class || '',
                     class: userData.class || 0,
                     number: userData.number || 0,
                     gradeClass: `${userData.grade || ''}학년 ${userData.class || ''}반 ${userData.number || ''}번`,

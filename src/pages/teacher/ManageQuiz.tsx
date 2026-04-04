@@ -181,6 +181,7 @@ const ManageQuiz: React.FC = () => {
                     isOpen={canWrite && settingsModalOpen}
                     onClose={() => setSettingsModalOpen(false)}
                     nodeId={selectedNode?.id || ''}
+                    nodeTitle={selectedNode?.title || ''}
                     category={settingsCategory}
                     canEdit={canWrite}
                 />
