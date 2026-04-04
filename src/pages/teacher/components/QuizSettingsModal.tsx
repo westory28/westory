@@ -244,7 +244,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
             </div>
           ) : (
             <div className="space-y-4">
-              <section className={`${sectionCardClassName} space-y-2 p-3`}>
+              <section className={`${sectionCardClassName} space-y-1.5 p-2.5`}>
                 <div className="flex flex-wrap items-center justify-between gap-1">
                   <div>
                     <h4 className="text-base font-extrabold text-gray-900">
@@ -260,7 +260,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-1 rounded-xl border border-gray-200 bg-gray-50 px-2 py-1.5">
+                <div className="flex flex-wrap items-center gap-1 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1">
                   <div className="text-[10px] font-semibold text-gray-600">
                     공개를 꺼도 반 선택은 저장됩니다.
                   </div>
@@ -278,7 +278,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                       }))
                     }
                     disabled={!canEdit}
-                    className={`ml-auto inline-flex h-7 w-[3.3rem] shrink-0 items-center rounded-full border px-1 transition ${
+                    className={`ml-auto inline-flex h-6 w-10 shrink-0 items-center rounded-full border p-0.5 transition ${
                       settings.active
                         ? "border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
                         : "border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:text-blue-700"
@@ -291,7 +291,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                     >
                       <span
                         className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${
-                          settings.active ? "translate-x-7" : ""
+                          settings.active ? "translate-x-5" : ""
                         }`}
                       ></span>
                     </span>
@@ -309,7 +309,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                         }))
                       }
                       disabled={!canEdit || grade3ClassIds.length === 0}
-                      className="rounded-full border border-gray-200 bg-white px-2 py-1 text-[10px] font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       전체 공개
                     </button>
@@ -322,7 +322,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                         }))
                       }
                       disabled={!canEdit || grade3ClassIds.length === 0}
-                      className="rounded-full border border-gray-200 bg-white px-2 py-1 text-[10px] font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       전체 비공개
                     </button>
@@ -354,7 +354,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                       return (
                         <div
                           key={classId}
-                          className={`rounded-lg border px-2 py-1.5 transition ${
+                          className={`rounded-lg border px-2 py-1 transition ${
                             checked
                               ? settings.active
                                 ? "border-blue-200 bg-blue-50/80"
@@ -362,7 +362,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                               : "border-gray-200 bg-white"
                           }`}
                         >
-                          <div className="grid min-h-8 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-1">
+                          <div className="grid min-h-7 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-1">
                             <div className="min-w-0 truncate text-[12px] font-extrabold text-gray-900">
                               {classId}
                             </div>
@@ -374,14 +374,14 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                               title={checked ? `${classId} 공개 중` : `${classId} 비공개`}
                               onClick={() => handleToggleClass(classId)}
                               disabled={!toggleEnabled}
-                              className={`inline-flex h-7 w-[3.3rem] shrink-0 items-center rounded-full border px-1 transition ${toggleClassName} disabled:cursor-not-allowed disabled:opacity-70`}
+                              className={`inline-flex h-6 w-10 shrink-0 items-center rounded-full border p-0.5 transition ${toggleClassName} disabled:cursor-not-allowed disabled:opacity-70`}
                             >
                               <span
                                 className={`relative h-5 w-full rounded-full ${toggleRailClassName}`}
                               >
                                 <span
                                   className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${
-                                    checked ? "translate-x-7" : ""
+                                    checked ? "translate-x-5" : ""
                                   }`}
                                 ></span>
                               </span>
@@ -398,14 +398,14 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                                 Boolean(resettingClassId) ||
                                 Boolean(saving)
                               }
-                              className="inline-flex h-7 shrink-0 items-center rounded-full border border-rose-200 bg-white px-2 py-1 text-[10px] font-bold leading-none text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                              className="inline-flex h-6 shrink-0 items-center rounded-full border border-rose-200 bg-white px-2 py-0.5 text-[10px] font-bold leading-none text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
                             >
                               초기화
                             </button>
                           </div>
 
                           {confirmResetClassId === classId && (
-                            <div className="mt-1.5 rounded-lg border border-rose-200 bg-rose-50 px-2 py-2">
+                            <div className="mt-1 rounded-lg border border-rose-200 bg-rose-50 px-2 py-2">
                               <div className="text-[11px] font-bold text-rose-800">
                                 {classId} 응시 기록을 초기화합니다.
                               </div>
