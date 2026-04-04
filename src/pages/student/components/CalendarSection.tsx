@@ -28,9 +28,13 @@ const LABELS = {
   today: "\uc624\ub298",
 } as const;
 
+const toDateKey = (value?: string) => String(value || "").split("T")[0].trim();
+
 const toExclusiveEnd = (start?: string, end?: string) => {
-  if (!start || !end || end <= start) return undefined;
-  const endDate = new Date(`${end}T00:00:00`);
+  const startDateKey = toDateKey(start);
+  const endDateKey = toDateKey(end);
+  if (!startDateKey || !endDateKey || endDateKey <= startDateKey) return undefined;
+  const endDate = new Date(`${endDateKey}T00:00:00`);
   endDate.setDate(endDate.getDate() + 1);
   const offset = endDate.getTimezoneOffset() * 60000;
   return new Date(endDate.getTime() - offset).toISOString().split("T")[0];
@@ -193,10 +197,9 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
   const fcEvents = events.map((event) => {
     const meta = getScheduleCategoryMeta(event.eventType, categories);
     const isHoliday = event.eventType === "holiday";
-    const isMultiDayRange =
-      Boolean(event.start) &&
-      Boolean(event.end) &&
-      String(event.end) > String(event.start);
+    const startDateKey = toDateKey(event.start);
+    const endDateKey = toDateKey(event.end);
+    const isMultiDayRange = Boolean(startDateKey && endDateKey && endDateKey > startDateKey);
 
     return {
       id: event.id,

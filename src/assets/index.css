@@ -99,11 +99,11 @@
 
 .student-calendar-shell__month-badge {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: 2.05rem minmax(0, 1fr) 2.05rem;
   align-items: center;
   justify-content: center;
   gap: 0.55rem;
-  width: min(100%, 24rem);
+  width: fit-content;
   max-width: 100%;
   margin-inline: auto;
   padding: 0.34rem 0.5rem;
@@ -142,8 +142,8 @@
   align-items: center;
   justify-content: center;
   min-width: 0;
+  width: auto;
   text-align: center;
-  flex: 1 1 10rem;
 }
 
 .student-calendar-shell__month-title {
@@ -154,6 +154,7 @@
   line-height: 1.08;
   letter-spacing: -0.025em;
   text-align: center;
+  white-space: nowrap;
 }
 
 .student-calendar-shell__nav-button,
@@ -817,6 +818,7 @@
 .student-calendar-section .student-calendar-event-label__text {
   display: block;
   box-sizing: border-box;
+  flex: 1 1 auto;
   min-width: 0;
   width: 100%;
   max-width: 100%;
