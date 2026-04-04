@@ -81,6 +81,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
       ),
     [settings.visibleClassIds],
   );
+  const hasVisibleClassSelection = normalizedSelectedClassIds.length > 0;
 
   useEffect(() => {
     if (!isOpen || !nodeId) return;
@@ -241,168 +242,268 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
             </div>
           ) : (
             <div className="space-y-5">
-              <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-                <section className={sectionCardClassName}>
-                  <div className="mb-4">
-                    <h4 className="text-base font-extrabold text-gray-900">
+              <section className={`${sectionCardClassName} space-y-5`}>
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                  <div>
+                    <h4 className="text-lg font-extrabold text-gray-900">
                       학급별 공개 / 초기화
                     </h4>
                     <p className="mt-1 text-sm text-gray-500">
-                      학생 공개 상태와 3학년 학급별 공개 / 초기화를 함께
-                      조정합니다.
+                      3학년 각 반의 공개 상태와 응시 초기화를 상단에서 한눈에
+                      확인하고 바로 조정합니다.
                     </p>
                   </div>
+                  <div className="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">
+                    공개 학급 {normalizedSelectedClassIds.length}/
+                    {grade3ClassIds.length || 0}
+                  </div>
+                </div>
 
+                <div className="grid gap-4 xl:grid-cols-[0.92fr_1.08fr]">
                   <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4">
-                    <label className="flex items-center justify-between gap-4">
+                    <div className="flex flex-wrap items-center justify-between gap-4">
                       <div>
                         <div className="text-sm font-bold text-gray-800">
                           학생에게 공개
                         </div>
                         <div className="mt-1 text-xs text-gray-500">
-                          공개를 끄면 어떤 학급에도 보이지 않습니다.
+                          공개를 끄면 저장된 학급 선택은 유지되지만 학생
+                          화면에서는 모두 숨겨집니다.
                         </div>
                       </div>
-                      <span className="relative inline-flex cursor-pointer items-center">
-                        <input
-                          type="checkbox"
-                          checked={settings.active}
-                          onChange={(event) =>
-                            setSettings((prev) => ({
-                              ...prev,
-                              active: event.target.checked,
-                            }))
-                          }
-                          className="peer sr-only"
-                        />
-                        <span className="h-6 w-11 rounded-full bg-gray-300 transition peer-checked:bg-blue-600"></span>
-                        <span className="pointer-events-none absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition peer-checked:translate-x-5"></span>
-                      </span>
-                    </label>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={settings.active}
+                        onClick={() =>
+                          canEdit &&
+                          setSettings((prev) => ({
+                            ...prev,
+                            active: !prev.active,
+                          }))
+                        }
+                        disabled={!canEdit}
+                        className={`inline-flex min-w-[126px] items-center justify-between gap-3 rounded-full border px-3 py-2 text-sm font-bold transition ${
+                          settings.active
+                            ? "border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
+                            : "border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:text-blue-700"
+                        } disabled:cursor-not-allowed disabled:opacity-60`}
+                      >
+                        <span>{settings.active ? "공개 중" : "비공개"}</span>
+                        <span
+                          className={`relative h-5 w-9 rounded-full ${
+                            settings.active ? "bg-white/35" : "bg-gray-200"
+                          }`}
+                        >
+                          <span
+                            className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${
+                              settings.active ? "translate-x-4" : ""
+                            }`}
+                          ></span>
+                        </span>
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="mt-4">
-                    <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-bold text-gray-800">
-                          공개 학급 설정
-                        </div>
-                        <div className="mt-1 text-xs text-gray-500">
-                          3학년 실제 학급의 공개 상태와 초기화를 함께
-                          정리합니다.
-                        </div>
-                      </div>
-                      <div className="text-xs font-semibold text-gray-500">
-                        두 줄 안에 학급별 상태를 확인하세요.
-                      </div>
+                  <div className="rounded-2xl border border-rose-200 bg-rose-50/80 px-4 py-4">
+                    <div className="text-sm font-bold text-rose-800">
+                      학급별 초기화 안내
                     </div>
+                    <p className="mt-1 text-xs leading-5 text-rose-700">
+                      특정 반의 응시 기록, 제출 상태, 재응시 제한과 해당 평가
+                      포인트만 정리합니다. 다른 반의 공개 상태와 기록은
+                      그대로 유지됩니다.
+                    </p>
+                  </div>
+                </div>
 
-                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                      {grade3ClassIds.length > 0 ? (
-                        grade3ClassIds.map((classId) => {
-                          const checked =
-                            normalizedSelectedClassIds.includes(classId);
-                          return (
-                            <div
-                              key={classId}
-                              className={`rounded-2xl border px-4 py-4 transition ${
-                                checked
-                                  ? "border-blue-200 bg-blue-50/70"
-                                  : "border-gray-200 bg-gray-50"
-                              }`}
-                            >
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                  <div className="text-sm font-extrabold text-gray-900">
-                                    {classId}
-                                  </div>
-                                  <div className="mt-1 text-xs text-gray-500">
-                                    {checked ? "학생에게 공개 중" : "비공개"}
-                                  </div>
-                                </div>
-                                <div className="flex shrink-0 items-center gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleToggleClass(classId)}
-                                    disabled={!canEdit}
-                                    aria-pressed={checked}
-                                    className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-bold transition ${
-                                      checked
-                                        ? "bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-300"
-                                        : "border border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:text-blue-700 disabled:bg-gray-100"
-                                    } disabled:cursor-not-allowed`}
-                                  >
-                                    {checked ? "공개 중" : "비공개"}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setConfirmResetClassId((prev) =>
-                                        prev === classId ? "" : classId,
-                                      )
-                                    }
-                                    disabled={
-                                      !canEdit ||
-                                      Boolean(resettingClassId) ||
-                                      Boolean(saving)
-                                    }
-                                    className="rounded-full border border-rose-200 bg-white px-3 py-1.5 text-xs font-bold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
-                                  >
-                                    초기화
-                                  </button>
-                                </div>
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3">
+                  <div>
+                    <div className="text-sm font-bold text-gray-800">
+                      공개 학급 빠른 선택
+                    </div>
+                    <div className="mt-1 text-xs text-gray-500">
+                      데스크톱에서는 두 줄 내외로 반별 상태를 바로 훑을 수 있게
+                      배치합니다.
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          visibleClassIds: [...grade3ClassIds],
+                        }))
+                      }
+                      disabled={!canEdit || grade3ClassIds.length === 0}
+                      className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      전체 공개
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          visibleClassIds: [],
+                        }))
+                      }
+                      disabled={!canEdit || grade3ClassIds.length === 0}
+                      className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      전체 비공개
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {grade3ClassIds.length > 0 ? (
+                    grade3ClassIds.map((classId) => {
+                      const checked =
+                        normalizedSelectedClassIds.includes(classId);
+                      const toggleEnabled = canEdit && settings.active;
+
+                      return (
+                        <div
+                          key={classId}
+                          className={`rounded-2xl border px-4 py-4 transition ${
+                            checked && settings.active
+                              ? "border-blue-200 bg-blue-50/80"
+                              : "border-gray-200 bg-white"
+                          }`}
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="text-base font-extrabold text-gray-900">
+                                {classId}
                               </div>
-
-                              {confirmResetClassId === classId && (
-                                <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4">
-                                  <div className="text-sm font-bold text-rose-800">
-                                    {classId} 학생의 {categoryLabel} 응시 기록을
-                                    초기화합니다.
-                                  </div>
-                                  <p className="mt-2 text-xs leading-5 text-rose-700">
-                                    삭제 대상: 응시 기록, 제출 상태, 재응시
-                                    제한, 해당 평가 포인트 거래
-                                  </p>
-                                  <div className="mt-4 flex flex-wrap justify-end gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={() => setConfirmResetClassId("")}
-                                      disabled={resettingClassId === classId}
-                                      className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-                                    >
-                                      취소
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => void handleResetAttempts(classId)}
-                                      disabled={resettingClassId === classId}
-                                      className="rounded-xl bg-rose-600 px-3 py-2 text-sm font-bold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-rose-300"
-                                    >
-                                      {resettingClassId === classId
-                                        ? "초기화 중..."
-                                        : `${classId} 초기화 실행`}
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
+                              <div
+                                className={`mt-1 text-xs font-semibold ${
+                                  settings.active
+                                    ? checked
+                                      ? "text-blue-700"
+                                      : "text-gray-500"
+                                    : checked
+                                      ? "text-amber-700"
+                                      : "text-gray-500"
+                                }`}
+                              >
+                                {settings.active
+                                  ? checked
+                                    ? "현재 공개"
+                                    : "현재 비공개"
+                                  : checked
+                                    ? "공개 대상 저장됨"
+                                    : "공개 대상 아님"}
+                              </div>
                             </div>
-                          );
-                        })
-                      ) : (
-                        <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-sm text-gray-500 sm:col-span-2 xl:col-span-3">
-                          학교 반 목록을 아직 불러오지 못했습니다.
+
+                            <div className="flex flex-wrap items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                role="switch"
+                                aria-checked={checked}
+                                onClick={() => handleToggleClass(classId)}
+                                disabled={!toggleEnabled}
+                                className={`inline-flex min-w-[108px] items-center justify-between gap-2 rounded-full border px-3 py-2 text-xs font-bold transition ${
+                                  checked
+                                    ? "border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
+                                    : "border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:text-blue-700"
+                                } disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-400`}
+                              >
+                                <span>{checked ? "공개" : "비공개"}</span>
+                                <span
+                                  className={`relative h-5 w-9 rounded-full ${
+                                    checked ? "bg-white/35" : "bg-gray-200"
+                                  }`}
+                                >
+                                  <span
+                                    className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${
+                                      checked ? "translate-x-4" : ""
+                                    }`}
+                                  ></span>
+                                </span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setConfirmResetClassId((prev) =>
+                                    prev === classId ? "" : classId,
+                                  )
+                                }
+                                disabled={
+                                  !canEdit ||
+                                  Boolean(resettingClassId) ||
+                                  Boolean(saving)
+                                }
+                                className="rounded-full border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                초기화
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="mt-3 text-xs text-gray-500">
+                            {nodeTitle || "선택한 단원"} · {categoryLabel}
+                          </div>
+
+                          {confirmResetClassId === classId && (
+                            <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4">
+                              <div className="text-sm font-bold text-rose-800">
+                                {classId} 학생의 {categoryLabel} 응시 기록을
+                                초기화합니다.
+                              </div>
+                              <p className="mt-2 text-xs leading-5 text-rose-700">
+                                삭제 대상: 응시 기록, 제출 상태, 재응시 제한,
+                                해당 평가 포인트 거래
+                              </p>
+                              <div className="mt-4 flex flex-wrap justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmResetClassId("")}
+                                  disabled={resettingClassId === classId}
+                                  className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  취소
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleResetAttempts(classId)}
+                                  disabled={resettingClassId === classId}
+                                  className="rounded-xl bg-rose-600 px-3 py-2 text-sm font-bold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-rose-300"
+                                >
+                                  {resettingClassId === classId
+                                    ? "초기화 중..."
+                                    : `${classId} 초기화 실행`}
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      )}
+                      );
+                    })
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-sm text-gray-500 md:col-span-2 xl:col-span-3">
+                      학교 반 목록을 아직 불러오지 못했습니다.
                     </div>
+                  )}
+                </div>
 
-                    {settings.active && normalizedSelectedClassIds.length === 0 && (
-                      <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                        학생 공개는 켜져 있지만 선택된 3학년 학급이 없습니다.
-                      </div>
-                    )}
+                {settings.active && !hasVisibleClassSelection && (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    학생 공개는 켜져 있지만 선택된 3학년 학급이 없습니다.
                   </div>
-                </section>
+                )}
 
+                {!settings.active && grade3ClassIds.length > 0 && (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                    전체 공개를 켜면 현재 저장된 학급 토글 상태가 그대로 반영됩니다.
+                  </div>
+                )}
+              </section>
+
+              <div className="grid gap-5 xl:grid-cols-2">
                 <section className={sectionCardClassName}>
                   <div className="mb-4">
                     <h4 className="text-base font-extrabold text-gray-900">
@@ -497,9 +598,6 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                     </div>
                   </div>
                 </section>
-              </div>
-
-              <div className="space-y-5">
                 <section className={sectionCardClassName}>
                   <div className="mb-4">
                     <h4 className="text-base font-extrabold text-gray-900">
@@ -578,7 +676,6 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                     />
                   </label>
                 </section>
-
               </div>
             </div>
           )}

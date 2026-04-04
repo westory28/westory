@@ -155,7 +155,6 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
   const [currentViewType, setCurrentViewType] =
     useState<CalendarViewType>("dayGridMonth");
   const [currentTitle, setCurrentTitle] = useState("");
-  const [monthWeekRows, setMonthWeekRows] = useState(6);
   const [visibleRange, setVisibleRange] = useState<{
     start: string;
     end: string;
@@ -209,7 +208,9 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
       textColor: isHoliday ? "#ffffff" : undefined,
       classNames: [
         ...(isHoliday ? ["holiday-text-event"] : []),
-        ...(isMultiDayRange ? ["student-calendar-range-event"] : []),
+        ...(isMultiDayRange
+          ? ["student-calendar-range-event"]
+          : ["student-calendar-single-event"]),
       ],
       extendedProps: { ...event },
     };
@@ -456,11 +457,6 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
           currentViewType === "listMonth" ? "custom-list-active" : ""
         }`}
         data-calendar-view={currentViewType}
-        style={
-          {
-            "--student-calendar-week-rows": monthWeekRows,
-          } as React.CSSProperties
-        }
       >
         <FullCalendar
           ref={calendarRef}
@@ -474,16 +470,6 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
           datesSet={(arg) => {
             setCurrentViewType(arg.view.type as CalendarViewType);
             setCurrentTitle(arg.view.title);
-            if (arg.view.type === "dayGridMonth") {
-              const weekCount = Math.max(
-                1,
-                Math.round(
-                  (arg.end.getTime() - arg.start.getTime()) /
-                    (7 * 24 * 60 * 60 * 1000),
-                ),
-              );
-              setMonthWeekRows(weekCount);
-            }
             setVisibleRange({
               start: toLocalYmd(arg.start),
               end: toLocalYmd(arg.end),
@@ -493,6 +479,23 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
           eventClick={(arg) =>
             onEventClick(arg.event.extendedProps as CalendarEvent)
           }
+          eventDidMount={(arg) => {
+            const isRangeEvent = arg.event.classNames.includes(
+              "student-calendar-range-event",
+            );
+            const harness = arg.el.closest(
+              ".fc-daygrid-event-harness, .fc-daygrid-event-harness-abs",
+            );
+            if (!harness) return;
+            harness.classList.toggle(
+              "student-calendar-event-harness--range",
+              isRangeEvent,
+            );
+            harness.classList.toggle(
+              "student-calendar-event-harness--single",
+              !isRangeEvent,
+            );
+          }}
           dayCellContent={(arg) =>
             renderDayCellHeader(arg.date, arg.dayNumberText)
           }
