@@ -44,6 +44,20 @@ const toExclusiveEnd = (start?: string, end?: string) => {
   return new Date(endDate.getTime() - offset).toISOString().split("T")[0];
 };
 
+const getInclusiveSpanDays = (start?: string, end?: string) => {
+  const startDateKey = toDateKey(start);
+  if (!startDateKey) return 1;
+  const endDateKey = toDateKey(end);
+  const resolvedEndDateKey =
+    endDateKey && endDateKey > startDateKey ? endDateKey : startDateKey;
+  const startDate = new Date(`${startDateKey}T00:00:00`);
+  const endDate = new Date(`${resolvedEndDateKey}T00:00:00`);
+  const diffDays = Math.round(
+    (endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000),
+  );
+  return diffDays + 1;
+};
+
 interface CalendarSectionProps {
   categories: ScheduleCategory[];
   events: CalendarEvent[];
@@ -201,11 +215,8 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
   const fcEvents = events.map((event) => {
     const meta = getScheduleCategoryMeta(event.eventType, categories);
     const isHoliday = event.eventType === "holiday";
-    const startDateKey = toDateKey(event.start);
-    const endDateKey = toDateKey(event.end);
-    const isMultiDayRange = Boolean(
-      startDateKey && endDateKey && endDateKey > startDateKey,
-    );
+    const inclusiveSpanDays = getInclusiveSpanDays(event.start, event.end);
+    const isMultiDayRange = inclusiveSpanDays > 1;
 
     return {
       id: event.id,
@@ -221,7 +232,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
           ? ["student-calendar-range-event"]
           : ["student-calendar-single-event"]),
       ],
-      extendedProps: { ...event },
+      extendedProps: { ...event, inclusiveSpanDays, isMultiDayRange },
     };
   });
 
@@ -489,9 +500,14 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             onEventClick(arg.event.extendedProps as CalendarEvent)
           }
           eventDidMount={(arg) => {
-            const isRangeEvent = arg.event.classNames.includes(
-              "student-calendar-range-event",
-            );
+            const event = arg.event.extendedProps as CalendarEvent & {
+              inclusiveSpanDays?: number;
+              isMultiDayRange?: boolean;
+            };
+            const isRangeEvent =
+              typeof event.inclusiveSpanDays === "number"
+                ? event.inclusiveSpanDays > 1
+                : Boolean(event.isMultiDayRange);
             const harness = arg.el.closest(
               ".fc-daygrid-event-harness, .fc-daygrid-event-harness-abs",
             );
@@ -507,18 +523,14 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
               !isRangeEvent,
             );
             if (isRangeEvent) {
-              harnessElement.style.removeProperty("left");
-              harnessElement.style.removeProperty("right");
-              harnessElement.style.removeProperty("inset-inline");
-              harnessElement.style.removeProperty("width");
-              harnessElement.style.removeProperty("max-width");
-              harnessElement.style.removeProperty("overflow");
+              harnessElement.style.removeProperty("min-width");
               eventElement.style.removeProperty("width");
               eventElement.style.removeProperty("max-width");
               eventElement.style.removeProperty("overflow");
               return;
             }
 
+            harnessElement.style.setProperty("min-width", "0px");
             harnessElement.style.setProperty("left", "0px");
             harnessElement.style.setProperty("right", "0px");
             harnessElement.style.setProperty("inset-inline", "0px");
@@ -533,11 +545,15 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             renderDayCellHeader(arg.date, arg.dayNumberText)
           }
           eventContent={(arg) => {
-            const event = arg.event.extendedProps as CalendarEvent;
+            const event = arg.event.extendedProps as CalendarEvent & {
+              inclusiveSpanDays?: number;
+              isMultiDayRange?: boolean;
+            };
             const isHoliday = event?.eventType === "holiday";
-            const isRangeEvent = arg.event.classNames.includes(
-              "student-calendar-range-event",
-            );
+            const isRangeEvent =
+              typeof event.inclusiveSpanDays === "number"
+                ? event.inclusiveSpanDays > 1
+                : Boolean(event.isMultiDayRange);
             const eventTitle = String(arg.event.title || "").trim();
             const meta = getScheduleCategoryMeta(event?.eventType, categories);
             const categoryLabel = isHoliday ? LABELS.holiday : meta.label;
