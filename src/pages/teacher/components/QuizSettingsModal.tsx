@@ -244,23 +244,23 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
             </div>
           ) : (
             <div className="space-y-4">
-              <section className={`${sectionCardClassName} space-y-2.5 p-3.5`}>
-                <div className="flex flex-wrap items-center justify-between gap-1.5">
+              <section className={`${sectionCardClassName} space-y-2 p-3`}>
+                <div className="flex flex-wrap items-center justify-between gap-1">
                   <div>
                     <h4 className="text-base font-extrabold text-gray-900">
                       학급별 공개 / 초기화
                     </h4>
-                    <p className="mt-0.5 text-[11px] text-gray-500">
+                    <p className="mt-0.5 text-[10px] text-gray-500">
                       공개 반과 초기화만 빠르게 확인합니다.
                     </p>
                   </div>
-                  <div className="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-2.5 py-0.5 text-[10px] font-bold text-blue-700">
+                  <div className="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700">
                     공개 학급 {normalizedSelectedClassIds.length}/
                     {grade3ClassIds.length || 0}
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-gray-200 bg-gray-50 px-2.5 py-2">
+                <div className="flex flex-wrap items-center gap-1 rounded-xl border border-gray-200 bg-gray-50 px-2 py-1.5">
                   <div className="text-[11px] font-semibold text-gray-600">
                     공개를 꺼도 반 선택은 저장됩니다.
                   </div>
@@ -268,6 +268,8 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                     type="button"
                     role="switch"
                     aria-checked={settings.active}
+                    aria-label="전체 공개 토글"
+                    title={settings.active ? "전체 공개 켜짐" : "전체 공개 꺼짐"}
                     onClick={() =>
                       canEdit &&
                       setSettings((prev) => ({
@@ -276,27 +278,26 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                       }))
                     }
                     disabled={!canEdit}
-                    className={`ml-auto inline-flex h-8 min-w-[104px] items-center justify-between gap-2 rounded-full border px-2.5 text-[11px] font-bold leading-none transition ${
+                    className={`ml-auto inline-flex h-7 w-[3.3rem] shrink-0 items-center rounded-full border px-1 transition ${
                       settings.active
                         ? "border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
                         : "border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:text-blue-700"
                     } disabled:cursor-not-allowed disabled:opacity-60`}
                   >
-                    <span>{settings.active ? "공개 중" : "비공개"}</span>
                     <span
-                      className={`relative h-[18px] w-8 rounded-full ${
-                        settings.active ? "bg-white/35" : "bg-gray-200"
+                      className={`relative h-5 w-full rounded-full ${
+                        settings.active ? "bg-white/30" : "bg-gray-200"
                       }`}
                     >
                       <span
-                        className={`absolute left-0.5 top-0.5 h-3.5 w-3.5 rounded-full bg-white shadow transition ${
-                          settings.active ? "translate-x-3.5" : ""
+                        className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${
+                          settings.active ? "translate-x-7" : ""
                         }`}
                       ></span>
                     </span>
                   </button>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[11px] font-bold text-gray-700">
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] font-bold text-gray-700">
                       공개 학급 빠른 선택
                     </span>
                     <button
@@ -308,7 +309,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                         }))
                       }
                       disabled={!canEdit || grade3ClassIds.length === 0}
-                      className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[10px] font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="rounded-full border border-gray-200 bg-white px-2 py-1 text-[10px] font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       전체 공개
                     </button>
@@ -321,17 +322,17 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                         }))
                       }
                       disabled={!canEdit || grade3ClassIds.length === 0}
-                      className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[10px] font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="rounded-full border border-gray-200 bg-white px-2 py-1 text-[10px] font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       전체 비공개
                     </button>
                   </div>
-                  <div className="text-[11px] font-semibold text-rose-600">
+                  <div className="text-[10px] font-semibold text-rose-600">
                     초기화는 선택한 반 기록만 정리합니다.
                   </div>
                 </div>
 
-                <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+                <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
                   {grade3ClassIds.length > 0 ? (
                     grade3ClassIds.map((classId) => {
                       const checked =
@@ -353,7 +354,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                       return (
                         <div
                           key={classId}
-                          className={`rounded-xl border px-2.5 py-2 transition ${
+                          className={`rounded-xl border px-2 py-1.5 transition ${
                             checked
                               ? settings.active
                                 ? "border-blue-200 bg-blue-50/80"
@@ -362,24 +363,25 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                           }`}
                         >
                           <div className="grid min-h-[2.5rem] grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-1.5">
-                            <div className="min-w-0 truncate text-[13px] font-extrabold text-gray-900">
+                            <div className="min-w-0 truncate text-[12px] font-extrabold text-gray-900">
                               {classId}
                             </div>
                             <button
                               type="button"
                               role="switch"
                               aria-checked={checked}
+                              aria-label={`${classId} 공개 토글`}
+                              title={checked ? `${classId} 공개 중` : `${classId} 비공개`}
                               onClick={() => handleToggleClass(classId)}
                               disabled={!toggleEnabled}
-                              className={`inline-flex min-h-8 min-w-[98px] items-center justify-between gap-2 rounded-full border px-2.5 py-1 text-[11px] font-bold leading-none transition ${toggleClassName} disabled:cursor-not-allowed disabled:opacity-70`}
+                              className={`inline-flex h-7 w-[3.3rem] shrink-0 items-center rounded-full border px-1 transition ${toggleClassName} disabled:cursor-not-allowed disabled:opacity-70`}
                             >
-                              <span>{checked ? "공개" : "비공개"}</span>
                               <span
-                                className={`relative h-[18px] w-8 rounded-full ${toggleRailClassName}`}
+                                className={`relative h-5 w-full rounded-full ${toggleRailClassName}`}
                               >
                                 <span
-                                  className={`absolute left-0.5 top-0.5 h-3.5 w-3.5 rounded-full bg-white shadow transition ${
-                                    checked ? "translate-x-3.5" : ""
+                                  className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${
+                                    checked ? "translate-x-7" : ""
                                   }`}
                                 ></span>
                               </span>
@@ -396,7 +398,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                                 Boolean(resettingClassId) ||
                                 Boolean(saving)
                               }
-                              className="inline-flex min-h-8 shrink-0 items-center rounded-full border border-rose-200 bg-white px-2.5 py-1 text-[11px] font-bold leading-none text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                              className="inline-flex h-7 shrink-0 items-center rounded-full border border-rose-200 bg-white px-2 py-1 text-[10px] font-bold leading-none text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
                             >
                               초기화
                             </button>

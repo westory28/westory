@@ -779,6 +779,7 @@
   .fc-daygrid-event.student-calendar-range-event
   .fc-event-title-container {
   min-width: 0;
+  width: 100%;
   max-width: none;
   overflow: visible;
 }
@@ -795,7 +796,8 @@
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
   .fc
   .fc-daygrid-event.student-calendar-range-event {
-  width: auto !important;
+  width: 100% !important;
+  min-width: 100% !important;
   max-width: none !important;
   overflow: visible !important;
   margin-left: -0.22rem !important;

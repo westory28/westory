@@ -512,8 +512,6 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
               ".fc-daygrid-event-harness, .fc-daygrid-event-harness-abs",
             );
             if (!harness) return;
-            const harnessElement = harness as HTMLElement;
-            const eventElement = arg.el as HTMLElement;
             harness.classList.toggle(
               "student-calendar-event-harness--range",
               isRangeEvent,
@@ -522,24 +520,6 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
               "student-calendar-event-harness--single",
               !isRangeEvent,
             );
-            if (isRangeEvent) {
-              harnessElement.style.removeProperty("min-width");
-              eventElement.style.removeProperty("width");
-              eventElement.style.removeProperty("max-width");
-              eventElement.style.removeProperty("overflow");
-              return;
-            }
-
-            harnessElement.style.setProperty("min-width", "0px");
-            harnessElement.style.setProperty("left", "0px");
-            harnessElement.style.setProperty("right", "0px");
-            harnessElement.style.setProperty("inset-inline", "0px");
-            harnessElement.style.setProperty("width", "100%");
-            harnessElement.style.setProperty("max-width", "100%");
-            harnessElement.style.setProperty("overflow", "hidden");
-            eventElement.style.setProperty("width", "100%");
-            eventElement.style.setProperty("max-width", "100%");
-            eventElement.style.setProperty("overflow", "hidden");
           }}
           dayCellContent={(arg) =>
             renderDayCellHeader(arg.date, arg.dayNumberText)
