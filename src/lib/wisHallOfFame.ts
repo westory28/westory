@@ -24,7 +24,7 @@ type ConfigLike = Pick<SystemConfig, 'year' | 'semester'> | null | undefined;
 
 export const WIS_HALL_OF_FAME_GRADE_KEY = '3';
 export const WIS_HALL_OF_FAME_DOC_ID = 'hall_of_fame';
-export const WIS_HALL_OF_FAME_SNAPSHOT_VERSION = 5;
+export const WIS_HALL_OF_FAME_SNAPSHOT_VERSION = 6;
 export const WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS = 4;
 export const WIS_HALL_OF_FAME_STALE_MS = WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS * 60 * 60 * 1000;
 export const DEFAULT_WIS_HALL_OF_FAME_POSITION_PRESET = 'classic_podium_v1';
@@ -201,6 +201,21 @@ const normalizeEntryMap = (
   );
 };
 
+const normalizePodiumEntryMap = (value: unknown) => Object.entries(normalizeEntryMap(value)).reduce<
+  Record<string, WisHallOfFameEntry[]>
+>((accumulator, [key, entries]) => {
+  const normalizedEntries = (entries || []).filter((entry) => Number(entry.rank || 0) <= 3);
+  if (normalizedEntries.length > 0) {
+    accumulator[key] = normalizedEntries.map((entry) => ({
+      ...entry,
+      podiumSlot: entry.rank === 1 || entry.rank === 2 || entry.rank === 3
+        ? entry.rank
+        : entry.podiumSlot,
+    }));
+  }
+  return accumulator;
+}, {});
+
 const normalizeMetaMap = (value: unknown) => {
   if (!value || typeof value !== 'object') return {} as Record<string, WisHallOfFameLeaderboardMeta>;
 
@@ -269,11 +284,24 @@ const resolveSnapshotSourceUpdatedAtMs = (
 };
 
 const buildPodiumEntriesFromLeaderboard = (entries: WisHallOfFameEntry[]) => entries
-  .slice(0, 3)
-  .map((entry, index) => ({
+  .filter((entry) => Number(entry.rank || 0) > 0 && Number(entry.rank || 0) <= 3)
+  .map((entry) => ({
     ...entry,
-    podiumSlot: (index + 1) as 1 | 2 | 3,
+    podiumSlot: (entry.rank === 1 || entry.rank === 2 || entry.rank === 3
+      ? entry.rank
+      : entry.podiumSlot) as 1 | 2 | 3 | undefined,
   }));
+
+const resolveBestPodiumEntries = (
+  podiumEntries: WisHallOfFameEntry[] | null | undefined,
+  leaderboardEntries: WisHallOfFameEntry[] | null | undefined,
+) => {
+  const normalizedPodiumEntries = podiumEntries || [];
+  const rebuiltEntries = buildPodiumEntriesFromLeaderboard(leaderboardEntries || []);
+  return rebuiltEntries.length > normalizedPodiumEntries.length
+    ? rebuiltEntries
+    : normalizedPodiumEntries;
+};
 
 export const DEFAULT_WIS_HALL_OF_FAME_PODIUM_POSITIONS = {
   desktop: DEFAULT_DESKTOP_POSITIONS,
@@ -358,8 +386,8 @@ export const normalizeWisHallOfFameSnapshot = (
     legacyLeaderboardMeta?.classLeadersByClassKey,
     legacyLeaderboardMeta?.classByClassKey,
   );
-  const normalizedGradeTop3ByGrade = normalizeEntryMap(raw.gradeTop3ByGrade, 3);
-  const normalizedClassTop3ByClassKey = normalizeEntryMap(raw.classTop3ByClassKey, 3);
+  const normalizedGradeTop3ByGrade = normalizePodiumEntryMap(raw.gradeTop3ByGrade);
+  const normalizedClassTop3ByClassKey = normalizePodiumEntryMap(raw.classTop3ByClassKey);
   const normalizedGradeLeaderboardByGrade = normalizeEntryMap(rawGradeLeaderboardByGrade);
   const normalizedClassLeaderboardByClassKey = normalizeEntryMap(rawClassLeaderboardByClassKey);
   return {
@@ -725,8 +753,10 @@ export const getWisHallOfFameGradeEntries = (
 ) => {
   const key = toSafeText(grade);
   if (!key) return [];
-  return snapshot?.gradeTop3ByGrade?.[key]
-    || buildPodiumEntriesFromLeaderboard(snapshot?.gradeLeaderboardByGrade?.[key] || []);
+  return resolveBestPodiumEntries(
+    snapshot?.gradeTop3ByGrade?.[key],
+    snapshot?.gradeLeaderboardByGrade?.[key],
+  );
 };
 
 export const getWisHallOfFameClassEntries = (
@@ -736,8 +766,10 @@ export const getWisHallOfFameClassEntries = (
 ) => {
   const classKey = buildWisHallOfFameClassKey(grade, className);
   if (!classKey) return [];
-  return snapshot?.classTop3ByClassKey?.[classKey]
-    || buildPodiumEntriesFromLeaderboard(snapshot?.classLeaderboardByClassKey?.[classKey] || []);
+  return resolveBestPodiumEntries(
+    snapshot?.classTop3ByClassKey?.[classKey],
+    snapshot?.classLeaderboardByClassKey?.[classKey],
+  );
 };
 
 export const getWisHallOfFameGradeLeaderboard = (

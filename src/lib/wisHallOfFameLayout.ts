@@ -28,9 +28,9 @@ export const buildHallOfFamePreviewLayout = (
     38,
   );
   const desktopRailTop = `${clampNumber(
-    Number(desktopRail.topPercent || 0) / 10,
+    Number(desktopRail.topPercent || 0) / 5,
     0,
-    4.5,
+    9,
   )}rem`;
   const desktopRailNudge = `${clampNumber(
     (Number(desktopRail.leftPercent || DEFAULT_RAIL_CENTER) -
@@ -45,9 +45,9 @@ export const buildHallOfFamePreviewLayout = (
     100,
   )}%`;
   const mobileRailTop = `${clampNumber(
-    Number(mobileRail.topPercent || 0) / 18,
+    Number(mobileRail.topPercent || 0) / 8,
     0,
-    1.75,
+    6,
   )}rem`;
   const desktopTrackWidth = `clamp(18rem, ${desktopRailWidthPercent}%, 21.5rem)`;
   const mobileRailAlignClassName = resolveRailAlignClassName(

@@ -60,9 +60,9 @@ const SLOT_SAFE_AREA = {
       third: { min: 62, max: 74 },
     },
     topPercentRangeBySlot: {
-      first: { min: 18, max: 33 },
-      second: { min: 29, max: 45 },
-      third: { min: 29, max: 45 },
+      first: { min: 12, max: 42 },
+      second: { min: 20, max: 56 },
+      third: { min: 20, max: 56 },
     },
     widthPercentBySlot: {
       first: { min: 19, max: 22 },
@@ -77,9 +77,9 @@ const SLOT_SAFE_AREA = {
       third: { min: 61, max: 74 },
     },
     topPercentRangeBySlot: {
-      first: { min: 21, max: 35 },
-      second: { min: 32, max: 47 },
-      third: { min: 32, max: 47 },
+      first: { min: 16, max: 48 },
+      second: { min: 26, max: 60 },
+      third: { min: 26, max: 60 },
     },
     widthPercentBySlot: {
       first: { min: 24, max: 29 },
@@ -126,12 +126,18 @@ const getEntryTone = (slotKey: HallOfFamePodiumSlotKey) => {
 };
 
 const resolveSlotEntries = (entries: WisHallOfFameEntry[]) => {
-  const slotEntries = new Map<HallOfFamePodiumSlotKey, WisHallOfFameEntry>();
+  const slotEntries = new Map<HallOfFamePodiumSlotKey, WisHallOfFameEntry[]>();
   entries.forEach((entry) => {
     const podiumSlot = entry.podiumSlot || entry.rank;
-    if (podiumSlot === 1) slotEntries.set("first", entry);
-    if (podiumSlot === 2) slotEntries.set("second", entry);
-    if (podiumSlot === 3) slotEntries.set("third", entry);
+    if (podiumSlot === 1) {
+      slotEntries.set("first", [...(slotEntries.get("first") || []), entry]);
+    }
+    if (podiumSlot === 2) {
+      slotEntries.set("second", [...(slotEntries.get("second") || []), entry]);
+    }
+    if (podiumSlot === 3) {
+      slotEntries.set("third", [...(slotEntries.get("third") || []), entry]);
+    }
   });
   return slotEntries;
 };
@@ -197,6 +203,19 @@ const buildRankLabel = (
   return `${tiedCount > 1 ? "공동 " : ""}${entry.rank}위`;
 };
 
+const getInfoCardAlignClassName = (
+  slotKey: HallOfFamePodiumSlotKey,
+  deviceMode: SlotLayoutMode,
+) => {
+  if (slotKey === "first") {
+    return "self-center";
+  }
+  if (deviceMode === "mobile") {
+    return slotKey === "second" ? "self-start" : "self-end";
+  }
+  return slotKey === "second" ? "self-start" : "self-end";
+};
+
 const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
   entries = [],
   hallOfFameConfig,
@@ -219,6 +238,9 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
   const normalizedPositions =
     normalizedConfig.positions || getDefaultHallOfFamePositions();
   const slotEntries = resolveSlotEntries(safeEntries);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [activeEntryKey, setActiveEntryKey] = useState<string | null>(null);
+  const [hoveredEntryKey, setHoveredEntryKey] = useState<string | null>(null);
   const resolvedDeviceMode: SlotLayoutMode =
     deviceMode === "mobile"
       ? "mobile"
@@ -275,6 +297,19 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
     };
   }, []);
 
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setActiveEntryKey(null);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, []);
+
   const slotPositionClassName =
     resolvedDeviceMode === "desktop"
       ? "absolute left-[var(--slot-left)] top-[var(--slot-top)] z-30 w-[var(--slot-width)] -translate-x-1/2 px-0"
@@ -290,6 +325,7 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
 
   return (
     <div
+      ref={rootRef}
       className="overflow-visible rounded-[1.85rem] border border-slate-200 bg-white shadow-[0_22px_54px_rgba(15,23,42,0.08)]"
       style={podiumStyle}
     >
@@ -343,16 +379,27 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
             )}
 
             {SLOT_ORDER.map((slotKey) => {
-              const entry = slotEntries.get(slotKey);
-              if (!entry) return null;
+              const entriesForSlot = slotEntries.get(slotKey) || [];
+              if (!entriesForSlot.length) return null;
 
               const tone = getEntryTone(slotKey);
               const control = slotControls?.[slotKey];
-              const rankLabel = buildRankLabel(safeEntries, entry);
+              const primaryEntry = entriesForSlot[0];
+              const rankLabel = buildRankLabel(safeEntries, primaryEntry);
+              const tieCountLabel =
+                entriesForSlot.length > 1 ? ` · ${entriesForSlot.length}명` : "";
+              const displayedEntry =
+                entriesForSlot.length === 1
+                  ? primaryEntry
+                  : entriesForSlot.find(
+                      (entry) =>
+                        `${slotKey}:${entry.uid}` === activeEntryKey ||
+                        `${slotKey}:${entry.uid}` === hoveredEntryKey,
+                    ) || null;
               const badgeClassName = `inline-flex min-h-8 max-w-full items-center justify-center whitespace-nowrap rounded-full border px-2.25 py-1 text-[9px] font-black tracking-[0.08em] shadow-[0_14px_26px_rgba(15,23,42,0.16)] sm:min-h-9 sm:px-2.75 sm:text-[13px] ${tone.badgeClassName}`;
               return (
                 <div
-                  key={`${slotKey}-${entry.uid}`}
+                  key={`${slotKey}-${entriesForSlot.map((entry) => entry.uid).join("-")}`}
                   style={buildSlotStyle(slotKey, normalizedPositions)}
                   className={`${slotPositionClassName} overflow-visible`}
                 >
@@ -376,34 +423,101 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                             : "cursor-grab active:cursor-grabbing"
                         }`}
                       >
-                        {rankLabel}
+                        {`${rankLabel}${tieCountLabel}`}
                       </button>
                     ) : (
-                      <div className={badgeClassName}>{rankLabel}</div>
+                      <div className={badgeClassName}>{`${rankLabel}${tieCountLabel}`}</div>
                     )}
 
-                    <div
-                      className={`relative z-10 leading-none drop-shadow-[0_12px_18px_rgba(15,23,42,0.24)] ${tone.emojiClassName}`}
-                    >
-                      {entry.profileIcon || "🙂"}
-                    </div>
+                    {entriesForSlot.length === 1 ? (
+                      <>
+                        <div
+                          className={`relative z-10 leading-none drop-shadow-[0_12px_18px_rgba(15,23,42,0.24)] ${tone.emojiClassName}`}
+                        >
+                          {primaryEntry.profileIcon || "🙂"}
+                        </div>
 
-                    <div
-                      className={`relative z-10 w-full max-w-full rounded-[1.2rem] border px-2.25 py-2.25 backdrop-blur-xl sm:px-3 sm:py-2.75 ${tone.nameClassName}`}
-                    >
-                      <div className="whitespace-nowrap text-[8px] font-bold uppercase tracking-[0.12em] text-white/80 [text-shadow:0_1px_2px_rgba(15,23,42,0.46)] sm:text-[9px]">
-                        {entry.grade}학년 {entry.class}반
-                      </div>
-                      <div className="mt-1 whitespace-normal break-keep text-[10px] font-black leading-[1.28] text-white [text-shadow:0_1px_3px_rgba(15,23,42,0.72)] sm:text-[13px] lg:text-[14px]">
-                        {entry.displayName || entry.studentName}
-                      </div>
-                    </div>
+                        <div
+                          className={`relative z-10 w-full max-w-full rounded-[1.2rem] border px-2.25 py-2.25 backdrop-blur-xl sm:px-3 sm:py-2.75 ${tone.nameClassName}`}
+                        >
+                          <div className="whitespace-nowrap text-[8px] font-bold uppercase tracking-[0.12em] text-white/80 [text-shadow:0_1px_2px_rgba(15,23,42,0.46)] sm:text-[9px]">
+                            {primaryEntry.grade}학년 {primaryEntry.class}반
+                          </div>
+                          <div className="mt-1 whitespace-normal break-keep text-[10px] font-black leading-[1.28] text-white [text-shadow:0_1px_3px_rgba(15,23,42,0.72)] sm:text-[13px] lg:text-[14px]">
+                            {primaryEntry.displayName || primaryEntry.studentName}
+                          </div>
+                        </div>
 
-                    <div
-                      className={`relative z-10 inline-flex min-h-[2rem] max-w-full shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-2.25 py-1 text-[9px] font-black leading-none backdrop-blur shadow-[0_14px_30px_rgba(15,23,42,0.2)] sm:min-h-[2.2rem] sm:px-2.75 sm:text-[13px] ${tone.scoreClassName}`}
-                    >
-                      누적 {formatWisAmount(entry.cumulativeEarned)}
-                    </div>
+                        <div
+                          className={`relative z-10 inline-flex min-h-[2rem] max-w-full shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-2.25 py-1 text-[9px] font-black leading-none backdrop-blur shadow-[0_14px_30px_rgba(15,23,42,0.2)] sm:min-h-[2.2rem] sm:px-2.75 sm:text-[13px] ${tone.scoreClassName}`}
+                        >
+                          누적 {formatWisAmount(primaryEntry.cumulativeEarned)}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="relative z-10 flex min-h-[3.5rem] w-full items-end justify-center">
+                          {entriesForSlot.map((entry, index) => {
+                            const entryKey = `${slotKey}:${entry.uid}`;
+                            const isActive = activeEntryKey === entryKey;
+                            const isHovered = hoveredEntryKey === entryKey;
+                            return (
+                              <button
+                                key={entryKey}
+                                type="button"
+                                onClick={() =>
+                                  setActiveEntryKey((previousValue) =>
+                                    previousValue === entryKey ? null : entryKey,
+                                  )
+                                }
+                                onMouseEnter={() => setHoveredEntryKey(entryKey)}
+                                onMouseLeave={() =>
+                                  setHoveredEntryKey((previousValue) =>
+                                    previousValue === entryKey ? null : previousValue,
+                                  )
+                                }
+                                aria-label={`${rankLabel} ${entry.displayName || entry.studentName} 정보 보기`}
+                                className={`relative leading-none drop-shadow-[0_12px_18px_rgba(15,23,42,0.24)] transition-transform ${
+                                  tone.emojiClassName
+                                } ${
+                                  index === 0 ? "" : "-ml-3.5 sm:-ml-4.5"
+                                } ${
+                                  isActive || isHovered ? "z-20 -translate-y-1 scale-105" : "z-10 hover:-translate-y-0.5"
+                                }`}
+                              >
+                                <span
+                                  className={`inline-flex rounded-full ring-offset-2 transition ${
+                                    isActive || isHovered
+                                      ? "ring-2 ring-white ring-offset-transparent"
+                                      : ""
+                                  }`}
+                                >
+                                  {entry.profileIcon || "🙂"}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {displayedEntry && (
+                          <div
+                            className={`relative z-20 mt-1.5 w-[min(12.5rem,calc(100vw-2rem))] max-w-[12.5rem] rounded-[1.2rem] border px-2.5 py-2.5 backdrop-blur-xl sm:px-3 sm:py-2.75 ${tone.nameClassName} ${getInfoCardAlignClassName(slotKey, resolvedDeviceMode)}`}
+                          >
+                            <div className="whitespace-nowrap text-[8px] font-bold uppercase tracking-[0.12em] text-white/80 [text-shadow:0_1px_2px_rgba(15,23,42,0.46)] sm:text-[9px]">
+                              {displayedEntry.grade}학년 {displayedEntry.class}반
+                            </div>
+                            <div className="mt-1 whitespace-normal break-keep text-[10px] font-black leading-[1.28] text-white [text-shadow:0_1px_3px_rgba(15,23,42,0.72)] sm:text-[13px] lg:text-[14px]">
+                              {displayedEntry.displayName || displayedEntry.studentName}
+                            </div>
+                            <div
+                              className={`mt-2 inline-flex min-h-[2rem] max-w-full shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-2.25 py-1 text-[9px] font-black leading-none backdrop-blur shadow-[0_14px_30px_rgba(15,23,42,0.2)] sm:min-h-[2.2rem] sm:px-2.75 sm:text-[13px] ${tone.scoreClassName}`}
+                            >
+                              누적 {formatWisAmount(displayedEntry.cumulativeEarned)}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
                 </div>
               );

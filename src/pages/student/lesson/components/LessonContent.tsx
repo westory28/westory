@@ -778,54 +778,48 @@ const LessonContent: React.FC<LessonContentProps> = ({
           className={canPersist ? "space-y-6 pt-16 md:pt-[4.5rem]" : "space-y-6"}
         >
           {!!worksheet.pageImages.length &&
-            (fullscreenPreview ? (
-              <LessonWorksheetStage
-                pageImages={worksheet.pageImages}
-                blanks={worksheet.blanks}
-                textRegions={worksheet.textRegions}
-                footnoteAnchors={worksheet.footnoteAnchors}
-                selectedFootnoteAnchorId={activeWorksheetFootnoteAnchorId}
-                footnoteTitles={Object.fromEntries(
-                  footnotes.map((footnote) => [
-                    footnote.id,
-                    footnote.title || footnote.label || "각주",
-                  ]),
-                )}
-                onActivateFootnoteAnchor={openWorksheetFootnoteAnchor}
-                mode="student-solve"
-                studentAnswers={studentAnswers}
-                onStudentAnswerChange={handleWorksheetAnswerChange}
-                annotationEnabled={false}
-              />
-            ) : (
-              <button
-                type="button"
-                onClick={() => setWorksheetScreenOpen(true)}
-                className="group block w-full overflow-hidden rounded-[28px] border border-slate-200 bg-white text-left shadow-sm transition hover:border-blue-300 hover:shadow-lg"
-              >
-                <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+            <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+              {!fullscreenPreview && (
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
                   <div>
                     <div className="text-sm font-bold text-slate-800">
-                      PDF 학습지 열기
+                      PDF 학습지
                     </div>
                     <div className="mt-1 text-xs text-slate-500">
-                      빈칸 풀이와 각주 확인은 전체 화면에서 이어집니다.
+                      빈칸 풀이와 각주 확인을 바로 시작할 수 있습니다.
                     </div>
                   </div>
-                  <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-600">
+                  <button
+                    type="button"
+                    onClick={() => setWorksheetScreenOpen(true)}
+                    className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-600 transition hover:bg-blue-100"
+                  >
                     <i className="fas fa-expand text-[11px]"></i>
-                    {worksheet.pageImages.length} page
-                  </div>
+                    전체화면
+                  </button>
                 </div>
-                <div className="bg-[radial-gradient(circle_at_top,_rgba(239,246,255,0.96),_rgba(248,250,252,0.98)_58%,_rgba(241,245,249,1)_100%)] p-4">
-                  <img
-                    src={worksheet.pageImages[0]?.imageUrl}
-                    alt="학습지 미리보기"
-                    className="mx-auto max-h-[26rem] w-auto rounded-2xl border border-slate-200 bg-white shadow-sm transition group-hover:scale-[1.01]"
-                  />
-                </div>
-              </button>
-            ))}
+              )}
+              <div className={fullscreenPreview ? "" : "p-4"}>
+                <LessonWorksheetStage
+                  pageImages={worksheet.pageImages}
+                  blanks={worksheet.blanks}
+                  textRegions={worksheet.textRegions}
+                  footnoteAnchors={worksheet.footnoteAnchors}
+                  selectedFootnoteAnchorId={activeWorksheetFootnoteAnchorId}
+                  footnoteTitles={Object.fromEntries(
+                    footnotes.map((footnote) => [
+                      footnote.id,
+                      footnote.title || footnote.label || "각주",
+                    ]),
+                  )}
+                  onActivateFootnoteAnchor={openWorksheetFootnoteAnchor}
+                  mode="student-solve"
+                  studentAnswers={studentAnswers}
+                  onStudentAnswerChange={handleWorksheetAnswerChange}
+                  annotationEnabled={false}
+                />
+              </div>
+            </section>}
 
           {!!bodyHtml && (
             <section

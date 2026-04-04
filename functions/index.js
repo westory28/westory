@@ -663,7 +663,7 @@ const getPointCollectionPath = (year, semester, collectionName) => `${getSemeste
 const getPointWalletPath = (year, semester, uid) => `${getPointCollectionPath(year, semester, 'point_wallets')}/${uid}`;
 const getPointPolicyPath = (year, semester) => `${getPointCollectionPath(year, semester, 'point_policies')}/current`;
 const WIS_HALL_OF_FAME_DOC_ID = 'hall_of_fame';
-const WIS_HALL_OF_FAME_SNAPSHOT_VERSION = 5;
+const WIS_HALL_OF_FAME_SNAPSHOT_VERSION = 6;
 const WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS = 4;
 const WIS_HALL_OF_FAME_STALE_MS = WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS * 60 * 60 * 1000;
 const WIS_HALL_OF_FAME_GRADE_KEY = '3';
@@ -929,10 +929,10 @@ const compareWisHallOfFameEntries = (left, right) => {
 };
 
 const buildPodiumWisHallOfFameEntries = (entries) => buildRankedWisHallOfFameEntries(entries)
-  .slice(0, 3)
-  .map((entry, index) => ({
+  .filter((entry) => Number(entry.rank || 0) > 0 && Number(entry.rank || 0) <= 3)
+  .map((entry) => ({
     ...sanitizeWisHallOfFameEntryForStorage(entry),
-    podiumSlot: index + 1,
+    podiumSlot: Number(entry.rank || 0),
   }));
 
 const buildRankedWisHallOfFameEntries = (entries) => {

@@ -205,8 +205,8 @@ const resolveLessonDocRef = async (parsed, customMetadata) => {
 exports.processLessonPdfIncomingUpload = onObjectFinalized(
   {
     region: REGION,
-    timeoutSeconds: 120,
-    memory: "512MiB",
+    timeoutSeconds: 300,
+    memory: "1GiB",
   },
   async (event) => {
     const objectName = normalizeText(event.data.name);

@@ -1197,6 +1197,21 @@ const ManageLesson: React.FC = () => {
     [config],
   );
 
+  const findOrCreateLessonDocRefByUnitId = useCallback(
+    async (unitId: string) => {
+      const existingLessonDocRef = await findLessonDocRefByUnitId(unitId);
+      if (existingLessonDocRef) {
+        return existingLessonDocRef;
+      }
+      const scopedRef = collection(
+        db,
+        getSemesterCollectionPath(config, "lessons"),
+      );
+      return doc(scopedRef);
+    },
+    [config, findLessonDocRefByUnitId],
+  );
+
   const refreshLessonPdfProcessing = useCallback(
     async (unitId: string) => {
       const lessonDocRef = await findLessonDocRefByUnitId(unitId);
@@ -2856,16 +2871,9 @@ const ManageLesson: React.FC = () => {
       : savedLessonState.isVisibleToStudents;
     let metaSaved = false;
     try {
-      const scopedRef = collection(
-        db,
-        getSemesterCollectionPath(config, "lessons"),
+      const lessonDocRef = await findOrCreateLessonDocRefByUnitId(
+        selectedNodeId,
       );
-      const scopedSnap = await getDocs(
-        query(scopedRef, where("unitId", "==", selectedNodeId), limit(1)),
-      );
-      const lessonDocRef = scopedSnap.empty
-        ? doc(scopedRef)
-        : doc(scopedRef, scopedSnap.docs[0].id);
       if (shouldSaveMeta) {
         setLessonSaveState("saving");
       }

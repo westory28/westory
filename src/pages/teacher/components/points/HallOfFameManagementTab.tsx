@@ -1027,7 +1027,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
           <div className="text-xs font-bold text-slate-500">공개 범위 요약</div>
-          <div className="mt-2 text-lg font-black text-slate-900 whitespace-nowrap break-keep">
+          <div className="mt-2 text-lg font-black leading-tight text-slate-900 break-keep">
             {buildStoredRangeSummary(featureDraft)}
           </div>
           <div className="mt-1 text-xs font-semibold text-slate-500">
@@ -1038,8 +1038,8 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
           <div className="text-xs font-bold text-slate-500">반영 주기</div>
-          <div className="mt-2 text-lg font-black text-slate-900 whitespace-nowrap break-keep">
-            교사 수동 + 4시간 자동 갱신
+          <div className="mt-2 text-lg font-black leading-tight text-slate-900 break-keep">
+            교사 수동 동기화 + 4시간 자동 갱신
           </div>
           <div className="mt-1 text-xs font-semibold text-slate-500">
             wallet 변경 시 즉시 반영하지 않고 {WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS}시간 주기와 수동 동기화만 사용합니다.

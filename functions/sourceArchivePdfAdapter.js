@@ -426,11 +426,39 @@ const saveSourceArchivePdfArtifacts = async ({
   originalName,
   revisionPaths,
 }) => {
-  const extraction = await extractSourceArchivePdf({
-    inputBuffer,
-    originalName,
-    revisionPaths,
-  });
+  let extraction;
+  try {
+    extraction = await extractSourceArchivePdf({
+      inputBuffer,
+      originalName,
+      revisionPaths,
+    });
+  } catch (error) {
+    console.warn(
+      "Primary PDF extraction failed, retrying with fallback parser:",
+      error,
+    );
+    const fallbackResult = await extractPdfWithFallback({
+      inputBuffer,
+      originalName,
+      revisionPaths,
+    });
+    extraction = finalizePdfExtraction({
+      parserKind: fallbackResult.parserKind,
+      extractionVersion: fallbackResult.extractionVersion,
+      title: fallbackResult.title,
+      markdown: fallbackResult.markdown,
+      previewText: fallbackResult.previewText,
+      pages: Array.isArray(fallbackResult.manifest?.pages)
+        ? fallbackResult.manifest.pages
+        : [],
+      titleBlocks: Array.isArray(fallbackResult.manifest?.titleBlocks)
+        ? fallbackResult.manifest.titleBlocks
+        : [],
+      originalName,
+      revisionPaths,
+    });
+  }
 
   await saveTextStorageFile({
     bucket,
