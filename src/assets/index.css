@@ -118,9 +118,9 @@
   align-items: center;
   gap: 0.45rem;
   color: #6b7280;
-  font-size: 0.82rem;
+  font-size: 0.95rem;
   font-weight: 800;
-  line-height: 1;
+  line-height: 1.05;
   letter-spacing: 0.02em;
   padding: 0;
   width: fit-content;
@@ -131,8 +131,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1rem;
-  height: 1rem;
+  width: 1.05rem;
+  height: 1.05rem;
   color: inherit;
 }
 
@@ -145,7 +145,7 @@
 .student-calendar-shell__month-title {
   margin: 0;
   color: #0f172a;
-  font-size: clamp(1.15rem, 1.8vw, 1.45rem);
+  font-size: clamp(1.22rem, 2vw, 1.62rem);
   font-weight: 900;
   line-height: 1.08;
   letter-spacing: -0.025em;
@@ -559,7 +559,7 @@
   .fc-daygrid-body
   tbody {
   display: grid;
-  grid-template-rows: repeat(6, minmax(0, 1fr));
+  grid-template-rows: repeat(var(--student-calendar-week-rows, 6), minmax(0, 1fr));
   height: 100%;
 }
 
@@ -686,10 +686,6 @@
   .fc
   .fc-daygrid-event-harness-abs {
   z-index: 6;
-  width: auto !important;
-  left: 0 !important;
-  right: 0 !important;
-  inset-inline: 0 !important;
 }
 
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
@@ -704,6 +700,19 @@
   border-radius: 0.45rem;
   font-size: 0.72rem;
   line-height: 1.1;
+}
+
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-event-main,
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-event-main-frame,
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-event-title-container {
+  min-width: 0;
+  width: 100%;
 }
 
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
@@ -752,7 +761,7 @@
   min-width: 0;
   width: 100%;
   min-height: 1.28rem;
-  padding: 0.11rem 0.34rem;
+  padding: 0.08rem 0.22rem;
   overflow: hidden;
 }
 
@@ -761,36 +770,45 @@
   min-width: 0;
   width: 100%;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.7rem;
   font-weight: 800;
   line-height: 1.1;
 }
 
+.student-calendar-section .student-calendar-event-label.is-single
+  .student-calendar-event-label__text {
+  text-overflow: ellipsis;
+}
+
+.student-calendar-section .student-calendar-event-label.is-range
+  .student-calendar-event-label__text {
+  text-overflow: clip;
+}
+
 .student-calendar-section .student-calendar-event-label.is-range {
-  padding-left: 0.34rem;
-  padding-right: 0.34rem;
+  padding-left: 0.08rem;
+  padding-right: 0.08rem;
 }
 
 .student-calendar-section .student-calendar-event-label.is-range.is-start {
-  padding-left: 0.34rem;
-  padding-right: 0.18rem;
+  padding-left: 0.08rem;
+  padding-right: 0.12rem;
 }
 
 .student-calendar-section .student-calendar-event-label.is-range.is-middle {
-  padding-left: 0.18rem;
-  padding-right: 0.18rem;
+  padding-left: 0.08rem;
+  padding-right: 0.08rem;
 }
 
 .student-calendar-section .student-calendar-event-label.is-range.is-end {
-  padding-left: 0.18rem;
-  padding-right: 0.34rem;
+  padding-left: 0.12rem;
+  padding-right: 0.08rem;
 }
 
 .student-calendar-section .student-calendar-event-label.is-single {
-  padding-left: 0.34rem;
-  padding-right: 0.34rem;
+  padding-left: 0.22rem;
+  padding-right: 0.22rem;
 }
 
 .student-calendar-section .student-calendar-event-label.is-range.is-middle,
@@ -880,7 +898,7 @@
   }
 
   .student-calendar-shell__month-title {
-    font-size: 1.05rem;
+    font-size: 1.12rem;
   }
 
   .student-calendar-shell__toolbar {
@@ -980,26 +998,28 @@
 
   .student-calendar-section .student-calendar-event-label {
     min-height: 1.2rem;
+    padding-left: 0.16rem;
+    padding-right: 0.16rem;
   }
 
   .student-calendar-section .student-calendar-event-label.is-range.is-start {
-    padding-left: 0.28rem;
-    padding-right: 0.12rem;
+    padding-left: 0.08rem;
+    padding-right: 0.1rem;
   }
 
   .student-calendar-section .student-calendar-event-label.is-range.is-middle {
-    padding-left: 0.12rem;
-    padding-right: 0.12rem;
+    padding-left: 0.08rem;
+    padding-right: 0.08rem;
   }
 
   .student-calendar-section .student-calendar-event-label.is-range.is-end {
-    padding-left: 0.12rem;
-    padding-right: 0.28rem;
+    padding-left: 0.1rem;
+    padding-right: 0.08rem;
   }
 
   .student-calendar-section .student-calendar-event-label.is-single {
-    padding-left: 0.28rem;
-    padding-right: 0.28rem;
+    padding-left: 0.16rem;
+    padding-right: 0.16rem;
   }
 
   .student-calendar-section .student-calendar-event-label__text {

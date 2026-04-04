@@ -155,6 +155,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
   const [currentViewType, setCurrentViewType] =
     useState<CalendarViewType>("dayGridMonth");
   const [currentTitle, setCurrentTitle] = useState("");
+  const [monthWeekRows, setMonthWeekRows] = useState(6);
   const [visibleRange, setVisibleRange] = useState<{
     start: string;
     end: string;
@@ -455,6 +456,11 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
           currentViewType === "listMonth" ? "custom-list-active" : ""
         }`}
         data-calendar-view={currentViewType}
+        style={
+          {
+            "--student-calendar-week-rows": monthWeekRows,
+          } as React.CSSProperties
+        }
       >
         <FullCalendar
           ref={calendarRef}
@@ -468,6 +474,16 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
           datesSet={(arg) => {
             setCurrentViewType(arg.view.type as CalendarViewType);
             setCurrentTitle(arg.view.title);
+            if (arg.view.type === "dayGridMonth") {
+              const weekCount = Math.max(
+                1,
+                Math.round(
+                  (arg.end.getTime() - arg.start.getTime()) /
+                    (7 * 24 * 60 * 60 * 1000),
+                ),
+              );
+              setMonthWeekRows(weekCount);
+            }
             setVisibleRange({
               start: toLocalYmd(arg.start),
               end: toLocalYmd(arg.end),
@@ -493,7 +509,6 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             const targetLabel = formatEventTargetLabel(event);
             const safeTitle =
               eventTitle || (isHoliday ? LABELS.holiday : LABELS.schedule);
-            const showRangeText = !isRangeEvent || arg.isStart;
 
             if (arg.view.type === "listMonth") {
               return (
@@ -524,10 +539,15 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
 
             if (!isMonthView) return undefined;
 
+            const eventSpanClass = isRangeEvent
+              ? "student-calendar-event-label--range"
+              : "student-calendar-event-label--single";
+
             return (
               <div
                 className={[
                   "student-calendar-event-label",
+                  eventSpanClass,
                   "fc-segment-title",
                   isHoliday ? "is-holiday" : "",
                   isRangeEvent ? "is-range" : "",
@@ -541,7 +561,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                 title={safeTitle}
               >
                 <span className="student-calendar-event-label__text">
-                  {showRangeText ? safeTitle : "\u00A0"}
+                  {isRangeEvent ? (arg.isStart ? safeTitle : "\u00A0") : safeTitle}
                 </span>
               </div>
             );
@@ -551,7 +571,6 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
           expandRows
           eventDisplay="block"
           dayMaxEvents={2}
-          fixedWeekCount
           showNonCurrentDates={false}
           dayCellClassNames={(arg) => {
             const dateStr = toLocalYmd(arg.date);
@@ -560,6 +579,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             if (selectedDate === dateStr) classes.push("fc-day-selected");
             return classes;
           }}
+          fixedWeekCount={false}
         />
 
         {currentViewType === "listMonth" && (
