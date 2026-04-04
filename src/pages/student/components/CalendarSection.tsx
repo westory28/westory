@@ -331,27 +331,27 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             </span>
 
             <div className="student-calendar-shell__month-row">
-              <div className="student-calendar-shell__month-label">
-                <h2 className="student-calendar-shell__month-title">
-                  {currentTitle || LABELS.heading}
-                </h2>
-              </div>
-
-              <div className="student-calendar-shell__control-cluster student-calendar-shell__control-cluster--nav">
+              <div className="student-calendar-shell__month-badge">
                 <button
                   type="button"
                   onClick={() => handleNavigate("prev")}
-                  className="student-calendar-shell__nav-button"
+                  className="student-calendar-shell__nav-button student-calendar-shell__nav-button--month"
                   aria-label={LABELS.previousMonth}
                   title={LABELS.previousMonth}
                 >
                   <ChevronLeftIcon />
                 </button>
 
+                <div className="student-calendar-shell__month-label">
+                  <h2 className="student-calendar-shell__month-title">
+                    {currentTitle || LABELS.heading}
+                  </h2>
+                </div>
+
                 <button
                   type="button"
                   onClick={() => handleNavigate("next")}
-                  className="student-calendar-shell__nav-button"
+                  className="student-calendar-shell__nav-button student-calendar-shell__nav-button--month"
                   aria-label={LABELS.nextMonth}
                   title={LABELS.nextMonth}
                 >
@@ -483,6 +483,9 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
           eventContent={(arg) => {
             const event = arg.event.extendedProps as CalendarEvent;
             const isHoliday = event?.eventType === "holiday";
+            const isRangeEvent = arg.event.classNames.includes(
+              "student-calendar-range-event",
+            );
             const eventTitle = String(arg.event.title || "").trim();
             const meta = getScheduleCategoryMeta(event?.eventType, categories);
             const categoryLabel = isHoliday ? LABELS.holiday : meta.label;
@@ -490,6 +493,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             const targetLabel = formatEventTargetLabel(event);
             const safeTitle =
               eventTitle || (isHoliday ? LABELS.holiday : LABELS.schedule);
+            const showRangeText = !isRangeEvent || arg.isStart;
 
             if (arg.view.type === "listMonth") {
               return (
@@ -522,12 +526,22 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
 
             return (
               <div
-                className={`student-calendar-segment-title fc-segment-title ${
-                  isHoliday ? "holiday-segment-title" : ""
-                }`}
+                className={[
+                  "student-calendar-event-label",
+                  "fc-segment-title",
+                  isHoliday ? "is-holiday" : "",
+                  isRangeEvent ? "is-range" : "",
+                  arg.isStart ? "is-start" : "",
+                  arg.isEnd ? "is-end" : "",
+                  !arg.isStart && !arg.isEnd ? "is-middle" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
                 title={safeTitle}
               >
-                {safeTitle}
+                <span className="student-calendar-event-label__text">
+                  {showRangeText ? safeTitle : "\u00A0"}
+                </span>
               </div>
             );
           }}

@@ -147,6 +147,8 @@ const main = async () => {
       grade: '1',
       class: '2',
       number: '3',
+      profileEmojiId: 'smile',
+      profileIcon: '😀',
       role: 'student',
       teacherPortalEnabled: false,
       staffPermissions: [],
@@ -285,6 +287,20 @@ const main = async () => {
     const studentDb = testEnv.authenticatedContext(student.user.uid, { email: student.email }).firestore();
     await assertFails(setDoc(doc(studentDb, `users/${student.user.uid}`), { profileIcon: '😎' }, { merge: true }));
     return 'direct profile icon write denied';
+  }, results);
+
+  await expectPass('rules: warning acknowledgement succeeds when profileEmojiId already exists', async () => {
+    const studentDb = testEnv.authenticatedContext(student.user.uid, { email: student.email }).firestore();
+    await assertSucceeds(setDoc(doc(studentDb, `users/${student.user.uid}`), {
+      scoreWarningAcknowledged: true,
+      scoreWarningAcknowledgedAt: '2026-03-01T00:00:00.000Z',
+      updatedAt: '2026-03-01T00:00:00.000Z',
+    }, { merge: true }));
+    const userSnap = await getDoc(doc(studentDb, `users/${student.user.uid}`));
+    return {
+      profileEmojiId: userSnap.data()?.profileEmojiId,
+      scoreWarningAcknowledged: userSnap.data()?.scoreWarningAcknowledged,
+    };
   }, results);
 
   await expectFail('rank: locked emoji is rejected for low tier student', async () => {
