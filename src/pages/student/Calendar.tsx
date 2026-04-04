@@ -335,8 +335,8 @@ const Calendar = () => {
                 }
                 .fc-daygrid-event-harness.student-calendar-page-event-harness--range,
                 .fc-daygrid-event-harness-abs.student-calendar-page-event-harness--range {
-                    width: 100% !important;
-                    min-width: 100% !important;
+                    width: auto !important;
+                    min-width: 0 !important;
                     max-width: none !important;
                     overflow: visible !important;
                 }
@@ -355,13 +355,13 @@ const Calendar = () => {
                 .fc-daygrid-event.student-calendar-page-range-event .fc-event-title-container {
                     min-width: 0;
                     width: 100%;
-                    max-width: none;
+                    max-width: 100%;
                     overflow: visible;
                 }
                 .fc-daygrid-event.student-calendar-page-range-event {
                     width: 100% !important;
-                    min-width: 100% !important;
-                    max-width: none !important;
+                    min-width: 0 !important;
+                    max-width: 100% !important;
                     overflow: visible !important;
                     margin-left: 0 !important;
                     margin-right: 0 !important;
