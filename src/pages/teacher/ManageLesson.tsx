@@ -1347,8 +1347,9 @@ const ManageLesson: React.FC = () => {
       const normalizedLesson = normalizeLessonData(lessonData, {
         unitId,
         title:
-          String(lessonData.title || lessonTitle || selectedNodeTitle || "").trim() ||
-          unitId,
+          String(
+            lessonData.title || lessonTitle || selectedNodeTitle || "",
+          ).trim() || unitId,
       });
       const nextPdfSnapshot = createPdfEditorSnapshot({
         selectedNodeId: unitId,
@@ -1458,7 +1459,9 @@ const ManageLesson: React.FC = () => {
       return;
     }
     if (selectedPdfFile || preparedPdf || hasUnsavedPdfChanges) {
-      alert("저장하지 않은 PDF 편집 내용이 있습니다. 먼저 저장한 뒤 다시 요청해 주세요.");
+      alert(
+        "저장하지 않은 PDF 편집 내용이 있습니다. 먼저 저장한 뒤 다시 요청해 주세요.",
+      );
       return;
     }
 
@@ -1494,11 +1497,17 @@ const ManageLesson: React.FC = () => {
       const basePath = `${getSemesterCollectionPath(config, "lesson_pdfs")}/${selectedNodeId}`;
       const pendingUploadPath = `${basePath}/incoming/${uploadToken}.pdf`;
       const queuedProcessing = buildQueuedLessonPdfProcessingMeta({
-        pdfName: lessonPdfName || lessonPdfProcessing.file.originalName || "lesson.pdf",
+        pdfName:
+          lessonPdfName ||
+          lessonPdfProcessing.file.originalName ||
+          "lesson.pdf",
         pdfStoragePath: retryPdfStoragePath,
         byteSize:
-          originalPdfBlob.size || Number(lessonPdfProcessing.file.byteSize) || 0,
-        pageCount: worksheetPageImages.length || lessonPdfProcessing.pageCount || 0,
+          originalPdfBlob.size ||
+          Number(lessonPdfProcessing.file.byteSize) ||
+          0,
+        pageCount:
+          worksheetPageImages.length || lessonPdfProcessing.pageCount || 0,
         pendingUploadToken: uploadToken,
         pendingUploadPath,
         previous: lessonPdfProcessing,
@@ -1556,7 +1565,8 @@ const ManageLesson: React.FC = () => {
       keepPdfBusyUntilPollingCompletes = true;
     } catch (error) {
       console.error("Failed to retry lesson pdf extraction:", error);
-      const shouldPersistFailure = shouldPersistPdfExtractionRetryFailure(error);
+      const shouldPersistFailure =
+        shouldPersistPdfExtractionRetryFailure(error);
       if (shouldPersistFailure) {
         const failedProcessing = buildFailedLessonPdfProcessingMeta(
           lessonPdfProcessing,
@@ -1739,7 +1749,9 @@ const ManageLesson: React.FC = () => {
       },
     );
     const hasStoredPdfSource = Boolean(
-      normalizedProcessing.file.storagePath || lessonPdfStoragePath || lessonPdfUrl,
+      normalizedProcessing.file.storagePath ||
+      lessonPdfStoragePath ||
+      lessonPdfUrl,
     );
 
     if (
@@ -1757,12 +1769,10 @@ const ManageLesson: React.FC = () => {
     let cancelled = false;
     let refreshInFlight = false;
     const finalizeRetryOverlay = (
-      nextFeedback:
-        | {
-            tone: "success" | "error";
-            message: string;
-          }
-        | null,
+      nextFeedback: {
+        tone: "success" | "error";
+        message: string;
+      } | null,
       logMessage?: string,
     ) => {
       if (logMessage) {
@@ -1830,7 +1840,10 @@ const ManageLesson: React.FC = () => {
         }
       } catch (error) {
         console.error("Failed to refresh lesson pdf processing state:", error);
-        if (!cancelled && pdfExtractionRetryOverlay?.unitId === selectedNodeId) {
+        if (
+          !cancelled &&
+          pdfExtractionRetryOverlay?.unitId === selectedNodeId
+        ) {
           finalizeRetryOverlay(
             {
               tone: "error",
@@ -1877,28 +1890,30 @@ const ManageLesson: React.FC = () => {
 
     const isRequesting = pdfExtractionRetryOverlay.phase === "requesting";
 
-    const timeoutId = window.setTimeout(() => {
-      console.warn("Lesson PDF extraction retry overlay timed out.", {
-        unitId: selectedNodeId,
-        startedAt: pdfExtractionRetryOverlay.startedAt,
-        phase: pdfExtractionRetryOverlay.phase,
-      });
-      setPdfExtractionRetryOverlay((current) => {
-        if (!current || current.unitId !== selectedNodeId) return current;
-        return null;
-      });
-      setPdfBusy(false);
-      setScreenBusyMessage(null);
-      setPdfSaveFeedback({
-        tone: "error",
-        message:
-          isRequesting
+    const timeoutId = window.setTimeout(
+      () => {
+        console.warn("Lesson PDF extraction retry overlay timed out.", {
+          unitId: selectedNodeId,
+          startedAt: pdfExtractionRetryOverlay.startedAt,
+          phase: pdfExtractionRetryOverlay.phase,
+        });
+        setPdfExtractionRetryOverlay((current) => {
+          if (!current || current.unitId !== selectedNodeId) return current;
+          return null;
+        });
+        setPdfBusy(false);
+        setScreenBusyMessage(null);
+        setPdfSaveFeedback({
+          tone: "error",
+          message: isRequesting
             ? "구조 추출 재요청이 예상보다 오래 걸리고 있습니다. 잠시 후 상태를 다시 확인해 주세요."
             : "원본 PDF 구조 추출이 예상보다 오래 걸리고 있습니다. 잠시 후 상태를 다시 확인해 주세요.",
-      });
-    }, isRequesting
-      ? PDF_EXTRACTION_RETRY_REQUEST_TIMEOUT_MS
-      : PDF_EXTRACTION_RETRY_TIMEOUT_MS);
+        });
+      },
+      isRequesting
+        ? PDF_EXTRACTION_RETRY_REQUEST_TIMEOUT_MS
+        : PDF_EXTRACTION_RETRY_TIMEOUT_MS,
+    );
 
     return () => window.clearTimeout(timeoutId);
   }, [pdfExtractionRetryOverlay, selectedNodeId]);
@@ -3250,9 +3265,8 @@ const ManageLesson: React.FC = () => {
       : savedLessonState.isVisibleToStudents;
     let metaSaved = false;
     try {
-      const lessonDocRef = await findOrCreateLessonDocRefByUnitId(
-        selectedNodeId,
-      );
+      const lessonDocRef =
+        await findOrCreateLessonDocRefByUnitId(selectedNodeId);
       if (shouldSaveMeta) {
         setLessonSaveState("saving");
       }
@@ -3485,9 +3499,9 @@ const ManageLesson: React.FC = () => {
             ? shouldSaveMeta
               ? "PDF 편집 내용과 제목/공개 설정을 저장했습니다. 원본 PDF 구조 추출 상태는 자동으로 다시 표시됩니다."
               : "PDF 편집 내용을 저장했습니다. 원본 PDF 구조 추출 상태는 자동으로 다시 표시됩니다."
-          : shouldSaveMeta
-            ? "PDF 편집 내용과 제목/공개 설정을 저장했습니다."
-            : "PDF 편집 내용을 저장했습니다.";
+            : shouldSaveMeta
+              ? "PDF 편집 내용과 제목/공개 설정을 저장했습니다."
+              : "PDF 편집 내용을 저장했습니다.";
       setPdfSaveFeedback({
         tone: "success",
         message: successMessage,
@@ -3788,7 +3802,9 @@ const ManageLesson: React.FC = () => {
                         onSavePdf={() =>
                           void saveLesson({ source: "pdf-floating" })
                         }
-                        onRetryPdfExtraction={() => void retryLessonPdfExtraction()}
+                        onRetryPdfExtraction={() =>
+                          void retryLessonPdfExtraction()
+                        }
                         disablePdfSave={
                           !canEdit ||
                           !selectedNodeId ||
@@ -3991,8 +4007,8 @@ const ManageLesson: React.FC = () => {
               <i className="fas fa-spinner fa-spin text-xl"></i>
             </div>
             <div className="text-sm font-bold text-gray-800">
-              {screenBusyMessage ||
-                pdfExtractionRetryOverlay?.message ||
+              {pdfExtractionRetryOverlay?.message ||
+                screenBusyMessage ||
                 "잠시만 기다려 주세요."}
             </div>
             <div className="mt-1 text-xs text-gray-500">

@@ -829,12 +829,14 @@
   line-height: 1.1;
 }
 
-.student-calendar-section .student-calendar-event-label.is-single
+.student-calendar-section
+  .student-calendar-event-label.is-single
   .student-calendar-event-label__text {
   text-overflow: ellipsis;
 }
 
-.student-calendar-section .student-calendar-event-label.is-range
+.student-calendar-section
+  .student-calendar-event-label.is-range
   .student-calendar-event-label__text {
   text-overflow: clip;
 }
@@ -870,7 +872,8 @@
   justify-content: flex-start;
 }
 
-.student-calendar-section .student-calendar-event-label.is-holiday
+.student-calendar-section
+  .student-calendar-event-label.is-holiday
   .student-calendar-event-label__text {
   color: #ffffff !important;
   font-weight: 800;
