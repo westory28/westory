@@ -709,10 +709,10 @@
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
   .fc
   .fc-daygrid-event-harness-abs.student-calendar-event-harness--single {
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  overflow: hidden;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
 }
 
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
@@ -728,7 +728,7 @@
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
   .fc
   .fc-daygrid-event-harness-abs.student-calendar-event-harness--range {
-  overflow: visible;
+  overflow: visible !important;
 }
 
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
@@ -795,15 +795,14 @@
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
   .fc
   .fc-daygrid-event.student-calendar-range-event {
-  width: 100%;
-  max-width: none;
-  overflow: visible;
-  margin-left: 0 !important;
-  margin-right: 0 !important;
+  width: auto !important;
+  max-width: none !important;
+  overflow: visible !important;
+  margin-left: -0.22rem !important;
+  margin-right: -0.22rem !important;
   border-radius: 0 !important;
   position: relative;
   z-index: 2;
-  overflow: visible;
 }
 
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
