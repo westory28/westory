@@ -5,7 +5,8 @@
   "scripts": {
     "check": "node --check index.js",
     "smoke:source-archive-pdf": "node scripts/smoke-source-archive-pdf.mjs",
-    "cleanup:student-teacher-portal": "node scripts/cleanup-student-teacher-portal.cjs"
+    "cleanup:student-teacher-portal": "node scripts/cleanup-student-teacher-portal.cjs",
+    "fix:legacy-student-profile-emojis": "node scripts/fix-legacy-student-profile-emojis.cjs"
   },
   "engines": {
     "node": "20"

@@ -100,6 +100,7 @@ service cloud.firestore {
         'privacyAgreedAt',
         'consentAgreedItems',
         'profileIcon',
+        'profileEmojiId',
         'myPageGoalScore',
         'myPageSubjectGoals',
         'scoreWarningAcknowledged',
@@ -128,6 +129,7 @@ service cloud.firestore {
           && request.resource.data.consentAgreedItems.size() <= 50
         ))
         && (!request.resource.data.keys().hasAny(['profileIcon']) || (request.resource.data.profileIcon is string && request.resource.data.profileIcon.size() <= 16))
+        && (!request.resource.data.keys().hasAny(['profileEmojiId']) || (request.resource.data.profileEmojiId is string && request.resource.data.profileEmojiId.size() <= 64))
         && (!request.resource.data.keys().hasAny(['myPageGoalScore']) || (request.resource.data.myPageGoalScore is string && request.resource.data.myPageGoalScore.size() <= 120))
         && (!request.resource.data.keys().hasAny(['myPageSubjectGoals']) || (
           request.resource.data.myPageSubjectGoals is map

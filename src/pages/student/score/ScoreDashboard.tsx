@@ -17,6 +17,26 @@ interface GradingPlan {
     createdAt?: any;
 }
 
+const getFirestoreErrorCode = (error: unknown) => (
+    typeof error === 'object'
+        && error !== null
+        && 'code' in error
+        && typeof (error as { code?: unknown }).code === 'string'
+        ? (error as { code: string }).code
+        : ''
+);
+
+const getWarningAgreementErrorMessage = (error: unknown) => {
+    const code = getFirestoreErrorCode(error);
+    if (code === 'permission-denied') {
+        return '학생 정보 저장 권한을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.';
+    }
+    if (code === 'unavailable') {
+        return '네트워크 상태를 확인한 뒤 다시 시도해 주세요.';
+    }
+    return '동의 저장 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.';
+};
+
 const ScoreDashboard: React.FC = () => {
     const { userData, currentUser, config } = useAuth();
     const { showToast } = useAppToast();
@@ -326,12 +346,13 @@ const ScoreDashboard: React.FC = () => {
                 uid: userData.uid,
                 userDocPath: `users/${userData.uid}`,
                 hasUserDoc: userDocExists,
+                code: getFirestoreErrorCode(e),
                 error: e,
             });
             showToast({
                 tone: 'error',
                 title: '동의 저장에 실패했습니다.',
-                message: '네트워크 상태를 확인한 뒤 다시 시도해 주세요.',
+                message: getWarningAgreementErrorMessage(e),
             });
         } finally {
             setWarningSaving(false);
