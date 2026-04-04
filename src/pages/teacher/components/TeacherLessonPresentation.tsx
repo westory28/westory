@@ -17,6 +17,7 @@ import {
   type LessonFootnote,
   type LessonData,
 } from "../../../lib/lessonData";
+import { emitSessionActivity } from "../../../lib/sessionActivity";
 import {
   formatTeacherPresentationSavedAt,
   getTeacherPresentationClassDocPath,
@@ -546,6 +547,7 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
   };
 
   const handleManualSave = async () => {
+    emitSessionActivity();
     await persistPresentation({
       annotationState: latestAnnotationRef.current,
       currentPage: latestPageRef.current,

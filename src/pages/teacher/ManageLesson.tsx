@@ -80,6 +80,7 @@ import {
   type TeacherPresentationClassSummary,
   type TeacherPresentationRuntimeStatus,
 } from "../../lib/teacherPresentation";
+import { emitSessionActivity } from "../../lib/sessionActivity";
 import type { SourceArchiveAsset } from "../../types";
 import TeacherPresentationLauncher from "./components/TeacherPresentationLauncher";
 import TeacherLessonPresentation from "./components/TeacherLessonPresentation";
@@ -1277,6 +1278,7 @@ const ManageLesson: React.FC = () => {
     }
 
     let lessonDocRef: ReturnType<typeof doc> | null = null;
+    emitSessionActivity();
     setPdfBusy(true);
     setScreenBusyMessage("원본 PDF 구조 추출을 다시 요청하는 중입니다...");
     setPdfSaveFeedback(null);
@@ -2808,6 +2810,7 @@ const ManageLesson: React.FC = () => {
     source?: "header" | "pdf-floating";
   }) => {
     if (!canEdit || !selectedNodeId) return;
+    emitSessionActivity();
     const source = options?.source || "header";
     const shouldSavePdf =
       source === "pdf-floating" ||

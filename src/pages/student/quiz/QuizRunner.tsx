@@ -8,6 +8,7 @@ import { notifyPointsUpdated } from '../../../lib/appEvents';
 import Chart from 'chart.js/auto';
 import { getSemesterCollectionPath, getSemesterDocPath } from '../../../lib/semesterScope';
 import { claimPointActivityReward } from '../../../lib/points';
+import { emitSessionActivity } from '../../../lib/sessionActivity';
 
 // Interfaces
 interface Question {
@@ -261,6 +262,9 @@ const QuizRunner: React.FC = () => {
 
     const finishQuiz = async (isTimeout = false) => {
         if (finishSubmitting) return;
+        if (!isTimeout) {
+            emitSessionActivity();
+        }
         setFinishSubmitting(true);
         if (timerRef.current) clearInterval(timerRef.current);
         if (isTimeout) alert('제한 시간이 종료되었습니다.');

@@ -27,6 +27,7 @@ import {
   type LessonFootnote,
 } from "../../../../lib/lessonData";
 import { claimPointActivityReward } from "../../../../lib/points";
+import { emitSessionActivity } from "../../../../lib/sessionActivity";
 import { getSemesterCollectionPath } from "../../../../lib/semesterScope";
 
 type AnswerStatus = "" | "correct" | "wrong";
@@ -262,6 +263,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
       answerSnapshot.totalCount > 0 &&
       answerSnapshot.filledCount === answerSnapshot.totalCount;
     try {
+      emitSessionActivity();
       setIsSaving(true);
       await setDoc(
         progressRef,
@@ -685,6 +687,49 @@ const LessonContent: React.FC<LessonContentProps> = ({
     : hasUnsavedChanges
       ? "저장"
       : "저장됨";
+  const floatingSaveControls = canPersist ? (
+    <div
+      className={
+        fullscreenPreview
+          ? "pointer-events-none sticky top-[calc(env(safe-area-inset-top,0px)+0.75rem)] z-[70] mb-4 flex justify-end px-1"
+          : "pointer-events-none fixed right-4 top-[calc(env(safe-area-inset-top,0px)+5rem)] z-[70] flex flex-col items-end gap-2 md:right-6 md:top-[5.5rem]"
+      }
+    >
+      <div className="flex flex-col items-end gap-2">
+        <div
+          aria-live="polite"
+          className={`pointer-events-auto rounded-full px-4 py-2 text-xs font-bold shadow-sm ${saveStatusToneClass}`}
+        >
+          {saveStatusLabel}
+        </div>
+        <button
+          type="button"
+          onClick={handleSaveAction}
+          disabled={isSaving || !hasUnsavedChanges}
+          data-session-action="true"
+          className={`pointer-events-auto inline-flex min-h-14 items-center gap-3 rounded-full px-5 text-sm font-bold shadow-[0_18px_38px_rgba(15,23,42,0.18)] transition focus-visible:outline-none focus-visible:ring-4 ${
+            isSaving
+              ? "bg-blue-600 text-white focus-visible:ring-blue-100"
+              : hasUnsavedChanges
+                ? "bg-blue-600 text-white hover:bg-blue-700 focus-visible:ring-blue-100"
+                : "cursor-default border border-emerald-200 bg-white text-emerald-700 focus-visible:ring-emerald-100"
+          }`}
+          aria-label={floatingSaveButtonLabel}
+        >
+          <i
+            className={`fas ${
+              isSaving
+                ? "fa-spinner fa-spin"
+                : hasUnsavedChanges
+                  ? "fa-floppy-disk"
+                  : "fa-check"
+            } text-sm`}
+          ></i>
+          <span>{floatingSaveButtonLabel}</span>
+        </button>
+      </div>
+    </div>
+  ) : null;
 
   const content = (
     <div
@@ -694,6 +739,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
           : "mx-auto max-w-4xl animate-fadeIn"
       }
     >
+      {floatingSaveControls}
       <div
         className={`rounded-[28px] border border-white/70 bg-white/95 shadow-[0_24px_60px_rgba(15,23,42,0.08)] backdrop-blur ${fullscreenPreview ? "p-4 md:p-5" : "mb-6 p-5 md:p-7"}`}
       >
@@ -858,47 +904,6 @@ const LessonContent: React.FC<LessonContentProps> = ({
             </span>
           )}
         </div>
-
-        {canPersist && (
-          <div
-            className={`pointer-events-none fixed right-4 z-[70] flex flex-col items-end gap-2 md:right-6 ${
-              fullscreenPreview
-                ? "top-[calc(env(safe-area-inset-top,0px)+0.75rem)] md:top-4"
-                : "top-[calc(env(safe-area-inset-top,0px)+5rem)] md:top-[5.5rem]"
-            }`}
-          >
-            <div
-              aria-live="polite"
-              className={`pointer-events-auto rounded-full px-4 py-2 text-xs font-bold shadow-sm ${saveStatusToneClass}`}
-            >
-              {saveStatusLabel}
-            </div>
-            <button
-              type="button"
-              onClick={handleSaveAction}
-              disabled={isSaving || !hasUnsavedChanges}
-              className={`pointer-events-auto inline-flex min-h-14 items-center gap-3 rounded-full px-5 text-sm font-bold shadow-[0_18px_38px_rgba(15,23,42,0.18)] transition focus-visible:outline-none focus-visible:ring-4 ${
-                isSaving
-                  ? "bg-blue-600 text-white focus-visible:ring-blue-100"
-                  : hasUnsavedChanges
-                    ? "bg-blue-600 text-white hover:bg-blue-700 focus-visible:ring-blue-100"
-                    : "cursor-default border border-emerald-200 bg-white text-emerald-700 focus-visible:ring-emerald-100"
-              }`}
-              aria-label={floatingSaveButtonLabel}
-            >
-              <i
-                className={`fas ${
-                  isSaving
-                    ? "fa-spinner fa-spin"
-                    : hasUnsavedChanges
-                      ? "fa-floppy-disk"
-                      : "fa-check"
-                } text-sm`}
-              ></i>
-              <span>{floatingSaveButtonLabel}</span>
-            </button>
-          </div>
-        )}
 
         {saveCompletionPopup && (
           <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">

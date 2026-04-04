@@ -8,6 +8,7 @@ import { runWhenIdle } from '../../lib/browserTasks';
 import { getDefaultProfileEmojiValue } from '../../lib/profileEmojis';
 import { loadStudentRankPromotionSnapshot } from '../../lib/pointRankPromotion';
 import { readLocalOnly, removeStorage, writeLocalOnly } from '../../lib/safeStorage';
+import { SESSION_ACTIVITY_EVENT } from '../../lib/sessionActivity';
 import { getPointRankDefaultEmojiValue, type PointRankDisplay } from '../../lib/pointRanks';
 import {
     canAccessTeacherPortal,
@@ -296,15 +297,34 @@ const Header: React.FC = () => {
     useEffect(() => {
         if (!currentUser) return;
 
-        const handleActivityClick = (event: MouseEvent) => {
+        const handleMeaningfulClick = (event: MouseEvent) => {
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+            if (target.closest('[data-session-ignore="true"]')) return;
+            if (target.closest('[data-session-action="true"]') || target.closest('a[href]')) {
+                extendSession();
+            }
+        };
+
+        const handleSubmit = (event: Event) => {
             const target = event.target;
             if (!(target instanceof Element)) return;
             if (target.closest('[data-session-ignore="true"]')) return;
             extendSession();
         };
 
-        document.addEventListener('click', handleActivityClick, true);
-        return () => document.removeEventListener('click', handleActivityClick, true);
+        const handleSessionActivity = () => {
+            extendSession();
+        };
+
+        document.addEventListener('click', handleMeaningfulClick, true);
+        document.addEventListener('submit', handleSubmit, true);
+        window.addEventListener(SESSION_ACTIVITY_EVENT, handleSessionActivity);
+        return () => {
+            document.removeEventListener('click', handleMeaningfulClick, true);
+            document.removeEventListener('submit', handleSubmit, true);
+            window.removeEventListener(SESSION_ACTIVITY_EVENT, handleSessionActivity);
+        };
     }, [currentUser]);
 
     useEffect(() => {
@@ -356,7 +376,7 @@ const Header: React.FC = () => {
         <header>
             <div className="header-container">
                 <div className="flex items-center gap-4 h-full">
-                    <Link to={home} className="logo-text" data-session-ignore="true">
+                    <Link to={home} className="logo-text">
                         <span className="logo-we">We</span>
                         <span className="logo-story">story</span>
                     </Link>
@@ -371,7 +391,7 @@ const Header: React.FC = () => {
                             if (!hasChildren) {
                                 const itemTarget = resolveTarget(item.url);
                                 return (
-                                    <Link key={`${item.url}-${idx}`} to={itemTarget} data-session-ignore="true" className={`nav-link ${active ? 'active' : ''} ${!isTeacherPortal ? 'student-nav-link' : ''}`}>
+                                    <Link key={`${item.url}-${idx}`} to={itemTarget} className={`nav-link ${active ? 'active' : ''} ${!isTeacherPortal ? 'student-nav-link' : ''}`}>
                                         {item.name}
                                     </Link>
                                 );
@@ -380,7 +400,7 @@ const Header: React.FC = () => {
                             const itemTarget = resolveTarget(item.url);
                             return (
                                 <div key={`${item.url}-${idx}`} className="relative group h-full flex items-center">
-                                    <Link to={itemTarget} data-session-ignore="true" className={`nav-link ${active ? 'active' : ''} ${!isTeacherPortal ? 'student-nav-link' : ''} flex items-center gap-1`}>
+                                    <Link to={itemTarget} className={`nav-link ${active ? 'active' : ''} ${!isTeacherPortal ? 'student-nav-link' : ''} flex items-center gap-1`}>
                                         {item.name}
                                         <i className="fas fa-chevron-down text-[10px] ml-1 opacity-50 group-hover:opacity-100 transition"></i>
                                     </Link>
@@ -392,7 +412,6 @@ const Header: React.FC = () => {
                                                 <Link
                                                     key={`${child.url}-${childIdx}`}
                                                     to={childTarget}
-                                                    data-session-ignore="true"
                                                     className={`block rounded-lg px-3 py-3.5 text-[13px] whitespace-nowrap font-bold ${isChildActive(child.resolvedUrl, resolvedChildren) ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'}`}
                                                 >
                                                     {child.name}
@@ -408,12 +427,12 @@ const Header: React.FC = () => {
 
                 <div className="header-right">
                     {isTeacherPortal && canManageSettings(userData, currentUser?.email || '') && (
-                        <Link to="/teacher/settings" data-session-ignore="true" className="text-gray-400 hover:text-blue-600 transition" title="설정">
+                        <Link to="/teacher/settings" className="text-gray-400 hover:text-blue-600 transition" title="설정">
                             <i className="fas fa-cog fa-lg"></i>
                         </Link>
                     )}
 
-                    <Link to={profileTarget} data-session-ignore="true" className="user-greeting header-user-link inline-flex items-center gap-1.5 hover:text-blue-600 transition cursor-pointer" title={isTeacherPortal ? '관리자 페이지' : '마이페이지'}>
+                    <Link to={profileTarget} className="user-greeting header-user-link inline-flex items-center gap-1.5 hover:text-blue-600 transition cursor-pointer" title={isTeacherPortal ? '관리자 페이지' : '마이페이지'}>
                         {!isTeacherPortal && (
                             <span className="mr-1.5 inline-flex h-6 w-6 items-center justify-center rounded-full border border-gray-300 bg-gray-100 text-[14px] leading-none">
                                 {studentProfileIcon}
@@ -479,7 +498,6 @@ const Header: React.FC = () => {
                     <div key={`${item.url}-mobile-${idx}`}>
                         <Link
                             to={itemTarget}
-                            data-session-ignore="true"
                             className={`mobile-link ${isActive(item.url) || resolvedChildren.some((child) => isChildActive(child.resolvedUrl, resolvedChildren)) ? 'active' : ''}`}
                             onClick={() => setMobileMenuOpen(false)}
                         >
@@ -493,7 +511,6 @@ const Header: React.FC = () => {
                                     <Link
                                         key={`${child.url}-mobile-child-${childIdx}`}
                                         to={childTarget}
-                                        data-session-ignore="true"
                                         className={`block pl-12 pr-4 py-1.5 text-sm rounded-r-full mr-2 font-bold ${isChildActive(child.resolvedUrl, resolvedChildren) ? 'text-blue-600 bg-blue-50' : 'text-gray-500 hover:text-blue-600 hover:bg-gray-100'}`}
                                         onClick={() => setMobileMenuOpen(false)}
                                     >
@@ -520,7 +537,6 @@ const Header: React.FC = () => {
                                 <Link
                                     key={`${child.url}-desktop-submenu-${childIdx}`}
                                     to={childTarget}
-                                    data-session-ignore="true"
                                     className={`border-b-2 px-6 py-3 text-sm font-bold transition ${
                                         active
                                             ? 'border-blue-500 text-blue-600'

@@ -6,6 +6,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { notifyPointsUpdated } from '../../../lib/appEvents';
 import { db } from '../../../lib/firebase';
 import { readLocalOnly, removeStorage, writeLocalOnly } from '../../../lib/safeStorage';
+import { emitSessionActivity } from '../../../lib/sessionActivity';
 import {
     normalizeHistoryClassroomAssignment,
     normalizeHistoryClassroomResult,
@@ -348,6 +349,7 @@ const HistoryClassroomRunner: React.FC = () => {
 
     const submitAnswers = async () => {
         if (!assignment || !userData) return;
+        emitSessionActivity();
         setSubmitting(true);
         try {
             const result = await saveResult({ status: 'failed' });

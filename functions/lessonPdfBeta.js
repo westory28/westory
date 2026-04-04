@@ -170,19 +170,36 @@ const deleteStoragePrefix = async (bucket, prefix) => {
 const resolveLessonDocRef = async (parsed, customMetadata) => {
   const lessonDocId = normalizeText(customMetadata.lessonDocId);
   if (lessonDocId) {
-    const directRef = db.doc(`${parsed.lessonCollectionPath}/${lessonDocId}`);
-    const directSnap = await directRef.get();
-    if (directSnap.exists) return directRef;
+    const directPaths = [parsed.lessonCollectionPath];
+    if (parsed.lessonCollectionPath !== "lessons") {
+      directPaths.push("lessons");
+    }
+
+    for (const collectionPath of directPaths) {
+      const directRef = db.doc(`${collectionPath}/${lessonDocId}`);
+      const directSnap = await directRef.get();
+      if (directSnap.exists) return directRef;
+    }
   }
 
-  const lessonQuery = await db
-    .collection(parsed.lessonCollectionPath)
-    .where("unitId", "==", parsed.unitId)
-    .limit(1)
-    .get();
+  const collectionPaths = [parsed.lessonCollectionPath];
+  if (parsed.lessonCollectionPath !== "lessons") {
+    collectionPaths.push("lessons");
+  }
 
-  if (lessonQuery.empty) return null;
-  return lessonQuery.docs[0].ref;
+  for (const collectionPath of collectionPaths) {
+    const lessonQuery = await db
+      .collection(collectionPath)
+      .where("unitId", "==", parsed.unitId)
+      .limit(1)
+      .get();
+
+    if (!lessonQuery.empty) {
+      return lessonQuery.docs[0].ref;
+    }
+  }
+
+  return null;
 };
 
 exports.processLessonPdfIncomingUpload = onObjectFinalized(

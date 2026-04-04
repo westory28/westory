@@ -605,6 +605,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   const shouldUseBoundedViewportScroll =
     isViewportInteractive &&
     (mode === "teacher-present" || isAnnotationEnabled || studentZoom > 1.02);
+  const allowNativeStudentTouchScroll =
+    isStudentSolveMode && !isAnnotationEnabled && studentZoom <= 1.02;
   const studentZoomRef = useRef(1);
   const [toolbarVisible, setToolbarVisible] = useState(
     annotationUiMode === "always",
@@ -1298,6 +1300,9 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     }
 
     if (hasActiveTouchGesture(page)) return;
+    if (event.pointerType === "touch" && allowNativeStudentTouchScroll) {
+      return;
+    }
     if (event.pointerType === "touch") {
       activeTouchPointerIdsRef.current.add(event.pointerId);
       if (activeTouchPointerIdsRef.current.size >= 2) {
@@ -2313,7 +2318,9 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                 style={
                   isViewportInteractive
                     ? {
-                        touchAction: "none",
+                        touchAction: allowNativeStudentTouchScroll
+                          ? "pan-y pinch-zoom"
+                          : "none",
                         overscrollBehavior: shouldUseBoundedViewportScroll
                           ? "contain"
                           : undefined,
@@ -2424,7 +2431,11 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                   }`}
                   style={{
                     cursor: stageCursor,
-                    touchAction: isViewportInteractive ? "none" : undefined,
+                    touchAction: isViewportInteractive
+                      ? allowNativeStudentTouchScroll
+                        ? "pan-y pinch-zoom"
+                        : "none"
+                      : undefined,
                     width: isViewportInteractive
                       ? `${studentZoom * 100}%`
                       : "100%",
