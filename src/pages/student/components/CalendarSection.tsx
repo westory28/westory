@@ -520,6 +520,33 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
               "student-calendar-event-harness--single",
               !isRangeEvent,
             );
+
+            const harnessElement = harness as HTMLElement;
+            const eventElement = arg.el as HTMLElement;
+            if (isRangeEvent) {
+              harnessElement.style.removeProperty("left");
+              harnessElement.style.removeProperty("right");
+              harnessElement.style.removeProperty("inset-inline");
+              harnessElement.style.removeProperty("width");
+              harnessElement.style.removeProperty("max-width");
+              harnessElement.style.removeProperty("min-width");
+              harnessElement.style.removeProperty("overflow");
+              eventElement.style.removeProperty("width");
+              eventElement.style.removeProperty("max-width");
+              eventElement.style.removeProperty("overflow");
+              return;
+            }
+
+            harnessElement.style.setProperty("left", "0px");
+            harnessElement.style.setProperty("right", "0px");
+            harnessElement.style.setProperty("inset-inline", "0px");
+            harnessElement.style.setProperty("width", "100%");
+            harnessElement.style.setProperty("max-width", "100%");
+            harnessElement.style.setProperty("min-width", "0px");
+            harnessElement.style.setProperty("overflow", "hidden");
+            eventElement.style.setProperty("width", "100%");
+            eventElement.style.setProperty("max-width", "100%");
+            eventElement.style.setProperty("overflow", "hidden");
           }}
           dayCellContent={(arg) =>
             renderDayCellHeader(arg.date, arg.dayNumberText)
@@ -574,30 +601,32 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             const eventSpanClass = isRangeEvent
               ? "student-calendar-event-label--range"
               : "student-calendar-event-label--single";
+            const eventLabelClassName = [
+              "student-calendar-event-label",
+              eventSpanClass,
+              "fc-segment-title",
+              isHoliday ? "is-holiday" : "",
+              isRangeEvent ? "is-range" : "",
+              !isRangeEvent ? "is-single" : "",
+              arg.isStart ? "is-start" : "",
+              arg.isEnd ? "is-end" : "",
+              !arg.isStart && !arg.isEnd ? "is-middle" : "",
+            ]
+              .filter(Boolean)
+              .join(" ");
+
+            if (!isRangeEvent) {
+              return (
+                <div className={eventLabelClassName} title={safeTitle}>
+                  {safeTitle}
+                </div>
+              );
+            }
 
             return (
-              <div
-                className={[
-                  "student-calendar-event-label",
-                  eventSpanClass,
-                  "fc-segment-title",
-                  isHoliday ? "is-holiday" : "",
-                  isRangeEvent ? "is-range" : "",
-                  !isRangeEvent ? "is-single" : "",
-                  arg.isStart ? "is-start" : "",
-                  arg.isEnd ? "is-end" : "",
-                  !arg.isStart && !arg.isEnd ? "is-middle" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-                title={safeTitle}
-              >
+              <div className={eventLabelClassName} title={safeTitle}>
                 <span className="student-calendar-event-label__text">
-                  {isRangeEvent
-                    ? arg.isStart
-                      ? safeTitle
-                      : "\u00A0"
-                    : safeTitle}
+                  {arg.isStart ? safeTitle : "\u00A0"}
                 </span>
               </div>
             );

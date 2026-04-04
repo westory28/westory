@@ -212,7 +212,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
       <div className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-[28px] border border-gray-200 bg-gray-50 shadow-2xl">
-        <div className="border-b border-gray-200 bg-white px-5 py-4 sm:px-6">
+        <div className="border-b border-gray-200 bg-white px-5 py-3.5 sm:px-6">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <div className="flex items-center gap-2 text-xs font-bold text-blue-600">
@@ -237,7 +237,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6">
           {loading ? (
             <div className="rounded-2xl border border-gray-200 bg-white px-6 py-14 text-center text-sm font-semibold text-gray-400">
               설정을 불러오는 중입니다...
@@ -261,7 +261,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-1 rounded-xl border border-gray-200 bg-gray-50 px-2 py-1.5">
-                  <div className="text-[11px] font-semibold text-gray-600">
+                  <div className="text-[10px] font-semibold text-gray-600">
                     공개를 꺼도 반 선택은 저장됩니다.
                   </div>
                   <button
@@ -332,7 +332,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                   </div>
                 </div>
 
-                <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+                <div className="grid gap-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
                   {grade3ClassIds.length > 0 ? (
                     grade3ClassIds.map((classId) => {
                       const checked =
@@ -362,7 +362,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                               : "border-gray-200 bg-white"
                           }`}
                         >
-                          <div className="grid min-h-[2.5rem] grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-1.5">
+                          <div className="grid min-h-8 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-1">
                             <div className="min-w-0 truncate text-[12px] font-extrabold text-gray-900">
                               {classId}
                             </div>
