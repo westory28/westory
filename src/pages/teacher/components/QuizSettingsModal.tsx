@@ -354,7 +354,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                       return (
                         <div
                           key={classId}
-                          className={`rounded-xl border px-2 py-1.5 transition ${
+                          className={`rounded-lg border px-2 py-1.5 transition ${
                             checked
                               ? settings.active
                                 ? "border-blue-200 bg-blue-50/80"
@@ -405,20 +405,20 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                           </div>
 
                           {confirmResetClassId === classId && (
-                            <div className="mt-1.5 rounded-xl border border-rose-200 bg-rose-50 px-2.5 py-2.5">
-                              <div className="text-xs font-bold text-rose-800">
+                            <div className="mt-1.5 rounded-lg border border-rose-200 bg-rose-50 px-2 py-2">
+                              <div className="text-[11px] font-bold text-rose-800">
                                 {classId} 응시 기록을 초기화합니다.
                               </div>
-                              <p className="mt-1 text-[11px] leading-5 text-rose-700">
+                              <p className="mt-1 text-[10px] leading-4 text-rose-700">
                                 응시 기록, 제출 상태, 재응시 제한, 해당 평가
                                 포인트 거래를 정리합니다.
                               </p>
-                              <div className="mt-2.5 flex flex-wrap justify-end gap-2">
+                              <div className="mt-2 flex flex-wrap justify-end gap-1.5">
                                 <button
                                   type="button"
                                   onClick={() => setConfirmResetClassId("")}
                                   disabled={resettingClassId === classId}
-                                  className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                  className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[10px] font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
                                 >
                                   취소
                                 </button>
@@ -428,7 +428,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                                     void handleResetAttempts(classId)
                                   }
                                   disabled={resettingClassId === classId}
-                                  className="rounded-lg bg-rose-600 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-rose-300"
+                                  className="rounded-lg bg-rose-600 px-2.5 py-1 text-[10px] font-bold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-rose-300"
                                 >
                                   {resettingClassId === classId
                                     ? "초기화 중..."
@@ -441,7 +441,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                       );
                     })
                   ) : (
-                    <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-sm text-gray-500 sm:col-span-2 lg:col-span-4 xl:col-span-5">
+                    <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-sm text-gray-500 sm:col-span-2 lg:col-span-6">
                       학교 반 목록을 아직 불러오지 못했습니다.
                     </div>
                   )}
