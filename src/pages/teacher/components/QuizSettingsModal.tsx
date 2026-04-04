@@ -247,20 +247,20 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
               <section className={`${sectionCardClassName} space-y-1.5 p-2.5`}>
                 <div className="flex flex-wrap items-center justify-between gap-1">
                   <div>
-                    <h4 className="text-base font-extrabold text-gray-900">
+                    <h4 className="text-sm font-extrabold text-gray-900">
                       학급별 공개 / 초기화
                     </h4>
                     <p className="mt-0.5 text-[10px] text-gray-500">
                       공개 반과 초기화만 빠르게 확인합니다.
                     </p>
                   </div>
-                  <div className="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700">
+                  <div className="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">
                     공개 학급 {normalizedSelectedClassIds.length}/
                     {grade3ClassIds.length || 0}
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-1 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1">
+                <div className="flex flex-wrap items-center gap-0.5 rounded-lg border border-gray-200 bg-gray-50 px-1.5 py-1">
                   <div className="text-[10px] font-semibold text-gray-600">
                     공개를 꺼도 반 선택은 저장됩니다.
                   </div>
