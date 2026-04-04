@@ -49,7 +49,7 @@ const createDefaultFormState = (classIds: string[]): QuizSettingsFormState => ({
 });
 
 const sectionCardClassName =
-  "rounded-2xl border border-gray-200 bg-white p-5 shadow-sm";
+  "rounded-2xl border border-gray-200 bg-white p-4 shadow-sm";
 
 const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
   isOpen,
@@ -208,20 +208,19 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
-      <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-[28px] border border-gray-200 bg-gray-50 shadow-2xl">
-        <div className="border-b border-gray-200 bg-white px-6 py-5 sm:px-7">
+      <div className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-[28px] border border-gray-200 bg-gray-50 shadow-2xl">
+        <div className="border-b border-gray-200 bg-white px-5 py-4 sm:px-6">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <div className="flex items-center gap-2 text-sm font-bold text-blue-600">
+              <div className="flex items-center gap-2 text-xs font-bold text-blue-600">
                 <i className="fas fa-sliders-h"></i>
                 <span>평가 상세 설정</span>
               </div>
-              <h3 className="mt-2 text-xl font-extrabold text-gray-900">
+              <h3 className="mt-1.5 text-lg font-extrabold text-gray-900 sm:text-xl">
                 {nodeTitle || "선택한 단원"} · {categoryLabel}
               </h3>
-              <p className="mt-2 text-sm text-gray-500">
-                공개 범위, 출제 방식, 재응시와 학급별 초기화를 한곳에서
-                관리합니다.
+              <p className="mt-1 text-sm text-gray-500">
+                공개, 초기화, 응시 조건을 한곳에서 조정합니다.
               </p>
             </div>
             <button
@@ -235,40 +234,38 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6 sm:px-7">
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
           {loading ? (
             <div className="rounded-2xl border border-gray-200 bg-white px-6 py-14 text-center text-sm font-semibold text-gray-400">
               설정을 불러오는 중입니다...
             </div>
           ) : (
-            <div className="space-y-5">
-              <section className={`${sectionCardClassName} space-y-5`}>
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div className="space-y-4">
+              <section className={`${sectionCardClassName} space-y-4`}>
+                <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
                   <div>
-                    <h4 className="text-lg font-extrabold text-gray-900">
+                    <h4 className="text-base font-extrabold text-gray-900">
                       학급별 공개 / 초기화
                     </h4>
-                    <p className="mt-1 text-sm text-gray-500">
-                      3학년 각 반의 공개 상태와 응시 초기화를 상단에서 한눈에
-                      확인하고 바로 조정합니다.
+                    <p className="mt-1 text-xs text-gray-500">
+                      3학년 반별 공개 상태와 초기화를 바로 조정합니다.
                     </p>
                   </div>
-                  <div className="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">
+                  <div className="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-[11px] font-bold text-blue-700">
                     공개 학급 {normalizedSelectedClassIds.length}/
                     {grade3ClassIds.length || 0}
                   </div>
                 </div>
 
-                <div className="grid gap-4 xl:grid-cols-[0.92fr_1.08fr]">
-                  <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4">
-                    <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="grid gap-3 xl:grid-cols-[0.96fr_1.04fr]">
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <div className="text-sm font-bold text-gray-800">
                           학생에게 공개
                         </div>
-                        <div className="mt-1 text-xs text-gray-500">
-                          공개를 끄면 저장된 학급 선택은 유지되지만 학생
-                          화면에서는 모두 숨겨집니다.
+                        <div className="mt-1 text-[11px] text-gray-500">
+                          공개를 꺼도 반 선택은 저장됩니다.
                         </div>
                       </div>
                       <button
@@ -283,7 +280,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                           }))
                         }
                         disabled={!canEdit}
-                        className={`inline-flex min-w-[126px] items-center justify-between gap-3 rounded-full border px-3 py-2 text-sm font-bold transition ${
+                        className={`inline-flex min-w-[112px] items-center justify-between gap-2 rounded-full border px-2.5 py-1.5 text-xs font-bold transition ${
                           settings.active
                             ? "border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
                             : "border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:text-blue-700"
@@ -291,13 +288,13 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                       >
                         <span>{settings.active ? "공개 중" : "비공개"}</span>
                         <span
-                          className={`relative h-5 w-9 rounded-full ${
+                          className={`relative h-[18px] w-8 rounded-full ${
                             settings.active ? "bg-white/35" : "bg-gray-200"
                           }`}
                         >
                           <span
-                            className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${
-                              settings.active ? "translate-x-4" : ""
+                            className={`absolute left-0.5 top-0.5 h-3.5 w-3.5 rounded-full bg-white shadow transition ${
+                              settings.active ? "translate-x-3.5" : ""
                             }`}
                           ></span>
                         </span>
@@ -305,26 +302,24 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-rose-200 bg-rose-50/80 px-4 py-4">
+                  <div className="rounded-xl border border-rose-200 bg-rose-50/80 px-3.5 py-3">
                     <div className="text-sm font-bold text-rose-800">
-                      학급별 초기화 안내
+                      초기화 범위
                     </div>
-                    <p className="mt-1 text-xs leading-5 text-rose-700">
-                      특정 반의 응시 기록, 제출 상태, 재응시 제한과 해당 평가
-                      포인트만 정리합니다. 다른 반의 공개 상태와 기록은
-                      그대로 유지됩니다.
+                    <p className="mt-1 text-[11px] leading-5 text-rose-700">
+                      선택한 반의 응시 기록, 제출 상태, 재응시 제한, 해당 평가
+                      포인트만 정리합니다.
                     </p>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3">
-                  <div>
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-3.5 py-2.5">
+                  <div className="min-w-0">
                     <div className="text-sm font-bold text-gray-800">
                       공개 학급 빠른 선택
                     </div>
-                    <div className="mt-1 text-xs text-gray-500">
-                      데스크톱에서는 두 줄 내외로 반별 상태를 바로 훑을 수 있게
-                      배치합니다.
+                    <div className="mt-0.5 text-[11px] text-gray-500">
+                      반별 토글을 빠르게 맞춥니다.
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -337,7 +332,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                         }))
                       }
                       disabled={!canEdit || grade3ClassIds.length === 0}
-                      className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       전체 공개
                     </button>
@@ -350,14 +345,14 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                         }))
                       }
                       disabled={!canEdit || grade3ClassIds.length === 0}
-                      className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       전체 비공개
                     </button>
                   </div>
                 </div>
 
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
                   {grade3ClassIds.length > 0 ? (
                     grade3ClassIds.map((classId) => {
                       const checked =
@@ -367,19 +362,19 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                       return (
                         <div
                           key={classId}
-                          className={`rounded-2xl border px-4 py-4 transition ${
+                          className={`rounded-xl border px-3 py-3 transition ${
                             checked && settings.active
                               ? "border-blue-200 bg-blue-50/80"
                               : "border-gray-200 bg-white"
                           }`}
                         >
-                          <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
-                              <div className="text-base font-extrabold text-gray-900">
+                              <div className="text-sm font-extrabold text-gray-900">
                                 {classId}
                               </div>
                               <div
-                                className={`mt-1 text-xs font-semibold ${
+                                className={`mt-0.5 text-[11px] font-semibold ${
                                   settings.active
                                     ? checked
                                       ? "text-blue-700"
@@ -394,76 +389,72 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                                     ? "현재 공개"
                                     : "현재 비공개"
                                   : checked
-                                    ? "공개 대상 저장됨"
+                                    ? "대상 저장됨"
                                     : "공개 대상 아님"}
                               </div>
                             </div>
-
-                            <div className="flex flex-wrap items-center justify-end gap-2">
-                              <button
-                                type="button"
-                                role="switch"
-                                aria-checked={checked}
-                                onClick={() => handleToggleClass(classId)}
-                                disabled={!toggleEnabled}
-                                className={`inline-flex min-w-[108px] items-center justify-between gap-2 rounded-full border px-3 py-2 text-xs font-bold transition ${
-                                  checked
-                                    ? "border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
-                                    : "border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:text-blue-700"
-                                } disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-400`}
-                              >
-                                <span>{checked ? "공개" : "비공개"}</span>
-                                <span
-                                  className={`relative h-5 w-9 rounded-full ${
-                                    checked ? "bg-white/35" : "bg-gray-200"
-                                  }`}
-                                >
-                                  <span
-                                    className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${
-                                      checked ? "translate-x-4" : ""
-                                    }`}
-                                  ></span>
-                                </span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setConfirmResetClassId((prev) =>
-                                    prev === classId ? "" : classId,
-                                  )
-                                }
-                                disabled={
-                                  !canEdit ||
-                                  Boolean(resettingClassId) ||
-                                  Boolean(saving)
-                                }
-                                className="rounded-full border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
-                              >
-                                초기화
-                              </button>
-                            </div>
                           </div>
 
-                          <div className="mt-3 text-xs text-gray-500">
-                            {nodeTitle || "선택한 단원"} · {categoryLabel}
+                          <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+                            <button
+                              type="button"
+                              role="switch"
+                              aria-checked={checked}
+                              onClick={() => handleToggleClass(classId)}
+                              disabled={!toggleEnabled}
+                              className={`inline-flex min-h-8 items-center justify-between gap-2 rounded-full border px-2.5 py-1.5 text-[11px] font-bold transition ${
+                                checked
+                                  ? "border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
+                                  : "border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:text-blue-700"
+                              } disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-400`}
+                            >
+                              <span>{checked ? "공개" : "비공개"}</span>
+                              <span
+                                className={`relative h-[18px] w-8 rounded-full ${
+                                  checked ? "bg-white/35" : "bg-gray-200"
+                                }`}
+                              >
+                                <span
+                                  className={`absolute left-0.5 top-0.5 h-3.5 w-3.5 rounded-full bg-white shadow transition ${
+                                    checked ? "translate-x-3.5" : ""
+                                  }`}
+                                ></span>
+                              </span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setConfirmResetClassId((prev) =>
+                                  prev === classId ? "" : classId,
+                                )
+                              }
+                              disabled={
+                                !canEdit ||
+                                Boolean(resettingClassId) ||
+                                Boolean(saving)
+                              }
+                              className="min-h-8 rounded-full border border-rose-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              초기화
+                            </button>
                           </div>
 
                           {confirmResetClassId === classId && (
-                            <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4">
-                              <div className="text-sm font-bold text-rose-800">
+                            <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-3">
+                              <div className="text-xs font-bold text-rose-800">
                                 {classId} 학생의 {categoryLabel} 응시 기록을
                                 초기화합니다.
                               </div>
-                              <p className="mt-2 text-xs leading-5 text-rose-700">
+                              <p className="mt-1.5 text-[11px] leading-5 text-rose-700">
                                 삭제 대상: 응시 기록, 제출 상태, 재응시 제한,
                                 해당 평가 포인트 거래
                               </p>
-                              <div className="mt-4 flex flex-wrap justify-end gap-2">
+                              <div className="mt-3 flex flex-wrap justify-end gap-2">
                                 <button
                                   type="button"
                                   onClick={() => setConfirmResetClassId("")}
                                   disabled={resettingClassId === classId}
-                                  className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                  className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
                                 >
                                   취소
                                 </button>
@@ -471,7 +462,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                                   type="button"
                                   onClick={() => void handleResetAttempts(classId)}
                                   disabled={resettingClassId === classId}
-                                  className="rounded-xl bg-rose-600 px-3 py-2 text-sm font-bold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-rose-300"
+                                  className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-rose-300"
                                 >
                                   {resettingClassId === classId
                                     ? "초기화 중..."
@@ -484,38 +475,38 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                       );
                     })
                   ) : (
-                    <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-sm text-gray-500 md:col-span-2 xl:col-span-3">
+                    <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-sm text-gray-500 sm:col-span-2 lg:col-span-4 xl:col-span-5">
                       학교 반 목록을 아직 불러오지 못했습니다.
                     </div>
                   )}
                 </div>
 
                 {settings.active && !hasVisibleClassSelection && (
-                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-sm text-amber-800">
                     학생 공개는 켜져 있지만 선택된 3학년 학급이 없습니다.
                   </div>
                 )}
 
                 {!settings.active && grade3ClassIds.length > 0 && (
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-600">
                     전체 공개를 켜면 현재 저장된 학급 토글 상태가 그대로 반영됩니다.
                   </div>
                 )}
               </section>
 
-              <div className="grid gap-5 xl:grid-cols-2">
+              <div className="grid gap-4 xl:grid-cols-2">
                 <section className={sectionCardClassName}>
-                  <div className="mb-4">
+                  <div className="mb-3">
                     <h4 className="text-base font-extrabold text-gray-900">
                       출제/응시 설정
                     </h4>
-                    <p className="mt-1 text-sm text-gray-500">
-                      학생이 실제로 푸는 문항 수와 제한 시간을 조정합니다.
+                    <p className="mt-1 text-xs text-gray-500">
+                      문항 수와 제한 시간을 조정합니다.
                     </p>
                   </div>
 
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <label className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <label className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3">
                       <span className="text-xs font-bold text-gray-500">
                         한 번에 출제할 문항 수
                       </span>
@@ -532,11 +523,11 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                             ),
                           }))
                         }
-                        className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-3 py-3 text-center text-lg font-extrabold text-blue-700"
+                        className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-center text-base font-extrabold text-blue-700"
                       />
                     </label>
 
-                    <label className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4">
+                    <label className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3">
                       <span className="text-xs font-bold text-gray-500">
                         제한 시간 (분)
                       </span>
@@ -553,16 +544,16 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                             ),
                           }))
                         }
-                        className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-3 py-3 text-center text-lg font-extrabold text-gray-800"
+                        className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-center text-base font-extrabold text-gray-800"
                       />
                     </label>
                   </div>
 
-                  <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4">
+                  <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3">
                     <div className="text-xs font-bold text-gray-500">
                       문항 출제 순서
                     </div>
-                    <div className="mt-3 grid grid-cols-2 gap-2">
+                    <div className="mt-2.5 grid grid-cols-2 gap-2">
                       <button
                         type="button"
                         onClick={() =>
@@ -571,7 +562,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                             randomOrder: true,
                           }))
                         }
-                        className={`rounded-xl border px-4 py-3 text-sm font-bold transition ${
+                        className={`rounded-lg border px-3 py-2.5 text-sm font-bold transition ${
                           settings.randomOrder
                             ? "border-blue-200 bg-blue-50 text-blue-700"
                             : "border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:text-blue-700"
@@ -587,7 +578,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                             randomOrder: false,
                           }))
                         }
-                        className={`rounded-xl border px-4 py-3 text-sm font-bold transition ${
+                        className={`rounded-lg border px-3 py-2.5 text-sm font-bold transition ${
                           !settings.randomOrder
                             ? "border-blue-200 bg-blue-50 text-blue-700"
                             : "border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:text-blue-700"
@@ -599,17 +590,17 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                   </div>
                 </section>
                 <section className={sectionCardClassName}>
-                  <div className="mb-4">
+                  <div className="mb-3">
                     <h4 className="text-base font-extrabold text-gray-900">
                       힌트/재응시 설정
                     </h4>
-                    <p className="mt-1 text-sm text-gray-500">
-                      힌트 횟수와 재응시 제한 규칙을 조정합니다.
+                    <p className="mt-1 text-xs text-gray-500">
+                      힌트 횟수와 재응시 규칙을 조정합니다.
                     </p>
                   </div>
 
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <label className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <label className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3">
                       <span className="text-xs font-bold text-gray-500">
                         힌트 사용 가능 횟수
                       </span>
@@ -626,11 +617,11 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                             ),
                           }))
                         }
-                        className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-3 py-3 text-center text-lg font-extrabold text-gray-800"
+                        className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-center text-base font-extrabold text-gray-800"
                       />
                     </label>
 
-                    <label className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4">
+                    <label className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3">
                       <span className="text-xs font-bold text-gray-500">
                         재응시 대기 시간 (분)
                       </span>
@@ -648,17 +639,17 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                             ),
                           }))
                         }
-                        className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-3 py-3 text-center text-lg font-extrabold text-gray-800 disabled:cursor-not-allowed disabled:bg-gray-100"
+                        className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-center text-base font-extrabold text-gray-800 disabled:cursor-not-allowed disabled:bg-gray-100"
                       />
                     </label>
                   </div>
 
-                  <label className="mt-4 flex items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-white px-4 py-4">
+                  <label className="mt-3 flex items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white px-3.5 py-3">
                     <div>
                       <div className="text-sm font-bold text-gray-800">
                         재응시 허용
                       </div>
-                      <div className="mt-1 text-xs text-gray-500">
+                      <div className="mt-0.5 text-xs text-gray-500">
                         허용을 끄면 이미 응시한 학생은 다시 시작할 수 없습니다.
                       </div>
                     </div>
@@ -681,7 +672,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
           )}
         </div>
 
-        <div className="border-t border-gray-200 bg-white px-6 py-4 sm:px-7">
+        <div className="border-t border-gray-200 bg-white px-5 py-3 sm:px-6">
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
             <button
               type="button"
