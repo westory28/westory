@@ -524,16 +524,6 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             const harnessElement = harness as HTMLElement;
             const eventElement = arg.el as HTMLElement;
             if (isRangeEvent) {
-              harnessElement.style.removeProperty("left");
-              harnessElement.style.removeProperty("right");
-              harnessElement.style.removeProperty("inset-inline");
-              harnessElement.style.removeProperty("width");
-              harnessElement.style.removeProperty("max-width");
-              harnessElement.style.removeProperty("min-width");
-              harnessElement.style.removeProperty("overflow");
-              eventElement.style.removeProperty("width");
-              eventElement.style.removeProperty("max-width");
-              eventElement.style.removeProperty("overflow");
               return;
             }
 
@@ -546,6 +536,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             harnessElement.style.setProperty("overflow", "hidden");
             eventElement.style.setProperty("width", "100%");
             eventElement.style.setProperty("max-width", "100%");
+            eventElement.style.setProperty("min-width", "0px");
             eventElement.style.setProperty("overflow", "hidden");
           }}
           dayCellContent={(arg) =>
@@ -618,7 +609,9 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             if (!isRangeEvent) {
               return (
                 <div className={eventLabelClassName} title={safeTitle}>
-                  {safeTitle}
+                  <span className="student-calendar-event-label__text">
+                    {safeTitle}
+                  </span>
                 </div>
               );
             }
@@ -626,7 +619,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             return (
               <div className={eventLabelClassName} title={safeTitle}>
                 <span className="student-calendar-event-label__text">
-                  {arg.isStart ? safeTitle : "\u00A0"}
+                  {safeTitle}
                 </span>
               </div>
             );

@@ -563,10 +563,7 @@
   .fc
   .fc-daygrid-body
   tbody {
-  display: grid;
-  grid-auto-flow: row;
-  grid-auto-rows: minmax(0, 1fr);
-  align-content: stretch;
+  display: table-row-group;
   height: 100%;
 }
 
@@ -574,20 +571,18 @@
   .fc
   .fc-daygrid-body
   tr {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  min-height: 0;
-  height: 100%;
+  display: table-row;
+  height: auto;
 }
 
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
   .fc
   .fc-daygrid-body
   td {
-  display: flex;
+  display: table-cell;
+  vertical-align: top;
   min-width: 0;
-  min-height: 0;
-  height: 100%;
+  height: auto;
 }
 
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
@@ -721,10 +716,8 @@
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
   .fc
   .fc-daygrid-event-harness-abs.student-calendar-event-harness--range {
-  width: auto !important;
   min-width: 0 !important;
-  max-width: none !important;
-  overflow: visible !important;
+  overflow: hidden !important;
 }
 
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
@@ -777,7 +770,7 @@
   min-width: 0;
   width: 100%;
   max-width: 100%;
-  overflow: visible;
+  overflow: hidden;
 }
 
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
@@ -795,7 +788,7 @@
   width: 100% !important;
   min-width: 0 !important;
   max-width: 100% !important;
-  overflow: visible !important;
+  overflow: hidden !important;
   margin-left: 0 !important;
   margin-right: 0 !important;
   border-radius: 0 !important;
@@ -845,22 +838,11 @@
   width: 100%;
   max-width: 100%;
   overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.7rem;
   font-weight: 800;
   line-height: 1.1;
-}
-
-.student-calendar-section
-  .student-calendar-event-label.is-single
-  .student-calendar-event-label__text {
-  text-overflow: ellipsis;
-}
-
-.student-calendar-section
-  .student-calendar-event-label.is-range
-  .student-calendar-event-label__text {
-  text-overflow: clip;
 }
 
 .student-calendar-section .student-calendar-event-label.is-range {
@@ -884,19 +866,20 @@
 }
 
 .student-calendar-section .student-calendar-event-label.is-single {
-  display: block;
   flex: 1 1 auto;
+  justify-content: flex-start;
   min-width: 0;
   width: 100%;
   max-width: 100%;
   padding-left: 0.22rem;
   padding-right: 0.22rem;
   overflow: hidden;
-  white-space: nowrap;
+}
+
+.student-calendar-section
+  .student-calendar-event-label.is-single
+  .student-calendar-event-label__text {
   text-overflow: ellipsis;
-  font-size: 0.7rem;
-  font-weight: 800;
-  line-height: 1.1;
 }
 
 .student-calendar-section .student-calendar-event-label.is-range.is-middle,
