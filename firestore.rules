@@ -255,8 +255,7 @@ service cloud.firestore {
     }
 
     function isValidQuizResultCreate() {
-      return isSignedIn()
-        && hasUserProfile()
+      return canUseWestory()
         && request.resource.data.keys().hasOnly([
           'uid',
           'name',
@@ -353,15 +352,13 @@ service cloud.firestore {
     }
 
     function isValidQuizSubmissionCreate(docId) {
-      return isSignedIn()
-        && hasUserProfile()
+      return canUseWestory()
         && isQuizSubmissionOwnerDoc(docId)
         && isValidQuizSubmissionPayload();
     }
 
     function isValidQuizSubmissionUpdate(docId) {
-      return isSignedIn()
-        && hasUserProfile()
+      return canUseWestory()
         && isQuizSubmissionOwnerDoc(docId)
         && (
           !resource.data.keys().hasAny(['uid'])
@@ -379,8 +376,7 @@ service cloud.firestore {
     }
 
     function isValidHistoryClassroomResultCreate() {
-      return isSignedIn()
-        && hasUserProfile()
+      return canUseWestory()
         && request.resource.data.keys().hasOnly([
           'assignmentId',
           'assignmentTitle',
@@ -569,8 +565,8 @@ service cloud.firestore {
 
     match /quiz_submissions/{docId} {
       allow read: if canReadQuizSubmission(resource.data);
-      allow create: if isAdmin() || isValidQuizSubmissionCreate(docId);
-      allow update: if isAdmin() || isValidQuizSubmissionUpdate(docId);
+      allow create: if isAdmin() || isValidQuizSubmissionCreate();
+      allow update: if isAdmin() || isValidQuizSubmissionUpdate();
       allow delete: if isAdmin();
     }
 
@@ -697,8 +693,8 @@ service cloud.firestore {
 
       match /quiz_submissions/{docId} {
         allow read: if canReadQuizSubmission(resource.data);
-        allow create: if isAdmin() || isValidQuizSubmissionCreate(docId);
-        allow update: if isAdmin() || isValidQuizSubmissionUpdate(docId);
+        allow create: if isAdmin() || isValidQuizSubmissionCreate();
+        allow update: if isAdmin() || isValidQuizSubmissionUpdate();
         allow delete: if isAdmin();
       }
 

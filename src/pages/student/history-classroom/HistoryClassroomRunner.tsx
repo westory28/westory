@@ -17,6 +17,7 @@ import { notifyPointsUpdated } from "../../../lib/appEvents";
 import { db } from "../../../lib/firebase";
 import {
   getHistoryClassroomRemainingMs,
+  isHistoryClassroomBlankCorrect,
   isHistoryClassroomPastDue,
   mergeHistoryClassroomMapSnapshot,
   normalizeHistoryClassroomAssignment,
@@ -110,7 +111,6 @@ const HistoryClassroomRunner: React.FC = () => {
     null,
   );
   const [currentPage, setCurrentPage] = useState(1);
-  const [selectedAnswer, setSelectedAnswer] = useState("");
   const [showAnswers, setShowAnswers] = useState(true);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -233,7 +233,6 @@ const HistoryClassroomRunner: React.FC = () => {
 
         setAssignment(loaded);
         setCurrentPage(loaded.pdfPageImages?.[0]?.page || 1);
-        setSelectedAnswer("");
         setShowAnswers(true);
         setAnswers({});
         setCompleted(false);
@@ -268,7 +267,8 @@ const HistoryClassroomRunner: React.FC = () => {
 
     const total = assignment.blanks.length;
     const score = assignment.blanks.reduce(
-      (sum, blank) => sum + (answers[blank.id] === blank.answer ? 1 : 0),
+      (sum, blank) =>
+        sum + (isHistoryClassroomBlankCorrect(answers[blank.id] || "", blank.answer) ? 1 : 0),
       0,
     );
     const percent = total > 0 ? Math.round((score / total) * 100) : 0;
@@ -566,9 +566,9 @@ const HistoryClassroomRunner: React.FC = () => {
     };
   }, [remainingDueMs]);
 
-  const placeAnswer = (blankId: string) => {
-    if (!selectedAnswer || completed || submitting) return;
-    setAnswers((prev) => ({ ...prev, [blankId]: selectedAnswer }));
+  const handleAnswerChange = (blankId: string, value: string) => {
+    if (completed || submitting) return;
+    setAnswers((prev) => ({ ...prev, [blankId]: value }));
   };
 
   const submitAnswers = async () => {
@@ -618,11 +618,9 @@ const HistoryClassroomRunner: React.FC = () => {
       currentPage={currentPage}
       onCurrentPageChange={setCurrentPage}
       answers={answers}
-      selectedAnswer={selectedAnswer}
-      onSelectAnswer={setSelectedAnswer}
       showAnswers={showAnswers}
       onToggleShowAnswers={() => setShowAnswers((prev) => !prev)}
-      onPlaceAnswer={placeAnswer}
+      onAnswerChange={handleAnswerChange}
       onSubmit={() => void submitAnswers()}
       submitting={submitting}
       completed={completed}

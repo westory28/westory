@@ -267,7 +267,6 @@ const ManageHistoryClassroom: React.FC = () => {
     const [deletingAssignment, setDeletingAssignment] = useState(false);
     const [previewOpen, setPreviewOpen] = useState(false);
     const [previewCurrentPage, setPreviewCurrentPage] = useState(1);
-    const [previewSelectedAnswer, setPreviewSelectedAnswer] = useState('');
     const [previewShowAnswers, setPreviewShowAnswers] = useState(true);
     const [previewAnswers, setPreviewAnswers] = useState<Record<string, string>>({});
     const preserveBlankResetRef = React.useRef(false);
@@ -711,7 +710,6 @@ const ManageHistoryClassroom: React.FC = () => {
     useEffect(() => {
         if (!previewOpen || !editingPreviewAssignment) return;
         setPreviewCurrentPage(editingPreviewAssignment.pdfPageImages?.[0]?.page || 1);
-        setPreviewSelectedAnswer('');
         setPreviewShowAnswers(true);
         setPreviewAnswers({});
     }, [editingPreviewAssignment, previewOpen]);
@@ -862,7 +860,6 @@ const ManageHistoryClassroom: React.FC = () => {
         setDeletingAssignment(false);
         setPreviewOpen(false);
         setPreviewCurrentPage(1);
-        setPreviewSelectedAnswer('');
         setPreviewShowAnswers(true);
         setPreviewAnswers({});
     };
@@ -1922,8 +1919,6 @@ const ManageHistoryClassroom: React.FC = () => {
                                             currentPage={previewCurrentPage}
                                             onCurrentPageChange={setPreviewCurrentPage}
                                             answers={previewAnswers}
-                                            selectedAnswer={previewSelectedAnswer}
-                                            onSelectAnswer={setPreviewSelectedAnswer}
                                             showAnswers={previewShowAnswers}
                                             onToggleShowAnswers={() => setPreviewShowAnswers((prev) => !prev)}
                                             readOnly

@@ -82,6 +82,8 @@ const wait = (ms: number) =>
   });
 
 const normalizeStudentText = (value: unknown) => String(value ?? "").trim();
+const normalizeStudentEmail = (value: unknown) =>
+  String(value ?? "").trim().toLowerCase();
 
 const buildGradeClassLabel = (
   userData?:
@@ -96,36 +98,6 @@ const buildGradeClassLabel = (
   const className = normalizeStudentText(userData?.class);
   const number = normalizeStudentText(userData?.number);
   return `${grade}학년 ${className}반 ${number}번`.trim();
-};
-
-const ensureOwnStudentProfile = async (options: {
-  uid: string;
-  email: string;
-  userData?: {
-    name?: unknown;
-    grade?: unknown;
-    class?: unknown;
-    number?: unknown;
-  } | null;
-}) => {
-  const userRef = doc(db, "users", options.uid);
-  const userSnap = await getDoc(userRef);
-  if (userSnap.exists()) {
-    return;
-  }
-
-  await setDoc(userRef, {
-    uid: options.uid,
-    email: options.email,
-    name: normalizeStudentText(options.userData?.name),
-    customNameConfirmed: false,
-    role: "student",
-    staffPermissions: [],
-    teacherPortalEnabled: false,
-    grade: normalizeStudentText(options.userData?.grade),
-    class: normalizeStudentText(options.userData?.class),
-    number: normalizeStudentText(options.userData?.number),
-  });
 };
 
 const readCommittedQuizSubmission = async (submissionRef: ReturnType<typeof doc>) => {
@@ -193,25 +165,64 @@ const QuizRunner: React.FC = () => {
   const persistTimeoutRef = useRef<number | null>(null);
   const persistInFlightRef = useRef(false);
   const timeoutHandledRef = useRef(false);
+  const authIdentityRef = useRef<{ uid: string; email: string }>({
+    uid: "",
+    email: "",
+  });
 
   const maxHintUses = quizConfig?.hintLimit ?? 2;
+  const fallbackStudentUid =
+    normalizeStudentText(currentUser?.uid) || normalizeStudentText(userData?.uid);
+  const fallbackStudentEmail =
+    normalizeStudentEmail(currentUser?.email) ||
+    normalizeStudentEmail(userData?.email);
   const activeSubmissionPath =
-    userData?.uid && unitId && category
-      ? getQuizSubmissionDocPath(config, userData.uid, unitId, category)
+    fallbackStudentUid && unitId && category
+      ? getQuizSubmissionDocPath(config, fallbackStudentUid, unitId, category)
       : "";
 
   const parseOrderAnswer = (value: string) =>
     value.split(ORDER_DELIMITER).filter(Boolean);
 
+  const getResolvedStudentUid = () =>
+    authIdentityRef.current.uid || fallbackStudentUid;
+
+  const getResolvedStudentEmail = () =>
+    authIdentityRef.current.email || fallbackStudentEmail;
+
+  const resolveStudentIdentity = async () => {
+    const uid = fallbackStudentUid;
+    let email = fallbackStudentEmail;
+
+    if (currentUser) {
+      try {
+        const tokenResult = await currentUser.getIdTokenResult();
+        const tokenEmail =
+          typeof tokenResult.claims.email === "string"
+            ? normalizeStudentEmail(tokenResult.claims.email)
+            : "";
+        if (tokenEmail) {
+          email = tokenEmail;
+        }
+      } catch (identityError) {
+        console.warn("[QuizRunner] Failed to resolve auth token email", {
+          uid,
+          identityError,
+        });
+      }
+    }
+
+    authIdentityRef.current = { uid, email };
+    return authIdentityRef.current;
+  };
+
   const buildSubmissionPayload = (
     status: QuizSubmissionDoc["status"],
     overrides: Partial<QuizSubmissionDoc> = {},
   ) => ({
-    uid: userData?.uid || "",
+    uid: getResolvedStudentUid(),
     name: normalizeStudentText(userData?.name) || "Student",
-    email:
-      normalizeStudentText(currentUser?.email) ||
-      normalizeStudentText(userData?.email),
+    email: getResolvedStudentEmail(),
     class: normalizeStudentText(userData?.class),
     number: normalizeStudentText(userData?.number),
     gradeClass: buildGradeClassLabel(userData || undefined),
@@ -325,9 +336,10 @@ const QuizRunner: React.FC = () => {
       revealedHintIds?: string[];
     } = {},
   ) => {
-    if (!userData?.uid || !unitId || !category) {
+    if (!getResolvedStudentUid() || !unitId || !category) {
       throw new Error("응시 저장에 필요한 사용자 정보가 없습니다.");
     }
+    await resolveStudentIdentity();
 
     const isTimeout = options.isTimeout === true;
     const questionList = options.questionList || selectedQuestions;
@@ -371,16 +383,15 @@ const QuizRunner: React.FC = () => {
     const finalScore = questionList.length
       ? Math.round((correctCount / questionList.length) * 100)
       : 0;
+    const resolvedUserData = userData;
 
     const resultPayload = {
-      uid: userData.uid,
-      name: normalizeStudentText(userData.name) || "Student",
-      email:
-        normalizeStudentText(currentUser?.email) ||
-        normalizeStudentText(userData.email),
-      class: normalizeStudentText(userData.class),
-      number: normalizeStudentText(userData.number),
-      gradeClass: buildGradeClassLabel(userData),
+      uid: getResolvedStudentUid(),
+      name: normalizeStudentText(resolvedUserData?.name) || "Student",
+      email: getResolvedStudentEmail(),
+      class: normalizeStudentText(resolvedUserData?.class),
+      number: normalizeStudentText(resolvedUserData?.number),
+      gradeClass: buildGradeClassLabel(resolvedUserData),
       unitId: String(unitId || "").trim(),
       category: String(category || "").trim(),
       score: finalScore,
@@ -457,7 +468,7 @@ const QuizRunner: React.FC = () => {
 
   const persistQuizProgress = async () => {
     if (
-      !userData?.uid ||
+      !getResolvedStudentUid() ||
       !unitId ||
       !category ||
       !activeSubmissionPath ||
@@ -509,7 +520,16 @@ const QuizRunner: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!unitId || !category || !userData?.uid) return;
+    if (!fallbackStudentUid) {
+      authIdentityRef.current = { uid: "", email: "" };
+      return;
+    }
+
+    void resolveStudentIdentity();
+  }, [fallbackStudentUid, fallbackStudentEmail, currentUser]);
+
+  useEffect(() => {
+    if (!unitId || !category || !fallbackStudentUid) return;
     void initializeQuiz();
 
     return () => {
@@ -520,7 +540,7 @@ const QuizRunner: React.FC = () => {
         window.clearTimeout(persistTimeoutRef.current);
       }
     };
-  }, [config, unitId, category, userData?.uid]);
+  }, [config, unitId, category, fallbackStudentUid]);
 
   useEffect(() => {
     if (view !== "quiz" || !activeSubmissionPath) return;
@@ -564,7 +584,7 @@ const QuizRunner: React.FC = () => {
   }, [view, quizDeadlineMs, serverTimeOffsetMs, finishSubmitting]);
 
   const initializeQuiz = async () => {
-    if (!unitId || !category || !userData?.uid) return;
+    if (!unitId || !category || !fallbackStudentUid) return;
 
     try {
       setErrorMsg(null);
@@ -631,7 +651,7 @@ const QuizRunner: React.FC = () => {
       const historySnap = await getDocs(
         query(
           collection(db, getSemesterCollectionPath(config, "quiz_results")),
-          where("uid", "==", userData.uid),
+          where("uid", "==", fallbackStudentUid),
           where("unitId", "==", unitId),
           where("category", "==", category),
         ),
@@ -648,7 +668,7 @@ const QuizRunner: React.FC = () => {
       const submissionSnap = await getDoc(submissionRef).catch(() => null);
       const existingSubmission =
         submissionSnap?.exists() &&
-        submissionSnap.data()?.uid === userData.uid &&
+        submissionSnap.data()?.uid === fallbackStudentUid &&
         submissionSnap.data()?.unitId === unitId &&
         submissionSnap.data()?.category === category
           ? normalizeQuizSubmissionDoc(
@@ -754,7 +774,7 @@ const QuizRunner: React.FC = () => {
   };
 
   const startQuiz = async () => {
-    if (!unitId || !category || !userData?.uid || !selectedQuestions.length) {
+    if (!unitId || !category || !fallbackStudentUid || !selectedQuestions.length) {
       return;
     }
 
@@ -766,6 +786,7 @@ const QuizRunner: React.FC = () => {
     }
 
     setStartingQuiz(true);
+    let submissionEmail = "";
     let startPayloadSummary: {
       uid: string;
       unitId: string;
@@ -775,19 +796,13 @@ const QuizRunner: React.FC = () => {
       status: string;
     } | null = null;
     try {
+      const identity = await resolveStudentIdentity();
       const submissionRef = doc(db, activeSubmissionPath);
       const clientStartedAtMs = Date.now();
-      const profileEmail =
-        normalizeStudentText(currentUser?.email) ||
-        normalizeStudentText(userData?.email);
-      if (!profileEmail) {
+      submissionEmail = identity.email;
+      if (!submissionEmail) {
         throw new Error("평가 시작에 필요한 이메일 정보를 찾지 못했습니다.");
       }
-      await ensureOwnStudentProfile({
-        uid: userData.uid,
-        email: profileEmail,
-        userData,
-      });
       const payload = {
         ...buildSubmissionPayload("in_progress", {
           answers: {},
@@ -808,6 +823,14 @@ const QuizRunner: React.FC = () => {
         status: payload.status,
       };
 
+      console.info("[QuizRunner] Starting quiz attempt", {
+        submissionPath: activeSubmissionPath,
+        payload: {
+          ...startPayloadSummary,
+          email: submissionEmail,
+        },
+      });
+
       await setDoc(submissionRef, payload);
       const committedSubmission =
         (await readCommittedQuizSubmission(submissionRef)) ||
@@ -827,6 +850,9 @@ const QuizRunner: React.FC = () => {
       console.error("Failed to start quiz attempt", {
         submissionPath: activeSubmissionPath,
         payload: startPayloadSummary,
+        currentUserUid: currentUser?.uid || "",
+        currentUserEmail: submissionEmail,
+        userDataUid: userData?.uid || "",
         code:
           typeof error === "object" && error && "code" in error
             ? String((error as { code?: unknown }).code || "")

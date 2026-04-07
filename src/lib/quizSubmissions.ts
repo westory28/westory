@@ -37,9 +37,12 @@ export const buildQuizSubmissionId = (
   unitId: string,
   category: string,
 ) =>
-  [uid, unitId, category]
-    .map((value) => encodeURIComponent(String(value || "").trim()))
-    .join("__");
+  [
+    // Keep the uid segment raw so the doc id stays aligned with Firestore rules.
+    String(uid || "").trim(),
+    encodeURIComponent(String(unitId || "").trim()),
+    encodeURIComponent(String(category || "").trim()),
+  ].join("__");
 
 export const getQuizSubmissionDocPath = (
   config: ConfigLike,

@@ -9,11 +9,9 @@ interface HistoryClassroomAssignmentViewProps {
   currentPage: number;
   onCurrentPageChange: (page: number) => void;
   answers: Record<string, string>;
-  selectedAnswer: string;
-  onSelectAnswer: (answer: string) => void;
   showAnswers: boolean;
   onToggleShowAnswers: () => void;
-  onPlaceAnswer?: (blankId: string) => void;
+  onAnswerChange?: (blankId: string, value: string) => void;
   onSubmit?: () => void;
   submitting?: boolean;
   completed?: boolean;
@@ -30,8 +28,8 @@ interface HistoryClassroomAssignmentViewProps {
 }
 
 const DEFAULT_HELPER_ITEMS = [
-  "오른쪽 정답 보기에서 단어를 고릅니다.",
-  "지도 위 빈칸을 눌러 선택한 답을 채웁니다.",
+  "오른쪽 보기를 참고해 지도 위 빈칸에 직접 입력합니다.",
+  "각 빈칸은 서로 독립적으로 입력되고 제출 전까지 자유롭게 수정할 수 있습니다.",
   "다른 창 전환, 화면 이동, 멀티태스킹 시 자동 취소됩니다.",
 ];
 
@@ -63,11 +61,9 @@ const HistoryClassroomAssignmentView: React.FC<
   currentPage,
   onCurrentPageChange,
   answers,
-  selectedAnswer,
-  onSelectAnswer,
   showAnswers,
   onToggleShowAnswers,
-  onPlaceAnswer,
+  onAnswerChange,
   onSubmit,
   submitting = false,
   completed = false,
@@ -215,26 +211,23 @@ const HistoryClassroomAssignmentView: React.FC<
                   );
                   const pixelWidth = renderRect.widthRatio * pageImage.width;
                   const pixelHeight = renderRect.heightRatio * pageImage.height;
-                  const answerValue = String(answers[blank.id] || "").trim();
-                  const placeholder = readOnly
-                    ? blank.prompt || "빈칸"
-                    : answerValue
-                      ? answerValue
-                      : "빈칸 선택";
+                  const answerValue = String(answers[blank.id] || "");
+                  const trimmedAnswerValue = answerValue.trim();
+                  const placeholder = blank.prompt || "정답 입력";
+                  const displayValue = trimmedAnswerValue || placeholder;
                   const fontSize = getBlankFontSize(
                     pixelWidth,
                     pixelHeight,
-                    (answerValue || placeholder).length,
+                    displayValue.length,
                   );
-                  const isFilled = Boolean(answerValue);
+                  const isFilled = Boolean(trimmedAnswerValue);
+                  const isInputLocked =
+                    readOnly || completed || submitting || !onAnswerChange;
 
                   return (
-                    <button
+                    <div
                       key={blank.id}
-                      type="button"
-                      disabled={readOnly || !onPlaceAnswer}
-                      onClick={() => onPlaceAnswer?.(blank.id)}
-                      className={`absolute z-10 overflow-hidden rounded-xl border text-left font-bold shadow-[0_6px_18px_rgba(15,23,42,0.12)] disabled:cursor-default ${
+                      className={`absolute z-10 overflow-hidden rounded-xl border text-left font-bold shadow-[0_6px_18px_rgba(15,23,42,0.12)] transition focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-200 disabled:cursor-default ${
                         isFilled
                           ? "border-orange-300 text-orange-800"
                           : "border-slate-300 text-slate-700"
@@ -250,23 +243,54 @@ const HistoryClassroomAssignmentView: React.FC<
                         opacity: 1,
                       }}
                     >
-                      <span
-                        aria-hidden
-                        className={`absolute inset-0 ${
-                          isFilled ? "bg-orange-50" : "bg-white"
-                        }`}
-                      />
-                      <span
-                        className="relative z-[1] flex h-full w-full items-center justify-center px-1.5 text-center leading-none"
-                        style={{
-                          fontSize: `${fontSize}px`,
-                          letterSpacing:
-                            pixelWidth < 46 ? "-0.05em" : "-0.02em",
-                        }}
-                      >
-                        {answerValue || placeholder}
-                      </span>
-                    </button>
+                      {isInputLocked ? (
+                        <span
+                          aria-hidden
+                          className={`absolute inset-0 ${
+                            isFilled ? "bg-orange-50" : "bg-white"
+                          }`}
+                        />
+                      ) : null}
+                      {isInputLocked ? (
+                        <span
+                          className="relative z-[1] flex h-full w-full items-center justify-center px-1.5 text-center leading-none"
+                          style={{
+                            fontSize: `${fontSize}px`,
+                            letterSpacing:
+                              pixelWidth < 46 ? "-0.05em" : "-0.02em",
+                          }}
+                        >
+                          {trimmedAnswerValue || placeholder}
+                        </span>
+                      ) : (
+                        <input
+                          type="text"
+                          value={answerValue}
+                          onChange={(event) =>
+                            onAnswerChange?.(blank.id, event.target.value)
+                          }
+                          readOnly={isInputLocked}
+                          autoComplete="off"
+                          autoCorrect="off"
+                          autoCapitalize="off"
+                          spellCheck={false}
+                          inputMode="text"
+                          lang="ko"
+                          aria-label={blank.prompt || `${blank.id} 답안 입력`}
+                          placeholder={placeholder}
+                          className={`relative z-[1] h-full w-full border-0 bg-transparent px-1.5 text-center font-bold outline-none ${
+                            isFilled
+                              ? "text-orange-800 placeholder:text-orange-300"
+                              : "text-slate-700 placeholder:text-slate-400"
+                          }`}
+                          style={{
+                            fontSize: `${Math.max(16, fontSize)}px`,
+                            letterSpacing:
+                              pixelWidth < 46 ? "-0.05em" : "-0.02em",
+                          }}
+                        />
+                      )}
+                    </div>
                   );
                 })}
               </div>
@@ -287,25 +311,23 @@ const HistoryClassroomAssignmentView: React.FC<
               onClick={onToggleShowAnswers}
               className="w-full rounded-2xl bg-orange-50 px-4 py-3 text-sm font-bold text-orange-700 hover:bg-orange-100"
             >
-              {showAnswers ? "정답 보기 닫기" : "정답 보기"}
+              {showAnswers ? "보기 목록 닫기" : "보기 목록 보기"}
             </button>
             {showAnswers && (
-              <div className="mt-4 flex flex-wrap gap-2">
-                {assignment.answerOptions.map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    disabled={readOnly}
-                    onClick={() => onSelectAnswer(option)}
-                    className={`rounded-full px-3 py-2 text-sm font-bold transition disabled:cursor-default disabled:opacity-70 ${
-                      selectedAnswer === option
-                        ? "bg-orange-500 text-white"
-                        : "bg-gray-100 text-gray-700 hover:bg-orange-100"
-                    }`}
-                  >
-                    {option}
-                  </button>
-                ))}
+              <div className="mt-4">
+                <div className="text-xs font-bold text-gray-500">
+                  보기를 참고해 빈칸에 직접 입력하세요.
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {assignment.answerOptions.map((option) => (
+                    <span
+                      key={option}
+                      className="rounded-full bg-gray-100 px-3 py-2 text-sm font-bold text-gray-700"
+                    >
+                      {option}
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
           </div>

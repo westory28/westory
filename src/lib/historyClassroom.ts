@@ -164,7 +164,14 @@ export const normalizeHistoryClassroomResult = (
     studentGrade: String(raw.studentGrade || '').trim(),
     studentClass: String(raw.studentClass || '').trim(),
     studentNumber: String(raw.studentNumber || '').trim(),
-    answers: raw.answers && typeof raw.answers === 'object' ? raw.answers : {},
+    answers: raw.answers && typeof raw.answers === 'object'
+        ? Object.fromEntries(
+            Object.entries(raw.answers).map(([key, value]) => [
+                String(key || '').trim(),
+                String(value ?? ''),
+            ]),
+        )
+        : {},
     score: Number(raw.score) || 0,
     total: Number(raw.total) || 0,
     percent: Math.min(100, Math.max(0, Number(raw.percent) || 0)),
@@ -270,6 +277,19 @@ export const sanitizeHistoryClassroomAssignmentForWrite = (
 
 export const buildAnswerOptions = (blanks: HistoryClassroomBlank[]) =>
     Array.from(new Set(blanks.map((blank) => blank.answer.trim()).filter(Boolean)));
+
+export const normalizeHistoryClassroomAnswer = (value: unknown) => {
+    const text = String(value ?? '');
+    const normalized = typeof text.normalize === 'function'
+        ? text.normalize('NFC')
+        : text;
+    return normalizeBlankText(normalized).toLocaleLowerCase('ko-KR');
+};
+
+export const isHistoryClassroomBlankCorrect = (
+    input: unknown,
+    expected: unknown,
+) => normalizeHistoryClassroomAnswer(input) === normalizeHistoryClassroomAnswer(expected);
 
 export const mergeHistoryClassroomMapSnapshot = (
     assignment: HistoryClassroomAssignment,
