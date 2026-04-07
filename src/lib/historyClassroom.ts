@@ -46,6 +46,8 @@ export interface HistoryClassroomAssignment {
     isPublished: boolean;
     publishedAt?: unknown;
     dueAt?: unknown;
+    deletedAt?: unknown;
+    deletedByUid?: string;
     createdAt?: unknown;
     updatedAt?: unknown;
 }
@@ -144,6 +146,8 @@ export const normalizeHistoryClassroomAssignment = (
     isPublished: raw.isPublished === true,
     publishedAt: raw.publishedAt,
     dueAt: raw.dueAt,
+    deletedAt: raw.deletedAt,
+    deletedByUid: String(raw.deletedByUid || '').trim(),
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
 });
@@ -259,12 +263,6 @@ export const sanitizeHistoryClassroomAssignmentForWrite = (
     }
     if (Object.prototype.hasOwnProperty.call(raw, 'updatedAt') && raw.updatedAt !== undefined) {
         payload.updatedAt = raw.updatedAt;
-    }
-    if (Object.prototype.hasOwnProperty.call(raw, 'deletedAt')) {
-        payload.deletedAt = raw.deletedAt ?? null;
-    }
-    if (Object.prototype.hasOwnProperty.call(raw, 'deletedByUid')) {
-        payload.deletedByUid = String(raw.deletedByUid || '').trim();
     }
 
     return payload;

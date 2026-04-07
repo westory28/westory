@@ -98,7 +98,7 @@ const HistoryClassroomAssignmentView: React.FC<
     <div
       className={
         isModalPreview
-          ? "mx-auto w-full max-w-[96rem] px-5 py-5 lg:px-6"
+          ? "mx-auto w-full max-w-[108rem] px-5 py-5 lg:px-6"
           : "mx-auto max-w-7xl px-4 py-8"
       }
     >
@@ -159,13 +159,13 @@ const HistoryClassroomAssignmentView: React.FC<
       <div
         className={
           isModalPreview
-            ? "grid gap-4 lg:grid-cols-[minmax(0,1.34fr)_17.5rem] xl:grid-cols-[minmax(0,1.52fr)_18rem]"
+            ? "grid gap-4 lg:grid-cols-[minmax(0,1.46fr)_18rem] xl:grid-cols-[minmax(0,1.7fr)_19.5rem]"
             : "grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]"
         }
       >
         <section
           className={`rounded-3xl border border-gray-200 bg-white shadow-sm ${
-            isModalPreview ? "flex min-h-[38rem] flex-col p-4 lg:p-5" : "p-5"
+            isModalPreview ? "flex min-h-[42rem] flex-col p-4 lg:p-5" : "p-5"
           }`}
         >
           <div className="mb-4 flex items-center justify-between">
@@ -197,10 +197,10 @@ const HistoryClassroomAssignmentView: React.FC<
           {pageImage && (
             <div
               className={`overflow-auto rounded-3xl border border-gray-200 bg-gray-100 ${
-                isModalPreview ? "flex-1 min-h-[34rem] p-3 lg:min-h-[40rem]" : "p-4"
+                isModalPreview ? "flex-1 min-h-[38rem] p-4 lg:min-h-[46rem]" : "p-4"
               }`}
             >
-              <div className="relative inline-block">
+              <div className={`relative inline-block ${isModalPreview ? "mx-auto" : ""}`}>
                 <img
                   src={pageImage.imageUrl}
                   alt={`${assignment.title} ${currentPage}`}
@@ -274,7 +274,13 @@ const HistoryClassroomAssignmentView: React.FC<
           )}
         </section>
 
-        <aside className={isModalPreview ? "space-y-3" : "space-y-4"}>
+        <aside
+          className={
+            isModalPreview
+              ? "space-y-3 lg:sticky lg:top-5 self-start"
+              : "space-y-4"
+          }
+        >
           <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
             <button
               type="button"

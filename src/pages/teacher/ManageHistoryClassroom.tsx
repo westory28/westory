@@ -13,6 +13,7 @@ import {
     getHistoryClassroomDueAtMs,
     getHistoryClassroomRemainingMs,
     inferHistoryClassroomBlankSource,
+    isHistoryClassroomDeleted,
     isHistoryClassroomPastDue,
     mergeHistoryClassroomMapSnapshot,
     normalizeHistoryClassroomAssignment,
@@ -221,7 +222,7 @@ const worksheetBlankToHistoryBlank = (
 };
 
 const ManageHistoryClassroom: React.FC = () => {
-    const { config, userData, currentUser } = useAuth();
+    const { config, userData } = useAuth();
     const navigate = useNavigate();
 
     const [maps, setMaps] = useState<MapResource[]>([]);
@@ -324,7 +325,8 @@ const ManageHistoryClassroom: React.FC = () => {
                     normalizeHistoryClassroomAssignment(docSnap.id, docSnap.data()),
                     loadedMaps.find((map) => map.id === docSnap.data().mapResourceId) || null,
                 ))
-                .filter((assignment) => !isHistoryClassroomDeleted(assignment)));
+                .filter((assignment) => !isHistoryClassroomDeleted(assignment))
+            );
 
             const resultPath = getSemesterCollectionPath(config, 'history_classroom_results');
             let resultSnap = await getDocs(query(collection(db, resultPath), orderBy('createdAt', 'desc')));
@@ -904,7 +906,7 @@ const ManageHistoryClassroom: React.FC = () => {
                 updatedAt: serverTimestamp(),
             });
 
-            await setDoc(doc(db, getSemesterCollectionPath(config, 'history_classrooms'), targetAssignment.id), payload, { merge: true });
+            await setDoc(doc(db, getSemesterCollectionPath(config, 'history_classrooms'), targetAssignment.id), payload);
             setAssignments((prev) => prev.map((assignment) => (
                 assignment.id === targetAssignment.id
                     ? (() => {
@@ -951,10 +953,16 @@ const ManageHistoryClassroom: React.FC = () => {
 
         setDeletingAssignment(true);
         try {
-            await Promise.all([
-                deleteDoc(doc(db, getSemesterCollectionPath(config, 'history_classrooms'), targetAssignment.id)),
-                deleteDoc(doc(db, 'history_classrooms', targetAssignment.id)),
-            ]);
+            await setDoc(
+                doc(db, `${getSemesterCollectionPath(config, 'history_classrooms')}/${targetAssignment.id}`),
+                {
+                    isPublished: false,
+                    deletedAt: serverTimestamp(),
+                    deletedByUid: String(userData?.uid || '').trim(),
+                    updatedAt: serverTimestamp(),
+                },
+                { merge: true },
+            );
             setAssignments((prev) => prev.filter((assignment) => assignment.id !== targetAssignment.id));
             setResultsByAssignment((prev) => {
                 const next = { ...prev };
@@ -1045,7 +1053,7 @@ const ManageHistoryClassroom: React.FC = () => {
                 createdAt: existingAssignment?.createdAt || serverTimestamp(),
                 updatedAt: serverTimestamp(),
             });
-            await setDoc(doc(db, getSemesterCollectionPath(config, 'history_classrooms'), assignmentId), payload, { merge: !!existingAssignment });
+            await setDoc(doc(db, getSemesterCollectionPath(config, 'history_classrooms'), assignmentId), payload);
             setAssignments((prev) => {
                 const normalizedAssignment = normalizeHistoryClassroomAssignment(
                     assignmentId,
@@ -1884,7 +1892,7 @@ const ManageHistoryClassroom: React.FC = () => {
                                     >
                                         {previewOpen ? '미리보기 닫기' : '미리보기'}
                                     </button>
-                                    <button type="button" onClick={() => void handleSaveAssignmentEdit()} disabled={savingEdit} className="rounded-2xl bg-orange-500 px-4 py-3 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-60">
+                                    <button type="button" onClick={() => void handleSaveAssignmentEdit()} disabled={savingEdit || deletingAssignment} className="rounded-2xl bg-orange-500 px-4 py-3 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-60">
                                         {savingEdit ? '저장 중...' : '설정 저장'}
                                     </button>
                                 </div>
