@@ -1,4 +1,14 @@
 import type { MapResource } from './mapResources';
+import {
+    clampRatio,
+    getTightTextRegionBounds,
+    normalizeBlankText,
+    splitTextRegionIntoTokens,
+    type LessonWorksheetPageImage,
+    type LessonWorksheetTextRegion,
+} from './lessonWorksheet';
+
+export type HistoryClassroomBlankSource = 'ocr' | 'manual';
 
 export interface HistoryClassroomBlank {
     id: string;
@@ -8,6 +18,8 @@ export interface HistoryClassroomBlank {
     width: number;
     height: number;
     answer: string;
+    prompt?: string;
+    source?: HistoryClassroomBlankSource;
 }
 
 export interface HistoryClassroomAssignment {
@@ -17,11 +29,13 @@ export interface HistoryClassroomAssignment {
     mapResourceId: string;
     mapTitle: string;
     pdfPageImages: MapResource['pdfPageImages'];
+    pdfRegions: MapResource['pdfRegions'];
     blanks: HistoryClassroomBlank[];
     answerOptions: string[];
     timeLimitMinutes: number;
     cooldownMinutes: number;
     passThresholdPercent: number;
+    dueWindowDays: number | null;
     targetGrade: string;
     targetClass: string;
     targetStudentUid: string;
@@ -30,6 +44,8 @@ export interface HistoryClassroomAssignment {
     targetStudentNames: string[];
     targetStudentNumber: string;
     isPublished: boolean;
+    publishedAt?: unknown;
+    dueAt?: unknown;
     createdAt?: unknown;
     updatedAt?: unknown;
 }
@@ -66,6 +82,22 @@ export const normalizeHistoryClassroomAssignment = (
     mapResourceId: String(raw.mapResourceId || '').trim(),
     mapTitle: String(raw.mapTitle || '').trim(),
     pdfPageImages: Array.isArray(raw.pdfPageImages) ? raw.pdfPageImages : [],
+    pdfRegions: Array.isArray(raw.pdfRegions)
+        ? raw.pdfRegions
+            .map((region) => ({
+                label: String(region?.label || '').trim(),
+                page: Math.max(1, Number(region?.page) || 1),
+                left: Number(region?.left) || 0,
+                top: Number(region?.top) || 0,
+                width: Number(region?.width) || 0,
+                height: Number(region?.height) || 0,
+                shortcutEnabled: region?.shortcutEnabled !== false,
+                tags: Array.isArray(region?.tags)
+                    ? region.tags.map((tag) => String(tag || '').trim()).filter(Boolean)
+                    : [],
+            }))
+            .filter((region) => region.label && region.width > 0 && region.height > 0)
+        : [],
     blanks: Array.isArray(raw.blanks)
         ? raw.blanks.map((blank) => ({
             id: String(blank?.id || '').trim() || `blank-${Date.now()}`,
@@ -75,6 +107,10 @@ export const normalizeHistoryClassroomAssignment = (
             width: Number(blank?.width) || 140,
             height: Number(blank?.height) || 52,
             answer: String(blank?.answer || '').trim(),
+            prompt: String(blank?.prompt || '').trim(),
+            source: blank?.source === 'manual' || blank?.source === 'ocr'
+                ? blank.source
+                : undefined,
         }))
         : [],
     answerOptions: Array.isArray(raw.answerOptions)
@@ -83,6 +119,9 @@ export const normalizeHistoryClassroomAssignment = (
     timeLimitMinutes: Math.max(0, Number(raw.timeLimitMinutes) || 0),
     cooldownMinutes: Number(raw.cooldownMinutes) || 0,
     passThresholdPercent: Math.min(100, Math.max(0, Number(raw.passThresholdPercent) || 80)),
+    dueWindowDays: Number.isFinite(Number(raw.dueWindowDays)) && Number(raw.dueWindowDays) > 0
+        ? Math.max(1, Math.floor(Number(raw.dueWindowDays)))
+        : null,
     targetGrade: String(raw.targetGrade || '').trim(),
     targetClass: String(raw.targetClass || '').trim(),
     targetStudentUid: String(raw.targetStudentUid || '').trim(),
@@ -95,6 +134,8 @@ export const normalizeHistoryClassroomAssignment = (
         : (String(raw.targetStudentName || '').trim() ? [String(raw.targetStudentName || '').trim()] : []),
     targetStudentNumber: String(raw.targetStudentNumber || '').trim(),
     isPublished: raw.isPublished === true,
+    publishedAt: raw.publishedAt,
+    dueAt: raw.dueAt,
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
 });
@@ -126,3 +167,305 @@ export const normalizeHistoryClassroomResult = (
 
 export const buildAnswerOptions = (blanks: HistoryClassroomBlank[]) =>
     Array.from(new Set(blanks.map((blank) => blank.answer.trim()).filter(Boolean)));
+
+export const mergeHistoryClassroomMapSnapshot = (
+    assignment: HistoryClassroomAssignment,
+    mapResource?: MapResource | null,
+): HistoryClassroomAssignment => ({
+    ...assignment,
+    pdfPageImages: assignment.pdfPageImages?.length
+        ? assignment.pdfPageImages
+        : (mapResource?.pdfPageImages || []),
+    pdfRegions: assignment.pdfRegions?.length
+        ? assignment.pdfRegions
+        : (mapResource?.pdfRegions || []),
+});
+
+export const getHistoryClassroomTimestampMs = (value: unknown): number | null => {
+    if (!value) return null;
+    if (value instanceof Date) {
+        const ms = value.getTime();
+        return Number.isFinite(ms) ? ms : null;
+    }
+    if (typeof value === 'number') {
+        return Number.isFinite(value) ? value : null;
+    }
+    if (typeof value === 'string') {
+        const parsed = Date.parse(value);
+        return Number.isFinite(parsed) ? parsed : null;
+    }
+    if (typeof value === 'object') {
+        const timestampLike = value as {
+            seconds?: number;
+            nanoseconds?: number;
+            toDate?: () => Date;
+        };
+        if (typeof timestampLike.toDate === 'function') {
+            const date = timestampLike.toDate();
+            return date instanceof Date && Number.isFinite(date.getTime())
+                ? date.getTime()
+                : null;
+        }
+        if (typeof timestampLike.seconds === 'number') {
+            return timestampLike.seconds * 1000
+                + Math.floor((Number(timestampLike.nanoseconds) || 0) / 1_000_000);
+        }
+    }
+    return null;
+};
+
+export const getHistoryClassroomDueAtMs = (
+    assignment: Pick<HistoryClassroomAssignment, 'dueAt' | 'dueWindowDays' | 'publishedAt' | 'createdAt' | 'updatedAt'>,
+): number | null => {
+    const explicitDueAtMs = getHistoryClassroomTimestampMs(assignment.dueAt);
+    if (explicitDueAtMs != null) return explicitDueAtMs;
+
+    const dueWindowDays = Number(assignment.dueWindowDays);
+    if (!Number.isFinite(dueWindowDays) || dueWindowDays <= 0) {
+        return null;
+    }
+
+    const publishedAtMs = getHistoryClassroomPublishedAtMs(assignment);
+    if (publishedAtMs == null) return null;
+
+    return publishedAtMs + Math.floor(dueWindowDays) * 24 * 60 * 60 * 1000;
+};
+
+export const getHistoryClassroomPublishedAtMs = (
+    assignment: Pick<HistoryClassroomAssignment, 'publishedAt' | 'createdAt' | 'updatedAt'>,
+): number | null => (
+    getHistoryClassroomTimestampMs(assignment.publishedAt)
+    ?? getHistoryClassroomTimestampMs(assignment.createdAt)
+    ?? getHistoryClassroomTimestampMs(assignment.updatedAt)
+);
+
+export const getHistoryClassroomRemainingMs = (
+    assignment: Pick<HistoryClassroomAssignment, 'dueAt' | 'dueWindowDays' | 'publishedAt' | 'createdAt' | 'updatedAt'>,
+    now = Date.now(),
+): number | null => {
+    const dueAtMs = getHistoryClassroomDueAtMs(assignment);
+    if (!dueAtMs) return null;
+    return Math.max(0, dueAtMs - now);
+};
+
+export const isHistoryClassroomPastDue = (
+    assignment: Pick<HistoryClassroomAssignment, 'dueAt' | 'dueWindowDays' | 'publishedAt' | 'createdAt' | 'updatedAt'>,
+    now = Date.now(),
+): boolean => {
+    const dueAtMs = getHistoryClassroomDueAtMs(assignment);
+    return dueAtMs != null && dueAtMs <= now;
+};
+
+export const buildHistoryClassroomDueAtDate = (
+    publishedBaseMs: number | null | undefined,
+    dueWindowDays: number | null | undefined,
+) => {
+    if (publishedBaseMs == null || !Number.isFinite(publishedBaseMs)) {
+        return null;
+    }
+
+    const normalizedDueWindowDays = Number(dueWindowDays);
+    if (!Number.isFinite(normalizedDueWindowDays) || normalizedDueWindowDays <= 0) {
+        return null;
+    }
+
+    return new Date(
+        publishedBaseMs + Math.floor(normalizedDueWindowDays) * 24 * 60 * 60 * 1000,
+    );
+};
+
+export const buildHistoryClassroomPublishWindow = ({
+    dueWindowDays,
+    isPublished,
+    previousIsPublished = false,
+    previousPublishedAt,
+    now = new Date(),
+}: {
+    dueWindowDays: number | null | undefined;
+    isPublished: boolean;
+    previousIsPublished?: boolean;
+    previousPublishedAt?: unknown;
+    now?: Date;
+}) => {
+    if (!isPublished) {
+        return {
+            publishedAt: previousIsPublished ? previousPublishedAt : undefined,
+            dueAt: undefined,
+        };
+    }
+
+    const publishedBaseMs = previousIsPublished
+        ? getHistoryClassroomTimestampMs(previousPublishedAt)
+        : null;
+    const publishedAt = publishedBaseMs != null ? new Date(publishedBaseMs) : now;
+
+    return {
+        publishedAt,
+        dueAt: buildHistoryClassroomDueAtDate(
+            publishedAt.getTime(),
+            dueWindowDays,
+        ),
+    };
+};
+
+export const formatHistoryClassroomRemainingWindow = (
+    remainingMs: number | null | undefined,
+) => {
+    if (!remainingMs || remainingMs <= 0) return '마감';
+
+    const totalMinutes = Math.ceil(remainingMs / 60000);
+    if (totalMinutes < 60) return `${totalMinutes}분`;
+
+    const totalHours = Math.ceil(totalMinutes / 60);
+    if (totalHours < 48) {
+        const days = Math.floor(totalHours / 24);
+        const hours = totalHours % 24;
+        if (days > 0) {
+            return hours > 0 ? `${days}일 ${hours}시간` : `${days}일`;
+        }
+        return `${totalHours}시간`;
+    }
+
+    return `${Math.ceil(totalHours / 24)}일`;
+};
+
+const getExpandedTextRegions = (
+    pageRegions: LessonWorksheetTextRegion[],
+    pageImage: LessonWorksheetPageImage,
+) => pageRegions.flatMap((region) => {
+    const tokens = splitTextRegionIntoTokens(region, pageImage);
+    return tokens.length ? tokens : [region];
+});
+
+const expandRenderRect = (
+    rect: {
+        leftRatio: number;
+        topRatio: number;
+        widthRatio: number;
+        heightRatio: number;
+    },
+    pageImage: LessonWorksheetPageImage,
+    options?: {
+        padX?: number;
+        padY?: number;
+        minWidth?: number;
+        minHeight?: number;
+    },
+) => {
+    const padX = options?.padX ?? 8;
+    const padY = options?.padY ?? 5;
+    const minWidth = options?.minWidth ?? 44;
+    const minHeight = options?.minHeight ?? 20;
+    const left = Math.max(0, rect.leftRatio * pageImage.width - padX);
+    const top = Math.max(0, rect.topRatio * pageImage.height - padY);
+    const right = Math.min(
+        pageImage.width,
+        (rect.leftRatio + rect.widthRatio) * pageImage.width + padX,
+    );
+    const bottom = Math.min(
+        pageImage.height,
+        (rect.topRatio + rect.heightRatio) * pageImage.height + padY,
+    );
+    const width = Math.max(minWidth, right - left);
+    const height = Math.max(minHeight, bottom - top);
+
+    return {
+        leftRatio: clampRatio(left / pageImage.width),
+        topRatio: clampRatio(top / pageImage.height),
+        widthRatio: Math.min(1 - left / pageImage.width, width / pageImage.width),
+        heightRatio: Math.min(1 - top / pageImage.height, height / pageImage.height),
+    };
+};
+
+export const inferHistoryClassroomBlankSource = (
+    blank: HistoryClassroomBlank,
+    pageImage?: LessonWorksheetPageImage | null,
+    pageRegions: LessonWorksheetTextRegion[] = [],
+): HistoryClassroomBlankSource => {
+    if (blank.source === 'ocr' || blank.source === 'manual') {
+        return blank.source;
+    }
+    if (!pageImage || pageRegions.length === 0) {
+        return 'manual';
+    }
+
+    const blankCenterX = blank.left + blank.width / 2;
+    const blankCenterY = blank.top + blank.height / 2;
+    const normalizedAnswer = normalizeBlankText(blank.answer);
+    if (!normalizedAnswer) return 'manual';
+
+    const expandedRegions = getExpandedTextRegions(pageRegions, pageImage);
+    const matchedRegion = expandedRegions.some((region) => {
+        if (normalizeBlankText(region.label) !== normalizedAnswer) return false;
+        const bounds = getTightTextRegionBounds(region, pageImage);
+        if (!bounds) return false;
+        const regionCenterX = bounds.left + bounds.width / 2;
+        const regionCenterY = bounds.top + bounds.height / 2;
+        const distance = Math.hypot(regionCenterX - blankCenterX, regionCenterY - blankCenterY);
+        return distance <= Math.max(blank.width, bounds.width) * 1.35;
+    });
+
+    return matchedRegion ? 'ocr' : 'manual';
+};
+
+export const getHistoryClassroomBlankRenderRect = (
+    blank: HistoryClassroomBlank,
+    pageImage: LessonWorksheetPageImage,
+    pageRegions: LessonWorksheetTextRegion[] = [],
+) => {
+    const blankSource = inferHistoryClassroomBlankSource(blank, pageImage, pageRegions);
+    const baseRect = {
+        leftRatio: clampRatio(blank.left / pageImage.width),
+        topRatio: clampRatio(blank.top / pageImage.height),
+        widthRatio: clampRatio(blank.width / pageImage.width),
+        heightRatio: clampRatio(blank.height / pageImage.height),
+    };
+
+    if (blankSource === 'manual' || pageRegions.length === 0) {
+        const pixelWidth = Math.max(1, baseRect.widthRatio * pageImage.width);
+        const pixelHeight = Math.max(1, baseRect.heightRatio * pageImage.height);
+        return expandRenderRect(baseRect, pageImage, {
+            padX: pixelWidth < 34 ? 3 : 4,
+            padY: pixelHeight < 18 ? 2 : 3,
+            minWidth: Math.max(38, Math.min(pixelWidth + 14, 96)),
+            minHeight: Math.max(20, Math.min(pixelHeight + 10, 40)),
+        });
+    }
+
+    const blankCenterX = blank.left + blank.width / 2;
+    const blankCenterY = blank.top + blank.height / 2;
+    const normalizedAnswer = normalizeBlankText(blank.answer);
+    const expandedRegions = getExpandedTextRegions(pageRegions, pageImage);
+    const nearestBounds = expandedRegions
+        .filter((region) => normalizeBlankText(region.label) === normalizedAnswer)
+        .map((region) => {
+            const bounds = getTightTextRegionBounds(region, pageImage);
+            if (!bounds) return null;
+            const regionCenterX = bounds.left + bounds.width / 2;
+            const regionCenterY = bounds.top + bounds.height / 2;
+            return {
+                bounds,
+                distance: Math.hypot(regionCenterX - blankCenterX, regionCenterY - blankCenterY),
+            };
+        })
+        .filter((item): item is NonNullable<typeof item> => Boolean(item))
+        .sort((a, b) => a.distance - b.distance)[0];
+
+    const resolvedRect = nearestBounds
+        ? {
+            leftRatio: nearestBounds.bounds.leftRatio,
+            topRatio: nearestBounds.bounds.topRatio,
+            widthRatio: nearestBounds.bounds.widthRatio,
+            heightRatio: nearestBounds.bounds.heightRatio,
+        }
+        : baseRect;
+    const pixelWidth = Math.max(1, resolvedRect.widthRatio * pageImage.width);
+    const pixelHeight = Math.max(1, resolvedRect.heightRatio * pageImage.height);
+
+    return expandRenderRect(resolvedRect, pageImage, {
+        padX: pixelWidth < 40 ? 4 : 5,
+        padY: pixelHeight < 20 ? 2.5 : 3.5,
+        minWidth: Math.max(40, Math.min(pixelWidth + 18, 104)),
+        minHeight: Math.max(22, Math.min(pixelHeight + 10, 42)),
+    });
+};
