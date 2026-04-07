@@ -565,8 +565,8 @@ service cloud.firestore {
 
     match /quiz_submissions/{docId} {
       allow read: if canReadQuizSubmission(resource.data);
-      allow create: if isAdmin() || isValidQuizSubmissionCreate();
-      allow update: if isAdmin() || isValidQuizSubmissionUpdate();
+      allow create: if isAdmin() || isValidQuizSubmissionCreate(docId);
+      allow update: if isAdmin() || isValidQuizSubmissionUpdate(docId);
       allow delete: if isAdmin();
     }
 
@@ -693,8 +693,8 @@ service cloud.firestore {
 
       match /quiz_submissions/{docId} {
         allow read: if canReadQuizSubmission(resource.data);
-        allow create: if isAdmin() || isValidQuizSubmissionCreate();
-        allow update: if isAdmin() || isValidQuizSubmissionUpdate();
+        allow create: if isAdmin() || isValidQuizSubmissionCreate(docId);
+        allow update: if isAdmin() || isValidQuizSubmissionUpdate(docId);
         allow delete: if isAdmin();
       }
 
