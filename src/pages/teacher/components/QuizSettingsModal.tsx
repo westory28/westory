@@ -278,22 +278,20 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                       }))
                     }
                     disabled={!canEdit}
-                    className={`ml-auto inline-flex h-6 w-10 shrink-0 items-center rounded-full border p-0.5 transition ${
+                    className={`ml-auto inline-flex h-7 w-12 shrink-0 box-border items-center rounded-full border p-0.5 transition ${
                       settings.active
                         ? "border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
                         : "border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:text-blue-700"
                     } disabled:cursor-not-allowed disabled:opacity-60`}
                   >
                     <span
-                      className={`relative h-5 w-full rounded-full ${
-                        settings.active ? "bg-white/30" : "bg-gray-200"
+                      className={`flex h-full w-full items-center rounded-full ${
+                        settings.active
+                          ? "justify-end bg-white/25"
+                          : "justify-start bg-gray-200"
                       }`}
                     >
-                      <span
-                        className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${
-                          settings.active ? "translate-x-5" : ""
-                        }`}
-                      ></span>
+                      <span className="h-5 w-5 rounded-full bg-white shadow-sm" />
                     </span>
                   </button>
                   <div className="flex items-center gap-1">
@@ -332,7 +330,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                   </div>
                 </div>
 
-                <div className="grid gap-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+                <div className="grid gap-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
                   {grade3ClassIds.length > 0 ? (
                     grade3ClassIds.map((classId) => {
                       const checked =
@@ -345,12 +343,6 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                         : settings.active
                           ? "border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:text-blue-700"
                           : "border-gray-200 bg-gray-50 text-gray-400";
-                      const toggleRailClassName = checked
-                        ? settings.active
-                          ? "bg-white/35"
-                          : "bg-blue-100"
-                        : "bg-gray-200";
-
                       return (
                         <div
                           key={classId}
@@ -374,16 +366,16 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                               title={checked ? `${classId} 공개 중` : `${classId} 비공개`}
                               onClick={() => handleToggleClass(classId)}
                               disabled={!toggleEnabled}
-                              className={`inline-flex h-6 w-10 shrink-0 items-center rounded-full border p-0.5 transition ${toggleClassName} disabled:cursor-not-allowed disabled:opacity-70`}
+                              className={`inline-flex h-7 w-12 shrink-0 box-border items-center rounded-full border p-0.5 transition ${toggleClassName} disabled:cursor-not-allowed disabled:opacity-70`}
                             >
                               <span
-                                className={`relative h-5 w-full rounded-full ${toggleRailClassName}`}
+                                className={`flex h-full w-full items-center rounded-full ${
+                                  checked
+                                    ? "justify-end bg-white/25"
+                                    : "justify-start bg-gray-200"
+                                }`}
                               >
-                                <span
-                                  className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${
-                                    checked ? "translate-x-5" : ""
-                                  }`}
-                                ></span>
+                                <span className="h-5 w-5 rounded-full bg-white shadow-sm" />
                               </span>
                             </button>
                             <button
@@ -441,7 +433,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                       );
                     })
                   ) : (
-                    <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-sm text-gray-500 sm:col-span-2 lg:col-span-6">
+                    <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-sm text-gray-500 sm:col-span-2 lg:col-span-5">
                       학교 반 목록을 아직 불러오지 못했습니다.
                     </div>
                   )}

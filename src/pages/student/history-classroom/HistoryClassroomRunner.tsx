@@ -165,8 +165,19 @@ const HistoryClassroomRunner: React.FC = () => {
         const percent = total > 0 ? Math.round((score / total) * 100) : 0;
         const passed = options.status === 'cancelled' ? false : percent >= assignment.passThresholdPercent;
         const status = options.status === 'cancelled' ? 'cancelled' : (passed ? 'passed' : 'failed');
+        const resultCollectionPath = getSemesterCollectionPath(config, 'history_classroom_results');
 
-        const resultRef = await addDoc(collection(db, getSemesterCollectionPath(config, 'history_classroom_results')), {
+        console.info('[HistoryClassroomRunner] Saving result', {
+            resultCollectionPath,
+            assignmentId: assignment.id,
+            uid: userData.uid,
+            score,
+            total,
+            percent,
+            status,
+        });
+
+        const resultRef = await addDoc(collection(db, resultCollectionPath), {
             assignmentId: assignment.id,
             assignmentTitle: assignment.title,
             uid: userData.uid,

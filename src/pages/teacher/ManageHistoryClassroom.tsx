@@ -695,13 +695,16 @@ const ManageHistoryClassroom: React.FC = () => {
   const loadAssignmentIntoWorksheetEditor = (
     assignment: HistoryClassroomAssignment,
     nextMapId: string,
+    mode: "edit" | "clone" = "edit",
   ) => {
     const mapIdToUse = nextMapId || assignment.mapResourceId;
     const sameMap = mapIdToUse === assignment.mapResourceId;
     preserveBlankResetRef.current = sameMap;
     setSelectedMapId(mapIdToUse);
-    setWorksheetEditingAssignmentId(assignment.id);
-    setWorksheetEditingIsPublished(assignment.isPublished);
+    setWorksheetEditingAssignmentId(mode === "edit" ? assignment.id : "");
+    setWorksheetEditingIsPublished(
+      mode === "edit" ? assignment.isPublished : true,
+    );
     setTitle(assignment.title);
     setDescription(assignment.description);
     setTimeLimitMinutes(assignment.timeLimitMinutes);
@@ -1714,11 +1717,25 @@ const ManageHistoryClassroom: React.FC = () => {
                           loadAssignmentIntoWorksheetEditor(
                             editingAssignment,
                             editingMapResourceId,
+                            "edit",
                           )
                         }
                         className="rounded-xl border border-orange-200 bg-white px-3 py-2 text-xs font-bold text-orange-700 hover:bg-orange-50"
                       >
                         지도/빈칸 수정
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          loadAssignmentIntoWorksheetEditor(
+                            editingAssignment,
+                            editingMapResourceId,
+                            "clone",
+                          )
+                        }
+                        className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50"
+                      >
+                        이 설정 불러오기
                       </button>
                     </div>
                     <select

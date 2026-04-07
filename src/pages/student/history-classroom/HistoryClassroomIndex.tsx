@@ -33,21 +33,35 @@ const HistoryClassroomIndex: React.FC = () => {
             if (!userData?.uid) return;
             setLoading(true);
             try {
-                const assignmentPath = getSemesterCollectionPath(config, 'history_classrooms');
-                let assignmentSnap = await getDocs(query(
-                    collection(db, assignmentPath),
-                    where('isPublished', '==', true),
-                ));
-                if (assignmentSnap.empty) {
-                    assignmentSnap = await getDocs(query(
-                        collection(db, 'history_classrooms'),
-                        where('isPublished', '==', true),
-                    ));
+                const loadAssignedSnapshots = async (collectionPath: string) => {
+                    const [singleTargetSnap, multiTargetSnap] = await Promise.all([
+                        getDocs(query(
+                            collection(db, collectionPath),
+                            where('targetStudentUid', '==', userData.uid),
+                        )),
+                        getDocs(query(
+                            collection(db, collectionPath),
+                            where('targetStudentUids', 'array-contains', userData.uid),
+                        )).catch(() => null),
+                    ]);
+
+                    return [
+                        ...singleTargetSnap.docs,
+                        ...(multiTargetSnap?.docs || []),
+                    ];
+                };
+
+                let assignmentDocs = await loadAssignedSnapshots(getSemesterCollectionPath(config, 'history_classrooms'));
+                if (!assignmentDocs.length) {
+                    assignmentDocs = await loadAssignedSnapshots('history_classrooms');
                 }
 
-                const loadedAssignments = assignmentSnap.docs
+                const loadedAssignments = Array.from(
+                    new Map(assignmentDocs.map((docSnap) => [docSnap.id, docSnap])).values(),
+                )
                     .map((docSnap) => normalizeHistoryClassroomAssignment(docSnap.id, docSnap.data()))
                     .filter((assignment) => {
+                        if (!assignment.isPublished) return false;
                         const assignedStudentUids = assignment.targetStudentUids.length
                             ? assignment.targetStudentUids
                             : (assignment.targetStudentUid ? [assignment.targetStudentUid] : []);

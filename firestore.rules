@@ -67,6 +67,47 @@ service cloud.firestore {
       return hasUserProfile() && userProfile().role == 'teacher';
     }
 
+    function canReadQuizResult(data) {
+      return canUseWestory()
+        && (
+          data.uid == request.auth.uid
+          || isAdmin()
+          || isTeacherRole()
+          || hasPermission('quiz_read')
+        );
+    }
+
+    function canReadQuizSubmission(data) {
+      return canUseWestory()
+        && (
+          data.uid == request.auth.uid
+          || isAdmin()
+          || isTeacherRole()
+          || hasPermission('quiz_read')
+        );
+    }
+
+    function isAssignedHistoryClassroomStudent(data) {
+      return canUseWestory()
+        && (
+          data.targetStudentUid == request.auth.uid
+          || (
+            data.targetStudentUids is list
+            && request.auth.uid in data.targetStudentUids
+          )
+        );
+    }
+
+    function canReadHistoryClassroomResource(data) {
+      return isAdmin() || isTeacherRole() || isAssignedHistoryClassroomStudent(data);
+    }
+
+    function canReadHistoryClassroomResult(data) {
+      return isAdmin()
+        || isTeacherRole()
+        || (canUseWestory() && data.uid == request.auth.uid);
+    }
+
     function canReadSourceArchive() {
       return isAdmin() || isTeacherRole() || hasPermission('lesson_read');
     }
@@ -243,6 +284,78 @@ service cloud.firestore {
         && request.resource.data.timeString is string;
     }
 
+    function hasOnlyQuizSubmissionKeys() {
+      return request.resource.data.keys().hasOnly([
+        'uid',
+        'name',
+        'email',
+        'class',
+        'number',
+        'gradeClass',
+        'unitId',
+        'category',
+        'title',
+        'status',
+        'questionIds',
+        'answers',
+        'currentIndex',
+        'hintUsedCount',
+        'revealedHintIds',
+        'orderOptionMap',
+        'timeLimitSeconds',
+        'clientStartedAtMs',
+        'lastClientSavedAtMs',
+        'startedAt',
+        'lastSavedAt',
+        'submittedAt',
+        'resultId'
+      ]);
+    }
+
+    function isValidQuizSubmissionPayload() {
+      return hasOnlyQuizSubmissionKeys()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.email is string
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.class is string
+        && request.resource.data.number is string
+        && request.resource.data.gradeClass is string
+        && request.resource.data.unitId is string
+        && request.resource.data.category is string
+        && request.resource.data.title is string
+        && request.resource.data.status in ['in_progress', 'submitted', 'timed_out']
+        && request.resource.data.questionIds is list
+        && request.resource.data.questionIds.size() <= 100
+        && request.resource.data.answers is map
+        && request.resource.data.answers.keys().size() <= 200
+        && request.resource.data.currentIndex is number
+        && request.resource.data.hintUsedCount is number
+        && request.resource.data.revealedHintIds is list
+        && request.resource.data.revealedHintIds.size() <= 100
+        && request.resource.data.orderOptionMap is map
+        && request.resource.data.timeLimitSeconds is number
+        && request.resource.data.clientStartedAtMs is number
+        && request.resource.data.lastClientSavedAtMs is number
+        && request.resource.data.startedAt is timestamp
+        && request.resource.data.lastSavedAt is timestamp
+        && (!request.resource.data.keys().hasAny(['submittedAt']) || request.resource.data.submittedAt is timestamp)
+        && request.resource.data.resultId is string;
+    }
+
+    function isValidQuizSubmissionCreate() {
+      return isSignedIn()
+        && hasUserProfile()
+        && isValidQuizSubmissionPayload();
+    }
+
+    function isValidQuizSubmissionUpdate() {
+      return isSignedIn()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == resource.data.uid
+        && isValidQuizSubmissionPayload();
+    }
+
     function isValidHistoryClassroomResultCreate() {
       return isSignedIn()
         && hasUserProfile()
@@ -271,8 +384,8 @@ service cloud.firestore {
         && request.resource.data.studentGrade is string
         && request.resource.data.studentClass is string
         && request.resource.data.studentNumber is string
-        && request.resource.data.answers is list
-        && request.resource.data.answers.size() <= 200
+        && request.resource.data.answers is map
+        && request.resource.data.answers.keys().size() <= 200
         && request.resource.data.score is number
         && request.resource.data.total is number
         && request.resource.data.percent is number
@@ -401,12 +514,12 @@ service cloud.firestore {
     }
 
     match /history_classrooms/{docId} {
-      allow read: if isAdmin() || (canUseWestory() && resource.data.targetStudentUid == request.auth.uid);
+      allow read: if canReadHistoryClassroomResource(resource.data);
       allow write: if isAdmin();
     }
 
     match /history_classroom_results/{docId} {
-      allow read: if isAdmin() || (canUseWestory() && resource.data.uid == request.auth.uid);
+      allow read: if canReadHistoryClassroomResult(resource.data);
       allow create: if isValidHistoryClassroomResultCreate();
       allow update, delete: if isAdmin();
     }
@@ -427,13 +540,16 @@ service cloud.firestore {
     }
 
     match /quiz_results/{resultId} {
-      allow read: if canUseWestory() && (resource.data.uid == request.auth.uid || isAdmin() || hasPermission('quiz_read'));
+      allow read: if canReadQuizResult(resource.data);
       allow create: if isValidQuizResultCreate();
       allow update, delete: if isAdmin();
     }
 
     match /quiz_submissions/{docId} {
-      allow read, write: if isAdmin();
+      allow read: if canReadQuizSubmission(resource.data);
+      allow create: if isAdmin() || isValidQuizSubmissionCreate();
+      allow update: if isAdmin() || isValidQuizSubmissionUpdate();
+      allow delete: if isAdmin();
     }
 
     match /think_cloud_state/{docId} {
@@ -526,12 +642,12 @@ service cloud.firestore {
       }
 
       match /history_classrooms/{docId} {
-        allow read: if isAdmin() || (canUseWestory() && resource.data.targetStudentUid == request.auth.uid);
+        allow read: if canReadHistoryClassroomResource(resource.data);
         allow write: if isAdmin();
       }
 
       match /history_classroom_results/{docId} {
-        allow read: if isAdmin() || (canUseWestory() && resource.data.uid == request.auth.uid);
+        allow read: if canReadHistoryClassroomResult(resource.data);
         allow create: if isValidHistoryClassroomResultCreate();
         allow update, delete: if isAdmin();
       }
@@ -552,13 +668,16 @@ service cloud.firestore {
       }
 
       match /quiz_results/{resultId} {
-        allow read: if canUseWestory() && (resource.data.uid == request.auth.uid || isAdmin() || hasPermission('quiz_read'));
+        allow read: if canReadQuizResult(resource.data);
         allow create: if isValidQuizResultCreate();
         allow update, delete: if isAdmin();
       }
 
       match /quiz_submissions/{docId} {
-        allow read, write: if isAdmin();
+        allow read: if canReadQuizSubmission(resource.data);
+        allow create: if isAdmin() || isValidQuizSubmissionCreate();
+        allow update: if isAdmin() || isValidQuizSubmissionUpdate();
+        allow delete: if isAdmin();
       }
 
       match /think_cloud_state/{docId} {

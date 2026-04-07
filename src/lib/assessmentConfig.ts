@@ -118,6 +118,18 @@ const collectGrade3ClassIdsFromProfiles = (profiles: UserProfileShape[]) =>
     }),
   );
 
+const normalizeAssessmentTimeLimitSeconds = (value: unknown) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return 60;
+
+  // Legacy data stored this field in minutes, while current writes use seconds.
+  if (numeric < 60) {
+    return Math.max(1, Math.round(numeric)) * 60;
+  }
+
+  return Math.max(60, Math.round(numeric));
+};
+
 export const getAssessmentConfigKey = (unitId: string, category: string) =>
   `${String(unitId || "").trim()}_${String(category || "").trim()}`;
 
@@ -188,7 +200,7 @@ export const normalizeAssessmentConfigEntry = (
     active: source.active === true,
     questionCount: Math.max(1, Number(source.questionCount) || 10),
     randomOrder: source.randomOrder !== false,
-    timeLimit: Math.max(60, Number(source.timeLimit) || 60),
+    timeLimit: normalizeAssessmentTimeLimitSeconds(source.timeLimit),
     allowRetake: source.allowRetake !== false,
     cooldown: Math.max(0, Number(source.cooldown) || 0),
     hintLimit: Math.max(0, Number(source.hintLimit) || 2),
