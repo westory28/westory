@@ -111,7 +111,6 @@ const HistoryClassroomRunner: React.FC = () => {
     null,
   );
   const [currentPage, setCurrentPage] = useState(1);
-  const [showAnswers, setShowAnswers] = useState(true);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -233,7 +232,6 @@ const HistoryClassroomRunner: React.FC = () => {
 
         setAssignment(loaded);
         setCurrentPage(loaded.pdfPageImages?.[0]?.page || 1);
-        setShowAnswers(true);
         setAnswers({});
         setCompleted(false);
         setResultText("");
@@ -618,8 +616,6 @@ const HistoryClassroomRunner: React.FC = () => {
       currentPage={currentPage}
       onCurrentPageChange={setCurrentPage}
       answers={answers}
-      showAnswers={showAnswers}
-      onToggleShowAnswers={() => setShowAnswers((prev) => !prev)}
       onAnswerChange={handleAnswerChange}
       onSubmit={() => void submitAnswers()}
       submitting={submitting}

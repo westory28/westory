@@ -346,13 +346,20 @@ service cloud.firestore {
         && request.resource.data.resultId is string;
     }
 
-    function isValidQuizSubmissionCreate() {
+    function isQuizSubmissionOwnerDoc(docId) {
+      return isSignedIn()
+        && docId.matches('^' + request.auth.uid + '__[^/]+__[^/]+$');
+    }
+
+    function isValidQuizSubmissionCreate(docId) {
       return canUseWestory()
+        && isQuizSubmissionOwnerDoc(docId)
         && isValidQuizSubmissionPayload();
     }
 
-    function isValidQuizSubmissionUpdate() {
+    function isValidQuizSubmissionUpdate(docId) {
       return canUseWestory()
+        && isQuizSubmissionOwnerDoc(docId)
         && (
           !resource.data.keys().hasAny(['uid'])
           || resource.data.uid == request.auth.uid
@@ -558,8 +565,8 @@ service cloud.firestore {
 
     match /quiz_submissions/{docId} {
       allow read: if canReadQuizSubmission(resource.data);
-      allow create: if isAdmin() || isValidQuizSubmissionCreate();
-      allow update: if isAdmin() || isValidQuizSubmissionUpdate();
+      allow create: if isAdmin() || isValidQuizSubmissionCreate(docId);
+      allow update: if isAdmin() || isValidQuizSubmissionUpdate(docId);
       allow delete: if isAdmin();
     }
 
@@ -686,8 +693,8 @@ service cloud.firestore {
 
       match /quiz_submissions/{docId} {
         allow read: if canReadQuizSubmission(resource.data);
-        allow create: if isAdmin() || isValidQuizSubmissionCreate();
-        allow update: if isAdmin() || isValidQuizSubmissionUpdate();
+        allow create: if isAdmin() || isValidQuizSubmissionCreate(docId);
+        allow update: if isAdmin() || isValidQuizSubmissionUpdate(docId);
         allow delete: if isAdmin();
       }
 

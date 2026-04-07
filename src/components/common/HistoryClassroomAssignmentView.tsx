@@ -9,8 +9,6 @@ interface HistoryClassroomAssignmentViewProps {
   currentPage: number;
   onCurrentPageChange: (page: number) => void;
   answers: Record<string, string>;
-  showAnswers: boolean;
-  onToggleShowAnswers: () => void;
   onAnswerChange?: (blankId: string, value: string) => void;
   onSubmit?: () => void;
   submitting?: boolean;
@@ -28,7 +26,7 @@ interface HistoryClassroomAssignmentViewProps {
 }
 
 const DEFAULT_HELPER_ITEMS = [
-  "오른쪽 보기를 참고해 지도 위 빈칸에 직접 입력합니다.",
+  "오른쪽 참고 보기에서 단어를 확인하고, 지도 위 빈칸에 직접 입력합니다.",
   "각 빈칸은 서로 독립적으로 입력되고 제출 전까지 자유롭게 수정할 수 있습니다.",
   "다른 창 전환, 화면 이동, 멀티태스킹 시 자동 취소됩니다.",
 ];
@@ -61,8 +59,6 @@ const HistoryClassroomAssignmentView: React.FC<
   currentPage,
   onCurrentPageChange,
   answers,
-  showAnswers,
-  onToggleShowAnswers,
   onAnswerChange,
   onSubmit,
   submitting = false,
@@ -227,7 +223,7 @@ const HistoryClassroomAssignmentView: React.FC<
                   return (
                     <div
                       key={blank.id}
-                      className={`absolute z-10 overflow-hidden rounded-xl border text-left font-bold shadow-[0_6px_18px_rgba(15,23,42,0.12)] transition focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-200 disabled:cursor-default ${
+                      className={`absolute z-10 overflow-hidden rounded-xl border text-left font-bold shadow-[0_6px_18px_rgba(15,23,42,0.12)] transition focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-200 ${
                         isFilled
                           ? "border-orange-300 text-orange-800"
                           : "border-slate-300 text-slate-700"
@@ -301,33 +297,28 @@ const HistoryClassroomAssignmentView: React.FC<
         <aside
           className={
             isModalPreview
-              ? "space-y-3 lg:sticky lg:top-5 self-start"
+              ? "self-start space-y-3 lg:sticky lg:top-5"
               : "space-y-4"
           }
         >
           <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
-            <button
-              type="button"
-              onClick={onToggleShowAnswers}
-              className="w-full rounded-2xl bg-orange-50 px-4 py-3 text-sm font-bold text-orange-700 hover:bg-orange-100"
-            >
-              {showAnswers ? "보기 목록 닫기" : "보기 목록 보기"}
-            </button>
-            {showAnswers && (
-              <div className="mt-4">
-                <div className="text-xs font-bold text-gray-500">
-                  보기를 참고해 빈칸에 직접 입력하세요.
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {assignment.answerOptions.map((option) => (
-                    <span
-                      key={option}
-                      className="rounded-full bg-gray-100 px-3 py-2 text-sm font-bold text-gray-700"
-                    >
-                      {option}
-                    </span>
-                  ))}
-                </div>
+            <div className="text-sm font-bold text-gray-700">참고 보기</div>
+            <div className="mt-2 text-xs font-bold text-gray-500">
+              보기는 참고만 하고, 정답은 지도 위 빈칸에 직접 입력하세요.
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {assignment.answerOptions.map((option) => (
+                <span
+                  key={option}
+                  className="rounded-full bg-gray-100 px-3 py-2 text-sm font-bold text-gray-700"
+                >
+                  {option}
+                </span>
+              ))}
+            </div>
+            {!assignment.answerOptions.length && (
+              <div className="mt-3 rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">
+                등록된 참고 보기가 없습니다.
               </div>
             )}
           </div>

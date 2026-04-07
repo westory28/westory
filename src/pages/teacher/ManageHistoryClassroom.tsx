@@ -267,7 +267,6 @@ const ManageHistoryClassroom: React.FC = () => {
     const [deletingAssignment, setDeletingAssignment] = useState(false);
     const [previewOpen, setPreviewOpen] = useState(false);
     const [previewCurrentPage, setPreviewCurrentPage] = useState(1);
-    const [previewShowAnswers, setPreviewShowAnswers] = useState(true);
     const [previewAnswers, setPreviewAnswers] = useState<Record<string, string>>({});
     const preserveBlankResetRef = React.useRef(false);
     const [tabLabels, setTabLabels] = useState({
@@ -710,7 +709,6 @@ const ManageHistoryClassroom: React.FC = () => {
     useEffect(() => {
         if (!previewOpen || !editingPreviewAssignment) return;
         setPreviewCurrentPage(editingPreviewAssignment.pdfPageImages?.[0]?.page || 1);
-        setPreviewShowAnswers(true);
         setPreviewAnswers({});
     }, [editingPreviewAssignment, previewOpen]);
 
@@ -860,7 +858,6 @@ const ManageHistoryClassroom: React.FC = () => {
         setDeletingAssignment(false);
         setPreviewOpen(false);
         setPreviewCurrentPage(1);
-        setPreviewShowAnswers(true);
         setPreviewAnswers({});
     };
 
@@ -1919,8 +1916,6 @@ const ManageHistoryClassroom: React.FC = () => {
                                             currentPage={previewCurrentPage}
                                             onCurrentPageChange={setPreviewCurrentPage}
                                             answers={previewAnswers}
-                                            showAnswers={previewShowAnswers}
-                                            onToggleShowAnswers={() => setPreviewShowAnswers((prev) => !prev)}
                                             readOnly
                                             dueStatusLabel={previewDueStatusMeta?.label || null}
                                             dueStatusTone={previewDueStatusMeta?.tone || 'slate'}
