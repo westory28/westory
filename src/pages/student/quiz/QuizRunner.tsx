@@ -98,6 +98,36 @@ const buildGradeClassLabel = (
   return `${grade}학년 ${className}반 ${number}번`.trim();
 };
 
+const ensureOwnStudentProfile = async (options: {
+  uid: string;
+  email: string;
+  userData?: {
+    name?: unknown;
+    grade?: unknown;
+    class?: unknown;
+    number?: unknown;
+  } | null;
+}) => {
+  const userRef = doc(db, "users", options.uid);
+  const userSnap = await getDoc(userRef);
+  if (userSnap.exists()) {
+    return;
+  }
+
+  await setDoc(userRef, {
+    uid: options.uid,
+    email: options.email,
+    name: normalizeStudentText(options.userData?.name),
+    customNameConfirmed: false,
+    role: "student",
+    staffPermissions: [],
+    teacherPortalEnabled: false,
+    grade: normalizeStudentText(options.userData?.grade),
+    class: normalizeStudentText(options.userData?.class),
+    number: normalizeStudentText(options.userData?.number),
+  });
+};
+
 const readCommittedQuizSubmission = async (submissionRef: ReturnType<typeof doc>) => {
   for (let attempt = 0; attempt < 4; attempt += 1) {
     const snap = await getDoc(submissionRef);
@@ -736,9 +766,28 @@ const QuizRunner: React.FC = () => {
     }
 
     setStartingQuiz(true);
+    let startPayloadSummary: {
+      uid: string;
+      unitId: string;
+      category: string;
+      questionCount: number;
+      title: string;
+      status: string;
+    } | null = null;
     try {
       const submissionRef = doc(db, activeSubmissionPath);
       const clientStartedAtMs = Date.now();
+      const profileEmail =
+        normalizeStudentText(currentUser?.email) ||
+        normalizeStudentText(userData?.email);
+      if (!profileEmail) {
+        throw new Error("평가 시작에 필요한 이메일 정보를 찾지 못했습니다.");
+      }
+      await ensureOwnStudentProfile({
+        uid: userData.uid,
+        email: profileEmail,
+        userData,
+      });
       const payload = {
         ...buildSubmissionPayload("in_progress", {
           answers: {},
@@ -750,8 +799,16 @@ const QuizRunner: React.FC = () => {
         startedAt: serverTimestamp(),
         lastSavedAt: serverTimestamp(),
       };
+      startPayloadSummary = {
+        uid: payload.uid,
+        unitId: payload.unitId,
+        category: payload.category,
+        questionCount: payload.questionIds.length,
+        title: payload.title,
+        status: payload.status,
+      };
 
-      await setDoc(submissionRef, payload, { merge: true });
+      await setDoc(submissionRef, payload);
       const committedSubmission =
         (await readCommittedQuizSubmission(submissionRef)) ||
         normalizeQuizSubmissionDoc(submissionRef.id, {
@@ -767,7 +824,16 @@ const QuizRunner: React.FC = () => {
       setResumeNotice("저장된 진행 상태를 이어서 풀 수 있습니다.");
       setView("quiz");
     } catch (error) {
-      console.error("Failed to start quiz attempt", error);
+      console.error("Failed to start quiz attempt", {
+        submissionPath: activeSubmissionPath,
+        payload: startPayloadSummary,
+        code:
+          typeof error === "object" && error && "code" in error
+            ? String((error as { code?: unknown }).code || "")
+            : "",
+        message: error instanceof Error ? error.message : String(error || ""),
+        error,
+      });
       showToast({
         tone: "error",
         title: "평가를 시작하지 못했습니다.",

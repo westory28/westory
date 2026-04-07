@@ -81,7 +81,17 @@ export const normalizeHistoryClassroomAssignment = (
     description: String(raw.description || '').trim(),
     mapResourceId: String(raw.mapResourceId || '').trim(),
     mapTitle: String(raw.mapTitle || '').trim(),
-    pdfPageImages: Array.isArray(raw.pdfPageImages) ? raw.pdfPageImages : [],
+    pdfPageImages: Array.isArray(raw.pdfPageImages)
+        ? raw.pdfPageImages
+            .map((page) => ({
+                page: Math.max(1, Number(page?.page) || 1),
+                imageUrl: String(page?.imageUrl || '').trim(),
+                width: Math.max(0, Number(page?.width) || 0),
+                height: Math.max(0, Number(page?.height) || 0),
+            }))
+            .filter((page) => page.imageUrl)
+            .sort((left, right) => left.page - right.page)
+        : [],
     pdfRegions: Array.isArray(raw.pdfRegions)
         ? raw.pdfRegions
             .map((region) => ({
@@ -108,9 +118,7 @@ export const normalizeHistoryClassroomAssignment = (
             height: Number(blank?.height) || 52,
             answer: String(blank?.answer || '').trim(),
             prompt: String(blank?.prompt || '').trim(),
-            source: blank?.source === 'manual' || blank?.source === 'ocr'
-                ? blank.source
-                : undefined,
+            source: blank?.source === 'ocr' ? 'ocr' : 'manual',
         }))
         : [],
     answerOptions: Array.isArray(raw.answerOptions)
@@ -165,6 +173,103 @@ export const normalizeHistoryClassroomResult = (
     createdAt: raw.createdAt,
 });
 
+export const sanitizeHistoryClassroomAssignmentForWrite = (
+    raw: Partial<HistoryClassroomAssignment>,
+) => {
+    const payload: Record<string, unknown> = {
+        title: String(raw.title || '').trim() || '역사교실',
+        description: String(raw.description || '').trim(),
+        mapResourceId: String(raw.mapResourceId || '').trim(),
+        mapTitle: String(raw.mapTitle || '').trim(),
+        pdfPageImages: Array.isArray(raw.pdfPageImages)
+            ? raw.pdfPageImages
+                .map((page) => ({
+                    page: Math.max(1, Number(page?.page) || 1),
+                    imageUrl: String(page?.imageUrl || '').trim(),
+                    width: Math.max(0, Number(page?.width) || 0),
+                    height: Math.max(0, Number(page?.height) || 0),
+                }))
+                .filter((page) => page.imageUrl)
+            : [],
+        pdfRegions: Array.isArray(raw.pdfRegions)
+            ? raw.pdfRegions
+                .map((region) => ({
+                    label: String(region?.label || '').trim(),
+                    page: Math.max(1, Number(region?.page) || 1),
+                    left: Number(region?.left) || 0,
+                    top: Number(region?.top) || 0,
+                    width: Math.max(0, Number(region?.width) || 0),
+                    height: Math.max(0, Number(region?.height) || 0),
+                    shortcutEnabled: region?.shortcutEnabled !== false,
+                    tags: Array.isArray(region?.tags)
+                        ? region.tags.map((tag) => String(tag || '').trim()).filter(Boolean)
+                        : [],
+                }))
+                .filter((region) => region.label && region.width > 0 && region.height > 0)
+            : [],
+        blanks: Array.isArray(raw.blanks)
+            ? raw.blanks.map((blank) => {
+                const normalizedBlank: Record<string, unknown> = {
+                    id: String(blank?.id || '').trim() || `blank-${Date.now()}`,
+                    page: Math.max(1, Number(blank?.page) || 1),
+                    left: Number(blank?.left) || 0,
+                    top: Number(blank?.top) || 0,
+                    width: Math.max(1, Number(blank?.width) || 1),
+                    height: Math.max(1, Number(blank?.height) || 1),
+                    answer: String(blank?.answer || '').trim(),
+                    prompt: String(blank?.prompt || '').trim(),
+                };
+                if (blank?.source === 'ocr' || blank?.source === 'manual') {
+                    normalizedBlank.source = blank.source;
+                }
+                return normalizedBlank;
+            })
+            : [],
+        answerOptions: Array.isArray(raw.answerOptions)
+            ? raw.answerOptions.map((item) => String(item || '').trim()).filter(Boolean)
+            : [],
+        timeLimitMinutes: Math.max(0, Number(raw.timeLimitMinutes) || 0),
+        cooldownMinutes: Math.max(0, Number(raw.cooldownMinutes) || 0),
+        passThresholdPercent: Math.min(100, Math.max(0, Number(raw.passThresholdPercent) || 80)),
+        dueWindowDays: Number.isFinite(Number(raw.dueWindowDays)) && Number(raw.dueWindowDays) > 0
+            ? Math.max(1, Math.floor(Number(raw.dueWindowDays)))
+            : null,
+        targetGrade: String(raw.targetGrade || '').trim(),
+        targetClass: String(raw.targetClass || '').trim(),
+        targetStudentUid: String(raw.targetStudentUid || '').trim(),
+        targetStudentUids: Array.isArray(raw.targetStudentUids)
+            ? raw.targetStudentUids.map((item) => String(item || '').trim()).filter(Boolean)
+            : [],
+        targetStudentName: String(raw.targetStudentName || '').trim(),
+        targetStudentNames: Array.isArray(raw.targetStudentNames)
+            ? raw.targetStudentNames.map((item) => String(item || '').trim()).filter(Boolean)
+            : [],
+        targetStudentNumber: String(raw.targetStudentNumber || '').trim(),
+        isPublished: raw.isPublished === true,
+    };
+
+    if (Object.prototype.hasOwnProperty.call(raw, 'publishedAt')) {
+        payload.publishedAt = raw.publishedAt ?? null;
+    }
+    if (Object.prototype.hasOwnProperty.call(raw, 'dueAt')) {
+        payload.dueAt = raw.dueAt ?? null;
+    }
+    if (Object.prototype.hasOwnProperty.call(raw, 'createdAt') && raw.createdAt !== undefined) {
+        payload.createdAt = raw.createdAt;
+    }
+    if (Object.prototype.hasOwnProperty.call(raw, 'updatedAt') && raw.updatedAt !== undefined) {
+        payload.updatedAt = raw.updatedAt;
+    }
+    if (Object.prototype.hasOwnProperty.call(raw, 'deletedAt')) {
+        payload.deletedAt = raw.deletedAt ?? null;
+    }
+    if (Object.prototype.hasOwnProperty.call(raw, 'deletedByUid')) {
+        payload.deletedByUid = String(raw.deletedByUid || '').trim();
+    }
+
+    return payload;
+};
+
 export const buildAnswerOptions = (blanks: HistoryClassroomBlank[]) =>
     Array.from(new Set(blanks.map((blank) => blank.answer.trim()).filter(Boolean)));
 
@@ -213,6 +318,10 @@ export const getHistoryClassroomTimestampMs = (value: unknown): number | null =>
     }
     return null;
 };
+
+export const isHistoryClassroomDeleted = (
+    assignment: Pick<HistoryClassroomAssignment, 'deletedAt'> | null | undefined,
+) => getHistoryClassroomTimestampMs(assignment?.deletedAt) != null;
 
 export const getHistoryClassroomDueAtMs = (
     assignment: Pick<HistoryClassroomAssignment, 'dueAt' | 'dueWindowDays' | 'publishedAt' | 'createdAt' | 'updatedAt'>,

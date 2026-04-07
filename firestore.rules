@@ -102,6 +102,10 @@ service cloud.firestore {
       return isAdmin() || isTeacherRole() || isAssignedHistoryClassroomStudent(data);
     }
 
+    function canWriteHistoryClassroomResource() {
+      return isAdmin() || isTeacherRole();
+    }
+
     function canReadHistoryClassroomResult(data) {
       return isAdmin()
         || isTeacherRole()
@@ -343,16 +347,34 @@ service cloud.firestore {
         && request.resource.data.resultId is string;
     }
 
-    function isValidQuizSubmissionCreate() {
+    function isQuizSubmissionOwnerDoc(docId) {
+      return isSignedIn()
+        && docId.matches('^' + request.auth.uid + '__[^/]+__[^/]+$');
+    }
+
+    function isValidQuizSubmissionCreate(docId) {
       return isSignedIn()
         && hasUserProfile()
+        && isQuizSubmissionOwnerDoc(docId)
         && isValidQuizSubmissionPayload();
     }
 
-    function isValidQuizSubmissionUpdate() {
+    function isValidQuizSubmissionUpdate(docId) {
       return isSignedIn()
-        && resource.data.uid == request.auth.uid
-        && request.resource.data.uid == resource.data.uid
+        && hasUserProfile()
+        && isQuizSubmissionOwnerDoc(docId)
+        && (
+          !resource.data.keys().hasAny(['uid'])
+          || resource.data.uid == request.auth.uid
+        )
+        && (
+          !resource.data.keys().hasAny(['unitId'])
+          || request.resource.data.unitId == resource.data.unitId
+        )
+        && (
+          !resource.data.keys().hasAny(['category'])
+          || request.resource.data.category == resource.data.category
+        )
         && isValidQuizSubmissionPayload();
     }
 
@@ -515,7 +537,7 @@ service cloud.firestore {
 
     match /history_classrooms/{docId} {
       allow read: if canReadHistoryClassroomResource(resource.data);
-      allow write: if isAdmin();
+      allow write: if canWriteHistoryClassroomResource();
     }
 
     match /history_classroom_results/{docId} {
@@ -526,7 +548,7 @@ service cloud.firestore {
 
     match /assessment_config/{docId} {
       allow read: if canUseWestory();
-      allow write: if isAdmin();
+      allow write: if isAdmin() || isTeacherRole();
     }
 
     match /grading_plans/{docId} {
@@ -547,8 +569,8 @@ service cloud.firestore {
 
     match /quiz_submissions/{docId} {
       allow read: if canReadQuizSubmission(resource.data);
-      allow create: if isAdmin() || isValidQuizSubmissionCreate();
-      allow update: if isAdmin() || isValidQuizSubmissionUpdate();
+      allow create: if isAdmin() || isValidQuizSubmissionCreate(docId);
+      allow update: if isAdmin() || isValidQuizSubmissionUpdate(docId);
       allow delete: if isAdmin();
     }
 
@@ -643,7 +665,7 @@ service cloud.firestore {
 
       match /history_classrooms/{docId} {
         allow read: if canReadHistoryClassroomResource(resource.data);
-        allow write: if isAdmin();
+        allow write: if canWriteHistoryClassroomResource();
       }
 
       match /history_classroom_results/{docId} {
@@ -654,7 +676,7 @@ service cloud.firestore {
 
       match /assessment_config/{docId} {
         allow read: if canUseWestory();
-        allow write: if isAdmin();
+        allow write: if isAdmin() || isTeacherRole();
       }
 
       match /grading_plans/{docId} {
@@ -675,8 +697,8 @@ service cloud.firestore {
 
       match /quiz_submissions/{docId} {
         allow read: if canReadQuizSubmission(resource.data);
-        allow create: if isAdmin() || isValidQuizSubmissionCreate();
-        allow update: if isAdmin() || isValidQuizSubmissionUpdate();
+        allow create: if isAdmin() || isValidQuizSubmissionCreate(docId);
+        allow update: if isAdmin() || isValidQuizSubmissionUpdate(docId);
         allow delete: if isAdmin();
       }
 

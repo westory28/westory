@@ -136,8 +136,16 @@ export const getAssessmentConfigKey = (unitId: string, category: string) =>
 export const getStudentGradeClassId = (
   userData?: Partial<UserData> | null,
 ) => {
-  const grade = normalizeDigitToken(userData?.grade);
-  const className = normalizeDigitToken(userData?.class);
+  const profileLike = (userData || {}) as Partial<UserData> & {
+    studentGrade?: string | number;
+    studentClass?: string | number;
+  };
+  const grade = normalizeDigitToken(
+    profileLike.studentGrade ?? profileLike.grade,
+  );
+  const className = normalizeDigitToken(
+    profileLike.studentClass ?? profileLike.class,
+  );
   return grade && className ? `${grade}-${className}` : "";
 };
 
@@ -248,7 +256,13 @@ export const isAssessmentVisibleToStudent = (
   userData?: Partial<UserData> | null,
 ) => {
   if (!entry?.active) return false;
-  const grade = normalizeDigitToken(userData?.grade);
+  const profileLike = (userData || {}) as Partial<UserData> & {
+    studentGrade?: string | number;
+    studentClass?: string | number;
+  };
+  const grade = normalizeDigitToken(
+    profileLike.studentGrade ?? profileLike.grade,
+  );
   const classId = getStudentGradeClassId(userData);
   if (grade !== "3" || !classId) return false;
   if (!entry.hasExplicitClassVisibility) return true;

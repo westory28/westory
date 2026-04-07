@@ -26,6 +26,7 @@ interface HistoryClassroomAssignmentViewProps {
   dueStatusTone?: "slate" | "amber" | "rose";
   headerAction?: React.ReactNode;
   helperItems?: string[];
+  layoutVariant?: "default" | "modalPreview";
 }
 
 const DEFAULT_HELPER_ITEMS = [
@@ -79,7 +80,9 @@ const HistoryClassroomAssignmentView: React.FC<
   dueStatusTone = "slate",
   headerAction = null,
   helperItems = DEFAULT_HELPER_ITEMS,
+  layoutVariant = "default",
 }) => {
+  const isModalPreview = layoutVariant === "modalPreview";
   const pageCount = assignment.pdfPageImages?.length || 1;
   const pageImage =
     assignment.pdfPageImages?.find((page) => page.page === currentPage) || null;
@@ -92,8 +95,18 @@ const HistoryClassroomAssignmentView: React.FC<
   const isPointAwardedNotice = pointNotice.includes("+");
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8">
-      <div className="mb-6 rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
+    <div
+      className={
+        isModalPreview
+          ? "mx-auto w-full max-w-[96rem] px-5 py-5 lg:px-6"
+          : "mx-auto max-w-7xl px-4 py-8"
+      }
+    >
+      <div
+        className={`rounded-3xl border border-gray-200 bg-white shadow-sm ${
+          isModalPreview ? "mb-4 p-5" : "mb-6 p-6"
+        }`}
+      >
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="text-sm font-bold text-orange-500">역사교실</div>
@@ -143,8 +156,18 @@ const HistoryClassroomAssignmentView: React.FC<
         )}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div
+        className={
+          isModalPreview
+            ? "grid gap-4 lg:grid-cols-[minmax(0,1.34fr)_17.5rem] xl:grid-cols-[minmax(0,1.52fr)_18rem]"
+            : "grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]"
+        }
+      >
+        <section
+          className={`rounded-3xl border border-gray-200 bg-white shadow-sm ${
+            isModalPreview ? "flex min-h-[38rem] flex-col p-4 lg:p-5" : "p-5"
+          }`}
+        >
           <div className="mb-4 flex items-center justify-between">
             <div className="text-sm font-bold text-gray-600">
               페이지 {currentPage} / {pageCount}
@@ -172,7 +195,11 @@ const HistoryClassroomAssignmentView: React.FC<
           </div>
 
           {pageImage && (
-            <div className="overflow-auto rounded-3xl border border-gray-200 bg-gray-100 p-4">
+            <div
+              className={`overflow-auto rounded-3xl border border-gray-200 bg-gray-100 ${
+                isModalPreview ? "flex-1 min-h-[34rem] p-3 lg:min-h-[40rem]" : "p-4"
+              }`}
+            >
               <div className="relative inline-block">
                 <img
                   src={pageImage.imageUrl}
@@ -247,7 +274,7 @@ const HistoryClassroomAssignmentView: React.FC<
           )}
         </section>
 
-        <aside className="space-y-4">
+        <aside className={isModalPreview ? "space-y-3" : "space-y-4"}>
           <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
             <button
               type="button"

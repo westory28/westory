@@ -17,6 +17,7 @@ import {
     mergeHistoryClassroomMapSnapshot,
     normalizeHistoryClassroomAssignment,
     normalizeHistoryClassroomResult,
+    sanitizeHistoryClassroomAssignmentForWrite,
     type HistoryClassroomAssignment,
     type HistoryClassroomBlank,
     type HistoryClassroomResult,
@@ -165,6 +166,11 @@ const formatDeadlineLabel = (timestampMs: number | null | undefined) => {
     }).format(new Date(timestampMs));
 };
 
+const getFirestoreErrorSummary = (error: unknown) => ({
+    code: typeof error === 'object' && error && 'code' in error ? String((error as { code?: unknown }).code || '') : '',
+    message: error instanceof Error ? error.message : String(error || ''),
+});
+
 const describeHistoryResultStatus = (status: HistoryClassroomResult['status']) => {
     if (status === 'passed') return '통과';
     if (status === 'failed') return '미통과';
@@ -215,7 +221,7 @@ const worksheetBlankToHistoryBlank = (
 };
 
 const ManageHistoryClassroom: React.FC = () => {
-    const { config } = useAuth();
+    const { config, userData, currentUser } = useAuth();
     const navigate = useNavigate();
 
     const [maps, setMaps] = useState<MapResource[]>([]);
@@ -257,6 +263,7 @@ const ManageHistoryClassroom: React.FC = () => {
     const [editingStudentUids, setEditingStudentUids] = useState<string[]>([]);
     const [editingIsPublished, setEditingIsPublished] = useState(true);
     const [savingEdit, setSavingEdit] = useState(false);
+    const [deletingAssignment, setDeletingAssignment] = useState(false);
     const [previewOpen, setPreviewOpen] = useState(false);
     const [previewCurrentPage, setPreviewCurrentPage] = useState(1);
     const [previewSelectedAnswer, setPreviewSelectedAnswer] = useState('');
@@ -312,10 +319,12 @@ const ManageHistoryClassroom: React.FC = () => {
             if (assignmentSnap.empty) {
                 assignmentSnap = await getDocs(query(collection(db, 'history_classrooms'), orderBy('updatedAt', 'desc')));
             }
-            setAssignments(assignmentSnap.docs.map((docSnap) => mergeHistoryClassroomMapSnapshot(
-                normalizeHistoryClassroomAssignment(docSnap.id, docSnap.data()),
-                loadedMaps.find((map) => map.id === docSnap.data().mapResourceId) || null,
-            )));
+            setAssignments(assignmentSnap.docs
+                .map((docSnap) => mergeHistoryClassroomMapSnapshot(
+                    normalizeHistoryClassroomAssignment(docSnap.id, docSnap.data()),
+                    loadedMaps.find((map) => map.id === docSnap.data().mapResourceId) || null,
+                ))
+                .filter((assignment) => !isHistoryClassroomDeleted(assignment)));
 
             const resultPath = getSemesterCollectionPath(config, 'history_classroom_results');
             let resultSnap = await getDocs(query(collection(db, resultPath), orderBy('createdAt', 'desc')));
@@ -370,6 +379,13 @@ const ManageHistoryClassroom: React.FC = () => {
             return null;
         }
 
+        if (
+            !(worksheetSourceAssignment.pdfPageImages?.length || 0)
+            && !(worksheetSourceAssignment.pdfRegions?.length || 0)
+        ) {
+            return maps.find((item) => item.id === selectedMapId) || null;
+        }
+
         return {
             id: worksheetSourceAssignment.mapResourceId,
             title: worksheetSourceAssignment.mapTitle || '불러온 지도',
@@ -380,7 +396,7 @@ const ManageHistoryClassroom: React.FC = () => {
             pdfRegions: worksheetSourceAssignment.pdfRegions || [],
             sortOrder: -1,
         };
-    }, [selectedMapId, worksheetSourceAssignment]);
+    }, [maps, selectedMapId, worksheetSourceAssignment]);
 
     const selectedMap = useMemo(
         () => worksheetSourceMap || maps.find((item) => item.id === selectedMapId) || null,
@@ -841,6 +857,7 @@ const ManageHistoryClassroom: React.FC = () => {
         setEditingStudentUids([]);
         setEditingIsPublished(true);
         setSavingEdit(false);
+        setDeletingAssignment(false);
         setPreviewOpen(false);
         setPreviewCurrentPage(1);
         setPreviewSelectedAnswer('');
@@ -866,7 +883,7 @@ const ManageHistoryClassroom: React.FC = () => {
                 previousIsPublished: targetAssignment.isPublished,
                 previousPublishedAt: targetAssignment.publishedAt || targetAssignment.createdAt || targetAssignment.updatedAt,
             });
-            const payload: Omit<HistoryClassroomAssignment, 'id'> = {
+            const payload = sanitizeHistoryClassroomAssignmentForWrite({
                 ...targetAssignment,
                 title: editingTitle.trim(),
                 description: editingDescription.trim(),
@@ -885,24 +902,86 @@ const ManageHistoryClassroom: React.FC = () => {
                 publishedAt: publishWindow.publishedAt || null,
                 dueAt: publishWindow.dueAt || null,
                 updatedAt: serverTimestamp(),
-            };
+            });
 
             await setDoc(doc(db, getSemesterCollectionPath(config, 'history_classrooms'), targetAssignment.id), payload, { merge: true });
             setAssignments((prev) => prev.map((assignment) => (
                 assignment.id === targetAssignment.id
-                    ? mergeHistoryClassroomMapSnapshot(
-                        normalizeHistoryClassroomAssignment(targetAssignment.id, payload),
-                        maps.find((map) => map.id === payload.mapResourceId) || null,
-                    )
+                    ? (() => {
+                        const normalized = normalizeHistoryClassroomAssignment(
+                            targetAssignment.id,
+                            payload as Partial<HistoryClassroomAssignment>,
+                        );
+                        return mergeHistoryClassroomMapSnapshot(
+                            normalized,
+                            maps.find((map) => map.id === normalized.mapResourceId) || null,
+                        );
+                    })()
                     : assignment
             )));
             closeAssignmentEditor();
             setWorksheetEditingAssignmentId('');
             setWorksheetEditingIsPublished(true);
         } catch (error) {
-            console.error(error);
+            console.error('Failed to save history classroom assignment edit', {
+                path: `${getSemesterCollectionPath(config, 'history_classrooms')}/${targetAssignment.id}`,
+                assignmentId: targetAssignment.id,
+                payload: {
+                    title: editingTitle.trim(),
+                    studentCount: updatedStudents.length,
+                    blankCount: targetAssignment.blanks.length,
+                    dueWindowDays: resolveDueWindowDaysValue(editingDueWindowDays),
+                    isPublished: editingIsPublished,
+                },
+                ...getFirestoreErrorSummary(error),
+                error,
+            });
             alert('역사교실 수정에 실패했습니다.');
             setSavingEdit(false);
+        }
+    };
+
+    const handleDeleteAssignment = async () => {
+        const targetAssignment = assignments.find((assignment) => assignment.id === editingAssignmentId);
+        if (!targetAssignment) return;
+        const confirmed = window.confirm(
+            '이 역사교실 과제를 삭제할까요?\n학생 목록에서는 즉시 사라지며, 기존 제출 결과는 유지됩니다.',
+        );
+        if (!confirmed) return;
+
+        setDeletingAssignment(true);
+        try {
+            await Promise.all([
+                deleteDoc(doc(db, getSemesterCollectionPath(config, 'history_classrooms'), targetAssignment.id)),
+                deleteDoc(doc(db, 'history_classrooms', targetAssignment.id)),
+            ]);
+            setAssignments((prev) => prev.filter((assignment) => assignment.id !== targetAssignment.id));
+            setResultsByAssignment((prev) => {
+                const next = { ...prev };
+                delete next[targetAssignment.id];
+                return next;
+            });
+            if (worksheetEditingAssignmentId === targetAssignment.id) {
+                setWorksheetEditingAssignmentId('');
+                setWorksheetEditingIsPublished(true);
+            }
+            if (worksheetSourceAssignment?.id === targetAssignment.id) {
+                setWorksheetSourceAssignment(null);
+                setWorksheetImportSourceId('');
+                setWorksheetImportSourceTitle('');
+            }
+            closeAssignmentEditor();
+            alert('역사교실 과제를 삭제했습니다.');
+        } catch (error) {
+            console.error('Failed to delete history classroom assignment', {
+                path: `${getSemesterCollectionPath(config, 'history_classrooms')}/${targetAssignment.id}`,
+                assignmentId: targetAssignment.id,
+                ...getFirestoreErrorSummary(error),
+                error,
+            });
+            alert('역사교실 과제 삭제에 실패했습니다.');
+        } finally {
+            setDeletingAssignment(false);
         }
     };
 
@@ -921,11 +1000,12 @@ const ManageHistoryClassroom: React.FC = () => {
         }
 
         setSaving(true);
+        let assignmentId = '';
         try {
             const existingAssignment = worksheetEditingAssignmentId
                 ? assignments.find((assignment) => assignment.id === worksheetEditingAssignmentId) || null
                 : null;
-            const assignmentId = existingAssignment?.id || `history-classroom-${Date.now()}`;
+            assignmentId = existingAssignment?.id || `history-classroom-${Date.now()}`;
             const sourceSnapshot = worksheetSourceAssignment && worksheetSourceAssignment.mapResourceId === selectedMap.id
                 ? worksheetSourceAssignment
                 : existingAssignment && existingAssignment.mapResourceId === selectedMap.id
@@ -939,7 +1019,7 @@ const ManageHistoryClassroom: React.FC = () => {
                 previousIsPublished: existingAssignment?.isPublished || false,
                 previousPublishedAt: existingAssignment?.publishedAt || existingAssignment?.createdAt || existingAssignment?.updatedAt,
             });
-            const payload: Omit<HistoryClassroomAssignment, 'id'> = {
+            const payload = sanitizeHistoryClassroomAssignmentForWrite({
                 title: title.trim(),
                 description: description.trim(),
                 mapResourceId: selectedMap.id,
@@ -964,12 +1044,16 @@ const ManageHistoryClassroom: React.FC = () => {
                 dueAt: publishWindow.dueAt || null,
                 createdAt: existingAssignment?.createdAt || serverTimestamp(),
                 updatedAt: serverTimestamp(),
-            };
+            });
             await setDoc(doc(db, getSemesterCollectionPath(config, 'history_classrooms'), assignmentId), payload, { merge: !!existingAssignment });
             setAssignments((prev) => {
+                const normalizedAssignment = normalizeHistoryClassroomAssignment(
+                    assignmentId,
+                    payload as Partial<HistoryClassroomAssignment>,
+                );
                 const normalized = mergeHistoryClassroomMapSnapshot(
-                    normalizeHistoryClassroomAssignment(assignmentId, payload),
-                    maps.find((map) => map.id === payload.mapResourceId) || null,
+                    normalizedAssignment,
+                    maps.find((map) => map.id === normalizedAssignment.mapResourceId) || null,
                 );
                 if (existingAssignment) {
                     return prev.map((assignment) => (assignment.id === assignmentId ? normalized : assignment));
@@ -999,7 +1083,20 @@ const ManageHistoryClassroom: React.FC = () => {
             setWorksheetSourceAssignment(null);
             alert('역사교실 과제를 저장했습니다.');
         } catch (error) {
-            console.error(error);
+            console.error('Failed to save history classroom assignment', {
+                path: `${getSemesterCollectionPath(config, 'history_classrooms')}/${assignmentId || worksheetEditingAssignmentId || 'new'}`,
+                assignmentId: assignmentId || worksheetEditingAssignmentId || null,
+                payload: {
+                    title: title.trim(),
+                    mapResourceId: selectedMap.id,
+                    studentCount: selectedStudents.length,
+                    blankCount: blanks.length,
+                    dueWindowDays: resolveDueWindowDaysValue(dueWindowDays),
+                    isPublished: worksheetEditingAssignmentId ? worksheetEditingIsPublished : true,
+                },
+                ...getFirestoreErrorSummary(error),
+                error,
+            });
             alert('역사교실 과제 저장에 실패했습니다.');
         } finally {
             setSaving(false);
@@ -1536,7 +1633,11 @@ const ManageHistoryClassroom: React.FC = () => {
 
             {editingAssignment && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4 py-6">
-                    <div className="relative max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-3xl bg-white shadow-2xl">
+                    <div className={`relative w-full overflow-hidden rounded-3xl bg-white shadow-2xl transition-[max-width,max-height] ${
+                        previewOpen
+                            ? 'max-h-[94vh] max-w-[min(96vw,92rem)]'
+                            : 'max-h-[90vh] max-w-5xl'
+                    }`}>
                         <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
                             <div>
                                 <div className="text-xs font-bold text-orange-500">{editingAssignment.mapTitle}</div>
@@ -1758,6 +1859,14 @@ const ManageHistoryClassroom: React.FC = () => {
                                 </div>
                                 </label>
                                 <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => void handleDeleteAssignment()}
+                                        disabled={savingEdit || deletingAssignment}
+                                        className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                        {deletingAssignment ? '삭제 중...' : '과제 삭제'}
+                                    </button>
                                     <button type="button" onClick={closeAssignmentEditor} className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50">
                                         취소
                                     </button>
@@ -1812,6 +1921,7 @@ const ManageHistoryClassroom: React.FC = () => {
                                             readOnly
                                             dueStatusLabel={previewDueStatusMeta?.label || null}
                                             dueStatusTone={previewDueStatusMeta?.tone || 'slate'}
+                                            layoutVariant="modalPreview"
                                         />
                                     </div>
                                 </div>
