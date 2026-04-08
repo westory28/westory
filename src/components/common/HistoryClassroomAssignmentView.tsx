@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import {
   getHistoryClassroomBlankRenderRect,
+  normalizeHistoryClassroomAnswer,
   type HistoryClassroomAssignment,
 } from "../../lib/historyClassroom";
 
@@ -51,6 +52,20 @@ const MIN_VIEWPORT_USER_SCALE = 1;
 const MAX_VIEWPORT_USER_SCALE = 2.8;
 const VIEWPORT_FIT_PADDING = 24;
 
+const getTimeProgressToneClass = (timeProgressPercent: number) =>
+  timeProgressPercent <= 20
+    ? "bg-red-500"
+    : timeProgressPercent <= 50
+      ? "bg-amber-500"
+      : "bg-blue-500";
+
+const getCountdownToneClass = (timeProgressPercent: number) =>
+  timeProgressPercent <= 20
+    ? "text-red-600"
+    : timeProgressPercent <= 50
+      ? "text-amber-700"
+      : "text-gray-900";
+
 const clampViewportUserScale = (value: number) =>
   Math.min(
     MAX_VIEWPORT_USER_SCALE,
@@ -71,8 +86,21 @@ const getBlankFontSize = (
   const widthBased =
     Math.max(1, pixelWidth - 10) / Math.max(1.2, safeLength * 0.82);
   const heightBased = Math.max(1, pixelHeight - 6) * 0.78;
-  return Math.max(10, Math.min(22, widthBased, heightBased));
+  return Math.max(12, Math.min(22, widthBased, heightBased));
 };
+
+const getAnswerChipWidth = (
+  baseWidth: number,
+  content: string,
+  fontSize: number,
+) => {
+  const textLength = Math.max(1, content.length);
+  const estimatedWidth = Math.ceil(textLength * fontSize * 1.04) + 24;
+  return Math.max(baseWidth, estimatedWidth);
+};
+
+const getAnswerChipHeight = (baseHeight: number, fontSize: number) =>
+  Math.max(baseHeight, Math.ceil(fontSize * 1.8));
 
 const getTouchDistance = (touches: React.TouchList) =>
   Math.hypot(
@@ -127,6 +155,7 @@ const HistoryClassroomAssignmentView: React.FC<
   interactiveViewport = false,
 }) => {
   const isModalPreview = layoutVariant === "modalPreview";
+  const showFloatingActions = !isModalPreview;
   const pageCount = assignment.pdfPageImages?.length || 1;
   const pageImage =
     assignment.pdfPageImages?.find((page) => page.page === currentPage) || null;
@@ -136,6 +165,18 @@ const HistoryClassroomAssignmentView: React.FC<
   const currentTextRegions = (assignment.pdfRegions || []).filter(
     (region) => region.page === currentPage,
   );
+  const normalizedAnsweredOptions = useMemo(() => {
+    const answered = new Set<string>();
+
+    Object.values(answers).forEach((value) => {
+      const normalized = normalizeHistoryClassroomAnswer(value);
+      if (normalized) {
+        answered.add(normalized);
+      }
+    });
+
+    return answered;
+  }, [answers]);
   const isPointAwardedNotice = pointNotice.includes("+");
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const fitScaleRef = useRef(1);
@@ -475,7 +516,7 @@ const HistoryClassroomAssignmentView: React.FC<
       className={
         isModalPreview
           ? "mx-auto w-full max-w-[108rem] px-5 py-5 lg:px-6"
-          : "mx-auto max-w-6xl px-4 py-6 lg:px-5"
+          : "mx-auto max-w-6xl px-4 py-6 pb-44 sm:pb-40 lg:px-5"
       }
     >
       <div
@@ -510,7 +551,7 @@ const HistoryClassroomAssignmentView: React.FC<
           {headerAction && <div className="min-w-[11rem]">{headerAction}</div>}
         </div>
 
-        {assignment.timeLimitMinutes > 0 && countdownLabel && (
+        {isModalPreview && assignment.timeLimitMinutes > 0 && countdownLabel && (
           <div className="mt-4 max-w-md">
             <div className="mb-2 flex items-center justify-between gap-3 text-xs font-bold text-gray-500">
               <span>제한 시간</span>
@@ -518,13 +559,9 @@ const HistoryClassroomAssignmentView: React.FC<
             </div>
             <div className="h-3 overflow-hidden rounded-full bg-gray-200">
               <div
-                className={`h-full rounded-full transition-[width] duration-1000 ${
-                  timeProgressPercent <= 20
-                    ? "bg-red-500"
-                    : timeProgressPercent <= 50
-                      ? "bg-amber-500"
-                      : "bg-blue-500"
-                }`}
+                className={`h-full rounded-full transition-[width] duration-1000 ${getTimeProgressToneClass(
+                  timeProgressPercent,
+                )}`}
                 style={{ width: `${timeProgressPercent}%` }}
               />
             </div>
@@ -710,20 +747,34 @@ const HistoryClassroomAssignmentView: React.FC<
                       const isFilled = Boolean(trimmedAnswerValue);
                       const isInputLocked =
                         readOnly || completed || submitting || !onAnswerChange;
+                      const chipWidth = getAnswerChipWidth(
+                        pixelWidth,
+                        displayValue,
+                        fontSize,
+                      );
+                      const chipHeight = getAnswerChipHeight(
+                        pixelHeight,
+                        fontSize,
+                      );
+                      const anchorLeft =
+                        (renderRect.leftRatio + renderRect.widthRatio / 2) * 100;
+                      const anchorTop =
+                        (renderRect.topRatio + renderRect.heightRatio / 2) * 100;
 
                       return (
                         <div
                           key={blank.id}
-                          className={`absolute z-10 overflow-hidden rounded-xl border text-left font-bold shadow-[0_6px_18px_rgba(15,23,42,0.12)] transition focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-200 ${
+                          className={`absolute z-10 rounded-xl border text-left font-bold shadow-[0_6px_18px_rgba(15,23,42,0.12)] transition focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-200 ${
                             isFilled
                               ? "border-orange-300 text-orange-800"
                               : "border-slate-300 text-slate-700"
                           }`}
                           style={{
-                            left: `${renderRect.leftRatio * 100}%`,
-                            top: `${renderRect.topRatio * 100}%`,
-                            width: `${renderRect.widthRatio * 100}%`,
-                            height: `${renderRect.heightRatio * 100}%`,
+                            left: `${anchorLeft}%`,
+                            top: `${anchorTop}%`,
+                            width: `${chipWidth}px`,
+                            minHeight: `${chipHeight}px`,
+                            transform: "translate(-50%, -50%)",
                             backgroundColor: "#ffffff",
                             opacity: 1,
                           }}
@@ -738,11 +789,11 @@ const HistoryClassroomAssignmentView: React.FC<
                           ) : null}
                           {isInputLocked ? (
                             <span
-                              className="relative z-[1] flex h-full w-full items-center justify-center px-1.5 text-center leading-none"
+                              className="relative z-[1] flex h-full w-full items-center justify-center whitespace-nowrap px-3 text-center leading-none"
                               style={{
                                 fontSize: `${fontSize}px`,
                                 letterSpacing:
-                                  pixelWidth < 46 ? "-0.05em" : "-0.02em",
+                                  chipWidth < 80 ? "-0.05em" : "-0.02em",
                               }}
                             >
                               {trimmedAnswerValue || placeholder}
@@ -765,7 +816,7 @@ const HistoryClassroomAssignmentView: React.FC<
                                 blank.prompt || `${blank.id} 답안 입력`
                               }
                               placeholder={placeholder}
-                              className={`relative z-[1] h-full w-full border-0 bg-transparent px-1.5 text-center font-bold outline-none ${
+                              className={`relative z-[1] h-full w-full border-0 bg-transparent px-3 text-center font-bold outline-none ${
                                 isFilled
                                   ? "text-orange-800 placeholder:text-orange-300"
                                   : "text-slate-700 placeholder:text-slate-400"
@@ -773,7 +824,7 @@ const HistoryClassroomAssignmentView: React.FC<
                               style={{
                                 fontSize: `${Math.max(16, fontSize)}px`,
                                 letterSpacing:
-                                  pixelWidth < 46 ? "-0.05em" : "-0.02em",
+                                  chipWidth < 80 ? "-0.05em" : "-0.02em",
                                 touchAction: "manipulation",
                               }}
                             />
@@ -801,14 +852,25 @@ const HistoryClassroomAssignmentView: React.FC<
               보기는 참고만 하고, 정답은 지도 위 빈칸에 직접 입력하세요.
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
-              {assignment.answerOptions.map((option) => (
-                <span
-                  key={option}
-                  className="rounded-full bg-gray-100 px-3 py-2 text-sm font-bold text-gray-700"
-                >
-                  {option}
-                </span>
-              ))}
+              {assignment.answerOptions.map((option) => {
+                const normalizedOption = normalizeHistoryClassroomAnswer(option);
+                const isAnswered =
+                  Boolean(normalizedOption) &&
+                  normalizedAnsweredOptions.has(normalizedOption);
+
+                return (
+                  <span
+                    key={option}
+                    className={`inline-flex max-w-full items-center rounded-full px-3 py-2 text-sm font-bold transition-colors ${
+                      isAnswered
+                        ? "border border-orange-300 bg-orange-50 text-orange-800 shadow-sm"
+                        : "border border-gray-200 bg-gray-100 text-gray-700"
+                    }`}
+                  >
+                    <span className="whitespace-nowrap">{option}</span>
+                  </span>
+                );
+              })}
             </div>
             {!assignment.answerOptions.length && (
               <div className="mt-3 rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">
@@ -826,20 +888,22 @@ const HistoryClassroomAssignmentView: React.FC<
                 </li>
               ))}
             </ul>
-            <button
-              type="button"
-              onClick={onSubmit}
-              disabled={readOnly || submitting || completed || !onSubmit}
-              className="mt-5 w-full rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60"
-            >
-              {readOnly
-                ? "읽기 전용 미리보기"
-                : submitting
-                  ? "제출 중..."
-                  : completed
-                    ? "제출 완료"
-                    : "제출하기"}
-            </button>
+            {isModalPreview && (
+              <button
+                type="button"
+                onClick={onSubmit}
+                disabled={readOnly || submitting || completed || !onSubmit}
+                className="mt-5 w-full rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60"
+              >
+                {readOnly
+                  ? "읽기 전용 미리보기"
+                  : submitting
+                    ? "제출 중..."
+                    : completed
+                      ? "제출 완료"
+                      : "제출하기"}
+              </button>
+            )}
             {resultText && (
               <div className="mt-3 text-sm font-bold text-blue-700">
                 {resultText}
@@ -857,6 +921,49 @@ const HistoryClassroomAssignmentView: React.FC<
           </div>
         </aside>
       </div>
+
+      {showFloatingActions && (
+        <div className="pointer-events-none fixed inset-x-4 bottom-4 z-50 flex justify-end sm:inset-x-auto sm:right-5 sm:bottom-5">
+          <div className="pointer-events-auto w-full max-w-[22rem] rounded-3xl border border-gray-200 bg-white/95 p-4 shadow-[0_20px_45px_-24px_rgba(15,23,42,0.35)] backdrop-blur">
+            {assignment.timeLimitMinutes > 0 && countdownLabel && (
+              <div className="rounded-2xl bg-gray-50 px-4 py-3">
+                <div className="flex items-center justify-between gap-3 text-[11px] font-bold tracking-[0.18em] text-gray-400">
+                  <span>남은 시간</span>
+                  <span
+                    className={`font-mono text-2xl leading-none ${getCountdownToneClass(
+                      timeProgressPercent,
+                    )}`}
+                  >
+                    {countdownLabel}
+                  </span>
+                </div>
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-gray-200">
+                  <div
+                    className={`h-full rounded-full transition-[width] duration-1000 ${getTimeProgressToneClass(
+                      timeProgressPercent,
+                    )}`}
+                    style={{ width: `${timeProgressPercent}%` }}
+                  />
+                </div>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={onSubmit}
+              disabled={readOnly || submitting || completed || !onSubmit}
+              className="mt-3 w-full rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {readOnly
+                ? "읽기 전용 미리보기"
+                : submitting
+                  ? "제출 중..."
+                  : completed
+                    ? "제출 완료"
+                    : "제출하기"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
