@@ -29,6 +29,7 @@ interface HistoryClassroomAssignmentViewProps {
   headerAction?: React.ReactNode;
   helperItems?: string[];
   layoutVariant?: "default" | "modalPreview";
+  interactiveViewport?: boolean;
 }
 
 const DEFAULT_HELPER_ITEMS = [
@@ -123,6 +124,7 @@ const HistoryClassroomAssignmentView: React.FC<
   headerAction = null,
   helperItems = DEFAULT_HELPER_ITEMS,
   layoutVariant = "default",
+  interactiveViewport = false,
 }) => {
   const isModalPreview = layoutVariant === "modalPreview";
   const pageCount = assignment.pdfPageImages?.length || 1;
@@ -146,7 +148,8 @@ const HistoryClassroomAssignmentView: React.FC<
   const [fitScale, setFitScale] = useState(1);
   const [userScale, setUserScale] = useState(MIN_VIEWPORT_USER_SCALE);
 
-  const enableInteractiveViewport = !isModalPreview && Boolean(pageImage);
+  const enableInteractiveViewport =
+    interactiveViewport && !isModalPreview && Boolean(pageImage);
   const viewportHeight = useMemo(() => {
     if (isModalPreview) return null;
     if (!pageImage) return "clamp(18rem, 56vh, 34rem)";
@@ -158,7 +161,10 @@ const HistoryClassroomAssignmentView: React.FC<
   const scaledPageWidth = pageImage ? pageImage.width * totalScale : 0;
   const scaledPageHeight = pageImage ? pageImage.height * totalScale : 0;
   const canPanViewport = enableInteractiveViewport && userScale > 1.01;
-  const displayZoomPercent = Math.max(1, Math.round(totalScale * 100));
+  const displayZoomPercent = Math.max(
+    100,
+    Math.round(userScale * 100),
+  );
 
   useEffect(() => {
     fitScaleRef.current = fitScale;
@@ -314,8 +320,14 @@ const HistoryClassroomAssignmentView: React.FC<
     });
   };
 
-  const nudgeViewportZoom = (delta: number) => {
-    applyViewportScale(userScaleRef.current + delta);
+  const nudgeViewportZoom = (
+    delta: number,
+    options?: {
+      anchorClientX?: number;
+      anchorClientY?: number;
+    },
+  ) => {
+    applyViewportScale(userScaleRef.current + delta, options);
   };
 
   const resetViewportScale = () => {
@@ -335,7 +347,10 @@ const HistoryClassroomAssignmentView: React.FC<
       return;
     }
     event.preventDefault();
-    nudgeViewportZoom(event.deltaY < 0 ? 0.16 : -0.16);
+    nudgeViewportZoom(event.deltaY < 0 ? 0.16 : -0.16, {
+      anchorClientX: event.clientX,
+      anchorClientY: event.clientY,
+    });
   };
 
   const handleViewportMouseDown = (
@@ -378,15 +393,29 @@ const HistoryClassroomAssignmentView: React.FC<
       const center = getTouchCenter(event.touches);
       const viewportRect = viewportRef.current.getBoundingClientRect();
       const currentScale = Math.max(totalScaleRef.current, 0.001);
+      const currentContentWidth = pageImage.width * currentScale;
+      const currentContentHeight = pageImage.height * currentScale;
+      const currentOffsetX = getCenteredViewportOffset(
+        viewportRef.current.clientWidth,
+        currentContentWidth,
+      );
+      const currentOffsetY = getCenteredViewportOffset(
+        viewportRef.current.clientHeight,
+        currentContentHeight,
+      );
       event.preventDefault();
       pinchStateRef.current = {
         distance,
         userScale: userScaleRef.current,
         contentAnchorX:
-          (viewportRef.current.scrollLeft + (center.x - viewportRect.left)) /
+          (viewportRef.current.scrollLeft +
+            (center.x - viewportRect.left) -
+            currentOffsetX) /
           currentScale,
         contentAnchorY:
-          (viewportRef.current.scrollTop + (center.y - viewportRect.top)) /
+          (viewportRef.current.scrollTop +
+            (center.y - viewportRect.top) -
+            currentOffsetY) /
           currentScale,
       };
       touchDragStateRef.current = null;
@@ -597,7 +626,7 @@ const HistoryClassroomAssignmentView: React.FC<
                 style={
                   !isModalPreview
                     ? {
-                        touchAction: "none",
+                        touchAction: canPanViewport ? "none" : "manipulation",
                         overscrollBehavior: "contain",
                       }
                     : undefined

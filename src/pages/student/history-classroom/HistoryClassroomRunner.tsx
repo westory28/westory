@@ -639,6 +639,7 @@ const HistoryClassroomRunner: React.FC = () => {
       currentPage={currentPage}
       onCurrentPageChange={setCurrentPage}
       answers={answers}
+      interactiveViewport
       onAnswerChange={handleAnswerChange}
       onSubmit={() => void submitAnswers()}
       submitting={submitting}
