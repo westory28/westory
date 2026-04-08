@@ -739,6 +739,7 @@ const HistoryClassroomAssignmentView: React.FC<
                       const trimmedAnswerValue = answerValue.trim();
                       const placeholder = blank.prompt || "정답 입력";
                       const displayValue = trimmedAnswerValue || placeholder;
+                      const widthSizingValue = trimmedAnswerValue || "";
                       const fontSize = getBlankFontSize(
                         pixelWidth,
                         pixelHeight,
@@ -749,7 +750,7 @@ const HistoryClassroomAssignmentView: React.FC<
                         readOnly || completed || submitting || !onAnswerChange;
                       const chipWidth = getAnswerChipWidth(
                         pixelWidth,
-                        displayValue,
+                        widthSizingValue,
                         fontSize,
                       );
                       const chipHeight = getAnswerChipHeight(
@@ -773,7 +774,7 @@ const HistoryClassroomAssignmentView: React.FC<
                             left: `${anchorLeft}%`,
                             top: `${anchorTop}%`,
                             width: `${chipWidth}px`,
-                            minHeight: `${chipHeight}px`,
+                            height: `${chipHeight}px`,
                             transform: "translate(-50%, -50%)",
                             backgroundColor: "#ffffff",
                             opacity: 1,
