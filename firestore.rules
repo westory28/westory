@@ -90,9 +90,18 @@ service cloud.firestore {
     function isAssignedHistoryClassroomStudent(data) {
       return canUseWestory()
         && (
-          data.targetStudentUid == request.auth.uid
+          (
+            data.keys().hasAny(['targetStudentUid'])
+            && data.targetStudentUid == request.auth.uid
+          )
           || (
-            data.targetStudentUids is list
+            data.keys().hasAny(['targetStudentAccessMap'])
+            && data.targetStudentAccessMap is map
+            && data.targetStudentAccessMap[request.auth.uid] == true
+          )
+          || (
+            data.keys().hasAny(['targetStudentUids'])
+            && data.targetStudentUids is list
             && request.auth.uid in data.targetStudentUids
           )
         );

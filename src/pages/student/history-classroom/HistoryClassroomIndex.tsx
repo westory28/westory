@@ -78,6 +78,7 @@ const HistoryClassroomIndex: React.FC = () => {
       setLoading(true);
       try {
         const loadAssignedSnapshots = async (collectionPath: string) => {
+          const accessFieldPath = `targetStudentAccessMap.${userData.uid}`;
           const [singleTargetSnap, multiTargetSnap] = await Promise.all([
             getDocs(
               query(
@@ -88,7 +89,7 @@ const HistoryClassroomIndex: React.FC = () => {
             getDocs(
               query(
                 collection(db, collectionPath),
-                where("targetStudentUids", "array-contains", userData.uid),
+                where(accessFieldPath, "==", true),
               ),
             ).catch(() => null),
           ]);

@@ -2198,9 +2198,9 @@ const ManageHistoryClassroom: React.FC = () => {
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_20rem]">
-                <div className="px-6 py-5">
+            <div className="min-h-0 flex-1 overflow-hidden">
+              <div className="grid h-full min-h-0 gap-0 lg:grid-cols-[minmax(0,1fr)_19.5rem] xl:grid-cols-[minmax(0,1fr)_21rem]">
+                <div className="min-h-0 overflow-y-auto px-6 py-5">
                   <div className="space-y-4">
                     <div>
                       <label className="mb-1 block text-xs font-bold text-gray-500">
@@ -2423,7 +2423,7 @@ const ManageHistoryClassroom: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="border-t border-gray-200 bg-gray-50 px-6 py-5 lg:border-l lg:border-t-0">
+                <div className="min-h-0 overflow-y-auto border-t border-gray-200 bg-gray-50 px-5 py-5 lg:border-l lg:border-t-0 lg:px-6">
                   <div className="rounded-2xl border border-gray-200 bg-white p-3.5">
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-sm font-bold text-gray-700">
@@ -2444,15 +2444,15 @@ const ManageHistoryClassroom: React.FC = () => {
                         미응시 {editingAttemptStatusCounts.overdueAbsent}
                       </span>
                     </div>
-                    <div className="mt-3 space-y-2">
+                    <div className="mt-3 space-y-1.5">
                       {editingAttemptStatusRows.map((row) => (
                         <div
                           key={row.student.uid}
-                          className={`rounded-xl border px-3 py-2 ${row.toneClassName}`}
+                          className={`rounded-xl border px-3 py-1.5 ${row.toneClassName}`}
                         >
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5">
                             <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1.5">
                                 <div className="truncate text-sm font-bold">
                                   {formatStudentBadgeLabel(row.student)}
                                 </div>
@@ -2464,7 +2464,7 @@ const ManageHistoryClassroom: React.FC = () => {
                                 {row.detailLabel}
                               </div>
                             </div>
-                            <span className="shrink-0 rounded-full bg-white/90 px-2 py-1 text-[11px] font-bold">
+                            <span className="shrink-0 rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-bold">
                               {row.statusLabel}
                             </span>
                           </div>
@@ -2479,15 +2479,15 @@ const ManageHistoryClassroom: React.FC = () => {
                       {editingResults.length}건
                     </div>
                   </div>
-                  <div className="mt-3 space-y-2">
+                  <div className="mt-3 space-y-1.5">
                     {editingResults.map((result) => (
                       <div
                         key={result.id}
-                        className="rounded-xl border border-gray-200 bg-white px-3 py-2"
+                        className="rounded-xl border border-gray-200 bg-white px-3 py-1.5"
                       >
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5">
                               <div className="truncate text-sm font-bold text-gray-900">
                                 {result.studentName}
                               </div>
@@ -2516,7 +2516,7 @@ const ManageHistoryClassroom: React.FC = () => {
                             </div>
                           </div>
                           <span
-                            className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-bold ${
+                            className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${
                               result.status === "passed"
                                 ? "bg-emerald-50 text-emerald-700"
                                 : result.status === "failed"
