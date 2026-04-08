@@ -4,7 +4,10 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../../contexts/AuthContext";
 import { db } from "../../../lib/firebase";
 import {
+  getHistoryClassroomAssignedStudentUids,
   getHistoryClassroomRemainingMs,
+  isHistoryClassroomAssignedToStudent,
+  isHistoryClassroomDeleted,
   isHistoryClassroomPastDue,
   normalizeHistoryClassroomAssignment,
   normalizeHistoryClassroomResult,
@@ -13,9 +16,15 @@ import {
 } from "../../../lib/historyClassroom";
 import { getSemesterCollectionPath } from "../../../lib/semesterScope";
 
-const formatCooldown = (latest: unknown, cooldownMinutes: number, nowMs: number) => {
+const formatCooldown = (
+  latest: unknown,
+  cooldownMinutes: number,
+  nowMs: number,
+) => {
   if (!latest || cooldownMinutes <= 0) return null;
-  const seconds = Number((latest as { seconds?: number } | undefined)?.seconds || 0);
+  const seconds = Number(
+    (latest as { seconds?: number } | undefined)?.seconds || 0,
+  );
   if (!seconds) return null;
   const availableAt = seconds * 1000 + cooldownMinutes * 60 * 1000;
   const remainMs = availableAt - nowMs;
@@ -49,7 +58,9 @@ const getResultLabel = (status: HistoryClassroomResult["status"]) => {
 const HistoryClassroomIndex: React.FC = () => {
   const { userData, config } = useAuth();
   const navigate = useNavigate();
-  const [assignments, setAssignments] = useState<HistoryClassroomAssignment[]>([]);
+  const [assignments, setAssignments] = useState<HistoryClassroomAssignment[]>(
+    [],
+  );
   const [resultsByAssignment, setResultsByAssignment] = useState<
     Record<string, HistoryClassroomResult[]>
   >({});
@@ -73,7 +84,7 @@ const HistoryClassroomIndex: React.FC = () => {
                 collection(db, collectionPath),
                 where("targetStudentUid", "==", userData.uid),
               ),
-            ),
+            ).catch(() => null),
             getDocs(
               query(
                 collection(db, collectionPath),
@@ -82,32 +93,41 @@ const HistoryClassroomIndex: React.FC = () => {
             ).catch(() => null),
           ]);
 
-          return [...singleTargetSnap.docs, ...(multiTargetSnap?.docs || [])];
+          return [
+            ...(singleTargetSnap?.docs || []),
+            ...(multiTargetSnap?.docs || []),
+          ];
         };
 
-        let assignmentDocs = await loadAssignedSnapshots(
-          getSemesterCollectionPath(config, "history_classrooms"),
-        );
-        if (!assignmentDocs.length) {
-          assignmentDocs = await loadAssignedSnapshots("history_classrooms");
-        }
-
-        const loadedAssignments = Array.from(
-          new Map(assignmentDocs.map((docSnap) => [docSnap.id, docSnap])).values(),
-        )
-          .map((docSnap) =>
-            normalizeHistoryClassroomAssignment(docSnap.id, docSnap.data()),
+        const normalizeVisibleAssignments = (
+          assignmentDocs: Awaited<ReturnType<typeof loadAssignedSnapshots>>,
+        ) =>
+          Array.from(
+            new Map(
+              assignmentDocs.map((docSnap) => [docSnap.id, docSnap]),
+            ).values(),
           )
-          .filter((assignment) => {
-            if (!assignment.isPublished) return false;
-            const assignedStudentUids = assignment.targetStudentUids.length
-              ? assignment.targetStudentUids
-              : assignment.targetStudentUid
-                ? [assignment.targetStudentUid]
-                : [];
-            return assignedStudentUids.includes(userData.uid);
-          })
-          .sort((left, right) => left.title.localeCompare(right.title, "ko"));
+            .map((docSnap) =>
+              normalizeHistoryClassroomAssignment(docSnap.id, docSnap.data()),
+            )
+            .filter(
+              (assignment) =>
+                !isHistoryClassroomDeleted(assignment) &&
+                assignment.isPublished &&
+                isHistoryClassroomAssignedToStudent(assignment, userData.uid),
+            )
+            .sort((left, right) => left.title.localeCompare(right.title, "ko"));
+
+        let loadedAssignments = normalizeVisibleAssignments(
+          await loadAssignedSnapshots(
+            getSemesterCollectionPath(config, "history_classrooms"),
+          ),
+        );
+        if (!loadedAssignments.length) {
+          loadedAssignments = normalizeVisibleAssignments(
+            await loadAssignedSnapshots("history_classrooms"),
+          );
+        }
         setAssignments(loadedAssignments);
 
         const resultPath = getSemesterCollectionPath(
@@ -128,17 +148,25 @@ const HistoryClassroomIndex: React.FC = () => {
 
         const grouped: Record<string, HistoryClassroomResult[]> = {};
         resultSnap.docs.forEach((docSnap) => {
-          const item = normalizeHistoryClassroomResult(docSnap.id, docSnap.data());
-          grouped[item.assignmentId] = [...(grouped[item.assignmentId] || []), item];
+          const item = normalizeHistoryClassroomResult(
+            docSnap.id,
+            docSnap.data(),
+          );
+          grouped[item.assignmentId] = [
+            ...(grouped[item.assignmentId] || []),
+            item,
+          ];
         });
         Object.keys(grouped).forEach((key) => {
           grouped[key].sort(
             (left, right) =>
               Number(
-                (right.createdAt as { seconds?: number } | undefined)?.seconds || 0,
+                (right.createdAt as { seconds?: number } | undefined)
+                  ?.seconds || 0,
               ) -
               Number(
-                (left.createdAt as { seconds?: number } | undefined)?.seconds || 0,
+                (left.createdAt as { seconds?: number } | undefined)?.seconds ||
+                  0,
               ),
           );
         });
@@ -163,7 +191,10 @@ const HistoryClassroomIndex: React.FC = () => {
           assignment.cooldownMinutes,
           nowMs,
         );
-        const remainingDueMs = getHistoryClassroomRemainingMs(assignment, nowMs);
+        const remainingDueMs = getHistoryClassroomRemainingMs(
+          assignment,
+          nowMs,
+        );
         const pastDue = isHistoryClassroomPastDue(assignment, nowMs);
         const dueLabel =
           remainingDueMs == null
@@ -191,13 +222,19 @@ const HistoryClassroomIndex: React.FC = () => {
   );
 
   if (loading) {
-    return <div className="p-10 text-center text-gray-400">역사교실을 불러오는 중입니다.</div>;
+    return (
+      <div className="p-10 text-center text-gray-400">
+        역사교실을 불러오는 중입니다.
+      </div>
+    );
   }
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
       <div className="mb-8 rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-        <div className="text-sm font-bold text-orange-500">학습 &gt; 역사교실</div>
+        <div className="text-sm font-bold text-orange-500">
+          학습 &gt; 역사교실
+        </div>
         <h1 className="mt-2 text-3xl font-black text-gray-900">역사교실</h1>
         <p className="mt-2 text-sm text-gray-600">
           지도의 빈칸을 채우고 기준 점수 이상이면 통과합니다.
@@ -240,18 +277,26 @@ const HistoryClassroomIndex: React.FC = () => {
               <div className="mt-4 space-y-1 text-xs text-gray-500">
                 <div>
                   배정 학생:{" "}
-                  {(assignment.targetStudentNames.length
-                    ? assignment.targetStudentNames.join(", ")
-                    : assignment.targetStudentName) || "미정"}
+                  {getHistoryClassroomAssignedStudentUids(assignment).length
+                    ? (assignment.targetStudentNames.length
+                        ? assignment.targetStudentNames.join(", ")
+                        : assignment.targetStudentName) || "배정됨"
+                    : "미정"}
                 </div>
                 <div>통과 기준: {assignment.passThresholdPercent}% 이상</div>
-                <div>재응시 제한: {assignment.cooldownMinutes > 0 ? `${assignment.cooldownMinutes}분` : "없음"}</div>
+                <div>
+                  재응시 제한:{" "}
+                  {assignment.cooldownMinutes > 0
+                    ? `${assignment.cooldownMinutes}분`
+                    : "없음"}
+                </div>
                 <div>응시 상태: {attendanceLabel}</div>
                 <div>{dueLabel}</div>
                 <div>응시 기록: {attemptCount}회</div>
                 {latest && (
                   <div>
-                    최근 결과: {latest.percent}% · {getResultLabel(latest.status)}
+                    최근 결과: {latest.percent}% ·{" "}
+                    {getResultLabel(latest.status)}
                   </div>
                 )}
               </div>
@@ -269,7 +314,9 @@ const HistoryClassroomIndex: React.FC = () => {
                   <button
                     type="button"
                     onClick={() =>
-                      navigate(`/student/history-classroom/run?id=${assignment.id}`)
+                      navigate(
+                        `/student/history-classroom/run?id=${assignment.id}`,
+                      )
                     }
                     className="w-full rounded-2xl bg-orange-500 px-4 py-3 text-sm font-bold text-white hover:bg-orange-600"
                   >

@@ -16,7 +16,9 @@ import { useAuth } from "../../../contexts/AuthContext";
 import { notifyPointsUpdated } from "../../../lib/appEvents";
 import { db } from "../../../lib/firebase";
 import {
+  getHistoryClassroomAssignedStudentUids,
   getHistoryClassroomRemainingMs,
+  isHistoryClassroomDeleted,
   isHistoryClassroomBlankCorrect,
   isHistoryClassroomPastDue,
   mergeHistoryClassroomMapSnapshot,
@@ -107,9 +109,8 @@ const HistoryClassroomRunner: React.FC = () => {
   const { userData, config } = useAuth();
   const assignmentId = searchParams.get("id") || "";
 
-  const [assignment, setAssignment] = useState<HistoryClassroomAssignment | null>(
-    null,
-  );
+  const [assignment, setAssignment] =
+    useState<HistoryClassroomAssignment | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -131,7 +132,10 @@ const HistoryClassroomRunner: React.FC = () => {
 
       try {
         let snap = await getDoc(
-          doc(db, getSemesterDocPath(config, "history_classrooms", assignmentId)),
+          doc(
+            db,
+            getSemesterDocPath(config, "history_classrooms", assignmentId),
+          ),
         );
         if (!snap.exists()) {
           snap = await getDoc(doc(db, `history_classrooms/${assignmentId}`));
@@ -143,13 +147,19 @@ const HistoryClassroomRunner: React.FC = () => {
         let loaded = normalizeHistoryClassroomAssignment(snap.id, snap.data());
         if (
           loaded.mapResourceId &&
-          (!(loaded.pdfPageImages?.length || 0) || !(loaded.pdfRegions?.length || 0))
+          (!(loaded.pdfPageImages?.length || 0) ||
+            !(loaded.pdfRegions?.length || 0))
         ) {
           let mapSnap = await getDoc(
-            doc(db, getSemesterDocPath(config, "map_resources", loaded.mapResourceId)),
+            doc(
+              db,
+              getSemesterDocPath(config, "map_resources", loaded.mapResourceId),
+            ),
           );
           if (!mapSnap.exists()) {
-            mapSnap = await getDoc(doc(db, `map_resources/${loaded.mapResourceId}`));
+            mapSnap = await getDoc(
+              doc(db, `map_resources/${loaded.mapResourceId}`),
+            );
           }
           if (mapSnap.exists()) {
             loaded = mergeHistoryClassroomMapSnapshot(
@@ -159,11 +169,12 @@ const HistoryClassroomRunner: React.FC = () => {
           }
         }
 
-        const assignedStudentUids = loaded.targetStudentUids.length
-          ? loaded.targetStudentUids
-          : loaded.targetStudentUid
-            ? [loaded.targetStudentUid]
-            : [];
+        if (isHistoryClassroomDeleted(loaded)) {
+          throw new Error("삭제된 역사교실입니다.");
+        }
+
+        const assignedStudentUids =
+          getHistoryClassroomAssignedStudentUids(loaded);
 
         if (!assignedStudentUids.includes(userData.uid)) {
           throw new Error("이 과제는 현재 계정에 배정되지 않았습니다.");
@@ -174,7 +185,10 @@ const HistoryClassroomRunner: React.FC = () => {
 
         let resultSnap = await getDocs(
           query(
-            collection(db, getSemesterCollectionPath(config, "history_classroom_results")),
+            collection(
+              db,
+              getSemesterCollectionPath(config, "history_classroom_results"),
+            ),
             where("uid", "==", userData.uid),
             where("assignmentId", "==", loaded.id),
           ),
@@ -196,8 +210,8 @@ const HistoryClassroomRunner: React.FC = () => {
           .sort(
             (left, right) =>
               Number(
-                (right.createdAt as { seconds?: number } | undefined)?.seconds ||
-                  0,
+                (right.createdAt as { seconds?: number } | undefined)
+                  ?.seconds || 0,
               ) -
               Number(
                 (left.createdAt as { seconds?: number } | undefined)?.seconds ||
@@ -266,7 +280,10 @@ const HistoryClassroomRunner: React.FC = () => {
     const total = assignment.blanks.length;
     const score = assignment.blanks.reduce(
       (sum, blank) =>
-        sum + (isHistoryClassroomBlankCorrect(answers[blank.id] || "", blank.answer) ? 1 : 0),
+        sum +
+        (isHistoryClassroomBlankCorrect(answers[blank.id] || "", blank.answer)
+          ? 1
+          : 0),
       0,
     );
     const percent = total > 0 ? Math.round((score / total) * 100) : 0;
@@ -330,7 +347,10 @@ const HistoryClassroomRunner: React.FC = () => {
         sourceLabel: assignment?.title || "역사교실 제출 완료",
       });
 
-      if (pointResult.awarded && (pointResult.totalAwarded || pointResult.amount)) {
+      if (
+        pointResult.awarded &&
+        (pointResult.totalAwarded || pointResult.amount)
+      ) {
         notifyPointsUpdated();
       }
 
@@ -382,7 +402,10 @@ const HistoryClassroomRunner: React.FC = () => {
         setPointNotice("");
       }
     } catch (pointError) {
-      console.error("Failed to claim history classroom point reward:", pointError);
+      console.error(
+        "Failed to claim history classroom point reward:",
+        pointError,
+      );
       setPointNotice("역사교실 위스를 바로 반영하지 못했습니다.");
       showToast({
         tone: "warning",
