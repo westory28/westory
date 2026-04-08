@@ -1,4 +1,10 @@
-import React from "react";
+import React, {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   getHistoryClassroomBlankRenderRect,
   type HistoryClassroomAssignment,
@@ -27,8 +33,8 @@ interface HistoryClassroomAssignmentViewProps {
 
 const DEFAULT_HELPER_ITEMS = [
   "오른쪽 참고 보기에서 단어를 확인하고, 지도 위 빈칸에 직접 입력합니다.",
-  "각 빈칸은 서로 독립적으로 입력되고 제출 전까지 자유롭게 수정할 수 있습니다.",
-  "다른 창 전환, 화면 이동, 멀티태스킹 시 자동 취소됩니다.",
+  "각 빈칸은 서로 독립적으로 입력하고 제출 전까지 자유롭게 수정할 수 있습니다.",
+  "다른 창 전환, 화면 이동, 멀티태스킹 시 응시는 자동 취소됩니다.",
 ];
 
 const TONE_CLASS_NAME: Record<
@@ -39,6 +45,21 @@ const TONE_CLASS_NAME: Record<
   amber: "border-amber-200 bg-amber-50 text-amber-700",
   rose: "border-rose-200 bg-rose-50 text-rose-700",
 };
+
+const MIN_VIEWPORT_USER_SCALE = 1;
+const MAX_VIEWPORT_USER_SCALE = 2.8;
+const VIEWPORT_FIT_PADDING = 24;
+
+const clampViewportUserScale = (value: number) =>
+  Math.min(
+    MAX_VIEWPORT_USER_SCALE,
+    Math.max(MIN_VIEWPORT_USER_SCALE, Number(value.toFixed(3))),
+  );
+
+const getCenteredViewportOffset = (
+  viewportSize: number,
+  contentSize: number,
+) => Math.max(0, (viewportSize - contentSize) / 2);
 
 const getBlankFontSize = (
   pixelWidth: number,
@@ -51,6 +72,35 @@ const getBlankFontSize = (
   const heightBased = Math.max(1, pixelHeight - 6) * 0.78;
   return Math.max(10, Math.min(22, widthBased, heightBased));
 };
+
+const getTouchDistance = (touches: React.TouchList) =>
+  Math.hypot(
+    touches[0].clientX - touches[1].clientX,
+    touches[0].clientY - touches[1].clientY,
+  );
+
+const getTouchCenter = (touches: React.TouchList) => ({
+  x: (touches[0].clientX + touches[1].clientX) / 2,
+  y: (touches[0].clientY + touches[1].clientY) / 2,
+});
+
+const isInteractiveFieldTarget = (target: EventTarget | null) =>
+  target instanceof HTMLElement &&
+  Boolean(target.closest("input, textarea, select, button, label"));
+
+interface ViewportDragState {
+  x: number;
+  y: number;
+  left: number;
+  top: number;
+}
+
+interface ViewportPinchState {
+  distance: number;
+  userScale: number;
+  contentAnchorX: number;
+  contentAnchorY: number;
+}
 
 const HistoryClassroomAssignmentView: React.FC<
   HistoryClassroomAssignmentViewProps
@@ -85,18 +135,323 @@ const HistoryClassroomAssignmentView: React.FC<
     (region) => region.page === currentPage,
   );
   const isPointAwardedNotice = pointNotice.includes("+");
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const fitScaleRef = useRef(1);
+  const userScaleRef = useRef(1);
+  const totalScaleRef = useRef(1);
+  const zoomFrameRef = useRef<number | null>(null);
+  const dragStateRef = useRef<ViewportDragState | null>(null);
+  const touchDragStateRef = useRef<ViewportDragState | null>(null);
+  const pinchStateRef = useRef<ViewportPinchState | null>(null);
+  const [fitScale, setFitScale] = useState(1);
+  const [userScale, setUserScale] = useState(MIN_VIEWPORT_USER_SCALE);
+
+  const enableInteractiveViewport = !isModalPreview && Boolean(pageImage);
+  const viewportHeight = useMemo(() => {
+    if (isModalPreview) return null;
+    if (!pageImage) return "clamp(18rem, 56vh, 34rem)";
+    return pageImage.height > pageImage.width
+      ? "clamp(20rem, 62vh, 38rem)"
+      : "clamp(18rem, 54vh, 32rem)";
+  }, [isModalPreview, pageImage]);
+  const totalScale = enableInteractiveViewport ? fitScale * userScale : 1;
+  const scaledPageWidth = pageImage ? pageImage.width * totalScale : 0;
+  const scaledPageHeight = pageImage ? pageImage.height * totalScale : 0;
+  const canPanViewport = enableInteractiveViewport && userScale > 1.01;
+  const displayZoomPercent = Math.max(1, Math.round(totalScale * 100));
+
+  useEffect(() => {
+    fitScaleRef.current = fitScale;
+  }, [fitScale]);
+
+  useEffect(() => {
+    userScaleRef.current = userScale;
+  }, [userScale]);
+
+  useEffect(() => {
+    totalScaleRef.current = totalScale;
+  }, [totalScale]);
+
+  useEffect(
+    () => () => {
+      if (zoomFrameRef.current !== null) {
+        window.cancelAnimationFrame(zoomFrameRef.current);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    setUserScale(MIN_VIEWPORT_USER_SCALE);
+    dragStateRef.current = null;
+    touchDragStateRef.current = null;
+    pinchStateRef.current = null;
+    viewportRef.current?.scrollTo({ left: 0, top: 0 });
+  }, [assignment.id, currentPage]);
+
+  useLayoutEffect(() => {
+    if (!enableInteractiveViewport || !viewportRef.current || !pageImage) {
+      setFitScale(1);
+      return undefined;
+    }
+
+    const viewport = viewportRef.current;
+    const updateFitScale = () => {
+      const availableWidth = Math.max(
+        0,
+        viewport.clientWidth - VIEWPORT_FIT_PADDING,
+      );
+      const availableHeight = Math.max(
+        0,
+        viewport.clientHeight - VIEWPORT_FIT_PADDING,
+      );
+      if (!availableWidth || !availableHeight) return;
+
+      const nextFitScale = Math.min(
+        1,
+        Math.max(
+          0.22,
+          Math.min(
+            availableWidth / Math.max(pageImage.width, 1),
+            availableHeight / Math.max(pageImage.height, 1),
+          ),
+        ),
+      );
+
+      setFitScale(nextFitScale);
+      if (userScaleRef.current <= 1.01) {
+        viewport.scrollTo({ left: 0, top: 0 });
+      }
+    };
+
+    updateFitScale();
+    const frameId = window.requestAnimationFrame(updateFitScale);
+    const observer = new ResizeObserver(updateFitScale);
+    observer.observe(viewport);
+    window.addEventListener("resize", updateFitScale);
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      observer.disconnect();
+      window.removeEventListener("resize", updateFitScale);
+    };
+  }, [enableInteractiveViewport, pageImage]);
+
+  const clearViewportGestureState = () => {
+    dragStateRef.current = null;
+    touchDragStateRef.current = null;
+    pinchStateRef.current = null;
+  };
+
+  const applyViewportScale = (
+    nextUserScale: number,
+    options?: {
+      anchorClientX?: number;
+      anchorClientY?: number;
+      contentAnchorX?: number;
+      contentAnchorY?: number;
+    },
+  ) => {
+    const clampedUserScale = clampViewportUserScale(nextUserScale);
+    const viewport = viewportRef.current;
+    if (!viewport || !pageImage) {
+      setUserScale(clampedUserScale);
+      return;
+    }
+
+    const rect = viewport.getBoundingClientRect();
+    const anchorClientX = options?.anchorClientX ?? rect.left + rect.width / 2;
+    const anchorClientY = options?.anchorClientY ?? rect.top + rect.height / 2;
+    const localX = anchorClientX - rect.left;
+    const localY = anchorClientY - rect.top;
+    const currentScale = Math.max(totalScaleRef.current, 0.001);
+    const currentContentWidth = pageImage.width * currentScale;
+    const currentContentHeight = pageImage.height * currentScale;
+    const currentOffsetX = getCenteredViewportOffset(
+      viewport.clientWidth,
+      currentContentWidth,
+    );
+    const currentOffsetY = getCenteredViewportOffset(
+      viewport.clientHeight,
+      currentContentHeight,
+    );
+    const contentAnchorX =
+      options?.contentAnchorX ??
+      (viewport.scrollLeft + localX - currentOffsetX) / currentScale;
+    const contentAnchorY =
+      options?.contentAnchorY ??
+      (viewport.scrollTop + localY - currentOffsetY) / currentScale;
+
+    setUserScale(clampedUserScale);
+
+    if (zoomFrameRef.current !== null) {
+      window.cancelAnimationFrame(zoomFrameRef.current);
+    }
+
+    zoomFrameRef.current = window.requestAnimationFrame(() => {
+      zoomFrameRef.current = null;
+      const nextViewport = viewportRef.current;
+      if (!nextViewport) return;
+      const nextTotalScale = fitScaleRef.current * clampedUserScale;
+      const nextContentWidth = pageImage.width * nextTotalScale;
+      const nextContentHeight = pageImage.height * nextTotalScale;
+      const nextOffsetX = getCenteredViewportOffset(
+        nextViewport.clientWidth,
+        nextContentWidth,
+      );
+      const nextOffsetY = getCenteredViewportOffset(
+        nextViewport.clientHeight,
+        nextContentHeight,
+      );
+      nextViewport.scrollLeft = Math.max(
+        0,
+        contentAnchorX * nextTotalScale - localX + nextOffsetX,
+      );
+      nextViewport.scrollTop = Math.max(
+        0,
+        contentAnchorY * nextTotalScale - localY + nextOffsetY,
+      );
+    });
+  };
+
+  const nudgeViewportZoom = (delta: number) => {
+    applyViewportScale(userScaleRef.current + delta);
+  };
+
+  const resetViewportScale = () => {
+    clearViewportGestureState();
+    if (zoomFrameRef.current !== null) {
+      window.cancelAnimationFrame(zoomFrameRef.current);
+      zoomFrameRef.current = null;
+    }
+    setUserScale(MIN_VIEWPORT_USER_SCALE);
+    window.requestAnimationFrame(() => {
+      viewportRef.current?.scrollTo({ left: 0, top: 0, behavior: "smooth" });
+    });
+  };
+
+  const handleViewportWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    if (!enableInteractiveViewport || isInteractiveFieldTarget(event.target)) {
+      return;
+    }
+    event.preventDefault();
+    nudgeViewportZoom(event.deltaY < 0 ? 0.16 : -0.16);
+  };
+
+  const handleViewportMouseDown = (
+    event: React.MouseEvent<HTMLDivElement>,
+  ) => {
+    if (
+      !canPanViewport ||
+      event.button !== 0 ||
+      !viewportRef.current ||
+      isInteractiveFieldTarget(event.target)
+    ) {
+      return;
+    }
+    event.preventDefault();
+    dragStateRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+      left: viewportRef.current.scrollLeft,
+      top: viewportRef.current.scrollTop,
+    };
+  };
+
+  const handleViewportMouseMove = (
+    event: React.MouseEvent<HTMLDivElement>,
+  ) => {
+    if (!viewportRef.current || !dragStateRef.current) return;
+    event.preventDefault();
+    viewportRef.current.scrollLeft =
+      dragStateRef.current.left - (event.clientX - dragStateRef.current.x);
+    viewportRef.current.scrollTop =
+      dragStateRef.current.top - (event.clientY - dragStateRef.current.y);
+  };
+
+  const handleViewportTouchStart = (
+    event: React.TouchEvent<HTMLDivElement>,
+  ) => {
+    if (!enableInteractiveViewport || !viewportRef.current || !pageImage) return;
+    if (event.touches.length === 2) {
+      const distance = getTouchDistance(event.touches);
+      const center = getTouchCenter(event.touches);
+      const viewportRect = viewportRef.current.getBoundingClientRect();
+      const currentScale = Math.max(totalScaleRef.current, 0.001);
+      event.preventDefault();
+      pinchStateRef.current = {
+        distance,
+        userScale: userScaleRef.current,
+        contentAnchorX:
+          (viewportRef.current.scrollLeft + (center.x - viewportRect.left)) /
+          currentScale,
+        contentAnchorY:
+          (viewportRef.current.scrollTop + (center.y - viewportRect.top)) /
+          currentScale,
+      };
+      touchDragStateRef.current = null;
+      return;
+    }
+
+    if (
+      event.touches.length === 1 &&
+      canPanViewport &&
+      !isInteractiveFieldTarget(event.target)
+    ) {
+      const touch = event.touches[0];
+      touchDragStateRef.current = {
+        x: touch.clientX,
+        y: touch.clientY,
+        left: viewportRef.current.scrollLeft,
+        top: viewportRef.current.scrollTop,
+      };
+    }
+  };
+
+  const handleViewportTouchMove = (
+    event: React.TouchEvent<HTMLDivElement>,
+  ) => {
+    if (!viewportRef.current || !pageImage) return;
+    if (event.touches.length === 2 && pinchStateRef.current) {
+      const nextDistance = getTouchDistance(event.touches);
+      const center = getTouchCenter(event.touches);
+      event.preventDefault();
+      applyViewportScale(
+        pinchStateRef.current.userScale *
+          (nextDistance / pinchStateRef.current.distance),
+        {
+          anchorClientX: center.x,
+          anchorClientY: center.y,
+          contentAnchorX: pinchStateRef.current.contentAnchorX,
+          contentAnchorY: pinchStateRef.current.contentAnchorY,
+        },
+      );
+      return;
+    }
+
+    if (event.touches.length === 1 && touchDragStateRef.current) {
+      const touch = event.touches[0];
+      event.preventDefault();
+      viewportRef.current.scrollLeft =
+        touchDragStateRef.current.left -
+        (touch.clientX - touchDragStateRef.current.x);
+      viewportRef.current.scrollTop =
+        touchDragStateRef.current.top -
+        (touch.clientY - touchDragStateRef.current.y);
+    }
+  };
 
   return (
     <div
       className={
         isModalPreview
           ? "mx-auto w-full max-w-[108rem] px-5 py-5 lg:px-6"
-          : "mx-auto max-w-7xl px-4 py-8"
+          : "mx-auto max-w-6xl px-4 py-6 lg:px-5"
       }
     >
       <div
         className={`rounded-3xl border border-gray-200 bg-white shadow-sm ${
-          isModalPreview ? "mb-4 p-5" : "mb-6 p-6"
+          isModalPreview ? "mb-4 p-5" : "mb-5 p-6"
         }`}
       >
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -152,19 +507,50 @@ const HistoryClassroomAssignmentView: React.FC<
         className={
           isModalPreview
             ? "grid gap-4 lg:grid-cols-[minmax(0,1.46fr)_18rem] xl:grid-cols-[minmax(0,1.7fr)_19.5rem]"
-            : "grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]"
+            : "grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]"
         }
       >
         <section
           className={`rounded-3xl border border-gray-200 bg-white shadow-sm ${
-            isModalPreview ? "flex min-h-[42rem] flex-col p-4 lg:p-5" : "p-5"
+            isModalPreview ? "flex min-h-[42rem] flex-col p-4 lg:p-5" : "p-4"
           }`}
         >
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div className="text-sm font-bold text-gray-600">
               페이지 {currentPage} / {pageCount}
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {!isModalPreview && (
+                <>
+                  <div className="hidden rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-500 sm:block">
+                    {displayZoomPercent}%
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => nudgeViewportZoom(-0.18)}
+                    disabled={userScale <= MIN_VIEWPORT_USER_SCALE}
+                    className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 disabled:opacity-40"
+                  >
+                    -
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetViewportScale}
+                    disabled={userScale <= MIN_VIEWPORT_USER_SCALE}
+                    className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 disabled:opacity-40"
+                  >
+                    전체 보기
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => nudgeViewportZoom(0.18)}
+                    disabled={userScale >= MAX_VIEWPORT_USER_SCALE}
+                    className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 disabled:opacity-40"
+                  >
+                    +
+                  </button>
+                </>
+              )}
               <button
                 type="button"
                 disabled={currentPage <= 1}
@@ -188,107 +574,186 @@ const HistoryClassroomAssignmentView: React.FC<
 
           {pageImage && (
             <div
-              className={`overflow-auto rounded-3xl border border-gray-200 bg-gray-100 ${
-                isModalPreview ? "flex-1 min-h-[38rem] p-4 lg:min-h-[46rem]" : "p-4"
+              className={`rounded-3xl border border-gray-200 bg-gray-100 ${
+                isModalPreview
+                  ? "flex-1 min-h-[38rem] overflow-auto p-4 lg:min-h-[46rem]"
+                  : "overflow-hidden p-3 sm:p-4"
               }`}
+              style={
+                !isModalPreview && viewportHeight
+                  ? { height: viewportHeight }
+                  : undefined
+              }
             >
-              <div className={`relative inline-block ${isModalPreview ? "mx-auto" : ""}`}>
-                <img
-                  src={pageImage.imageUrl}
-                  alt={`${assignment.title} ${currentPage}`}
-                  className="block"
-                  style={{ width: `${pageImage.width}px`, maxWidth: "none" }}
-                />
-                {currentBlanks.map((blank) => {
-                  const renderRect = getHistoryClassroomBlankRenderRect(
-                    blank,
-                    pageImage,
-                    currentTextRegions,
-                  );
-                  const pixelWidth = renderRect.widthRatio * pageImage.width;
-                  const pixelHeight = renderRect.heightRatio * pageImage.height;
-                  const answerValue = String(answers[blank.id] || "");
-                  const trimmedAnswerValue = answerValue.trim();
-                  const placeholder = blank.prompt || "정답 입력";
-                  const displayValue = trimmedAnswerValue || placeholder;
-                  const fontSize = getBlankFontSize(
-                    pixelWidth,
-                    pixelHeight,
-                    displayValue.length,
-                  );
-                  const isFilled = Boolean(trimmedAnswerValue);
-                  const isInputLocked =
-                    readOnly || completed || submitting || !onAnswerChange;
+              {!isModalPreview && (
+                <div className="mb-3 text-xs font-medium text-gray-500">
+                  첫 화면에서는 전체 지도와 빈칸 분포를 먼저 확인하고, 확대가
+                  필요하면 휠 또는 핀치로 조절하세요.
+                </div>
+              )}
+              <div
+                ref={!isModalPreview ? viewportRef : undefined}
+                className="h-full min-h-0 overflow-auto"
+                style={
+                  !isModalPreview
+                    ? {
+                        touchAction: "none",
+                        overscrollBehavior: "contain",
+                      }
+                    : undefined
+                }
+                onWheel={!isModalPreview ? handleViewportWheel : undefined}
+                onMouseDown={
+                  !isModalPreview ? handleViewportMouseDown : undefined
+                }
+                onMouseMove={
+                  !isModalPreview ? handleViewportMouseMove : undefined
+                }
+                onMouseUp={!isModalPreview ? clearViewportGestureState : undefined}
+                onMouseLeave={
+                  !isModalPreview ? clearViewportGestureState : undefined
+                }
+                onTouchStart={
+                  !isModalPreview ? handleViewportTouchStart : undefined
+                }
+                onTouchMove={
+                  !isModalPreview ? handleViewportTouchMove : undefined
+                }
+                onTouchEnd={
+                  !isModalPreview ? clearViewportGestureState : undefined
+                }
+                onTouchCancel={
+                  !isModalPreview ? clearViewportGestureState : undefined
+                }
+              >
+                <div
+                  className={`flex min-h-full min-w-full ${
+                    !isModalPreview && !canPanViewport
+                      ? "items-center justify-center"
+                      : "items-start justify-start"
+                  }`}
+                >
+                  <div
+                    className={`relative shrink-0 ${
+                      !isModalPreview && canPanViewport
+                        ? "cursor-grab active:cursor-grabbing"
+                        : ""
+                    } ${isModalPreview ? "mx-auto" : ""}`}
+                    style={{
+                      width: `${
+                        isModalPreview ? pageImage.width : scaledPageWidth
+                      }px`,
+                      height: `${
+                        isModalPreview ? pageImage.height : scaledPageHeight
+                      }px`,
+                    }}
+                  >
+                    <img
+                      src={pageImage.imageUrl}
+                      alt={`${assignment.title} ${currentPage}`}
+                      className="block h-full w-full"
+                      style={{ maxWidth: "none" }}
+                    />
+                    {currentBlanks.map((blank) => {
+                      const renderRect = getHistoryClassroomBlankRenderRect(
+                        blank,
+                        pageImage,
+                        currentTextRegions,
+                      );
+                      const displayWidth = isModalPreview
+                        ? pageImage.width
+                        : scaledPageWidth;
+                      const displayHeight = isModalPreview
+                        ? pageImage.height
+                        : scaledPageHeight;
+                      const pixelWidth = renderRect.widthRatio * displayWidth;
+                      const pixelHeight =
+                        renderRect.heightRatio * displayHeight;
+                      const answerValue = String(answers[blank.id] || "");
+                      const trimmedAnswerValue = answerValue.trim();
+                      const placeholder = blank.prompt || "정답 입력";
+                      const displayValue = trimmedAnswerValue || placeholder;
+                      const fontSize = getBlankFontSize(
+                        pixelWidth,
+                        pixelHeight,
+                        displayValue.length,
+                      );
+                      const isFilled = Boolean(trimmedAnswerValue);
+                      const isInputLocked =
+                        readOnly || completed || submitting || !onAnswerChange;
 
-                  return (
-                    <div
-                      key={blank.id}
-                      className={`absolute z-10 overflow-hidden rounded-xl border text-left font-bold shadow-[0_6px_18px_rgba(15,23,42,0.12)] transition focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-200 ${
-                        isFilled
-                          ? "border-orange-300 text-orange-800"
-                          : "border-slate-300 text-slate-700"
-                      }`}
-                      style={{
-                        left: `${renderRect.leftRatio * 100}%`,
-                        top: `${renderRect.topRatio * 100}%`,
-                        width: `${renderRect.widthRatio * 100}%`,
-                        height: `${renderRect.heightRatio * 100}%`,
-                        minWidth: `${Math.max(pixelWidth, 32)}px`,
-                        minHeight: `${Math.max(pixelHeight, 18)}px`,
-                        backgroundColor: "#ffffff",
-                        opacity: 1,
-                      }}
-                    >
-                      {isInputLocked ? (
-                        <span
-                          aria-hidden
-                          className={`absolute inset-0 ${
-                            isFilled ? "bg-orange-50" : "bg-white"
+                      return (
+                        <div
+                          key={blank.id}
+                          className={`absolute z-10 overflow-hidden rounded-xl border text-left font-bold shadow-[0_6px_18px_rgba(15,23,42,0.12)] transition focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-200 ${
+                            isFilled
+                              ? "border-orange-300 text-orange-800"
+                              : "border-slate-300 text-slate-700"
                           }`}
-                        />
-                      ) : null}
-                      {isInputLocked ? (
-                        <span
-                          className="relative z-[1] flex h-full w-full items-center justify-center px-1.5 text-center leading-none"
                           style={{
-                            fontSize: `${fontSize}px`,
-                            letterSpacing:
-                              pixelWidth < 46 ? "-0.05em" : "-0.02em",
+                            left: `${renderRect.leftRatio * 100}%`,
+                            top: `${renderRect.topRatio * 100}%`,
+                            width: `${renderRect.widthRatio * 100}%`,
+                            height: `${renderRect.heightRatio * 100}%`,
+                            backgroundColor: "#ffffff",
+                            opacity: 1,
                           }}
                         >
-                          {trimmedAnswerValue || placeholder}
-                        </span>
-                      ) : (
-                        <input
-                          type="text"
-                          value={answerValue}
-                          onChange={(event) =>
-                            onAnswerChange?.(blank.id, event.target.value)
-                          }
-                          readOnly={isInputLocked}
-                          autoComplete="off"
-                          autoCorrect="off"
-                          autoCapitalize="off"
-                          spellCheck={false}
-                          inputMode="text"
-                          lang="ko"
-                          aria-label={blank.prompt || `${blank.id} 답안 입력`}
-                          placeholder={placeholder}
-                          className={`relative z-[1] h-full w-full border-0 bg-transparent px-1.5 text-center font-bold outline-none ${
-                            isFilled
-                              ? "text-orange-800 placeholder:text-orange-300"
-                              : "text-slate-700 placeholder:text-slate-400"
-                          }`}
-                          style={{
-                            fontSize: `${Math.max(16, fontSize)}px`,
-                            letterSpacing:
-                              pixelWidth < 46 ? "-0.05em" : "-0.02em",
-                          }}
-                        />
-                      )}
-                    </div>
-                  );
-                })}
+                          {isInputLocked ? (
+                            <span
+                              aria-hidden
+                              className={`absolute inset-0 ${
+                                isFilled ? "bg-orange-50" : "bg-white"
+                              }`}
+                            />
+                          ) : null}
+                          {isInputLocked ? (
+                            <span
+                              className="relative z-[1] flex h-full w-full items-center justify-center px-1.5 text-center leading-none"
+                              style={{
+                                fontSize: `${fontSize}px`,
+                                letterSpacing:
+                                  pixelWidth < 46 ? "-0.05em" : "-0.02em",
+                              }}
+                            >
+                              {trimmedAnswerValue || placeholder}
+                            </span>
+                          ) : (
+                            <input
+                              type="text"
+                              value={answerValue}
+                              onChange={(event) =>
+                                onAnswerChange?.(blank.id, event.target.value)
+                              }
+                              readOnly={isInputLocked}
+                              autoComplete="off"
+                              autoCorrect="off"
+                              autoCapitalize="off"
+                              spellCheck={false}
+                              inputMode="text"
+                              lang="ko"
+                              aria-label={
+                                blank.prompt || `${blank.id} 답안 입력`
+                              }
+                              placeholder={placeholder}
+                              className={`relative z-[1] h-full w-full border-0 bg-transparent px-1.5 text-center font-bold outline-none ${
+                                isFilled
+                                  ? "text-orange-800 placeholder:text-orange-300"
+                                  : "text-slate-700 placeholder:text-slate-400"
+                              }`}
+                              style={{
+                                fontSize: `${Math.max(16, fontSize)}px`,
+                                letterSpacing:
+                                  pixelWidth < 46 ? "-0.05em" : "-0.02em",
+                                touchAction: "manipulation",
+                              }}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
           )}
