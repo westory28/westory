@@ -102,6 +102,60 @@ const clearCooldownLock = (assignmentId: string, uid: string) => {
   removeStorage(getCooldownLockKey(assignmentId, uid));
 };
 
+type HistoryClassroomResultWrongItem = {
+  blankId: string;
+  blankNumber: number;
+  studentAnswer: string;
+  correctAnswer: string;
+};
+
+type HistoryClassroomResultModalSummary = {
+  total: number;
+  correctCount: number;
+  wrongCount: number;
+  percent: number;
+  passed: boolean;
+  passThresholdPercent: number;
+  wrongItems: HistoryClassroomResultWrongItem[];
+};
+
+const buildHistoryClassroomResultSummary = (
+  assignment: HistoryClassroomAssignment,
+  answers: Record<string, string>,
+  passed: boolean,
+  percent: number,
+): HistoryClassroomResultModalSummary => {
+  let correctCount = 0;
+  const wrongItems: HistoryClassroomResultWrongItem[] = [];
+
+  assignment.blanks.forEach((blank, index) => {
+    const studentAnswer = answers[blank.id] || "";
+    const correctAnswer = blank.answer || "";
+
+    if (isHistoryClassroomBlankCorrect(studentAnswer, correctAnswer)) {
+      correctCount += 1;
+      return;
+    }
+
+    wrongItems.push({
+      blankId: blank.id,
+      blankNumber: index + 1,
+      studentAnswer,
+      correctAnswer,
+    });
+  });
+
+  return {
+    total: assignment.blanks.length,
+    correctCount,
+    wrongCount: assignment.blanks.length - correctCount,
+    percent,
+    passed,
+    passThresholdPercent: assignment.passThresholdPercent,
+    wrongItems,
+  };
+};
+
 const HistoryClassroomRunner: React.FC = () => {
   const { showToast } = useAppToast();
   const [searchParams] = useSearchParams();
@@ -118,11 +172,14 @@ const HistoryClassroomRunner: React.FC = () => {
   const [completed, setCompleted] = useState(false);
   const [error, setError] = useState("");
   const [resultText, setResultText] = useState("");
+  const [resultSummary, setResultSummary] =
+    useState<HistoryClassroomResultModalSummary | null>(null);
   const [pointNotice, setPointNotice] = useState("");
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [remainingDueMs, setRemainingDueMs] = useState<number | null>(null);
   const cancellationInFlightRef = useRef(false);
   const autoSubmitHandledRef = useRef(false);
+  const resultSummaryShownRef = useRef(false);
 
   useEffect(() => {
     const loadAssignment = async () => {
@@ -249,6 +306,8 @@ const HistoryClassroomRunner: React.FC = () => {
         setAnswers({});
         setCompleted(false);
         setResultText("");
+        setResultSummary(null);
+        resultSummaryShownRef.current = false;
         setPointNotice("");
         setRemainingSeconds(
           loaded.timeLimitMinutes > 0 ? loaded.timeLimitMinutes * 60 : null,
@@ -439,6 +498,7 @@ const HistoryClassroomRunner: React.FC = () => {
     try {
       await saveResult({ status: "cancelled", cancellationReason: reason });
       setCompleted(true);
+      setResultSummary(null);
       setResultText(
         "화면 이탈로 응시가 자동 취소되었습니다. 재응시 제한이 시작됩니다.",
       );
@@ -469,12 +529,18 @@ const HistoryClassroomRunner: React.FC = () => {
       setCompleted(true);
       if (!result) return;
 
-      const statusLabel = result.status === "passed" ? "통과" : "미통과";
-      setResultText(
-        reason === "due-window"
-          ? `응시 기간이 지나 자동 제출되었습니다. ${result.score}/${result.total} (${result.percent}%) · ${statusLabel}`
-          : `제한 시간이 종료되어 자동 제출되었습니다. ${result.score}/${result.total} (${result.percent}%) · ${statusLabel}`,
-      );
+      if (!resultSummaryShownRef.current) {
+        resultSummaryShownRef.current = true;
+        setResultSummary(
+          buildHistoryClassroomResultSummary(
+            assignment,
+            answers,
+            result.passed,
+            result.percent,
+          ),
+        );
+      }
+      setResultText("");
       await applyHistoryClassroomPointReward(result.resultId, result.percent);
     } catch (submitError) {
       console.error(submitError);
@@ -602,10 +668,18 @@ const HistoryClassroomRunner: React.FC = () => {
       setCompleted(true);
       if (!result) return;
 
-      const statusLabel = result.status === "passed" ? "통과" : "미통과";
-      setResultText(
-        `제출 완료: ${result.score}/${result.total} (${result.percent}%) · ${statusLabel}`,
-      );
+      if (!resultSummaryShownRef.current) {
+        resultSummaryShownRef.current = true;
+        setResultSummary(
+          buildHistoryClassroomResultSummary(
+            assignment,
+            answers,
+            result.passed,
+            result.percent,
+          ),
+        );
+      }
+      setResultText("");
       await applyHistoryClassroomPointReward(result.resultId, result.percent);
     } catch (submitError) {
       console.error(submitError);
@@ -634,32 +708,180 @@ const HistoryClassroomRunner: React.FC = () => {
   }
 
   return (
-    <HistoryClassroomAssignmentView
-      assignment={assignment}
-      currentPage={currentPage}
-      onCurrentPageChange={setCurrentPage}
-      answers={answers}
-      interactiveViewport
-      onAnswerChange={handleAnswerChange}
-      onSubmit={() => void submitAnswers()}
-      submitting={submitting}
-      completed={completed}
-      resultText={resultText}
-      pointNotice={pointNotice}
-      countdownLabel={countdownLabel}
-      timeProgressPercent={timeProgressPercent}
-      dueStatusLabel={dueStatus.label}
-      dueStatusTone={dueStatus.tone}
-      headerAction={
-        <button
-          type="button"
-          onClick={() => navigate("/student/history-classroom")}
-          className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50"
+    <>
+      <HistoryClassroomAssignmentView
+        assignment={assignment}
+        currentPage={currentPage}
+        onCurrentPageChange={setCurrentPage}
+        answers={answers}
+        interactiveViewport
+        onAnswerChange={handleAnswerChange}
+        onSubmit={() => void submitAnswers()}
+        submitting={submitting}
+        completed={completed}
+        resultText={resultSummary ? "" : resultText}
+        pointNotice={pointNotice}
+        countdownLabel={countdownLabel}
+        timeProgressPercent={timeProgressPercent}
+        dueStatusLabel={dueStatus.label}
+        dueStatusTone={dueStatus.tone}
+        headerAction={
+          <button
+            type="button"
+            onClick={() => navigate("/student/history-classroom")}
+            className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50"
+          >
+            목록으로
+          </button>
+        }
+      />
+      {resultSummary && (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/55 px-4 py-6 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="history-classroom-result-title"
+          onClick={() => {
+            setResultSummary(null);
+            setResultText("");
+          }}
         >
-          목록으로
-        </button>
-      }
-    />
+          <div
+            className="flex max-h-[calc(100vh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.35)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="shrink-0 border-b border-slate-200 px-5 py-4 sm:px-6">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="text-xs font-bold uppercase tracking-[0.2em] text-blue-500">
+                    Submission Result
+                  </div>
+                  <h2
+                    id="history-classroom-result-title"
+                    className="mt-1 text-2xl font-black text-slate-900"
+                  >
+                    {resultSummary.passed ? "Passed" : "Not passed"}
+                  </h2>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                    Total {resultSummary.total}, correct {resultSummary.correctCount}, wrong {resultSummary.wrongCount}, score {resultSummary.percent}%.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setResultSummary(null);
+                    setResultText("");
+                  }}
+                  className="rounded-full border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="text-xs font-bold text-slate-500">Total questions</div>
+                  <div className="mt-1 text-2xl font-black text-slate-900">
+                    {resultSummary.total}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                  <div className="text-xs font-bold text-emerald-700">Correct</div>
+                  <div className="mt-1 text-2xl font-black text-emerald-700">
+                    {resultSummary.correctCount}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3">
+                  <div className="text-xs font-bold text-rose-700">Wrong</div>
+                  <div className="mt-1 text-2xl font-black text-rose-700">
+                    {resultSummary.wrongCount}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3">
+                  <div className="text-xs font-bold text-blue-700">Pass status</div>
+                  <div className="mt-1 text-lg font-black text-blue-700">
+                    {resultSummary.passed ? "Passed" : "Failed"}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+                  <div className="text-xs font-bold text-amber-700">Passing threshold</div>
+                  <div className="mt-1 text-lg font-black text-amber-800">
+                    {resultSummary.passThresholdPercent}% or more
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="text-xs font-bold text-slate-500">Score rate</div>
+                  <div className="mt-1 text-lg font-black text-slate-900">
+                    {resultSummary.percent}%
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-5 rounded-3xl border border-slate-200 bg-white">
+                <div className="border-b border-slate-200 px-4 py-3 sm:px-5">
+                  <div className="text-sm font-bold text-slate-900">Wrong items</div>
+                  <div className="mt-1 text-xs text-slate-500">Review your input and the correct answer.</div>
+                </div>
+                <div className="max-h-[min(42vh,24rem)] overflow-y-auto p-4 sm:p-5">
+                  {resultSummary.wrongItems.length > 0 ? (
+                    <div className="space-y-3">
+                      {resultSummary.wrongItems.map((item) => (
+                        <div
+                          key={item.blankId}
+                          className="rounded-2xl border border-rose-200 bg-rose-50/70 p-4"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="text-sm font-bold text-rose-800">
+                              Question {item.blankNumber}
+                            </div>
+                            <div className="text-xs font-semibold text-slate-500">
+                              {item.blankId}
+                            </div>
+                          </div>
+                          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                            <div>
+                              <div className="text-xs font-bold text-slate-500">Student answer</div>
+                              <div className="mt-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800">
+                                {item.studentAnswer || "No input"}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-xs font-bold text-slate-500">Correct answer</div>
+                              <div className="mt-1 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">
+                                {item.correctAnswer || "No answer"}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-5 text-center text-sm font-bold text-emerald-700">
+                      No wrong items.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="shrink-0 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:px-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setResultSummary(null);
+                  setResultText("");
+                }}
+                className="w-full rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-700"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 
