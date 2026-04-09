@@ -8,6 +8,7 @@ import React, {
 import {
   getHistoryClassroomBlankRenderRect,
   normalizeHistoryClassroomAnswer,
+  type HistoryClassroomBlank,
   type HistoryClassroomAssignment,
 } from "../../lib/historyClassroom";
 
@@ -31,6 +32,7 @@ interface HistoryClassroomAssignmentViewProps {
   helperItems?: string[];
   layoutVariant?: "default" | "modalPreview";
   interactiveViewport?: boolean;
+  resolveBlankOverlap?: boolean;
 }
 
 const DEFAULT_HELPER_ITEMS = [
@@ -72,10 +74,8 @@ const clampViewportUserScale = (value: number) =>
     Math.max(MIN_VIEWPORT_USER_SCALE, Number(value.toFixed(3))),
   );
 
-const getCenteredViewportOffset = (
-  viewportSize: number,
-  contentSize: number,
-) => Math.max(0, (viewportSize - contentSize) / 2);
+const getCenteredViewportOffset = (viewportSize: number, contentSize: number) =>
+  Math.max(0, (viewportSize - contentSize) / 2);
 
 const getBlankFontSize = (
   pixelWidth: number,
@@ -131,6 +131,173 @@ interface ViewportPinchState {
   contentAnchorY: number;
 }
 
+interface BlankRenderMetrics {
+  blank: HistoryClassroomBlank;
+  renderRect: ReturnType<typeof getHistoryClassroomBlankRenderRect>;
+  answerValue: string;
+  trimmedAnswerValue: string;
+  placeholder: string;
+  fontSize: number;
+  chipWidth: number;
+  chipHeight: number;
+  isFilled: boolean;
+  isInputLocked: boolean;
+}
+
+interface BlankRenderPlacement extends BlankRenderMetrics {
+  leftPx: number;
+  topPx: number;
+}
+
+const BLANK_CYCLE_BUCKET_PX = 18;
+const BLANK_CYCLE_WINDOW_MS = 1500;
+
+const clampPixel = (value: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, value));
+
+const getRectOverlapArea = (
+  left: number,
+  top: number,
+  width: number,
+  height: number,
+  other: Pick<
+    BlankRenderPlacement,
+    "leftPx" | "topPx" | "chipWidth" | "chipHeight"
+  >,
+) => {
+  const overlapWidth =
+    Math.min(left + width, other.leftPx + other.chipWidth) -
+    Math.max(left, other.leftPx);
+  const overlapHeight =
+    Math.min(top + height, other.topPx + other.chipHeight) -
+    Math.max(top, other.topPx);
+
+  if (overlapWidth <= 0 || overlapHeight <= 0) return 0;
+  return overlapWidth * overlapHeight;
+};
+
+const sortPlacementsForFocus = (
+  placements: BlankRenderPlacement[],
+): BlankRenderPlacement[] =>
+  [...placements].sort(
+    (left, right) =>
+      left.topPx - right.topPx ||
+      left.leftPx - right.leftPx ||
+      left.blank.id.localeCompare(right.blank.id, "ko"),
+  );
+
+const resolveBlankPlacements = ({
+  metrics,
+  displayWidth,
+  displayHeight,
+}: {
+  metrics: BlankRenderMetrics[];
+  displayWidth: number;
+  displayHeight: number;
+}) => {
+  const placed: BlankRenderPlacement[] = [];
+
+  [...metrics]
+    .sort(
+      (left, right) =>
+        left.renderRect.topRatio - right.renderRect.topRatio ||
+        left.renderRect.leftRatio - right.renderRect.leftRatio ||
+        left.blank.id.localeCompare(right.blank.id, "ko"),
+    )
+    .forEach((entry) => {
+      const baseCenterX =
+        (entry.renderRect.leftRatio + entry.renderRect.widthRatio / 2) *
+        displayWidth;
+      const baseCenterY =
+        (entry.renderRect.topRatio + entry.renderRect.heightRatio / 2) *
+        displayHeight;
+      const baseLeft = clampPixel(
+        baseCenterX - entry.chipWidth / 2,
+        0,
+        Math.max(0, displayWidth - entry.chipWidth),
+      );
+      const baseTop = clampPixel(
+        baseCenterY - entry.chipHeight / 2,
+        0,
+        Math.max(0, displayHeight - entry.chipHeight),
+      );
+      const stepX = Math.max(
+        10,
+        Math.min(26, Math.round(entry.chipWidth * 0.26)),
+      );
+      const stepY = Math.max(
+        8,
+        Math.min(22, Math.round(entry.chipHeight * 0.72)),
+      );
+      const candidateOffsets = [{ x: 0, y: 0 }];
+
+      for (let radius = 1; radius <= 4; radius += 1) {
+        const offsetX = stepX * radius;
+        const offsetY = stepY * radius;
+        candidateOffsets.push(
+          { x: 0, y: offsetY },
+          { x: 0, y: -offsetY },
+          { x: offsetX, y: 0 },
+          { x: -offsetX, y: 0 },
+          { x: offsetX, y: offsetY },
+          { x: -offsetX, y: offsetY },
+          { x: offsetX, y: -offsetY },
+          { x: -offsetX, y: -offsetY },
+        );
+      }
+
+      let bestPlacement: BlankRenderPlacement | null = null;
+      let bestScore = Number.POSITIVE_INFINITY;
+
+      candidateOffsets.forEach((offset) => {
+        const leftPx = clampPixel(
+          baseLeft + offset.x,
+          0,
+          Math.max(0, displayWidth - entry.chipWidth),
+        );
+        const topPx = clampPixel(
+          baseTop + offset.y,
+          0,
+          Math.max(0, displayHeight - entry.chipHeight),
+        );
+        const overlapArea = placed.reduce(
+          (sum, other) =>
+            sum +
+            getRectOverlapArea(
+              leftPx,
+              topPx,
+              entry.chipWidth,
+              entry.chipHeight,
+              other,
+            ),
+          0,
+        );
+        const distancePenalty =
+          Math.abs(leftPx - baseLeft) * 0.35 + Math.abs(topPx - baseTop) * 0.55;
+        const score = overlapArea * 10 + distancePenalty;
+
+        if (score < bestScore) {
+          bestScore = score;
+          bestPlacement = {
+            ...entry,
+            leftPx,
+            topPx,
+          };
+        }
+      });
+
+      placed.push(
+        bestPlacement || {
+          ...entry,
+          leftPx: baseLeft,
+          topPx: baseTop,
+        },
+      );
+    });
+
+  return placed;
+};
+
 const HistoryClassroomAssignmentView: React.FC<
   HistoryClassroomAssignmentViewProps
 > = ({
@@ -153,6 +320,7 @@ const HistoryClassroomAssignmentView: React.FC<
   helperItems = DEFAULT_HELPER_ITEMS,
   layoutVariant = "default",
   interactiveViewport = false,
+  resolveBlankOverlap = false,
 }) => {
   const isModalPreview = layoutVariant === "modalPreview";
   const showFloatingActions = !isModalPreview;
@@ -186,8 +354,16 @@ const HistoryClassroomAssignmentView: React.FC<
   const dragStateRef = useRef<ViewportDragState | null>(null);
   const touchDragStateRef = useRef<ViewportDragState | null>(null);
   const pinchStateRef = useRef<ViewportPinchState | null>(null);
+  const blankInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const overlapCycleRef = useRef<{
+    idsKey: string;
+    bucketKey: string;
+    nextIndex: number;
+    timestamp: number;
+  } | null>(null);
   const [fitScale, setFitScale] = useState(1);
   const [userScale, setUserScale] = useState(MIN_VIEWPORT_USER_SCALE);
+  const [focusedBlankId, setFocusedBlankId] = useState("");
 
   const enableInteractiveViewport =
     interactiveViewport && !isModalPreview && Boolean(pageImage);
@@ -202,9 +378,91 @@ const HistoryClassroomAssignmentView: React.FC<
   const scaledPageWidth = pageImage ? pageImage.width * totalScale : 0;
   const scaledPageHeight = pageImage ? pageImage.height * totalScale : 0;
   const canPanViewport = enableInteractiveViewport && userScale > 1.01;
-  const displayZoomPercent = Math.max(
-    100,
-    Math.round(userScale * 100),
+  const displayZoomPercent = Math.max(100, Math.round(userScale * 100));
+  const displayWidth = isModalPreview ? pageImage?.width || 0 : scaledPageWidth;
+  const displayHeight = isModalPreview
+    ? pageImage?.height || 0
+    : scaledPageHeight;
+  const blankPlacements = useMemo(() => {
+    if (!pageImage || !displayWidth || !displayHeight) return [];
+
+    const metrics = currentBlanks.map((blank) => {
+      const renderRect = getHistoryClassroomBlankRenderRect(
+        blank,
+        pageImage,
+        currentTextRegions,
+      );
+      const pixelWidth = renderRect.widthRatio * displayWidth;
+      const pixelHeight = renderRect.heightRatio * displayHeight;
+      const answerValue = String(answers[blank.id] || "");
+      const trimmedAnswerValue = answerValue.trim();
+      const placeholder = blank.prompt || "정답 입력";
+      const displayValue = trimmedAnswerValue || placeholder;
+      const widthSizingValue = trimmedAnswerValue || "";
+      const fontSize = getBlankFontSize(
+        pixelWidth,
+        pixelHeight,
+        displayValue.length,
+      );
+      const isFilled = Boolean(trimmedAnswerValue);
+      const isInputLocked =
+        readOnly || completed || submitting || !onAnswerChange;
+
+      return {
+        blank,
+        renderRect,
+        answerValue,
+        trimmedAnswerValue,
+        placeholder,
+        fontSize,
+        chipWidth: getAnswerChipWidth(pixelWidth, widthSizingValue, fontSize),
+        chipHeight: getAnswerChipHeight(pixelHeight, fontSize),
+        isFilled,
+        isInputLocked,
+      };
+    });
+
+    if (!resolveBlankOverlap) {
+      return metrics.map((entry) => {
+        const centerX =
+          (entry.renderRect.leftRatio + entry.renderRect.widthRatio / 2) *
+          displayWidth;
+        const centerY =
+          (entry.renderRect.topRatio + entry.renderRect.heightRatio / 2) *
+          displayHeight;
+
+        return {
+          ...entry,
+          leftPx: centerX - entry.chipWidth / 2,
+          topPx: centerY - entry.chipHeight / 2,
+        };
+      });
+    }
+
+    return resolveBlankPlacements({
+      metrics,
+      displayWidth,
+      displayHeight,
+    });
+  }, [
+    answers,
+    completed,
+    currentBlanks,
+    currentTextRegions,
+    displayHeight,
+    displayWidth,
+    onAnswerChange,
+    pageImage,
+    readOnly,
+    resolveBlankOverlap,
+    submitting,
+  ]);
+  const orderedBlankPlacements = useMemo(
+    () =>
+      resolveBlankOverlap
+        ? sortPlacementsForFocus(blankPlacements)
+        : blankPlacements,
+    [blankPlacements, resolveBlankOverlap],
   );
 
   useEffect(() => {
@@ -233,6 +491,8 @@ const HistoryClassroomAssignmentView: React.FC<
     dragStateRef.current = null;
     touchDragStateRef.current = null;
     pinchStateRef.current = null;
+    overlapCycleRef.current = null;
+    setFocusedBlankId("");
     viewportRef.current?.scrollTo({ left: 0, top: 0 });
   }, [assignment.id, currentPage]);
 
@@ -394,9 +654,7 @@ const HistoryClassroomAssignmentView: React.FC<
     });
   };
 
-  const handleViewportMouseDown = (
-    event: React.MouseEvent<HTMLDivElement>,
-  ) => {
+  const handleViewportMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
     if (
       !canPanViewport ||
       event.button !== 0 ||
@@ -414,9 +672,7 @@ const HistoryClassroomAssignmentView: React.FC<
     };
   };
 
-  const handleViewportMouseMove = (
-    event: React.MouseEvent<HTMLDivElement>,
-  ) => {
+  const handleViewportMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
     if (!viewportRef.current || !dragStateRef.current) return;
     event.preventDefault();
     viewportRef.current.scrollLeft =
@@ -428,7 +684,8 @@ const HistoryClassroomAssignmentView: React.FC<
   const handleViewportTouchStart = (
     event: React.TouchEvent<HTMLDivElement>,
   ) => {
-    if (!enableInteractiveViewport || !viewportRef.current || !pageImage) return;
+    if (!enableInteractiveViewport || !viewportRef.current || !pageImage)
+      return;
     if (event.touches.length === 2) {
       const distance = getTouchDistance(event.touches);
       const center = getTouchCenter(event.touches);
@@ -478,9 +735,7 @@ const HistoryClassroomAssignmentView: React.FC<
     }
   };
 
-  const handleViewportTouchMove = (
-    event: React.TouchEvent<HTMLDivElement>,
-  ) => {
+  const handleViewportTouchMove = (event: React.TouchEvent<HTMLDivElement>) => {
     if (!viewportRef.current || !pageImage) return;
     if (event.touches.length === 2 && pinchStateRef.current) {
       const nextDistance = getTouchDistance(event.touches);
@@ -511,12 +766,85 @@ const HistoryClassroomAssignmentView: React.FC<
     }
   };
 
+  const handleBlankStackPointerDownCapture = (
+    event: React.PointerEvent<HTMLDivElement>,
+  ) => {
+    if (
+      !resolveBlankOverlap ||
+      completed ||
+      submitting ||
+      readOnly ||
+      !onAnswerChange ||
+      orderedBlankPlacements.length < 2
+    ) {
+      return;
+    }
+
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+
+    const containerRect = event.currentTarget.getBoundingClientRect();
+    const localX = event.clientX - containerRect.left;
+    const localY = event.clientY - containerRect.top;
+    const hitPlacements = orderedBlankPlacements.filter(
+      (placement) =>
+        localX >= placement.leftPx &&
+        localX <= placement.leftPx + placement.chipWidth &&
+        localY >= placement.topPx &&
+        localY <= placement.topPx + placement.chipHeight,
+    );
+
+    if (hitPlacements.length < 2) return;
+
+    const ids = hitPlacements.map((placement) => placement.blank.id);
+    const idsKey = ids.join("|");
+    const bucketKey = `${Math.round(localX / BLANK_CYCLE_BUCKET_PX)}:${Math.round(localY / BLANK_CYCLE_BUCKET_PX)}`;
+    const previousCycle = overlapCycleRef.current;
+    const isRepeatedOverlapClick =
+      previousCycle?.idsKey === idsKey &&
+      previousCycle.bucketKey === bucketKey &&
+      Date.now() - previousCycle.timestamp < BLANK_CYCLE_WINDOW_MS;
+
+    if (!isRepeatedOverlapClick) {
+      overlapCycleRef.current = {
+        idsKey,
+        bucketKey,
+        nextIndex: 1 % ids.length,
+        timestamp: Date.now(),
+      };
+      return;
+    }
+
+    const currentIndex = focusedBlankId ? ids.indexOf(focusedBlankId) : -1;
+    const nextIndex =
+      currentIndex >= 0
+        ? (currentIndex + 1) % ids.length
+        : previousCycle.nextIndex % ids.length;
+
+    overlapCycleRef.current = {
+      idsKey,
+      bucketKey,
+      nextIndex: (nextIndex + 1) % ids.length,
+      timestamp: Date.now(),
+    };
+
+    const nextBlankId = ids[nextIndex];
+    event.preventDefault();
+    event.stopPropagation();
+    setFocusedBlankId(nextBlankId);
+    window.requestAnimationFrame(() => {
+      const input = blankInputRefs.current[nextBlankId];
+      input?.focus({ preventScroll: true });
+      input?.select();
+    });
+  };
+
   return (
     <div
       className={
         isModalPreview
           ? "mx-auto w-full max-w-[108rem] px-5 py-5 lg:px-6"
-          : "mx-auto max-w-6xl px-4 py-6 pb-44 sm:pb-40 lg:px-5"
+          : "mx-auto max-w-6xl px-4 pt-32 pb-12 sm:pt-28 sm:pb-14 lg:px-5"
       }
     >
       <div
@@ -551,22 +879,24 @@ const HistoryClassroomAssignmentView: React.FC<
           {headerAction && <div className="min-w-[11rem]">{headerAction}</div>}
         </div>
 
-        {isModalPreview && assignment.timeLimitMinutes > 0 && countdownLabel && (
-          <div className="mt-4 max-w-md">
-            <div className="mb-2 flex items-center justify-between gap-3 text-xs font-bold text-gray-500">
-              <span>제한 시간</span>
-              <span>{countdownLabel}</span>
+        {isModalPreview &&
+          assignment.timeLimitMinutes > 0 &&
+          countdownLabel && (
+            <div className="mt-4 max-w-md">
+              <div className="mb-2 flex items-center justify-between gap-3 text-xs font-bold text-gray-500">
+                <span>제한 시간</span>
+                <span>{countdownLabel}</span>
+              </div>
+              <div className="h-3 overflow-hidden rounded-full bg-gray-200">
+                <div
+                  className={`h-full rounded-full transition-[width] duration-1000 ${getTimeProgressToneClass(
+                    timeProgressPercent,
+                  )}`}
+                  style={{ width: `${timeProgressPercent}%` }}
+                />
+              </div>
             </div>
-            <div className="h-3 overflow-hidden rounded-full bg-gray-200">
-              <div
-                className={`h-full rounded-full transition-[width] duration-1000 ${getTimeProgressToneClass(
-                  timeProgressPercent,
-                )}`}
-                style={{ width: `${timeProgressPercent}%` }}
-              />
-            </div>
-          </div>
-        )}
+          )}
       </div>
 
       <div
@@ -620,7 +950,9 @@ const HistoryClassroomAssignmentView: React.FC<
               <button
                 type="button"
                 disabled={currentPage <= 1}
-                onClick={() => onCurrentPageChange(Math.max(1, currentPage - 1))}
+                onClick={() =>
+                  onCurrentPageChange(Math.max(1, currentPage - 1))
+                }
                 className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 disabled:opacity-40"
               >
                 이전
@@ -675,7 +1007,9 @@ const HistoryClassroomAssignmentView: React.FC<
                 onMouseMove={
                   !isModalPreview ? handleViewportMouseMove : undefined
                 }
-                onMouseUp={!isModalPreview ? clearViewportGestureState : undefined}
+                onMouseUp={
+                  !isModalPreview ? clearViewportGestureState : undefined
+                }
                 onMouseLeave={
                   !isModalPreview ? clearViewportGestureState : undefined
                 }
@@ -705,6 +1039,11 @@ const HistoryClassroomAssignmentView: React.FC<
                         ? "cursor-grab active:cursor-grabbing"
                         : ""
                     } ${isModalPreview ? "mx-auto" : ""}`}
+                    onPointerDownCapture={
+                      resolveBlankOverlap
+                        ? handleBlankStackPointerDownCapture
+                        : undefined
+                    }
                     style={{
                       width: `${
                         isModalPreview ? pageImage.width : scaledPageWidth
@@ -720,62 +1059,36 @@ const HistoryClassroomAssignmentView: React.FC<
                       className="block h-full w-full"
                       style={{ maxWidth: "none" }}
                     />
-                    {currentBlanks.map((blank) => {
-                      const renderRect = getHistoryClassroomBlankRenderRect(
+                    {orderedBlankPlacements.map((placement) => {
+                      const {
                         blank,
-                        pageImage,
-                        currentTextRegions,
-                      );
-                      const displayWidth = isModalPreview
-                        ? pageImage.width
-                        : scaledPageWidth;
-                      const displayHeight = isModalPreview
-                        ? pageImage.height
-                        : scaledPageHeight;
-                      const pixelWidth = renderRect.widthRatio * displayWidth;
-                      const pixelHeight =
-                        renderRect.heightRatio * displayHeight;
-                      const answerValue = String(answers[blank.id] || "");
-                      const trimmedAnswerValue = answerValue.trim();
+                        answerValue,
+                        trimmedAnswerValue,
+                        fontSize,
+                        chipWidth,
+                        chipHeight,
+                        isFilled,
+                        isInputLocked,
+                        leftPx,
+                        topPx,
+                      } = placement;
+                      const isFocused = focusedBlankId === blank.id;
                       const placeholder = blank.prompt || "정답 입력";
-                      const displayValue = trimmedAnswerValue || placeholder;
-                      const widthSizingValue = trimmedAnswerValue || "";
-                      const fontSize = getBlankFontSize(
-                        pixelWidth,
-                        pixelHeight,
-                        displayValue.length,
-                      );
-                      const isFilled = Boolean(trimmedAnswerValue);
-                      const isInputLocked =
-                        readOnly || completed || submitting || !onAnswerChange;
-                      const chipWidth = getAnswerChipWidth(
-                        pixelWidth,
-                        widthSizingValue,
-                        fontSize,
-                      );
-                      const chipHeight = getAnswerChipHeight(
-                        pixelHeight,
-                        fontSize,
-                      );
-                      const anchorLeft =
-                        (renderRect.leftRatio + renderRect.widthRatio / 2) * 100;
-                      const anchorTop =
-                        (renderRect.topRatio + renderRect.heightRatio / 2) * 100;
-
                       return (
                         <div
                           key={blank.id}
-                          className={`absolute z-10 rounded-xl border text-left font-bold shadow-[0_6px_18px_rgba(15,23,42,0.12)] transition focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-200 ${
+                          className={`absolute rounded-xl border text-left font-bold shadow-[0_6px_18px_rgba(15,23,42,0.12)] transition focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-200 ${
+                            isFocused ? "z-20" : "z-10"
+                          } ${
                             isFilled
                               ? "border-orange-300 text-orange-800"
                               : "border-slate-300 text-slate-700"
                           }`}
                           style={{
-                            left: `${anchorLeft}%`,
-                            top: `${anchorTop}%`,
+                            left: `${leftPx}px`,
+                            top: `${topPx}px`,
                             width: `${chipWidth}px`,
                             height: `${chipHeight}px`,
-                            transform: "translate(-50%, -50%)",
                             backgroundColor: "#ffffff",
                             opacity: 1,
                           }}
@@ -802,10 +1115,14 @@ const HistoryClassroomAssignmentView: React.FC<
                           ) : (
                             <input
                               type="text"
+                              ref={(node) => {
+                                blankInputRefs.current[blank.id] = node;
+                              }}
                               value={answerValue}
                               onChange={(event) =>
                                 onAnswerChange?.(blank.id, event.target.value)
                               }
+                              onFocus={() => setFocusedBlankId(blank.id)}
                               readOnly={isInputLocked}
                               autoComplete="off"
                               autoCorrect="off"
@@ -854,7 +1171,8 @@ const HistoryClassroomAssignmentView: React.FC<
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
               {assignment.answerOptions.map((option) => {
-                const normalizedOption = normalizeHistoryClassroomAnswer(option);
+                const normalizedOption =
+                  normalizeHistoryClassroomAnswer(option);
                 const isAnswered =
                   Boolean(normalizedOption) &&
                   normalizedAnsweredOptions.has(normalizedOption);
@@ -924,8 +1242,14 @@ const HistoryClassroomAssignmentView: React.FC<
       </div>
 
       {showFloatingActions && (
-        <div className="pointer-events-none fixed inset-x-4 bottom-4 z-50 flex justify-end sm:inset-x-auto sm:right-5 sm:bottom-5">
-          <div className="pointer-events-auto w-full max-w-[22rem] rounded-3xl border border-gray-200 bg-white/95 p-4 shadow-[0_20px_45px_-24px_rgba(15,23,42,0.35)] backdrop-blur">
+        <div
+          className="pointer-events-none fixed z-50 flex max-w-[calc(100vw-2rem)] justify-start sm:max-w-[22rem]"
+          style={{
+            top: "calc(env(safe-area-inset-top, 0px) + 5rem)",
+            left: "calc(env(safe-area-inset-left, 0px) + 1rem)",
+          }}
+        >
+          <div className="pointer-events-auto w-[min(20rem,calc(100vw-2rem))] rounded-3xl border border-gray-200 bg-white/95 p-4 shadow-[0_20px_45px_-24px_rgba(15,23,42,0.35)] backdrop-blur">
             {assignment.timeLimitMinutes > 0 && countdownLabel && (
               <div className="rounded-2xl bg-gray-50 px-4 py-3">
                 <div className="flex items-center justify-between gap-3 text-[11px] font-bold tracking-[0.18em] text-gray-400">
@@ -952,7 +1276,7 @@ const HistoryClassroomAssignmentView: React.FC<
               type="button"
               onClick={onSubmit}
               disabled={readOnly || submitting || completed || !onSubmit}
-              className="mt-3 w-full rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-3 min-h-11 w-full rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {readOnly
                 ? "읽기 전용 미리보기"

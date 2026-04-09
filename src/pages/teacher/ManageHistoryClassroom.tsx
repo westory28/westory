@@ -2423,8 +2423,8 @@ const ManageHistoryClassroom: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="min-h-0 overflow-y-auto border-t border-gray-200 bg-gray-50 px-5 py-5 lg:border-l lg:border-t-0 lg:px-6">
-                  <div className="rounded-2xl border border-gray-200 bg-white p-3.5">
+                <div className="flex min-h-0 flex-col overflow-hidden border-t border-gray-200 bg-gray-50 px-5 py-5 lg:border-l lg:border-t-0 lg:px-6">
+                  <div className="flex min-h-0 flex-1 flex-col rounded-2xl border border-gray-200 bg-white p-3.5">
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-sm font-bold text-gray-700">
                         응시 현황
@@ -2444,7 +2444,7 @@ const ManageHistoryClassroom: React.FC = () => {
                         미응시 {editingAttemptStatusCounts.overdueAbsent}
                       </span>
                     </div>
-                    <div className="mt-3 space-y-1.5">
+                    <div className="mt-3 max-h-56 space-y-1.5 overflow-y-auto pr-1">
                       {editingAttemptStatusRows.map((row) => (
                         <div
                           key={row.student.uid}
@@ -2472,26 +2472,40 @@ const ManageHistoryClassroom: React.FC = () => {
                       ))}
                     </div>
                   </div>
-
-                  <div className="mt-3 flex items-center justify-between gap-2">
-                    <div className="text-sm font-bold text-gray-700">결과</div>
-                    <div className="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-gray-600">
-                      {editingResults.length}건
+                  <div className="mt-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white p-3.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-sm font-bold text-gray-700">
+                        결과
+                      </div>
+                      <div className="rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-bold text-gray-600">
+                        {editingResults.length}건
+                      </div>
                     </div>
-                  </div>
-                  <div className="mt-3 space-y-1.5">
-                    {editingResults.map((result) => (
-                      <div
-                        key={result.id}
-                        className="rounded-xl border border-gray-200 bg-white px-3 py-1.5"
-                      >
-                        <div className="flex items-center gap-1.5">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5">
-                              <div className="truncate text-sm font-bold text-gray-900">
-                                {result.studentName}
+                    <div className="mt-3 min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
+                      {editingResults.map((result) => (
+                        <div
+                          key={result.id}
+                          className="rounded-xl border border-gray-200 bg-white px-3 py-1.5"
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5">
+                                <div className="truncate text-sm font-bold text-gray-900">
+                                  {result.studentName}
+                                </div>
+                                <div className="hidden min-w-0 flex-1 truncate text-[11px] text-gray-500 sm:block">
+                                  {[
+                                    result.studentGrade,
+                                    result.studentClass,
+                                    result.studentNumber,
+                                  ]
+                                    .filter(Boolean)
+                                    .join("-")}{" "}
+                                  · {result.score}/{result.total} ·{" "}
+                                  {result.percent}%
+                                </div>
                               </div>
-                              <div className="hidden min-w-0 flex-1 truncate text-[11px] text-gray-500 sm:block">
+                              <div className="mt-1 truncate text-[11px] text-gray-500 sm:hidden">
                                 {[
                                   result.studentGrade,
                                   result.studentClass,
@@ -2500,44 +2514,34 @@ const ManageHistoryClassroom: React.FC = () => {
                                   .filter(Boolean)
                                   .join("-")}{" "}
                                 · {result.score}/{result.total} ·{" "}
-                                {result.percent}%
+                                {result.percent}% · 기준{" "}
+                                {result.passThresholdPercent}%
                               </div>
                             </div>
-                            <div className="mt-1 truncate text-[11px] text-gray-500 sm:hidden">
-                              {[
-                                result.studentGrade,
-                                result.studentClass,
-                                result.studentNumber,
-                              ]
-                                .filter(Boolean)
-                                .join("-")}{" "}
-                              · {result.score}/{result.total} · {result.percent}
-                              % · 기준 {result.passThresholdPercent}%
-                            </div>
-                          </div>
-                          <span
-                            className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${
-                              result.status === "passed"
-                                ? "bg-emerald-50 text-emerald-700"
+                            <span
+                              className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                                result.status === "passed"
+                                  ? "bg-emerald-50 text-emerald-700"
+                                  : result.status === "failed"
+                                    ? "bg-rose-50 text-rose-700"
+                                    : "bg-amber-50 text-amber-700"
+                              }`}
+                            >
+                              {result.status === "passed"
+                                ? "통과"
                                 : result.status === "failed"
-                                  ? "bg-rose-50 text-rose-700"
-                                  : "bg-amber-50 text-amber-700"
-                            }`}
-                          >
-                            {result.status === "passed"
-                              ? "통과"
-                              : result.status === "failed"
-                                ? "미통과"
-                                : "취소"}
-                          </span>
+                                  ? "미통과"
+                                  : "취소"}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                    {!editingResults.length && (
-                      <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-4 py-6 text-center text-sm text-gray-400">
-                        아직 결과가 없습니다.
-                      </div>
-                    )}
+                      ))}
+                      {!editingResults.length && (
+                        <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-4 py-6 text-center text-sm text-gray-400">
+                          아직 결과가 없습니다.
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
