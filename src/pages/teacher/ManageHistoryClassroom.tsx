@@ -2424,7 +2424,7 @@ const ManageHistoryClassroom: React.FC = () => {
                 </div>
 
                 <div className="flex min-h-0 flex-col overflow-hidden border-t border-gray-200 bg-gray-50 px-5 py-5 lg:border-l lg:border-t-0 lg:px-6">
-                  <div className="flex min-h-0 flex-1 flex-col rounded-2xl border border-gray-200 bg-white p-3.5">
+                  <div className="shrink-0 rounded-2xl border border-gray-200 bg-white p-3.5">
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-sm font-bold text-gray-700">
                         응시 현황
