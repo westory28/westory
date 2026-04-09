@@ -178,6 +178,8 @@ const compareSchoolValues = (a: string, b: string) => {
   return a.localeCompare(b, "ko");
 };
 
+type BlankEditorMode = "create" | "edit";
+
 const normalizeDueWindowDaysInput = (value: string): number | "" => {
   const trimmed = String(value || "").trim();
   if (!trimmed) return "";
@@ -287,6 +289,9 @@ const ManageHistoryClassroom: React.FC = () => {
   const [selectedBlankId, setSelectedBlankId] = useState("");
   const [draftBlank, setDraftBlank] = useState<any>(null);
   const [draftBlankAnswer, setDraftBlankAnswer] = useState("");
+  const [blankEditorMode, setBlankEditorMode] =
+    useState<BlankEditorMode | null>(null);
+  const [blankEditorAnswer, setBlankEditorAnswer] = useState("");
   const [worksheetTool, setWorksheetTool] = useState<"ocr" | "box">("box");
   const [showAllBlankTags, setShowAllBlankTags] = useState(false);
   const [floatingPanelOpen, setFloatingPanelOpen] = useState(false);
@@ -319,6 +324,8 @@ const ManageHistoryClassroom: React.FC = () => {
     {},
   );
   const preserveBlankResetRef = React.useRef(false);
+  const blankEditorComposingRef = React.useRef(false);
+  const blankEditorCommitLockRef = React.useRef(false);
   const [tabLabels, setTabLabels] = useState({
     manage: "문제 등록",
     log: "제출 현황",
@@ -473,6 +480,9 @@ const ManageHistoryClassroom: React.FC = () => {
     setSelectedBlankId("");
     setDraftBlank(null);
     setDraftBlankAnswer("");
+    setBlankEditorMode(null);
+    setBlankEditorAnswer("");
+    blankEditorComposingRef.current = false;
     setShowAllBlankTags(false);
   }, [selectedMapId]);
 
@@ -562,6 +572,10 @@ const ManageHistoryClassroom: React.FC = () => {
   const visibleBlankTags = useMemo(
     () => (showAllBlankTags ? sortedBlanks : sortedBlanks.slice(0, 6)),
     [showAllBlankTags, sortedBlanks],
+  );
+  const blankOrderMap = useMemo(
+    () => new Map(sortedBlanks.map((blank, index) => [blank.id, index + 1])),
+    [sortedBlanks],
   );
 
   const classFilteredStudents = useMemo(
@@ -878,6 +892,15 @@ const ManageHistoryClassroom: React.FC = () => {
     () => blanks.find((blank) => blank.id === selectedBlankId) || null,
     [blanks, selectedBlankId],
   );
+  const activeBlankEditor =
+    blankEditorMode === "create"
+      ? draftBlank
+      : blankEditorMode === "edit"
+        ? selectedBlank
+        : null;
+  const activeBlankEditorOrder = activeBlankEditor
+    ? blankOrderMap.get(activeBlankEditor.id) || null
+    : null;
 
   useEffect(() => {
     if (!previewOpen || !editingPreviewAssignment) return;
@@ -927,20 +950,30 @@ const ManageHistoryClassroom: React.FC = () => {
     const pageImage =
       worksheetPageImages.find((item) => item.page === page) || null;
     const regionBounds = getBoundsFromRegions(matchedRegions, pageImage);
+    const initialAnswer = getBlankAnswerFromRegions(matchedRegions);
     const blank = createWorksheetBlankFromRect(
       page,
       regionBounds || rect,
       matchedRegions.length ? "ocr" : source,
     );
     setDraftBlank(blank);
-    setDraftBlankAnswer(getBlankAnswerFromRegions(matchedRegions));
+    setDraftBlankAnswer(initialAnswer);
     setSelectedBlankId("");
+    setBlankEditorMode("create");
+    setBlankEditorAnswer(initialAnswer);
+    blankEditorComposingRef.current = false;
+  };
+
+  const closeBlankEditor = () => {
+    setBlankEditorMode(null);
+    setBlankEditorAnswer("");
+    blankEditorComposingRef.current = false;
   };
 
   const handleConfirmDraftBlank = () => {
     if (!draftBlank) return;
 
-    const answer = draftBlankAnswer.trim();
+    const answer = blankEditorAnswer.trim();
     if (!answer) {
       alert("빈칸 정답을 입력해 주세요.");
       return;
@@ -958,17 +991,24 @@ const ManageHistoryClassroom: React.FC = () => {
     setSelectedBlankId(nextBlank.id);
     setDraftBlank(null);
     setDraftBlankAnswer("");
+    closeBlankEditor();
   };
 
   const handleCancelDraftBlank = () => {
     setDraftBlank(null);
     setDraftBlankAnswer("");
+    closeBlankEditor();
   };
 
   const handleSelectBlank = (blankId: string) => {
+    const targetBlank = blanks.find((blank) => blank.id === blankId);
+    if (!targetBlank) return;
     setSelectedBlankId(blankId);
     setDraftBlank(null);
     setDraftBlankAnswer("");
+    setBlankEditorMode("edit");
+    setBlankEditorAnswer(targetBlank.answer);
+    blankEditorComposingRef.current = false;
   };
 
   const handleBlankChange = (blankId: string, answer: string) => {
@@ -981,7 +1021,49 @@ const ManageHistoryClassroom: React.FC = () => {
 
   const removeBlank = (blankId: string) => {
     setBlanks((prev) => prev.filter((blank) => blank.id !== blankId));
-    if (selectedBlankId === blankId) setSelectedBlankId("");
+    if (selectedBlankId === blankId) {
+      setSelectedBlankId("");
+      closeBlankEditor();
+    }
+  };
+
+  const handleSaveSelectedBlank = () => {
+    if (!selectedBlank) return;
+
+    const answer = blankEditorAnswer.trim();
+    if (!answer) {
+      alert("鍮덉뭏 ?뺣떟???낅젰??二쇱꽭??");
+      return;
+    }
+
+    handleBlankChange(selectedBlank.id, answer);
+    closeBlankEditor();
+  };
+
+  const handleSubmitBlankEditor = () => {
+    if (blankEditorCommitLockRef.current) return;
+
+    blankEditorCommitLockRef.current = true;
+    try {
+      if (blankEditorMode === "create") {
+        handleConfirmDraftBlank();
+      } else if (blankEditorMode === "edit") {
+        handleSaveSelectedBlank();
+      }
+    } finally {
+      window.requestAnimationFrame(() => {
+        blankEditorCommitLockRef.current = false;
+      });
+    }
+  };
+
+  const handleBlankEditorKeyDown = (
+    event: React.KeyboardEvent<HTMLInputElement>,
+  ) => {
+    if (event.key !== "Enter") return;
+    if (event.nativeEvent.isComposing || blankEditorComposingRef.current) return;
+    event.preventDefault();
+    handleSubmitBlankEditor();
   };
 
   const openAssignmentEditor = (assignment: HistoryClassroomAssignment) => {
@@ -1035,6 +1117,9 @@ const ManageHistoryClassroom: React.FC = () => {
     setSelectedBlankId("");
     setDraftBlank(null);
     setDraftBlankAnswer("");
+    setBlankEditorMode(null);
+    setBlankEditorAnswer("");
+    blankEditorComposingRef.current = false;
     setShowAllBlankTags(false);
     setWorksheetImportSourceTitle(mode === "clone" ? assignment.title : "");
     setWorksheetImportSourceId(mode === "clone" ? assignment.id : "");
@@ -1346,6 +1431,9 @@ const ManageHistoryClassroom: React.FC = () => {
       setSelectedBlankId("");
       setDraftBlank(null);
       setDraftBlankAnswer("");
+      setBlankEditorMode(null);
+      setBlankEditorAnswer("");
+      blankEditorComposingRef.current = false;
       setShowAllBlankTags(false);
       setWorksheetEditingAssignmentId("");
       setWorksheetEditingIsPublished(true);
@@ -1945,7 +2033,10 @@ const ManageHistoryClassroom: React.FC = () => {
                       </span>
                       <button
                         type="button"
-                        onClick={() => removeBlank(blank.id)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          removeBlank(blank.id);
+                        }}
                         className="text-red-500"
                       >
                         삭제
@@ -1957,8 +2048,11 @@ const ManageHistoryClassroom: React.FC = () => {
                         handleBlankChange(blank.id, e.target.value)
                       }
                       placeholder="정답 입력"
-                      className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm"
+                      className="hidden"
                     />
+                    <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                      {blank.answer || "답안이 비어 있습니다."}
+                    </div>
                   </div>
                 ))}
                 {!blanks.length && (
@@ -1996,6 +2090,9 @@ const ManageHistoryClassroom: React.FC = () => {
                   setSelectedBlankId("");
                   setDraftBlank(null);
                   setDraftBlankAnswer("");
+                  setBlankEditorMode(null);
+                  setBlankEditorAnswer("");
+                  blankEditorComposingRef.current = false;
                   setShowAllBlankTags(false);
                 }}
                 className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50"
@@ -2806,6 +2903,124 @@ const ManageHistoryClassroom: React.FC = () => {
         </div>
       )}
 
+      {blankEditorMode && activeBlankEditor && (
+        <div
+          className="fixed inset-0 z-[70] bg-slate-950/45 backdrop-blur-sm"
+          onClick={
+            blankEditorMode === "create"
+              ? handleCancelDraftBlank
+              : closeBlankEditor
+          }
+        >
+          <div className="flex h-full items-end justify-center p-3 md:items-center md:p-6">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="history-blank-editor-title"
+              className="w-full max-w-lg overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_28px_80px_rgba(15,23,42,0.2)]"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
+                <div>
+                  <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
+                    {blankEditorMode === "create" ? "새 빈칸 등록" : "빈칸 답 수정"}
+                  </div>
+                  <h3
+                    id="history-blank-editor-title"
+                    className="mt-1 text-lg font-bold text-slate-900"
+                  >
+                    {blankEditorMode === "create"
+                      ? "선택한 빈칸 답 입력"
+                      : "선택한 빈칸 저장"}
+                  </h3>
+                  <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-semibold text-slate-600">
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1">
+                      p.{activeBlankEditor.page}
+                    </span>
+                    {activeBlankEditorOrder && (
+                      <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">
+                        빈칸 {activeBlankEditorOrder}
+                      </span>
+                    )}
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1">
+                      {activeBlankEditor.id}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={
+                    blankEditorMode === "create"
+                      ? handleCancelDraftBlank
+                      : closeBlankEditor
+                  }
+                  className="inline-flex h-10 items-center justify-center rounded-full border border-slate-200 px-4 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                >
+                  닫기
+                </button>
+              </div>
+
+              <div className="max-h-[calc(90vh-8rem)] overflow-y-auto px-5 py-5">
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-semibold text-slate-700">
+                    답 입력
+                  </span>
+                  <input
+                    type="text"
+                    value={blankEditorAnswer}
+                    onChange={(event) => setBlankEditorAnswer(event.target.value)}
+                    onKeyDown={handleBlankEditorKeyDown}
+                    onCompositionStart={() => {
+                      blankEditorComposingRef.current = true;
+                    }}
+                    onCompositionEnd={() => {
+                      blankEditorComposingRef.current = false;
+                    }}
+                    placeholder="정답을 입력해 주세요."
+                    autoFocus
+                    className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
+                  />
+                </label>
+                <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-500">
+                  입력창에서 Enter를 누르면 바로
+                  {blankEditorMode === "create" ? " 등록" : " 저장"}됩니다.
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-200 px-5 py-4">
+                {blankEditorMode === "edit" && selectedBlank && (
+                  <button
+                    type="button"
+                    onClick={() => removeBlank(selectedBlank.id)}
+                    className="mr-auto rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-700 hover:bg-rose-100"
+                  >
+                    삭제
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={
+                    blankEditorMode === "create"
+                      ? handleCancelDraftBlank
+                      : closeBlankEditor
+                  }
+                  className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                >
+                  취소
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSubmitBlankEditor}
+                  className="rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+                >
+                  {blankEditorMode === "create" ? "등록" : "저장"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="fixed bottom-5 right-5 z-40 flex max-w-[calc(100vw-2.5rem)] flex-col items-end gap-3">
         {floatingPanelOpen && (
           <div className="w-[min(18rem,calc(100vw-2.5rem))] space-y-2.5">
@@ -2887,7 +3102,7 @@ const ManageHistoryClassroom: React.FC = () => {
               </div>
             </div>
 
-            {draftBlank ? (
+            {false ? (
               <div className="space-y-2.5 rounded-2xl border border-amber-200 bg-white/98 p-3 shadow-2xl backdrop-blur">
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-sm font-bold text-amber-900">
@@ -2920,7 +3135,7 @@ const ManageHistoryClassroom: React.FC = () => {
                   빈칸 추가
                 </button>
               </div>
-            ) : selectedBlank ? (
+            ) : false ? (
               <div className="space-y-2.5 rounded-2xl border border-blue-100 bg-white/98 p-3 shadow-2xl backdrop-blur">
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-sm font-bold text-blue-900">

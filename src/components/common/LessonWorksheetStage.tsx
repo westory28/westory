@@ -231,6 +231,9 @@ const ERASER_CURSOR = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2
 const RECTANGLE_CURSOR = "crosshair";
 const STRAIGHT_LINE_HOLD_MS = 650;
 const STRAIGHT_LINE_MOVE_THRESHOLD = 0.002;
+const WHEEL_ZOOM_STEP_MIN = 0.01;
+const WHEEL_ZOOM_STEP_MAX = 0.18;
+const WHEEL_ZOOM_STEP_RATIO = 0.0012;
 const EMPTY_ANNOTATION_STATE: LessonWorksheetAnnotationState = {
   strokes: [],
   boxes: [],
@@ -550,6 +553,29 @@ const createBox = (
 const getAnnotationStateKey = (state: LessonWorksheetAnnotationState) =>
   JSON.stringify(state);
 
+const isWheelZoomBlockedTarget = (target: EventTarget | null) =>
+  target instanceof HTMLElement &&
+  Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
+
+const getWheelZoomDelta = (event: React.WheelEvent<HTMLDivElement>) => {
+  if (Math.abs(event.deltaX) > Math.abs(event.deltaY) && Math.abs(event.deltaX) > 2) {
+    return 0;
+  }
+
+  const multiplier =
+    event.deltaMode === 1
+      ? 0.03
+      : event.deltaMode === 2
+        ? 0.12
+        : WHEEL_ZOOM_STEP_RATIO;
+  const magnitude = Math.min(
+    WHEEL_ZOOM_STEP_MAX,
+    Math.max(WHEEL_ZOOM_STEP_MIN, Math.abs(event.deltaY) * multiplier),
+  );
+
+  return event.deltaY < 0 ? magnitude : -magnitude;
+};
+
 const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   pageImages,
   blanks,
@@ -588,7 +614,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   const isAnnotationEnabled =
     capabilities.enableAnnotationTools && (annotationEnabled ?? true);
   const isViewportInteractive =
-    mode === "teacher-present" || isStudentSolveMode;
+    mode === "teacher-present" || isStudentSolveMode || isTeacherEditMode;
   const pageRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const [draftRect, setDraftRect] = useState<DraftRect | null>(null);
   const [activeTeacherPage, setActiveTeacherPage] = useState<number | null>(
@@ -604,7 +630,10 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   const [studentZoom, setStudentZoom] = useState(1);
   const shouldUseBoundedViewportScroll =
     isViewportInteractive &&
-    (mode === "teacher-present" || isAnnotationEnabled || studentZoom > 1.02);
+    (mode === "teacher-present" ||
+      isTeacherEditMode ||
+      isAnnotationEnabled ||
+      studentZoom > 1.02);
   const allowNativeStudentTouchScroll =
     isStudentSolveMode && !isAnnotationEnabled && studentZoom <= 1.02;
   const studentZoomRef = useRef(1);
@@ -2334,10 +2363,22 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     : undefined
                 }
                 onWheel={(event) => {
-                  if (
-                    !isViewportInteractive ||
-                    !shouldUseBoundedViewportScroll
-                  ) {
+                  if (!isViewportInteractive || isWheelZoomBlockedTarget(event.target)) {
+                    return;
+                  }
+                  if (isTeacherEditMode) {
+                    const delta = getWheelZoomDelta(event);
+                    if (!delta) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    applyViewportZoom(studentZoomRef.current + delta, {
+                      page: pageImage.page,
+                      anchorClientX: event.clientX,
+                      anchorClientY: event.clientY,
+                    });
+                    return;
+                  }
+                  if (!shouldUseBoundedViewportScroll) {
                     return;
                   }
                   event.preventDefault();
