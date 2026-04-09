@@ -53,6 +53,12 @@ const TONE_CLASS_NAME: Record<
 const MIN_VIEWPORT_USER_SCALE = 1;
 const MAX_VIEWPORT_USER_SCALE = 2.8;
 const VIEWPORT_FIT_PADDING = 24;
+const BLANK_TEXT_HORIZONTAL_PADDING = 24;
+const BLANK_TEXT_VERTICAL_PADDING = 4;
+const BLANK_TEXT_MIN_FONT_SIZE = 11;
+const BLANK_TEXT_MAX_FONT_SIZE = 22;
+const BLANK_TEXT_FONT_FAMILY = '"Noto Sans KR", sans-serif';
+let blankTextMeasureContext: CanvasRenderingContext2D | null = null;
 
 const getTimeProgressToneClass = (timeProgressPercent: number) =>
   timeProgressPercent <= 20
@@ -80,27 +86,49 @@ const getCenteredViewportOffset = (viewportSize: number, contentSize: number) =>
 const getBlankFontSize = (
   pixelWidth: number,
   pixelHeight: number,
-  contentLength: number,
-) => {
-  const safeLength = Math.max(1, contentLength);
-  const widthBased =
-    Math.max(1, pixelWidth - 10) / Math.max(1.2, safeLength * 0.82);
-  const heightBased = Math.max(1, pixelHeight - 6) * 0.78;
-  return Math.max(12, Math.min(22, widthBased, heightBased));
-};
-
-const getAnswerChipWidth = (
-  baseWidth: number,
   content: string,
-  fontSize: number,
 ) => {
-  const textLength = Math.max(1, content.length);
-  const estimatedWidth = Math.ceil(textLength * fontSize * 1.04) + 24;
-  return Math.max(baseWidth, estimatedWidth);
-};
+  const safeContent = String(content || "").trim() || "가";
+  const availableWidth = Math.max(1, pixelWidth - BLANK_TEXT_HORIZONTAL_PADDING);
+  const availableHeight = Math.max(1, pixelHeight - BLANK_TEXT_VERTICAL_PADDING);
+  const heightLimitedFontSize = Math.max(
+    BLANK_TEXT_MIN_FONT_SIZE,
+    Math.min(BLANK_TEXT_MAX_FONT_SIZE, Math.floor(availableHeight * 0.82)),
+  );
 
-const getAnswerChipHeight = (baseHeight: number, fontSize: number) =>
-  Math.max(baseHeight, Math.ceil(fontSize * 1.8));
+  if (typeof document === "undefined") {
+    const widthBasedEstimate =
+      availableWidth / Math.max(1.1, safeContent.length * 0.9);
+    return Math.max(
+      BLANK_TEXT_MIN_FONT_SIZE,
+      Math.min(heightLimitedFontSize, Math.floor(widthBasedEstimate)),
+    );
+  }
+
+  if (!blankTextMeasureContext) {
+    blankTextMeasureContext = document.createElement("canvas").getContext("2d");
+  }
+
+  const measureTextWidth = (fontSize: number) => {
+    if (!blankTextMeasureContext) {
+      return safeContent.length * fontSize * 0.9;
+    }
+    blankTextMeasureContext.font = `700 ${fontSize}px ${BLANK_TEXT_FONT_FAMILY}`;
+    return blankTextMeasureContext.measureText(safeContent).width;
+  };
+
+  for (
+    let fontSize = heightLimitedFontSize;
+    fontSize >= BLANK_TEXT_MIN_FONT_SIZE;
+    fontSize -= 1
+  ) {
+    if (measureTextWidth(fontSize) <= availableWidth) {
+      return fontSize;
+    }
+  }
+
+  return BLANK_TEXT_MIN_FONT_SIZE;
+};
 
 const getTouchDistance = (touches: React.TouchList) =>
   Math.hypot(
@@ -398,11 +426,10 @@ const HistoryClassroomAssignmentView: React.FC<
       const trimmedAnswerValue = answerValue.trim();
       const placeholder = blank.prompt || "정답 입력";
       const displayValue = trimmedAnswerValue || placeholder;
-      const widthSizingValue = trimmedAnswerValue || "";
       const fontSize = getBlankFontSize(
         pixelWidth,
         pixelHeight,
-        displayValue.length,
+        displayValue,
       );
       const isFilled = Boolean(trimmedAnswerValue);
       const isInputLocked =
@@ -415,8 +442,8 @@ const HistoryClassroomAssignmentView: React.FC<
         trimmedAnswerValue,
         placeholder,
         fontSize,
-        chipWidth: getAnswerChipWidth(pixelWidth, widthSizingValue, fontSize),
-        chipHeight: getAnswerChipHeight(pixelHeight, fontSize),
+        chipWidth: pixelWidth,
+        chipHeight: pixelHeight,
         isFilled,
         isInputLocked,
       };
@@ -424,17 +451,10 @@ const HistoryClassroomAssignmentView: React.FC<
 
     if (!resolveBlankOverlap) {
       return metrics.map((entry) => {
-        const centerX =
-          (entry.renderRect.leftRatio + entry.renderRect.widthRatio / 2) *
-          displayWidth;
-        const centerY =
-          (entry.renderRect.topRatio + entry.renderRect.heightRatio / 2) *
-          displayHeight;
-
         return {
           ...entry,
-          leftPx: centerX - entry.chipWidth / 2,
-          topPx: centerY - entry.chipHeight / 2,
+          leftPx: entry.renderRect.leftRatio * displayWidth,
+          topPx: entry.renderRect.topRatio * displayHeight,
         };
       });
     }
@@ -458,11 +478,8 @@ const HistoryClassroomAssignmentView: React.FC<
     submitting,
   ]);
   const orderedBlankPlacements = useMemo(
-    () =>
-      resolveBlankOverlap
-        ? sortPlacementsForFocus(blankPlacements)
-        : blankPlacements,
-    [blankPlacements, resolveBlankOverlap],
+    () => sortPlacementsForFocus(blankPlacements),
+    [blankPlacements],
   );
 
   useEffect(() => {
@@ -770,7 +787,6 @@ const HistoryClassroomAssignmentView: React.FC<
     event: React.PointerEvent<HTMLDivElement>,
   ) => {
     if (
-      !resolveBlankOverlap ||
       completed ||
       submitting ||
       readOnly ||
@@ -780,18 +796,17 @@ const HistoryClassroomAssignmentView: React.FC<
       return;
     }
 
-    const target = event.target;
-    if (!(target instanceof HTMLElement)) return;
-
     const containerRect = event.currentTarget.getBoundingClientRect();
     const localX = event.clientX - containerRect.left;
     const localY = event.clientY - containerRect.top;
-    const hitPlacements = orderedBlankPlacements.filter(
-      (placement) =>
-        localX >= placement.leftPx &&
-        localX <= placement.leftPx + placement.chipWidth &&
-        localY >= placement.topPx &&
-        localY <= placement.topPx + placement.chipHeight,
+    const hitPlacements = sortPlacementsForFocus(
+      orderedBlankPlacements.filter(
+        (placement) =>
+          localX >= placement.leftPx &&
+          localX <= placement.leftPx + placement.chipWidth &&
+          localY >= placement.topPx &&
+          localY <= placement.topPx + placement.chipHeight,
+      ),
     );
 
     if (hitPlacements.length < 2) return;
@@ -1039,11 +1054,7 @@ const HistoryClassroomAssignmentView: React.FC<
                         ? "cursor-grab active:cursor-grabbing"
                         : ""
                     } ${isModalPreview ? "mx-auto" : ""}`}
-                    onPointerDownCapture={
-                      resolveBlankOverlap
-                        ? handleBlankStackPointerDownCapture
-                        : undefined
-                    }
+                    onPointerDownCapture={handleBlankStackPointerDownCapture}
                     style={{
                       width: `${
                         isModalPreview ? pageImage.width : scaledPageWidth
@@ -1077,7 +1088,7 @@ const HistoryClassroomAssignmentView: React.FC<
                       return (
                         <div
                           key={blank.id}
-                          className={`absolute rounded-xl border text-left font-bold shadow-[0_6px_18px_rgba(15,23,42,0.12)] transition focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-200 ${
+                          className={`absolute overflow-hidden rounded-xl border text-left font-bold shadow-[0_6px_18px_rgba(15,23,42,0.12)] transition focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-200 ${
                             isFocused ? "z-20" : "z-10"
                           } ${
                             isFilled
@@ -1103,7 +1114,7 @@ const HistoryClassroomAssignmentView: React.FC<
                           ) : null}
                           {isInputLocked ? (
                             <span
-                              className="relative z-[1] flex h-full w-full items-center justify-center whitespace-nowrap px-3 text-center leading-none"
+                              className="relative z-[1] flex h-full w-full items-center justify-center overflow-hidden whitespace-nowrap px-3 text-center leading-none"
                               style={{
                                 fontSize: `${fontSize}px`,
                                 letterSpacing:
@@ -1134,13 +1145,13 @@ const HistoryClassroomAssignmentView: React.FC<
                                 blank.prompt || `${blank.id} 답안 입력`
                               }
                               placeholder={placeholder}
-                              className={`relative z-[1] h-full w-full border-0 bg-transparent px-3 text-center font-bold outline-none ${
+                              className={`relative z-[1] h-full w-full border-0 bg-transparent px-3 text-center font-bold leading-none outline-none ${
                                 isFilled
                                   ? "text-orange-800 placeholder:text-orange-300"
                                   : "text-slate-700 placeholder:text-slate-400"
                               }`}
                               style={{
-                                fontSize: `${Math.max(16, fontSize)}px`,
+                                fontSize: `${fontSize}px`,
                                 letterSpacing:
                                   chipWidth < 80 ? "-0.05em" : "-0.02em",
                                 touchAction: "manipulation",

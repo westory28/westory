@@ -640,7 +640,6 @@ const HistoryClassroomRunner: React.FC = () => {
       onCurrentPageChange={setCurrentPage}
       answers={answers}
       interactiveViewport
-      resolveBlankOverlap
       onAnswerChange={handleAnswerChange}
       onSubmit={() => void submitAnswers()}
       submitting={submitting}
