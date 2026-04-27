@@ -28,10 +28,6 @@ import type {
   SystemConfig,
   WisHallOfFameSnapshot,
 } from "../../../../types";
-import HallOfFameSettingsSidebar, {
-  type HallOfFameSettingsPanelId,
-  type HallOfFameSettingsSidebarItem,
-} from "./HallOfFameSettingsSidebar";
 
 interface HallOfFameManagementTabProps {
   config: SystemConfig | null;
@@ -207,8 +203,7 @@ const getNextHallOfFameAutoSyncMs = (fromMs = Date.now()) => {
   const currentBlock = Math.floor(
     currentHour / WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS,
   );
-  const nextHour =
-    (currentBlock + 1) * WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS;
+  const nextHour = (currentBlock + 1) * WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS;
 
   next.setMinutes(0, 0, 0);
   if (nextHour >= 24) {
@@ -227,14 +222,14 @@ const getHallOfFameImageUploadFailureText = (error: any) => {
   if (isStorageUnauthorizedError(error)) {
     return {
       title: "시상대 이미지 업로드 권한이 없어 저장하지 못했습니다.",
-      message:
-        "교사, point manager, admin 권한과 Storage 정책을 확인한 뒤 다시 시도해 주세요.",
+      message: "이미지 저장 권한을 확인한 뒤 다시 시도해 주세요.",
     };
   }
 
   return {
     title: "시상대 이미지 업로드에 실패했습니다.",
-    message: error?.message || "잠시 후 다시 시도해 주세요.",
+    message:
+      "이미지 업로드 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.",
   };
 };
 
@@ -243,7 +238,7 @@ const getHallOfFameRefreshStageMessage = (stage: string, detail: string) => {
     return {
       title: "현재 학기 정보를 확인하지 못했습니다.",
       message:
-        "site_settings/config에 year와 semester가 설정되어 있는지 확인한 뒤 다시 시도해 주세요.",
+        "학기 설정에 학년도와 학기가 지정되어 있는지 확인한 뒤 다시 시도해 주세요.",
     };
   }
   if (stage === "policy_load") {
@@ -257,32 +252,29 @@ const getHallOfFameRefreshStageMessage = (stage: string, detail: string) => {
   if (stage === "wallet_read") {
     return {
       title: "현재 학기 위스 현황을 읽지 못했습니다.",
-      message:
-        "현재 학기 point_wallets 경로를 읽는 중 실패했습니다. 학기 설정과 위스 현황 데이터를 확인해 주세요.",
+      message: "학기 설정과 학생 위스 현황을 확인한 뒤 다시 시도해 주세요.",
     };
   }
 
   if (stage === "profile_read") {
     return {
-      title: "학생 기본 정보를 합치는 중 오류가 났습니다.",
+      title: "학생 정보를 불러오는 중 문제가 생겼습니다.",
       message:
-        "위스 현황은 읽었지만 학생 이름, 학년, 반 정보를 모으는 단계에서 실패했습니다. 사용자 문서 상태를 확인해 주세요.",
+        "위스 현황은 확인했지만 학생 이름, 학년, 반 정보를 함께 불러오지 못했습니다. 학생 명단을 확인해 주세요.",
     };
   }
 
   if (stage === "snapshot_write") {
     return {
-      title: "계산한 공개 랭킹을 저장하지 못했습니다.",
-      message:
-        "화랑의 전당 공개 snapshot을 쓰는 단계에서 실패했습니다. Firestore 권한 또는 배포 상태를 확인해 주세요.",
+      title: "새 공개 랭킹을 저장하지 못했습니다.",
+      message: "공개 랭킹을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.",
     };
   }
 
   return {
-    title: "위스 현황과 동기화하지 못했습니다.",
+    title: "최신 위스 현황을 반영하지 못했습니다.",
     message:
-      detail ||
-      "공개 랭킹을 다시 계산하는 중 서버 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+      "공개 랭킹을 새로 반영하는 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.",
   };
 };
 
@@ -300,7 +292,7 @@ const getHallOfFameConfigSaveFailureText = (error: any) => {
     return {
       title: "배치 설정 저장에 실패했습니다.",
       message:
-        normalizedMessage || "학생 화면 설정 저장 중 서버 오류가 발생했습니다.",
+        "학생 화면 설정을 저장하는 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.",
     };
   }
 
@@ -309,9 +301,9 @@ const getHallOfFameConfigSaveFailureText = (error: any) => {
       return getHallOfFameRefreshStageMessage(errorStage, errorDetail);
     }
     return {
-      title: "학생 화면 설정은 저장됐지만 공개 랭킹 동기화에 실패했습니다.",
+      title: "학생 화면 설정은 저장됐지만 최신 랭킹 반영에 실패했습니다.",
       message:
-        error?.message || "잠시 후 위스 현황과 다시 동기화해 주세요.",
+        "저장은 완료됐지만 최신 랭킹을 반영하지 못했습니다. 잠시 후 다시 시도해 주세요.",
     };
   }
 
@@ -320,16 +312,17 @@ const getHallOfFameConfigSaveFailureText = (error: any) => {
     normalizedMessage.toLowerCase().includes("savewishalloffameconfig")
   ) {
     return {
-      title: "학생 화면 설정 저장 중 서버 오류가 발생했습니다.",
-      message:
-        "서버 저장 함수를 찾지 못했습니다. Functions 배포 상태를 확인한 뒤 다시 시도해 주세요.",
+      title: "학생 화면 설정 저장 중 문제가 발생했습니다.",
+      message: "저장 기능을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
     };
   }
 
   if (
     errorCode === "functions/permission-denied" ||
     normalizedMessage.toLowerCase().includes("permission is required") ||
-    normalizedMessage.toLowerCase().includes("cannot use westory point functions")
+    normalizedMessage
+      .toLowerCase()
+      .includes("cannot use westory point functions")
   ) {
     return {
       title: "학생 화면 설정을 저장할 권한이 없습니다.",
@@ -349,10 +342,9 @@ const getHallOfFameConfigSaveFailureText = (error: any) => {
 
   if (errorStage === "snapshot_write") {
     return {
-      title: "怨듦컻 ??궧 ??ν떎?먯꽌 臾몄젣媛 諛쒖깮?덉뒿?덈떎.",
+      title: "공개 랭킹 반영 중 문제가 발생했습니다.",
       message:
-        errorDetail ||
-        "?꾩뒪 ?꾪솴???쎄린???깃났?덉?留?怨듦컻 ?붾옉???꾨떦 ?곗씠?곕? ??μ븯吏 紐삵뻽?듬땲?? Functions 諛고룷 ?곹깭瑜??뺤씤?????ㅼ떆 ?쒕룄??二쇱꽭??",
+        "학생 위스 현황은 확인했지만 공개 랭킹에 반영하지 못했습니다. 잠시 후 다시 시도해 주세요.",
     };
   }
 
@@ -362,9 +354,8 @@ const getHallOfFameConfigSaveFailureText = (error: any) => {
     normalizedMessage.toLowerCase() === "internal"
   ) {
     return {
-      title: "학생 화면 설정 저장 중 서버 오류가 발생했습니다.",
-      message:
-        "서버 저장 단계에서 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+      title: "학생 화면 설정 저장 중 문제가 발생했습니다.",
+      message: "저장하는 중 문제가 생겼습니다. 잠시 후 다시 시도해 주세요.",
     };
   }
 
@@ -379,8 +370,8 @@ const getHallOfFameConfigSaveFailureText = (error: any) => {
   }
 
   return {
-    title: "학생 화면 설정 저장 중 서버 오류가 발생했습니다.",
-    message: normalizedMessage || "잠시 후 다시 시도해 주세요.",
+    title: "학생 화면 설정 저장 중 문제가 발생했습니다.",
+    message: "잠시 후 다시 시도해 주세요.",
   };
 };
 
@@ -400,9 +391,8 @@ const getHallOfFameSnapshotRefreshFailureText = (error: any) => {
     lowerMessage.includes("ensurewishalloffame")
   ) {
     return {
-      title: "위스 현황 동기화 함수를 찾지 못했습니다.",
-      message:
-        "Functions 배포 상태를 확인한 뒤 다시 시도해 주세요.",
+      title: "최신 위스 현황을 반영하지 못했습니다.",
+      message: "반영 기능을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
     };
   }
 
@@ -412,7 +402,7 @@ const getHallOfFameSnapshotRefreshFailureText = (error: any) => {
     lowerMessage.includes("cannot use westory point functions")
   ) {
     return {
-      title: "위스 현황과 동기화할 권한이 없습니다.",
+      title: "최신 위스 현황을 반영할 권한이 없습니다.",
       message: "화랑의 전당 관리 권한을 확인한 뒤 다시 시도해 주세요.",
     };
   }
@@ -429,7 +419,7 @@ const getHallOfFameSnapshotRefreshFailureText = (error: any) => {
 
   if (errorCode === "functions/failed-precondition") {
     return {
-      title: "공개 랭킹을 동기화할 준비가 아직 끝나지 않았습니다.",
+      title: "공개 랭킹을 새로 반영할 준비가 아직 끝나지 않았습니다.",
       message:
         "위스 현황 또는 학생 기본 정보가 아직 정리되지 않았습니다. 잠시 후 다시 시도해 주세요.",
     };
@@ -441,9 +431,9 @@ const getHallOfFameSnapshotRefreshFailureText = (error: any) => {
     lowerMessage === "internal"
   ) {
     return {
-      title: "위스 현황 동기화 중 서버 오류가 발생했습니다.",
+      title: "최신 위스 현황 반영 중 문제가 발생했습니다.",
       message:
-        "공개 랭킹 계산 또는 저장 단계에서 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+        "공개 랭킹을 새로 반영하는 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.",
     };
   }
 
@@ -452,58 +442,16 @@ const getHallOfFameSnapshotRefreshFailureText = (error: any) => {
     errorCode === "functions/deadline-exceeded"
   ) {
     return {
-      title: "위스 현황 동기화 응답이 지연되고 있습니다.",
+      title: "최신 위스 현황 반영이 지연되고 있습니다.",
       message: "네트워크 상태를 확인한 뒤 잠시 후 다시 시도해 주세요.",
     };
   }
 
   return {
-    title: "위스 현황과 동기화하지 못했습니다.",
-    message: normalizedMessage || "잠시 후 다시 시도해 주세요.",
+    title: "최신 위스 현황을 반영하지 못했습니다.",
+    message: "잠시 후 다시 시도해 주세요.",
   };
 };
-
-const buildStoredRangeSummary = (draft: FeatureDraft) =>
-  `전교 ${draft.publicRange.gradeRankLimit}위 / 학급 ${draft.publicRange.classRankLimit}위`;
-
-const PanelHeader: React.FC<{
-  title: string;
-  description: string;
-  saveLabel: string;
-  canManage: boolean;
-  saving: boolean;
-  dirty: boolean;
-  onSave: () => void;
-}> = ({ title, description, saveLabel, canManage, saving, dirty, onSave }) => (
-  <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-    <div className="flex flex-col gap-4 p-5 sm:p-6 lg:flex-row lg:items-start lg:justify-between">
-      <div>
-        <h2 className="text-lg font-extrabold text-gray-900">{title}</h2>
-        <p className="mt-1 text-sm text-gray-500">{description}</p>
-      </div>
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center lg:min-w-[320px] lg:flex-col lg:items-end">
-        <button
-          type="button"
-          onClick={onSave}
-          disabled={!canManage || !dirty || saving}
-          className="inline-flex min-h-11 items-center justify-center whitespace-nowrap break-keep rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
-        >
-          {saving ? "저장 중..." : saveLabel}
-        </button>
-        <div
-          className={[
-            "rounded-xl border px-4 py-3 text-sm break-keep",
-            dirty
-              ? "border-amber-200 bg-amber-50 text-amber-800"
-              : "border-gray-200 bg-gray-50 text-gray-600",
-          ].join(" ")}
-        >
-          {dirty ? "변경사항이 저장 대기 중입니다." : "저장된 설정과 같습니다."}
-        </div>
-      </div>
-    </div>
-  </div>
-);
 
 const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
   config,
@@ -522,8 +470,6 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
   const [refreshing, setRefreshing] = useState(false);
   const [featureSaving, setFeatureSaving] = useState(false);
   const [viewSaving, setViewSaving] = useState(false);
-  const [activePanel, setActivePanel] =
-    useState<HallOfFameSettingsPanelId>("feature_settings");
   const [previewScope, setPreviewScope] =
     useState<HallOfFamePreviewView>("grade");
   const [editorDeviceMode, setEditorDeviceMode] =
@@ -553,13 +499,13 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
     setSnapshot(nextSnapshot);
     if (!nextSnapshot) {
       setSnapshotError(
-        "현재 학기 공개 랭킹 snapshot을 아직 읽지 못했습니다. 교사 수동 동기화나 다음 자동 갱신 이후 다시 확인해 주세요.",
+        "현재 학기 공개 랭킹을 아직 불러오지 못했습니다. 지금 반영하거나 다음 자동 갱신 이후 다시 확인해 주세요.",
       );
       return;
     }
     if (isWisHallOfFameSnapshotStale(nextSnapshot)) {
       setSnapshotError(
-        "공개 랭킹 snapshot이 최신 위스 현황보다 오래되었습니다. 수동 동기화 또는 다음 4시간 자동 갱신에서 다시 계산됩니다.",
+        "공개 랭킹이 최신 위스 현황보다 오래되었습니다. 지금 반영하거나 다음 자동 갱신 이후 다시 확인해 주세요.",
       );
       return;
     }
@@ -625,7 +571,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
         if (!cancelled) {
           setSnapshot(null);
           setSnapshotError(
-            "공개 랭킹 데이터를 읽지 못했습니다. 그래도 위스 관리 전체는 계속 사용할 수 있습니다.",
+            "공개 랭킹을 불러오지 못했습니다. 그래도 위스 관리 화면은 계속 사용할 수 있습니다.",
           );
         }
       } finally {
@@ -649,8 +595,8 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
     Boolean(imageFile) ||
     serializeViewDraft(viewDraft) !== serializeViewDraft(savedViewDraft);
   const combinedDraft = useMemo(
-    () => buildCombinedConfig(savedFeatureDraft, viewDraft),
-    [savedFeatureDraft, viewDraft],
+    () => buildCombinedConfig(featureDraft, viewDraft),
+    [featureDraft, viewDraft],
   );
   const previewConfig = useMemo(
     () =>
@@ -723,34 +669,9 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
   const snapshotUpdatedAtLabel = snapshot?.updatedAt
     ? formatPointDateShortTime(snapshot.updatedAt)
     : "아직 없음";
-  const snapshotUpdatedAtMs = Math.max(0, Number(snapshot?.updatedAtMs || 0));
-  const snapshotSourceUpdatedAtMs = Math.max(
-    0,
-    Number(snapshot?.sourceUpdatedAtMs || 0),
-  );
   const nextAutomaticRefreshLabel = formatAdminDateTime(
     getNextHallOfFameAutoSyncMs(),
   );
-  const snapshotStatusLabel = snapshot
-    ? isWisHallOfFameSnapshotStale(snapshot)
-      ? snapshotSourceUpdatedAtMs > snapshotUpdatedAtMs
-        ? "최신 위스 현황과 공개 랭킹 snapshot 사이에 차이가 있습니다. 교사 수동 동기화나 다음 자동 갱신에서 다시 계산됩니다."
-        : `${WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS}시간 주기 안에서 다음 자동 갱신 또는 수동 동기화를 기다리는 상태입니다.`
-      : "현재 공개 랭킹 snapshot이 최신 반영 시각 기준으로 유지되고 있습니다."
-    : "첫 공개 랭킹 snapshot 생성을 기다리는 중입니다.";
-  const sidebarItems: HallOfFameSettingsSidebarItem[] = [
-    {
-      id: "feature_settings",
-      label: "기능 설정",
-      iconClassName: "fas fa-sliders-h",
-    },
-    {
-      id: "student_view_settings",
-      label: "학생 화면 설정",
-      iconClassName: "fas fa-images",
-    },
-  ];
-
   const clearImageSelection = () => {
     setImageFile(null);
     setImagePreviewUrl((previousValue) => {
@@ -786,20 +707,6 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
     });
   };
 
-  const persistStudentViewSettings = async (
-    nextViewDraft: ViewDraft,
-    options?: { preserveImageSelection?: boolean },
-  ) => {
-    const result = await saveWisHallOfFameConfig(
-      config,
-      buildCombinedConfig(savedFeatureDraft, nextViewDraft),
-    );
-    const nextDraft = createDraft(result.hallOfFame);
-    applySavedStudentViewDraft(nextDraft, options);
-    await refreshSavedInterfaceConfig();
-    return nextDraft;
-  };
-
   const refreshSnapshot = async () => {
     if (!config) return;
 
@@ -810,9 +717,8 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
       applySnapshotState(nextSnapshot);
       showToast({
         tone: "success",
-        title: "위스 현황과 화랑의 전당을 동기화했습니다.",
-        message:
-          "현재 학기 point_wallets 기준으로 1~3위와 4~10위 공개 snapshot을 다시 계산했습니다.",
+        title: "최신 위스 현황을 화랑의 전당에 반영했습니다.",
+        message: "현재 학기 학생 위스 현황이 공개 랭킹에 반영됐습니다.",
       });
     } catch (error: any) {
       const failure = getHallOfFameSnapshotRefreshFailureText(error);
@@ -824,146 +730,6 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
       });
     } finally {
       setRefreshing(false);
-    }
-  };
-
-  const handleSaveFeatureSettings = async () => {
-    if (!config || !canManage || !featureDirty) return;
-
-    setFeatureSaving(true);
-    try {
-      const fullDraft = buildCombinedConfig(featureDraft, savedViewDraft);
-      const result = await saveWisHallOfFameConfig(config, fullDraft);
-      const nextDraft = createDraft(result.hallOfFame);
-      const nextFeatureDraft = pickFeatureDraft(nextDraft);
-
-      setSavedFeatureDraft(nextFeatureDraft);
-      setFeatureDraft(nextFeatureDraft);
-
-      if (onInterfaceConfigRefresh) {
-        await onInterfaceConfigRefresh().catch((error) => {
-          console.warn(
-            "Failed to refresh interface config after hall of fame feature save:",
-            error,
-          );
-        });
-      }
-
-      applySnapshotState(await getWisHallOfFameSnapshot(config));
-
-      showToast({
-        tone: "success",
-        title: "기능 설정이 저장되었습니다.",
-        message:
-          "공개 범위와 팝업 설정을 저장했습니다. 공개 랭킹 snapshot은 수동 동기화 또는 다음 자동 갱신에서 다시 계산됩니다.",
-      });
-    } catch (error: any) {
-      const failure = getHallOfFameConfigSaveFailureText(error);
-      showToast({
-        tone: "error",
-        title: failure.title || "기능 설정 저장에 실패했습니다.",
-        message: failure.message || "잠시 후 다시 시도해 주세요.",
-      });
-    } finally {
-      setFeatureSaving(false);
-    }
-  };
-
-  const handleSaveStudentViewSettings = async () => {
-    if (!config || !canManage || !viewDirty) return;
-
-    setViewSaving(true);
-    try {
-      const nextViewDraft: ViewDraft = {
-        ...viewDraft,
-        podiumImageUrl: viewDraft.podiumImageUrl.trim(),
-        podiumStoragePath: viewDraft.podiumStoragePath.trim(),
-      };
-
-      if (imageFile) {
-        const layoutOnlyDraft: ViewDraft = {
-          ...nextViewDraft,
-          podiumImageUrl: savedViewDraft.podiumImageUrl,
-          podiumStoragePath: savedViewDraft.podiumStoragePath,
-        };
-        const hasNonImageChanges =
-          serializeViewDraft(layoutOnlyDraft) !==
-          serializeViewDraft(savedViewDraft);
-
-        try {
-          const resizedBlob = await buildResizedImageBlob(
-            imageFile,
-            1600,
-            0.84,
-          );
-          const imageRef = ref(
-            storage,
-            `${HALL_OF_FAME_PODIUM_STORAGE_DIR}/podium-${Date.now()}.jpg`,
-          );
-
-          await uploadBytes(imageRef, resizedBlob, {
-            contentType: "image/jpeg",
-            cacheControl: "public,max-age=86400",
-          });
-
-          nextViewDraft.podiumImageUrl = await getDownloadURL(imageRef);
-          nextViewDraft.podiumStoragePath = imageRef.fullPath;
-        } catch (imageError: any) {
-          const uploadFailure = getHallOfFameImageUploadFailureText(imageError);
-
-          if (hasNonImageChanges) {
-            try {
-              await persistStudentViewSettings(layoutOnlyDraft, {
-                preserveImageSelection: true,
-              });
-              showToast({
-                tone: "warning",
-                title: uploadFailure.title,
-                message:
-                  "배치와 다른 학생 화면 설정은 저장했습니다. 이미지는 권한을 확인한 뒤 다시 업로드해 주세요.",
-              });
-              return;
-            } catch (saveError: any) {
-              const saveFailure = getHallOfFameConfigSaveFailureText(saveError);
-              showToast({
-                tone: "error",
-                title:
-                  "시상대 이미지 업로드와 학생 화면 설정 저장이 모두 완료되지 않았습니다.",
-                message:
-                  saveFailure.message ||
-                  `${uploadFailure.message} 배치 저장도 다시 시도해 주세요.`,
-              });
-              return;
-            }
-          }
-
-          showToast({
-            tone: "error",
-            title: uploadFailure.title,
-            message: uploadFailure.message,
-          });
-          return;
-        }
-      }
-
-      await persistStudentViewSettings(nextViewDraft);
-
-      showToast({
-        tone: "success",
-        title: "학생 화면 설정이 저장되었습니다.",
-        message: imageFile
-          ? "시상대 이미지와 배치 편집 결과를 저장했습니다."
-          : "배경 설정과 배치 편집 결과를 저장했습니다.",
-      });
-    } catch (error: any) {
-      const failure = getHallOfFameConfigSaveFailureText(error);
-      showToast({
-        tone: "error",
-        title: failure.title,
-        message: failure.message,
-      });
-    } finally {
-      setViewSaving(false);
     }
   };
 
@@ -998,651 +764,168 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
     setLayoutEditorOpen(false);
   };
 
-  const featureSettingsPanel = (
-    <div className="space-y-6">
-      <PanelHeader
-        title="기능 설정"
-        description="공개 범위와 팝업 정책을 저장하고, 공개 snapshot은 수동 동기화 또는 4시간 자동 갱신 정책에 맞춰 운영합니다."
-        saveLabel="기능 설정 저장"
-        canManage={canManage}
-        saving={featureSaving}
-        dirty={featureDirty}
-        onSave={() => void handleSaveFeatureSettings()}
-      />
+  const handleSaveAllChanges = async () => {
+    if (!config || !canManage || (!featureDirty && !viewDirty)) return;
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
-        <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-          <div className="text-xs font-bold text-slate-500">현재 학기</div>
-          <div className="mt-2 text-lg font-black text-slate-900">
-            {`${snapshot?.year || config?.year || "-"}학년도 ${
-              snapshot?.semester || config?.semester || "-"
-            }학기`}
-          </div>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-          <div className="text-xs font-bold text-slate-500">최근 반영 시각</div>
-          <div className="mt-2 text-lg font-black text-slate-900">
-            {snapshotUpdatedAtLabel}
-          </div>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-          <div className="text-xs font-bold text-slate-500">공개 범위 요약</div>
-          <div className="mt-2 text-lg font-black leading-tight text-slate-900 break-keep">
-            {buildStoredRangeSummary(featureDraft)}
-          </div>
-          <div className="mt-1 text-xs font-semibold text-slate-500">
-            {featureDraft.publicRange.includeTies
-              ? "동점자는 함께 공개"
-              : "동점자는 추가 공개하지 않음"}
-          </div>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-          <div className="text-xs font-bold text-slate-500">반영 주기</div>
-          <div className="mt-2 text-lg font-black leading-tight text-slate-900 break-keep">
-            교사 수동 동기화 + 4시간 자동 갱신
-          </div>
-          <div className="mt-1 text-xs font-semibold text-slate-500">
-            wallet 변경 시 즉시 반영하지 않고 {WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS}시간 주기와 수동 동기화만 사용합니다.
-          </div>
-        </div>
-      </div>
+    const nextFeatureDraft = featureDirty ? featureDraft : savedFeatureDraft;
+    let nextViewDraft: ViewDraft = viewDirty
+      ? {
+          ...viewDraft,
+          podiumImageUrl: viewDraft.podiumImageUrl.trim(),
+          podiumStoragePath: viewDraft.podiumStoragePath.trim(),
+        }
+      : savedViewDraft;
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-        <div className="space-y-6">
-          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
-              <h3 className="text-lg font-black text-slate-900">공개 범위</h3>
-              <p className="mt-1 text-sm text-slate-500">
-                저장값을 한눈에 확인하면서 전교/학급 공개 기준을 정리합니다.
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <span className="inline-flex items-center whitespace-nowrap rounded-full bg-slate-900 px-3 py-1 text-xs font-bold text-white">
-                  저장값 {buildStoredRangeSummary(savedFeatureDraft)}
-                </span>
-                <span className="inline-flex items-center whitespace-nowrap rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
-                  {savedFeatureDraft.publicRange.includeTies
-                    ? "동점자 함께 공개"
-                    : "동점자 추가 공개 안 함"}
-                </span>
-              </div>
-            </div>
+    setFeatureSaving(featureDirty);
+    setViewSaving(viewDirty);
 
-            <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2 sm:p-6">
-              <label className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                <div className="text-sm font-black text-slate-900">
-                  전교 공개 범위
-                </div>
-                <p className="mt-1 text-sm text-slate-500">
-                  전교 화랑의 전당에서 몇 위까지 공개할지 정합니다.
-                </p>
-                <input
-                  type="number"
-                  min={4}
-                  max={20}
-                  value={featureDraft.publicRange.gradeRankLimit}
-                  onChange={(event) =>
-                    setFeatureDraft((previousValue) => ({
-                      ...previousValue,
-                      publicRange: {
-                        ...previousValue.publicRange,
-                        gradeRankLimit: Math.min(
-                          20,
-                          Math.max(
-                            4,
-                            Number(
-                              event.target.value ||
-                                previousValue.publicRange.gradeRankLimit,
-                            ),
-                          ),
-                        ),
-                      },
-                    }))
-                  }
-                  className="mt-4 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700"
-                  disabled={!canManage}
-                />
-              </label>
+    try {
+      if (imageFile) {
+        const layoutOnlyDraft: ViewDraft = {
+          ...nextViewDraft,
+          podiumImageUrl: savedViewDraft.podiumImageUrl,
+          podiumStoragePath: savedViewDraft.podiumStoragePath,
+        };
+        const hasNonImageChanges =
+          featureDirty ||
+          serializeViewDraft(layoutOnlyDraft) !==
+            serializeViewDraft(savedViewDraft);
 
-              <label className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                <div className="text-sm font-black text-slate-900">
-                  학급 공개 범위
-                </div>
-                <p className="mt-1 text-sm text-slate-500">
-                  학급 화랑의 전당에서 몇 위까지 공개할지 정합니다.
-                </p>
-                <input
-                  type="number"
-                  min={4}
-                  max={20}
-                  value={featureDraft.publicRange.classRankLimit}
-                  onChange={(event) =>
-                    setFeatureDraft((previousValue) => ({
-                      ...previousValue,
-                      publicRange: {
-                        ...previousValue.publicRange,
-                        classRankLimit: Math.min(
-                          20,
-                          Math.max(
-                            4,
-                            Number(
-                              event.target.value ||
-                                previousValue.publicRange.classRankLimit,
-                            ),
-                          ),
-                        ),
-                      },
-                    }))
-                  }
-                  className="mt-4 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700"
-                  disabled={!canManage}
-                />
-              </label>
+        try {
+          const resizedBlob = await buildResizedImageBlob(
+            imageFile,
+            1600,
+            0.84,
+          );
+          const imageRef = ref(
+            storage,
+            `${HALL_OF_FAME_PODIUM_STORAGE_DIR}/podium-${Date.now()}.jpg`,
+          );
 
-              <label className="sm:col-span-2 flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-4">
-                <div>
-                  <div className="text-sm font-black text-slate-900">
-                    동점자 함께 공개 여부
-                  </div>
-                  <p className="mt-1 text-sm text-slate-500">
-                    컷오프 점수가 같으면 같은 순위를 함께 보여줍니다.
-                  </p>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={featureDraft.publicRange.includeTies}
-                  onChange={(event) =>
-                    setFeatureDraft((previousValue) => ({
-                      ...previousValue,
-                      publicRange: {
-                        ...previousValue.publicRange,
-                        includeTies: event.target.checked,
-                      },
-                    }))
-                  }
-                  className="h-5 w-5"
-                  disabled={!canManage}
-                />
-              </label>
-            </div>
-          </section>
+          await uploadBytes(imageRef, resizedBlob, {
+            contentType: "image/jpeg",
+            cacheControl: "public,max-age=86400",
+          });
 
-          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
-              <h3 className="text-lg font-black text-slate-900">팝업 설정</h3>
-              <p className="mt-1 text-sm text-slate-500">
-                입상 팝업 사용 여부만 단정하게 관리합니다.
-              </p>
-            </div>
+          nextViewDraft = {
+            ...nextViewDraft,
+            podiumImageUrl: await getDownloadURL(imageRef),
+            podiumStoragePath: imageRef.fullPath,
+          };
+        } catch (imageError: any) {
+          const uploadFailure = getHallOfFameImageUploadFailureText(imageError);
 
-            <div className="space-y-3 p-5 sm:p-6">
-              <label className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                <div>
-                  <div className="text-sm font-black text-slate-900">
-                    입상 팝업 사용
-                  </div>
-                  <p className="mt-1 text-sm text-slate-500">
-                    학생이 입상했을 때 축하 팝업을 전체적으로 사용할지 정합니다.
-                  </p>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={featureDraft.recognitionPopup.enabled}
-                  onChange={(event) =>
-                    setFeatureDraft((previousValue) => ({
-                      ...previousValue,
-                      recognitionPopup: {
-                        ...previousValue.recognitionPopup,
-                        enabled: event.target.checked,
-                      },
-                    }))
-                  }
-                  className="h-5 w-5"
-                  disabled={!canManage}
-                />
-              </label>
+          if (hasNonImageChanges) {
+            const result = await saveWisHallOfFameConfig(
+              config,
+              buildCombinedConfig(nextFeatureDraft, layoutOnlyDraft),
+            );
+            const nextDraft = createDraft(result.hallOfFame);
+            const savedNextFeatureDraft = pickFeatureDraft(nextDraft);
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <label className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-4">
-                  <div>
-                    <div className="text-sm font-black text-slate-900">
-                      전교 팝업 사용
-                    </div>
-                    <p className="mt-1 text-sm text-slate-500">
-                      전교 화랑의 전당 입상 팝업입니다.
-                    </p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={featureDraft.recognitionPopup.gradeEnabled}
-                    onChange={(event) =>
-                      setFeatureDraft((previousValue) => ({
-                        ...previousValue,
-                        recognitionPopup: {
-                          ...previousValue.recognitionPopup,
-                          gradeEnabled: event.target.checked,
-                        },
-                      }))
-                    }
-                    className="h-5 w-5"
-                    disabled={
-                      !canManage || !featureDraft.recognitionPopup.enabled
-                    }
-                  />
-                </label>
+            setSavedFeatureDraft(savedNextFeatureDraft);
+            setFeatureDraft(savedNextFeatureDraft);
+            applySavedStudentViewDraft(nextDraft, {
+              preserveImageSelection: true,
+            });
+            await refreshSavedInterfaceConfig();
+            applySnapshotState(await getWisHallOfFameSnapshot(config));
 
-                <label className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-4">
-                  <div>
-                    <div className="text-sm font-black text-slate-900">
-                      학급 팝업 사용
-                    </div>
-                    <p className="mt-1 text-sm text-slate-500">
-                      학급 화랑의 전당 입상 팝업입니다.
-                    </p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={featureDraft.recognitionPopup.classEnabled}
-                    onChange={(event) =>
-                      setFeatureDraft((previousValue) => ({
-                        ...previousValue,
-                        recognitionPopup: {
-                          ...previousValue.recognitionPopup,
-                          classEnabled: event.target.checked,
-                        },
-                      }))
-                    }
-                    className="h-5 w-5"
-                    disabled={
-                      !canManage || !featureDraft.recognitionPopup.enabled
-                    }
-                  />
-                </label>
-              </div>
+            showToast({
+              tone: "warning",
+              title: uploadFailure.title,
+              message:
+                "이미지를 제외한 변경사항은 저장했습니다. 이미지 권한을 확인한 뒤 다시 업로드해 주세요.",
+            });
+            return;
+          }
 
-              <div className="rounded-2xl border border-dashed border-sky-200 bg-sky-50 px-4 py-4 text-sm text-sky-900">
-                팝업은 on/off만 관리합니다. 학생 문구 편집은 넣지 않았습니다.
-              </div>
-            </div>
-          </section>
-        </div>
+          showToast({
+            tone: "error",
+            title: uploadFailure.title,
+            message: uploadFailure.message,
+          });
+          return;
+        }
+      }
 
-        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
-            <h3 className="text-lg font-black text-slate-900">동기화 정책</h3>
-            <p className="mt-1 text-sm text-slate-500">
-              공개 랭킹 snapshot은 교사 수동 동기화와 {WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS}시간마다 한 번 실행되는 자동 갱신만 사용합니다.
-            </p>
-          </div>
+      const result = await saveWisHallOfFameConfig(
+        config,
+        buildCombinedConfig(nextFeatureDraft, nextViewDraft),
+      );
+      const nextDraft = createDraft(result.hallOfFame);
+      const savedNextFeatureDraft = pickFeatureDraft(nextDraft);
 
-          <div className="space-y-4 p-5 sm:p-6">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-sm font-black text-slate-900 whitespace-nowrap break-keep">
-                    수동 동기화 + 4시간 자동 갱신
-                  </div>
-                  <p className="mt-1 text-sm text-slate-500">
-                    학생 화면은 공개 snapshot만 읽고, 현재 학기 point_wallets 기준 재계산은 교사 수동 동기화와
-                    {` ${WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS}시간 자동 갱신에서만`} 실행됩니다.
-                  </p>
-                </div>
-                <span className="inline-flex items-center whitespace-nowrap rounded-full bg-slate-900 px-3 py-1 text-xs font-bold text-white">
-                  운영 정책
-                </span>
-              </div>
-            </div>
+      setSavedFeatureDraft(savedNextFeatureDraft);
+      setFeatureDraft(savedNextFeatureDraft);
+      applySavedStudentViewDraft(nextDraft);
+      await refreshSavedInterfaceConfig();
+      applySnapshotState(await getWisHallOfFameSnapshot(config));
 
-            <div className="grid grid-cols-1 gap-3">
-              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
-                <div className="text-xs font-bold text-slate-500">
-                  최근 반영 시각
-                </div>
-                <div className="mt-2 text-base font-black text-slate-900">
-                  {snapshotUpdatedAtLabel}
-                </div>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
-                <div className="text-xs font-bold text-slate-500">
-                  다음 자동 갱신 기준
-                </div>
-                <div className="mt-2 text-base font-black text-slate-900">
-                  {nextAutomaticRefreshLabel}
-                </div>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
-                <div className="text-xs font-bold text-slate-500">
-                  현재 상태
-                </div>
-                <div className="mt-2 text-base font-black text-slate-900">
-                  {snapshotStatusLabel}
-                </div>
-              </div>
-            </div>
+      showToast({
+        tone: "success",
+        title: "화랑의 전당 변경사항을 저장했습니다.",
+        message:
+          "공개 범위, 팝업, 배경, 배치 설정을 현재 설정값으로 반영했습니다.",
+      });
+    } catch (error: any) {
+      const failure = getHallOfFameConfigSaveFailureText(error);
+      showToast({
+        tone: "error",
+        title: failure.title || "화랑의 전당 설정 저장에 실패했습니다.",
+        message: failure.message || "잠시 후 다시 시도해 주세요.",
+      });
+    } finally {
+      setFeatureSaving(false);
+      setViewSaving(false);
+    }
+  };
 
-            <div className="rounded-2xl border border-dashed border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
-              학생 화면과 교사 미리보기는 현재 학기 공개 snapshot만 읽고, point_wallets를 직접 조회해 즉시 재계산하지 않습니다.
-            </div>
-
-            <button
-              type="button"
-              onClick={() => void refreshSnapshot()}
-              disabled={!canManage || refreshing}
-              className="inline-flex min-h-11 items-center justify-center whitespace-nowrap break-keep rounded-lg border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {refreshing
-                ? "현재 학기 위스 기준으로 동기화 중..."
-                : "현재 학기 위스 기준 수동 동기화"}
-            </button>
-          </div>
-        </section>
-      </div>
-    </div>
-  );
-  const studentViewSettingsPanel = (
-    <div className="space-y-6">
-      <PanelHeader
-        title="학생 화면 설정"
-        description="실제 학생 화랑의 전당 구조를 보면서 배경 이미지와 배치를 조정합니다."
-        saveLabel="학생 화면 설정 저장"
-        canManage={canManage}
-        saving={viewSaving}
-        dirty={viewDirty}
-        onSave={() => void handleSaveStudentViewSettings()}
-      />
-
-      <div className="space-y-6">
-        <section className="overflow-visible rounded-[1.9rem] border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-5 py-5 sm:px-6">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-              <div className="min-w-0">
-                <div className="text-[11px] font-black tracking-[0.18em] text-amber-600">
-                  STUDENT PREVIEW
-                </div>
-                <h3 className="mt-2 text-xl font-black text-slate-900 sm:text-2xl">
-                  학생 화면 미리보기
-                </h3>
-                <p className="mt-2 text-sm leading-6 text-slate-500 break-keep">
-                  교사가 가장 먼저 확인해야 하는 학생 화면을 크게 보여 줍니다.
-                  좌측 시상대와 우측 공개 랭킹, 전교/학급 전환까지 실제 구조에
-                  가깝게 바로 확인할 수 있습니다.
-                </p>
-              </div>
-
-              <div className="flex flex-col items-start gap-3 xl:items-end">
-                <button
-                  type="button"
-                  onClick={openLayoutEditor}
-                  disabled={!canManage}
-                  className="inline-flex min-h-11 min-w-[10rem] items-center justify-center whitespace-nowrap break-keep rounded-lg bg-slate-900 px-4 text-sm font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-                >
-                  배치 편집 열기
-                </button>
-                <div className="flex flex-wrap items-center gap-2 text-xs font-bold xl:max-w-[24rem] xl:justify-end">
-                  <span className="inline-flex items-center whitespace-nowrap rounded-full bg-slate-900 px-3 py-1 text-white">
-                    좌측 시상대
-                  </span>
-                  <span className="inline-flex items-center whitespace-nowrap rounded-full bg-sky-50 px-3 py-1 text-sky-700">
-                    우측 4위 이후 공개 랭킹
-                  </span>
-                  <span className="inline-flex items-center whitespace-nowrap rounded-full bg-slate-100 px-3 py-1 text-slate-600">
-                    전교/학급 전환
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-slate-50/70 px-3 py-3 sm:px-4 sm:py-4">
-            <WisHallOfFameStudentPreview
-              snapshot={snapshot}
-              hallOfFameConfig={previewConfig}
-              activeView={previewScope}
-              onActiveViewChange={setPreviewScope}
-              gradeKey={gradeKey}
-              currentGrade={previewClass.grade}
-              currentClass={previewClass.className}
-              deviceMode="responsive"
-              showSnapshotAlert={!snapshotError}
-            />
-          </div>
-        </section>
-
-        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
-            <h3 className="text-lg font-black text-slate-900">
-              배경 이미지 설정
-            </h3>
-            <p className="mt-1 text-sm text-slate-500 break-keep">
-              시상대 배경 이미지를 바꾸면 상단 학생 화면 미리보기에 바로
-              반영됩니다.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 gap-5 p-5 sm:p-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)]">
-            <div className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-50">
-              <div className="aspect-[16/9] overflow-hidden">
-                <img
-                  src={imageUrl}
-                  alt="화랑의 전당 배경 미리보기"
-                  className="h-full w-full object-cover"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-4 rounded-3xl border border-slate-200 bg-slate-50 p-5">
-              <div>
-                <div className="text-sm font-black text-slate-900">
-                  현재 배경
-                </div>
-                <p className="mt-1 text-sm text-slate-500 break-keep">
-                  업로드 후 저장하면 학생 화면과 배치 편집기에도 같은 이미지가
-                  쓰입니다.
-                </p>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <label className="inline-flex min-h-11 cursor-pointer items-center whitespace-nowrap break-keep rounded-lg bg-slate-900 px-4 text-sm font-bold text-white transition hover:bg-slate-800">
-                  이미지 업로드
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="sr-only"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0] || null;
-                      if (!file) return;
-                      setImageFile(file);
-                      setImagePreviewUrl((previousValue) => {
-                        if (previousValue.startsWith("blob:")) {
-                          URL.revokeObjectURL(previousValue);
-                        }
-                        return URL.createObjectURL(file);
-                      });
-                      event.target.value = "";
-                    }}
-                    disabled={!canManage}
-                  />
-                </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    clearImageSelection();
-                    setViewDraft((previousValue) => ({
-                      ...previousValue,
-                      podiumImageUrl: "",
-                      podiumStoragePath: "",
-                    }));
-                  }}
-                  disabled={!canManage}
-                  className="inline-flex min-h-11 items-center whitespace-nowrap break-keep rounded-lg border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  기본 이미지 복원
-                </button>
-              </div>
-
-              {imageFile && (
-                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 break-all">
-                  {imageFile.name}
-                </div>
-              )}
-            </div>
-          </div>
-        </section>
-
-        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-              <div>
-                <h3 className="text-lg font-black text-slate-900">배치 편집</h3>
-                <p className="mt-1 text-sm text-slate-500 break-keep">
-                  좁은 카드 안에서 억지로 조정하지 않고, 큰 모달 편집기에서
-                  데스크톱과 모바일 배치를 직접 드래그해 정리합니다.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={openLayoutEditor}
-                disabled={!canManage}
-                className="inline-flex min-h-11 items-center justify-center whitespace-nowrap break-keep rounded-lg bg-slate-900 px-4 text-sm font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-              >
-                배치 편집 열기
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2 sm:p-6 xl:grid-cols-4">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-              <div className="text-xs font-bold text-slate-500">편집 방식</div>
-              <div className="mt-2 text-base font-black text-slate-900 whitespace-nowrap break-keep">
-                모달 드래그 편집
-              </div>
-              <p className="mt-1 text-sm text-slate-500 break-keep">
-                큰 편집기에서 슬롯을 선택하고 위치를 옮깁니다.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-              <div className="text-xs font-bold text-slate-500">
-                데스크톱 기본
-              </div>
-              <div className="mt-2 text-base font-black text-slate-900 whitespace-nowrap break-keep">
-                {`${Math.round(viewDraft.positions.desktop.first.leftPercent)}% / ${Math.round(viewDraft.leaderboardPanel.desktop.widthPercent)}%`}
-              </div>
-              <p className="mt-1 text-sm text-slate-500 break-keep">
-                1위 중심 위치와 우측 랭킹 패널 너비를 기준으로 확인합니다.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-              <div className="text-xs font-bold text-slate-500">
-                모바일 기본
-              </div>
-              <div className="mt-2 text-base font-black text-slate-900 whitespace-nowrap break-keep">
-                {`${Math.round(viewDraft.positions.mobile.first.leftPercent)}% / ${Math.round(viewDraft.leaderboardPanel.mobile.widthPercent)}%`}
-              </div>
-              <p className="mt-1 text-sm text-slate-500 break-keep">
-                모바일 시상대와 공개 랭킹 정렬을 따로 관리합니다.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-              <div className="text-xs font-bold text-slate-500">복원 가능</div>
-              <div className="mt-2 text-base font-black text-slate-900 whitespace-nowrap break-keep">
-                기본 배치 복원
-              </div>
-              <p className="mt-1 text-sm text-slate-500 break-keep">
-                모달 안에서 데스크톱과 모바일 배치를 기본값으로 되돌릴 수
-                있습니다.
-              </p>
-            </div>
-          </div>
-        </section>
-
-        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
-            <h3 className="text-lg font-black text-slate-900">
-              기타 보조 설정
-            </h3>
-            <p className="mt-1 text-sm text-slate-500 break-keep">
-              상단 미리보기 기준을 고르고, 학생 화면 설정 저장 전 알아둘 동작만
-              아래에서 확인합니다.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 gap-4 p-5 sm:p-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <label className="block rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                <div className="mb-2 text-xs font-bold text-slate-500">
-                  전교 미리보기 학년
-                </div>
-                <select
-                  value={gradeKey}
-                  onChange={(event) => setGradeKey(event.target.value)}
-                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700"
-                >
-                  {gradeOptions.length === 0 && (
-                    <option value={WIS_HALL_OF_FAME_GRADE_KEY}>
-                      학년 없음
-                    </option>
-                  )}
-                  {gradeOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {`${option}학년`}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="block rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                <div className="mb-2 text-xs font-bold text-slate-500">
-                  학급 미리보기 대상
-                </div>
-                <select
-                  value={classKey}
-                  onChange={(event) => setClassKey(event.target.value)}
-                  disabled={classOptions.length === 0}
-                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700 disabled:bg-slate-100 disabled:text-slate-400"
-                >
-                  {classOptions.length === 0 && (
-                    <option value="">학급 없음</option>
-                  )}
-                  {classOptions.map((option) => {
-                    const parsed = parseClassKey(option);
-                    return (
-                      <option key={option} value={option}>
-                        {`${parsed.grade}학년 ${parsed.className}반`}
-                      </option>
-                    );
-                  })}
-                </select>
-              </label>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                <div className="text-sm font-black text-slate-900 whitespace-nowrap break-keep">
-                  탭별 저장 구조 유지
-                </div>
-                <p className="mt-1 text-sm text-slate-500 break-keep">
-                  학생 화면 설정 저장 버튼은 지금 탭의 변경사항만 저장합니다.
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                <div className="text-sm font-black text-slate-900 whitespace-nowrap break-keep">
-                  fail-open 유지
-                </div>
-                <p className="mt-1 text-sm text-slate-500 break-keep">
-                  공개 랭킹 데이터가 일시적으로 불안정해도 위스 관리 전체는 계속 사용할
-                  수 있습니다.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-      </div>
-    </div>
-  );
+  const hasUnsavedChanges = featureDirty || viewDirty;
+  const savingChanges = featureSaving || viewSaving;
+  const semesterLabel = `${snapshot?.year || config?.year || "-"}학년도 ${
+    snapshot?.semester || config?.semester || "-"
+  }학기`;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-2xl font-black text-slate-950">
+            화랑의 전당 관리
+          </h2>
+          <p className="mt-1 text-sm font-semibold text-slate-500 break-keep">
+            학생에게 공개되는 시상대, 공개 랭킹, 팝업과 반영 상태를 한 화면에서
+            관리합니다.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void handleSaveAllChanges()}
+          disabled={!canManage || !hasUnsavedChanges || savingChanges}
+          className="inline-flex min-h-12 items-center justify-center whitespace-nowrap rounded-lg bg-slate-950 px-6 text-sm font-black text-white shadow-[0_12px_26px_rgba(15,23,42,0.18)] transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
+        >
+          {savingChanges ? "저장 중..." : "변경사항 저장"}
+        </button>
+      </div>
+
       {snapshotError && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-semibold text-amber-900 break-keep">
-          {snapshotError}
+        <div className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-semibold text-amber-950 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-start gap-3">
+            <i
+              className="fas fa-exclamation-circle mt-0.5 text-amber-500"
+              aria-hidden="true"
+            ></i>
+            <p className="break-keep">{snapshotError}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void refreshSnapshot()}
+            disabled={!canManage || refreshing}
+            className="inline-flex min-h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-lg border border-amber-300 bg-white px-4 text-sm font-black text-slate-800 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {refreshing ? "반영 중..." : "지금 반영"}
+          </button>
         </div>
       )}
 
@@ -1656,18 +939,453 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
           </p>
         </div>
       ) : (
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
-          <HallOfFameSettingsSidebar
-            activePanel={activePanel}
-            items={sidebarItems}
-            onSelect={setActivePanel}
-          />
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,22rem)] 2xl:grid-cols-[minmax(0,1fr)_minmax(21rem,23rem)]">
+          <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-lg font-black text-slate-950">
+                    학생 화면 미리보기
+                  </h3>
+                  <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">
+                    최근 반영 {snapshotUpdatedAtLabel}
+                  </span>
+                </div>
+                <p className="mt-1 text-sm font-semibold text-slate-500 break-keep">
+                  실제 학생 화면과 같은 컴포넌트로 전교/학급 공개 모습을
+                  확인합니다.
+                </p>
+              </div>
 
-          <div className="min-w-0 flex-1 space-y-5">
-            {activePanel === "feature_settings"
-              ? featureSettingsPanel
-              : studentViewSettingsPanel}
-          </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => setEditorDeviceMode("desktop")}
+                    className={`inline-flex min-h-9 items-center gap-2 rounded-md px-3 text-sm font-black transition ${
+                      editorDeviceMode === "desktop"
+                        ? "bg-slate-950 text-white"
+                        : "text-slate-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    <i
+                      className="fas fa-desktop text-xs"
+                      aria-hidden="true"
+                    ></i>
+                    데스크톱
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditorDeviceMode("mobile")}
+                    className={`inline-flex min-h-9 items-center gap-2 rounded-md px-3 text-sm font-black transition ${
+                      editorDeviceMode === "mobile"
+                        ? "bg-slate-950 text-white"
+                        : "text-slate-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    <i
+                      className="fas fa-mobile-alt text-xs"
+                      aria-hidden="true"
+                    ></i>
+                    모바일
+                  </button>
+                </div>
+
+                <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => setPreviewScope("grade")}
+                    className={`min-h-9 rounded-md px-3 text-sm font-black transition ${
+                      previewScope === "grade"
+                        ? "bg-slate-950 text-white"
+                        : "text-slate-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    전교
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => classKey && setPreviewScope("class")}
+                    disabled={!classKey}
+                    className={`min-h-9 rounded-md px-3 text-sm font-black transition ${
+                      previewScope === "class"
+                        ? "bg-slate-950 text-white"
+                        : "text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300"
+                    }`}
+                  >
+                    학급
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="sr-only" htmlFor="hall-preview-grade">
+                    전교 미리보기 학년
+                  </label>
+                  <select
+                    id="hall-preview-grade"
+                    value={gradeKey}
+                    onChange={(event) => setGradeKey(event.target.value)}
+                    className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 shadow-sm"
+                  >
+                    {gradeOptions.length === 0 && (
+                      <option value={WIS_HALL_OF_FAME_GRADE_KEY}>
+                        학년 없음
+                      </option>
+                    )}
+                    {gradeOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {`${option}학년 전교`}
+                      </option>
+                    ))}
+                  </select>
+
+                  <label className="sr-only" htmlFor="hall-preview-class">
+                    학급 미리보기 대상
+                  </label>
+                  <select
+                    id="hall-preview-class"
+                    value={classKey}
+                    onChange={(event) => setClassKey(event.target.value)}
+                    disabled={classOptions.length === 0}
+                    className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 shadow-sm disabled:bg-slate-100 disabled:text-slate-400"
+                  >
+                    {classOptions.length === 0 && (
+                      <option value="">학급 없음</option>
+                    )}
+                    {classOptions.map((option) => {
+                      const parsed = parseClassKey(option);
+                      return (
+                        <option key={option} value={option}>
+                          {`${parsed.grade}학년 ${parsed.className}반`}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-50/70 p-3 sm:p-4">
+              <WisHallOfFameStudentPreview
+                snapshot={snapshot}
+                hallOfFameConfig={previewConfig}
+                activeView={previewScope}
+                onActiveViewChange={setPreviewScope}
+                gradeKey={gradeKey}
+                currentGrade={previewClass.grade}
+                currentClass={previewClass.className}
+                deviceMode={editorDeviceMode}
+                showSnapshotAlert={!snapshotError}
+              />
+            </div>
+          </section>
+
+          <aside className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-100 px-5 py-4">
+              <h3 className="text-base font-black text-slate-950">관리 옵션</h3>
+              <p className="mt-1 text-sm font-semibold text-slate-500">
+                {semesterLabel}
+              </p>
+            </div>
+
+            <div className="divide-y divide-slate-100">
+              <section className="space-y-4 px-4 py-5 2xl:px-5">
+                <div className="flex items-center gap-2">
+                  <i
+                    className="fas fa-eye text-sm text-slate-500"
+                    aria-hidden="true"
+                  ></i>
+                  <h4 className="text-sm font-black text-slate-950">
+                    공개 범위
+                  </h4>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block">
+                    <span className="text-xs font-bold text-slate-600">
+                      전교 공개 인원
+                    </span>
+                    <input
+                      type="number"
+                      min={4}
+                      max={20}
+                      value={featureDraft.publicRange.gradeRankLimit}
+                      onChange={(event) =>
+                        setFeatureDraft((previousValue) => ({
+                          ...previousValue,
+                          publicRange: {
+                            ...previousValue.publicRange,
+                            gradeRankLimit: Math.min(
+                              20,
+                              Math.max(
+                                4,
+                                Number(
+                                  event.target.value ||
+                                    previousValue.publicRange.gradeRankLimit,
+                                ),
+                              ),
+                            ),
+                          },
+                        }))
+                      }
+                      disabled={!canManage}
+                      className="mt-2 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-black text-slate-800 disabled:bg-slate-100 disabled:text-slate-400"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-bold text-slate-600">
+                      학급 공개 인원
+                    </span>
+                    <input
+                      type="number"
+                      min={4}
+                      max={20}
+                      value={featureDraft.publicRange.classRankLimit}
+                      onChange={(event) =>
+                        setFeatureDraft((previousValue) => ({
+                          ...previousValue,
+                          publicRange: {
+                            ...previousValue.publicRange,
+                            classRankLimit: Math.min(
+                              20,
+                              Math.max(
+                                4,
+                                Number(
+                                  event.target.value ||
+                                    previousValue.publicRange.classRankLimit,
+                                ),
+                              ),
+                            ),
+                          },
+                        }))
+                      }
+                      disabled={!canManage}
+                      className="mt-2 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-black text-slate-800 disabled:bg-slate-100 disabled:text-slate-400"
+                    />
+                  </label>
+                </div>
+                <label className="flex items-center justify-between gap-4 rounded-xl bg-slate-50 px-4 py-3">
+                  <span className="text-sm font-bold text-slate-700">
+                    동점자 함께 공개
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={featureDraft.publicRange.includeTies}
+                    onChange={(event) =>
+                      setFeatureDraft((previousValue) => ({
+                        ...previousValue,
+                        publicRange: {
+                          ...previousValue.publicRange,
+                          includeTies: event.target.checked,
+                        },
+                      }))
+                    }
+                    className="h-5 w-5 accent-blue-600"
+                    disabled={!canManage}
+                  />
+                </label>
+              </section>
+
+              <section className="space-y-4 px-4 py-5 2xl:px-5">
+                <div className="flex items-center gap-2">
+                  <i
+                    className="fas fa-sync-alt text-sm text-slate-500"
+                    aria-hidden="true"
+                  ></i>
+                  <h4 className="text-sm font-black text-slate-950">
+                    랭킹 반영
+                  </h4>
+                </div>
+                <div className="grid grid-cols-[1fr_auto] items-center gap-4 rounded-xl bg-slate-50 px-4 py-4">
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-slate-500">
+                      최근 반영 시각
+                    </p>
+                    <p className="mt-1 text-sm font-black text-slate-950">
+                      {snapshotUpdatedAtLabel}
+                    </p>
+                    <p className="mt-2 text-xs font-semibold text-slate-500 break-keep">
+                      다음 자동 갱신 {nextAutomaticRefreshLabel}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void refreshSnapshot()}
+                    disabled={!canManage || refreshing}
+                    className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-lg bg-slate-950 px-4 text-sm font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                  >
+                    {refreshing ? "반영 중..." : "지금 반영"}
+                  </button>
+                </div>
+              </section>
+
+              <section className="space-y-4 px-4 py-5 2xl:px-5">
+                <div className="flex items-center gap-2">
+                  <i
+                    className="far fa-bell text-sm text-slate-500"
+                    aria-hidden="true"
+                  ></i>
+                  <h4 className="text-sm font-black text-slate-950">
+                    입상 팝업
+                  </h4>
+                </div>
+                {[
+                  {
+                    label: "전체 팝업",
+                    checked: featureDraft.recognitionPopup.enabled,
+                    disabled: !canManage,
+                    onChange: (checked: boolean) =>
+                      setFeatureDraft((previousValue) => ({
+                        ...previousValue,
+                        recognitionPopup: {
+                          ...previousValue.recognitionPopup,
+                          enabled: checked,
+                        },
+                      })),
+                  },
+                  {
+                    label: "전교 팝업",
+                    checked: featureDraft.recognitionPopup.gradeEnabled,
+                    disabled:
+                      !canManage || !featureDraft.recognitionPopup.enabled,
+                    onChange: (checked: boolean) =>
+                      setFeatureDraft((previousValue) => ({
+                        ...previousValue,
+                        recognitionPopup: {
+                          ...previousValue.recognitionPopup,
+                          gradeEnabled: checked,
+                        },
+                      })),
+                  },
+                  {
+                    label: "학급 팝업",
+                    checked: featureDraft.recognitionPopup.classEnabled,
+                    disabled:
+                      !canManage || !featureDraft.recognitionPopup.enabled,
+                    onChange: (checked: boolean) =>
+                      setFeatureDraft((previousValue) => ({
+                        ...previousValue,
+                        recognitionPopup: {
+                          ...previousValue.recognitionPopup,
+                          classEnabled: checked,
+                        },
+                      })),
+                  },
+                ].map((item) => (
+                  <label
+                    key={item.label}
+                    className="flex items-center justify-between gap-4"
+                  >
+                    <span className="text-sm font-bold text-slate-700">
+                      {item.label}
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={item.checked}
+                      onChange={(event) => item.onChange(event.target.checked)}
+                      disabled={item.disabled}
+                      className="h-5 w-5 accent-blue-600 disabled:opacity-40"
+                    />
+                  </label>
+                ))}
+              </section>
+
+              <section className="space-y-4 px-4 py-5 2xl:px-5">
+                <div className="flex items-center gap-2">
+                  <i
+                    className="far fa-image text-sm text-slate-500"
+                    aria-hidden="true"
+                  ></i>
+                  <h4 className="text-sm font-black text-slate-950">
+                    배경 / 배치
+                  </h4>
+                </div>
+                <div className="grid grid-cols-[7.5rem_1fr] gap-4">
+                  <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                    <img
+                      src={imageUrl}
+                      alt="화랑의 전당 배경"
+                      className="h-full min-h-[4.5rem] w-full object-cover"
+                    />
+                  </div>
+                  <div className="flex min-w-0 flex-col gap-2">
+                    <label className="inline-flex min-h-10 cursor-pointer items-center justify-center whitespace-nowrap rounded-lg border border-slate-300 bg-white px-3 text-sm font-black text-slate-700 transition hover:bg-slate-100">
+                      배경 변경
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="sr-only"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0] || null;
+                          if (!file) return;
+                          setImageFile(file);
+                          setImagePreviewUrl((previousValue) => {
+                            if (previousValue.startsWith("blob:")) {
+                              URL.revokeObjectURL(previousValue);
+                            }
+                            return URL.createObjectURL(file);
+                          });
+                          event.target.value = "";
+                        }}
+                        disabled={!canManage}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={openLayoutEditor}
+                      disabled={!canManage}
+                      className="inline-flex min-h-10 items-center justify-center whitespace-nowrap rounded-lg bg-slate-950 px-3 text-sm font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                    >
+                      배치 편집 열기
+                    </button>
+                  </div>
+                </div>
+                {imageFile && (
+                  <div className="rounded-xl bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 break-all">
+                    새 배경 선택됨: {imageFile.name}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearImageSelection();
+                    setViewDraft((previousValue) => ({
+                      ...previousValue,
+                      podiumImageUrl: "",
+                      podiumStoragePath: "",
+                    }));
+                  }}
+                  disabled={!canManage}
+                  className="inline-flex min-h-10 w-full items-center justify-center whitespace-nowrap rounded-lg border border-slate-300 bg-white px-3 text-sm font-black text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  기본 배치 이미지 복원
+                </button>
+              </section>
+
+              <section className="space-y-3 px-4 py-5 2xl:px-5">
+                <div className="flex items-center gap-2">
+                  <i
+                    className="fas fa-cog text-sm text-slate-500"
+                    aria-hidden="true"
+                  ></i>
+                  <h4 className="text-sm font-black text-slate-950">
+                    화면 유지 설정
+                  </h4>
+                </div>
+                <div className="flex items-center justify-between gap-4 rounded-xl bg-slate-50 px-4 py-3">
+                  <span className="text-sm font-bold text-slate-700">
+                    랭킹을 못 불러와도 화면 계속 열기
+                  </span>
+                  <span className="inline-flex rounded-full bg-blue-600 px-3 py-1 text-xs font-black text-white">
+                    켜짐
+                  </span>
+                </div>
+                <p className="text-xs font-semibold text-slate-500 break-keep">
+                  공개 랭킹을 잠시 불러오지 못해도 이 관리 화면은 닫히지
+                  않습니다.
+                </p>
+              </section>
+            </div>
+          </aside>
         </div>
       )}
 
@@ -1687,7 +1405,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <div className="text-[11px] font-black tracking-[0.18em] text-amber-600">
-                    LAYOUT EDITOR
+                    배치 편집
                   </div>
                   <h3 className="mt-2 text-xl font-black text-slate-900">
                     화랑의 전당 배치 편집
@@ -1752,7 +1470,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
             <div className="flex flex-col gap-3 border-t border-slate-100 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
               <p className="text-sm text-slate-500 break-keep">
                 취소하면 이번 모달에서 조정한 배치는 버리고, 저장하면 학생 화면
-                설정 draft에 반영됩니다.
+                설정에 반영됩니다.
               </p>
               <div className="flex flex-wrap items-center justify-end gap-2">
                 <button

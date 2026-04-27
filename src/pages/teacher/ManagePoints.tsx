@@ -1332,7 +1332,12 @@ const ManagePoints: React.FC = () => {
 
     return (
         <div className="flex min-h-screen flex-col bg-gray-50">
-            <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-4 py-6">
+            <main
+                className={[
+                    'mx-auto flex w-full flex-1 flex-col px-4 py-6',
+                    activeTab === 'hall-of-fame' ? 'max-w-[96rem] 2xl:px-6' : 'max-w-7xl',
+                ].join(' ')}
+            >
                 <div className="mb-4 flex shrink-0 overflow-x-auto rounded-t-lg border-b border-gray-200 bg-white px-2">
                     {(Object.keys(TEACHER_POINT_TAB_LABELS) as TeacherPointTab[]).map((tab) => (
                         <button
