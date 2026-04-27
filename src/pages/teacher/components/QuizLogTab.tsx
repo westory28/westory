@@ -352,9 +352,12 @@ const QuizLogTab: React.FC = () => {
     (typeof SCORE_BUCKETS)[number] | null
   >(null);
   const [scoreBucketPage, setScoreBucketPage] = useState(1);
+  const [pendingModalOpen, setPendingModalOpen] = useState(false);
+  const [pendingPage, setPendingPage] = useState(1);
   const [returnToLowScoreModal, setReturnToLowScoreModal] = useState(false);
   const [returnToScoreBucketModal, setReturnToScoreBucketModal] =
     useState(false);
+  const [returnToPendingModal, setReturnToPendingModal] = useState(false);
   const [wrongNoteTarget, setWrongNoteTarget] = useState<{
     uid: string;
     name: string;
@@ -362,6 +365,7 @@ const QuizLogTab: React.FC = () => {
   const lowScoreModalRef = useRef<HTMLDivElement>(null);
   const lowScoreCloseButtonRef = useRef<HTMLButtonElement>(null);
   const scoreBucketCloseButtonRef = useRef<HTMLButtonElement>(null);
+  const pendingCloseButtonRef = useRef<HTMLButtonElement>(null);
 
   const unitMetaById = useMemo(() => buildUnitMetaMap(treeData), [treeData]);
 
@@ -1028,6 +1032,19 @@ const QuizLogTab: React.FC = () => {
   const pendingCount = reportStudentSummaries.filter(
     (student) => student.attemptCount === 0,
   ).length;
+  const pendingStudents = reportStudentSummaries
+    .filter((student) => student.attemptCount === 0)
+    .sort((a, b) => {
+      const classCompare = a.classOnly.localeCompare(b.classOnly, "ko-KR", {
+        numeric: true,
+      });
+      if (classCompare !== 0) return classCompare;
+      const numberCompare = a.number.localeCompare(b.number, "ko-KR", {
+        numeric: true,
+      });
+      if (numberCompare !== 0) return numberCompare;
+      return a.name.localeCompare(b.name, "ko-KR");
+    });
 
   const classSummaries = useMemo(() => {
     return classOptions.map((classOnly) => {
@@ -1174,6 +1191,14 @@ const QuizLogTab: React.FC = () => {
     (scoreBucketPage - 1) * STUDENTS_PER_PAGE,
     scoreBucketPage * STUDENTS_PER_PAGE,
   );
+  const pendingTotalPages = Math.max(
+    1,
+    Math.ceil(pendingStudents.length / STUDENTS_PER_PAGE),
+  );
+  const pagedPendingStudents = pendingStudents.slice(
+    (pendingPage - 1) * STUDENTS_PER_PAGE,
+    pendingPage * STUDENTS_PER_PAGE,
+  );
 
   useEffect(() => {
     setStudentPage(1);
@@ -1203,6 +1228,10 @@ const QuizLogTab: React.FC = () => {
   ]);
 
   useEffect(() => {
+    setPendingPage(1);
+  }, [bigFilter, categoryFilter, classFilter, midFilter, pendingModalOpen]);
+
+  useEffect(() => {
     if (studentPage > studentTotalPages) {
       setStudentPage(studentTotalPages);
     }
@@ -1221,6 +1250,12 @@ const QuizLogTab: React.FC = () => {
   }, [scoreBucketPage, scoreBucketTotalPages]);
 
   useEffect(() => {
+    if (pendingPage > pendingTotalPages) {
+      setPendingPage(pendingTotalPages);
+    }
+  }, [pendingPage, pendingTotalPages]);
+
+  useEffect(() => {
     if (!scoreBucketModalOpen) return;
     scoreBucketCloseButtonRef.current?.focus();
 
@@ -1233,6 +1268,20 @@ const QuizLogTab: React.FC = () => {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [scoreBucketModalOpen]);
+
+  useEffect(() => {
+    if (!pendingModalOpen) return;
+    pendingCloseButtonRef.current?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setPendingModalOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [pendingModalOpen]);
 
   useEffect(() => {
     if (bigFilter && !bigOptions.some((big) => big.id === bigFilter)) {
@@ -1379,6 +1428,10 @@ const QuizLogTab: React.FC = () => {
               value: rosterLimited || !classFilter ? "-" : `${pendingCount}명`,
               icon: "fa-user-clock",
               tone: "text-gray-400",
+              onClick:
+                rosterLimited || !classFilter
+                  ? undefined
+                  : () => setPendingModalOpen(true),
             },
             {
               label: "마지막 동기화",
@@ -2136,6 +2189,162 @@ const QuizLogTab: React.FC = () => {
         </div>
       )}
 
+      {pendingModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pending-students-title"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/45"
+            onClick={() => setPendingModalOpen(false)}
+            aria-label="미응시 학생 명단 닫기"
+          />
+          <div className="relative z-10 flex max-h-[86vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-4">
+              <div>
+                <h3
+                  id="pending-students-title"
+                  className="text-lg font-extrabold text-gray-900"
+                >
+                  미응시 학생 명단
+                </h3>
+                <p className="mt-1 text-sm font-medium text-gray-500">
+                  {classFilter ? `${classFilter}반` : "전체 반"} ·{" "}
+                  {pendingStudents.length}명 · 상단 필터 기준
+                </p>
+              </div>
+              <button
+                ref={pendingCloseButtonRef}
+                type="button"
+                onClick={() => setPendingModalOpen(false)}
+                className="rounded-md px-2 py-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+                aria-label="닫기"
+              >
+                <i className="fas fa-times" aria-hidden="true"></i>
+              </button>
+            </div>
+
+            <div className="overflow-y-auto p-5">
+              {pendingStudents.length === 0 ? (
+                <div className="rounded-lg border border-gray-100 bg-gray-50 px-4 py-10 text-center text-sm font-bold text-gray-400">
+                  현재 조건에서 미응시 학생이 없습니다.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[560px] text-left text-sm">
+                    <thead className="border-y border-gray-100 bg-gray-50 text-xs font-extrabold text-gray-500">
+                      <tr>
+                        <th className="px-4 py-3">반/번호</th>
+                        <th className="px-4 py-3">학생</th>
+                        <th className="px-4 py-3">상태</th>
+                        <th className="px-4 py-3">오답노트</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {pagedPendingStudents.map((student) => {
+                        const statusMeta = getStatusMeta(student.status);
+
+                        return (
+                          <tr key={`pending-${student.key}`}>
+                            <td className="px-4 py-3 font-bold text-gray-600">
+                              {student.classOnly
+                                ? `${student.classOnly}반`
+                                : "-"}{" "}
+                              {student.number && student.number !== "-"
+                                ? `${student.number}번`
+                                : ""}
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="font-extrabold text-gray-800">
+                                {student.name}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span
+                                className={`inline-flex rounded-md border px-2 py-1 text-xs font-extrabold ${statusMeta.className}`}
+                              >
+                                {statusMeta.label}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              {student.uid ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setPendingModalOpen(false);
+                                    setReturnToPendingModal(true);
+                                    setWrongNoteTarget({
+                                      uid: student.uid,
+                                      name: student.name,
+                                    });
+                                  }}
+                                  className="inline-flex min-w-[64px] items-center justify-center gap-2 whitespace-nowrap rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-extrabold text-gray-700 transition hover:border-blue-300 hover:text-blue-600"
+                                >
+                                  열기
+                                  <i
+                                    className="fas fa-arrow-up-right-from-square text-[10px]"
+                                    aria-hidden="true"
+                                  ></i>
+                                </button>
+                              ) : (
+                                <span className="text-xs font-bold text-gray-400">
+                                  연결 없음
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  {pendingTotalPages > 1 && (
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4 text-sm font-bold text-gray-600">
+                      <span>
+                        {pendingStudents.length}명 중{" "}
+                        {(pendingPage - 1) * STUDENTS_PER_PAGE + 1}-
+                        {Math.min(
+                          pendingPage * STUDENTS_PER_PAGE,
+                          pendingStudents.length,
+                        )}
+                        명 표시
+                      </span>
+                      <div className="flex flex-wrap gap-1">
+                        {Array.from(
+                          { length: pendingTotalPages },
+                          (_, index) => {
+                            const page = index + 1;
+                            return (
+                              <button
+                                key={`pending-page-${page}`}
+                                type="button"
+                                onClick={() => setPendingPage(page)}
+                                className={`min-w-9 rounded-md border px-3 py-1.5 transition ${
+                                  pendingPage === page
+                                    ? "border-blue-500 bg-blue-600 text-white"
+                                    : "border-gray-200 bg-white text-gray-600 hover:border-blue-300 hover:text-blue-600"
+                                }`}
+                                aria-current={
+                                  pendingPage === page ? "page" : undefined
+                                }
+                              >
+                                {page}
+                              </button>
+                            );
+                          },
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <StudentWrongNoteModal
         isOpen={!!wrongNoteTarget}
         onClose={() => {
@@ -2146,6 +2355,9 @@ const QuizLogTab: React.FC = () => {
           } else if (returnToScoreBucketModal && selectedScoreBucket) {
             setReturnToScoreBucketModal(false);
             setScoreBucketModalOpen(true);
+          } else if (returnToPendingModal) {
+            setReturnToPendingModal(false);
+            setPendingModalOpen(true);
           }
         }}
         studentId={wrongNoteTarget?.uid || ""}
