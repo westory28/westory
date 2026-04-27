@@ -54,6 +54,7 @@ export interface ResetAssessmentAttemptsByClassResult {
   deletedQuizResultCount: number;
   deletedSubmissionCount: number;
   targetStudentCount: number;
+  walletRebuildErrorCount?: number;
 }
 
 export interface AssessmentVisibilityTarget {

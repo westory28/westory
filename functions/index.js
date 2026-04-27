@@ -1541,6 +1541,47 @@ const isQuizStudentProfile = (profile = {}) => {
   return role === 'student';
 };
 
+const getQuizAttemptClassCandidates = (attempt = {}) => {
+  const candidates = new Set();
+  const gradeValue = normalizeSchoolToken(attempt.studentGrade || attempt.grade);
+  const classValue = normalizeSchoolToken(attempt.studentClass || attempt.class);
+  const explicitClassId = buildQuizClassId(gradeValue, classValue);
+  if (explicitClassId) {
+    candidates.add(explicitClassId);
+  }
+
+  const gradeClassDigits = String(attempt.gradeClass || '').match(/\d+/g) || [];
+  const gradeClassId = buildQuizClassId(gradeClassDigits[0], gradeClassDigits[1]);
+  if (gradeClassId) {
+    candidates.add(gradeClassId);
+  }
+
+  return candidates;
+};
+
+const quizAttemptMatchesClass = (attempt = {}, normalizedClassId) => {
+  if (!normalizedClassId) return false;
+  const candidates = getQuizAttemptClassCandidates(attempt);
+  if (candidates.has(normalizedClassId)) return true;
+
+  const [targetGrade, targetClass] = normalizedClassId.split('-');
+  const classValue = normalizeSchoolToken(attempt.studentClass || attempt.class);
+  const gradeClassLabel = String(attempt.gradeClass || '').trim();
+  if (!targetGrade || !targetClass || !classValue || classValue !== targetClass || !gradeClassLabel) {
+    return false;
+  }
+
+  const gradeClassDigits = gradeClassLabel.match(/\d+/g) || [];
+  if (normalizeSchoolToken(gradeClassDigits[0]) === targetGrade) {
+    return true;
+  }
+  if (/^\d+$/.test(targetGrade) || /^\d+$/.test(targetClass)) {
+    return false;
+  }
+
+  return gradeClassLabel.includes(targetGrade) && gradeClassLabel.includes(targetClass);
+};
+
 const shouldCountTowardsEarnedTotal = (pointTransaction = {}) => {
   const type = String(pointTransaction.type || '').trim();
   const delta = Number(pointTransaction.delta || 0);
@@ -1593,7 +1634,15 @@ const buildQuizResetWalletSnapshot = ({ uid, profile, transactionDocs, rankPolic
 };
 
 const rebuildQuizResetWallet = async ({ year, semester, uid, rankPolicy }) => {
-  const { profile } = await ensureStudentProfile(uid);
+  let profile = {};
+  try {
+    ({ profile } = await ensureStudentProfile(uid));
+  } catch (error) {
+    console.warn('Rebuilding quiz reset wallet without an active user profile.', {
+      uid,
+      errorMessage: String(error?.message || 'profile-missing'),
+    });
+  }
   const pointTransactionsSnapshot = await db
     .collection(getPointCollectionPath(year, semester, 'point_transactions'))
     .where('uid', '==', uid)
@@ -1624,6 +1673,46 @@ const commitDeleteRefsInChunks = async (refs) => {
     await batch.commit();
   }
   return uniqueRefs.length;
+};
+
+const collectMatchingQuizAttemptDocsByClass = async ({
+  collectionRef,
+  unitId,
+  category,
+  className,
+  normalizedClassId,
+}) => {
+  const snapshots = await Promise.all(
+    ['class', 'studentClass'].map((classField) =>
+      collectionRef
+        .where(classField, '==', className)
+        .get()
+        .catch((error) => {
+          console.warn('Failed to query quiz attempts by class field.', {
+            collectionPath: collectionRef.path,
+            classField,
+            className,
+            errorMessage: String(error?.message || 'query-failed'),
+          });
+          return null;
+        }),
+    ),
+  );
+  const docsByPath = new Map();
+  snapshots.forEach((snapshot) => {
+    snapshot?.forEach((docSnap) => {
+      docsByPath.set(docSnap.ref.path, docSnap);
+    });
+  });
+
+  return Array.from(docsByPath.values()).filter((docSnap) => {
+    const data = docSnap.data() || {};
+    return (
+      String(data.unitId || '').trim() === unitId
+      && String(data.category || '').trim() === category
+      && quizAttemptMatchesClass(data, normalizedClassId)
+    );
+  });
 };
 
 const filterExistingRefs = async (refs) => {
@@ -1727,6 +1816,23 @@ const resetAssessmentAttemptsByClassHandler = onCall(
       const pointTransactionRefs = [];
       const affectedStudentUids = new Set();
 
+      const [classResultDocs, classSubmissionDocs] = await Promise.all([
+        collectMatchingQuizAttemptDocsByClass({
+          collectionRef: quizResultsCollection,
+          unitId,
+          category,
+          className,
+          normalizedClassId,
+        }),
+        collectMatchingQuizAttemptDocsByClass({
+          collectionRef: quizSubmissionsCollection,
+          unitId,
+          category,
+          className,
+          normalizedClassId,
+        }),
+      ]);
+
       for (const studentUid of studentUids) {
         const [resultSnap, submissionSnap] = await Promise.all([
           quizResultsCollection.where('uid', '==', studentUid).get(),
@@ -1772,6 +1878,34 @@ const resetAssessmentAttemptsByClassHandler = onCall(
         });
       }
 
+      classResultDocs.forEach((docSnap) => {
+        const data = docSnap.data() || {};
+        const studentUid = String(data.uid || '').trim();
+        if (!studentUid) return;
+        resultRefs.push(docSnap.ref);
+        affectedStudentUids.add(studentUid);
+
+        const sourceId = `quiz-result-${docSnap.id}`;
+        pointTransactionRefs.push(
+          db.doc(
+            `${getPointCollectionPath(year, semester, 'point_transactions')}/${buildActivityTransactionId(studentUid, 'quiz', sourceId)}`,
+          ),
+        );
+        pointTransactionRefs.push(
+          db.doc(
+            `${getPointCollectionPath(year, semester, 'point_transactions')}/${buildActivityTransactionId(studentUid, 'quiz_bonus', sourceId)}`,
+          ),
+        );
+      });
+
+      classSubmissionDocs.forEach((docSnap) => {
+        const data = docSnap.data() || {};
+        const studentUid = String(data.uid || '').trim();
+        if (!studentUid) return;
+        submissionRefs.push(docSnap.ref);
+        affectedStudentUids.add(studentUid);
+      });
+
       const deletedQuizResultCount = await commitDeleteRefsInChunks(resultRefs);
       const deletedSubmissionCount = await commitDeleteRefsInChunks(submissionRefs);
       const existingPointTransactionRefs = await filterExistingRefs(pointTransactionRefs);
@@ -1781,14 +1915,29 @@ const resetAssessmentAttemptsByClassHandler = onCall(
       const pointPolicy = await db.runTransaction((transaction) =>
         loadPolicy(transaction, year, semester),
       );
+      const walletRebuildErrors = [];
       for (const studentUid of affectedStudentList) {
-        await rebuildQuizResetWallet({
-          year,
-          semester,
-          uid: studentUid,
-          rankPolicy: pointPolicy.rankPolicy,
-        });
+        try {
+          await rebuildQuizResetWallet({
+            year,
+            semester,
+            uid: studentUid,
+            rankPolicy: pointPolicy.rankPolicy,
+          });
+        } catch (error) {
+          walletRebuildErrors.push({
+            uid: studentUid,
+            errorMessage: String(error?.message || 'wallet-rebuild-failed').slice(0, 160),
+          });
+          console.error('Failed to rebuild wallet after quiz reset.', {
+            uid: studentUid,
+            year,
+            semester,
+            error,
+          });
+        }
       }
+      const recalculatedWalletCount = affectedStudentList.length - walletRebuildErrors.length;
 
       if (deletedPointTransactionCount > 0) {
         await markWisHallOfFameDirtySafely(year, semester);
@@ -1802,7 +1951,9 @@ const resetAssessmentAttemptsByClassHandler = onCall(
           deletedQuizResultCount,
           deletedSubmissionCount,
           deletedPointTransactionCount,
-          recalculatedWalletCount: affectedStudentList.length,
+          recalculatedWalletCount,
+          walletRebuildErrorCount: walletRebuildErrors.length,
+          walletRebuildErrors: walletRebuildErrors.slice(0, 20),
           completedAt: FieldValue.serverTimestamp(),
         },
         { merge: true },
@@ -1820,6 +1971,8 @@ const resetAssessmentAttemptsByClassHandler = onCall(
         deletedQuizResultCount,
         deletedSubmissionCount,
         deletedPointTransactionCount,
+        recalculatedWalletCount,
+        walletRebuildErrorCount: walletRebuildErrors.length,
       });
 
       return {
@@ -1829,7 +1982,8 @@ const resetAssessmentAttemptsByClassHandler = onCall(
         deletedQuizResultCount,
         deletedSubmissionCount,
         deletedPointTransactionCount,
-        recalculatedWalletCount: affectedStudentList.length,
+        recalculatedWalletCount,
+        walletRebuildErrorCount: walletRebuildErrors.length,
       };
     } catch (error) {
       await auditRef.set(
