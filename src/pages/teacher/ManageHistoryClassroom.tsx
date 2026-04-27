@@ -2342,9 +2342,8 @@ const ManageHistoryClassroom: React.FC = () => {
                           {label}
                         </div>
                         <div className="mt-2 flex flex-wrap gap-2">
-                          {(students as typeof row.studentSummaries)
-                            .slice(0, 3)
-                            .map((student) => (
+                          {(students as typeof row.studentSummaries).map(
+                            (student) => (
                               <span
                                 key={`${row.assignment.id}-${label}-${student.uid}`}
                                 className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-700"
@@ -2357,14 +2356,7 @@ const ManageHistoryClassroom: React.FC = () => {
                                     student.attemptLabel}
                                 </span>
                               </span>
-                            ))}
-                          {(students as typeof row.studentSummaries).length >
-                            3 && (
-                            <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-bold text-gray-500">
-                              +
-                              {(students as typeof row.studentSummaries)
-                                .length - 3}
-                            </span>
+                            ),
                           )}
                           {!(students as typeof row.studentSummaries)
                             .length && (
