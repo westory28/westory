@@ -191,6 +191,11 @@ const FINAL_REGION_INTERSECTION_RATIO = 0.12;
 const EMPTY_BLANK_LABEL = "빈칸";
 const MIN_STUDENT_ZOOM = 0.7;
 const MAX_STUDENT_ZOOM = 2.4;
+const STUDENT_BLANK_MIN_DISPLAY_WIDTH = 34;
+const STUDENT_BLANK_MIN_DISPLAY_HEIGHT = 18;
+const STUDENT_BLANK_MAX_FONT_SIZE = 28;
+const STUDENT_BLANK_MIN_FONT_SIZE = 6;
+const STUDENT_BLANK_FONT_FAMILY = '"Noto Sans KR", sans-serif';
 const TOOL_COLORS: ToolColorOption[] = [
   {
     key: "blue",
@@ -243,6 +248,21 @@ const EMPTY_ANNOTATION_STATE: LessonWorksheetAnnotationState = {
 const toPercent = (value: number) => `${value * 100}%`;
 const clampZoom = (value: number) =>
   Math.min(MAX_STUDENT_ZOOM, Math.max(MIN_STUDENT_ZOOM, value));
+const getZoomedPageWidth = (baseWidth: number, zoom: number) =>
+  Math.max(1, baseWidth * zoom);
+let studentBlankTextMeasureContext: CanvasRenderingContext2D | null = null;
+
+const measureStudentBlankText = (content: string, fontSize: number) => {
+  if (typeof document === "undefined") return content.length * fontSize * 0.82;
+  if (!studentBlankTextMeasureContext) {
+    studentBlankTextMeasureContext = document
+      .createElement("canvas")
+      .getContext("2d");
+  }
+  if (!studentBlankTextMeasureContext) return content.length * fontSize * 0.82;
+  studentBlankTextMeasureContext.font = `700 ${fontSize}px ${STUDENT_BLANK_FONT_FAMILY}`;
+  return studentBlankTextMeasureContext.measureText(content).width;
+};
 
 const getDefaultFootnoteAnchorRect = (
   point: RatioPoint,
@@ -425,27 +445,36 @@ const expandRect = (
   const padY = options?.padY ?? 5;
   const minWidth = options?.minWidth ?? 44;
   const minHeight = options?.minHeight ?? 20;
-  const left = Math.max(0, rect.leftRatio * pageImage.width - padX);
-  const top = Math.max(0, rect.topRatio * pageImage.height - padY);
-  const right = Math.min(
+  const naturalLeft = rect.leftRatio * pageImage.width - padX;
+  const naturalTop = rect.topRatio * pageImage.height - padY;
+  const naturalRight =
+    (rect.leftRatio + rect.widthRatio) * pageImage.width + padX;
+  const naturalBottom =
+    (rect.topRatio + rect.heightRatio) * pageImage.height + padY;
+  const width = Math.min(
     pageImage.width,
-    (rect.leftRatio + rect.widthRatio) * pageImage.width + padX,
+    Math.max(minWidth, naturalRight - naturalLeft),
   );
-  const bottom = Math.min(
+  const height = Math.min(
     pageImage.height,
-    (rect.topRatio + rect.heightRatio) * pageImage.height + padY,
+    Math.max(minHeight, naturalBottom - naturalTop),
   );
-  const width = Math.max(minWidth, right - left);
-  const height = Math.max(minHeight, bottom - top);
+  const centerX = (rect.leftRatio + rect.widthRatio / 2) * pageImage.width;
+  const centerY = (rect.topRatio + rect.heightRatio / 2) * pageImage.height;
+  const left = Math.max(
+    0,
+    Math.min(pageImage.width - width, centerX - width / 2),
+  );
+  const top = Math.max(
+    0,
+    Math.min(pageImage.height - height, centerY - height / 2),
+  );
 
   return {
     leftRatio: left / pageImage.width,
     topRatio: top / pageImage.height,
-    widthRatio: Math.min(1 - left / pageImage.width, width / pageImage.width),
-    heightRatio: Math.min(
-      1 - top / pageImage.height,
-      height / pageImage.height,
-    ),
+    widthRatio: width / pageImage.width,
+    heightRatio: height / pageImage.height,
   };
 };
 
@@ -453,7 +482,9 @@ const getStudentBlankRect = (
   blank: LessonWorksheetBlank,
   pageImage: LessonWorksheetPageImage,
   pageRegions: LessonWorksheetTextRegion[],
+  displayScale = 1,
 ) => {
+  const safeDisplayScale = Math.max(0.001, displayScale);
   const baseRect =
     blank.source === "manual"
       ? {
@@ -468,31 +499,56 @@ const getStudentBlankRect = (
 
   if (blank.source === "manual") {
     return expandRect(baseRect, pageImage, {
-      padX: pixelWidth < 34 ? 2 : 3,
-      padY: pixelHeight < 18 ? 1.5 : 2.5,
-      minWidth: Math.max(34, Math.min(pixelWidth + 10, 88)),
-      minHeight: Math.max(18, Math.min(pixelHeight + 8, 36)),
+      padX: (pixelWidth < 34 ? 2 : 3) / safeDisplayScale,
+      padY: (pixelHeight < 18 ? 1.5 : 2.5) / safeDisplayScale,
+      minWidth:
+        Math.max(
+          STUDENT_BLANK_MIN_DISPLAY_WIDTH,
+          Math.min(pixelWidth * safeDisplayScale + 10, 88),
+        ) / safeDisplayScale,
+      minHeight:
+        Math.max(
+          STUDENT_BLANK_MIN_DISPLAY_HEIGHT,
+          Math.min(pixelHeight * safeDisplayScale + 8, 36),
+        ) / safeDisplayScale,
     });
   }
 
   return expandRect(baseRect, pageImage, {
-    padX: pixelWidth < 40 ? 2.5 : 4,
-    padY: pixelHeight < 20 ? 2 : 2.5,
-    minWidth: Math.max(36, Math.min(pixelWidth + 14, 94)),
-    minHeight: Math.max(20, Math.min(pixelHeight + 8, 38)),
+    padX: (pixelWidth < 40 ? 2.5 : 4) / safeDisplayScale,
+    padY: (pixelHeight < 20 ? 2 : 2.5) / safeDisplayScale,
+    minWidth:
+      Math.max(
+        STUDENT_BLANK_MIN_DISPLAY_WIDTH,
+        Math.min(pixelWidth * safeDisplayScale + 14, 94),
+      ) / safeDisplayScale,
+    minHeight:
+      Math.max(
+        STUDENT_BLANK_MIN_DISPLAY_HEIGHT,
+        Math.min(pixelHeight * safeDisplayScale + 8, 38),
+      ) / safeDisplayScale,
   });
 };
 
 const getStudentBlankFontSize = (
   pixelWidth: number,
   pixelHeight: number,
-  contentLength: number,
+  content: string,
 ) => {
-  const safeLength = Math.max(1, contentLength);
-  const widthBased =
-    Math.max(1, pixelWidth - 2) / Math.max(0.82, safeLength * 0.82);
-  const heightBased = Math.max(1, pixelHeight - 1) * 0.9;
-  return Math.max(8, Math.min(24, widthBased, heightBased));
+  const safeContent = String(content || EMPTY_BLANK_LABEL);
+  const availableWidth = Math.max(1, pixelWidth - 4);
+  const heightBased = Math.max(1, pixelHeight - 2) * 0.82;
+  const initialSize = Math.min(STUDENT_BLANK_MAX_FONT_SIZE, heightBased);
+  for (
+    let fontSize = initialSize;
+    fontSize >= STUDENT_BLANK_MIN_FONT_SIZE;
+    fontSize -= 0.5
+  ) {
+    if (measureStudentBlankText(safeContent, fontSize) <= availableWidth) {
+      return fontSize;
+    }
+  }
+  return STUDENT_BLANK_MIN_FONT_SIZE;
 };
 
 const buildStrokePath = (
@@ -630,13 +686,17 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   const [studentZoom, setStudentZoom] = useState(1);
   const shouldUseBoundedViewportScroll =
     isViewportInteractive &&
-    (mode === "teacher-present" ||
+    (isStudentSolveMode ||
+      mode === "teacher-present" ||
       isTeacherEditMode ||
       isAnnotationEnabled ||
       studentZoom > 1.02);
   const allowNativeStudentTouchScroll =
     isStudentSolveMode && !isAnnotationEnabled && studentZoom <= 1.02;
   const studentZoomRef = useRef(1);
+  const [pageViewportWidths, setPageViewportWidths] = useState<
+    Record<number, number>
+  >({});
   const [toolbarVisible, setToolbarVisible] = useState(
     annotationUiMode === "always",
   );
@@ -870,6 +930,37 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     isTeacherViewMode,
     pageImages,
   ]);
+
+  useEffect(() => {
+    if (!isViewportInteractive || typeof ResizeObserver === "undefined") {
+      return undefined;
+    }
+    const observers: ResizeObserver[] = [];
+    const updateViewportWidth = (page: number, width: number) => {
+      setPageViewportWidths((prev) => {
+        if (Math.abs((prev[page] || 0) - width) < 0.5) return prev;
+        return { ...prev, [page]: width };
+      });
+    };
+
+    visiblePageImages.forEach((pageImage) => {
+      const host = scrollHostRefs.current[pageImage.page];
+      if (!host) return;
+      updateViewportWidth(pageImage.page, host.clientWidth);
+      const observer = new ResizeObserver((entries) => {
+        updateViewportWidth(
+          pageImage.page,
+          entries[0]?.contentRect.width || host.clientWidth,
+        );
+      });
+      observer.observe(host);
+      observers.push(observer);
+    });
+
+    return () => {
+      observers.forEach((observer) => observer.disconnect());
+    };
+  }, [isViewportInteractive, visiblePageImages]);
 
   const activeTeacherPageIndex =
     isTeacherViewMode && activeTeacherPage != null
@@ -2317,6 +2408,19 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
             draftStroke?.page === pageImage.page ? draftStroke : null;
           const currentDraftBox =
             draftBox?.page === pageImage.page ? draftBox : null;
+          const baseViewportWidth =
+            pageViewportWidths[pageImage.page] ||
+            scrollHostRefs.current[pageImage.page]?.clientWidth ||
+            pageImage.width;
+          const visualPageWidth = isViewportInteractive
+            ? getZoomedPageWidth(baseViewportWidth, studentZoom)
+            : Math.max(1, baseViewportWidth);
+          const visualPageHeight =
+            pageImage.width > 0
+              ? (visualPageWidth * pageImage.height) / pageImage.width
+              : Math.max(1, pageImage.height);
+          const pageDisplayScale =
+            pageImage.width > 0 ? visualPageWidth / pageImage.width : 1;
 
           return (
             <section
@@ -2348,7 +2452,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                   isViewportInteractive
                     ? {
                         touchAction: allowNativeStudentTouchScroll
-                          ? "pan-y pinch-zoom"
+                          ? "pan-y"
                           : "none",
                         overscrollBehavior: shouldUseBoundedViewportScroll
                           ? "contain"
@@ -2381,9 +2485,14 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                   if (!shouldUseBoundedViewportScroll) {
                     return;
                   }
+                  if (!event.ctrlKey && !event.metaKey) {
+                    return;
+                  }
                   event.preventDefault();
-                  const delta = event.deltaY < 0 ? 0.08 : -0.08;
-                  applyViewportZoom(studentZoom + delta, {
+                  event.stopPropagation();
+                  const delta = getWheelZoomDelta(event);
+                  if (!delta) return;
+                  applyViewportZoom(studentZoomRef.current + delta, {
                     page: pageImage.page,
                     anchorClientX: event.clientX,
                     anchorClientY: event.clientY,
@@ -2474,7 +2583,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     cursor: stageCursor,
                     touchAction: isViewportInteractive
                       ? allowNativeStudentTouchScroll
-                        ? "pan-y pinch-zoom"
+                        ? "pan-y"
                         : "none"
                       : undefined,
                     width: isViewportInteractive
@@ -2927,11 +3036,12 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                         blank,
                         pageImage,
                         pageRegions,
+                        pageDisplayScale,
                       );
                       const pixelWidth =
-                        renderRect.widthRatio * pageImage.width;
+                        renderRect.widthRatio * visualPageWidth;
                       const pixelHeight =
-                        renderRect.heightRatio * pageImage.height;
+                        renderRect.heightRatio * visualPageHeight;
                       const placeholder = blank.prompt || EMPTY_BLANK_LABEL;
                       const activeValue = (studentAnswer?.value || "").trim();
                       const sizingText =
@@ -2942,7 +3052,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                       const fontSize = getStudentBlankFontSize(
                         pixelWidth,
                         pixelHeight,
-                        sizingText.length,
+                        sizingText,
                       );
                       const horizontalPadding =
                         pixelWidth < 42
@@ -3002,13 +3112,16 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                             style={{
                               fontSize: `${fontSize}px`,
                               lineHeight: 1,
-                              letterSpacing:
-                                pixelWidth < 46 ? "-0.06em" : "-0.02em",
+                              letterSpacing: 0,
                               paddingLeft: `${horizontalPadding}px`,
                               paddingRight: `${horizontalPadding}px`,
                               paddingTop: `${verticalPadding}px`,
                               paddingBottom: `${verticalPadding}px`,
                               boxSizing: "border-box",
+                              minWidth: 0,
+                              overflow: "hidden",
+                              textOverflow: "clip",
+                              whiteSpace: "nowrap",
                             }}
                           />
                           {!!activeValue && (
