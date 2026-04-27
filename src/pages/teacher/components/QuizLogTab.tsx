@@ -1,351 +1,1970 @@
-﻿import React, { useEffect, useState } from 'react';
-import { collection, documentId, getDocs, limit, orderBy, query, where } from 'firebase/firestore';
-import { db } from '../../../lib/firebase';
-import { useAuth } from '../../../contexts/AuthContext';
-import { getSemesterCollectionPath } from '../../../lib/semesterScope';
-import StudentWrongNoteModal from './StudentWrongNoteModal';
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+} from "firebase/firestore";
+import { db } from "../../../lib/firebase";
+import { useAuth } from "../../../contexts/AuthContext";
+import {
+  getSemesterCollectionPath,
+  getSemesterDocPath,
+} from "../../../lib/semesterScope";
+import StudentWrongNoteModal from "./StudentWrongNoteModal";
+
+interface QuizDetail {
+  id?: string | number;
+  correct?: boolean;
+  u?: string;
+}
 
 interface Log {
-    id: string;
-    timestamp: any;
-    uid?: string;
-    unitId?: string;
-    category?: string;
-    gradeClass?: string;
-    studentName: string;
-    email?: string;
-    score: number;
-    classOnly: string;
-    studentNumber: string;
+  id: string;
+  timestamp: any;
+  uid?: string;
+  unitId?: string;
+  category?: string;
+  gradeClass?: string;
+  studentName: string;
+  email?: string;
+  score: number;
+  classOnly: string;
+  studentNumber: string;
+  details: QuizDetail[];
 }
 
 interface UserProfile {
-    name?: string;
-    class?: string;
-    number?: string;
-    email?: string;
+  uid: string;
+  name: string;
+  class: string;
+  number: string;
+  email: string;
+  role?: string;
 }
 
-const chunkArray = <T,>(arr: T[], size: number): T[][] => {
-    const chunks: T[][] = [];
-    for (let i = 0; i < arr.length; i += size) {
-        chunks.push(arr.slice(i, i + size));
-    }
-    return chunks;
-};
+interface TreeUnit {
+  id: string;
+  title: string;
+  children?: TreeUnit[];
+}
+
+interface QuestionMeta {
+  docId: string;
+  id: string;
+  unitId: string;
+  subUnitId: string;
+  refBig: string;
+  refMid: string;
+  refSmall: string;
+}
+
+interface UnitMeta {
+  id: string;
+  title: string;
+  bigId: string;
+  bigTitle: string;
+  midId: string;
+  midTitle: string;
+  smallId?: string;
+  smallTitle?: string;
+}
+
+interface StudentSummary {
+  key: string;
+  uid: string;
+  name: string;
+  email: string;
+  classOnly: string;
+  number: string;
+  logs: Log[];
+  latestLog?: Log;
+  latestScore: number | null;
+  averageScore: number | null;
+  attemptCount: number;
+  weakUnits: string[];
+  status: "stable" | "watch" | "risk" | "pending";
+}
+
+type SortKey =
+  | "scoreAsc"
+  | "scoreDesc"
+  | "nameAsc"
+  | "attemptDesc"
+  | "averageAsc";
+
+const SCORE_BUCKETS = [
+  { label: "0-20", min: 0, max: 20 },
+  { label: "21-40", min: 21, max: 40 },
+  { label: "41-60", min: 41, max: 60 },
+  { label: "61-80", min: 61, max: 80 },
+  { label: "81-100", min: 81, max: 100 },
+];
+
+const RESULT_LIMIT = 50;
+const STUDENTS_PER_PAGE = 50;
 
 const normalizeClass = (value: unknown): string => {
-    const raw = String(value || '').trim();
-    if (!raw) return '';
-    const digits = raw.match(/\d+/)?.[0];
-    return digits || raw.replace('반', '').trim();
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const digits = raw.match(/\d+/)?.[0];
+  return digits || raw.replace("반", "").trim();
 };
 
 const normalizeNumber = (value: unknown): string => {
-    const raw = String(value || '').trim();
-    if (!raw) return '';
-    const digits = raw.match(/\d+/)?.[0];
-    return digits || raw.replace('번', '').trim();
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const digits = raw.match(/\d+/)?.[0];
+  return digits || raw.replace("번", "").trim();
 };
 
-const toText = (value: unknown): string => String(value ?? '').trim();
+const toText = (value: unknown): string => String(value ?? "").trim();
 
-const getTimestampSeconds = (value: any): number => {
-    if (typeof value?.seconds === 'number') return value.seconds;
-    if (typeof value?.toDate === 'function') {
-        const date = value.toDate();
-        if (date instanceof Date && !Number.isNaN(date.getTime())) {
-            return Math.floor(date.getTime() / 1000);
-        }
+const getTimestampMs = (value: any): number => {
+  if (typeof value?.seconds === "number") return value.seconds * 1000;
+  if (typeof value?.toDate === "function") {
+    const date = value.toDate();
+    if (date instanceof Date && !Number.isNaN(date.getTime())) {
+      return date.getTime();
     }
-    return 0;
+  }
+  return 0;
+};
+
+const formatTime = (value: number) => {
+  if (!value) return "-";
+  return new Date(value).toLocaleTimeString("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+};
+
+const average = (values: number[]) => {
+  if (!values.length) return null;
+  return values.reduce((acc, cur) => acc + cur, 0) / values.length;
+};
+
+const median = (values: number[]) => {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  if (sorted.length % 2) return sorted[middle];
+  return (sorted[middle - 1] + sorted[middle]) / 2;
+};
+
+const roundOne = (value: number | null) =>
+  value === null ? "-" : Number(value.toFixed(1)).toString();
+
+const buildStudentKey = (params: {
+  uid?: string;
+  email?: string;
+  classOnly?: string;
+  number?: string;
+  name?: string;
+}) => {
+  if (params.uid) return `uid:${params.uid}`;
+  if (params.email) return `email:${params.email}`;
+  return `fallback:${params.classOnly || "-"}:${params.number || "-"}:${params.name || "학생"}`;
 };
 
 const buildDedupKey = (log: Log): string => {
-    const identity = toText(log.uid) || toText(log.email) || `${toText(log.classOnly)}-${toText(log.studentNumber)}-${toText(log.studentName)}`;
-    return [
-        identity,
-        toText(log.unitId),
-        toText(log.category),
-        String(getTimestampSeconds(log.timestamp)),
-        String(log.score),
-    ].join('::');
+  const identity =
+    toText(log.uid) ||
+    toText(log.email) ||
+    `${toText(log.classOnly)}-${toText(log.studentNumber)}-${toText(log.studentName)}`;
+  return [
+    identity,
+    toText(log.unitId),
+    toText(log.category),
+    String(getTimestampMs(log.timestamp)),
+    String(log.score),
+  ].join("::");
+};
+
+const buildUnitMetaMap = (treeData: TreeUnit[]) => {
+  const map = new Map<string, UnitMeta>();
+
+  treeData.forEach((big) => {
+    map.set(big.id, {
+      id: big.id,
+      title: big.title,
+      bigId: big.id,
+      bigTitle: big.title,
+      midId: "",
+      midTitle: "",
+    });
+
+    (big.children || []).forEach((mid) => {
+      map.set(mid.id, {
+        id: mid.id,
+        title: mid.title,
+        bigId: big.id,
+        bigTitle: big.title,
+        midId: mid.id,
+        midTitle: mid.title,
+      });
+
+      (mid.children || []).forEach((small) => {
+        map.set(small.id, {
+          id: small.id,
+          title: small.title,
+          bigId: big.id,
+          bigTitle: big.title,
+          midId: mid.id,
+          midTitle: mid.title,
+          smallId: small.id,
+          smallTitle: small.title,
+        });
+      });
+    });
+  });
+
+  return map;
+};
+
+const parseLogDoc = (id: string, raw: any): Log => {
+  const gradeClassRaw = toText(
+    raw.gradeClass ||
+      raw.classInfo ||
+      raw.student?.gradeClass ||
+      raw.user?.gradeClass,
+  );
+  const classOnly =
+    toText(
+      raw.class ||
+        raw.classOnly ||
+        raw.className ||
+        raw.studentClass ||
+        raw.student?.class ||
+        raw.user?.class ||
+        (gradeClassRaw ? gradeClassRaw.split(" ")[1] : ""),
+    ) || "-";
+  const studentNumber =
+    toText(
+      raw.number ||
+        raw.studentNumber ||
+        raw.studentNo ||
+        raw.no ||
+        raw.student?.number ||
+        raw.user?.number ||
+        (gradeClassRaw ? gradeClassRaw.split(" ")[2]?.replace("번", "") : ""),
+    ) || "-";
+
+  return {
+    id,
+    timestamp: raw.timestamp,
+    uid: toText(
+      raw.uid ||
+        raw.studentId ||
+        raw.userId ||
+        raw.student?.uid ||
+        raw.user?.uid,
+    ),
+    unitId: toText(raw.unitId),
+    category: toText(raw.category),
+    gradeClass: gradeClassRaw,
+    studentName:
+      toText(
+        raw.name ||
+          raw.studentName ||
+          raw.userName ||
+          raw.student?.name ||
+          raw.user?.name,
+      ) || "학생",
+    email: toText(
+      raw.email ||
+        raw.studentEmail ||
+        raw.userEmail ||
+        raw.student?.email ||
+        raw.user?.email,
+    ),
+    score: Number(raw.score || 0),
+    classOnly: normalizeClass(classOnly) || "-",
+    studentNumber: normalizeNumber(studentNumber) || "-",
+    details: Array.isArray(raw.details) ? raw.details : [],
+  };
+};
+
+const getStatusMeta = (status: StudentSummary["status"]) => {
+  if (status === "pending")
+    return {
+      label: "미응시",
+      className: "border-gray-200 bg-gray-50 text-gray-500",
+    };
+  if (status === "risk")
+    return {
+      label: "위험",
+      className: "border-red-200 bg-red-50 text-red-600",
+    };
+  if (status === "watch")
+    return {
+      label: "주의",
+      className: "border-amber-200 bg-amber-50 text-amber-700",
+    };
+  return {
+    label: "안정",
+    className: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  };
 };
 
 const QuizLogTab: React.FC = () => {
-    const LOGS_PER_PAGE = 30;
-    const { config } = useAuth();
-    const [logs, setLogs] = useState<Log[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [classFilter, setClassFilter] = useState('');
-    const [wrongNoteTarget, setWrongNoteTarget] = useState<{ uid: string; name: string } | null>(null);
-    const [currentPage, setCurrentPage] = useState(1);
+  const { config } = useAuth();
+  const [logs, setLogs] = useState<Log[]>([]);
+  const [students, setStudents] = useState<UserProfile[]>([]);
+  const [treeData, setTreeData] = useState<TreeUnit[]>([]);
+  const [questions, setQuestions] = useState<QuestionMeta[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [supportLoading, setSupportLoading] = useState(true);
+  const [lastSyncedAt, setLastSyncedAt] = useState(0);
+  const [loadError, setLoadError] = useState("");
+  const [rosterLimited, setRosterLimited] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [classFilter, setClassFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [bigFilter, setBigFilter] = useState("");
+  const [midFilter, setMidFilter] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("scoreAsc");
+  const [showPendingOnly, setShowPendingOnly] = useState(false);
+  const [studentSearch, setStudentSearch] = useState("");
+  const [studentPage, setStudentPage] = useState(1);
+  const [lowScoreModalOpen, setLowScoreModalOpen] = useState(false);
+  const [lowScorePage, setLowScorePage] = useState(1);
+  const [scoreBucketModalOpen, setScoreBucketModalOpen] = useState(false);
+  const [selectedScoreBucket, setSelectedScoreBucket] = useState<
+    (typeof SCORE_BUCKETS)[number] | null
+  >(null);
+  const [scoreBucketPage, setScoreBucketPage] = useState(1);
+  const [returnToLowScoreModal, setReturnToLowScoreModal] = useState(false);
+  const [returnToScoreBucketModal, setReturnToScoreBucketModal] =
+    useState(false);
+  const [wrongNoteTarget, setWrongNoteTarget] = useState<{
+    uid: string;
+    name: string;
+  } | null>(null);
+  const lowScoreModalRef = useRef<HTMLDivElement>(null);
+  const lowScoreCloseButtonRef = useRef<HTMLButtonElement>(null);
+  const scoreBucketCloseButtonRef = useRef<HTMLButtonElement>(null);
 
-    useEffect(() => {
-        fetchLogs();
-    }, [config]);
+  const unitMetaById = useMemo(() => buildUnitMetaMap(treeData), [treeData]);
 
-    const fetchLogs = async () => {
-        setLoading(true);
-        try {
-            const snap = await getDocs(query(
-                collection(db, getSemesterCollectionPath(config, 'quiz_results')),
-                orderBy('timestamp', 'desc'),
-                limit(100)
-            ));
+  const questionMetaById = useMemo(() => {
+    const map = new Map<string, QuestionMeta>();
+    questions.forEach((question) => {
+      if (question.docId) map.set(question.docId, question);
+      if (question.id) map.set(question.id, question);
+    });
+    return map;
+  }, [questions]);
 
-            const rawList: Log[] = [];
-            snap.forEach((doc) => {
-                const d = doc.data() as any;
+  const reload = () => {
+    setRefreshKey((prev) => prev + 1);
+  };
 
-                const gradeClassRaw = toText(
-                    d.gradeClass ||
-                    d.classInfo ||
-                    d.student?.gradeClass ||
-                    d.user?.gradeClass,
-                );
-                const classOnly = toText(
-                    d.class ||
-                    d.classOnly ||
-                    d.className ||
-                    d.studentClass ||
-                    d.student?.class ||
-                    d.user?.class ||
-                    (gradeClassRaw ? gradeClassRaw.split(' ')[1] : ''),
-                ) || '-';
-                const studentNumber = toText(
-                    d.number ||
-                    d.studentNumber ||
-                    d.studentNo ||
-                    d.no ||
-                    d.student?.number ||
-                    d.user?.number ||
-                    (gradeClassRaw ? gradeClassRaw.split(' ')[2]?.replace('번', '') : ''),
-                ) || '-';
-                const uid = toText(
-                    d.uid ||
-                    d.studentId ||
-                    d.userId ||
-                    d.student?.uid ||
-                    d.user?.uid,
-                );
-                const email = toText(
-                    d.email ||
-                    d.studentEmail ||
-                    d.userEmail ||
-                    d.student?.email ||
-                    d.user?.email,
-                );
-                const studentName = toText(
-                    d.name ||
-                    d.studentName ||
-                    d.userName ||
-                    d.student?.name ||
-                    d.user?.name,
-                ) || '학생';
+  useEffect(() => {
+    if (!lowScoreModalOpen) return;
 
-                rawList.push({
-                    id: doc.id,
-                    timestamp: d.timestamp,
-                    uid,
-                    unitId: toText(d.unitId),
-                    category: toText(d.category),
-                    gradeClass: gradeClassRaw,
-                    studentName,
-                    email,
-                    score: Number(d.score || 0),
-                    classOnly: String(classOnly),
-                    studentNumber: String(studentNumber),
-                });
-            });
+    lowScoreCloseButtonRef.current?.focus();
 
-            const userByUid = new Map<string, UserProfile>();
-            const uidCandidates = Array.from(new Set(rawList.map((item) => String(item.uid || '').trim()).filter(Boolean)));
-            const emailCandidates = Array.from(new Set(rawList.map((item) => String(item.email || '').trim()).filter(Boolean)));
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setLowScoreModalOpen(false);
+        return;
+      }
 
-            if (uidCandidates.length > 0) {
-                for (const chunk of chunkArray(uidCandidates, 10)) {
-                    const userSnap = await getDocs(query(collection(db, 'users'), where(documentId(), 'in', chunk)));
-                    userSnap.forEach((userDoc) => {
-                        const u = userDoc.data() as any;
-                        userByUid.set(userDoc.id, {
-                            name: String(u.name || '').trim(),
-                            class: normalizeClass(u.class),
-                            number: normalizeNumber(u.number),
-                            email: String(u.email || '').trim(),
-                        });
-                    });
-                }
-            }
+      if (event.key !== "Tab") return;
 
-            if (emailCandidates.length > 0) {
-                for (const chunk of chunkArray(emailCandidates, 10)) {
-                    const userSnap = await getDocs(query(collection(db, 'users'), where('email', 'in', chunk)));
-                    userSnap.forEach((userDoc) => {
-                        if (userByUid.has(userDoc.id)) return;
-                        const u = userDoc.data() as any;
-                        userByUid.set(userDoc.id, {
-                            name: String(u.name || '').trim(),
-                            class: normalizeClass(u.class),
-                            number: normalizeNumber(u.number),
-                            email: String(u.email || '').trim(),
-                        });
-                    });
-                }
-            }
+      const modal = lowScoreModalRef.current;
+      if (!modal) return;
 
-            const profileByEmail = new Map<string, UserProfile>();
-            userByUid.forEach((profile) => {
-                const email = String(profile.email || '').trim();
-                if (email && !profileByEmail.has(email)) profileByEmail.set(email, profile);
-            });
+      const focusable = Array.from(
+        modal.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((element) => !element.hasAttribute("disabled"));
 
-            const dedupedMap = new Map<string, Log>();
-            rawList.forEach((item) => {
-                const key = buildDedupKey(item);
-                const existing = dedupedMap.get(key);
-                if (!existing || getTimestampSeconds(item.timestamp) >= getTimestampSeconds(existing.timestamp)) {
-                    dedupedMap.set(key, item);
-                }
-            });
+      if (!focusable.length) return;
 
-            const list = Array.from(dedupedMap.values()).map((item) => {
-                const uidProfile = item.uid ? userByUid.get(item.uid) : undefined;
-                const emailProfile = item.email ? profileByEmail.get(item.email) : undefined;
-                const profile = uidProfile || emailProfile;
-                return {
-                    ...item,
-                    classOnly: normalizeClass(item.classOnly) || profile?.class || '-',
-                    studentNumber: normalizeNumber(item.studentNumber) || profile?.number || '-',
-                    studentName: item.studentName === '학생' ? (profile?.name || item.studentName) : item.studentName,
-                };
-            });
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
 
-            list.sort((a, b) => getTimestampSeconds(b.timestamp) - getTimestampSeconds(a.timestamp));
-            setLogs(list);
-            setCurrentPage(1);
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setLoading(false);
-        }
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
 
-    const filteredLogs = classFilter
-        ? logs.filter((l) => l.classOnly === classFilter || (l.gradeClass && l.gradeClass.includes(`${classFilter}반`)))
-        : logs;
-    const totalPages = Math.max(1, Math.ceil(filteredLogs.length / LOGS_PER_PAGE));
-    const pagedLogs = filteredLogs.slice((currentPage - 1) * LOGS_PER_PAGE, currentPage * LOGS_PER_PAGE);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [lowScoreModalOpen]);
 
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [classFilter, logs.length]);
+  useEffect(() => {
+    let active = true;
 
-    useEffect(() => {
-        if (currentPage > totalPages) {
-            setCurrentPage(totalPages);
+    const loadSupportData = async () => {
+      setSupportLoading(true);
+      try {
+        const [treeResult, questionSnap, userSnap] = await Promise.allSettled([
+          (async () => {
+            const scoped = await getDoc(
+              doc(db, getSemesterDocPath(config, "curriculum", "tree")),
+            );
+            if (scoped.exists())
+              return (scoped.data().tree || []) as TreeUnit[];
+            const legacy = await getDoc(doc(db, "curriculum", "tree"));
+            return legacy.exists()
+              ? ((legacy.data().tree || []) as TreeUnit[])
+              : [];
+          })(),
+          getDocs(
+            collection(db, getSemesterCollectionPath(config, "quiz_questions")),
+          ),
+          getDocs(collection(db, "users")),
+        ]);
+
+        if (!active) return;
+
+        if (treeResult.status === "fulfilled") {
+          setTreeData(treeResult.value);
+        } else {
+          console.error(treeResult.reason);
+          setTreeData([]);
         }
-    }, [currentPage, totalPages]);
 
-    return (
-        <div className="h-full overflow-y-auto bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold text-gray-800">제출 현황 <span className="text-sm font-normal text-gray-500">({filteredLogs.length}건)</span></h2>
-                <div className="flex gap-2">
-                    <select
-                        value={classFilter}
-                        onChange={(e) => {
-                            setClassFilter(e.target.value);
-                            setCurrentPage(1);
-                        }}
-                        className="border rounded px-3 py-2 text-sm font-bold"
-                    >
-                        <option value="">전체 (최대 100건)</option>
-                        {[...Array(12)].map((_, i) => <option key={i + 1} value={String(i + 1)}>{i + 1}반</option>)}
-                    </select>
-                    <button onClick={fetchLogs} className="bg-gray-100 p-2 rounded hover:bg-gray-200 transition">
-                        <i className="fas fa-sync-alt"></i>
-                    </button>
+        if (questionSnap.status === "fulfilled") {
+          setQuestions(
+            questionSnap.value.docs.map((item) => {
+              const data = item.data() as any;
+              return {
+                docId: item.id,
+                id: toText(data.id || item.id),
+                unitId: toText(data.unitId),
+                subUnitId: toText(data.subUnitId),
+                refBig: toText(data.refBig),
+                refMid: toText(data.refMid),
+                refSmall: toText(data.refSmall),
+              };
+            }),
+          );
+        } else {
+          console.error(questionSnap.reason);
+          setQuestions([]);
+        }
+
+        if (userSnap.status === "fulfilled") {
+          setRosterLimited(false);
+          setStudents(
+            userSnap.value.docs
+              .map((item) => {
+                const data = item.data() as any;
+                return {
+                  uid: item.id,
+                  name: toText(data.name) || "학생",
+                  class: normalizeClass(data.class),
+                  number: normalizeNumber(data.number),
+                  email: toText(data.email),
+                  role: toText(data.role),
+                };
+              })
+              .filter((student) => student.role !== "teacher" && student.class),
+          );
+        } else {
+          console.error(userSnap.reason);
+          setRosterLimited(true);
+          setStudents([]);
+        }
+      } finally {
+        if (active) setSupportLoading(false);
+      }
+    };
+
+    void loadSupportData();
+
+    return () => {
+      active = false;
+    };
+  }, [config]);
+
+  useEffect(() => {
+    setLoading(true);
+    setLoadError("");
+
+    const unsubscribe = onSnapshot(
+      query(
+        collection(db, getSemesterCollectionPath(config, "quiz_results")),
+        orderBy("timestamp", "desc"),
+        limit(RESULT_LIMIT),
+      ),
+      (snap) => {
+        const dedupedMap = new Map<string, Log>();
+        snap.docs.forEach((item) => {
+          const log = parseLogDoc(item.id, item.data());
+          const key = buildDedupKey(log);
+          const existing = dedupedMap.get(key);
+          if (
+            !existing ||
+            getTimestampMs(log.timestamp) >= getTimestampMs(existing.timestamp)
+          ) {
+            dedupedMap.set(key, log);
+          }
+        });
+        const list = Array.from(dedupedMap.values());
+        list.sort(
+          (a, b) => getTimestampMs(b.timestamp) - getTimestampMs(a.timestamp),
+        );
+        setLogs(list);
+        setLastSyncedAt(Date.now());
+        setLoading(false);
+      },
+      (error) => {
+        console.error(error);
+        setLoadError("응시 데이터를 불러오지 못했습니다.");
+        setLoading(false);
+      },
+    );
+
+    return () => unsubscribe();
+  }, [config, refreshKey]);
+
+  const bigOptions = treeData;
+  const midOptions = useMemo(() => {
+    if (!bigFilter) return treeData.flatMap((big) => big.children || []);
+    return treeData.find((big) => big.id === bigFilter)?.children || [];
+  }, [bigFilter, treeData]);
+
+  const getLogUnitMetas = (log: Log) => {
+    const metas: UnitMeta[] = [];
+    const direct = log.unitId ? unitMetaById.get(log.unitId) : undefined;
+    if (direct) metas.push(direct);
+
+    log.details.forEach((detail) => {
+      const question = questionMetaById.get(toText(detail.id));
+      const ids = [
+        question?.refSmall,
+        question?.subUnitId,
+        question?.refMid,
+        question?.unitId,
+        question?.refBig,
+      ].filter(Boolean) as string[];
+      const meta = ids.map((id) => unitMetaById.get(id)).find(Boolean);
+      if (meta) metas.push(meta);
+    });
+
+    return metas;
+  };
+
+  const findUnitMeta = (ids: Array<string | undefined>) =>
+    ids
+      .map((id) => (id ? unitMetaById.get(id) : undefined))
+      .find((meta): meta is UnitMeta => Boolean(meta));
+
+  const profileMap = useMemo(() => {
+    const map = new Map<string, UserProfile>();
+    students.forEach((student) => {
+      map.set(buildStudentKey({ uid: student.uid }), student);
+      if (student.email)
+        map.set(buildStudentKey({ email: student.email }), student);
+    });
+    return map;
+  }, [students]);
+
+  const canonicalLogs = useMemo(
+    () =>
+      logs.map((log) => {
+        const profile =
+          (log.uid
+            ? profileMap.get(buildStudentKey({ uid: log.uid }))
+            : undefined) ||
+          (log.email
+            ? profileMap.get(buildStudentKey({ email: log.email }))
+            : undefined);
+        if (!profile) return log;
+        return {
+          ...log,
+          uid: log.uid || profile.uid,
+          email: log.email || profile.email,
+          studentName: profile.name || log.studentName,
+          classOnly: profile.class || log.classOnly,
+          studentNumber: profile.number || log.studentNumber,
+        };
+      }),
+    [logs, profileMap],
+  );
+
+  const analysisLogs = useMemo(() => {
+    return canonicalLogs.filter((log) => {
+      if (categoryFilter && log.category !== categoryFilter) return false;
+
+      if (bigFilter || midFilter) {
+        const metas = getLogUnitMetas(log);
+        if (!metas.length) return false;
+        if (
+          bigFilter &&
+          !metas.some(
+            (meta) => meta.bigId === bigFilter || meta.id === bigFilter,
+          )
+        )
+          return false;
+        if (
+          midFilter &&
+          !metas.some(
+            (meta) => meta.midId === midFilter || meta.id === midFilter,
+          )
+        )
+          return false;
+      }
+
+      return true;
+    });
+  }, [
+    bigFilter,
+    canonicalLogs,
+    categoryFilter,
+    midFilter,
+    questionMetaById,
+    unitMetaById,
+  ]);
+
+  const filteredLogs = useMemo(
+    () =>
+      classFilter
+        ? analysisLogs.filter((log) => log.classOnly === classFilter)
+        : analysisLogs,
+    [analysisLogs, classFilter],
+  );
+
+  const allStudentProfiles = useMemo(() => {
+    const map = new Map<string, UserProfile>();
+
+    students.forEach((student) => {
+      map.set(buildStudentKey({ uid: student.uid }), student);
+    });
+
+    canonicalLogs.forEach((log) => {
+      const uidProfile = log.uid
+        ? profileMap.get(buildStudentKey({ uid: log.uid }))
+        : undefined;
+      const emailProfile = log.email
+        ? profileMap.get(buildStudentKey({ email: log.email }))
+        : undefined;
+      const profile = uidProfile || emailProfile;
+      const key = buildStudentKey({
+        uid: log.uid || profile?.uid,
+        email: log.email || profile?.email,
+        classOnly: log.classOnly,
+        number: log.studentNumber,
+        name: log.studentName,
+      });
+
+      if (!map.has(key)) {
+        map.set(key, {
+          uid: log.uid || profile?.uid || "",
+          name: profile?.name || log.studentName,
+          class: profile?.class || log.classOnly,
+          number: profile?.number || log.studentNumber,
+          email: profile?.email || log.email || "",
+          role: "student",
+        });
+      }
+    });
+
+    return Array.from(map.values()).filter((student) => student.class);
+  }, [canonicalLogs, profileMap, students]);
+
+  const classOptions = useMemo(() => {
+    const classes = new Set<string>();
+    allStudentProfiles.forEach((student) => {
+      if (student.class) classes.add(student.class);
+    });
+    canonicalLogs.forEach((log) => {
+      if (log.classOnly && log.classOnly !== "-") classes.add(log.classOnly);
+    });
+    return Array.from(classes).sort(
+      (a, b) => Number(a) - Number(b) || a.localeCompare(b),
+    );
+  }, [allStudentProfiles, canonicalLogs]);
+
+  const buildStudentSummaries = (sourceLogs: Log[], selectedClass: string) => {
+    const targetProfiles = selectedClass
+      ? allStudentProfiles.filter((student) => student.class === selectedClass)
+      : [];
+    const byStudent = new Map<string, StudentSummary>();
+
+    targetProfiles.forEach((student) => {
+      const key = buildStudentKey({
+        uid: student.uid,
+        email: student.email,
+        classOnly: student.class,
+        number: student.number,
+        name: student.name,
+      });
+      byStudent.set(key, {
+        key,
+        uid: student.uid,
+        name: student.name || "학생",
+        email: student.email,
+        classOnly: student.class,
+        number: student.number,
+        logs: [],
+        latestScore: null,
+        averageScore: null,
+        attemptCount: 0,
+        weakUnits: [],
+        status: "pending",
+      });
+    });
+
+    sourceLogs.forEach((log) => {
+      if (selectedClass && log.classOnly !== selectedClass) return;
+      const profile =
+        (log.uid
+          ? profileMap.get(buildStudentKey({ uid: log.uid }))
+          : undefined) ||
+        (log.email
+          ? profileMap.get(buildStudentKey({ email: log.email }))
+          : undefined);
+      const key = buildStudentKey({
+        uid: log.uid || profile?.uid,
+        email: log.email || profile?.email,
+        classOnly: log.classOnly,
+        number: log.studentNumber,
+        name: log.studentName,
+      });
+      const existing = byStudent.get(key);
+      const summary =
+        existing ||
+        ({
+          key,
+          uid: log.uid || profile?.uid || "",
+          name: profile?.name || log.studentName,
+          email: profile?.email || log.email || "",
+          classOnly: profile?.class || log.classOnly,
+          number: profile?.number || log.studentNumber,
+          logs: [],
+          latestScore: null,
+          averageScore: null,
+          attemptCount: 0,
+          weakUnits: [],
+          status: "pending",
+        } as StudentSummary);
+      summary.logs.push(log);
+      byStudent.set(key, summary);
+    });
+
+    return Array.from(byStudent.values()).map((summary) => {
+      const sortedLogs = [...summary.logs].sort(
+        (a, b) => getTimestampMs(b.timestamp) - getTimestampMs(a.timestamp),
+      );
+      const scores = sortedLogs.map((log) => log.score);
+      const wrongUnits = new Map<string, { label: string; count: number }>();
+
+      sortedLogs.forEach((log) => {
+        log.details.forEach((detail) => {
+          if (detail.correct) return;
+          const question = questionMetaById.get(toText(detail.id));
+          const meta = findUnitMeta([
+            question?.refSmall,
+            question?.subUnitId,
+            question?.refMid,
+            question?.unitId,
+            log.unitId,
+          ]);
+          const id =
+            meta?.smallId || meta?.midId || meta?.id || log.unitId || "unknown";
+          const label =
+            meta?.smallTitle ||
+            meta?.midTitle ||
+            meta?.title ||
+            log.unitId ||
+            "단원 미지정";
+          const existing = wrongUnits.get(id) || { label, count: 0 };
+          wrongUnits.set(id, { ...existing, count: existing.count + 1 });
+        });
+      });
+
+      const latestScore = scores.length ? scores[0] : null;
+      const averageScore = average(scores);
+      const status: StudentSummary["status"] =
+        latestScore === null
+          ? "pending"
+          : latestScore < 40 || (averageScore !== null && averageScore < 60)
+            ? "risk"
+            : latestScore < 70 || (averageScore !== null && averageScore < 75)
+              ? "watch"
+              : "stable";
+
+      return {
+        ...summary,
+        logs: sortedLogs,
+        latestLog: sortedLogs[0],
+        latestScore,
+        averageScore,
+        attemptCount: sortedLogs.length,
+        weakUnits: Array.from(wrongUnits.values())
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 2)
+          .map((unit) => unit.label),
+        status,
+      };
+    });
+  };
+
+  const reportStudentSummaries = useMemo(
+    () => buildStudentSummaries(filteredLogs, classFilter),
+    [
+      allStudentProfiles,
+      classFilter,
+      filteredLogs,
+      profileMap,
+      questionMetaById,
+      unitMetaById,
+    ],
+  );
+
+  const selectedStudentSummaries = useMemo(
+    () => (classFilter ? reportStudentSummaries : []),
+    [classFilter, reportStudentSummaries],
+  );
+
+  const attemptedSummaries = reportStudentSummaries.filter(
+    (student) => student.attemptCount > 0,
+  );
+  const latestScores = attemptedSummaries
+    .map((student) => student.latestScore)
+    .filter((score): score is number => score !== null);
+  const averageScore = average(latestScores);
+  const medianScore = median(latestScores);
+  const below50Students = attemptedSummaries
+    .filter((student) => (student.latestScore ?? 100) < 50)
+    .sort((a, b) => (a.latestScore ?? 101) - (b.latestScore ?? 101));
+  const pendingCount = reportStudentSummaries.filter(
+    (student) => student.attemptCount === 0,
+  ).length;
+
+  const classSummaries = useMemo(() => {
+    return classOptions.map((classOnly) => {
+      const summaries = buildStudentSummaries(
+        analysisLogs.filter((log) => log.classOnly === classOnly),
+        classOnly,
+      );
+      const scores = summaries
+        .map((summary) => summary.latestScore)
+        .filter((score): score is number => score !== null);
+      return {
+        classOnly,
+        average: average(scores),
+        attempted: summaries.filter((summary) => summary.attemptCount > 0)
+          .length,
+        total: summaries.length,
+      };
+    });
+  }, [
+    analysisLogs,
+    classOptions,
+    allStudentProfiles,
+    profileMap,
+    questionMetaById,
+    unitMetaById,
+  ]);
+
+  const scoreDistribution = SCORE_BUCKETS.map((bucket) => ({
+    ...bucket,
+    count: latestScores.filter(
+      (score) => score >= bucket.min && score <= bucket.max,
+    ).length,
+  }));
+  const maxBucketCount = Math.max(
+    1,
+    ...scoreDistribution.map((bucket) => bucket.count),
+  );
+  const scoreBucketStudents = selectedScoreBucket
+    ? attemptedSummaries
+        .filter(
+          (student) =>
+            student.latestScore !== null &&
+            student.latestScore >= selectedScoreBucket.min &&
+            student.latestScore <= selectedScoreBucket.max,
+        )
+        .sort((a, b) => (a.latestScore ?? 101) - (b.latestScore ?? 101))
+    : [];
+
+  const weakUnits = useMemo(() => {
+    const unitStats = new Map<
+      string,
+      { label: string; attempts: number; correct: number }
+    >();
+
+    filteredLogs.forEach((log) => {
+      log.details.forEach((detail) => {
+        const question = questionMetaById.get(toText(detail.id));
+        const meta = findUnitMeta([
+          question?.refSmall,
+          question?.subUnitId,
+          question?.refMid,
+          question?.unitId,
+          log.unitId,
+        ]);
+        const id =
+          meta?.smallId || meta?.midId || meta?.id || log.unitId || "unknown";
+        const label =
+          meta?.smallTitle ||
+          meta?.midTitle ||
+          meta?.title ||
+          log.unitId ||
+          "단원 미지정";
+        const existing = unitStats.get(id) || {
+          label,
+          attempts: 0,
+          correct: 0,
+        };
+        existing.attempts += 1;
+        if (detail.correct) existing.correct += 1;
+        unitStats.set(id, existing);
+      });
+    });
+
+    return Array.from(unitStats.values())
+      .filter((unit) => unit.attempts > 0)
+      .map((unit) => ({
+        ...unit,
+        rate: Math.round((unit.correct / unit.attempts) * 100),
+      }))
+      .sort((a, b) => a.rate - b.rate || b.attempts - a.attempts)
+      .slice(0, 5);
+  }, [filteredLogs, questionMetaById, unitMetaById]);
+
+  const displayedStudents = useMemo(() => {
+    const keyword = studentSearch.trim().toLowerCase();
+    let list = selectedStudentSummaries;
+
+    if (showPendingOnly)
+      list = list.filter((student) => student.attemptCount === 0);
+    if (keyword) {
+      list = list.filter((student) =>
+        [student.name, student.number, student.email, student.classOnly].some(
+          (value) =>
+            String(value || "")
+              .toLowerCase()
+              .includes(keyword),
+        ),
+      );
+    }
+
+    return [...list].sort((a, b) => {
+      if (sortKey === "scoreAsc")
+        return (a.latestScore ?? 101) - (b.latestScore ?? 101);
+      if (sortKey === "scoreDesc")
+        return (b.latestScore ?? -1) - (a.latestScore ?? -1);
+      if (sortKey === "averageAsc")
+        return (a.averageScore ?? 101) - (b.averageScore ?? 101);
+      if (sortKey === "attemptDesc") return b.attemptCount - a.attemptCount;
+      return a.name.localeCompare(b.name, "ko-KR");
+    });
+  }, [selectedStudentSummaries, showPendingOnly, sortKey, studentSearch]);
+
+  const studentTotalPages = Math.max(
+    1,
+    Math.ceil(displayedStudents.length / STUDENTS_PER_PAGE),
+  );
+  const pagedDisplayedStudents = displayedStudents.slice(
+    (studentPage - 1) * STUDENTS_PER_PAGE,
+    studentPage * STUDENTS_PER_PAGE,
+  );
+  const lowScoreTotalPages = Math.max(
+    1,
+    Math.ceil(below50Students.length / STUDENTS_PER_PAGE),
+  );
+  const pagedBelow50Students = below50Students.slice(
+    (lowScorePage - 1) * STUDENTS_PER_PAGE,
+    lowScorePage * STUDENTS_PER_PAGE,
+  );
+  const scoreBucketTotalPages = Math.max(
+    1,
+    Math.ceil(scoreBucketStudents.length / STUDENTS_PER_PAGE),
+  );
+  const pagedScoreBucketStudents = scoreBucketStudents.slice(
+    (scoreBucketPage - 1) * STUDENTS_PER_PAGE,
+    scoreBucketPage * STUDENTS_PER_PAGE,
+  );
+
+  useEffect(() => {
+    setStudentPage(1);
+  }, [
+    bigFilter,
+    categoryFilter,
+    classFilter,
+    midFilter,
+    showPendingOnly,
+    sortKey,
+    studentSearch,
+  ]);
+
+  useEffect(() => {
+    setLowScorePage(1);
+  }, [bigFilter, categoryFilter, classFilter, lowScoreModalOpen, midFilter]);
+
+  useEffect(() => {
+    setScoreBucketPage(1);
+  }, [
+    bigFilter,
+    categoryFilter,
+    classFilter,
+    midFilter,
+    scoreBucketModalOpen,
+    selectedScoreBucket,
+  ]);
+
+  useEffect(() => {
+    if (studentPage > studentTotalPages) {
+      setStudentPage(studentTotalPages);
+    }
+  }, [studentPage, studentTotalPages]);
+
+  useEffect(() => {
+    if (lowScorePage > lowScoreTotalPages) {
+      setLowScorePage(lowScoreTotalPages);
+    }
+  }, [lowScorePage, lowScoreTotalPages]);
+
+  useEffect(() => {
+    if (scoreBucketPage > scoreBucketTotalPages) {
+      setScoreBucketPage(scoreBucketTotalPages);
+    }
+  }, [scoreBucketPage, scoreBucketTotalPages]);
+
+  useEffect(() => {
+    if (!scoreBucketModalOpen) return;
+    scoreBucketCloseButtonRef.current?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setScoreBucketModalOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [scoreBucketModalOpen]);
+
+  useEffect(() => {
+    if (bigFilter && !bigOptions.some((big) => big.id === bigFilter)) {
+      setBigFilter("");
+      setMidFilter("");
+      return;
+    }
+    if (midFilter && !midOptions.some((mid) => mid.id === midFilter)) {
+      setMidFilter("");
+    }
+  }, [bigFilter, bigOptions, midFilter, midOptions]);
+
+  return (
+    <div className="h-full overflow-y-auto bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6">
+      <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div>
+          <h2 className="text-2xl font-extrabold text-gray-900">응시 현황</h2>
+          <p className="mt-1 text-sm text-gray-500">
+            반별 점수 흐름과 취약 단원을 현재 학기 최근 {RESULT_LIMIT}건
+            기준으로 분석합니다.
+          </p>
+        </div>
+
+        <div className="w-full space-y-2 xl:max-w-[620px]">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:justify-end xl:grid-cols-[minmax(0,250px)_minmax(0,250px)]">
+            <select
+              value={bigFilter}
+              onChange={(event) => {
+                setBigFilter(event.target.value);
+                setMidFilter("");
+              }}
+              className="min-w-0 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-700"
+              aria-label="대단원 필터"
+            >
+              <option value="">대단원 전체</option>
+              {bigOptions.map((big) => (
+                <option key={big.id} value={big.id}>
+                  {big.title}
+                </option>
+              ))}
+            </select>
+            <select
+              value={midFilter}
+              onChange={(event) => setMidFilter(event.target.value)}
+              className="min-w-0 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-700"
+              aria-label="중단원 필터"
+            >
+              <option value="">중단원 전체</option>
+              {midOptions.map((mid) => (
+                <option key={mid.id} value={mid.id}>
+                  {mid.title}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[150px_190px_auto] sm:justify-end">
+            <select
+              value={classFilter}
+              onChange={(event) => setClassFilter(event.target.value)}
+              className="min-w-0 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-700"
+              aria-label="반 필터"
+            >
+              <option value="">반 전체</option>
+              {classOptions.map((classOnly) => (
+                <option key={classOnly} value={classOnly}>
+                  {classOnly}반
+                </option>
+              ))}
+            </select>
+            <select
+              value={categoryFilter}
+              onChange={(event) => setCategoryFilter(event.target.value)}
+              className="min-w-0 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-700"
+              aria-label="평가유형 필터"
+            >
+              <option value="">평가유형 전체</option>
+              <option value="diagnostic">진단</option>
+              <option value="formative">형성</option>
+              <option value="exam_prep">시험 대비</option>
+            </select>
+            <button
+              type="button"
+              onClick={reload}
+              className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
+            >
+              <i className="fas fa-sync-alt text-xs" aria-hidden="true"></i>
+              새로고침
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {loadError && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-600">
+          {loadError}
+        </div>
+      )}
+      {rosterLimited && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
+          학생 명단 권한이 없어 미응시 수와 현재 반 정보는 제출 기록 기준으로
+          제한됩니다.
+        </div>
+      )}
+
+      <section className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
+        <div className="mb-4 flex items-center gap-2">
+          <h3 className="text-sm font-extrabold text-gray-800">
+            오늘의 학급 수준
+          </h3>
+          {(loading || supportLoading) && (
+            <span className="text-xs font-bold text-blue-600">
+              동기화 중...
+            </span>
+          )}
+        </div>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
+          {[
+            {
+              label: "응시",
+              value: `${attemptedSummaries.length}명`,
+              icon: "fa-users",
+              tone: "text-blue-500",
+            },
+            {
+              label: "평균",
+              value: `${roundOne(averageScore)}점`,
+              icon: "fa-chart-simple",
+              tone: "text-emerald-500",
+            },
+            {
+              label: "중앙값",
+              value: `${roundOne(medianScore)}점`,
+              icon: "fa-chart-line",
+              tone: "text-violet-500",
+            },
+            {
+              label: "50점 미만",
+              value: `${below50Students.length}명`,
+              icon: "fa-circle-exclamation",
+              tone: "text-red-500",
+              onClick: () => setLowScoreModalOpen(true),
+            },
+            {
+              label: "미응시",
+              value: rosterLimited || !classFilter ? "-" : `${pendingCount}명`,
+              icon: "fa-user-clock",
+              tone: "text-gray-400",
+            },
+            {
+              label: "마지막 동기화",
+              value: formatTime(lastSyncedAt),
+              icon: "fa-clock",
+              tone: "text-blue-500",
+            },
+          ].map((item) => {
+            const handleClick = "onClick" in item ? item.onClick : undefined;
+
+            return (
+              <button
+                key={item.label}
+                type="button"
+                onClick={handleClick}
+                disabled={!handleClick}
+                className={`rounded-lg border border-gray-200 bg-white px-4 py-4 text-left transition ${
+                  handleClick
+                    ? "hover:-translate-y-0.5 hover:border-red-200 hover:bg-red-50/40 hover:shadow-sm"
+                    : "cursor-default"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <i
+                    className={`fas ${item.icon} text-3xl ${item.tone}`}
+                    aria-hidden="true"
+                  ></i>
+                  <div>
+                    <div className="text-xs font-bold text-gray-500">
+                      {item.label}
+                    </div>
+                    <div className="mt-1 text-2xl font-extrabold text-gray-900">
+                      {item.value}
+                    </div>
+                  </div>
                 </div>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <div className="mb-4 grid gap-4 xl:grid-cols-3">
+        <section className="rounded-xl border border-gray-200 bg-white p-4">
+          <div className="mb-4 flex items-center gap-2 text-sm font-extrabold text-gray-800">
+            <i className="fas fa-users text-blue-500" aria-hidden="true"></i>
+            반별 비교
+          </div>
+          <div className="space-y-3">
+            {classSummaries.length === 0 && (
+              <div className="py-8 text-center text-sm text-gray-400">
+                반 데이터가 없습니다.
+              </div>
+            )}
+            {classSummaries.map((item) => {
+              const value = item.average ?? 0;
+              const selected = classFilter === item.classOnly;
+              return (
+                <button
+                  key={item.classOnly}
+                  type="button"
+                  onClick={() => setClassFilter(selected ? "" : item.classOnly)}
+                  className={`grid w-full grid-cols-[44px_1fr_48px] items-center gap-3 rounded-md px-2 py-1.5 text-left transition ${
+                    selected ? "bg-blue-50" : "hover:bg-gray-50"
+                  }`}
+                >
+                  <span className="text-sm font-bold text-gray-700">
+                    {item.classOnly}반
+                  </span>
+                  <span className="h-2.5 overflow-hidden rounded-full bg-gray-100">
+                    <span
+                      className="block h-full rounded-full bg-blue-500"
+                      style={{ width: `${Math.min(100, value)}%` }}
+                    ></span>
+                  </span>
+                  <span className="text-right text-sm font-bold text-gray-700">
+                    {item.average === null ? "-" : Math.round(item.average)}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-4 text-xs font-bold text-gray-500">
+            선택 반: {classFilter ? `${classFilter}반` : "전체"}
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-gray-200 bg-white p-4">
+          <div className="mb-4 flex items-center gap-2 text-sm font-extrabold text-gray-800">
+            <i
+              className="fas fa-chart-column text-blue-500"
+              aria-hidden="true"
+            ></i>
+            점수 분포
+          </div>
+          <div className="space-y-4">
+            {scoreDistribution.map((bucket) => (
+              <button
+                key={bucket.label}
+                type="button"
+                onClick={() => {
+                  setSelectedScoreBucket(bucket);
+                  setScoreBucketModalOpen(true);
+                }}
+                disabled={bucket.count === 0}
+                className={`grid w-full grid-cols-[56px_1fr_52px] items-center gap-3 rounded-md px-2 py-1.5 text-left transition ${
+                  bucket.count === 0
+                    ? "cursor-default"
+                    : "hover:-translate-y-0.5 hover:bg-blue-50 hover:shadow-sm"
+                }`}
+                aria-label={`${bucket.label}점 구간 학생 ${bucket.count}명 보기`}
+              >
+                <span className="text-sm font-bold text-gray-600">
+                  {bucket.label}
+                </span>
+                <span className="h-3 overflow-hidden rounded-full bg-gray-100">
+                  <span
+                    className="block h-full rounded-full bg-blue-500"
+                    style={{
+                      width: `${Math.max(4, (bucket.count / maxBucketCount) * 100)}%`,
+                    }}
+                  ></span>
+                </span>
+                <span className="text-right text-sm font-bold text-gray-700">
+                  {bucket.count}명
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-gray-200 bg-white p-4">
+          <div className="mb-4 flex items-center gap-2 text-sm font-extrabold text-gray-800">
+            <i className="fas fa-star text-blue-500" aria-hidden="true"></i>
+            부족 단원 TOP 5{" "}
+            <span className="text-xs font-bold text-gray-400">(정답률)</span>
+          </div>
+          <div className="space-y-3">
+            {weakUnits.length === 0 && (
+              <div className="py-8 text-center text-sm text-gray-400">
+                분석할 오답 데이터가 없습니다.
+              </div>
+            )}
+            {weakUnits.map((unit, index) => (
+              <div
+                key={`${unit.label}-${index}`}
+                className="grid grid-cols-[28px_1fr_56px] items-center gap-3"
+              >
+                <span className="text-sm font-extrabold text-gray-600">
+                  {index + 1}
+                </span>
+                <span
+                  className="truncate text-sm font-bold text-gray-700"
+                  title={unit.label}
+                >
+                  {unit.label}
+                </span>
+                <span className="text-right text-sm font-extrabold text-gray-800">
+                  {unit.rate}%
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      <section className="rounded-xl border border-gray-200 bg-white p-4">
+        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <h3 className="text-lg font-extrabold text-gray-900">
+            선택 학급 상세 · {classFilter ? `${classFilter}반` : "반 선택 필요"}
+          </h3>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <select
+              value={sortKey}
+              onChange={(event) => setSortKey(event.target.value as SortKey)}
+              className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-700"
+              aria-label="학생 정렬"
+            >
+              <option value="scoreAsc">점수 낮은순</option>
+              <option value="scoreDesc">점수 높은순</option>
+              <option value="averageAsc">평균 낮은순</option>
+              <option value="attemptDesc">응시 많은순</option>
+              <option value="nameAsc">이름순</option>
+            </select>
+            <button
+              type="button"
+              onClick={() => setShowPendingOnly((prev) => !prev)}
+              className={`rounded-lg border px-3 py-2 text-sm font-bold transition ${
+                showPendingOnly
+                  ? "border-blue-300 bg-blue-50 text-blue-700"
+                  : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              미응시만
+            </button>
+            <div className="relative">
+              <input
+                value={studentSearch}
+                onChange={(event) => setStudentSearch(event.target.value)}
+                placeholder="학생 검색"
+                className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-3 pr-9 text-sm font-medium outline-none transition focus:border-blue-400 sm:w-64"
+              />
+              <i
+                className="fas fa-search absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400"
+                aria-hidden="true"
+              ></i>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-3 md:hidden">
+          {displayedStudents.length === 0 && (
+            <div className="rounded-lg border border-gray-100 px-4 py-10 text-center text-sm text-gray-400">
+              {classFilter
+                ? "조건에 맞는 학생 데이터가 없습니다."
+                : "상세 명단은 반을 선택하면 표시됩니다."}
+            </div>
+          )}
+          {pagedDisplayedStudents.map((student) => {
+            const status = getStatusMeta(student.status);
+            return (
+              <div
+                key={`mobile-${student.key}`}
+                className="rounded-lg border border-gray-200 bg-white p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold text-gray-400">
+                      {student.classOnly ? `${student.classOnly}반` : "-"} ·{" "}
+                      {student.number && student.number !== "-"
+                        ? `${student.number}번`
+                        : "-"}
+                    </div>
+                    <div className="mt-1 truncate text-base font-extrabold text-gray-900">
+                      {student.name}
+                    </div>
+                  </div>
+                  <span
+                    className={`shrink-0 rounded-md border px-2 py-1 text-xs font-extrabold ${status.className}`}
+                  >
+                    {status.label}
+                  </span>
+                </div>
+                <div className="mt-4 grid grid-cols-3 gap-2 text-sm">
+                  <div>
+                    <div className="text-xs font-bold text-gray-400">최근</div>
+                    <div className="font-extrabold text-gray-800">
+                      {student.latestScore === null ? "-" : student.latestScore}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-gray-400">평균</div>
+                    <div className="font-extrabold text-gray-800">
+                      {roundOne(student.averageScore)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-gray-400">응시</div>
+                    <div className="font-extrabold text-gray-800">
+                      {student.attemptCount ? `${student.attemptCount}회` : "-"}
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-3 text-sm font-medium text-gray-700">
+                  취약 단원:{" "}
+                  {student.weakUnits.length
+                    ? student.weakUnits.join(", ")
+                    : "-"}
+                </div>
+                <div className="mt-3">
+                  {student.uid ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setWrongNoteTarget({
+                          uid: student.uid,
+                          name: student.name,
+                        })
+                      }
+                      className="inline-flex items-center gap-2 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-extrabold text-gray-700 transition hover:border-blue-300 hover:text-blue-600"
+                    >
+                      오답노트 열기
+                      <i
+                        className="fas fa-arrow-up-right-from-square text-[10px]"
+                        aria-hidden="true"
+                      ></i>
+                    </button>
+                  ) : (
+                    <span className="text-xs font-bold text-gray-400">
+                      오답노트 연결 없음
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[880px] text-left text-sm">
+            <thead className="border-y border-gray-100 bg-gray-50 text-xs font-extrabold text-gray-500">
+              <tr>
+                <th className="px-4 py-3">번호</th>
+                <th className="px-4 py-3">학생</th>
+                <th className="px-4 py-3">최근점수</th>
+                <th className="px-4 py-3">평균</th>
+                <th className="px-4 py-3">응시</th>
+                <th className="px-4 py-3">취약 단원</th>
+                <th className="px-4 py-3">상태</th>
+                <th className="px-4 py-3">오답노트</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {displayedStudents.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={8}
+                    className="px-4 py-10 text-center text-gray-400"
+                  >
+                    {classFilter
+                      ? "조건에 맞는 학생 데이터가 없습니다."
+                      : "상세 명단은 반을 선택하면 표시됩니다."}
+                  </td>
+                </tr>
+              )}
+              {pagedDisplayedStudents.map((student) => {
+                const status = getStatusMeta(student.status);
+                return (
+                  <tr key={student.key} className="transition hover:bg-gray-50">
+                    <td className="px-4 py-3 font-bold text-gray-600">
+                      {student.number && student.number !== "-"
+                        ? student.number.padStart(2, "0")
+                        : "-"}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="font-extrabold text-gray-800">
+                        {student.name}
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        {student.classOnly ? `${student.classOnly}반` : "-"}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 font-bold text-gray-800">
+                      {student.latestScore === null ? "-" : student.latestScore}
+                    </td>
+                    <td className="px-4 py-3 font-bold text-gray-700">
+                      {roundOne(student.averageScore)}
+                    </td>
+                    <td className="px-4 py-3 font-bold text-gray-700">
+                      {student.attemptCount ? `${student.attemptCount}회` : "-"}
+                    </td>
+                    <td className="max-w-[260px] px-4 py-3 font-medium text-gray-700">
+                      {student.weakUnits.length
+                        ? student.weakUnits.join(", ")
+                        : "-"}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`inline-flex rounded-md border px-2 py-1 text-xs font-extrabold ${status.className}`}
+                      >
+                        {status.label}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {student.uid ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setWrongNoteTarget({
+                              uid: student.uid,
+                              name: student.name,
+                            })
+                          }
+                          className="inline-flex items-center gap-2 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-extrabold text-gray-700 transition hover:border-blue-300 hover:text-blue-600"
+                        >
+                          열기
+                          <i
+                            className="fas fa-arrow-up-right-from-square text-[10px]"
+                            aria-hidden="true"
+                          ></i>
+                        </button>
+                      ) : (
+                        <span className="text-xs font-bold text-gray-400">
+                          연결 없음
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {studentTotalPages > 1 && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4 text-sm font-bold text-gray-600">
+            <span>
+              {displayedStudents.length}명 중{" "}
+              {(studentPage - 1) * STUDENTS_PER_PAGE + 1}-
+              {Math.min(
+                studentPage * STUDENTS_PER_PAGE,
+                displayedStudents.length,
+              )}
+              명 표시
+            </span>
+            <div className="flex flex-wrap gap-1">
+              {Array.from({ length: studentTotalPages }, (_, index) => {
+                const page = index + 1;
+                return (
+                  <button
+                    key={`student-page-${page}`}
+                    type="button"
+                    onClick={() => setStudentPage(page)}
+                    className={`min-w-9 rounded-md border px-3 py-1.5 transition ${
+                      studentPage === page
+                        ? "border-blue-500 bg-blue-600 text-white"
+                        : "border-gray-200 bg-white text-gray-600 hover:border-blue-300 hover:text-blue-600"
+                    }`}
+                    aria-current={studentPage === page ? "page" : undefined}
+                  >
+                    {page}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </section>
+
+      {lowScoreModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="below-50-students-title"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/45"
+            onClick={() => setLowScoreModalOpen(false)}
+            aria-label="50점 미만 학생 명단 닫기"
+          />
+          <div
+            ref={lowScoreModalRef}
+            className="relative z-10 flex max-h-[86vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-4">
+              <div>
+                <h3
+                  id="below-50-students-title"
+                  className="text-lg font-extrabold text-gray-900"
+                >
+                  50점 미만 학생 명단
+                </h3>
+                <p className="mt-1 text-sm font-medium text-gray-500">
+                  {classFilter ? `${classFilter}반` : "전체 반"} ·{" "}
+                  {below50Students.length}명 · 상단 필터 기준
+                </p>
+              </div>
+              <button
+                ref={lowScoreCloseButtonRef}
+                type="button"
+                onClick={() => setLowScoreModalOpen(false)}
+                className="rounded-md px-2 py-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+                aria-label="닫기"
+              >
+                <i className="fas fa-times" aria-hidden="true"></i>
+              </button>
             </div>
 
-            <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left whitespace-nowrap">
-                    <thead className="bg-gray-50 text-gray-600 font-bold border-b">
-                        <tr>
-                            <th className="p-4 w-40">시간</th>
-                            <th className="p-4 w-16">반</th>
-                            <th className="p-4 w-16">번호</th>
-                            <th className="p-4 w-40">학생</th>
-                            <th className="p-4 w-24">점수</th>
-                            <th className="p-4 w-24">상태</th>
-                        </tr>
+            <div className="overflow-y-auto p-5">
+              {below50Students.length === 0 ? (
+                <div className="rounded-lg border border-gray-100 bg-gray-50 px-4 py-10 text-center text-sm font-bold text-gray-400">
+                  현재 조건에서 50점 미만 학생이 없습니다.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[680px] text-left text-sm">
+                    <thead className="border-y border-gray-100 bg-gray-50 text-xs font-extrabold text-gray-500">
+                      <tr>
+                        <th className="px-4 py-3">반/번호</th>
+                        <th className="px-4 py-3">학생</th>
+                        <th className="px-4 py-3">최근점수</th>
+                        <th className="px-4 py-3">평균</th>
+                        <th className="px-4 py-3">취약 단원</th>
+                        <th className="px-4 py-3">오답노트</th>
+                      </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                        {loading ? <tr><td colSpan={6} className="p-4 text-center">로딩 중...</td></tr> :
-                            filteredLogs.length === 0 ? <tr><td colSpan={6} className="p-4 text-center text-gray-400">내역 없음</td></tr> :
-                                pagedLogs.map(log => (
-                                    <tr key={log.id} className="hover:bg-gray-50 transition">
-                                        <td className="p-4 text-gray-500">
-                                            {log.timestamp?.seconds ? new Date(log.timestamp.seconds * 1000).toLocaleString() : '-'}
-                                        </td>
-                                        <td className="p-4 font-bold text-gray-600">{log.classOnly}</td>
-                                        <td className="p-4 font-bold text-gray-600">{log.studentNumber === '-' ? '-' : `${log.studentNumber}번`}</td>
-                                        <td className="p-4">
-                                            {log.uid ? (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setWrongNoteTarget({ uid: log.uid || '', name: log.studentName })}
-                                                    className="font-bold text-gray-800 hover:text-blue-600 transition"
-                                                    title="현재 학기 오답 노트 보기"
-                                                >
-                                                    {log.studentName}
-                                                </button>
-                                            ) : (
-                                                <div className="font-bold text-gray-800">{log.studentName}</div>
-                                            )}
-                                            {log.email ? <div className="text-xs text-gray-400 truncate max-w-[200px]">{log.email}</div> : null}
-                                        </td>
-                                        <td className={`p-4 font-bold ${log.score >= 80 ? 'text-green-600' : 'text-red-600'}`}>
-                                            {log.score}점
-                                        </td>
-                                        <td className="p-4">
-                                            <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs font-bold">제출완료</span>
-                                        </td>
-                                    </tr>
-                                ))
-                        }
+                      {pagedBelow50Students.map((student) => (
+                        <tr key={`below-50-${student.key}`}>
+                          <td className="px-4 py-3 font-bold text-gray-600">
+                            {student.classOnly ? `${student.classOnly}반` : "-"}{" "}
+                            {student.number && student.number !== "-"
+                              ? `${student.number}번`
+                              : ""}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="font-extrabold text-gray-800">
+                              {student.name}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 font-extrabold text-red-600">
+                            {student.latestScore === null
+                              ? "-"
+                              : `${student.latestScore}점`}
+                          </td>
+                          <td className="px-4 py-3 font-bold text-gray-700">
+                            {roundOne(student.averageScore)}
+                          </td>
+                          <td className="max-w-[220px] px-4 py-3 font-medium text-gray-700">
+                            {student.weakUnits.length
+                              ? student.weakUnits.join(", ")
+                              : "-"}
+                          </td>
+                          <td className="px-4 py-3">
+                            {student.uid ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setLowScoreModalOpen(false);
+                                  setReturnToLowScoreModal(true);
+                                  setWrongNoteTarget({
+                                    uid: student.uid,
+                                    name: student.name,
+                                  });
+                                }}
+                                className="inline-flex min-w-[64px] items-center justify-center gap-2 whitespace-nowrap rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-extrabold text-gray-700 transition hover:border-blue-300 hover:text-blue-600"
+                              >
+                                열기
+                                <i
+                                  className="fas fa-arrow-up-right-from-square text-[10px]"
+                                  aria-hidden="true"
+                                ></i>
+                              </button>
+                            ) : (
+                              <span className="text-xs font-bold text-gray-400">
+                                연결 없음
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
-                </table>
-            </div>
-            {!loading && filteredLogs.length > LOGS_PER_PAGE && (
-                <div className="mt-4 flex items-center justify-center gap-1.5">
-                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                        <button
-                            key={page}
-                            type="button"
-                            onClick={() => setCurrentPage(page)}
-                            className={`min-w-8 rounded-md px-3 py-2 text-xs font-bold transition ${
-                                currentPage === page
-                                    ? 'bg-blue-600 text-white shadow-sm'
-                                    : 'bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-blue-600'
-                            }`}
-                        >
-                            {page}
-                        </button>
-                    ))}
+                  </table>
+                  {lowScoreTotalPages > 1 && (
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4 text-sm font-bold text-gray-600">
+                      <span>
+                        {below50Students.length}명 중{" "}
+                        {(lowScorePage - 1) * STUDENTS_PER_PAGE + 1}-
+                        {Math.min(
+                          lowScorePage * STUDENTS_PER_PAGE,
+                          below50Students.length,
+                        )}
+                        명 표시
+                      </span>
+                      <div className="flex flex-wrap gap-1">
+                        {Array.from(
+                          { length: lowScoreTotalPages },
+                          (_, index) => {
+                            const page = index + 1;
+                            return (
+                              <button
+                                key={`below-50-page-${page}`}
+                                type="button"
+                                onClick={() => setLowScorePage(page)}
+                                className={`min-w-9 rounded-md border px-3 py-1.5 transition ${
+                                  lowScorePage === page
+                                    ? "border-blue-500 bg-blue-600 text-white"
+                                    : "border-gray-200 bg-white text-gray-600 hover:border-blue-300 hover:text-blue-600"
+                                }`}
+                                aria-current={
+                                  lowScorePage === page ? "page" : undefined
+                                }
+                              >
+                                {page}
+                              </button>
+                            );
+                          },
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
-            )}
-            <StudentWrongNoteModal
-                isOpen={!!wrongNoteTarget}
-                onClose={() => setWrongNoteTarget(null)}
-                studentId={wrongNoteTarget?.uid || ''}
-                studentName={wrongNoteTarget?.name || ''}
-                readScope="current"
-                launchContextLabel="제출 현황"
-            />
+              )}
+            </div>
+          </div>
         </div>
-    );
+      )}
+
+      {scoreBucketModalOpen && selectedScoreBucket && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="score-bucket-students-title"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/45"
+            onClick={() => setScoreBucketModalOpen(false)}
+            aria-label="점수 구간 학생 명단 닫기"
+          />
+          <div className="relative z-10 flex max-h-[86vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-4">
+              <div>
+                <h3
+                  id="score-bucket-students-title"
+                  className="text-lg font-extrabold text-gray-900"
+                >
+                  {selectedScoreBucket.label}점 구간 학생 명단
+                </h3>
+                <p className="mt-1 text-sm font-medium text-gray-500">
+                  {classFilter ? `${classFilter}반` : "전체 반"} ·{" "}
+                  {scoreBucketStudents.length}명 · 상단 필터 기준
+                </p>
+              </div>
+              <button
+                ref={scoreBucketCloseButtonRef}
+                type="button"
+                onClick={() => setScoreBucketModalOpen(false)}
+                className="rounded-md px-2 py-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+                aria-label="닫기"
+              >
+                <i className="fas fa-times" aria-hidden="true"></i>
+              </button>
+            </div>
+
+            <div className="overflow-y-auto p-5">
+              {scoreBucketStudents.length === 0 ? (
+                <div className="rounded-lg border border-gray-100 bg-gray-50 px-4 py-10 text-center text-sm font-bold text-gray-400">
+                  현재 조건에서 해당 점수 구간 학생이 없습니다.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[680px] text-left text-sm">
+                    <thead className="border-y border-gray-100 bg-gray-50 text-xs font-extrabold text-gray-500">
+                      <tr>
+                        <th className="px-4 py-3">반/번호</th>
+                        <th className="px-4 py-3">학생</th>
+                        <th className="px-4 py-3">최근점수</th>
+                        <th className="px-4 py-3">평균</th>
+                        <th className="px-4 py-3">취약 단원</th>
+                        <th className="px-4 py-3">오답노트</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {pagedScoreBucketStudents.map((student) => (
+                        <tr key={`score-bucket-${student.key}`}>
+                          <td className="px-4 py-3 font-bold text-gray-600">
+                            {student.classOnly ? `${student.classOnly}반` : "-"}{" "}
+                            {student.number && student.number !== "-"
+                              ? `${student.number}번`
+                              : ""}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="font-extrabold text-gray-800">
+                              {student.name}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 font-extrabold text-gray-800">
+                            {student.latestScore === null
+                              ? "-"
+                              : `${student.latestScore}점`}
+                          </td>
+                          <td className="px-4 py-3 font-bold text-gray-700">
+                            {roundOne(student.averageScore)}
+                          </td>
+                          <td className="max-w-[220px] px-4 py-3 font-medium text-gray-700">
+                            {student.weakUnits.length
+                              ? student.weakUnits.join(", ")
+                              : "-"}
+                          </td>
+                          <td className="px-4 py-3">
+                            {student.uid ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setScoreBucketModalOpen(false);
+                                  setReturnToScoreBucketModal(true);
+                                  setWrongNoteTarget({
+                                    uid: student.uid,
+                                    name: student.name,
+                                  });
+                                }}
+                                className="inline-flex min-w-[64px] items-center justify-center gap-2 whitespace-nowrap rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-extrabold text-gray-700 transition hover:border-blue-300 hover:text-blue-600"
+                              >
+                                열기
+                                <i
+                                  className="fas fa-arrow-up-right-from-square text-[10px]"
+                                  aria-hidden="true"
+                                ></i>
+                              </button>
+                            ) : (
+                              <span className="text-xs font-bold text-gray-400">
+                                연결 없음
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {scoreBucketTotalPages > 1 && (
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4 text-sm font-bold text-gray-600">
+                      <span>
+                        {scoreBucketStudents.length}명 중{" "}
+                        {(scoreBucketPage - 1) * STUDENTS_PER_PAGE + 1}-
+                        {Math.min(
+                          scoreBucketPage * STUDENTS_PER_PAGE,
+                          scoreBucketStudents.length,
+                        )}
+                        명 표시
+                      </span>
+                      <div className="flex flex-wrap gap-1">
+                        {Array.from(
+                          { length: scoreBucketTotalPages },
+                          (_, index) => {
+                            const page = index + 1;
+                            return (
+                              <button
+                                key={`score-bucket-page-${page}`}
+                                type="button"
+                                onClick={() => setScoreBucketPage(page)}
+                                className={`min-w-9 rounded-md border px-3 py-1.5 transition ${
+                                  scoreBucketPage === page
+                                    ? "border-blue-500 bg-blue-600 text-white"
+                                    : "border-gray-200 bg-white text-gray-600 hover:border-blue-300 hover:text-blue-600"
+                                }`}
+                                aria-current={
+                                  scoreBucketPage === page ? "page" : undefined
+                                }
+                              >
+                                {page}
+                              </button>
+                            );
+                          },
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <StudentWrongNoteModal
+        isOpen={!!wrongNoteTarget}
+        onClose={() => {
+          setWrongNoteTarget(null);
+          if (returnToLowScoreModal) {
+            setReturnToLowScoreModal(false);
+            setLowScoreModalOpen(true);
+          } else if (returnToScoreBucketModal && selectedScoreBucket) {
+            setReturnToScoreBucketModal(false);
+            setScoreBucketModalOpen(true);
+          }
+        }}
+        studentId={wrongNoteTarget?.uid || ""}
+        studentName={wrongNoteTarget?.name || ""}
+        readScope="current"
+        launchContextLabel="응시 현황"
+      />
+    </div>
+  );
 };
 
 export default QuizLogTab;
