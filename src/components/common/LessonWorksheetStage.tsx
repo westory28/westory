@@ -72,6 +72,7 @@ interface LessonWorksheetStageProps {
   onAnnotationChange?: (nextState: LessonWorksheetAnnotationState) => void;
   teacherCurrentPage?: number | null;
   onTeacherCurrentPageChange?: (page: number) => void;
+  showPageLabel?: boolean;
 }
 
 interface DraftRect {
@@ -614,7 +615,10 @@ const isWheelZoomBlockedTarget = (target: EventTarget | null) =>
   Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
 
 const getWheelZoomDelta = (event: React.WheelEvent<HTMLDivElement>) => {
-  if (Math.abs(event.deltaX) > Math.abs(event.deltaY) && Math.abs(event.deltaX) > 2) {
+  if (
+    Math.abs(event.deltaX) > Math.abs(event.deltaY) &&
+    Math.abs(event.deltaX) > 2
+  ) {
     return 0;
   }
 
@@ -659,6 +663,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   onAnnotationChange,
   teacherCurrentPage,
   onTeacherCurrentPageChange,
+  showPageLabel = true,
 }) => {
   const capabilities = useMemo(
     () => getLessonWorksheetStageCapabilities(mode),
@@ -2427,17 +2432,21 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
               key={pageImage.page}
               className={`rounded-[2rem] border border-gray-200 bg-white shadow-sm ${isStudentSolveMode ? "p-2 md:p-3" : "p-3 md:p-4"}`}
             >
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <div className="text-xs font-bold uppercase tracking-[0.18em] text-gray-400">
-                  Page {pageImage.page}
+              {(showPageLabel || capabilities.showTextRegionHints) && (
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  {showPageLabel && (
+                    <div className="text-xs font-bold uppercase tracking-[0.18em] text-gray-400">
+                      Page {pageImage.page}
+                    </div>
+                  )}
+                  {capabilities.showTextRegionHints && (
+                    <div className="text-xs text-gray-500">
+                      페이지에서 원하는 글자를 드래그하면 실제 선택처럼
+                      반영되고, 놓으면 그 글자만 가려집니다.
+                    </div>
+                  )}
                 </div>
-                {capabilities.showTextRegionHints && (
-                  <div className="text-xs text-gray-500">
-                    페이지에서 원하는 글자를 드래그하면 실제 선택처럼 반영되고,
-                    놓으면 그 글자만 가려집니다.
-                  </div>
-                )}
-              </div>
+              )}
 
               <div
                 ref={(node) => {
@@ -2467,7 +2476,10 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     : undefined
                 }
                 onWheel={(event) => {
-                  if (!isViewportInteractive || isWheelZoomBlockedTarget(event.target)) {
+                  if (
+                    !isViewportInteractive ||
+                    isWheelZoomBlockedTarget(event.target)
+                  ) {
                     return;
                   }
                   if (isTeacherEditMode) {

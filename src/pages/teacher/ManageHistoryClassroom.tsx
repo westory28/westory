@@ -270,7 +270,12 @@ const compareSchoolValues = (a: string, b: string) => {
 };
 
 type BlankEditorMode = "create" | "edit";
-type DashboardStatusFilter = "all" | "published" | "private" | "pending" | "passed";
+type DashboardStatusFilter =
+  | "all"
+  | "published"
+  | "private"
+  | "pending"
+  | "passed";
 type DashboardSortOrder = "latest" | "oldest";
 
 const ASSIGNMENTS_PER_PAGE = 10;
@@ -410,7 +415,9 @@ const cloneMapResourceBlanks = (
 ): HistoryClassroomBlank[] =>
   (mapResource?.pdfBlanks || [])
     .map((blank) => ({
-      id: String(blank.id || "").trim() || `blank-${blank.page}-${blank.left}-${blank.top}`,
+      id:
+        String(blank.id || "").trim() ||
+        `blank-${blank.page}-${blank.left}-${blank.top}`,
       page: Math.max(1, Number(blank.page) || 1),
       left: Number(blank.left) || 0,
       top: Number(blank.top) || 0,
@@ -456,6 +463,7 @@ const ManageHistoryClassroom: React.FC = () => {
   const [blankEditorMode, setBlankEditorMode] =
     useState<BlankEditorMode | null>(null);
   const [blankEditorAnswer, setBlankEditorAnswer] = useState("");
+  const [blankEditorError, setBlankEditorError] = useState("");
   const [worksheetTool, setWorksheetTool] = useState<"ocr" | "box">("box");
   const [showAllBlankTags, setShowAllBlankTags] = useState(false);
   const [floatingPanelOpen, setFloatingPanelOpen] = useState(false);
@@ -671,6 +679,7 @@ const ManageHistoryClassroom: React.FC = () => {
     setDraftBlankAnswer("");
     setBlankEditorMode(null);
     setBlankEditorAnswer("");
+    setBlankEditorError("");
     blankEditorComposingRef.current = false;
     setShowAllBlankTags(false);
   }, [maps, selectedMapId]);
@@ -1344,7 +1353,9 @@ const ManageHistoryClassroom: React.FC = () => {
   useEffect(() => {
     if (
       expandedAssignmentId &&
-      !pagedAssignmentRows.some((row) => row.assignment.id === expandedAssignmentId)
+      !pagedAssignmentRows.some(
+        (row) => row.assignment.id === expandedAssignmentId,
+      )
     ) {
       setExpandedAssignmentId("");
     }
@@ -1373,6 +1384,7 @@ const ManageHistoryClassroom: React.FC = () => {
     setDraftBlankAnswer("");
     setBlankEditorMode(null);
     setBlankEditorAnswer("");
+    setBlankEditorError("");
     blankEditorComposingRef.current = false;
     setShowAllBlankTags(false);
     setFloatingPanelOpen(false);
@@ -1399,9 +1411,6 @@ const ManageHistoryClassroom: React.FC = () => {
       : blankEditorMode === "edit"
         ? selectedBlank
         : null;
-  const activeBlankEditorOrder = activeBlankEditor
-    ? blankOrderMap.get(activeBlankEditor.id) || null
-    : null;
 
   useEffect(() => {
     if (!previewOpen || !editingPreviewAssignment) return;
@@ -1462,12 +1471,15 @@ const ManageHistoryClassroom: React.FC = () => {
     setSelectedBlankId("");
     setBlankEditorMode("create");
     setBlankEditorAnswer(initialAnswer);
+    setBlankEditorError("");
     blankEditorComposingRef.current = false;
+    setFloatingPanelOpen(false);
   };
 
   const closeBlankEditor = () => {
     setBlankEditorMode(null);
     setBlankEditorAnswer("");
+    setBlankEditorError("");
     blankEditorComposingRef.current = false;
   };
 
@@ -1503,7 +1515,7 @@ const ManageHistoryClassroom: React.FC = () => {
 
     const answer = blankEditorAnswer.trim();
     if (!answer) {
-      alert("빈칸 정답을 입력해 주세요.");
+      setBlankEditorError("빈칸 정답을 입력해 주세요.");
       return;
     }
 
@@ -1520,12 +1532,14 @@ const ManageHistoryClassroom: React.FC = () => {
     setDraftBlank(null);
     setDraftBlankAnswer("");
     closeBlankEditor();
+    setFloatingPanelOpen(true);
   };
 
   const handleCancelDraftBlank = () => {
     setDraftBlank(null);
     setDraftBlankAnswer("");
     closeBlankEditor();
+    setFloatingPanelOpen(true);
   };
 
   const handleSelectBlank = (blankId: string) => {
@@ -1536,7 +1550,17 @@ const ManageHistoryClassroom: React.FC = () => {
     setDraftBlankAnswer("");
     setBlankEditorMode("edit");
     setBlankEditorAnswer(targetBlank.answer);
+    setBlankEditorError("");
     blankEditorComposingRef.current = false;
+  };
+
+  const handleFocusBlankFromList = (blankId: string) => {
+    const targetBlank = blanks.find((blank) => blank.id === blankId);
+    if (!targetBlank) return;
+    setSelectedBlankId(blankId);
+    setDraftBlank(null);
+    setDraftBlankAnswer("");
+    closeBlankEditor();
   };
 
   const handleBlankChange = (blankId: string, answer: string) => {
@@ -1560,12 +1584,13 @@ const ManageHistoryClassroom: React.FC = () => {
 
     const answer = blankEditorAnswer.trim();
     if (!answer) {
-      alert("鍮덉뭏 ?뺣떟???낅젰??二쇱꽭??");
+      setBlankEditorError("빈칸 정답을 입력해 주세요.");
       return;
     }
 
     handleBlankChange(selectedBlank.id, answer);
     closeBlankEditor();
+    setFloatingPanelOpen(true);
   };
 
   const handleSubmitBlankEditor = () => {
@@ -1854,7 +1879,10 @@ const ManageHistoryClassroom: React.FC = () => {
       worksheetEditingAssignmentId && worksheetSourceAssignment
         ? blanks
         : cloneMapResourceBlanks(selectedMap);
-    if (!saveBlanks.length || saveBlanks.some((blank) => !blank.answer.trim())) {
+    if (
+      !saveBlanks.length ||
+      saveBlanks.some((blank) => !blank.answer.trim())
+    ) {
       alert("배포 지도 관리에서 출제 빈칸과 정답을 먼저 저장해 주세요.");
       return;
     }
@@ -2222,7 +2250,8 @@ const ManageHistoryClassroom: React.FC = () => {
                       </span>
                     </div>
                     <div className="mt-2 text-sm font-medium text-gray-500">
-                      통과 기준 {row.assignment.passThresholdPercent}% · 제한 시간{" "}
+                      통과 기준 {row.assignment.passThresholdPercent}% · 제한
+                      시간{" "}
                       {row.assignment.timeLimitMinutes > 0
                         ? `${row.assignment.timeLimitMinutes}분`
                         : "없음"}{" "}
@@ -2231,14 +2260,26 @@ const ManageHistoryClassroom: React.FC = () => {
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     {[
-                      ["통과", row.passed, "border-emerald-200 bg-emerald-50 text-emerald-700"],
-                      ["미통과", row.failed, "border-rose-200 bg-rose-50 text-rose-700"],
+                      [
+                        "통과",
+                        row.passed,
+                        "border-emerald-200 bg-emerald-50 text-emerald-700",
+                      ],
+                      [
+                        "미통과",
+                        row.failed,
+                        "border-rose-200 bg-rose-50 text-rose-700",
+                      ],
                       [
                         "미제출",
                         row.pendingCount + row.overdueAbsentCount,
                         "border-gray-200 bg-gray-50 text-gray-700",
                       ],
-                      ["자동 종료", row.cancelled, "border-amber-200 bg-amber-50 text-amber-700"],
+                      [
+                        "자동 종료",
+                        row.cancelled,
+                        "border-amber-200 bg-amber-50 text-amber-700",
+                      ],
                     ].map(([label, count, className]) => (
                       <span
                         key={label}
@@ -2264,7 +2305,9 @@ const ManageHistoryClassroom: React.FC = () => {
                       onClick={(event) => {
                         event.stopPropagation();
                         setExpandedAssignmentId((current) =>
-                          current === row.assignment.id ? "" : row.assignment.id,
+                          current === row.assignment.id
+                            ? ""
+                            : row.assignment.id,
                         );
                       }}
                       className="flex h-10 w-10 items-center justify-center rounded-xl text-gray-500 transition hover:bg-gray-100 hover:text-gray-700"
@@ -2285,7 +2328,11 @@ const ManageHistoryClassroom: React.FC = () => {
                       ["통과", row.statusGroups.passed, "text-emerald-700"],
                       ["미통과", row.statusGroups.failed, "text-rose-700"],
                       ["미제출", row.statusGroups.pending, "text-gray-700"],
-                      ["자동 종료", row.statusGroups.cancelled, "text-amber-700"],
+                      [
+                        "자동 종료",
+                        row.statusGroups.cancelled,
+                        "text-amber-700",
+                      ],
                     ].map(([label, students, toneClassName]) => (
                       <div
                         key={label}
@@ -2311,14 +2358,16 @@ const ManageHistoryClassroom: React.FC = () => {
                                 </span>
                               </span>
                             ))}
-                          {(students as typeof row.studentSummaries).length > 3 && (
+                          {(students as typeof row.studentSummaries).length >
+                            3 && (
                             <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-bold text-gray-500">
                               +
-                              {(students as typeof row.studentSummaries).length -
-                                3}
+                              {(students as typeof row.studentSummaries)
+                                .length - 3}
                             </span>
                           )}
-                          {!(students as typeof row.studentSummaries).length && (
+                          {!(students as typeof row.studentSummaries)
+                            .length && (
                             <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-bold text-gray-400">
                               없음
                             </span>
@@ -2785,7 +2834,8 @@ const ManageHistoryClassroom: React.FC = () => {
                           선택한 배포 지도
                         </div>
                         <div className="mt-1 text-xs text-gray-500">
-                          빈칸과 정답은 지도 관리에서 저장한 값을 그대로 사용합니다.
+                          빈칸과 정답은 지도 관리에서 저장한 값을 그대로
+                          사용합니다.
                         </div>
                       </div>
                       <div className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-bold text-blue-700">
@@ -2842,7 +2892,7 @@ const ManageHistoryClassroom: React.FC = () => {
                           <div
                             key={blank.id}
                             className={`rounded-2xl border bg-white p-3 transition ${blank.id === selectedBlankId ? "border-blue-300 shadow-md shadow-blue-100" : "border-gray-200"}`}
-                            onClick={() => handleSelectBlank(blank.id)}
+                            onClick={() => handleFocusBlankFromList(blank.id)}
                           >
                             <div className="mb-2 flex items-center justify-between gap-2 text-xs font-bold text-gray-500">
                               <span>
@@ -2935,154 +2985,157 @@ const ManageHistoryClassroom: React.FC = () => {
 
                 {false && (
                   <section className="hidden">
-                  <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
-                    <div className="mb-4 flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-bold text-gray-700">
-                          지도 선택 영역
-                        </div>
-                        <div className="mt-1 text-xs text-gray-500">
-                          지도 관리에 저장된 빈칸과 정답 배치를 확인합니다.
+                    <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
+                      <div className="mb-4 flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-bold text-gray-700">
+                            지도 선택 영역
+                          </div>
+                          <div className="mt-1 text-xs text-gray-500">
+                            지도 관리에 저장된 빈칸과 정답 배치를 확인합니다.
+                          </div>
                         </div>
                       </div>
+
+                      {false && (
+                        <div className="mb-4 space-y-3 lg:hidden">
+                          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
+                            <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400">
+                              Tool
+                            </div>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setWorksheetTool("box")}
+                                className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                                  worksheetTool === "box"
+                                    ? "bg-blue-600 text-white shadow-sm"
+                                    : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                                }`}
+                              >
+                                텍스트 박스
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setWorksheetTool("ocr")}
+                                className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                                  worksheetTool === "ocr"
+                                    ? "bg-blue-600 text-white shadow-sm"
+                                    : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                                }`}
+                              >
+                                OCR 선택
+                              </button>
+                            </div>
+                          </div>
+
+                          {(draftBlank ||
+                            selectedBlank ||
+                            sortedBlanks.length > 0) && (
+                            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400">
+                                  Words
+                                </div>
+                                <div className="text-[11px] font-semibold text-gray-500">
+                                  {sortedBlanks.length}개
+                                </div>
+                              </div>
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {visibleBlankTags.map((blank, index) => (
+                                  <button
+                                    key={blank.id}
+                                    type="button"
+                                    onClick={() =>
+                                      handleFocusBlankFromList(blank.id)
+                                    }
+                                    className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
+                                      selectedBlankId === blank.id
+                                        ? "border-blue-300 bg-blue-50 text-blue-700"
+                                        : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                                    }`}
+                                  >
+                                    {blank.answer || `빈칸 ${index + 1}`}
+                                  </button>
+                                ))}
+                                {sortedBlanks.length > 6 && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setShowAllBlankTags((prev) => !prev)
+                                    }
+                                    className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 transition hover:bg-blue-100"
+                                  >
+                                    {showAllBlankTags
+                                      ? "숨기기"
+                                      : `더보기 +${sortedBlanks.length - visibleBlankTags.length}`}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {worksheetPageImages.length > 0 ? (
+                        <div className="mx-auto max-w-[56rem]">
+                          <LessonWorksheetStage
+                            pageImages={worksheetPageImages}
+                            blanks={worksheetBlanks}
+                            textRegions={worksheetTextRegions}
+                            mode="teacher-present"
+                            annotationEnabled={false}
+                            showPageLabel={false}
+                          />
+                        </div>
+                      ) : (
+                        <div className="rounded-3xl border border-dashed border-gray-300 bg-gray-50 p-12 text-center text-gray-400">
+                          PDF 지도를 먼저 선택해 주세요.
+                        </div>
+                      )}
                     </div>
 
                     {false && (
-                      <div className="mb-4 space-y-3 lg:hidden">
-                        <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
-                          <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400">
-                            Tool
-                          </div>
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setWorksheetTool("box")}
-                              className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
-                                worksheetTool === "box"
-                                  ? "bg-blue-600 text-white shadow-sm"
-                                  : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
-                              }`}
-                            >
-                              텍스트 박스
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setWorksheetTool("ocr")}
-                              className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
-                                worksheetTool === "ocr"
-                                  ? "bg-blue-600 text-white shadow-sm"
-                                  : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
-                              }`}
-                            >
-                              OCR 선택
-                            </button>
-                          </div>
+                      <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
+                        <div className="text-sm font-bold text-gray-700">
+                          생성된 역사교실
                         </div>
-
-                        {(draftBlank ||
-                          selectedBlank ||
-                          sortedBlanks.length > 0) && (
-                          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400">
-                                Words
-                              </div>
-                              <div className="text-[11px] font-semibold text-gray-500">
-                                {sortedBlanks.length}개
+                        <div className="mt-4 space-y-3">
+                          {assignments.map((assignment) => (
+                            <div
+                              key={assignment.id}
+                              className="rounded-2xl border border-gray-200 p-4"
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <div>
+                                  <div className="text-xs font-bold text-orange-500">
+                                    {assignment.mapTitle}
+                                  </div>
+                                  <div className="text-lg font-black text-gray-900">
+                                    {assignment.title}
+                                  </div>
+                                  <div className="mt-1 text-xs text-gray-500">
+                                    통과 기준 {assignment.passThresholdPercent}%
+                                    · 재도전 제한 {assignment.cooldownMinutes}분
+                                  </div>
+                                </div>
+                                <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-bold text-orange-700 whitespace-nowrap">
+                                  {(assignment.targetStudentNames.length
+                                    ? `${assignment.targetStudentNames[0]}${assignment.targetStudentNames.length > 1 ? ` 외 ${assignment.targetStudentNames.length - 1}명` : ""}`
+                                    : assignment.targetStudentName) ||
+                                    "학생 미지정"}
+                                </span>
                               </div>
                             </div>
-                            <div className="mt-2 flex flex-wrap gap-1.5">
-                              {visibleBlankTags.map((blank, index) => (
-                                <button
-                                  key={blank.id}
-                                  type="button"
-                                  onClick={() => handleSelectBlank(blank.id)}
-                                  className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
-                                    selectedBlankId === blank.id
-                                      ? "border-blue-300 bg-blue-50 text-blue-700"
-                                      : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
-                                  }`}
-                                >
-                                  {blank.answer || `빈칸 ${index + 1}`}
-                                </button>
-                              ))}
-                              {sortedBlanks.length > 6 && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setShowAllBlankTags((prev) => !prev)
-                                  }
-                                  className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 transition hover:bg-blue-100"
-                                >
-                                  {showAllBlankTags
-                                    ? "숨기기"
-                                    : `더보기 +${sortedBlanks.length - visibleBlankTags.length}`}
-                                </button>
-                              )}
+                          ))}
+                          {!assignments.length && (
+                            <div className="text-sm text-gray-400">
+                              아직 생성된 역사교실 과제가 없습니다.
                             </div>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
                     )}
-
-                    {worksheetPageImages.length > 0 ? (
-                      <div className="mx-auto max-w-[56rem]">
-                        <LessonWorksheetStage
-                          pageImages={worksheetPageImages}
-                          blanks={worksheetBlanks}
-                          textRegions={worksheetTextRegions}
-                          mode="teacher-present"
-                          annotationEnabled={false}
-                        />
-                      </div>
-                    ) : (
-                      <div className="rounded-3xl border border-dashed border-gray-300 bg-gray-50 p-12 text-center text-gray-400">
-                        PDF 지도를 먼저 선택해 주세요.
-                      </div>
-                    )}
-                  </div>
-
-                  {false && (
-                    <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
-                      <div className="text-sm font-bold text-gray-700">
-                        생성된 역사교실
-                      </div>
-                      <div className="mt-4 space-y-3">
-                        {assignments.map((assignment) => (
-                          <div
-                            key={assignment.id}
-                            className="rounded-2xl border border-gray-200 p-4"
-                          >
-                            <div className="flex items-center justify-between gap-3">
-                              <div>
-                                <div className="text-xs font-bold text-orange-500">
-                                  {assignment.mapTitle}
-                                </div>
-                                <div className="text-lg font-black text-gray-900">
-                                  {assignment.title}
-                                </div>
-                                <div className="mt-1 text-xs text-gray-500">
-                                  통과 기준 {assignment.passThresholdPercent}% ·
-                                  재도전 제한 {assignment.cooldownMinutes}분
-                                </div>
-                              </div>
-                              <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-bold text-orange-700 whitespace-nowrap">
-                                {(assignment.targetStudentNames.length
-                                  ? `${assignment.targetStudentNames[0]}${assignment.targetStudentNames.length > 1 ? ` 외 ${assignment.targetStudentNames.length - 1}명` : ""}`
-                                  : assignment.targetStudentName) ||
-                                  "학생 미지정"}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                        {!assignments.length && (
-                          <div className="text-sm text-gray-400">
-                            아직 생성된 역사교실 과제가 없습니다.
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
                   </section>
                 )}
               </div>
@@ -3165,7 +3218,8 @@ const ManageHistoryClassroom: React.FC = () => {
                       {selectedStoredMap?.title || "지도 미선택"}
                     </div>
                     <div className="mt-1 text-xs text-gray-500">
-                      백지도 위에서 영역을 드래그하거나 OCR 글자를 선택해 빈칸을 추가합니다.
+                      백지도 위에서 영역을 드래그하거나 OCR 글자를 선택해 빈칸을
+                      추가합니다.
                     </div>
                   </div>
                   <div className="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-600">
@@ -3184,8 +3238,11 @@ const ManageHistoryClassroom: React.FC = () => {
                       pendingBlank={draftBlank}
                       onSelectBlank={handleSelectBlank}
                       onDeleteBlank={removeBlank}
-                      onCreateBlankFromSelection={handleCreateBlankFromSelection}
+                      onCreateBlankFromSelection={
+                        handleCreateBlankFromSelection
+                      }
                       annotationEnabled={false}
+                      showPageLabel={false}
                     />
                   </div>
                 ) : (
@@ -3730,7 +3787,7 @@ const ManageHistoryClassroom: React.FC = () => {
                 <button
                   key={blank.id}
                   type="button"
-                  onClick={() => handleSelectBlank(blank.id)}
+                  onClick={() => handleFocusBlankFromList(blank.id)}
                   className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
                     selectedBlankId === blank.id
                       ? "border-blue-300 bg-blue-50 text-blue-700"
@@ -3818,9 +3875,9 @@ const ManageHistoryClassroom: React.FC = () => {
         </div>
       )}
 
-      {!isMapManagerOpen && blankEditorMode && activeBlankEditor && (
+      {blankEditorMode && activeBlankEditor && (
         <div
-          className="fixed inset-0 z-[70] bg-slate-950/45 backdrop-blur-sm"
+          className="fixed inset-0 z-[90] bg-slate-950/45 backdrop-blur-sm"
           onClick={
             blankEditorMode === "create"
               ? handleCancelDraftBlank
@@ -3850,19 +3907,6 @@ const ManageHistoryClassroom: React.FC = () => {
                       ? "선택한 빈칸 답 입력"
                       : "선택한 빈칸 저장"}
                   </h3>
-                  <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-semibold text-slate-600">
-                    <span className="rounded-full bg-slate-100 px-2.5 py-1">
-                      p.{activeBlankEditor.page}
-                    </span>
-                    {activeBlankEditorOrder && (
-                      <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">
-                        빈칸 {activeBlankEditorOrder}
-                      </span>
-                    )}
-                    <span className="rounded-full bg-slate-100 px-2.5 py-1">
-                      {activeBlankEditor.id}
-                    </span>
-                  </div>
                 </div>
                 <button
                   type="button"
@@ -3885,9 +3929,10 @@ const ManageHistoryClassroom: React.FC = () => {
                   <input
                     type="text"
                     value={blankEditorAnswer}
-                    onChange={(event) =>
-                      setBlankEditorAnswer(event.target.value)
-                    }
+                    onChange={(event) => {
+                      setBlankEditorAnswer(event.target.value);
+                      if (blankEditorError) setBlankEditorError("");
+                    }}
                     onKeyDown={handleBlankEditorKeyDown}
                     onCompositionStart={() => {
                       blankEditorComposingRef.current = true;
@@ -3900,6 +3945,11 @@ const ManageHistoryClassroom: React.FC = () => {
                     className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
                   />
                 </label>
+                {blankEditorError && (
+                  <div className="mt-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700">
+                    {blankEditorError}
+                  </div>
+                )}
                 <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-500">
                   입력창에서 Enter를 누르면 바로
                   {blankEditorMode === "create" ? " 등록" : " 저장"}됩니다.
@@ -3941,166 +3991,64 @@ const ManageHistoryClassroom: React.FC = () => {
       )}
 
       {isMapManagerOpen && (
-      <div className="fixed bottom-5 right-5 z-[65] flex max-w-[calc(100vw-2.5rem)] flex-col items-end gap-3">
-        {floatingPanelOpen && (
-          <div className="w-[min(18rem,calc(100vw-2.5rem))] space-y-2.5">
-            <div className="rounded-2xl border border-gray-200 bg-white/96 p-3 shadow-2xl backdrop-blur">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400">
-                  Tool
+        <div className="fixed bottom-5 right-5 z-[65] flex max-w-[calc(100vw-2.5rem)] flex-col items-end gap-3">
+          {floatingPanelOpen && (
+            <div className="w-[min(18rem,calc(100vw-2.5rem))] space-y-2.5">
+              <div className="rounded-2xl border border-gray-200 bg-white/96 p-3 shadow-2xl backdrop-blur">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400">
+                    빈칸 목록
+                  </div>
+                  <div className="text-[11px] font-semibold text-gray-500">
+                    {sortedBlanks.length}개
+                  </div>
                 </div>
-                <div className="text-[11px] font-semibold text-gray-500">
-                  {worksheetTool === "box" ? "텍스트 박스" : "OCR 선택"}
+                <div className="mt-2.5 flex max-h-28 flex-wrap gap-1.5 overflow-hidden">
+                  {visibleBlankTags.map((blank, index) => (
+                    <button
+                      key={blank.id}
+                      type="button"
+                      onClick={() => handleFocusBlankFromList(blank.id)}
+                      className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
+                        selectedBlankId === blank.id
+                          ? "border-blue-300 bg-blue-50 text-blue-700"
+                          : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      {blank.answer || `빈칸 ${index + 1}`}
+                    </button>
+                  ))}
+                  {sortedBlanks.length > 6 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllBlankTags((prev) => !prev)}
+                      className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 transition hover:bg-blue-100"
+                    >
+                      {showAllBlankTags
+                        ? "숨기기"
+                        : `더보기 +${sortedBlanks.length - visibleBlankTags.length}`}
+                    </button>
+                  )}
                 </div>
-              </div>
-              <div className="mt-2.5 flex flex-wrap gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setWorksheetTool("box")}
-                  className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
-                    worksheetTool === "box"
-                      ? "bg-blue-600 text-white shadow-sm"
-                      : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
-                  }`}
-                >
-                  텍스트 박스
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setWorksheetTool("ocr")}
-                  className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
-                    worksheetTool === "ocr"
-                      ? "bg-blue-600 text-white shadow-sm"
-                      : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
-                  }`}
-                >
-                  OCR 선택
-                </button>
-              </div>
-              <div className="mt-2 text-[11px] leading-4 text-gray-500">
-                {worksheetTool === "box"
-                  ? "드래그한 크기 그대로 빈칸 상자를 만듭니다."
-                  : "글자를 클릭하거나 드래그하면 OCR 단어를 기준으로 빈칸을 잡습니다."}
               </div>
             </div>
+          )}
 
-            <div className="rounded-2xl border border-gray-200 bg-white/96 p-3 shadow-2xl backdrop-blur">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400">
-                  Words
-                </div>
-                <div className="text-[11px] font-semibold text-gray-500">
-                  {sortedBlanks.length}개
-                </div>
-              </div>
-              <div className="mt-2.5 flex max-h-28 flex-wrap gap-1.5 overflow-hidden">
-                {visibleBlankTags.map((blank, index) => (
-                  <button
-                    key={blank.id}
-                    type="button"
-                    onClick={() => handleSelectBlank(blank.id)}
-                    className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
-                      selectedBlankId === blank.id
-                        ? "border-blue-300 bg-blue-50 text-blue-700"
-                        : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
-                    }`}
-                  >
-                    {blank.answer || `빈칸 ${index + 1}`}
-                  </button>
-                ))}
-                {sortedBlanks.length > 6 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowAllBlankTags((prev) => !prev)}
-                    className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 transition hover:bg-blue-100"
-                  >
-                    {showAllBlankTags
-                      ? "숨기기"
-                      : `더보기 +${sortedBlanks.length - visibleBlankTags.length}`}
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {draftBlank ? (
-              <div className="space-y-2.5 rounded-2xl border border-amber-200 bg-white/98 p-3 shadow-2xl backdrop-blur">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="text-sm font-bold text-amber-900">
-                    새 빈칸 초안
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleCancelDraftBlank}
-                    className="text-xs font-bold text-gray-500"
-                  >
-                    취소
-                  </button>
-                </div>
-                <div className="text-xs text-gray-500">
-                  p.{draftBlank!.page} 영역이 선택되었습니다.
-                </div>
-                <input
-                  type="text"
-                  value={draftBlankAnswer}
-                  onChange={(e) => setDraftBlankAnswer(e.target.value)}
-                  className="w-full rounded-lg border border-amber-300 px-2.5 py-1.5 text-sm"
-                  placeholder="정답을 입력해 주세요."
-                  autoFocus
-                />
-                <button
-                  type="button"
-                  onClick={handleConfirmDraftBlank}
-                  className="w-full rounded-lg bg-amber-500 px-3 py-1.5 text-sm font-bold text-white hover:bg-amber-600"
-                >
-                  빈칸 추가
-                </button>
-              </div>
-            ) : selectedBlank ? (
-              <div className="space-y-2.5 rounded-2xl border border-blue-100 bg-white/98 p-3 shadow-2xl backdrop-blur">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="text-sm font-bold text-blue-900">
-                    선택한 빈칸
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => removeBlank(selectedBlank!.id)}
-                    className="text-xs font-bold text-red-600"
-                  >
-                    삭제
-                  </button>
-                </div>
-                <div className="text-xs text-gray-500">
-                  p.{selectedBlank!.page}
-                </div>
-                <input
-                  type="text"
-                  value={selectedBlank!.answer}
-                  onChange={(e) =>
-                    handleBlankChange(selectedBlank!.id, e.target.value)
-                  }
-                  className="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
-                  placeholder="정답"
-                />
-              </div>
-            ) : null}
-          </div>
-        )}
-
-        <button
-          type="button"
-          onClick={() => setFloatingPanelOpen((prev) => !prev)}
-          aria-label={
-            floatingPanelOpen ? "플로팅 도구 닫기" : "플로팅 도구 열기"
-          }
-          className={`flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-2xl transition duration-200 hover:bg-blue-700 ${
-            floatingPanelOpen ? "scale-90" : "scale-100"
-          }`}
-        >
-          <i
-            className={`fas ${floatingPanelOpen ? "fa-times" : "fa-layer-group"} text-lg`}
-          ></i>
-        </button>
-      </div>
+          <button
+            type="button"
+            onClick={() => setFloatingPanelOpen((prev) => !prev)}
+            aria-label={
+              floatingPanelOpen ? "플로팅 도구 닫기" : "플로팅 도구 열기"
+            }
+            className={`flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-2xl transition duration-200 hover:bg-blue-700 ${
+              floatingPanelOpen ? "scale-90" : "scale-100"
+            }`}
+          >
+            <i
+              className={`fas ${floatingPanelOpen ? "fa-times" : "fa-layer-group"} text-lg`}
+            ></i>
+          </button>
+        </div>
       )}
       <style>{`
                 .history-assignment-card > div:last-child {
