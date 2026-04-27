@@ -573,10 +573,7 @@ const QuizLogTab: React.FC = () => {
   }, [bigFilter, midFilter, treeData]);
 
   useEffect(() => {
-    const targetStudents = students.filter(
-      (student) =>
-        (!classFilter || student.class === classFilter) && student.uid,
-    );
+    const targetStudents = students.filter((student) => student.uid);
 
     if (!targetStudents.length) {
       setAnalyticsBackfillLogs([]);
@@ -593,20 +590,32 @@ const QuizLogTab: React.FC = () => {
           db,
           getSemesterCollectionPath(config, "quiz_results"),
         );
-        const uidChunks = chunkArray(
-          Array.from(new Set(targetStudents.map((student) => student.uid))),
-          FIRESTORE_IN_CHUNK_SIZE,
-        );
         const hasAnalysisFilter =
           Boolean(categoryFilter) || selectedUnitFilterIds.length > 0;
-        const queryLimit = classFilter
-          ? BACKFILL_CLASS_LIMIT
-          : hasAnalysisFilter
-            ? BACKFILL_FILTERED_LIMIT
-            : BACKFILL_BASIC_LIMIT;
+        const baseQueryLimit = hasAnalysisFilter
+          ? BACKFILL_FILTERED_LIMIT
+          : BACKFILL_BASIC_LIMIT;
+        const buildUidChunks = (items: UserProfile[]) =>
+          chunkArray(
+            Array.from(new Set(items.map((student) => student.uid))),
+            FIRESTORE_IN_CHUNK_SIZE,
+          );
+        const selectedClassStudents = classFilter
+          ? targetStudents.filter((student) => student.class === classFilter)
+          : [];
+        const queryPlans = [
+          ...buildUidChunks(targetStudents).map((uidChunk) => ({
+            uidChunk,
+            queryLimit: baseQueryLimit,
+          })),
+          ...buildUidChunks(selectedClassStudents).map((uidChunk) => ({
+            uidChunk,
+            queryLimit: BACKFILL_CLASS_LIMIT,
+          })),
+        ];
 
         const snaps = await Promise.all(
-          uidChunks.map(async (uidChunk) => {
+          queryPlans.map(async ({ uidChunk, queryLimit }) => {
             const constraints = [
               where("uid", "in", uidChunk),
               ...(categoryFilter
@@ -1432,7 +1441,7 @@ const QuizLogTab: React.FC = () => {
                   key={item.classOnly}
                   type="button"
                   onClick={() => setClassFilter(selected ? "" : item.classOnly)}
-                  className={`grid w-full grid-cols-[48px_1fr_54px] items-center gap-3 rounded-lg px-2.5 py-2 text-left transition focus:outline-none focus:ring-2 focus:ring-blue-200 ${
+                  className={`grid w-full grid-cols-[48px_minmax(0,250px)] items-center gap-2 rounded-lg px-2.5 py-2 text-left transition focus:outline-none focus:ring-2 focus:ring-blue-200 ${
                     selected
                       ? "bg-blue-50 ring-1 ring-blue-200"
                       : "hover:bg-gray-50"
@@ -1441,20 +1450,22 @@ const QuizLogTab: React.FC = () => {
                   <span className="text-sm font-bold text-gray-700">
                     {item.classOnly}반
                   </span>
-                  <span className="h-2.5 overflow-hidden rounded-full bg-gray-100">
+                  <span className="grid min-w-0 grid-cols-[minmax(0,1fr)_36px] items-center gap-2">
+                    <span className="h-2.5 overflow-hidden rounded-full bg-gray-100">
+                      <span
+                        className="block h-full rounded-full bg-gradient-to-r from-blue-400 to-blue-600"
+                        style={{ width: `${Math.min(100, value)}%` }}
+                      ></span>
+                    </span>
                     <span
-                      className="block h-full rounded-full bg-gradient-to-r from-blue-400 to-blue-600"
-                      style={{ width: `${Math.min(100, value)}%` }}
-                    ></span>
-                  </span>
-                  <span
-                    className={`rounded-md px-2 py-1 text-right text-xs font-extrabold ${
-                      item.average === null
-                        ? "text-gray-400"
-                        : "bg-gray-50 text-gray-800"
-                    }`}
-                  >
-                    {item.average === null ? "-" : Math.round(item.average)}
+                      className={`text-center text-xs font-extrabold ${
+                        item.average === null
+                          ? "text-gray-400"
+                          : "text-gray-800"
+                      }`}
+                    >
+                      {item.average === null ? "-" : Math.round(item.average)}
+                    </span>
                   </span>
                 </button>
               );
