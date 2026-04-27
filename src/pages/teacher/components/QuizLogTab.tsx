@@ -8,6 +8,7 @@ import {
   onSnapshot,
   orderBy,
   query,
+  where,
 } from "firebase/firestore";
 import { db } from "../../../lib/firebase";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -107,6 +108,7 @@ const SCORE_BUCKETS = [
 
 const RESULT_LIMIT = 50;
 const STUDENTS_PER_PAGE = 50;
+const FIRESTORE_IN_CHUNK_SIZE = 10;
 
 const normalizeClass = (value: unknown): string => {
   const raw = String(value || "").trim();
@@ -159,6 +161,11 @@ const median = (values: number[]) => {
 
 const roundOne = (value: number | null) =>
   value === null ? "-" : Number(value.toFixed(1)).toString();
+
+const chunkArray = <T,>(items: T[], size: number) =>
+  Array.from({ length: Math.ceil(items.length / size) }, (_, index) =>
+    items.slice(index * size, index * size + size),
+  );
 
 const buildStudentKey = (params: {
   uid?: string;
@@ -315,10 +322,12 @@ const getStatusMeta = (status: StudentSummary["status"]) => {
 const QuizLogTab: React.FC = () => {
   const { config } = useAuth();
   const [logs, setLogs] = useState<Log[]>([]);
+  const [classScopedLogs, setClassScopedLogs] = useState<Log[]>([]);
   const [students, setStudents] = useState<UserProfile[]>([]);
   const [treeData, setTreeData] = useState<TreeUnit[]>([]);
   const [questions, setQuestions] = useState<QuestionMeta[]>([]);
   const [loading, setLoading] = useState(true);
+  const [classScopedLoading, setClassScopedLoading] = useState(false);
   const [supportLoading, setSupportLoading] = useState(true);
   const [lastSyncedAt, setLastSyncedAt] = useState(0);
   const [loadError, setLoadError] = useState("");
@@ -533,6 +542,99 @@ const QuizLogTab: React.FC = () => {
     return () => unsubscribe();
   }, [config, refreshKey]);
 
+  useEffect(() => {
+    if (!classFilter) {
+      setClassScopedLogs([]);
+      setClassScopedLoading(false);
+      return;
+    }
+
+    const selectedClassStudents = students.filter(
+      (student) => student.class === classFilter && student.uid,
+    );
+
+    if (!selectedClassStudents.length) {
+      setClassScopedLogs([]);
+      setClassScopedLoading(false);
+      return;
+    }
+
+    let active = true;
+    setClassScopedLoading(true);
+
+    const loadClassScopedLogs = async () => {
+      try {
+        const quizResultCollection = collection(
+          db,
+          getSemesterCollectionPath(config, "quiz_results"),
+        );
+        const uidChunks = chunkArray(
+          Array.from(
+            new Set(selectedClassStudents.map((student) => student.uid)),
+          ),
+          FIRESTORE_IN_CHUNK_SIZE,
+        );
+        const snaps = await Promise.all(
+          uidChunks.map(async (uidChunk) => {
+            try {
+              return await getDocs(
+                query(
+                  quizResultCollection,
+                  where("uid", "in", uidChunk),
+                  orderBy("timestamp", "desc"),
+                  limit(RESULT_LIMIT),
+                ),
+              );
+            } catch (error) {
+              console.warn(error);
+              return getDocs(
+                query(
+                  quizResultCollection,
+                  where("uid", "in", uidChunk),
+                  limit(RESULT_LIMIT),
+                ),
+              );
+            }
+          }),
+        );
+
+        if (!active) return;
+
+        const dedupedMap = new Map<string, Log>();
+        snaps.forEach((snap) => {
+          snap.docs.forEach((item) => {
+            const log = parseLogDoc(item.id, item.data());
+            const key = buildDedupKey(log);
+            const existing = dedupedMap.get(key);
+            if (
+              !existing ||
+              getTimestampMs(log.timestamp) >=
+                getTimestampMs(existing.timestamp)
+            ) {
+              dedupedMap.set(key, log);
+            }
+          });
+        });
+        const list = Array.from(dedupedMap.values());
+        list.sort(
+          (a, b) => getTimestampMs(b.timestamp) - getTimestampMs(a.timestamp),
+        );
+        setClassScopedLogs(list);
+      } catch (error) {
+        console.error(error);
+        if (active) setClassScopedLogs([]);
+      } finally {
+        if (active) setClassScopedLoading(false);
+      }
+    };
+
+    void loadClassScopedLogs();
+
+    return () => {
+      active = false;
+    };
+  }, [classFilter, config, refreshKey, students]);
+
   const bigOptions = treeData;
   const midOptions = useMemo(() => {
     if (!bigFilter) return treeData.flatMap((big) => big.children || []);
@@ -575,9 +677,26 @@ const QuizLogTab: React.FC = () => {
     return map;
   }, [students]);
 
+  const mergedLogs = useMemo(() => {
+    const dedupedMap = new Map<string, Log>();
+    [...logs, ...classScopedLogs].forEach((log) => {
+      const key = buildDedupKey(log);
+      const existing = dedupedMap.get(key);
+      if (
+        !existing ||
+        getTimestampMs(log.timestamp) >= getTimestampMs(existing.timestamp)
+      ) {
+        dedupedMap.set(key, log);
+      }
+    });
+    return Array.from(dedupedMap.values()).sort(
+      (a, b) => getTimestampMs(b.timestamp) - getTimestampMs(a.timestamp),
+    );
+  }, [classScopedLogs, logs]);
+
   const canonicalLogs = useMemo(
     () =>
-      logs.map((log) => {
+      mergedLogs.map((log) => {
         const profile =
           (log.uid
             ? profileMap.get(buildStudentKey({ uid: log.uid }))
@@ -595,7 +714,7 @@ const QuizLogTab: React.FC = () => {
           studentNumber: profile.number || log.studentNumber,
         };
       }),
-    [logs, profileMap],
+    [mergedLogs, profileMap],
   );
 
   const analysisLogs = useMemo(() => {
@@ -1161,7 +1280,7 @@ const QuizLogTab: React.FC = () => {
           <h3 className="text-sm font-extrabold text-gray-800">
             오늘의 학급 수준
           </h3>
-          {(loading || supportLoading) && (
+          {(loading || supportLoading || classScopedLoading) && (
             <span className="text-xs font-bold text-blue-600">
               동기화 중...
             </span>
