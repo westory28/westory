@@ -2208,17 +2208,17 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                 {visibleSummary.totalQuestions}문항
               </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1220px] table-fixed text-left text-sm">
+            <div className="overflow-hidden">
+              <table className="w-full table-fixed text-left text-sm">
                 <colgroup>
-                  <col className="w-[84px]" />
-                  <col className="w-[250px]" />
-                  <col className="w-[88px]" />
-                  <col className="w-[96px]" />
+                  <col className="w-[7%]" />
+                  <col className="w-[17%]" />
+                  <col className="w-[8%]" />
+                  <col className="w-[8%]" />
                   <col />
-                  <col className="w-[172px]" />
-                  <col className="w-[160px]" />
-                  <col className="w-[132px]" />
+                  <col className="w-[14%]" />
+                  <col className="w-[12%]" />
+                  <col className="w-[10%]" />
                 </colgroup>
                 <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-black text-slate-500 shadow-sm">
                   <tr>

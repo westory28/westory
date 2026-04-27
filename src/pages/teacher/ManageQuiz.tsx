@@ -71,7 +71,7 @@ const ManageQuiz: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col">
-            <main className="flex-1 w-full max-w-7xl mx-auto px-4 lg:px-6 py-6 flex flex-col min-h-0">
+            <main className={`flex-1 w-full mx-auto px-4 lg:px-6 py-6 flex flex-col min-h-0 ${activeTab === 'bank' ? 'max-w-[1680px]' : 'max-w-7xl'}`}>
                 <div className="flex border-b border-gray-200 mb-4 bg-white rounded-t-lg px-2 shrink-0 overflow-x-auto">
                     {canWrite && (
                         <button
