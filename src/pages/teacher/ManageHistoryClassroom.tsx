@@ -51,6 +51,97 @@ interface StudentOption {
   number: string;
 }
 
+type DashboardIconName =
+  | "calendar"
+  | "search"
+  | "clipboard"
+  | "users"
+  | "check"
+  | "edit"
+  | "chevronDown"
+  | "chevronUp";
+
+const DashboardIcon = ({
+  name,
+  className = "h-5 w-5",
+}: {
+  name: DashboardIconName;
+  className?: string;
+}) => {
+  const commonProps = {
+    className,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+  };
+
+  if (name === "calendar") {
+    return (
+      <svg {...commonProps}>
+        <path d="M8 2v4" />
+        <path d="M16 2v4" />
+        <rect x="3" y="5" width="18" height="16" rx="3" />
+        <path d="M3 10h18" />
+      </svg>
+    );
+  }
+  if (name === "search") {
+    return (
+      <svg {...commonProps}>
+        <circle cx="11" cy="11" r="7" />
+        <path d="m20 20-3.5-3.5" />
+      </svg>
+    );
+  }
+  if (name === "clipboard") {
+    return (
+      <svg {...commonProps}>
+        <rect x="8" y="3" width="8" height="4" rx="1.5" />
+        <path d="M8 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
+        <path d="M8 12h8" />
+        <path d="M8 16h5" />
+      </svg>
+    );
+  }
+  if (name === "users") {
+    return (
+      <svg {...commonProps}>
+        <path d="M16 20c0-2.2-1.8-4-4-4s-4 1.8-4 4" />
+        <circle cx="12" cy="9" r="3" />
+        <path d="M22 20c0-1.8-1.2-3.3-2.8-3.8" />
+        <path d="M19 7.5a2.5 2.5 0 0 1 0 5" />
+        <path d="M2 20c0-1.8 1.2-3.3 2.8-3.8" />
+        <path d="M5 7.5a2.5 2.5 0 0 0 0 5" />
+      </svg>
+    );
+  }
+  if (name === "check") {
+    return (
+      <svg {...commonProps}>
+        <circle cx="12" cy="12" r="9" />
+        <path d="m8 12 2.5 2.5L16 9" />
+      </svg>
+    );
+  }
+  if (name === "edit") {
+    return (
+      <svg {...commonProps}>
+        <path d="M12 20h9" />
+        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+      </svg>
+    );
+  }
+  return (
+    <svg {...commonProps}>
+      <path d={name === "chevronUp" ? "m6 15 6-6 6 6" : "m6 9 6 6 6-6"} />
+    </svg>
+  );
+};
+
 const formatStudentBadgeLabel = (
   student: Pick<StudentOption, "grade" | "className" | "number" | "name">,
 ) => {
@@ -179,6 +270,10 @@ const compareSchoolValues = (a: string, b: string) => {
 };
 
 type BlankEditorMode = "create" | "edit";
+type DashboardStatusFilter = "all" | "published" | "private" | "pending" | "passed";
+type DashboardSortOrder = "latest" | "oldest";
+
+const ASSIGNMENTS_PER_PAGE = 10;
 
 const normalizeDueWindowDaysInput = (value: string): number | "" => {
   const trimmed = String(value || "").trim();
@@ -199,6 +294,56 @@ const formatDeadlineLabel = (timestampMs: number | null | undefined) => {
     hour: "numeric",
     minute: "2-digit",
   }).format(new Date(timestampMs));
+};
+
+const getTimestampMs = (value: unknown): number | null => {
+  if (!value) return null;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "object" && value) {
+    if ("toMillis" in value && typeof value.toMillis === "function") {
+      return value.toMillis();
+    }
+    if ("seconds" in value) {
+      const seconds = Number((value as { seconds?: unknown }).seconds);
+      if (Number.isFinite(seconds)) return seconds * 1000;
+    }
+  }
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const getAssignmentSortMs = (assignment: HistoryClassroomAssignment) =>
+  getTimestampMs(assignment.publishedAt) ||
+  getTimestampMs(assignment.createdAt) ||
+  getTimestampMs(assignment.updatedAt) ||
+  getHistoryClassroomDueAtMs(assignment) ||
+  0;
+
+const formatAssignmentDateLabel = (timestampMs: number) => {
+  if (!timestampMs) return "날짜 미정";
+  return new Intl.DateTimeFormat("ko-KR", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  }).format(new Date(timestampMs));
+};
+
+const formatAssignmentTimelineDate = (timestampMs: number) => {
+  if (!timestampMs) return { date: "날짜 미정", weekday: "" };
+  const target = new Date(timestampMs);
+  return {
+    date: new Intl.DateTimeFormat("ko-KR", {
+      month: "long",
+      day: "numeric",
+    }).format(target),
+    weekday: new Intl.DateTimeFormat("ko-KR", {
+      weekday: "long",
+    }).format(target),
+  };
 };
 
 const getFirestoreErrorSummary = (error: unknown) => ({
@@ -260,6 +405,24 @@ const worksheetBlankToHistoryBlank = (
   };
 };
 
+const cloneMapResourceBlanks = (
+  mapResource: MapResource | null,
+): HistoryClassroomBlank[] =>
+  (mapResource?.pdfBlanks || [])
+    .map((blank) => ({
+      id: String(blank.id || "").trim() || `blank-${blank.page}-${blank.left}-${blank.top}`,
+      page: Math.max(1, Number(blank.page) || 1),
+      left: Number(blank.left) || 0,
+      top: Number(blank.top) || 0,
+      width: Math.max(1, Number(blank.width) || 1),
+      height: Math.max(1, Number(blank.height) || 1),
+      answer: String(blank.answer || "").trim(),
+      prompt: String(blank.prompt || "").trim(),
+      source: blank.source === "ocr" ? "ocr" : "manual",
+    }))
+    .filter((blank) => blank.answer)
+    .sort((a, b) => a.page - b.page || a.top - b.top || a.left - b.left);
+
 const ManageHistoryClassroom: React.FC = () => {
   const { config, userData } = useAuth();
   const navigate = useNavigate();
@@ -283,6 +446,7 @@ const ManageHistoryClassroom: React.FC = () => {
   const [targetClass, setTargetClass] = useState("");
   const [targetNumber, setTargetNumber] = useState("");
   const [targetStudentUid, setTargetStudentUid] = useState("");
+  const [targetStudentSearch, setTargetStudentSearch] = useState("");
   const [selectedStudentUids, setSelectedStudentUids] = useState<string[]>([]);
   const [blanks, setBlanks] = useState<HistoryClassroomBlank[]>([]);
   const [saving, setSaving] = useState(false);
@@ -323,6 +487,16 @@ const ManageHistoryClassroom: React.FC = () => {
   const [previewAnswers, setPreviewAnswers] = useState<Record<string, string>>(
     {},
   );
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isMapManagerOpen, setIsMapManagerOpen] = useState(false);
+  const [assignmentPage, setAssignmentPage] = useState(1);
+  const [dashboardSearch, setDashboardSearch] = useState("");
+  const [dashboardStatusFilter, setDashboardStatusFilter] =
+    useState<DashboardStatusFilter>("all");
+  const [dashboardSortOrder, setDashboardSortOrder] =
+    useState<DashboardSortOrder>("latest");
+  const [expandedAssignmentId, setExpandedAssignmentId] = useState("");
+  const [savingMapBlanks, setSavingMapBlanks] = useState(false);
   const preserveBlankResetRef = React.useRef(false);
   const blankEditorComposingRef = React.useRef(false);
   const blankEditorCommitLockRef = React.useRef(false);
@@ -336,20 +510,34 @@ const ManageHistoryClassroom: React.FC = () => {
   useEffect(() => {
     const loadData = async () => {
       const mapPath = getSemesterCollectionPath(config, "map_resources");
-      let mapSnap = await getDocs(
+      const semesterMapSnap = await getDocs(
         query(collection(db, mapPath), orderBy("sortOrder", "asc")),
       );
-      if (mapSnap.empty) {
-        mapSnap = await getDocs(
-          query(collection(db, "map_resources"), orderBy("sortOrder", "asc")),
+      const legacyMapSnap = await getDocs(
+        query(collection(db, "map_resources"), orderBy("sortOrder", "asc")),
+      );
+      const mapById = new Map<string, MapResource>();
+      legacyMapSnap.docs.forEach((docSnap) => {
+        mapById.set(
+          docSnap.id,
+          normalizeMapResource(docSnap.id, docSnap.data()),
         );
-      }
-      const loadedMaps = mapSnap.docs
-        .map((docSnap) => normalizeMapResource(docSnap.id, docSnap.data()))
+      });
+      semesterMapSnap.docs.forEach((docSnap) => {
+        mapById.set(
+          docSnap.id,
+          normalizeMapResource(docSnap.id, docSnap.data()),
+        );
+      });
+      const loadedMaps = Array.from(mapById.values())
         .filter(
           (item) =>
             item.type === "pdf" && (item.pdfPageImages?.length || 0) > 0,
-        );
+        )
+        .sort((a, b) => {
+          if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+          return a.title.localeCompare(b.title, "ko");
+        });
       setMaps(loadedMaps);
       if (loadedMaps[0]) {
         setSelectedMapId((prev) => prev || loadedMaps[0].id);
@@ -476,7 +664,8 @@ const ManageHistoryClassroom: React.FC = () => {
       preserveBlankResetRef.current = false;
       return;
     }
-    setBlanks([]);
+    const nextMap = maps.find((item) => item.id === selectedMapId) || null;
+    setBlanks(cloneMapResourceBlanks(nextMap));
     setSelectedBlankId("");
     setDraftBlank(null);
     setDraftBlankAnswer("");
@@ -484,7 +673,7 @@ const ManageHistoryClassroom: React.FC = () => {
     setBlankEditorAnswer("");
     blankEditorComposingRef.current = false;
     setShowAllBlankTags(false);
-  }, [selectedMapId]);
+  }, [maps, selectedMapId]);
 
   const worksheetSourceMap = useMemo<MapResource | null>(() => {
     if (
@@ -521,20 +710,27 @@ const ManageHistoryClassroom: React.FC = () => {
     [maps, selectedMapId, worksheetSourceMap],
   );
 
+  const selectedStoredMap = useMemo(
+    () => maps.find((item) => item.id === selectedMapId) || null,
+    [maps, selectedMapId],
+  );
+
+  const activeWorksheetMap = isMapManagerOpen ? selectedStoredMap : selectedMap;
+
   const worksheetPageImages = useMemo(
     () =>
-      (selectedMap?.pdfPageImages || []).map((page) => ({
+      (activeWorksheetMap?.pdfPageImages || []).map((page) => ({
         page: page.page,
         imageUrl: page.imageUrl,
         width: page.width,
         height: page.height,
       })),
-    [selectedMap],
+    [activeWorksheetMap],
   );
 
   const worksheetTextRegions = useMemo(
     () =>
-      (selectedMap?.pdfRegions || []).map((region) => ({
+      (activeWorksheetMap?.pdfRegions || []).map((region) => ({
         label: region.label,
         page: region.page,
         left: region.left,
@@ -542,7 +738,7 @@ const ManageHistoryClassroom: React.FC = () => {
         width: region.width,
         height: region.height,
       })),
-    [selectedMap],
+    [activeWorksheetMap],
   );
 
   const worksheetBlanks = useMemo(
@@ -596,6 +792,28 @@ const ManageHistoryClassroom: React.FC = () => {
     [classFilteredStudents, targetNumber],
   );
 
+  const searchedStudents = useMemo(() => {
+    const keyword = targetStudentSearch.trim().toLocaleLowerCase("ko-KR");
+    if (!keyword) return [];
+    return students
+      .filter((student) => {
+        if (selectedStudentUids.includes(student.uid)) return false;
+        const searchable = [
+          student.name,
+          student.grade,
+          student.className,
+          student.number,
+          `${student.grade}-${student.className}`,
+          `${student.grade}-${student.className} ${student.number}번`,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLocaleLowerCase("ko-KR");
+        return searchable.includes(keyword);
+      })
+      .slice(0, 8);
+  }, [selectedStudentUids, students, targetStudentSearch]);
+
   const selectedStudents = useMemo(
     () =>
       selectedStudentUids
@@ -644,13 +862,11 @@ const ManageHistoryClassroom: React.FC = () => {
 
   const targetStudentPreview = useMemo(
     () =>
-      numberFilteredStudents.find(
-        (student) => student.uid === targetStudentUid,
-      ) ||
+      students.find((student) => student.uid === targetStudentUid) ||
       (targetNumber && numberFilteredStudents.length === 1
         ? numberFilteredStudents[0]
         : null),
-    [numberFilteredStudents, targetNumber, targetStudentUid],
+    [numberFilteredStudents, students, targetNumber, targetStudentUid],
   );
 
   const editingAssignment = useMemo(
@@ -705,9 +921,16 @@ const ManageHistoryClassroom: React.FC = () => {
 
     assignments.forEach((assignment) => {
       const assignedUids = getHistoryClassroomAssignedStudentUids(assignment);
+      const assignedUidSet = new Set(assignedUids);
       const latestByStudentUid = new Map<string, HistoryClassroomResult>();
       (resultsByAssignment[assignment.id] || []).forEach((result) => {
-        if (!result.uid || latestByStudentUid.has(result.uid)) return;
+        if (
+          !result.uid ||
+          !assignedUidSet.has(result.uid) ||
+          latestByStudentUid.has(result.uid)
+        ) {
+          return;
+        }
         latestByStudentUid.set(result.uid, result);
       });
 
@@ -888,6 +1111,284 @@ const ManageHistoryClassroom: React.FC = () => {
     };
   }, [editingPreviewAssignment]);
 
+  const classroomDashboard = useMemo(() => {
+    const totals = assignments.reduce(
+      (accumulator, assignment) => {
+        const assignedUids = getHistoryClassroomAssignedStudentUids(assignment);
+        const assignedUidSet = new Set(assignedUids);
+        const assignedCount = assignedUids.length;
+        const attemptMeta = assignmentAttemptMetaById.get(assignment.id);
+        const latestByStudentUid = new Map<string, HistoryClassroomResult>();
+        (resultsByAssignment[assignment.id] || []).forEach((result) => {
+          if (
+            !result.uid ||
+            !assignedUidSet.has(result.uid) ||
+            latestByStudentUid.has(result.uid)
+          ) {
+            return;
+          }
+          latestByStudentUid.set(result.uid, result);
+        });
+
+        accumulator.assigned += assignedCount;
+        accumulator.submitted += attemptMeta?.completed || 0;
+        accumulator.pending += attemptMeta?.pending || 0;
+        accumulator.overdueAbsent += attemptMeta?.overdueAbsent || 0;
+        latestByStudentUid.forEach((result) => {
+          if (result.status === "passed") accumulator.passed += 1;
+          if (result.status === "failed") accumulator.failed += 1;
+          if (result.status === "cancelled") accumulator.cancelled += 1;
+        });
+        return accumulator;
+      },
+      {
+        assigned: 0,
+        submitted: 0,
+        passed: 0,
+        failed: 0,
+        cancelled: 0,
+        pending: 0,
+        overdueAbsent: 0,
+      },
+    );
+
+    const published = assignments.filter(
+      (assignment) => assignment.isPublished,
+    ).length;
+
+    return {
+      ...totals,
+      totalAssignments: assignments.length,
+      published,
+      privateCount: assignments.length - published,
+    };
+  }, [assignmentAttemptMetaById, assignments, resultsByAssignment]);
+
+  const assignmentRows = useMemo(
+    () =>
+      assignments.map((assignment) => {
+        const attemptMeta = assignmentAttemptMetaById.get(assignment.id);
+        const assignedUids = getHistoryClassroomAssignedStudentUids(assignment);
+        const assignedUidSet = new Set(assignedUids);
+        const latestByStudentUid = new Map<string, HistoryClassroomResult>();
+        const assignmentResults = resultsByAssignment[assignment.id] || [];
+        assignmentResults.forEach((result) => {
+          if (
+            !result.uid ||
+            !assignedUidSet.has(result.uid) ||
+            latestByStudentUid.has(result.uid)
+          ) {
+            return;
+          }
+          latestByStudentUid.set(result.uid, result);
+        });
+        const statusCounts = {
+          passed: 0,
+          failed: 0,
+          cancelled: 0,
+        };
+        latestByStudentUid.forEach((result) => {
+          if (result.status === "passed") statusCounts.passed += 1;
+          if (result.status === "failed") statusCounts.failed += 1;
+          if (result.status === "cancelled") statusCounts.cancelled += 1;
+        });
+        const isPastDue = isHistoryClassroomPastDue(assignment);
+        const studentSummaries = assignedUids.map((uid, index) => {
+          const student = studentByUid.get(uid);
+          const attempts = assignmentResults
+            .filter((result) => result.uid === uid)
+            .sort(
+              (a, b) =>
+                (getTimestampMs(a.createdAt) || 0) -
+                (getTimestampMs(b.createdAt) || 0),
+            );
+          const latest = attempts[attempts.length - 1] || null;
+          const fallbackName =
+            assignment.targetStudentNames[index] ||
+            assignment.targetStudentName ||
+            "학생";
+          return {
+            uid,
+            name: student?.name || fallbackName,
+            classLabel: student ? formatClassGroupLabel(student) : "",
+            number: student?.number || "",
+            status: latest?.status || null,
+            statusLabel: latest
+              ? describeHistoryResultStatus(latest.status)
+              : isPastDue
+                ? "마감 미제출"
+                : "미제출",
+            attemptLabel: latest
+              ? `${attempts.length}번째 · ${Math.round(latest.percent)}%`
+              : "시도 없음",
+          };
+        });
+        const statusGroups = {
+          passed: studentSummaries.filter(
+            (student) => student.status === "passed",
+          ),
+          failed: studentSummaries.filter(
+            (student) => student.status === "failed",
+          ),
+          pending: studentSummaries.filter((student) => !student.status),
+          cancelled: studentSummaries.filter(
+            (student) => student.status === "cancelled",
+          ),
+        };
+        const sortMs = getAssignmentSortMs(assignment);
+
+        return {
+          assignment,
+          assignedCount: assignedUids.length,
+          submittedCount: attemptMeta?.completed || 0,
+          pendingCount: attemptMeta?.pending || 0,
+          overdueAbsentCount: attemptMeta?.overdueAbsent || 0,
+          dueAtMs: attemptMeta?.dueAtMs || null,
+          sortMs,
+          dateLabel: formatAssignmentDateLabel(sortMs),
+          timelineDate: formatAssignmentTimelineDate(sortMs),
+          studentSummaries,
+          statusGroups,
+          ...statusCounts,
+        };
+      }),
+    [assignmentAttemptMetaById, assignments, resultsByAssignment, studentByUid],
+  );
+
+  const filteredAssignmentRows = useMemo(() => {
+    const keyword = dashboardSearch.trim().toLocaleLowerCase("ko-KR");
+    return assignmentRows.filter((row) => {
+      if (dashboardStatusFilter === "published" && !row.assignment.isPublished)
+        return false;
+      if (dashboardStatusFilter === "private" && row.assignment.isPublished)
+        return false;
+      if (
+        dashboardStatusFilter === "pending" &&
+        row.pendingCount + row.overdueAbsentCount <= 0
+      ) {
+        return false;
+      }
+      if (dashboardStatusFilter === "passed" && row.passed <= 0) return false;
+      if (!keyword) return true;
+
+      const searchable = [
+        row.assignment.title,
+        row.assignment.mapTitle,
+        row.assignment.description,
+        row.dateLabel,
+        ...row.studentSummaries.flatMap((student) => [
+          student.name,
+          student.classLabel,
+          student.number,
+          student.statusLabel,
+          student.attemptLabel,
+        ]),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLocaleLowerCase("ko-KR");
+      return searchable.includes(keyword);
+    });
+  }, [assignmentRows, dashboardSearch, dashboardStatusFilter]);
+
+  const sortedAssignmentRows = useMemo(
+    () =>
+      [...filteredAssignmentRows].sort((a, b) =>
+        dashboardSortOrder === "latest"
+          ? b.sortMs - a.sortMs
+          : a.sortMs - b.sortMs,
+      ),
+    [dashboardSortOrder, filteredAssignmentRows],
+  );
+
+  const dashboardDateRangeLabel = useMemo(() => {
+    const timestamps = filteredAssignmentRows
+      .map((row) => row.sortMs)
+      .filter((value) => value > 0);
+    if (!timestamps.length) return "날짜 전체";
+    const start = Math.min(...timestamps);
+    const end = Math.max(...timestamps);
+    const format = (timestampMs: number) =>
+      new Intl.DateTimeFormat("ko-KR", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      })
+        .format(new Date(timestampMs))
+        .replace(/\.\s?/g, ".")
+        .replace(/\.$/, "");
+    return `${format(start)} ~ ${format(end)}`;
+  }, [filteredAssignmentRows]);
+
+  const totalAssignmentPages = Math.max(
+    1,
+    Math.ceil(sortedAssignmentRows.length / ASSIGNMENTS_PER_PAGE),
+  );
+  const pagedAssignmentRows = useMemo(
+    () =>
+      sortedAssignmentRows.slice(
+        (assignmentPage - 1) * ASSIGNMENTS_PER_PAGE,
+        assignmentPage * ASSIGNMENTS_PER_PAGE,
+      ),
+    [assignmentPage, sortedAssignmentRows],
+  );
+
+  useEffect(() => {
+    setAssignmentPage((current) => Math.min(current, totalAssignmentPages));
+  }, [totalAssignmentPages]);
+
+  useEffect(() => {
+    setAssignmentPage(1);
+  }, [dashboardSearch, dashboardStatusFilter, dashboardSortOrder]);
+
+  useEffect(() => {
+    if (
+      expandedAssignmentId &&
+      !pagedAssignmentRows.some((row) => row.assignment.id === expandedAssignmentId)
+    ) {
+      setExpandedAssignmentId("");
+    }
+  }, [expandedAssignmentId, pagedAssignmentRows]);
+
+  const resetWorksheetDraft = () => {
+    setWorksheetEditingAssignmentId("");
+    setWorksheetEditingIsPublished(true);
+    setWorksheetImportSourceId("");
+    setWorksheetImportSourceTitle("");
+    setWorksheetSourceAssignment(null);
+    setTitle("");
+    setDescription("");
+    setTimeLimitMinutes(0);
+    setCooldownMinutes(0);
+    setDueWindowDays("");
+    setPassThresholdPercent(80);
+    setTargetGrade("");
+    setTargetClass("");
+    setTargetNumber("");
+    setTargetStudentUid("");
+    setTargetStudentSearch("");
+    setSelectedStudentUids([]);
+    setSelectedBlankId("");
+    setDraftBlank(null);
+    setDraftBlankAnswer("");
+    setBlankEditorMode(null);
+    setBlankEditorAnswer("");
+    blankEditorComposingRef.current = false;
+    setShowAllBlankTags(false);
+    setFloatingPanelOpen(false);
+    if (maps[0]) {
+      setSelectedMapId(maps[0].id);
+      setBlanks(cloneMapResourceBlanks(maps[0]));
+    } else {
+      setBlanks([]);
+    }
+  };
+
+  const openCreateModal = () => {
+    resetWorksheetDraft();
+    setIsCreateModalOpen(true);
+  };
+
   const selectedBlank = useMemo<any>(
     () => blanks.find((blank) => blank.id === selectedBlankId) || null,
     [blanks, selectedBlankId],
@@ -968,6 +1469,33 @@ const ManageHistoryClassroom: React.FC = () => {
     setBlankEditorMode(null);
     setBlankEditorAnswer("");
     blankEditorComposingRef.current = false;
+  };
+
+  const openMapBlankManager = (mapId?: string) => {
+    const nextMap =
+      maps.find((item) => item.id === mapId) ||
+      maps.find((item) => item.id === selectedMapId) ||
+      maps[0] ||
+      null;
+    if (nextMap) {
+      setSelectedMapId(nextMap.id);
+      setBlanks(cloneMapResourceBlanks(nextMap));
+    }
+    setSelectedBlankId("");
+    setDraftBlank(null);
+    setDraftBlankAnswer("");
+    closeBlankEditor();
+    setFloatingPanelOpen(true);
+    setIsMapManagerOpen(true);
+  };
+
+  const closeMapBlankManager = () => {
+    setIsMapManagerOpen(false);
+    setFloatingPanelOpen(false);
+    setSelectedBlankId("");
+    setDraftBlank(null);
+    setDraftBlankAnswer("");
+    closeBlankEditor();
   };
 
   const handleConfirmDraftBlank = () => {
@@ -1061,7 +1589,8 @@ const ManageHistoryClassroom: React.FC = () => {
     event: React.KeyboardEvent<HTMLInputElement>,
   ) => {
     if (event.key !== "Enter") return;
-    if (event.nativeEvent.isComposing || blankEditorComposingRef.current) return;
+    if (event.nativeEvent.isComposing || blankEditorComposingRef.current)
+      return;
     event.preventDefault();
     handleSubmitBlankEditor();
   };
@@ -1106,6 +1635,7 @@ const ManageHistoryClassroom: React.FC = () => {
     setTargetClass(assignment.targetClass);
     setTargetNumber("");
     setTargetStudentUid("");
+    setTargetStudentSearch("");
     setSelectedStudentUids(
       assignment.targetStudentUids.length
         ? assignment.targetStudentUids
@@ -1124,7 +1654,7 @@ const ManageHistoryClassroom: React.FC = () => {
     setWorksheetImportSourceTitle(mode === "clone" ? assignment.title : "");
     setWorksheetImportSourceId(mode === "clone" ? assignment.id : "");
     closeAssignmentEditor();
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setIsCreateModalOpen(true);
   };
 
   const handleImportAssignmentToDraft = () => {
@@ -1320,8 +1850,12 @@ const ManageHistoryClassroom: React.FC = () => {
       alert("학생 정보를 찾을 수 없습니다.");
       return;
     }
-    if (!blanks.length || blanks.some((blank) => !blank.answer.trim())) {
-      alert("모든 빈칸의 정답을 입력해 주세요.");
+    const saveBlanks =
+      worksheetEditingAssignmentId && worksheetSourceAssignment
+        ? blanks
+        : cloneMapResourceBlanks(selectedMap);
+    if (!saveBlanks.length || saveBlanks.some((blank) => !blank.answer.trim())) {
+      alert("배포 지도 관리에서 출제 빈칸과 정답을 먼저 저장해 주세요.");
       return;
     }
 
@@ -1367,8 +1901,8 @@ const ManageHistoryClassroom: React.FC = () => {
         pdfRegions: sourceSnapshot?.pdfRegions?.length
           ? sourceSnapshot.pdfRegions
           : selectedMap.pdfRegions || [],
-        blanks,
-        answerOptions: buildAnswerOptions(blanks),
+        blanks: saveBlanks,
+        answerOptions: buildAnswerOptions(saveBlanks),
         timeLimitMinutes,
         cooldownMinutes,
         dueWindowDays: resolvedDueWindowDays,
@@ -1416,6 +1950,7 @@ const ManageHistoryClassroom: React.FC = () => {
         }
         return [normalized, ...prev];
       });
+      setAssignmentPage(1);
       setTitle("");
       setDescription("");
       setTimeLimitMinutes(0);
@@ -1426,6 +1961,7 @@ const ManageHistoryClassroom: React.FC = () => {
       setTargetClass("");
       setTargetNumber("");
       setTargetStudentUid("");
+      setTargetStudentSearch("");
       setSelectedStudentUids([]);
       setBlanks([]);
       setSelectedBlankId("");
@@ -1441,6 +1977,7 @@ const ManageHistoryClassroom: React.FC = () => {
       setWorksheetImportSourceTitle("");
       setWorksheetSourceAssignment(null);
       alert("역사교실 과제를 저장했습니다.");
+      setIsCreateModalOpen(false);
     } catch (error) {
       console.error("Failed to save history classroom assignment", {
         path: `${getSemesterCollectionPath(config, "history_classrooms")}/${assignmentId || worksheetEditingAssignmentId || "new"}`,
@@ -1461,6 +1998,52 @@ const ManageHistoryClassroom: React.FC = () => {
       alert("역사교실 과제 저장에 실패했습니다.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveMapBlanks = async () => {
+    if (!selectedStoredMap) {
+      alert("저장할 지도를 선택해 주세요.");
+      return;
+    }
+    if (!blanks.length || blanks.some((blank) => !blank.answer.trim())) {
+      alert("빈칸을 추가하고 모든 정답을 입력해 주세요.");
+      return;
+    }
+
+    setSavingMapBlanks(true);
+    try {
+      const payload = normalizeMapResource(selectedStoredMap.id, {
+        ...selectedStoredMap,
+        pdfBlanks: blanks,
+        answerOptions: buildAnswerOptions(blanks),
+      });
+      await setDoc(
+        doc(
+          db,
+          getSemesterCollectionPath(config, "map_resources"),
+          selectedStoredMap.id,
+        ),
+        {
+          ...payload,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+      setMaps((prev) =>
+        prev.map((map) => (map.id === selectedStoredMap.id ? payload : map)),
+      );
+      setBlanks(cloneMapResourceBlanks(payload));
+      alert("배포 지도 빈칸과 정답을 저장했습니다.");
+    } catch (error) {
+      console.error("Failed to save map blanks", {
+        mapResourceId: selectedStoredMap.id,
+        ...getFirestoreErrorSummary(error),
+        error,
+      });
+      alert("배포 지도 빈칸 저장에 실패했습니다.");
+    } finally {
+      setSavingMapBlanks(false);
     }
   };
 
@@ -1496,777 +2079,1125 @@ const ManageHistoryClassroom: React.FC = () => {
         </button>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[22rem_minmax(0,1fr)]">
-        <section className="space-y-4 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
-          <div>
-            <label className="mb-1 block text-xs font-bold text-gray-500">
-              PDF 지도 선택
-            </label>
-            <select
-              value={selectedMapId}
-              onChange={(e) => {
-                const nextMapId = e.target.value;
-                setSelectedMapId(nextMapId);
-                if (worksheetSourceAssignment?.mapResourceId !== nextMapId) {
-                  setWorksheetSourceAssignment(null);
-                  setWorksheetImportSourceId("");
-                  setWorksheetImportSourceTitle("");
-                }
-                setTargetStudentUid("");
-                setSelectedStudentUids([]);
-              }}
-              className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm"
-            >
-              {maps.map((map) => (
-                <option key={map.id} value={map.id}>
-                  {map.title}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
-            <div className="text-sm font-bold text-gray-700">
-              기존 역사교실 불러오기
-            </div>
-            <div className="mt-1 text-xs text-gray-500">
-              지도와 OCR 빈칸 배치를 그대로 가져와 새 과제로 다시 배포할 수
-              있습니다.
-            </div>
-            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-              <select
-                value={worksheetImportSourceId}
-                onChange={(e) => setWorksheetImportSourceId(e.target.value)}
-                className="h-11 min-w-0 flex-1 rounded-xl border border-gray-300 bg-white px-3 text-sm"
-              >
-                <option value="">불러올 역사교실 선택</option>
-                {assignments.map((assignment) => (
-                  <option key={assignment.id} value={assignment.id}>
-                    {assignment.title} · {assignment.mapTitle}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={handleImportAssignmentToDraft}
-                disabled={!worksheetImportSourceId}
-                className="h-11 rounded-xl border border-blue-200 bg-white px-4 text-sm font-bold text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                불러오기
-              </button>
-            </div>
-            {worksheetImportSourceTitle && (
-              <div className="mt-3 rounded-xl border border-blue-100 bg-white px-3 py-2 text-xs text-blue-700">
-                복제 기준:{" "}
-                <span className="font-bold">{worksheetImportSourceTitle}</span>
-              </div>
-            )}
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-bold text-gray-500">
-              제목
-            </label>
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-bold text-gray-500">
-              설명
-            </label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm"
-            />
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1">
-            <div>
-              <label className="mb-1 block text-xs font-bold text-gray-500">
-                제한 시간(분)
-              </label>
-              <input
-                type="number"
-                min={0}
-                value={timeLimitMinutes}
-                onChange={(e) =>
-                  setTimeLimitMinutes(Number(e.target.value) || 0)
-                }
-                className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm"
-              />
+      <section className="mb-5 px-1 py-2">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-blue-100 bg-blue-50 text-blue-600">
+              <DashboardIcon name="calendar" className="h-6 w-6" />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-bold text-gray-500">
-                재도전 제한 시간(분)
-              </label>
-              <input
-                type="number"
-                min={0}
-                value={cooldownMinutes}
-                onChange={(e) =>
-                  setCooldownMinutes(Number(e.target.value) || 0)
-                }
-                className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-bold text-gray-500">
-                응시 제한 기간(일)
-              </label>
-              <input
-                type="number"
-                min={1}
-                value={dueWindowDays}
-                onChange={(e) =>
-                  setDueWindowDays(normalizeDueWindowDaysInput(e.target.value))
-                }
-                placeholder="없음"
-                className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-bold text-gray-500">
-                통과 기준 (%)
-              </label>
-              <input
-                type="number"
-                min={0}
-                max={100}
-                value={passThresholdPercent}
-                onChange={(e) =>
-                  setPassThresholdPercent(
-                    Math.min(100, Math.max(0, Number(e.target.value) || 0)),
-                  )
-                }
-                className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm"
-              />
+              <h1 className="text-2xl font-black text-gray-900">
+                역사교실 제출 현황 대시보드
+              </h1>
+              <p className="mt-2 text-sm leading-6 text-gray-600">
+                날짜별로 과제와 학생 제출 현황을 한눈에 확인하세요.
+              </p>
             </div>
           </div>
-
-          <div className="space-y-3">
-            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(5.75rem,1.2fr)] gap-2 lg:grid-cols-4 lg:gap-3">
-              <select
-                value={targetGrade}
-                onChange={(e) => {
-                  setTargetGrade(e.target.value);
-                  setTargetClass("");
-                  setTargetNumber("");
-                  setTargetStudentUid("");
-                }}
-                className="h-11 w-full min-w-0 rounded-xl border border-gray-300 px-3 text-sm"
-              >
-                <option value="">학년 선택</option>
-                {gradeOptions.map((grade) => (
-                  <option key={grade} value={grade}>
-                    {grade}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={targetClass}
-                onChange={(e) => {
-                  setTargetClass(e.target.value);
-                  setTargetNumber("");
-                  setTargetStudentUid("");
-                }}
-                className="h-11 w-full min-w-0 rounded-xl border border-gray-300 px-3 text-sm"
-              >
-                <option value="">학급 선택</option>
-                {classOptions.map((className) => (
-                  <option key={className} value={className}>
-                    {className}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={targetNumber}
-                onChange={(e) => {
-                  setTargetNumber(e.target.value);
-                  setTargetStudentUid("");
-                }}
-                className="h-11 w-full min-w-0 rounded-xl border border-gray-300 px-3 text-sm"
-              >
-                <option value="">번호 선택</option>
-                {numberOptions.map((number) => (
-                  <option key={number} value={number}>
-                    {number}
-                  </option>
-                ))}
-              </select>
-              <div className="flex h-11 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 px-3 text-center text-sm font-bold text-gray-700">
-                <span className="block w-full truncate whitespace-nowrap">
-                  {targetStudentPreview?.name || "학생 이름"}
-                </span>
-              </div>
-            </div>
-            <select
-              value={targetStudentUid}
-              onChange={(e) => setTargetStudentUid(e.target.value)}
-              className="h-11 w-full min-w-0 rounded-xl border border-gray-300 px-3 text-sm"
-              title={
-                targetStudentPreview
-                  ? `${targetStudentPreview.grade}-${targetStudentPreview.className} ${targetStudentPreview.number}번 ${targetStudentPreview.name}`
-                  : "학생 선택"
-              }
-            >
-              <option value="">학생 선택</option>
-              {numberFilteredStudents.map((student) => (
-                <option key={student.uid} value={student.uid}>
-                  {student.grade}-{student.className} {student.number}번{" "}
-                  {student.name}
-                </option>
-              ))}
-            </select>
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => {
-                if (
-                  !targetStudentUid ||
-                  selectedStudentUids.includes(targetStudentUid)
-                )
-                  return;
-                setSelectedStudentUids((prev) => [...prev, targetStudentUid]);
-                setTargetStudentUid("");
-              }}
-              disabled={
-                !targetStudentUid ||
-                selectedStudentUids.includes(targetStudentUid)
-              }
-              className="h-11 rounded-xl border border-blue-200 bg-blue-50 px-3 text-sm font-bold text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => openMapBlankManager()}
+              className="inline-flex h-11 items-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 text-sm font-bold text-gray-700 shadow-sm hover:bg-gray-50"
             >
-              학생 추가
+              지도 관리
+            </button>
+            <button
+              type="button"
+              onClick={openCreateModal}
+              className="h-11 rounded-2xl bg-blue-600 px-5 text-sm font-bold text-white shadow-sm hover:bg-blue-700"
+            >
+              + 새 역사교실
             </button>
           </div>
+        </div>
+      </section>
 
-          <div className="rounded-2xl border border-gray-200 bg-white p-3">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <div className="text-sm font-bold text-gray-700">배정 학생</div>
-              <div className="inline-flex shrink-0 items-center rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 whitespace-nowrap">
-                {selectedStudents.length}명
-              </div>
-            </div>
-            <div className="max-h-32 space-y-2 overflow-y-auto pr-1">
-              {groupStudentsByClass(selectedStudents).map((group) => (
-                <div key={group.classLabel} className="flex items-center gap-2">
-                  <span className="shrink-0 rounded-full bg-gray-100 px-2 py-1 text-[11px] font-bold text-gray-600">
-                    {group.classLabel}
-                  </span>
-                  <div className="flex min-w-0 flex-wrap gap-1">
-                    {group.students.map((student) => (
-                      <div
-                        key={student.uid}
-                        className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] font-semibold text-gray-700"
-                      >
-                        <span className="font-bold text-gray-900">
-                          {student.name}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setSelectedStudentUids((prev) =>
-                              prev.filter((uid) => uid !== student.uid),
-                            )
-                          }
-                          className="shrink-0 text-[10px] font-bold text-red-500"
-                        >
-                          삭제
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-              {!selectedStudents.length && (
-                <div className="text-sm text-gray-400">
-                  학생을 선택해서 추가하면 여기에 반별로 묶여 표시됩니다.
-                </div>
-              )}
-            </div>
-            <div className="hidden flex flex-wrap gap-2">
-              {selectedStudents.map((student) => (
-                <div
-                  key={student.uid}
-                  className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-700"
-                >
-                  <span className="max-w-[10rem] truncate">
-                    <span className="font-bold">
-                      {student.grade}-{student.className}
-                    </span>{" "}
-                    <span>{student.number}번</span>{" "}
-                    <span className="font-bold text-gray-900">
-                      {student.name}
-                    </span>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setSelectedStudentUids((prev) =>
-                        prev.filter((uid) => uid !== student.uid),
-                      )
-                    }
-                    className="shrink-0 text-[11px] font-bold text-red-500"
-                  >
-                    제거
-                  </button>
-                </div>
-              ))}
-              {!selectedStudents.length && (
-                <div className="text-sm text-gray-400">
-                  학생을 선택해서 추가하면 여기에 여러 명이 목록으로 표시됩니다.
-                </div>
-              )}
-            </div>
+      <section className="mb-5 rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="grid gap-3 xl:grid-cols-[17rem_minmax(16rem,1fr)_auto_auto] xl:items-center">
+          <div className="flex h-12 items-center gap-3 rounded-2xl border border-gray-200 px-4 text-sm font-bold text-gray-700">
+            <DashboardIcon name="calendar" className="h-4 w-4 text-blue-600" />
+            {dashboardDateRangeLabel}
           </div>
+          <div className="flex h-12 items-center gap-3 rounded-2xl border border-gray-200 px-4">
+            <input
+              value={dashboardSearch}
+              onChange={(event) => setDashboardSearch(event.target.value)}
+              placeholder="과제명, 학생 이름, 학번 검색"
+              className="h-full min-w-0 flex-1 border-0 bg-transparent text-sm outline-none placeholder:text-gray-400"
+            />
+            <DashboardIcon name="search" className="h-5 w-5 text-gray-400" />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {[
+              ["all", "전체"],
+              ["published", "공개"],
+              ["private", "비공개"],
+              ["pending", "미제출"],
+              ["passed", "통과"],
+            ].map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() =>
+                  setDashboardStatusFilter(value as DashboardStatusFilter)
+                }
+                className={`h-11 rounded-2xl border px-4 text-sm font-bold transition ${
+                  dashboardStatusFilter === value
+                    ? "border-blue-600 bg-blue-600 text-white shadow-sm"
+                    : value === "pending"
+                      ? "border-rose-200 bg-white text-rose-600 hover:bg-rose-50"
+                      : value === "passed"
+                        ? "border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50"
+                        : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <label className="flex h-12 items-center gap-3 rounded-2xl border border-gray-200 px-4 text-sm font-bold text-gray-600">
+            정렬 기준
+            <select
+              value={dashboardSortOrder}
+              onChange={(event) =>
+                setDashboardSortOrder(event.target.value as DashboardSortOrder)
+              }
+              className="h-full min-w-[7rem] border-0 bg-transparent text-sm font-bold text-gray-900 outline-none"
+            >
+              <option value="latest">최신순</option>
+              <option value="oldest">오래된순</option>
+            </select>
+          </label>
+        </div>
+      </section>
 
-          <div className="rounded-2xl bg-gray-50 p-4">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <div>
-                <div className="text-sm font-bold text-gray-700">
-                  역사교실 목록
-                </div>
-                <div className="mt-1 text-xs text-gray-500">
-                  생성한 역사교실 과제를 여기에서 빠르게 확인할 수 있습니다.
-                </div>
-              </div>
-              <div className="inline-flex shrink-0 items-center rounded-full bg-white px-3 py-1 text-xs font-bold text-gray-600 whitespace-nowrap">
-                {assignments.length}개
-              </div>
-            </div>
-            <div className="max-h-[24rem] space-y-2 overflow-y-auto pr-1">
-              {assignments.map((assignment) => (
-                <button
-                  key={assignment.id}
-                  type="button"
-                  onClick={() => openAssignmentEditor(assignment)}
-                  className="history-assignment-card w-full rounded-2xl border border-gray-200 bg-white p-3 text-left transition hover:border-orange-200 hover:shadow-sm"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="truncate text-[11px] font-bold text-orange-500">
-                        {assignment.mapTitle}
-                      </div>
-                      <div className="mt-0.5 text-sm font-black text-gray-900 break-words">
-                        {assignment.title}
-                      </div>
+      <section className="space-y-3">
+        {pagedAssignmentRows.map((row) => {
+          const expanded = expandedAssignmentId === row.assignment.id;
+          return (
+            <div
+              key={row.assignment.id}
+              className="flex w-full items-stretch gap-4"
+            >
+              <div className="relative w-28 shrink-0 sm:w-32 lg:w-36">
+                <div className="absolute bottom-[-0.75rem] left-1.5 top-0 w-px bg-gray-200" />
+                <div className="relative z-10">
+                  <div className="absolute left-0 top-2 h-3 w-3 rounded-full border-4 border-white bg-blue-600 shadow ring-1 ring-blue-200" />
+                  <div className="ml-6">
+                    <div className="text-base font-black leading-6 text-gray-900 sm:text-lg">
+                      {row.timelineDate.date}
                     </div>
-                    <span
-                      className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold whitespace-nowrap ${
-                        assignment.isPublished
-                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                          : "bg-gray-100 text-gray-600 border border-gray-200"
-                      }`}
-                    >
-                      {assignment.isPublished ? "공개" : "비공개"}
-                    </span>
+                    <div className="mt-1 text-xs font-semibold text-gray-500 sm:text-sm">
+                      {row.timelineDate.weekday}
+                    </div>
                   </div>
-                  <div className="mt-2 space-y-1.5">
-                    {groupStudentsByClass(
-                      assignmentStudentsById.get(assignment.id) || [],
-                    ).map((group) => (
-                      <div
-                        key={`${assignment.id}-${group.classLabel}`}
-                        className="flex items-center gap-2"
+                </div>
+              </div>
+              <article
+                className="min-w-0 flex-1 cursor-pointer rounded-3xl border border-gray-200 bg-white p-4 shadow-sm transition hover:shadow-md"
+                onClick={() =>
+                  setExpandedAssignmentId((current) =>
+                    current === row.assignment.id ? "" : row.assignment.id,
+                  )
+                }
+              >
+                <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-lg font-black text-gray-900">
+                        {row.assignment.mapTitle || row.assignment.title}
+                      </h2>
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-bold ${
+                          row.assignment.isPublished
+                            ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
+                            : "border border-gray-200 bg-gray-100 text-gray-600"
+                        }`}
                       >
-                        <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-bold text-gray-600">
-                          {group.classLabel}
-                        </span>
-                        <div className="flex min-w-0 flex-wrap gap-1">
-                          {group.students.map((student) => (
-                            <span
-                              key={`${assignment.id}-${student.uid}`}
-                              className="rounded-full border border-orange-100 bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-orange-700"
-                            >
-                              {student.name}
+                        {row.assignment.isPublished ? "공개" : "비공개"}
+                      </span>
+                      <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-600">
+                        {row.assignment.mapTitle}
+                      </span>
+                    </div>
+                    <div className="mt-2 text-sm font-medium text-gray-500">
+                      통과 기준 {row.assignment.passThresholdPercent}% · 제한 시간{" "}
+                      {row.assignment.timeLimitMinutes > 0
+                        ? `${row.assignment.timeLimitMinutes}분`
+                        : "없음"}{" "}
+                      · 재도전 제한 {row.assignment.cooldownMinutes}분
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {[
+                      ["통과", row.passed, "border-emerald-200 bg-emerald-50 text-emerald-700"],
+                      ["미통과", row.failed, "border-rose-200 bg-rose-50 text-rose-700"],
+                      [
+                        "미제출",
+                        row.pendingCount + row.overdueAbsentCount,
+                        "border-gray-200 bg-gray-50 text-gray-700",
+                      ],
+                      ["자동 종료", row.cancelled, "border-amber-200 bg-amber-50 text-amber-700"],
+                    ].map(([label, count, className]) => (
+                      <span
+                        key={label}
+                        className={`inline-flex h-10 min-w-[5.75rem] items-center justify-center gap-2 rounded-xl border px-3 text-xs font-black ${className}`}
+                      >
+                        {label}
+                        <span>{count}</span>
+                      </span>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openAssignmentEditor(row.assignment);
+                      }}
+                      className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-700 transition hover:bg-blue-100"
+                      aria-label={`${row.assignment.title} 설정 수정`}
+                    >
+                      <DashboardIcon name="edit" className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setExpandedAssignmentId((current) =>
+                          current === row.assignment.id ? "" : row.assignment.id,
+                        );
+                      }}
+                      className="flex h-10 w-10 items-center justify-center rounded-xl text-gray-500 transition hover:bg-gray-100 hover:text-gray-700"
+                      aria-label={expanded ? "상세 접기" : "상세 펼치기"}
+                      aria-expanded={expanded}
+                    >
+                      <DashboardIcon
+                        name={expanded ? "chevronUp" : "chevronDown"}
+                        className="h-4 w-4"
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                {expanded && (
+                  <div className="mt-4 grid gap-3 xl:grid-cols-4">
+                    {[
+                      ["통과", row.statusGroups.passed, "text-emerald-700"],
+                      ["미통과", row.statusGroups.failed, "text-rose-700"],
+                      ["미제출", row.statusGroups.pending, "text-gray-700"],
+                      ["자동 종료", row.statusGroups.cancelled, "text-amber-700"],
+                    ].map(([label, students, toneClassName]) => (
+                      <div
+                        key={label}
+                        className="rounded-2xl border border-gray-200 bg-white p-3"
+                      >
+                        <div className={`text-xs font-black ${toneClassName}`}>
+                          {label}
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {(students as typeof row.studentSummaries)
+                            .slice(0, 3)
+                            .map((student) => (
+                              <span
+                                key={`${row.assignment.id}-${label}-${student.uid}`}
+                                className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-700"
+                              >
+                                {student.name}
+                                <span className="ml-2 font-semibold text-gray-500">
+                                  {student.classLabel}{" "}
+                                  {student.number && `${student.number}번`}{" "}
+                                  {student.attemptLabel !== "시도 없음" &&
+                                    student.attemptLabel}
+                                </span>
+                              </span>
+                            ))}
+                          {(students as typeof row.studentSummaries).length > 3 && (
+                            <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-bold text-gray-500">
+                              +
+                              {(students as typeof row.studentSummaries).length -
+                                3}
                             </span>
-                          ))}
+                          )}
+                          {!(students as typeof row.studentSummaries).length && (
+                            <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-bold text-gray-400">
+                              없음
+                            </span>
+                          )}
                         </div>
                       </div>
                     ))}
-                    {!(assignmentStudentsById.get(assignment.id) || [])
-                      .length &&
-                      assignment.targetStudentNames.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {assignment.targetStudentNames.map((name) => (
-                            <span
-                              key={`${assignment.id}-${name}`}
-                              className="rounded-full border border-orange-100 bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-orange-700"
-                            >
-                              {name}
-                            </span>
-                          ))}
-                        </div>
-                      )}
                   </div>
-                  <div className="hidden text-xs font-bold text-orange-500">
-                    {assignment.mapTitle}
-                  </div>
-                  <div className="hidden mt-1 flex items-start justify-between gap-3">
-                    <div className="text-base font-black text-gray-900 break-words">
-                      {assignment.title}
-                    </div>
-                    <span
-                      className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold whitespace-nowrap ${
-                        assignment.isPublished
-                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                          : "bg-gray-100 text-gray-600 border border-gray-200"
-                      }`}
-                    >
-                      {assignment.isPublished ? "공개" : "비공개"}
-                    </span>
-                  </div>
-                  <div className="hidden mt-3 flex flex-wrap gap-1.5">
-                    {(assignment.targetStudentUids.length
-                      ? assignment.targetStudentUids
-                          .map((uid) => studentByUid.get(uid))
-                          .filter((student): student is StudentOption =>
-                            Boolean(student),
-                          )
-                          .map((student) => formatStudentBadgeLabel(student))
-                      : assignment.targetStudentNames
-                    )
-                      .filter(Boolean)
-                      .map((label) => (
-                        <span
-                          key={`${assignment.id}-${label}`}
-                          className="rounded-full border border-orange-100 bg-orange-50 px-2.5 py-1 text-[11px] font-semibold text-orange-700"
-                        >
-                          {label}
-                        </span>
-                      ))}
-                    {!assignment.targetStudentUids.length &&
-                      !assignment.targetStudentNames.length &&
-                      !assignment.targetStudentName && (
-                        <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-semibold text-gray-500">
-                          배정 학생 없음
-                        </span>
-                      )}
-                  </div>
-                  <div className="hidden mt-2 inline-flex rounded-full bg-orange-50 px-3 py-1 text-xs font-bold text-orange-700 whitespace-nowrap">
-                    {(assignment.targetStudentNames.length
-                      ? `${assignment.targetStudentNames[0]}${assignment.targetStudentNames.length > 1 ? ` 외 ${assignment.targetStudentNames.length - 1}명` : ""}`
-                      : assignment.targetStudentName) || "학생 미지정"}
-                  </div>
-                  <div className="mt-2 text-xs text-gray-500">
-                    통과 기준 {assignment.passThresholdPercent}% · 제한 시간{" "}
-                    {assignment.timeLimitMinutes > 0
-                      ? `${assignment.timeLimitMinutes}분`
-                      : "없음"}{" "}
-                    · 재도전 제한 {assignment.cooldownMinutes}분 · 응시 제한{" "}
-                    {assignment.dueWindowDays
-                      ? `${assignment.dueWindowDays}일`
-                      : "없음"}
-                  </div>
-                  {assignmentAttemptMetaById.get(assignment.id) && (
-                    <div className="mt-3 flex flex-wrap gap-1.5 text-[11px] font-bold">
-                      <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">
-                        응시 완료{" "}
-                        {
-                          assignmentAttemptMetaById.get(assignment.id)!
-                            .completed
-                        }
-                      </span>
-                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">
-                        응시 전{" "}
-                        {assignmentAttemptMetaById.get(assignment.id)!.pending}
-                      </span>
-                      <span className="rounded-full bg-rose-50 px-2.5 py-1 text-rose-700">
-                        미응시{" "}
-                        {
-                          assignmentAttemptMetaById.get(assignment.id)!
-                            .overdueAbsent
-                        }
-                      </span>
-                      {assignmentAttemptMetaById.get(assignment.id)!
-                        .dueAtMs && (
-                        <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700">
-                          마감{" "}
-                          {formatDeadlineLabel(
-                            assignmentAttemptMetaById.get(assignment.id)!
-                              .dueAtMs,
-                          )}
-                        </span>
-                      )}
-                    </div>
-                  )}
+                )}
+              </article>
+            </div>
+          );
+        })}
+        {!assignmentRows.length && (
+          <div className="rounded-3xl border border-dashed border-gray-300 bg-white px-5 py-12 text-center text-sm font-semibold text-gray-400">
+            아직 생성된 역사교실 과제가 없습니다. + 새 역사교실로 첫 과제를
+            등록하세요.
+          </div>
+        )}
+        {assignmentRows.length > 0 && !pagedAssignmentRows.length && (
+          <div className="rounded-3xl border border-dashed border-gray-300 bg-white px-5 py-12 text-center text-sm font-semibold text-gray-400">
+            현재 검색 조건에 맞는 역사교실이 없습니다.
+          </div>
+        )}
+        {totalAssignmentPages > 1 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-3">
+            <div className="text-xs font-semibold text-gray-500">
+              {assignmentPage} / {totalAssignmentPages}페이지
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  setAssignmentPage((current) => Math.max(1, current - 1))
+                }
+                disabled={assignmentPage <= 1}
+                className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                이전
+              </button>
+              {Array.from(
+                { length: totalAssignmentPages },
+                (_, index) => index + 1,
+              ).map((page) => (
+                <button
+                  key={page}
+                  type="button"
+                  onClick={() => setAssignmentPage(page)}
+                  className={`h-10 w-10 rounded-xl text-xs font-black ${
+                    page === assignmentPage
+                      ? "bg-blue-600 text-white"
+                      : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  {page}
                 </button>
               ))}
-              {!assignments.length && (
-                <div className="text-sm text-gray-400">
-                  아직 생성된 역사교실 과제가 없습니다.
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={() =>
+                  setAssignmentPage((current) =>
+                    Math.min(totalAssignmentPages, current + 1),
+                  )
+                }
+                disabled={assignmentPage >= totalAssignmentPages}
+                className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                다음
+              </button>
             </div>
           </div>
+        )}
+      </section>
 
-          {false && (
-            <div className="rounded-2xl bg-gray-50 p-4">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <div>
-                  <div className="text-sm font-bold text-gray-700">
-                    빈칸 목록
-                  </div>
-                  <div className="mt-1 text-xs text-gray-500">
-                    추가한 단어는 우측 하단 패널에서도 빠르게 선택할 수
-                    있습니다.
-                  </div>
+      {isCreateModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-3 py-5 backdrop-blur-sm">
+          <div className="flex max-h-[94vh] w-full max-w-[min(96vw,96rem)] flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <div className="flex shrink-0 items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
+              <div>
+                <div className="text-xs font-bold uppercase tracking-[0.18em] text-blue-500">
+                  New History Classroom
                 </div>
-                <div className="inline-flex shrink-0 items-center rounded-full bg-white px-3 py-1 text-xs font-bold text-gray-600 whitespace-nowrap">
-                  {blanks.length}개
-                </div>
+                <h2 className="mt-1 text-xl font-black text-gray-900">
+                  {worksheetEditingAssignmentId
+                    ? "역사교실 지도/빈칸 수정"
+                    : "새 역사교실 등록"}
+                </h2>
               </div>
-              <div className="space-y-2">
-                {sortedBlanks.map((blank, index) => (
-                  <div
-                    key={blank.id}
-                    className={`rounded-2xl border bg-white p-3 transition ${blank.id === selectedBlankId ? "border-blue-300 shadow-md shadow-blue-100" : "border-gray-200"}`}
-                    onClick={() => handleSelectBlank(blank.id)}
-                  >
-                    <div className="mb-2 flex items-center justify-between gap-2 text-xs font-bold text-gray-500">
-                      <span>
-                        빈칸 {index + 1} / p.{blank.page}
+              <button
+                type="button"
+                onClick={() => setIsCreateModalOpen(false)}
+                className="rounded-2xl border border-gray-200 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
+              >
+                닫기
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto bg-gray-50 p-4">
+              <div className="mx-auto max-w-6xl space-y-4">
+                <section className="grid gap-4 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_18rem]">
+                  <div className="md:col-span-2 xl:col-span-2">
+                    <label className="mb-1 block text-xs font-bold text-gray-500">
+                      PDF 지도 선택
+                    </label>
+                    <select
+                      value={selectedMapId}
+                      onChange={(e) => {
+                        const nextMapId = e.target.value;
+                        setSelectedMapId(nextMapId);
+                        if (
+                          worksheetSourceAssignment?.mapResourceId !== nextMapId
+                        ) {
+                          setWorksheetSourceAssignment(null);
+                          setWorksheetImportSourceId("");
+                          setWorksheetImportSourceTitle("");
+                        }
+                        setTargetStudentUid("");
+                        setTargetStudentSearch("");
+                        setSelectedStudentUids([]);
+                      }}
+                      className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm"
+                    >
+                      {maps.map((map) => (
+                        <option key={map.id} value={map.id}>
+                          {map.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="md:col-span-2 xl:col-span-2">
+                    <label className="mb-1 block text-xs font-bold text-gray-500">
+                      제목
+                    </label>
+                    <input
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2 xl:col-span-2">
+                    <label className="mb-1 block text-xs font-bold text-gray-500">
+                      설명
+                    </label>
+                    <textarea
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      rows={3}
+                      className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm"
+                    />
+                  </div>
+
+                  <div className="grid gap-3 md:col-span-2 md:grid-cols-2 xl:col-span-2 xl:grid-cols-4">
+                    <div>
+                      <label className="mb-1 block text-xs font-bold text-gray-500">
+                        제한 시간(분)
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={timeLimitMinutes}
+                        onChange={(e) =>
+                          setTimeLimitMinutes(Number(e.target.value) || 0)
+                        }
+                        className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-bold text-gray-500">
+                        재도전 제한 시간(분)
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={cooldownMinutes}
+                        onChange={(e) =>
+                          setCooldownMinutes(Number(e.target.value) || 0)
+                        }
+                        className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-bold text-gray-500">
+                        응시 제한 기간(일)
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={dueWindowDays}
+                        onChange={(e) =>
+                          setDueWindowDays(
+                            normalizeDueWindowDaysInput(e.target.value),
+                          )
+                        }
+                        placeholder="없음"
+                        className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-bold text-gray-500">
+                        통과 기준 (%)
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={passThresholdPercent}
+                        onChange={(e) =>
+                          setPassThresholdPercent(
+                            Math.min(
+                              100,
+                              Math.max(0, Number(e.target.value) || 0),
+                            ),
+                          )
+                        }
+                        className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 md:col-span-2 xl:col-span-2">
+                    <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(5.75rem,1.2fr)] gap-2 lg:grid-cols-4 lg:gap-3">
+                      <select
+                        value={targetGrade}
+                        onChange={(e) => {
+                          setTargetGrade(e.target.value);
+                          setTargetClass("");
+                          setTargetNumber("");
+                          setTargetStudentUid("");
+                          setTargetStudentSearch("");
+                        }}
+                        className="h-11 w-full min-w-0 rounded-xl border border-gray-300 px-3 text-sm"
+                      >
+                        <option value="">학년 선택</option>
+                        {gradeOptions.map((grade) => (
+                          <option key={grade} value={grade}>
+                            {grade}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={targetClass}
+                        onChange={(e) => {
+                          setTargetClass(e.target.value);
+                          setTargetNumber("");
+                          setTargetStudentUid("");
+                          setTargetStudentSearch("");
+                        }}
+                        className="h-11 w-full min-w-0 rounded-xl border border-gray-300 px-3 text-sm"
+                      >
+                        <option value="">학급 선택</option>
+                        {classOptions.map((className) => (
+                          <option key={className} value={className}>
+                            {className}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={targetNumber}
+                        onChange={(e) => {
+                          setTargetNumber(e.target.value);
+                          setTargetStudentUid("");
+                          setTargetStudentSearch("");
+                        }}
+                        className="h-11 w-full min-w-0 rounded-xl border border-gray-300 px-3 text-sm"
+                      >
+                        <option value="">번호 선택</option>
+                        {numberOptions.map((number) => (
+                          <option key={number} value={number}>
+                            {number}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="flex h-11 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 px-3 text-center text-sm font-bold text-gray-700">
+                        <span className="block w-full truncate whitespace-nowrap">
+                          {targetStudentPreview?.name || "학생 이름"}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <input
+                        value={targetStudentSearch}
+                        onChange={(e) => setTargetStudentSearch(e.target.value)}
+                        placeholder="이름으로 전체 학생 검색"
+                        className="h-11 w-full min-w-0 rounded-xl border border-gray-300 px-3 text-sm"
+                      />
+                      {targetStudentSearch.trim() && (
+                        <div className="max-h-48 overflow-y-auto rounded-2xl border border-gray-200 bg-white p-2">
+                          {searchedStudents.length > 0 ? (
+                            <div className="space-y-1">
+                              {searchedStudents.map((student) => (
+                                <button
+                                  key={student.uid}
+                                  type="button"
+                                  onClick={() => {
+                                    setTargetGrade(student.grade || "");
+                                    setTargetClass(student.className || "");
+                                    setTargetNumber(student.number || "");
+                                    setTargetStudentUid(student.uid);
+                                    setSelectedStudentUids((prev) =>
+                                      prev.includes(student.uid)
+                                        ? prev
+                                        : [...prev, student.uid],
+                                    );
+                                    setTargetStudentSearch("");
+                                  }}
+                                  className="flex w-full min-w-0 items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-blue-50"
+                                >
+                                  <span className="min-w-0 truncate font-bold text-gray-900">
+                                    {student.name}
+                                  </span>
+                                  <span className="shrink-0 text-xs font-semibold text-gray-500">
+                                    {student.grade}-{student.className}{" "}
+                                    {student.number}번
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="px-3 py-4 text-center text-sm font-semibold text-gray-400">
+                              검색 결과가 없습니다.
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <select
+                      value={targetStudentUid}
+                      onChange={(e) => {
+                        setTargetStudentUid(e.target.value);
+                        setTargetStudentSearch("");
+                      }}
+                      className="h-11 w-full min-w-0 rounded-xl border border-gray-300 px-3 text-sm"
+                      title={
+                        targetStudentPreview
+                          ? `${targetStudentPreview.grade}-${targetStudentPreview.className} ${targetStudentPreview.number}번 ${targetStudentPreview.name}`
+                          : "학생 선택"
+                      }
+                    >
+                      <option value="">학생 선택</option>
+                      {numberFilteredStudents.map((student) => (
+                        <option key={student.uid} value={student.uid}>
+                          {student.grade}-{student.className} {student.number}번{" "}
+                          {student.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (
+                          !targetStudentUid ||
+                          selectedStudentUids.includes(targetStudentUid)
+                        )
+                          return;
+                        setSelectedStudentUids((prev) => [
+                          ...prev,
+                          targetStudentUid,
+                        ]);
+                        setTargetStudentUid("");
+                        setTargetStudentSearch("");
+                      }}
+                      disabled={
+                        !targetStudentUid ||
+                        selectedStudentUids.includes(targetStudentUid)
+                      }
+                      className="h-11 rounded-xl border border-blue-200 bg-blue-50 px-3 text-sm font-bold text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      학생 추가
+                    </button>
+                  </div>
+
+                  <div className="rounded-2xl border border-gray-200 bg-white p-3 md:col-span-2 xl:col-span-2">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <div className="text-sm font-bold text-gray-700">
+                        배정 학생
+                      </div>
+                      <div className="inline-flex shrink-0 items-center rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 whitespace-nowrap">
+                        {selectedStudents.length}명
+                      </div>
+                    </div>
+                    <div className="max-h-32 space-y-2 overflow-y-auto pr-1">
+                      {groupStudentsByClass(selectedStudents).map((group) => (
+                        <div
+                          key={group.classLabel}
+                          className="flex items-center gap-2"
+                        >
+                          <span className="shrink-0 rounded-full bg-gray-100 px-2 py-1 text-[11px] font-bold text-gray-600">
+                            {group.classLabel}
+                          </span>
+                          <div className="flex min-w-0 flex-wrap gap-1">
+                            {group.students.map((student) => (
+                              <div
+                                key={student.uid}
+                                className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] font-semibold text-gray-700"
+                              >
+                                <span className="font-bold text-gray-900">
+                                  {student.name}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setSelectedStudentUids((prev) =>
+                                      prev.filter((uid) => uid !== student.uid),
+                                    )
+                                  }
+                                  className="shrink-0 text-[10px] font-bold text-red-500"
+                                >
+                                  삭제
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                      {!selectedStudents.length && (
+                        <div className="text-sm text-gray-400">
+                          학생을 선택해서 추가하면 여기에 반별로 묶여
+                          표시됩니다.
+                        </div>
+                      )}
+                    </div>
+                    <div className="hidden flex flex-wrap gap-2">
+                      {selectedStudents.map((student) => (
+                        <div
+                          key={student.uid}
+                          className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-700"
+                        >
+                          <span className="max-w-[10rem] truncate">
+                            <span className="font-bold">
+                              {student.grade}-{student.className}
+                            </span>{" "}
+                            <span>{student.number}번</span>{" "}
+                            <span className="font-bold text-gray-900">
+                              {student.name}
+                            </span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSelectedStudentUids((prev) =>
+                                prev.filter((uid) => uid !== student.uid),
+                              )
+                            }
+                            className="shrink-0 text-[11px] font-bold text-red-500"
+                          >
+                            제거
+                          </button>
+                        </div>
+                      ))}
+                      {!selectedStudents.length && (
+                        <div className="text-sm text-gray-400">
+                          학생을 선택해서 추가하면 여기에 여러 명이 목록으로
+                          표시됩니다.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4 md:col-span-2 xl:col-span-1 xl:col-start-3 xl:row-span-4 xl:row-start-1">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-bold text-gray-700">
+                          선택한 배포 지도
+                        </div>
+                        <div className="mt-1 text-xs text-gray-500">
+                          빈칸과 정답은 지도 관리에서 저장한 값을 그대로 사용합니다.
+                        </div>
+                      </div>
+                      <div className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-bold text-blue-700">
+                        {blanks.length}개 빈칸
+                      </div>
+                    </div>
+                    <div className="mt-3 overflow-hidden rounded-2xl border border-blue-100 bg-white">
+                      <div className="flex aspect-[4/3] items-center justify-center bg-gray-50">
+                        {selectedMap?.pdfPageImages?.[0]?.imageUrl ? (
+                          <img
+                            src={selectedMap.pdfPageImages[0].imageUrl}
+                            alt={selectedMap.title}
+                            className="h-full w-full object-contain"
+                          />
+                        ) : (
+                          <div className="px-4 text-center text-xs font-semibold text-gray-400">
+                            미리보기 이미지가 없습니다.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <span className="rounded-full bg-white px-3 py-1.5 text-xs font-bold text-gray-700">
+                        {selectedMap?.title || "지도 미선택"}
                       </span>
                       <button
                         type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          removeBlank(blank.id);
-                        }}
-                        className="text-red-500"
+                        onClick={() => openMapBlankManager(selectedMapId)}
+                        className="rounded-full border border-blue-200 bg-white px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-50"
                       >
-                        삭제
+                        지도 관리에서 수정
                       </button>
                     </div>
-                    <input
-                      value={blank.answer}
-                      onChange={(e) =>
-                        handleBlankChange(blank.id, e.target.value)
-                      }
-                      placeholder="정답 입력"
-                      className="hidden"
-                    />
-                    <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
-                      {blank.answer || "답안이 비어 있습니다."}
-                    </div>
                   </div>
-                ))}
-                {!blanks.length && (
-                  <div className="text-sm text-gray-400">
-                    지도에서 영역을 드래그하거나 OCR 단어를 선택해 빈칸을
-                    추가하세요.
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
 
-          <div className="space-y-2">
-            {worksheetEditingAssignmentId && (
-              <button
-                type="button"
-                onClick={() => {
-                  setWorksheetEditingAssignmentId("");
-                  setWorksheetEditingIsPublished(true);
-                  setWorksheetImportSourceId("");
-                  setWorksheetImportSourceTitle("");
-                  setWorksheetSourceAssignment(null);
-                  setTitle("");
-                  setDescription("");
-                  setTimeLimitMinutes(0);
-                  setCooldownMinutes(0);
-                  setDueWindowDays("");
-                  setPassThresholdPercent(80);
-                  setTargetGrade("");
-                  setTargetClass("");
-                  setTargetNumber("");
-                  setTargetStudentUid("");
-                  setSelectedStudentUids([]);
-                  setBlanks([]);
-                  setSelectedBlankId("");
-                  setDraftBlank(null);
-                  setDraftBlankAnswer("");
-                  setBlankEditorMode(null);
-                  setBlankEditorAnswer("");
-                  blankEditorComposingRef.current = false;
-                  setShowAllBlankTags(false);
-                }}
-                className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50"
-              >
-                수정 취소
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => void handleSave()}
-              disabled={saving}
-              className="w-full rounded-2xl bg-orange-500 px-4 py-3 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-60"
-            >
-              {saving
-                ? "저장 중..."
-                : worksheetEditingAssignmentId
-                  ? "역사교실 수정 저장"
-                  : "역사교실 저장"}
-            </button>
-          </div>
-        </section>
-
-        <section className="space-y-6">
-          <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <div>
-                <div className="text-sm font-bold text-gray-700">
-                  지도 선택 영역
-                </div>
-                <div className="mt-1 text-xs text-gray-500">
-                  텍스트 박스는 자유 드래그, OCR 선택은 글자를 따라 빈칸을
-                  잡습니다.
-                </div>
-              </div>
-            </div>
-
-            {false && (
-              <div className="mb-4 space-y-3 lg:hidden">
-                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
-                  <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400">
-                    Tool
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setWorksheetTool("box")}
-                      className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
-                        worksheetTool === "box"
-                          ? "bg-blue-600 text-white shadow-sm"
-                          : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
-                      }`}
-                    >
-                      텍스트 박스
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setWorksheetTool("ocr")}
-                      className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
-                        worksheetTool === "ocr"
-                          ? "bg-blue-600 text-white shadow-sm"
-                          : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
-                      }`}
-                    >
-                      OCR 선택
-                    </button>
-                  </div>
-                </div>
-
-                {(draftBlank || selectedBlank || sortedBlanks.length > 0) && (
-                  <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400">
-                        Words
-                      </div>
-                      <div className="text-[11px] font-semibold text-gray-500">
-                        {sortedBlanks.length}개
-                      </div>
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {visibleBlankTags.map((blank, index) => (
-                        <button
-                          key={blank.id}
-                          type="button"
-                          onClick={() => handleSelectBlank(blank.id)}
-                          className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
-                            selectedBlankId === blank.id
-                              ? "border-blue-300 bg-blue-50 text-blue-700"
-                              : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
-                          }`}
-                        >
-                          {blank.answer || `빈칸 ${index + 1}`}
-                        </button>
-                      ))}
-                      {sortedBlanks.length > 6 && (
-                        <button
-                          type="button"
-                          onClick={() => setShowAllBlankTags((prev) => !prev)}
-                          className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 transition hover:bg-blue-100"
-                        >
-                          {showAllBlankTags
-                            ? "숨기기"
-                            : `더보기 +${sortedBlanks.length - visibleBlankTags.length}`}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {worksheetPageImages.length > 0 ? (
-              <div className="mx-auto max-w-[56rem]">
-                <LessonWorksheetStage
-                  pageImages={worksheetPageImages}
-                  blanks={worksheetBlanks}
-                  textRegions={worksheetTextRegions}
-                  mode="teacher-edit"
-                  teacherTool={worksheetTool}
-                  selectedBlankId={selectedBlankId || null}
-                  pendingBlank={draftBlank}
-                  onSelectBlank={handleSelectBlank}
-                  onDeleteBlank={removeBlank}
-                  onCreateBlankFromSelection={handleCreateBlankFromSelection}
-                />
-              </div>
-            ) : (
-              <div className="rounded-3xl border border-dashed border-gray-300 bg-gray-50 p-12 text-center text-gray-400">
-                PDF 지도를 먼저 선택해 주세요.
-              </div>
-            )}
-          </div>
-
-          {false && (
-            <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
-              <div className="text-sm font-bold text-gray-700">
-                생성된 역사교실
-              </div>
-              <div className="mt-4 space-y-3">
-                {assignments.map((assignment) => (
-                  <div
-                    key={assignment.id}
-                    className="rounded-2xl border border-gray-200 p-4"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <div className="text-xs font-bold text-orange-500">
-                          {assignment.mapTitle}
+                  {false && (
+                    <div className="rounded-2xl bg-gray-50 p-4 md:col-span-2 xl:col-span-3">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <div>
+                          <div className="text-sm font-bold text-gray-700">
+                            빈칸 목록
+                          </div>
+                          <div className="mt-1 text-xs text-gray-500">
+                            추가한 단어는 우측 하단 패널에서도 빠르게 선택할 수
+                            있습니다.
+                          </div>
                         </div>
-                        <div className="text-lg font-black text-gray-900">
-                          {assignment.title}
+                        <div className="inline-flex shrink-0 items-center rounded-full bg-white px-3 py-1 text-xs font-bold text-gray-600 whitespace-nowrap">
+                          {blanks.length}개
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        {sortedBlanks.map((blank, index) => (
+                          <div
+                            key={blank.id}
+                            className={`rounded-2xl border bg-white p-3 transition ${blank.id === selectedBlankId ? "border-blue-300 shadow-md shadow-blue-100" : "border-gray-200"}`}
+                            onClick={() => handleSelectBlank(blank.id)}
+                          >
+                            <div className="mb-2 flex items-center justify-between gap-2 text-xs font-bold text-gray-500">
+                              <span>
+                                빈칸 {index + 1} / p.{blank.page}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  removeBlank(blank.id);
+                                }}
+                                className="text-red-500"
+                              >
+                                삭제
+                              </button>
+                            </div>
+                            <input
+                              value={blank.answer}
+                              onChange={(e) =>
+                                handleBlankChange(blank.id, e.target.value)
+                              }
+                              placeholder="정답 입력"
+                              className="hidden"
+                            />
+                            <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                              {blank.answer || "답안이 비어 있습니다."}
+                            </div>
+                          </div>
+                        ))}
+                        {!blanks.length && (
+                          <div className="text-sm text-gray-400">
+                            지도에서 영역을 드래그하거나 OCR 단어를 선택해
+                            빈칸을 추가하세요.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex flex-col gap-2 md:col-span-2 sm:flex-row sm:justify-end xl:col-span-3">
+                    {worksheetEditingAssignmentId && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setWorksheetEditingAssignmentId("");
+                          setWorksheetEditingIsPublished(true);
+                          setWorksheetImportSourceId("");
+                          setWorksheetImportSourceTitle("");
+                          setWorksheetSourceAssignment(null);
+                          setTitle("");
+                          setDescription("");
+                          setTimeLimitMinutes(0);
+                          setCooldownMinutes(0);
+                          setDueWindowDays("");
+                          setPassThresholdPercent(80);
+                          setTargetGrade("");
+                          setTargetClass("");
+                          setTargetNumber("");
+                          setTargetStudentUid("");
+                          setTargetStudentSearch("");
+                          setSelectedStudentUids([]);
+                          setBlanks([]);
+                          setSelectedBlankId("");
+                          setDraftBlank(null);
+                          setDraftBlankAnswer("");
+                          setBlankEditorMode(null);
+                          setBlankEditorAnswer("");
+                          blankEditorComposingRef.current = false;
+                          setShowAllBlankTags(false);
+                        }}
+                        className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50 sm:w-auto"
+                      >
+                        수정 취소
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void handleSave()}
+                      disabled={saving}
+                      className="rounded-2xl bg-orange-500 px-6 py-3 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-60 sm:w-auto"
+                    >
+                      {saving
+                        ? "저장 중..."
+                        : worksheetEditingAssignmentId
+                          ? "역사교실 수정 저장"
+                          : "역사교실 저장"}
+                    </button>
+                  </div>
+                </section>
+
+                {false && (
+                  <section className="hidden">
+                  <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
+                    <div className="mb-4 flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-bold text-gray-700">
+                          지도 선택 영역
                         </div>
                         <div className="mt-1 text-xs text-gray-500">
-                          통과 기준 {assignment.passThresholdPercent}% · 재도전
-                          제한 {assignment.cooldownMinutes}분
+                          지도 관리에 저장된 빈칸과 정답 배치를 확인합니다.
                         </div>
                       </div>
-                      <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-bold text-orange-700 whitespace-nowrap">
-                        {(assignment.targetStudentNames.length
-                          ? `${assignment.targetStudentNames[0]}${assignment.targetStudentNames.length > 1 ? ` 외 ${assignment.targetStudentNames.length - 1}명` : ""}`
-                          : assignment.targetStudentName) || "학생 미지정"}
-                      </span>
                     </div>
+
+                    {false && (
+                      <div className="mb-4 space-y-3 lg:hidden">
+                        <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
+                          <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400">
+                            Tool
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setWorksheetTool("box")}
+                              className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                                worksheetTool === "box"
+                                  ? "bg-blue-600 text-white shadow-sm"
+                                  : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                              }`}
+                            >
+                              텍스트 박스
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setWorksheetTool("ocr")}
+                              className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                                worksheetTool === "ocr"
+                                  ? "bg-blue-600 text-white shadow-sm"
+                                  : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                              }`}
+                            >
+                              OCR 선택
+                            </button>
+                          </div>
+                        </div>
+
+                        {(draftBlank ||
+                          selectedBlank ||
+                          sortedBlanks.length > 0) && (
+                          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400">
+                                Words
+                              </div>
+                              <div className="text-[11px] font-semibold text-gray-500">
+                                {sortedBlanks.length}개
+                              </div>
+                            </div>
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {visibleBlankTags.map((blank, index) => (
+                                <button
+                                  key={blank.id}
+                                  type="button"
+                                  onClick={() => handleSelectBlank(blank.id)}
+                                  className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
+                                    selectedBlankId === blank.id
+                                      ? "border-blue-300 bg-blue-50 text-blue-700"
+                                      : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                                  }`}
+                                >
+                                  {blank.answer || `빈칸 ${index + 1}`}
+                                </button>
+                              ))}
+                              {sortedBlanks.length > 6 && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setShowAllBlankTags((prev) => !prev)
+                                  }
+                                  className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 transition hover:bg-blue-100"
+                                >
+                                  {showAllBlankTags
+                                    ? "숨기기"
+                                    : `더보기 +${sortedBlanks.length - visibleBlankTags.length}`}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {worksheetPageImages.length > 0 ? (
+                      <div className="mx-auto max-w-[56rem]">
+                        <LessonWorksheetStage
+                          pageImages={worksheetPageImages}
+                          blanks={worksheetBlanks}
+                          textRegions={worksheetTextRegions}
+                          mode="teacher-present"
+                          annotationEnabled={false}
+                        />
+                      </div>
+                    ) : (
+                      <div className="rounded-3xl border border-dashed border-gray-300 bg-gray-50 p-12 text-center text-gray-400">
+                        PDF 지도를 먼저 선택해 주세요.
+                      </div>
+                    )}
                   </div>
-                ))}
-                {!assignments.length && (
-                  <div className="text-sm text-gray-400">
-                    아직 생성된 역사교실 과제가 없습니다.
-                  </div>
+
+                  {false && (
+                    <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
+                      <div className="text-sm font-bold text-gray-700">
+                        생성된 역사교실
+                      </div>
+                      <div className="mt-4 space-y-3">
+                        {assignments.map((assignment) => (
+                          <div
+                            key={assignment.id}
+                            className="rounded-2xl border border-gray-200 p-4"
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <div className="text-xs font-bold text-orange-500">
+                                  {assignment.mapTitle}
+                                </div>
+                                <div className="text-lg font-black text-gray-900">
+                                  {assignment.title}
+                                </div>
+                                <div className="mt-1 text-xs text-gray-500">
+                                  통과 기준 {assignment.passThresholdPercent}% ·
+                                  재도전 제한 {assignment.cooldownMinutes}분
+                                </div>
+                              </div>
+                              <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-bold text-orange-700 whitespace-nowrap">
+                                {(assignment.targetStudentNames.length
+                                  ? `${assignment.targetStudentNames[0]}${assignment.targetStudentNames.length > 1 ? ` 외 ${assignment.targetStudentNames.length - 1}명` : ""}`
+                                  : assignment.targetStudentName) ||
+                                  "학생 미지정"}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                        {!assignments.length && (
+                          <div className="text-sm text-gray-400">
+                            아직 생성된 역사교실 과제가 없습니다.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  </section>
                 )}
               </div>
             </div>
-          )}
-        </section>
-      </div>
+          </div>
+        </div>
+      )}
+
+      {isMapManagerOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/45 px-3 py-5 backdrop-blur-sm">
+          <div className="flex max-h-[94vh] w-full max-w-[min(96vw,92rem)] flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <div className="flex shrink-0 items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
+              <div>
+                <div className="text-xs font-bold uppercase tracking-[0.18em] text-blue-500">
+                  Map Blank Editor
+                </div>
+                <h2 className="mt-1 text-xl font-black text-gray-900">
+                  배포 지도 관리
+                </h2>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleSaveMapBlanks()}
+                  disabled={savingMapBlanks}
+                  className="rounded-2xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60"
+                >
+                  {savingMapBlanks ? "저장 중..." : "빈칸 저장"}
+                </button>
+                <button
+                  type="button"
+                  onClick={closeMapBlankManager}
+                  className="rounded-2xl border border-gray-200 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
+                >
+                  닫기
+                </button>
+              </div>
+            </div>
+            <div className="grid min-h-0 flex-1 bg-gray-50 lg:grid-cols-[18rem_minmax(0,1fr)]">
+              <aside className="min-h-0 border-r border-gray-200 bg-white p-4">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div className="text-sm font-black text-gray-900">
+                    지도 목록
+                  </div>
+                  <div className="rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-bold text-gray-600">
+                    {maps.length}개
+                  </div>
+                </div>
+                <div className="max-h-[calc(94vh-10rem)] space-y-2 overflow-y-auto pr-1">
+                  {maps.map((map) => (
+                    <button
+                      key={map.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedMapId(map.id);
+                        setBlanks(cloneMapResourceBlanks(map));
+                        setSelectedBlankId("");
+                        setDraftBlank(null);
+                        setDraftBlankAnswer("");
+                        closeBlankEditor();
+                      }}
+                      className={`w-full rounded-2xl border px-3 py-3 text-left transition ${
+                        map.id === selectedMapId
+                          ? "border-blue-200 bg-blue-50 text-blue-800"
+                          : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      <div className="text-sm font-black">{map.title}</div>
+                      <div className="mt-1 text-xs font-semibold text-gray-500">
+                        빈칸 {map.pdfBlanks?.length || 0}개
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </aside>
+              <section className="min-h-0 overflow-y-auto p-4">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3">
+                  <div>
+                    <div className="text-sm font-black text-gray-900">
+                      {selectedStoredMap?.title || "지도 미선택"}
+                    </div>
+                    <div className="mt-1 text-xs text-gray-500">
+                      백지도 위에서 영역을 드래그하거나 OCR 글자를 선택해 빈칸을 추가합니다.
+                    </div>
+                  </div>
+                  <div className="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-600">
+                    현재 빈칸 {blanks.length}개
+                  </div>
+                </div>
+                {worksheetPageImages.length > 0 ? (
+                  <div className="mx-auto max-w-[64rem]">
+                    <LessonWorksheetStage
+                      pageImages={worksheetPageImages}
+                      blanks={worksheetBlanks}
+                      textRegions={worksheetTextRegions}
+                      mode="teacher-edit"
+                      teacherTool={worksheetTool}
+                      selectedBlankId={selectedBlankId || null}
+                      pendingBlank={draftBlank}
+                      onSelectBlank={handleSelectBlank}
+                      onDeleteBlank={removeBlank}
+                      onCreateBlankFromSelection={handleCreateBlankFromSelection}
+                      annotationEnabled={false}
+                    />
+                  </div>
+                ) : (
+                  <div className="rounded-3xl border border-dashed border-gray-300 bg-white px-6 py-20 text-center text-sm font-semibold text-gray-400">
+                    빈칸을 편집할 PDF 지도를 선택해 주세요.
+                  </div>
+                )}
+              </section>
+            </div>
+          </div>
+        </div>
+      )}
 
       {editingAssignment && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4 py-6">
@@ -2399,8 +3330,7 @@ const ManageHistoryClassroom: React.FC = () => {
                             현재 배포 지도
                           </div>
                           <div className="mt-1 text-xs text-gray-500">
-                            지도와 OCR 빈칸 배치를 그대로 가져와 수정하거나,
-                            복제해서 새 과제로 다시 만들 수 있습니다.
+                            빈칸과 정답은 배포 지도 관리에서 수정합니다.
                           </div>
                         </div>
                         <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-gray-600">
@@ -2411,26 +3341,11 @@ const ManageHistoryClassroom: React.FC = () => {
                         <button
                           type="button"
                           onClick={() =>
-                            loadAssignmentIntoWorksheetEditor(
-                              editingAssignment,
-                              "edit",
-                            )
+                            openMapBlankManager(editingAssignment.mapResourceId)
                           }
                           className="rounded-xl border border-orange-200 bg-white px-3 py-2 text-xs font-bold text-orange-700 hover:bg-orange-50"
                         >
-                          지도/빈칸 수정
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            loadAssignmentIntoWorksheetEditor(
-                              editingAssignment,
-                              "clone",
-                            )
-                          }
-                          className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50"
-                        >
-                          기존 역사교실 불러오기
+                          배포 지도 관리
                         </button>
                       </div>
                     </div>
@@ -2903,7 +3818,7 @@ const ManageHistoryClassroom: React.FC = () => {
         </div>
       )}
 
-      {blankEditorMode && activeBlankEditor && (
+      {!isMapManagerOpen && blankEditorMode && activeBlankEditor && (
         <div
           className="fixed inset-0 z-[70] bg-slate-950/45 backdrop-blur-sm"
           onClick={
@@ -2923,7 +3838,9 @@ const ManageHistoryClassroom: React.FC = () => {
               <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
                 <div>
                   <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
-                    {blankEditorMode === "create" ? "새 빈칸 등록" : "빈칸 답 수정"}
+                    {blankEditorMode === "create"
+                      ? "새 빈칸 등록"
+                      : "빈칸 답 수정"}
                   </div>
                   <h3
                     id="history-blank-editor-title"
@@ -2968,7 +3885,9 @@ const ManageHistoryClassroom: React.FC = () => {
                   <input
                     type="text"
                     value={blankEditorAnswer}
-                    onChange={(event) => setBlankEditorAnswer(event.target.value)}
+                    onChange={(event) =>
+                      setBlankEditorAnswer(event.target.value)
+                    }
                     onKeyDown={handleBlankEditorKeyDown}
                     onCompositionStart={() => {
                       blankEditorComposingRef.current = true;
@@ -3021,7 +3940,8 @@ const ManageHistoryClassroom: React.FC = () => {
         </div>
       )}
 
-      <div className="fixed bottom-5 right-5 z-40 flex max-w-[calc(100vw-2.5rem)] flex-col items-end gap-3">
+      {isMapManagerOpen && (
+      <div className="fixed bottom-5 right-5 z-[65] flex max-w-[calc(100vw-2.5rem)] flex-col items-end gap-3">
         {floatingPanelOpen && (
           <div className="w-[min(18rem,calc(100vw-2.5rem))] space-y-2.5">
             <div className="rounded-2xl border border-gray-200 bg-white/96 p-3 shadow-2xl backdrop-blur">
@@ -3102,7 +4022,7 @@ const ManageHistoryClassroom: React.FC = () => {
               </div>
             </div>
 
-            {false ? (
+            {draftBlank ? (
               <div className="space-y-2.5 rounded-2xl border border-amber-200 bg-white/98 p-3 shadow-2xl backdrop-blur">
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-sm font-bold text-amber-900">
@@ -3135,7 +4055,7 @@ const ManageHistoryClassroom: React.FC = () => {
                   빈칸 추가
                 </button>
               </div>
-            ) : false ? (
+            ) : selectedBlank ? (
               <div className="space-y-2.5 rounded-2xl border border-blue-100 bg-white/98 p-3 shadow-2xl backdrop-blur">
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-sm font-bold text-blue-900">
@@ -3181,6 +4101,7 @@ const ManageHistoryClassroom: React.FC = () => {
           ></i>
         </button>
       </div>
+      )}
       <style>{`
                 .history-assignment-card > div:last-child {
                     display: none;

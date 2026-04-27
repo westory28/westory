@@ -318,7 +318,13 @@ const isRestrictedInAppBrowser = (): boolean => {
     return /(NAVER|KAKAOTALK)/i.test(ua);
 };
 
+const isLocalAuthHost = (): boolean => {
+    if (typeof window === 'undefined') return false;
+    return /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname);
+};
+
 const shouldPreferRedirectLogin = (): boolean => {
+    if (isLocalAuthHost()) return false;
     return isSafariBrowser() || isIOSDevice() || isAndroidDevice();
 };
 
@@ -464,6 +470,13 @@ const isPopupFallbackError = (error: unknown): boolean => {
         'auth/internal-error',
         'auth/network-request-failed',
     ].includes(code);
+};
+
+const shouldFallbackToRedirectLogin = (error: unknown): boolean => {
+    const code = (error as Partial<AuthError>)?.code || '';
+    if (!isLocalAuthHost()) return isPopupFallbackError(error);
+    return code === 'auth/popup-blocked'
+        || code === 'auth/operation-not-supported-in-this-environment';
 };
 
 const isIgnorableRedirectError = (error: unknown): boolean => {
@@ -1349,8 +1362,8 @@ const Login: React.FC = () => {
         setAuthBusy(true);
 
         try {
-            await authPersistenceReady;
             if (useRedirect) {
+                await authPersistenceReady;
                 markRedirectAttempt(mode);
                 console.info('[Auth] Starting Google redirect login', { mode });
                 setLoginNotice(getRedirectStartMessage(mode));
@@ -1359,10 +1372,12 @@ const Login: React.FC = () => {
             }
             console.info('[Auth] Starting Google popup login', { mode });
             const result = await signInWithPopup(auth, provider);
+            await authPersistenceReady;
             await finishLoginForRole(result.user, mode);
         } catch (error) {
-            if (isPopupFallbackError(error)) {
+            if (shouldFallbackToRedirectLogin(error)) {
                 try {
+                    await authPersistenceReady;
                     markRedirectAttempt(mode);
                     console.info('[Auth] Falling back to Google redirect login', { mode, code: (error as Partial<AuthError>)?.code || 'unknown' });
                     setLoginNotice(getRedirectStartMessage(mode));
@@ -1550,22 +1565,11 @@ const Login: React.FC = () => {
                 <button onClick={() => showPolicy('privacy')} className="text-gray-400 hover:text-gray-600">개인정보 처리 방침</button>
             </div>
 
-            <div className="absolute bottom-12 left-1/2 -translate-x-1/2 md:hidden z-20">
+            <div className="fixed bottom-12 right-4 z-30 md:bottom-8 md:right-8">
                 <button
                     onClick={() => handleLogin('teacher')}
                     disabled={authBusy || restrictedInAppBrowser}
                     className="text-gray-400 hover:text-gray-700 text-xs font-semibold px-2 py-1 rounded hover:bg-gray-200/60 transition whitespace-nowrap"
-                >
-                    <i className="fas fa-chalkboard-teacher mr-1"></i>
-                    관리자 로그인
-                </button>
-            </div>
-
-            <div className="fixed bottom-8 right-8 hidden lg:block z-30">
-                <button
-                    onClick={() => handleLogin('teacher')}
-                    disabled={authBusy || restrictedInAppBrowser}
-                    className="text-gray-400 hover:text-gray-700 text-xs font-semibold px-2 py-1 rounded hover:bg-gray-200/60 transition"
                 >
                     <i className="fas fa-chalkboard-teacher mr-1"></i>
                     관리자 로그인

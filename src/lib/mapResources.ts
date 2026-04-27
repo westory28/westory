@@ -18,6 +18,20 @@ export interface PdfMapRegion {
     tags?: string[];
 }
 
+export type PdfMapBlankSource = 'ocr' | 'manual';
+
+export interface PdfMapBlank {
+    id: string;
+    page: number;
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+    answer: string;
+    prompt?: string;
+    source?: PdfMapBlankSource;
+}
+
 export interface PdfTagSection {
     id: string;
     label: string;
@@ -41,6 +55,8 @@ export interface MapResource {
     externalUrl?: string;
     pdfPageImages?: PdfMapPageImage[];
     pdfRegions?: PdfMapRegion[];
+    pdfBlanks?: PdfMapBlank[];
+    answerOptions?: string[];
     pdfTagSections?: PdfTagSection[];
     sortOrder: number;
 }
@@ -137,9 +153,31 @@ const normalizePdfTagSections = (sections: unknown): PdfTagSection[] => {
     return parsed.length > 0 ? parsed : defaults;
 };
 
+const normalizePdfBlanks = (blanks: unknown): PdfMapBlank[] => {
+    if (!Array.isArray(blanks)) return [];
+
+    return blanks
+        .map((blank, index) => ({
+            id: String(blank && typeof blank === 'object' && 'id' in blank ? (blank as { id?: string }).id : '').trim() || `blank-${index + 1}`,
+            page: Math.max(1, Number(blank && typeof blank === 'object' && 'page' in blank ? (blank as { page?: unknown }).page : 1) || 1),
+            left: Number(blank && typeof blank === 'object' && 'left' in blank ? (blank as { left?: unknown }).left : 0) || 0,
+            top: Number(blank && typeof blank === 'object' && 'top' in blank ? (blank as { top?: unknown }).top : 0) || 0,
+            width: Math.max(1, Number(blank && typeof blank === 'object' && 'width' in blank ? (blank as { width?: unknown }).width : 1) || 1),
+            height: Math.max(1, Number(blank && typeof blank === 'object' && 'height' in blank ? (blank as { height?: unknown }).height : 1) || 1),
+            answer: String(blank && typeof blank === 'object' && 'answer' in blank ? (blank as { answer?: string }).answer : '').trim(),
+            prompt: String(blank && typeof blank === 'object' && 'prompt' in blank ? (blank as { prompt?: string }).prompt : '').trim(),
+            source: blank && typeof blank === 'object' && 'source' in blank && (blank as { source?: string }).source === 'ocr'
+                ? 'ocr' as const
+                : 'manual' as const,
+        }))
+        .filter((blank) => blank.answer && blank.width > 0 && blank.height > 0)
+        .sort((a, b) => a.page - b.page || a.top - b.top || a.left - b.left);
+};
+
 export const normalizeMapResource = (id: string, raw: Partial<MapResource>): MapResource => {
     const pdfTagSections = normalizePdfTagSections(raw.pdfTagSections);
     const allowedTagSet = new Set(getPdfSectionTagOptions(pdfTagSections));
+    const pdfBlanks = normalizePdfBlanks(raw.pdfBlanks);
 
     return {
         id,
@@ -183,6 +221,13 @@ export const normalizeMapResource = (id: string, raw: Partial<MapResource>): Map
                 }))
                 .filter((region) => region.label)
             : [],
+        pdfBlanks,
+        answerOptions: Array.from(new Set([
+            ...(Array.isArray(raw.answerOptions)
+                ? raw.answerOptions.map((item) => String(item || '').trim()).filter(Boolean)
+                : []),
+            ...pdfBlanks.map((blank) => blank.answer).filter(Boolean),
+        ])),
         pdfTagSections,
         sortOrder: Number.isFinite(Number(raw.sortOrder)) ? Number(raw.sortOrder) : 999,
     };

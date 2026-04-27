@@ -81,17 +81,20 @@ void authPersistenceReady.then(() => {
 
 try {
     const isBrowser = typeof window !== 'undefined';
+    const useFirebaseEmulators = import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true'
+        || Boolean(import.meta.env.VITE_FIRESTORE_EMULATOR_HOST)
+        || Boolean(import.meta.env.VITE_FUNCTIONS_EMULATOR_HOST);
     const emulatorHost = import.meta.env.VITE_FIRESTORE_EMULATOR_HOST || '127.0.0.1';
     const emulatorPort = Number(import.meta.env.VITE_FIRESTORE_EMULATOR_PORT || 8080);
     const functionsEmulatorHost = import.meta.env.VITE_FUNCTIONS_EMULATOR_HOST || emulatorHost;
     const functionsEmulatorPort = Number(import.meta.env.VITE_FUNCTIONS_EMULATOR_PORT || 5001);
 
-    if (import.meta.env.DEV && !firestoreEmulatorConnected) {
+    if (import.meta.env.DEV && useFirebaseEmulators && !firestoreEmulatorConnected) {
         connectFirestoreEmulator(db, emulatorHost, emulatorPort);
         firestoreEmulatorConnected = true;
         console.info(`[Firebase] Connected Firestore emulator at ${emulatorHost}:${emulatorPort}`);
     }
-    if (import.meta.env.DEV && !functionsEmulatorConnected) {
+    if (import.meta.env.DEV && useFirebaseEmulators && !functionsEmulatorConnected) {
         connectFunctionsEmulator(functions, functionsEmulatorHost, functionsEmulatorPort);
         functionsEmulatorConnected = true;
         console.info(`[Firebase] Connected Functions emulator at ${functionsEmulatorHost}:${functionsEmulatorPort}`);
