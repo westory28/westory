@@ -118,6 +118,10 @@ const sanitizeStudentNameInput = (value: unknown): string => {
     return String(value ?? '').replace(/[^\u1100-\u11FF\u3130-\u318F가-힣]/g, '').slice(0, 4);
 };
 
+const hasEnglishStudentNameInput = (value: unknown): boolean => {
+    return /[A-Za-z]/.test(String(value ?? ''));
+};
+
 const normalizeStudentName = (value: unknown): string => {
     return String(value ?? '')
         .replace(/[^\u1100-\u11FF\u3130-\u318F가-힣]/g, '')
@@ -513,6 +517,8 @@ const Login: React.FC = () => {
         number: '',
         name: '',
     });
+    const [profileNameInputWarning, setProfileNameInputWarning] = useState(false);
+    const profileNameAlertedRef = useRef(false);
     const profileResolverRef = useRef<((value: StudentProfileForm | null) => void) | null>(null);
 
     const [consentModalOpen, setConsentModalOpen] = useState(false);
@@ -673,6 +679,8 @@ const Login: React.FC = () => {
 
     const openProfileModal = (initial: StudentProfileForm): Promise<StudentProfileForm | null> => {
         const normalizedNumber = normalizeSchoolField(initial.number);
+        profileNameAlertedRef.current = false;
+        setProfileNameInputWarning(false);
         setProfileForm({
             ...initial,
             name: normalizeStudentName(initial.name),
@@ -686,9 +694,32 @@ const Login: React.FC = () => {
 
     const closeProfileModal = (result: StudentProfileForm | null) => {
         setProfileModalOpen(false);
+        setProfileNameInputWarning(false);
+        profileNameAlertedRef.current = false;
         const resolver = profileResolverRef.current;
         profileResolverRef.current = null;
         resolver?.(result);
+    };
+
+    const handleProfileNameChange = (value: string) => {
+        const sanitizedName = sanitizeStudentNameInput(value);
+        const hasEnglishInput = hasEnglishStudentNameInput(value);
+
+        setProfileForm((prev) => ({ ...prev, name: sanitizedName }));
+
+        if (!hasEnglishInput) {
+            if (sanitizedName) {
+                setProfileNameInputWarning(false);
+                profileNameAlertedRef.current = false;
+            }
+            return;
+        }
+
+        setProfileNameInputWarning(true);
+        if (!profileNameAlertedRef.current) {
+            profileNameAlertedRef.current = true;
+            alert('영어키로 되어 있어요. 한/영키를 눌러 한글로 바꾼 뒤 이름을 입력해주세요.');
+        }
     };
 
     const handleProfileSubmit = () => {
@@ -1543,7 +1574,7 @@ const Login: React.FC = () => {
                             <img src="https://fonts.gstatic.com/s/i/productlogos/googleg/v6/24px.svg" width={24} height={24} alt="Google" />
                             학생 로그인
                         </button>
-                        <p className="text-center text-xs leading-5 text-gray-500 px-3">
+                        <p className="text-center text-xs leading-5 text-gray-500 whitespace-nowrap">
                             학교 Google 계정(@{ALLOWED_SCHOOL_EMAIL_DOMAIN})으로만 로그인할 수 있습니다.
                         </p>
                         {!!loginNotice && (
@@ -1664,11 +1695,20 @@ const Login: React.FC = () => {
                                     type="text"
                                     value={profileForm.name}
                                     maxLength={4}
-                                    onChange={(e) => setProfileForm((prev) => ({ ...prev, name: sanitizeStudentNameInput(e.target.value) }))}
+                                    onChange={(e) => handleProfileNameChange(e.target.value)}
                                     placeholder="한글 2~4글자"
-                                    className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                    aria-invalid={profileNameInputWarning}
+                                    className={`w-full rounded-lg border p-3 text-sm outline-none focus:ring-2 ${
+                                        profileNameInputWarning
+                                            ? 'border-red-500 focus:border-red-500 focus:ring-red-200'
+                                            : 'border-gray-300 focus:ring-blue-500'
+                                    }`}
                                 />
-                                <p className="mt-1 text-xs text-gray-500">숫자/영문/특수문자는 입력할 수 없습니다.</p>
+                                <p className={`mt-1 text-xs ${profileNameInputWarning ? 'font-semibold text-red-600' : 'text-gray-500'}`}>
+                                    {profileNameInputWarning
+                                        ? '영어키로 되어 있어요. 한/영키를 눌러 한글로 바꿔주세요.'
+                                        : '숫자/영문/특수문자는 입력할 수 없습니다.'}
+                                </p>
                             </div>
                         </div>
 
