@@ -2209,20 +2209,20 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
               </div>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1040px] table-fixed text-left text-sm">
+              <table className="w-full min-w-[1220px] table-fixed text-left text-sm">
                 <colgroup>
-                  <col className="w-[72px]" />
-                  <col className="w-[210px]" />
-                  <col className="w-[76px]" />
-                  <col className="w-[76px]" />
+                  <col className="w-[84px]" />
+                  <col className="w-[250px]" />
+                  <col className="w-[88px]" />
+                  <col className="w-[96px]" />
                   <col />
-                  <col className="w-[150px]" />
-                  <col className="w-[135px]" />
-                  <col className="w-[115px]" />
+                  <col className="w-[172px]" />
+                  <col className="w-[160px]" />
+                  <col className="w-[132px]" />
                 </colgroup>
                 <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-black text-slate-500 shadow-sm">
                   <tr>
-                    <th className="px-3 py-3 text-center">
+                    <th className="px-4 py-3.5 text-center">
                       <button
                         type="button"
                         onClick={() => toggleSort("code")}
@@ -2234,8 +2234,8 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                         ></i>
                       </button>
                     </th>
-                    <th className="px-3 py-3">단원</th>
-                    <th className="px-3 py-3">
+                    <th className="px-4 py-3.5">단원</th>
+                    <th className="px-4 py-3.5">
                       <button
                         type="button"
                         onClick={() => toggleSort("category")}
@@ -2247,7 +2247,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                         ></i>
                       </button>
                     </th>
-                    <th className="px-3 py-3">
+                    <th className="px-4 py-3.5">
                       <button
                         type="button"
                         onClick={() => toggleSort("type")}
@@ -2259,21 +2259,21 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                         ></i>
                       </button>
                     </th>
-                    <th className="px-3 py-3">문제</th>
-                    <th className="px-3 py-3">
+                    <th className="px-4 py-3.5">문제</th>
+                    <th className="px-4 py-3.5">
                       <button
                         type="button"
                         onClick={() => toggleSort("rate")}
                         className="inline-flex items-center gap-1 hover:text-blue-600"
                       >
-                        성과{" "}
+                        정답률{" "}
                         <i
                           className={`fas ${sortIndicator("rate")} text-xs`}
                         ></i>
                       </button>
                     </th>
-                    <th className="px-3 py-3">오답 경향</th>
-                    <th className="px-3 py-3">활용</th>
+                    <th className="px-4 py-3.5">주요 오답</th>
+                    <th className="px-4 py-3.5">활용</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
@@ -2324,20 +2324,20 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                           onClick={() => openEditModal(q)}
                         >
                           <td
-                            className="px-3 py-4 text-center text-xs font-black text-slate-500"
+                            className="px-4 py-5 text-center text-xs font-black text-slate-500"
                             title={`문항 ID: ${q.docId}`}
                           >
                             {questionDisplayCodes[q.docId] || "-"}
                           </td>
-                          <td className="overflow-hidden px-3 py-4 align-top">
+                          <td className="overflow-hidden px-4 py-5 align-top">
                             <div className="min-w-0 truncate text-sm font-black text-slate-800">
                               {unitMeta.focusTitle}
                             </div>
-                            <div className="mt-1 min-w-0 truncate text-[11px] font-bold text-slate-400">
+                            <div className="mt-2 min-w-0 truncate text-[11px] font-bold text-slate-400">
                               {unitMeta.bigTitle} &gt; {unitMeta.midTitle}
                             </div>
                           </td>
-                          <td className="overflow-hidden px-3 py-4 align-top">
+                          <td className="overflow-hidden px-4 py-5 align-top">
                             <span
                               className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-black ${
                                 q.category === "diagnostic"
@@ -2350,12 +2350,12 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                               {getCategoryLabel(q.category)}
                             </span>
                           </td>
-                          <td className="overflow-hidden px-3 py-4 align-top text-xs font-black text-slate-600">
+                          <td className="overflow-hidden px-4 py-5 align-top text-xs font-black text-slate-600">
                             {QUESTION_TYPE_LABEL[q.type] || q.type}
                           </td>
-                          <td className="overflow-hidden px-3 py-4 align-top">
+                          <td className="overflow-hidden px-4 py-5 align-top">
                             <div className="min-w-0">
-                              <div className="flex items-start gap-2">
+                              <div className="flex items-start gap-3">
                                 {q.image && (
                                   <i
                                     className="fas fa-image mt-1 text-blue-500"
@@ -2368,11 +2368,11 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                                     title="힌트 제공"
                                   ></i>
                                 )}
-                                <div className="min-w-0 break-words font-black leading-5 text-slate-800">
+                                <div className="min-w-0 break-words font-black leading-6 text-slate-800">
                                   {q.question}
                                 </div>
                               </div>
-                              <div className="mt-1 min-w-0 truncate text-xs font-bold text-blue-700">
+                              <div className="mt-2 min-w-0 truncate text-xs font-bold text-blue-700">
                                 정답:{" "}
                                 {String(q.answer || "-")
                                   .split(ORDER_DELIMITER)
@@ -2380,11 +2380,11 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                               </div>
                             </div>
                           </td>
-                          <td className="overflow-hidden px-3 py-4 align-top">
+                          <td className="overflow-hidden px-4 py-5 align-top">
                             <div className="text-xs font-black text-slate-700">
                               {rateInfo.text}
                             </div>
-                            <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                            <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
                               <div
                                 className={`h-full rounded-full ${rateInfo.attempts && rateInfo.rate < 60 ? "bg-red-500" : "bg-blue-500"}`}
                                 style={{
@@ -2393,17 +2393,17 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                               ></div>
                             </div>
                           </td>
-                          <td className="overflow-hidden px-3 py-4 align-top">
+                          <td className="overflow-hidden px-4 py-5 align-top">
                             <div className="text-xs font-black text-slate-700">
                               {stat.uniqueWrongStudents}명 오답
                             </div>
-                            <div className="mt-1 min-w-0 truncate text-[11px] font-bold text-slate-400">
+                            <div className="mt-2 min-w-0 truncate text-[11px] font-bold text-slate-400">
                               {wrong.count
                                 ? `${wrong.answer} ${wrong.count}회`
                                 : "반복 오답 없음"}
                             </div>
                           </td>
-                          <td className="overflow-hidden px-3 py-4 align-top">
+                          <td className="overflow-hidden px-4 py-5 align-top">
                             <span
                               className={`mb-2 inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-black ${status.tone}`}
                             >
