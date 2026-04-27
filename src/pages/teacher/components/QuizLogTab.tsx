@@ -109,6 +109,9 @@ const SCORE_BUCKETS = [
 const RESULT_LIMIT = 50;
 const STUDENTS_PER_PAGE = 50;
 const FIRESTORE_IN_CHUNK_SIZE = 10;
+const BACKFILL_BASIC_LIMIT = 50;
+const BACKFILL_FILTERED_LIMIT = 150;
+const BACKFILL_CLASS_LIMIT = 300;
 
 const normalizeClass = (value: unknown): string => {
   const raw = String(value || "").trim();
@@ -322,12 +325,13 @@ const getStatusMeta = (status: StudentSummary["status"]) => {
 const QuizLogTab: React.FC = () => {
   const { config } = useAuth();
   const [logs, setLogs] = useState<Log[]>([]);
-  const [classScopedLogs, setClassScopedLogs] = useState<Log[]>([]);
+  const [analyticsBackfillLogs, setAnalyticsBackfillLogs] = useState<Log[]>([]);
   const [students, setStudents] = useState<UserProfile[]>([]);
   const [treeData, setTreeData] = useState<TreeUnit[]>([]);
   const [questions, setQuestions] = useState<QuestionMeta[]>([]);
   const [loading, setLoading] = useState(true);
-  const [classScopedLoading, setClassScopedLoading] = useState(false);
+  const [analyticsBackfillLoading, setAnalyticsBackfillLoading] =
+    useState(false);
   const [supportLoading, setSupportLoading] = useState(true);
   const [lastSyncedAt, setLastSyncedAt] = useState(0);
   const [loadError, setLoadError] = useState("");
@@ -542,56 +546,87 @@ const QuizLogTab: React.FC = () => {
     return () => unsubscribe();
   }, [config, refreshKey]);
 
-  useEffect(() => {
-    if (!classFilter) {
-      setClassScopedLogs([]);
-      setClassScopedLoading(false);
-      return;
+  const bigOptions = treeData;
+  const midOptions = useMemo(() => {
+    if (!bigFilter) return treeData.flatMap((big) => big.children || []);
+    return treeData.find((big) => big.id === bigFilter)?.children || [];
+  }, [bigFilter, treeData]);
+
+  const selectedUnitFilterIds = useMemo(() => {
+    const ids = new Set<string>();
+    const addUnitWithChildren = (unit?: TreeUnit) => {
+      if (!unit) return;
+      ids.add(unit.id);
+      (unit.children || []).forEach(addUnitWithChildren);
+    };
+
+    if (midFilter) {
+      const mid = treeData
+        .flatMap((big) => big.children || [])
+        .find((item) => item.id === midFilter);
+      addUnitWithChildren(mid);
+    } else if (bigFilter) {
+      addUnitWithChildren(treeData.find((big) => big.id === bigFilter));
     }
 
-    const selectedClassStudents = students.filter(
-      (student) => student.class === classFilter && student.uid,
+    return Array.from(ids);
+  }, [bigFilter, midFilter, treeData]);
+
+  useEffect(() => {
+    const targetStudents = students.filter(
+      (student) =>
+        (!classFilter || student.class === classFilter) && student.uid,
     );
 
-    if (!selectedClassStudents.length) {
-      setClassScopedLogs([]);
-      setClassScopedLoading(false);
+    if (!targetStudents.length) {
+      setAnalyticsBackfillLogs([]);
+      setAnalyticsBackfillLoading(false);
       return;
     }
 
     let active = true;
-    setClassScopedLoading(true);
+    setAnalyticsBackfillLoading(true);
 
-    const loadClassScopedLogs = async () => {
+    const loadAnalyticsBackfillLogs = async () => {
       try {
         const quizResultCollection = collection(
           db,
           getSemesterCollectionPath(config, "quiz_results"),
         );
         const uidChunks = chunkArray(
-          Array.from(
-            new Set(selectedClassStudents.map((student) => student.uid)),
-          ),
+          Array.from(new Set(targetStudents.map((student) => student.uid))),
           FIRESTORE_IN_CHUNK_SIZE,
         );
+        const hasAnalysisFilter =
+          Boolean(categoryFilter) || selectedUnitFilterIds.length > 0;
+        const queryLimit = classFilter
+          ? BACKFILL_CLASS_LIMIT
+          : hasAnalysisFilter
+            ? BACKFILL_FILTERED_LIMIT
+            : BACKFILL_BASIC_LIMIT;
+
         const snaps = await Promise.all(
           uidChunks.map(async (uidChunk) => {
+            const constraints = [
+              where("uid", "in", uidChunk),
+              ...(categoryFilter
+                ? [where("category", "==", categoryFilter)]
+                : []),
+              orderBy("timestamp", "desc"),
+              limit(queryLimit),
+            ];
             try {
-              return await getDocs(
-                query(
-                  quizResultCollection,
-                  where("uid", "in", uidChunk),
-                  orderBy("timestamp", "desc"),
-                  limit(RESULT_LIMIT),
-                ),
-              );
+              return await getDocs(query(quizResultCollection, ...constraints));
             } catch (error) {
               console.warn(error);
               return getDocs(
                 query(
                   quizResultCollection,
                   where("uid", "in", uidChunk),
-                  limit(RESULT_LIMIT),
+                  ...(categoryFilter
+                    ? [where("category", "==", categoryFilter)]
+                    : []),
+                  limit(queryLimit),
                 ),
               );
             }
@@ -615,31 +650,49 @@ const QuizLogTab: React.FC = () => {
             }
           });
         });
-        const list = Array.from(dedupedMap.values());
+
+        let list = Array.from(dedupedMap.values());
+        if (selectedUnitFilterIds.length) {
+          const unitIds = new Set(selectedUnitFilterIds);
+          list = list.filter((log) => {
+            if (log.unitId && unitIds.has(log.unitId)) return true;
+            return getLogUnitMetas(log).some(
+              (meta) =>
+                unitIds.has(meta.id) ||
+                unitIds.has(meta.bigId) ||
+                unitIds.has(meta.midId) ||
+                Boolean(meta.smallId && unitIds.has(meta.smallId)),
+            );
+          });
+        }
+
         list.sort(
           (a, b) => getTimestampMs(b.timestamp) - getTimestampMs(a.timestamp),
         );
-        setClassScopedLogs(list);
+        setAnalyticsBackfillLogs(list);
       } catch (error) {
         console.error(error);
-        if (active) setClassScopedLogs([]);
+        if (active) setAnalyticsBackfillLogs([]);
       } finally {
-        if (active) setClassScopedLoading(false);
+        if (active) setAnalyticsBackfillLoading(false);
       }
     };
 
-    void loadClassScopedLogs();
+    void loadAnalyticsBackfillLogs();
 
     return () => {
       active = false;
     };
-  }, [classFilter, config, refreshKey, students]);
-
-  const bigOptions = treeData;
-  const midOptions = useMemo(() => {
-    if (!bigFilter) return treeData.flatMap((big) => big.children || []);
-    return treeData.find((big) => big.id === bigFilter)?.children || [];
-  }, [bigFilter, treeData]);
+  }, [
+    categoryFilter,
+    classFilter,
+    config,
+    refreshKey,
+    selectedUnitFilterIds,
+    students,
+    unitMetaById,
+    questionMetaById,
+  ]);
 
   const getLogUnitMetas = (log: Log) => {
     const metas: UnitMeta[] = [];
@@ -679,7 +732,7 @@ const QuizLogTab: React.FC = () => {
 
   const mergedLogs = useMemo(() => {
     const dedupedMap = new Map<string, Log>();
-    [...logs, ...classScopedLogs].forEach((log) => {
+    [...logs, ...analyticsBackfillLogs].forEach((log) => {
       const key = buildDedupKey(log);
       const existing = dedupedMap.get(key);
       if (
@@ -692,7 +745,7 @@ const QuizLogTab: React.FC = () => {
     return Array.from(dedupedMap.values()).sort(
       (a, b) => getTimestampMs(b.timestamp) - getTimestampMs(a.timestamp),
     );
-  }, [classScopedLogs, logs]);
+  }, [analyticsBackfillLogs, logs]);
 
   const canonicalLogs = useMemo(
     () =>
@@ -1189,8 +1242,7 @@ const QuizLogTab: React.FC = () => {
         <div>
           <h2 className="text-2xl font-extrabold text-gray-900">응시 현황</h2>
           <p className="mt-1 text-sm text-gray-500">
-            반별 점수 흐름과 취약 단원을 현재 학기 최근 {RESULT_LIMIT}건
-            기준으로 분석합니다.
+            반별 점수 흐름과 취약 단원을 현재 필터 기준으로 분석합니다.
           </p>
         </div>
 
@@ -1280,7 +1332,7 @@ const QuizLogTab: React.FC = () => {
           <h3 className="text-sm font-extrabold text-gray-800">
             오늘의 학급 수준
           </h3>
-          {(loading || supportLoading || classScopedLoading) && (
+          {(loading || supportLoading || analyticsBackfillLoading) && (
             <span className="text-xs font-bold text-blue-600">
               동기화 중...
             </span>
@@ -1380,8 +1432,10 @@ const QuizLogTab: React.FC = () => {
                   key={item.classOnly}
                   type="button"
                   onClick={() => setClassFilter(selected ? "" : item.classOnly)}
-                  className={`grid w-full grid-cols-[44px_1fr_48px] items-center gap-3 rounded-md px-2 py-1.5 text-left transition ${
-                    selected ? "bg-blue-50" : "hover:bg-gray-50"
+                  className={`grid w-full grid-cols-[48px_1fr_54px] items-center gap-3 rounded-lg px-2.5 py-2 text-left transition focus:outline-none focus:ring-2 focus:ring-blue-200 ${
+                    selected
+                      ? "bg-blue-50 ring-1 ring-blue-200"
+                      : "hover:bg-gray-50"
                   }`}
                 >
                   <span className="text-sm font-bold text-gray-700">
@@ -1389,11 +1443,17 @@ const QuizLogTab: React.FC = () => {
                   </span>
                   <span className="h-2.5 overflow-hidden rounded-full bg-gray-100">
                     <span
-                      className="block h-full rounded-full bg-blue-500"
+                      className="block h-full rounded-full bg-gradient-to-r from-blue-400 to-blue-600"
                       style={{ width: `${Math.min(100, value)}%` }}
                     ></span>
                   </span>
-                  <span className="text-right text-sm font-bold text-gray-700">
+                  <span
+                    className={`rounded-md px-2 py-1 text-right text-xs font-extrabold ${
+                      item.average === null
+                        ? "text-gray-400"
+                        : "bg-gray-50 text-gray-800"
+                    }`}
+                  >
                     {item.average === null ? "-" : Math.round(item.average)}
                   </span>
                 </button>
