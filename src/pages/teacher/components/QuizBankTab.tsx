@@ -1354,11 +1354,11 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   }, [activeClassFilter, filteredQuestions, questionStats]);
 
   const scopeTitle = useMemo(() => {
-    if (filters.small) return getNodeTitle(filters.small);
     if (filters.mid) return getNodeTitle(filters.mid);
+    if (weakestMidUnit) return weakestMidUnit.title;
     if (filters.big) return getNodeTitle(filters.big);
     return "최근 응시 평가";
-  }, [filters.big, filters.mid, filters.small, treeData]);
+  }, [filters.big, filters.mid, treeData, weakestMidUnit]);
 
   const actionSuggestions = useMemo(() => {
     const weak = filteredQuestions
@@ -1974,19 +1974,12 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       <div className="flex-1 overflow-auto p-4">
         <section className="rounded-lg border border-slate-200 bg-white">
           <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-start gap-3">
-              <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-xs font-black text-white">
-                4
-              </span>
-              <div>
-                <h3 className="font-black text-slate-900">
-                  문제 은행 - 대시보드
-                </h3>
-                <p className="mt-1 text-xs font-bold text-slate-500">
-                  {scopeTitle} 기준으로 단원, 유형, 학급 격차와 재출제 후보를
-                  함께 봅니다.
-                </p>
-              </div>
+            <div>
+              <h3 className="font-black text-slate-900">{scopeTitle}</h3>
+              <p className="mt-1 text-xs font-bold text-slate-500">
+                현재 필터 기준으로 단원, 유형, 학급 격차와 재출제 후보를 함께
+                봅니다.
+              </p>
             </div>
             <div className="text-xs font-black text-slate-400">
               마지막 응시{" "}
