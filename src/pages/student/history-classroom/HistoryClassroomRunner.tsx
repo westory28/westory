@@ -99,6 +99,9 @@ const writeCooldownLock = (
   );
 };
 
+const getExitCooldownUntil = (assignment: HistoryClassroomAssignment) =>
+  Date.now() + Math.max(1, assignment.cooldownMinutes || 0) * 60 * 1000;
+
 const clearCooldownLock = (assignmentId: string, uid: string) => {
   removeStorage(getCooldownLockKey(assignmentId, uid));
 };
@@ -306,6 +309,12 @@ const HistoryClassroomRunner: React.FC = () => {
           throw new Error("응시 기간이 마감된 역사교실입니다.");
         }
 
+        writeCooldownLock(
+          loaded.id,
+          userData.uid,
+          getExitCooldownUntil(loaded),
+          "attempt-started",
+        );
         setAssignment(loaded);
         setCurrentPage(loaded.pdfPageImages?.[0]?.page || 1);
         setAnswers({});
@@ -491,14 +500,12 @@ const HistoryClassroomRunner: React.FC = () => {
     }
 
     cancellationInFlightRef.current = true;
-    if (assignment.cooldownMinutes > 0) {
-      writeCooldownLock(
-        assignment.id,
-        userData.uid,
-        Date.now() + assignment.cooldownMinutes * 60 * 1000,
-        reason,
-      );
-    }
+    writeCooldownLock(
+      assignment.id,
+      userData.uid,
+      getExitCooldownUntil(assignment),
+      reason,
+    );
 
     try {
       await saveResult({ status: "cancelled", cancellationReason: reason });
@@ -533,6 +540,16 @@ const HistoryClassroomRunner: React.FC = () => {
       const result = await saveResult({ status: "failed" });
       setCompleted(true);
       if (!result) return;
+      if (!assignment.cooldownMinutes || result.passed) {
+        clearCooldownLock(assignment.id, userData.uid);
+      } else {
+        writeCooldownLock(
+          assignment.id,
+          userData.uid,
+          Date.now() + assignment.cooldownMinutes * 60 * 1000,
+          reason,
+        );
+      }
 
       if (!resultSummaryShownRef.current) {
         resultSummaryShownRef.current = true;
@@ -588,6 +605,32 @@ const HistoryClassroomRunner: React.FC = () => {
       window.removeEventListener("blur", handleBlur);
     };
   }, [assignment, completed, navigate, submitting, userData]);
+
+  useEffect(() => {
+    if (!assignment || !userData || completed || submitting) {
+      return undefined;
+    }
+
+    const refreshExitCooldown = (reason: string) => {
+      writeCooldownLock(
+        assignment.id,
+        userData.uid,
+        getExitCooldownUntil(assignment),
+        reason,
+      );
+    };
+
+    refreshExitCooldown("attempt-active");
+    const timerId = window.setInterval(
+      () => refreshExitCooldown("attempt-active"),
+      15000,
+    );
+
+    return () => {
+      window.clearInterval(timerId);
+      refreshExitCooldown("attempt-left");
+    };
+  }, [assignment, completed, submitting, userData]);
 
   useEffect(() => {
     if (!assignment?.timeLimitMinutes || completed || submitting) {
@@ -672,6 +715,16 @@ const HistoryClassroomRunner: React.FC = () => {
       const result = await saveResult({ status: "failed" });
       setCompleted(true);
       if (!result) return;
+      if (!assignment.cooldownMinutes || result.passed) {
+        clearCooldownLock(assignment.id, userData.uid);
+      } else {
+        writeCooldownLock(
+          assignment.id,
+          userData.uid,
+          Date.now() + assignment.cooldownMinutes * 60 * 1000,
+          "submitted",
+        );
+      }
 
       if (!resultSummaryShownRef.current) {
         resultSummaryShownRef.current = true;
@@ -733,7 +786,7 @@ const HistoryClassroomRunner: React.FC = () => {
         headerAction={
           <button
             type="button"
-            onClick={() => navigate("/student/history-classroom")}
+            onClick={() => void handleForcedCancel("student-navigation")}
             className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50"
           >
             목록으로
