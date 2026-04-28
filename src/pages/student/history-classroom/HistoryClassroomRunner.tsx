@@ -1,4 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   addDoc,
   collection,
@@ -182,6 +188,7 @@ const HistoryClassroomRunner: React.FC = () => {
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [remainingDueMs, setRemainingDueMs] = useState<number | null>(null);
   const cancellationInFlightRef = useRef(false);
+  const exitNavigationAllowedRef = useRef(false);
   const autoSubmitHandledRef = useRef(false);
   const resultSummaryShownRef = useRef(false);
 
@@ -328,6 +335,7 @@ const HistoryClassroomRunner: React.FC = () => {
         );
         setRemainingDueMs(getHistoryClassroomRemainingMs(loaded));
         cancellationInFlightRef.current = false;
+        exitNavigationAllowedRef.current = false;
         autoSubmitHandledRef.current = false;
       } catch (loadError) {
         console.error(loadError);
@@ -488,7 +496,21 @@ const HistoryClassroomRunner: React.FC = () => {
     }
   };
 
-  const handleForcedCancel = async (reason: string) => {
+  const getExitCooldownDurationLabel = useCallback(() => {
+    const cooldownMs = Math.max(1, assignment?.cooldownMinutes || 0) * 60000;
+    return formatRemainingDuration(cooldownMs);
+  }, [assignment?.cooldownMinutes]);
+
+  const getExitWarningMessage = useCallback(
+    () =>
+      `응시 화면을 나가면 현재 응시는 종료되고 ${getExitCooldownDurationLabel()} 후에 다시 응시할 수 있습니다.\n정말 나가시겠습니까?`,
+    [getExitCooldownDurationLabel],
+  );
+
+  const handleForcedCancel = async (
+    reason: string,
+    options: { redirectTo?: string | null; replace?: boolean } = {},
+  ) => {
     if (
       !assignment ||
       !userData ||
@@ -514,10 +536,30 @@ const HistoryClassroomRunner: React.FC = () => {
       setResultText(
         "화면 이탈로 응시가 자동 취소되었습니다. 재응시 제한이 시작됩니다.",
       );
-      navigate("/student/history-classroom", { replace: true });
+      const redirectTo =
+        "redirectTo" in options
+          ? options.redirectTo
+          : "/student/history-classroom";
+      if (redirectTo) {
+        exitNavigationAllowedRef.current = true;
+        navigate(redirectTo, { replace: options.replace ?? true });
+      }
     } catch (cancelError) {
       console.error("Failed to save cancelled attempt:", cancelError);
     }
+  };
+
+  const requestExit = async (
+    reason: string,
+    redirectTo = "/student/history-classroom",
+  ) => {
+    if (!assignment || completed || submitting) {
+      navigate(redirectTo);
+      return;
+    }
+
+    if (!window.confirm(getExitWarningMessage())) return;
+    await handleForcedCancel(reason, { redirectTo });
   };
 
   const finalizeExpiredAttempt = async (
@@ -577,6 +619,81 @@ const HistoryClassroomRunner: React.FC = () => {
   };
 
   useEffect(() => {
+    if (!assignment || !userData || completed || submitting) {
+      return undefined;
+    }
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (exitNavigationAllowedRef.current) return undefined;
+      writeCooldownLock(
+        assignment.id,
+        userData.uid,
+        getExitCooldownUntil(assignment),
+        "beforeunload",
+      );
+      event.preventDefault();
+      event.returnValue = getExitWarningMessage();
+      return event.returnValue;
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [assignment, completed, getExitWarningMessage, submitting, userData]);
+
+  useEffect(() => {
+    if (!assignment || completed || submitting) return undefined;
+
+    const getNavigationRoute = (anchor: HTMLAnchorElement) => {
+      const rawHref = anchor.getAttribute("href") || "";
+      if (!rawHref || rawHref.startsWith("javascript:")) return null;
+
+      const url = new URL(anchor.href, window.location.href);
+      if (url.origin !== window.location.origin) return null;
+
+      const hashRoute = url.hash.startsWith("#/") ? url.hash.slice(1) : null;
+      const route = hashRoute || `${url.pathname}${url.search}${url.hash}`;
+      const currentRoute = window.location.hash.startsWith("#/")
+        ? window.location.hash.slice(1)
+        : `${window.location.pathname}${window.location.search}${window.location.hash}`;
+
+      return route === currentRoute ? null : route;
+    };
+
+    const handleLinkClick = (event: MouseEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.shiftKey
+      ) {
+        return;
+      }
+
+      const target = event.target as Element | null;
+      const anchor = target?.closest("a[href]") as HTMLAnchorElement | null;
+      if (
+        !anchor ||
+        anchor.hasAttribute("download") ||
+        (anchor.target && anchor.target !== "_self")
+      ) {
+        return;
+      }
+
+      const route = getNavigationRoute(anchor);
+      if (!route) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      void requestExit("link-navigation", route);
+    };
+
+    document.addEventListener("click", handleLinkClick, true);
+    return () => document.removeEventListener("click", handleLinkClick, true);
+  }, [assignment, completed, requestExit, submitting]);
+
+  useEffect(() => {
     if (!assignment || completed) return undefined;
 
     const handleVisibility = () => {
@@ -587,22 +704,13 @@ const HistoryClassroomRunner: React.FC = () => {
     const handlePageHide = () => {
       void handleForcedCancel("pagehide");
     };
-    const handleBlur = () => {
-      window.setTimeout(() => {
-        if (!document.hasFocus()) {
-          void handleForcedCancel("window-blur");
-        }
-      }, 0);
-    };
 
     document.addEventListener("visibilitychange", handleVisibility);
     window.addEventListener("pagehide", handlePageHide);
-    window.addEventListener("blur", handleBlur);
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener("pagehide", handlePageHide);
-      window.removeEventListener("blur", handleBlur);
     };
   }, [assignment, completed, navigate, submitting, userData]);
 
@@ -687,6 +795,12 @@ const HistoryClassroomRunner: React.FC = () => {
       : `${String(Math.floor(remainingSeconds / 60)).padStart(2, "0")}:${String(
           remainingSeconds % 60,
         ).padStart(2, "0")}`;
+  const showLowTimeWarning =
+    remainingSeconds != null &&
+    remainingSeconds > 0 &&
+    remainingSeconds <= 60 &&
+    !completed &&
+    !submitting;
 
   const dueStatus = useMemo(() => {
     if (remainingDueMs == null) {
@@ -786,13 +900,23 @@ const HistoryClassroomRunner: React.FC = () => {
         headerAction={
           <button
             type="button"
-            onClick={() => void handleForcedCancel("student-navigation")}
+            onClick={() => void requestExit("student-navigation")}
             className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50"
           >
             목록으로
           </button>
         }
       />
+      {showLowTimeWarning && (
+        <div
+          className="pointer-events-none fixed left-1/2 top-4 z-[130] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl border border-rose-200 bg-white/95 px-4 py-3 text-center text-sm font-black text-rose-700 shadow-lg backdrop-blur"
+          role="status"
+          aria-live="polite"
+        >
+          남은 시간이 1분 이내입니다. 작성 중인 답을 확인하고 빨리 제출해
+          주세요.
+        </div>
+      )}
       {resultSummary && (
         <div
           className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/55 px-4 py-6 backdrop-blur-sm"
