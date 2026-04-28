@@ -189,6 +189,13 @@ const HistoryClassroomRunner: React.FC = () => {
   const [remainingDueMs, setRemainingDueMs] = useState<number | null>(null);
   const cancellationInFlightRef = useRef(false);
   const exitNavigationAllowedRef = useRef(false);
+  const forcedCancelRef =
+    useRef<
+      (
+        reason: string,
+        options?: { redirectTo?: string | null; replace?: boolean },
+      ) => Promise<void>
+    >();
   const autoSubmitHandledRef = useRef(false);
   const resultSummaryShownRef = useRef(false);
 
@@ -562,6 +569,8 @@ const HistoryClassroomRunner: React.FC = () => {
     await handleForcedCancel(reason, { redirectTo });
   };
 
+  forcedCancelRef.current = handleForcedCancel;
+
   const finalizeExpiredAttempt = async (
     reason: "time-limit" | "due-window",
   ) => {
@@ -639,6 +648,44 @@ const HistoryClassroomRunner: React.FC = () => {
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [assignment, completed, getExitWarningMessage, submitting, userData]);
+
+  useEffect(() => {
+    if (!assignment || completed || submitting) return undefined;
+
+    const guardState =
+      window.history.state && typeof window.history.state === "object"
+        ? { ...window.history.state, westoryHistoryClassroomGuard: true }
+        : { westoryHistoryClassroomGuard: true };
+    let disposed = false;
+
+    const armBackGuard = () => {
+      if (disposed || exitNavigationAllowedRef.current) return;
+      window.history.pushState(guardState, "", window.location.href);
+    };
+
+    armBackGuard();
+
+    const handlePopState = () => {
+      if (exitNavigationAllowedRef.current) return;
+
+      if (!window.confirm(getExitWarningMessage())) {
+        armBackGuard();
+        return;
+      }
+
+      exitNavigationAllowedRef.current = true;
+      void (async () => {
+        await forcedCancelRef.current?.("browser-back", { redirectTo: null });
+        window.history.back();
+      })();
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      disposed = true;
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [assignment, completed, getExitWarningMessage, submitting]);
 
   useEffect(() => {
     if (!assignment || completed || submitting) return undefined;

@@ -16,7 +16,10 @@ import {
   type HistoryClassroomAssignment,
   type HistoryClassroomResult,
 } from "../../../lib/historyClassroom";
+import { readLocalOnly, removeStorage } from "../../../lib/safeStorage";
 import { getSemesterCollectionPath } from "../../../lib/semesterScope";
+
+const HISTORY_CLASSROOM_LOCK_PREFIX = "westoryHistoryClassroomLock";
 
 type StudentHistoryClassroomStatus =
   | "available"
@@ -46,6 +49,31 @@ const formatCooldown = (
   const remainMs = availableAt - nowMs;
   if (remainMs <= 0) return null;
   return Math.ceil(remainMs / 60000);
+};
+
+const getCooldownLockKey = (assignmentId: string, uid: string) =>
+  `${HISTORY_CLASSROOM_LOCK_PREFIX}:${assignmentId}:${uid}`;
+
+const readCooldownLockRemainMinutes = (
+  assignmentId: string,
+  uid: string,
+  nowMs: number,
+) => {
+  const key = getCooldownLockKey(assignmentId, uid);
+  const raw = readLocalOnly(key);
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw) as { blockedUntil?: number };
+    const blockedUntil = Number(parsed.blockedUntil) || 0;
+    const remainMs = blockedUntil - nowMs;
+    if (remainMs > 0) return Math.ceil(remainMs / 60000);
+  } catch (error) {
+    console.warn("Failed to read history classroom cooldown lock", error);
+  }
+
+  removeStorage(key);
+  return null;
 };
 
 const formatRemainingDuration = (remainMs: number) => {
@@ -270,11 +298,18 @@ const HistoryClassroomIndex: React.FC = () => {
         const bestPercent = attempts.length
           ? Math.max(...attempts.map((attempt) => attempt.percent))
           : null;
-        const remainMinutes = formatCooldown(
+        const serverRemainMinutes = formatCooldown(
           latest?.createdAt,
           assignment.cooldownMinutes,
           nowMs,
         );
+        const localRemainMinutes = userData?.uid
+          ? readCooldownLockRemainMinutes(assignment.id, userData.uid, nowMs)
+          : null;
+        const remainMinutes =
+          serverRemainMinutes && localRemainMinutes
+            ? Math.max(serverRemainMinutes, localRemainMinutes)
+            : serverRemainMinutes || localRemainMinutes;
         const remainingDueMs = getHistoryClassroomRemainingMs(
           assignment,
           nowMs,
@@ -521,7 +556,7 @@ const HistoryClassroomIndex: React.FC = () => {
                               : item.status === "available"
                                 ? "응시하기"
                                 : item.status === "cooldown"
-                                  ? `${item.remainMinutes}분 후 가능`
+                                  ? "다시 도전하기"
                                   : statusMeta.label}
                           </button>
                         </div>
