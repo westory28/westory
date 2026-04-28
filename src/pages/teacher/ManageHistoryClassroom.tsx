@@ -58,6 +58,7 @@ type DashboardIconName =
   | "users"
   | "check"
   | "edit"
+  | "plus"
   | "chevronDown"
   | "chevronUp";
 
@@ -135,6 +136,14 @@ const DashboardIcon = ({
       </svg>
     );
   }
+  if (name === "plus") {
+    return (
+      <svg {...commonProps}>
+        <path d="M12 5v14" />
+        <path d="M5 12h14" />
+      </svg>
+    );
+  }
   return (
     <svg {...commonProps}>
       <path d={name === "chevronUp" ? "m6 15 6-6 6 6" : "m6 9 6 6 6-6"} />
@@ -179,6 +188,22 @@ const groupStudentsByClass = <
     students: students.sort((a, b) => a.name.localeCompare(b.name, "ko")),
   }));
 };
+
+const buildStudentSearchText = (
+  student: Pick<StudentOption, "name" | "grade" | "className" | "number">,
+) =>
+  [
+    student.name,
+    student.grade,
+    student.className,
+    student.number,
+    `${student.grade}-${student.className}`,
+    `${student.grade}-${student.className} ${student.number}번`,
+    `${student.grade} ${student.className} ${student.number}`,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLocaleLowerCase("ko-KR");
 
 const createWorksheetBlankFromRect = (
   page: number,
@@ -487,6 +512,9 @@ const ManageHistoryClassroom: React.FC = () => {
   const [editingPassThresholdPercent, setEditingPassThresholdPercent] =
     useState(80);
   const [editingStudentUids, setEditingStudentUids] = useState<string[]>([]);
+  const [editingStudentSearchOpen, setEditingStudentSearchOpen] =
+    useState(false);
+  const [editingStudentSearch, setEditingStudentSearch] = useState("");
   const [editingIsPublished, setEditingIsPublished] = useState(true);
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingAssignment, setDeletingAssignment] = useState(false);
@@ -807,18 +835,7 @@ const ManageHistoryClassroom: React.FC = () => {
     return students
       .filter((student) => {
         if (selectedStudentUids.includes(student.uid)) return false;
-        const searchable = [
-          student.name,
-          student.grade,
-          student.className,
-          student.number,
-          `${student.grade}-${student.className}`,
-          `${student.grade}-${student.className} ${student.number}번`,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLocaleLowerCase("ko-KR");
-        return searchable.includes(keyword);
+        return buildStudentSearchText(student).includes(keyword);
       })
       .slice(0, 8);
   }, [selectedStudentUids, students, targetStudentSearch]);
@@ -892,6 +909,18 @@ const ManageHistoryClassroom: React.FC = () => {
         .filter((student): student is StudentOption => !!student),
     [editingStudentUids, students],
   );
+
+  const searchedEditingStudents = useMemo(() => {
+    const keyword = editingStudentSearch.trim().toLocaleLowerCase("ko-KR");
+    if (!keyword) return [];
+    return students
+      .filter(
+        (student) =>
+          !editingStudentUids.includes(student.uid) &&
+          buildStudentSearchText(student).includes(keyword),
+      )
+      .slice(0, 8);
+  }, [editingStudentSearch, editingStudentUids, students]);
 
   const assignmentStudentsById = useMemo(() => {
     const resolved = new Map<string, StudentOption[]>();
@@ -1635,6 +1664,8 @@ const ManageHistoryClassroom: React.FC = () => {
           ? [assignment.targetStudentUid]
           : [],
     );
+    setEditingStudentSearchOpen(false);
+    setEditingStudentSearch("");
     setEditingIsPublished(assignment.isPublished);
     setPreviewOpen(false);
   };
@@ -1699,6 +1730,8 @@ const ManageHistoryClassroom: React.FC = () => {
     setEditingDueWindowDays("");
     setEditingPassThresholdPercent(80);
     setEditingStudentUids([]);
+    setEditingStudentSearchOpen(false);
+    setEditingStudentSearch("");
     setEditingIsPublished(true);
     setSavingEdit(false);
     setDeletingAssignment(false);
@@ -3401,13 +3434,84 @@ const ManageHistoryClassroom: React.FC = () => {
 
                     <div className="rounded-2xl bg-gray-50 p-4">
                       <div className="mb-3 flex items-center justify-between gap-2">
-                        <div className="text-sm font-bold text-gray-700">
-                          배정 학생
+                        <div className="flex items-center gap-2">
+                          <div className="text-sm font-bold text-gray-700">
+                            배정 학생
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingStudentSearchOpen((current) => {
+                                if (current) setEditingStudentSearch("");
+                                return !current;
+                              });
+                            }}
+                            className={`flex h-7 w-7 items-center justify-center rounded-full border text-xs font-bold transition ${
+                              editingStudentSearchOpen
+                                ? "border-blue-600 bg-blue-600 text-white"
+                                : "border-blue-200 bg-white text-blue-700 hover:bg-blue-50"
+                            }`}
+                            aria-label="배정 학생 추가"
+                            title="배정 학생 추가"
+                          >
+                            <DashboardIcon
+                              name="plus"
+                              className="h-3.5 w-3.5"
+                            />
+                          </button>
                         </div>
                         <div className="rounded-full bg-white px-3 py-1 text-xs font-bold text-gray-600">
                           {editingStudents.length}명
                         </div>
                       </div>
+                      {editingStudentSearchOpen && (
+                        <div className="mb-3 space-y-2">
+                          <input
+                            value={editingStudentSearch}
+                            onChange={(event) =>
+                              setEditingStudentSearch(event.target.value)
+                            }
+                            placeholder="학년 반 번호 또는 이름 검색"
+                            className="h-10 w-full min-w-0 rounded-xl border border-gray-300 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                            autoFocus
+                          />
+                          {editingStudentSearch.trim() && (
+                            <div className="max-h-44 overflow-y-auto rounded-2xl border border-gray-200 bg-white p-2">
+                              {searchedEditingStudents.length > 0 ? (
+                                <div className="space-y-1">
+                                  {searchedEditingStudents.map((student) => (
+                                    <button
+                                      key={student.uid}
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingStudentUids((prev) =>
+                                          prev.includes(student.uid)
+                                            ? prev
+                                            : [...prev, student.uid],
+                                        );
+                                        setEditingStudentSearch("");
+                                      }}
+                                      className="flex w-full min-w-0 items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-blue-50"
+                                    >
+                                      <span className="min-w-0 truncate font-bold text-gray-900">
+                                        {student.name}
+                                      </span>
+                                      <span className="shrink-0 text-xs font-semibold text-gray-500">
+                                        {student.grade}-{student.className}{" "}
+                                        {student.number}번
+                                      </span>
+                                    </button>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="px-3 py-4 text-center text-sm font-semibold text-gray-400">
+                                  검색 결과가 없습니다.
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
                       <div className="max-h-40 space-y-2 overflow-y-auto pr-1">
                         {editingStudentGroups.map((group) => (
                           <div
