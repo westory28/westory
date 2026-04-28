@@ -291,11 +291,15 @@ const HistoryClassroomIndex: React.FC = () => {
                 : "available";
         const assignedCount =
           getHistoryClassroomAssignedStudentUids(assignment).length;
+        const assignmentReason = String(
+          assignment.targetStudentReasons?.[userData?.uid || ""] || "",
+        ).trim();
         const dateMs = getAssignmentDateMs(assignment);
         const date = dateMs ? new Date(dateMs) : new Date(0);
 
         return {
           assignment,
+          assignmentReason,
           assignedCount,
           attemptCount: attempts.length,
           bestPercent,
@@ -314,7 +318,7 @@ const HistoryClassroomIndex: React.FC = () => {
           status,
         };
       }),
-    [assignments, nowMs, resultsByAssignment],
+    [assignments, nowMs, resultsByAssignment, userData?.uid],
   );
 
   const groupedItems = useMemo(() => {
@@ -456,9 +460,11 @@ const HistoryClassroomIndex: React.FC = () => {
                             <span>{item.dueLabel}</span>
                           </div>
 
-                          {item.assignment.description && (
+                          {(item.assignmentReason ||
+                            item.assignment.description) && (
                             <p className="mt-3 line-clamp-2 text-sm leading-6 text-slate-500">
-                              {item.assignment.description}
+                              {item.assignmentReason ||
+                                item.assignment.description}
                             </p>
                           )}
 

@@ -43,6 +43,7 @@ export interface HistoryClassroomAssignment {
   targetStudentAccessMap: Record<string, boolean>;
   targetStudentName: string;
   targetStudentNames: string[];
+  targetStudentReasons: Record<string, string>;
   targetStudentNumber: string;
   isPublished: boolean;
   publishedAt?: unknown;
@@ -185,6 +186,17 @@ export const normalizeHistoryClassroomAssignment = (
       : String(raw.targetStudentName || "").trim()
         ? [String(raw.targetStudentName || "").trim()]
         : [],
+    targetStudentReasons:
+      raw.targetStudentReasons && typeof raw.targetStudentReasons === "object"
+        ? Object.fromEntries(
+            Object.entries(raw.targetStudentReasons)
+              .map(([uid, reason]) => [
+                String(uid || "").trim(),
+                String(reason || "").trim(),
+              ])
+              .filter(([uid]) => uid),
+          )
+        : {},
     targetStudentNumber: String(raw.targetStudentNumber || "").trim(),
     isPublished: raw.isPublished === true,
     publishedAt: raw.publishedAt,
@@ -325,6 +337,17 @@ export const sanitizeHistoryClassroomAssignmentForWrite = (
           .map((item) => String(item || "").trim())
           .filter(Boolean)
       : [],
+    targetStudentReasons:
+      raw.targetStudentReasons && typeof raw.targetStudentReasons === "object"
+        ? Object.fromEntries(
+            Object.entries(raw.targetStudentReasons)
+              .map(([uid, reason]) => [
+                String(uid || "").trim(),
+                String(reason || "").trim(),
+              ])
+              .filter(([uid]) => uid),
+          )
+        : {},
     targetStudentNumber: String(raw.targetStudentNumber || "").trim(),
     isPublished: raw.isPublished === true,
   };

@@ -362,6 +362,15 @@ const formatAssignmentDateLabel = (timestampMs: number) => {
   }).format(new Date(timestampMs));
 };
 
+const formatAssignmentDateKey = (timestampMs: number) => {
+  if (!timestampMs) return "unknown";
+  const target = new Date(timestampMs);
+  const year = target.getFullYear();
+  const month = String(target.getMonth() + 1).padStart(2, "0");
+  const day = String(target.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 const formatAssignmentTimelineDate = (timestampMs: number) => {
   if (!timestampMs) return { date: "날짜 미정", weekday: "" };
   const target = new Date(timestampMs);
@@ -391,6 +400,16 @@ const describeHistoryResultStatus = (
   if (status === "failed") return "미통과";
   return "자동 종료";
 };
+
+const pickStudentReasons = (
+  reasons: Record<string, string>,
+  studentUids: string[],
+) =>
+  Object.fromEntries(
+    studentUids
+      .map((uid) => [uid, String(reasons[uid] || "").trim()] as const)
+      .filter(([, reason]) => reason),
+  );
 
 const historyBlankToWorksheetBlank = (
   blank: HistoryClassroomBlank,
@@ -480,6 +499,9 @@ const ManageHistoryClassroom: React.FC = () => {
   const [targetStudentUid, setTargetStudentUid] = useState("");
   const [targetStudentSearch, setTargetStudentSearch] = useState("");
   const [selectedStudentUids, setSelectedStudentUids] = useState<string[]>([]);
+  const [studentReasons, setStudentReasons] = useState<Record<string, string>>(
+    {},
+  );
   const [blanks, setBlanks] = useState<HistoryClassroomBlank[]>([]);
   const [saving, setSaving] = useState(false);
   const [selectedBlankId, setSelectedBlankId] = useState("");
@@ -515,6 +537,9 @@ const ManageHistoryClassroom: React.FC = () => {
   const [editingStudentSearchOpen, setEditingStudentSearchOpen] =
     useState(false);
   const [editingStudentSearch, setEditingStudentSearch] = useState("");
+  const [editingStudentReasons, setEditingStudentReasons] = useState<
+    Record<string, string>
+  >({});
   const [editingIsPublished, setEditingIsPublished] = useState(true);
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingAssignment, setDeletingAssignment] = useState(false);
@@ -935,11 +960,6 @@ const ManageHistoryClassroom: React.FC = () => {
     return resolved;
   }, [assignments, studentByUid]);
 
-  const editingStudentGroups = useMemo(
-    () => groupStudentsByClass(editingStudents),
-    [editingStudents],
-  );
-
   const editingResults = useMemo(
     () => resultsByAssignment[editingAssignmentId] || [],
     [editingAssignmentId, resultsByAssignment],
@@ -1025,8 +1045,12 @@ const ManageHistoryClassroom: React.FC = () => {
       editingAssignment.id,
       {
         ...editingAssignment,
-        title: editingTitle.trim() || editingAssignment.title,
-        description: editingDescription.trim(),
+        title: editingAssignment.mapTitle || editingAssignment.title,
+        description: "",
+        targetStudentReasons: pickStudentReasons(
+          editingStudentReasons,
+          editingStudentUids,
+        ),
         timeLimitMinutes: Math.max(0, editingTimeLimitMinutes),
         cooldownMinutes: Math.max(0, editingCooldownMinutes),
         dueWindowDays: resolvedDueWindowDays,
@@ -1047,13 +1071,13 @@ const ManageHistoryClassroom: React.FC = () => {
   }, [
     editingAssignment,
     editingCooldownMinutes,
-    editingDescription,
     editingDueWindowDays,
     editingIsPublished,
     editingPassThresholdPercent,
     editingPreviewMap,
+    editingStudentReasons,
+    editingStudentUids,
     editingTimeLimitMinutes,
-    editingTitle,
   ]);
 
   const editingAttemptStatusRows = useMemo(() => {
@@ -1245,11 +1269,15 @@ const ManageHistoryClassroom: React.FC = () => {
             assignment.targetStudentNames[index] ||
             assignment.targetStudentName ||
             "학생";
+          const reason = String(
+            assignment.targetStudentReasons?.[uid] || "",
+          ).trim();
           return {
             uid,
             name: student?.name || fallbackName,
             classLabel: student ? formatClassGroupLabel(student) : "",
             number: student?.number || "",
+            reason,
             status: latest?.status || null,
             statusLabel: latest
               ? describeHistoryResultStatus(latest.status)
@@ -1274,6 +1302,9 @@ const ManageHistoryClassroom: React.FC = () => {
           ),
         };
         const sortMs = getAssignmentSortMs(assignment);
+        const studentNames = studentSummaries
+          .map((student) => student.name)
+          .filter(Boolean);
 
         return {
           assignment,
@@ -1283,8 +1314,16 @@ const ManageHistoryClassroom: React.FC = () => {
           overdueAbsentCount: attemptMeta?.overdueAbsent || 0,
           dueAtMs: attemptMeta?.dueAtMs || null,
           sortMs,
+          dateKey: formatAssignmentDateKey(sortMs),
           dateLabel: formatAssignmentDateLabel(sortMs),
           timelineDate: formatAssignmentTimelineDate(sortMs),
+          studentNamesLabel: studentNames.length
+            ? `${studentNames.slice(0, 3).join(", ")}${
+                studentNames.length > 3
+                  ? ` 외 ${studentNames.length - 3}명`
+                  : ""
+              }`
+            : "배정 학생 없음",
           studentSummaries,
           statusGroups,
           ...statusCounts,
@@ -1318,6 +1357,7 @@ const ManageHistoryClassroom: React.FC = () => {
           student.name,
           student.classLabel,
           student.number,
+          student.reason,
           student.statusLabel,
           student.attemptLabel,
         ]),
@@ -1371,6 +1411,18 @@ const ManageHistoryClassroom: React.FC = () => {
     [assignmentPage, sortedAssignmentRows],
   );
 
+  const pagedAssignmentGroups = useMemo(() => {
+    const grouped = new Map<string, typeof pagedAssignmentRows>();
+    pagedAssignmentRows.forEach((row) => {
+      grouped.set(row.dateKey, [...(grouped.get(row.dateKey) || []), row]);
+    });
+    return Array.from(grouped.entries()).map(([dateKey, rows]) => ({
+      dateKey,
+      timelineDate: rows[0]?.timelineDate || { date: "날짜 미정", weekday: "" },
+      rows,
+    }));
+  }, [pagedAssignmentRows]);
+
   useEffect(() => {
     setAssignmentPage((current) => Math.min(current, totalAssignmentPages));
   }, [totalAssignmentPages]);
@@ -1408,6 +1460,7 @@ const ManageHistoryClassroom: React.FC = () => {
     setTargetStudentUid("");
     setTargetStudentSearch("");
     setSelectedStudentUids([]);
+    setStudentReasons({});
     setSelectedBlankId("");
     setDraftBlank(null);
     setDraftBlankAnswer("");
@@ -1666,6 +1719,7 @@ const ManageHistoryClassroom: React.FC = () => {
     );
     setEditingStudentSearchOpen(false);
     setEditingStudentSearch("");
+    setEditingStudentReasons(assignment.targetStudentReasons || {});
     setEditingIsPublished(assignment.isPublished);
     setPreviewOpen(false);
   };
@@ -1699,6 +1753,7 @@ const ManageHistoryClassroom: React.FC = () => {
           ? [assignment.targetStudentUid]
           : [],
     );
+    setStudentReasons(assignment.targetStudentReasons || {});
     setBlanks(assignment.blanks);
     setSelectedBlankId("");
     setDraftBlank(null);
@@ -1732,6 +1787,7 @@ const ManageHistoryClassroom: React.FC = () => {
     setEditingStudentUids([]);
     setEditingStudentSearchOpen(false);
     setEditingStudentSearch("");
+    setEditingStudentReasons({});
     setEditingIsPublished(true);
     setSavingEdit(false);
     setDeletingAssignment(false);
@@ -1748,8 +1804,8 @@ const ManageHistoryClassroom: React.FC = () => {
     const updatedStudents = students.filter((student) =>
       editingStudentUids.includes(student.uid),
     );
-    if (!editingTitle.trim() || !updatedStudents.length) {
-      alert("제목과 배정 학생을 확인해주세요.");
+    if (!updatedStudents.length) {
+      alert("배정 학생을 확인해주세요.");
       return;
     }
 
@@ -1768,8 +1824,8 @@ const ManageHistoryClassroom: React.FC = () => {
       });
       const payload = sanitizeHistoryClassroomAssignmentForWrite({
         ...targetAssignment,
-        title: editingTitle.trim(),
-        description: editingDescription.trim(),
+        title: targetAssignment.mapTitle || editingTitle.trim(),
+        description: "",
         timeLimitMinutes: Math.max(0, editingTimeLimitMinutes),
         cooldownMinutes: Math.max(0, editingCooldownMinutes),
         dueWindowDays: resolvedDueWindowDays,
@@ -1785,6 +1841,10 @@ const ManageHistoryClassroom: React.FC = () => {
           .map((student) => student.name)
           .join(", "),
         targetStudentNames: updatedStudents.map((student) => student.name),
+        targetStudentReasons: pickStudentReasons(
+          editingStudentReasons,
+          updatedStudents.map((student) => student.uid),
+        ),
         targetStudentNumber: updatedStudents
           .map((student) => student.number)
           .filter(Boolean)
@@ -1828,7 +1888,7 @@ const ManageHistoryClassroom: React.FC = () => {
         path: `${getSemesterCollectionPath(config, "history_classrooms")}/${targetAssignment.id}`,
         assignmentId: targetAssignment.id,
         payload: {
-          title: editingTitle.trim(),
+          title: targetAssignment.mapTitle || editingTitle.trim(),
           studentCount: updatedStudents.length,
           blankCount: targetAssignment.blanks.length,
           dueWindowDays: resolveDueWindowDaysValue(editingDueWindowDays),
@@ -1900,8 +1960,8 @@ const ManageHistoryClassroom: React.FC = () => {
   };
 
   const handleSave = async () => {
-    if (!selectedMap || !title.trim() || !selectedStudentUids.length) {
-      alert("지도, 제목, 대상 학생을 먼저 선택해 주세요.");
+    if (!selectedMap || !selectedStudentUids.length) {
+      alert("지도와 대상 학생을 먼저 선택해 주세요.");
       return;
     }
     if (!selectedStudents.length) {
@@ -1939,6 +1999,8 @@ const ManageHistoryClassroom: React.FC = () => {
             ? existingAssignment
             : null;
       const resolvedDueWindowDays = resolveDueWindowDaysValue(dueWindowDays);
+      const resolvedMapTitle =
+        sourceSnapshot?.mapTitle || selectedMap.title || "역사교실";
       const nextIsPublished = existingAssignment
         ? worksheetEditingIsPublished
         : true;
@@ -1952,10 +2014,10 @@ const ManageHistoryClassroom: React.FC = () => {
           existingAssignment?.updatedAt,
       });
       const payload = sanitizeHistoryClassroomAssignmentForWrite({
-        title: title.trim(),
-        description: description.trim(),
+        title: resolvedMapTitle,
+        description: "",
         mapResourceId: selectedMap.id,
-        mapTitle: sourceSnapshot?.mapTitle || selectedMap.title,
+        mapTitle: resolvedMapTitle,
         pdfPageImages: sourceSnapshot?.pdfPageImages?.length
           ? sourceSnapshot.pdfPageImages
           : selectedMap.pdfPageImages || [],
@@ -1976,6 +2038,10 @@ const ManageHistoryClassroom: React.FC = () => {
           .map((student) => student.name)
           .join(", "),
         targetStudentNames: selectedStudents.map((student) => student.name),
+        targetStudentReasons: pickStudentReasons(
+          studentReasons,
+          selectedStudents.map((student) => student.uid),
+        ),
         targetStudentNumber: selectedStudents
           .map((student) => student.number)
           .filter(Boolean)
@@ -2024,6 +2090,7 @@ const ManageHistoryClassroom: React.FC = () => {
       setTargetStudentUid("");
       setTargetStudentSearch("");
       setSelectedStudentUids([]);
+      setStudentReasons({});
       setBlanks([]);
       setSelectedBlankId("");
       setDraftBlank(null);
@@ -2044,7 +2111,7 @@ const ManageHistoryClassroom: React.FC = () => {
         path: `${getSemesterCollectionPath(config, "history_classrooms")}/${assignmentId || worksheetEditingAssignmentId || "new"}`,
         assignmentId: assignmentId || worksheetEditingAssignmentId || null,
         payload: {
-          title: title.trim(),
+          title: selectedMap.title,
           mapResourceId: selectedMap.id,
           studentCount: selectedStudents.length,
           blankCount: blanks.length,
@@ -2233,29 +2300,29 @@ const ManageHistoryClassroom: React.FC = () => {
         </div>
       </section>
 
-      <section className="space-y-3">
-        {pagedAssignmentRows.map((row) => {
-          const expanded = expandedAssignmentId === row.assignment.id;
-          return (
-            <div
-              key={row.assignment.id}
-              className="flex w-full items-stretch gap-4"
-            >
-              <div className="relative w-28 shrink-0 sm:w-32 lg:w-36">
+      <section className="space-y-4">
+        {pagedAssignmentGroups.map((group) => (
+          <div key={group.dateKey} className="flex w-full items-stretch gap-4">
+            <div className="relative w-28 shrink-0 sm:w-32 lg:w-36">
                 <div className="absolute bottom-[-0.75rem] left-1.5 top-0 w-px bg-gray-200" />
                 <div className="relative z-10">
                   <div className="absolute left-0 top-2 h-3 w-3 rounded-full border-4 border-white bg-blue-600 shadow ring-1 ring-blue-200" />
                   <div className="ml-6">
                     <div className="text-base font-black leading-6 text-gray-900 sm:text-lg">
-                      {row.timelineDate.date}
+                      {group.timelineDate.date}
                     </div>
                     <div className="mt-1 text-xs font-semibold text-gray-500 sm:text-sm">
-                      {row.timelineDate.weekday}
+                      {group.timelineDate.weekday}
                     </div>
                   </div>
                 </div>
               </div>
+            <div className="min-w-0 flex-1 space-y-3">
+              {group.rows.map((row) => {
+                const expanded = expandedAssignmentId === row.assignment.id;
+                return (
               <article
+                key={row.assignment.id}
                 className="min-w-0 flex-1 cursor-pointer rounded-3xl border border-gray-200 bg-white p-4 shadow-sm transition hover:shadow-md"
                 onClick={() =>
                   setExpandedAssignmentId((current) =>
@@ -2279,7 +2346,7 @@ const ManageHistoryClassroom: React.FC = () => {
                         {row.assignment.isPublished ? "공개" : "비공개"}
                       </span>
                       <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-600">
-                        {row.assignment.mapTitle}
+                        {row.studentNamesLabel}
                       </span>
                     </div>
                     <div className="mt-2 text-sm font-medium text-gray-500">
@@ -2388,6 +2455,11 @@ const ManageHistoryClassroom: React.FC = () => {
                                   {student.attemptLabel !== "시도 없음" &&
                                     student.attemptLabel}
                                 </span>
+                                {student.reason && (
+                                  <span className="ml-2 font-semibold text-blue-600">
+                                    {student.reason}
+                                  </span>
+                                )}
                               </span>
                             ),
                           )}
@@ -2403,9 +2475,11 @@ const ManageHistoryClassroom: React.FC = () => {
                   </div>
                 )}
               </article>
+                );
+              })}
             </div>
-          );
-        })}
+          </div>
+        ))}
         {!assignmentRows.length && (
           <div className="rounded-3xl border border-dashed border-gray-300 bg-white px-5 py-12 text-center text-sm font-semibold text-gray-400">
             아직 생성된 역사교실 과제가 없습니다. + 새 역사교실로 첫 과제를
@@ -2511,6 +2585,7 @@ const ManageHistoryClassroom: React.FC = () => {
                         setTargetStudentUid("");
                         setTargetStudentSearch("");
                         setSelectedStudentUids([]);
+                        setStudentReasons({});
                       }}
                       className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm"
                     >
@@ -2520,29 +2595,6 @@ const ManageHistoryClassroom: React.FC = () => {
                         </option>
                       ))}
                     </select>
-                  </div>
-
-                  <div className="md:col-span-2 xl:col-span-2">
-                    <label className="mb-1 block text-xs font-bold text-gray-500">
-                      제목
-                    </label>
-                    <input
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm"
-                    />
-                  </div>
-
-                  <div className="md:col-span-2 xl:col-span-2">
-                    <label className="mb-1 block text-xs font-bold text-gray-500">
-                      설명
-                    </label>
-                    <textarea
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      rows={3}
-                      className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm"
-                    />
                   </div>
 
                   <div className="grid gap-3 md:col-span-2 md:grid-cols-2 xl:col-span-2 xl:grid-cols-4">
@@ -2774,78 +2826,49 @@ const ManageHistoryClassroom: React.FC = () => {
                         {selectedStudents.length}명
                       </div>
                     </div>
-                    <div className="max-h-32 space-y-2 overflow-y-auto pr-1">
-                      {groupStudentsByClass(selectedStudents).map((group) => (
+                    <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                      {selectedStudents.map((student) => (
                         <div
-                          key={group.classLabel}
-                          className="flex items-center gap-2"
+                          key={student.uid}
+                          className="rounded-2xl border border-gray-200 bg-gray-50 p-3"
                         >
-                          <span className="shrink-0 rounded-full bg-gray-100 px-2 py-1 text-[11px] font-bold text-gray-600">
-                            {group.classLabel}
-                          </span>
-                          <div className="flex min-w-0 flex-wrap gap-1">
-                            {group.students.map((student) => (
-                              <div
-                                key={student.uid}
-                                className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] font-semibold text-gray-700"
-                              >
-                                <span className="font-bold text-gray-900">
-                                  {student.name}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setSelectedStudentUids((prev) =>
-                                      prev.filter((uid) => uid !== student.uid),
-                                    )
-                                  }
-                                  className="shrink-0 text-[10px] font-bold text-red-500"
-                                >
-                                  삭제
-                                </button>
-                              </div>
-                            ))}
+                          <div className="mb-2 flex items-center justify-between gap-3">
+                            <div className="min-w-0 text-sm font-bold text-gray-900">
+                              <span className="mr-2 rounded-full bg-white px-2 py-1 text-[11px] text-gray-600">
+                                {student.grade}-{student.className}{" "}
+                                {student.number}번
+                              </span>
+                              {student.name}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setSelectedStudentUids((prev) =>
+                                  prev.filter((uid) => uid !== student.uid),
+                                )
+                              }
+                              className="shrink-0 text-[11px] font-bold text-red-500"
+                            >
+                              삭제
+                            </button>
                           </div>
+                          <textarea
+                            value={studentReasons[student.uid] || ""}
+                            onChange={(event) =>
+                              setStudentReasons((prev) => ({
+                                ...prev,
+                                [student.uid]: event.target.value,
+                              }))
+                            }
+                            rows={2}
+                            placeholder="왜 배정했는지 입력"
+                            className="w-full resize-none rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                          />
                         </div>
                       ))}
                       {!selectedStudents.length && (
                         <div className="text-sm text-gray-400">
                           학생을 선택해서 추가하면 여기에 반별로 묶여
-                          표시됩니다.
-                        </div>
-                      )}
-                    </div>
-                    <div className="hidden flex flex-wrap gap-2">
-                      {selectedStudents.map((student) => (
-                        <div
-                          key={student.uid}
-                          className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-700"
-                        >
-                          <span className="max-w-[10rem] truncate">
-                            <span className="font-bold">
-                              {student.grade}-{student.className}
-                            </span>{" "}
-                            <span>{student.number}번</span>{" "}
-                            <span className="font-bold text-gray-900">
-                              {student.name}
-                            </span>
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setSelectedStudentUids((prev) =>
-                                prev.filter((uid) => uid !== student.uid),
-                              )
-                            }
-                            className="shrink-0 text-[11px] font-bold text-red-500"
-                          >
-                            제거
-                          </button>
-                        </div>
-                      ))}
-                      {!selectedStudents.length && (
-                        <div className="text-sm text-gray-400">
-                          학생을 선택해서 추가하면 여기에 여러 명이 목록으로
                           표시됩니다.
                         </div>
                       )}
@@ -2979,6 +3002,7 @@ const ManageHistoryClassroom: React.FC = () => {
                           setTargetStudentUid("");
                           setTargetStudentSearch("");
                           setSelectedStudentUids([]);
+                          setStudentReasons({});
                           setBlanks([]);
                           setSelectedBlankId("");
                           setDraftBlank(null);
@@ -3312,27 +3336,6 @@ const ManageHistoryClassroom: React.FC = () => {
               <div className="grid h-full min-h-0 gap-0 lg:grid-cols-[minmax(0,1fr)_19.5rem] xl:grid-cols-[minmax(0,1fr)_21rem]">
                 <div className="min-h-0 overflow-y-auto px-6 py-5">
                   <div className="space-y-4">
-                    <div>
-                      <label className="mb-1 block text-xs font-bold text-gray-500">
-                        제목
-                      </label>
-                      <input
-                        value={editingTitle}
-                        onChange={(e) => setEditingTitle(e.target.value)}
-                        className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-bold text-gray-500">
-                        설명
-                      </label>
-                      <textarea
-                        value={editingDescription}
-                        onChange={(e) => setEditingDescription(e.target.value)}
-                        rows={3}
-                        className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm"
-                      />
-                    </div>
                     <div className="grid gap-3 md:grid-cols-4">
                       <div>
                         <label className="mb-1 block text-xs font-bold text-gray-500">
@@ -3512,58 +3515,19 @@ const ManageHistoryClassroom: React.FC = () => {
                           )}
                         </div>
                       )}
-                      <div className="max-h-40 space-y-2 overflow-y-auto pr-1">
-                        {editingStudentGroups.map((group) => (
+                      <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                        {editingStudents.map((student) => (
                           <div
-                            key={group.classLabel}
-                            className="rounded-xl bg-white px-3 py-2"
+                            key={student.uid}
+                            className="rounded-2xl bg-white px-3 py-2"
                           >
-                            <div className="flex items-start gap-2">
-                              <span className="mt-0.5 shrink-0 rounded-full bg-gray-100 px-2 py-1 text-[11px] font-bold text-gray-600">
-                                {group.classLabel}
-                              </span>
-                              <div className="flex min-w-0 flex-wrap gap-1">
-                                {group.students.map((student) => (
-                                  <span
-                                    key={student.uid}
-                                    className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] font-semibold text-gray-700"
-                                  >
-                                    <span className="font-bold text-gray-900">
-                                      {student.name}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setEditingStudentUids((prev) =>
-                                          prev.filter(
-                                            (uid) => uid !== student.uid,
-                                          ),
-                                        )
-                                      }
-                                      className="shrink-0 text-[10px] font-bold text-red-500"
-                                    >
-                                      삭제
-                                    </button>
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                        {false &&
-                          editingStudents.map((student) => (
-                            <div
-                              key={student.uid}
-                              className="flex items-center justify-between gap-3 rounded-xl bg-white px-3 py-2 text-sm"
-                            >
-                              <div className="min-w-0 text-gray-700">
-                                <span className="font-bold">
-                                  {student.grade}-{student.className}
-                                </span>{" "}
-                                <span>{student.number}번</span>{" "}
-                                <span className="font-bold text-gray-900">
-                                  {student.name}
+                            <div className="mb-2 flex items-center justify-between gap-3">
+                              <div className="min-w-0 text-sm font-bold text-gray-900">
+                                <span className="mr-2 rounded-full bg-gray-100 px-2 py-1 text-[11px] text-gray-600">
+                                  {student.grade}-{student.className}{" "}
+                                  {student.number}번
                                 </span>
+                                {student.name}
                               </div>
                               <button
                                 type="button"
@@ -3572,12 +3536,25 @@ const ManageHistoryClassroom: React.FC = () => {
                                     prev.filter((uid) => uid !== student.uid),
                                   )
                                 }
-                                className="shrink-0 text-xs font-bold text-red-500"
+                                className="shrink-0 text-[11px] font-bold text-red-500"
                               >
                                 삭제
                               </button>
                             </div>
-                          ))}
+                            <textarea
+                              value={editingStudentReasons[student.uid] || ""}
+                              onChange={(event) =>
+                                setEditingStudentReasons((prev) => ({
+                                  ...prev,
+                                  [student.uid]: event.target.value,
+                                }))
+                              }
+                              rows={2}
+                              placeholder="왜 배정했는지 입력"
+                              className="w-full resize-none rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                            />
+                          </div>
+                        ))}
                         {!editingStudents.length && (
                           <div className="text-sm text-gray-400">
                             배정 학생이 없습니다.
