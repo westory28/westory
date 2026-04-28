@@ -524,6 +524,7 @@ const ManageHistoryClassroom: React.FC = () => {
   const [worksheetSourceAssignment, setWorksheetSourceAssignment] =
     useState<HistoryClassroomAssignment | null>(null);
   const [editingAssignmentId, setEditingAssignmentId] = useState("");
+  const [editingMapResourceId, setEditingMapResourceId] = useState("");
   const [editingTitle, setEditingTitle] = useState("");
   const [editingDescription, setEditingDescription] = useState("");
   const [editingTimeLimitMinutes, setEditingTimeLimitMinutes] = useState(0);
@@ -927,6 +928,11 @@ const ManageHistoryClassroom: React.FC = () => {
     [assignments, editingAssignmentId],
   );
 
+  const editingSelectedMap = useMemo(
+    () => maps.find((map) => map.id === editingMapResourceId) || null,
+    [editingMapResourceId, maps],
+  );
+
   const editingStudents = useMemo(
     () =>
       editingStudentUids
@@ -1022,8 +1028,10 @@ const ManageHistoryClassroom: React.FC = () => {
 
   const editingPreviewMap = useMemo(
     () =>
-      maps.find((map) => map.id === editingAssignment?.mapResourceId) || null,
-    [editingAssignment?.mapResourceId, maps],
+      editingSelectedMap ||
+      maps.find((map) => map.id === editingAssignment?.mapResourceId) ||
+      null,
+    [editingAssignment?.mapResourceId, editingSelectedMap, maps],
   );
 
   const editingPreviewAssignment = useMemo(() => {
@@ -1031,6 +1039,12 @@ const ManageHistoryClassroom: React.FC = () => {
 
     const resolvedDueWindowDays =
       resolveDueWindowDaysValue(editingDueWindowDays);
+    const mapChanged =
+      !!editingSelectedMap &&
+      editingSelectedMap.id !== editingAssignment.mapResourceId;
+    const previewBlanks = mapChanged
+      ? cloneMapResourceBlanks(editingSelectedMap)
+      : editingAssignment.blanks;
     const publishWindow = buildHistoryClassroomPublishWindow({
       dueWindowDays: resolvedDueWindowDays,
       isPublished: editingIsPublished,
@@ -1045,8 +1059,18 @@ const ManageHistoryClassroom: React.FC = () => {
       editingAssignment.id,
       {
         ...editingAssignment,
-        title: editingAssignment.mapTitle || editingAssignment.title,
+        title:
+          editingSelectedMap?.title ||
+          editingAssignment.mapTitle ||
+          editingAssignment.title,
         description: "",
+        mapResourceId: editingSelectedMap?.id || editingAssignment.mapResourceId,
+        mapTitle: editingSelectedMap?.title || editingAssignment.mapTitle,
+        pdfPageImages:
+          editingSelectedMap?.pdfPageImages || editingAssignment.pdfPageImages,
+        pdfRegions: editingSelectedMap?.pdfRegions || editingAssignment.pdfRegions,
+        blanks: previewBlanks,
+        answerOptions: buildAnswerOptions(previewBlanks),
         targetStudentReasons: pickStudentReasons(
           editingStudentReasons,
           editingStudentUids,
@@ -1075,6 +1099,7 @@ const ManageHistoryClassroom: React.FC = () => {
     editingIsPublished,
     editingPassThresholdPercent,
     editingPreviewMap,
+    editingSelectedMap,
     editingStudentReasons,
     editingStudentUids,
     editingTimeLimitMinutes,
@@ -1704,6 +1729,7 @@ const ManageHistoryClassroom: React.FC = () => {
 
   const openAssignmentEditor = (assignment: HistoryClassroomAssignment) => {
     setEditingAssignmentId(assignment.id);
+    setEditingMapResourceId(assignment.mapResourceId);
     setEditingTitle(assignment.title);
     setEditingDescription(assignment.description);
     setEditingTimeLimitMinutes(assignment.timeLimitMinutes);
@@ -1778,6 +1804,7 @@ const ManageHistoryClassroom: React.FC = () => {
 
   const closeAssignmentEditor = () => {
     setEditingAssignmentId("");
+    setEditingMapResourceId("");
     setEditingTitle("");
     setEditingDescription("");
     setEditingTimeLimitMinutes(0);
@@ -1808,6 +1835,24 @@ const ManageHistoryClassroom: React.FC = () => {
       alert("배정 학생을 확인해주세요.");
       return;
     }
+    const replacementMap = maps.find((map) => map.id === editingMapResourceId);
+    const mapChanged =
+      !!replacementMap && replacementMap.id !== targetAssignment.mapResourceId;
+    if (editingMapResourceId && !replacementMap) {
+      alert("교체할 배포 지도를 찾을 수 없습니다.");
+      return;
+    }
+    const nextBlanks = mapChanged
+      ? cloneMapResourceBlanks(replacementMap)
+      : targetAssignment.blanks;
+    if (
+      mapChanged &&
+      (!nextBlanks.length ||
+        nextBlanks.some((blank) => !String(blank.answer || "").trim()))
+    ) {
+      alert("교체할 배포 지도에 저장된 빈칸과 정답을 먼저 확인해 주세요.");
+      return;
+    }
 
     setSavingEdit(true);
     try {
@@ -1822,10 +1867,19 @@ const ManageHistoryClassroom: React.FC = () => {
           targetAssignment.createdAt ||
           targetAssignment.updatedAt,
       });
+      const nextMapTitle =
+        replacementMap?.title || targetAssignment.mapTitle || editingTitle.trim();
       const payload = sanitizeHistoryClassroomAssignmentForWrite({
         ...targetAssignment,
-        title: targetAssignment.mapTitle || editingTitle.trim(),
+        title: nextMapTitle,
         description: "",
+        mapResourceId: replacementMap?.id || targetAssignment.mapResourceId,
+        mapTitle: nextMapTitle,
+        pdfPageImages:
+          replacementMap?.pdfPageImages || targetAssignment.pdfPageImages,
+        pdfRegions: replacementMap?.pdfRegions || targetAssignment.pdfRegions,
+        blanks: nextBlanks,
+        answerOptions: buildAnswerOptions(nextBlanks),
         timeLimitMinutes: Math.max(0, editingTimeLimitMinutes),
         cooldownMinutes: Math.max(0, editingCooldownMinutes),
         dueWindowDays: resolvedDueWindowDays,
@@ -3415,22 +3469,49 @@ const ManageHistoryClassroom: React.FC = () => {
                             현재 배포 지도
                           </div>
                           <div className="mt-1 text-xs text-gray-500">
-                            빈칸과 정답은 배포 지도 관리에서 수정합니다.
+                            선택한 배포 지도의 빈칸과 정답으로 과제를 교체합니다.
                           </div>
                         </div>
                         <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-gray-600">
-                          {editingAssignment.mapTitle}
+                          현재 {editingAssignment.mapTitle}
                         </span>
                       </div>
+                      <label className="mt-3 block">
+                        <span className="mb-1 block text-xs font-bold text-gray-500">
+                          배포 지도 교체
+                        </span>
+                        <select
+                          value={editingMapResourceId}
+                          onChange={(event) =>
+                            setEditingMapResourceId(event.target.value)
+                          }
+                          className="h-10 w-full rounded-xl border border-orange-200 bg-white px-3 text-sm font-bold text-gray-800 outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100"
+                        >
+                          {maps.map((map) => (
+                            <option key={map.id} value={map.id}>
+                              {map.title}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      {editingSelectedMap &&
+                        editingSelectedMap.id !== editingAssignment.mapResourceId && (
+                          <div className="mt-2 rounded-xl border border-blue-100 bg-white px-3 py-2 text-xs font-bold text-blue-700">
+                            저장하면 {editingSelectedMap.title} 지도로 교체됩니다.
+                          </div>
+                        )}
                       <div className="mt-3 flex flex-wrap gap-2">
                         <button
                           type="button"
                           onClick={() =>
-                            openMapBlankManager(editingAssignment.mapResourceId)
+                            openMapBlankManager(
+                              editingMapResourceId ||
+                                editingAssignment.mapResourceId,
+                            )
                           }
                           className="rounded-xl border border-orange-200 bg-white px-3 py-2 text-xs font-bold text-orange-700 hover:bg-orange-50"
                         >
-                          배포 지도 관리
+                          선택한 지도 관리
                         </button>
                       </div>
                     </div>
