@@ -50,6 +50,7 @@ export interface HistoryClassroomAssignment {
   dueAt?: unknown;
   deletedAt?: unknown;
   deletedByUid?: string;
+  retryResetByStudentUid?: Record<string, unknown>;
   createdAt?: unknown;
   updatedAt?: unknown;
 }
@@ -203,6 +204,14 @@ export const normalizeHistoryClassroomAssignment = (
     dueAt: raw.dueAt,
     deletedAt: raw.deletedAt,
     deletedByUid: String(raw.deletedByUid || "").trim(),
+    retryResetByStudentUid:
+      raw.retryResetByStudentUid && typeof raw.retryResetByStudentUid === "object"
+        ? Object.fromEntries(
+            Object.entries(raw.retryResetByStudentUid)
+              .map(([uid, resetAt]) => [String(uid || "").trim(), resetAt])
+              .filter(([uid]) => uid),
+          )
+        : {},
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
   };
@@ -359,6 +368,16 @@ export const sanitizeHistoryClassroomAssignmentForWrite = (
     payload.dueAt = raw.dueAt ?? null;
   }
   if (
+    raw.retryResetByStudentUid &&
+    typeof raw.retryResetByStudentUid === "object"
+  ) {
+    payload.retryResetByStudentUid = Object.fromEntries(
+      Object.entries(raw.retryResetByStudentUid)
+        .map(([uid, resetAt]) => [String(uid || "").trim(), resetAt])
+        .filter(([uid]) => uid),
+    );
+  }
+  if (
     Object.prototype.hasOwnProperty.call(raw, "createdAt") &&
     raw.createdAt !== undefined
   ) {
@@ -471,6 +490,20 @@ export const getHistoryClassroomTimestampMs = (
     }
   }
   return null;
+};
+
+export const getHistoryClassroomStudentRetryResetMs = (
+  assignment:
+    | Pick<HistoryClassroomAssignment, "retryResetByStudentUid">
+    | null
+    | undefined,
+  uid: string,
+) => {
+  const normalizedUid = String(uid || "").trim();
+  if (!assignment || !normalizedUid) return null;
+  return getHistoryClassroomTimestampMs(
+    assignment.retryResetByStudentUid?.[normalizedUid],
+  );
 };
 
 export const isHistoryClassroomDeleted = (

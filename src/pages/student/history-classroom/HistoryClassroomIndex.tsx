@@ -7,6 +7,7 @@ import {
   getHistoryClassroomAssignedStudentUids,
   getHistoryClassroomPublishedAtMs,
   getHistoryClassroomRemainingMs,
+  getHistoryClassroomStudentRetryResetMs,
   getHistoryClassroomTimestampMs,
   isHistoryClassroomAssignedToStudent,
   isHistoryClassroomDeleted,
@@ -41,10 +42,12 @@ const formatCooldown = (
   latest: unknown,
   cooldownMinutes: number,
   nowMs: number,
+  resetAtMs: number | null = null,
 ) => {
   if (!latest || cooldownMinutes <= 0) return null;
   const latestMs = getHistoryClassroomTimestampMs(latest);
   if (!latestMs) return null;
+  if (resetAtMs && latestMs <= resetAtMs) return null;
   const availableAt = latestMs + cooldownMinutes * 60 * 1000;
   const remainMs = availableAt - nowMs;
   if (remainMs <= 0) return null;
@@ -58,13 +61,19 @@ const readCooldownLockRemainMinutes = (
   assignmentId: string,
   uid: string,
   nowMs: number,
+  resetAtMs: number | null = null,
 ) => {
   const key = getCooldownLockKey(assignmentId, uid);
   const raw = readLocalOnly(key);
   if (!raw) return null;
 
   try {
-    const parsed = JSON.parse(raw) as { blockedUntil?: number };
+    const parsed = JSON.parse(raw) as { blockedUntil?: number; savedAt?: number };
+    const savedAt = Number(parsed.savedAt) || 0;
+    if (resetAtMs && savedAt && savedAt <= resetAtMs) {
+      removeStorage(key);
+      return null;
+    }
     const blockedUntil = Number(parsed.blockedUntil) || 0;
     const remainMs = blockedUntil - nowMs;
     if (remainMs > 0) return Math.ceil(remainMs / 60000);
@@ -298,13 +307,22 @@ const HistoryClassroomIndex: React.FC = () => {
         const bestPercent = attempts.length
           ? Math.max(...attempts.map((attempt) => attempt.percent))
           : null;
+        const resetAtMs = userData?.uid
+          ? getHistoryClassroomStudentRetryResetMs(assignment, userData.uid)
+          : null;
         const serverRemainMinutes = formatCooldown(
           latest?.createdAt,
           assignment.cooldownMinutes,
           nowMs,
+          resetAtMs,
         );
         const localRemainMinutes = userData?.uid
-          ? readCooldownLockRemainMinutes(assignment.id, userData.uid, nowMs)
+          ? readCooldownLockRemainMinutes(
+              assignment.id,
+              userData.uid,
+              nowMs,
+              resetAtMs,
+            )
           : null;
         const remainMinutes =
           serverRemainMinutes && localRemainMinutes

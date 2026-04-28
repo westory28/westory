@@ -24,6 +24,7 @@ import { db } from "../../../lib/firebase";
 import {
   getHistoryClassroomAssignedStudentUids,
   getHistoryClassroomRemainingMs,
+  getHistoryClassroomStudentRetryResetMs,
   getHistoryClassroomTimestampMs,
   isHistoryClassroomDeleted,
   isHistoryClassroomBlankCorrect,
@@ -73,19 +74,29 @@ const formatRemainingDuration = (remainMs: number) => {
 const getCooldownLockKey = (assignmentId: string, uid: string) =>
   `${HISTORY_CLASSROOM_LOCK_PREFIX}:${assignmentId}:${uid}`;
 
-const readCooldownLockUntil = (assignmentId: string, uid: string): number => {
-  const raw = readLocalOnly(getCooldownLockKey(assignmentId, uid));
+const readCooldownLockUntil = (
+  assignmentId: string,
+  uid: string,
+  resetAtMs: number | null = null,
+): number => {
+  const key = getCooldownLockKey(assignmentId, uid);
+  const raw = readLocalOnly(key);
   if (!raw) return 0;
 
   try {
-    const parsed = JSON.parse(raw) as { blockedUntil?: number };
+    const parsed = JSON.parse(raw) as { blockedUntil?: number; savedAt?: number };
+    const savedAt = Number(parsed.savedAt) || 0;
+    if (resetAtMs && savedAt && savedAt <= resetAtMs) {
+      removeStorage(key);
+      return 0;
+    }
     const blockedUntil = Number(parsed.blockedUntil) || 0;
     if (blockedUntil > Date.now()) return blockedUntil;
   } catch (error) {
     console.warn("Failed to read history classroom cooldown lock", error);
   }
 
-  removeStorage(getCooldownLockKey(assignmentId, uid));
+  removeStorage(key);
   return 0;
 };
 
@@ -298,19 +309,31 @@ const HistoryClassroomRunner: React.FC = () => {
           );
         }
 
-        const lastSeconds = Number(
-          (latest?.createdAt as { seconds?: number } | undefined)?.seconds || 0,
+        const resetAtMs = getHistoryClassroomStudentRetryResetMs(
+          loaded,
+          userData.uid,
         );
-        if (lastSeconds && loaded.cooldownMinutes > 0) {
+        const lastAttemptMs = getHistoryClassroomTimestampMs(latest?.createdAt);
+        const shouldSkipServerCooldown =
+          !!resetAtMs && !!lastAttemptMs && lastAttemptMs <= resetAtMs;
+        if (
+          lastAttemptMs &&
+          loaded.cooldownMinutes > 0 &&
+          !shouldSkipServerCooldown
+        ) {
           const availableAt =
-            lastSeconds * 1000 + loaded.cooldownMinutes * 60 * 1000;
+            lastAttemptMs + loaded.cooldownMinutes * 60 * 1000;
           if (availableAt > Date.now()) {
             const remain = Math.ceil((availableAt - Date.now()) / 60000);
             throw new Error(`${remain}분 후 다시 응시할 수 있습니다.`);
           }
         }
 
-        const localAvailableAt = readCooldownLockUntil(loaded.id, userData.uid);
+        const localAvailableAt = readCooldownLockUntil(
+          loaded.id,
+          userData.uid,
+          resetAtMs,
+        );
         if (localAvailableAt > Date.now()) {
           const remain = Math.ceil((localAvailableAt - Date.now()) / 60000);
           throw new Error(`${remain}분 후 다시 응시할 수 있습니다.`);

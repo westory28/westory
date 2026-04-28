@@ -22,6 +22,7 @@ import {
   getHistoryClassroomAssignedStudentUids,
   getHistoryClassroomDueAtMs,
   getHistoryClassroomRemainingMs,
+  getHistoryClassroomStudentRetryResetMs,
   inferHistoryClassroomBlankSource,
   isHistoryClassroomDeleted,
   isHistoryClassroomPastDue,
@@ -544,6 +545,7 @@ const ManageHistoryClassroom: React.FC = () => {
   const [editingIsPublished, setEditingIsPublished] = useState(true);
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingAssignment, setDeletingAssignment] = useState(false);
+  const [resettingAttemptUid, setResettingAttemptUid] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewCurrentPage, setPreviewCurrentPage] = useState(1);
   const [previewAnswers, setPreviewAnswers] = useState<Record<string, string>>(
@@ -1118,6 +1120,26 @@ const ManageHistoryClassroom: React.FC = () => {
     return editingStudents.map((student) => {
       const latestResult = editingLatestResultsByStudentUid.get(student.uid);
       if (latestResult) {
+        const resetAtMs = getHistoryClassroomStudentRetryResetMs(
+          editingPreviewAssignment,
+          student.uid,
+        );
+        const latestCreatedAtMs = getTimestampMs(latestResult.createdAt);
+        const isResetAfterLatest =
+          latestResult.status !== "passed" &&
+          !!resetAtMs &&
+          (!latestCreatedAtMs || latestCreatedAtMs <= resetAtMs);
+        if (isResetAfterLatest) {
+          return {
+            student,
+            statusKey: "pending" as const,
+            statusLabel: "재도전 가능",
+            detailLabel: "응시 시간이 초기화되어 바로 다시 응시할 수 있습니다.",
+            toneClassName: "border-blue-200 bg-blue-50 text-blue-700",
+            canResetAttempt: false,
+          };
+        }
+
         return {
           student,
           statusKey: "completed" as const,
@@ -1131,6 +1153,7 @@ const ManageHistoryClassroom: React.FC = () => {
             latestResult.status === "cancelled"
               ? "border-amber-200 bg-amber-50 text-amber-700"
               : "border-emerald-200 bg-emerald-50 text-emerald-700",
+          canResetAttempt: latestResult.status !== "passed",
         };
       }
 
@@ -1141,6 +1164,7 @@ const ManageHistoryClassroom: React.FC = () => {
           statusLabel: "미응시",
           detailLabel: "응시 기간이 지나 미응시로 처리됩니다.",
           toneClassName: "border-rose-200 bg-rose-50 text-rose-700",
+          canResetAttempt: false,
         };
       }
 
@@ -1154,6 +1178,7 @@ const ManageHistoryClassroom: React.FC = () => {
             ? `응시 마감까지 ${formatHistoryClassroomRemainingWindow(remainingMs)}`
             : "아직 시작하지 않았습니다.",
         toneClassName: "border-slate-200 bg-slate-50 text-slate-700",
+        canResetAttempt: false,
       };
     });
   }, [
@@ -1818,6 +1843,7 @@ const ManageHistoryClassroom: React.FC = () => {
     setEditingIsPublished(true);
     setSavingEdit(false);
     setDeletingAssignment(false);
+    setResettingAttemptUid("");
     setPreviewOpen(false);
     setPreviewCurrentPage(1);
     setPreviewAnswers({});
@@ -1953,6 +1979,69 @@ const ManageHistoryClassroom: React.FC = () => {
       });
       alert("역사교실 수정에 실패했습니다.");
       setSavingEdit(false);
+    }
+  };
+
+  const handleResetStudentAttemptCooldown = async (student: StudentOption) => {
+    const targetAssignment = assignments.find(
+      (assignment) => assignment.id === editingAssignmentId,
+    );
+    if (!targetAssignment || !student.uid || resettingAttemptUid) return;
+
+    const latestResult = editingLatestResultsByStudentUid.get(student.uid);
+    if (!latestResult || latestResult.status === "passed") {
+      alert("초기화할 재도전 제한 기록이 없습니다.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `${student.name} 학생의 역사교실 응시 시간을 초기화할까요?\n기존 결과 기록은 남기고, 학생은 바로 다시 응시할 수 있습니다.`,
+    );
+    if (!confirmed) return;
+
+    const resetAt = new Date();
+    setResettingAttemptUid(student.uid);
+    try {
+      await setDoc(
+        doc(
+          db,
+          getSemesterCollectionPath(config, "history_classrooms"),
+          targetAssignment.id,
+        ),
+        {
+          retryResetByStudentUid: {
+            [student.uid]: serverTimestamp(),
+          },
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      setAssignments((prev) =>
+        prev.map((assignment) =>
+          assignment.id === targetAssignment.id
+            ? {
+                ...assignment,
+                retryResetByStudentUid: {
+                  ...(assignment.retryResetByStudentUid || {}),
+                  [student.uid]: resetAt,
+                },
+                updatedAt: resetAt,
+              }
+            : assignment,
+        ),
+      );
+    } catch (error) {
+      console.error("Failed to reset history classroom attempt cooldown", {
+        path: `${getSemesterCollectionPath(config, "history_classrooms")}/${targetAssignment.id}`,
+        assignmentId: targetAssignment.id,
+        uid: student.uid,
+        ...getFirestoreErrorSummary(error),
+        error,
+      });
+      alert("응시 시간 초기화에 실패했습니다.");
+    } finally {
+      setResettingAttemptUid("");
     }
   };
 
@@ -3673,7 +3762,7 @@ const ManageHistoryClassroom: React.FC = () => {
                           key={row.student.uid}
                           className={`rounded-xl border px-3 py-1.5 ${row.toneClassName}`}
                         >
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex flex-wrap items-center gap-1.5">
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-1.5">
                                 <div className="truncate text-sm font-bold">
@@ -3690,6 +3779,22 @@ const ManageHistoryClassroom: React.FC = () => {
                             <span className="shrink-0 rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-bold">
                               {row.statusLabel}
                             </span>
+                            {row.canResetAttempt && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void handleResetStudentAttemptCooldown(
+                                    row.student,
+                                  )
+                                }
+                                disabled={resettingAttemptUid === row.student.uid}
+                                className="shrink-0 rounded-full border border-blue-200 bg-white px-2 py-0.5 text-[11px] font-bold text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {resettingAttemptUid === row.student.uid
+                                  ? "초기화 중"
+                                  : "응시 시간 초기화"}
+                              </button>
+                            )}
                           </div>
                         </div>
                       ))}
