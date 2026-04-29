@@ -91,6 +91,14 @@ interface StudentSummary {
   status: "stable" | "watch" | "risk" | "pending";
 }
 
+interface RecentDefaultUnitStat {
+  bigId: string;
+  midId: string;
+  studentKeys: Set<string>;
+  attemptCount: number;
+  latestMs: number;
+}
+
 type SortKey =
   | "scoreAsc"
   | "scoreDesc"
@@ -366,6 +374,8 @@ const QuizLogTab: React.FC = () => {
   const lowScoreCloseButtonRef = useRef<HTMLButtonElement>(null);
   const scoreBucketCloseButtonRef = useRef<HTMLButtonElement>(null);
   const pendingCloseButtonRef = useRef<HTMLButtonElement>(null);
+  const autoUnitFilterAppliedRef = useRef(false);
+  const userTouchedUnitFilterRef = useRef(false);
 
   const unitMetaById = useMemo(() => buildUnitMetaMap(treeData), [treeData]);
 
@@ -816,6 +826,73 @@ const QuizLogTab: React.FC = () => {
     questionMetaById,
     unitMetaById,
   ]);
+
+  const recentDefaultUnitSelection = useMemo(() => {
+    const unitStats = new Map<string, RecentDefaultUnitStat>();
+
+    canonicalLogs.forEach((log) => {
+      const studentKey = buildStudentKey({
+        uid: log.uid,
+        email: log.email,
+        classOnly: log.classOnly,
+        number: log.studentNumber,
+        name: log.studentName,
+      });
+      const latestMs = getTimestampMs(log.timestamp);
+      const countedUnitKeys = new Set<string>();
+
+      getLogUnitMetas(log).forEach((meta) => {
+        if (!meta.bigId || !meta.midId) return;
+
+        const key = `${meta.bigId}::${meta.midId}`;
+        if (countedUnitKeys.has(key)) return;
+        countedUnitKeys.add(key);
+
+        const existing =
+          unitStats.get(key) ||
+          {
+            bigId: meta.bigId,
+            midId: meta.midId,
+            studentKeys: new Set<string>(),
+            attemptCount: 0,
+            latestMs: 0,
+          };
+
+        existing.studentKeys.add(studentKey);
+        existing.attemptCount += 1;
+        existing.latestMs = Math.max(existing.latestMs, latestMs);
+        unitStats.set(key, existing);
+      });
+    });
+
+    return (
+      Array.from(unitStats.values()).sort((a, b) => {
+        const studentDiff = b.studentKeys.size - a.studentKeys.size;
+        if (studentDiff !== 0) return studentDiff;
+        const attemptDiff = b.attemptCount - a.attemptCount;
+        if (attemptDiff !== 0) return attemptDiff;
+        return b.latestMs - a.latestMs;
+      })[0] || null
+    );
+  }, [canonicalLogs, questionMetaById, unitMetaById]);
+
+  useEffect(() => {
+    if (autoUnitFilterAppliedRef.current || userTouchedUnitFilterRef.current)
+      return;
+    if (bigFilter || midFilter || !recentDefaultUnitSelection) return;
+
+    const big = treeData.find(
+      (item) => item.id === recentDefaultUnitSelection.bigId,
+    );
+    const mid = (big?.children || []).find(
+      (item) => item.id === recentDefaultUnitSelection.midId,
+    );
+    if (!big || !mid) return;
+
+    autoUnitFilterAppliedRef.current = true;
+    setBigFilter(recentDefaultUnitSelection.bigId);
+    setMidFilter(recentDefaultUnitSelection.midId);
+  }, [bigFilter, midFilter, recentDefaultUnitSelection, treeData]);
 
   const filteredLogs = useMemo(
     () =>
@@ -1309,6 +1386,7 @@ const QuizLogTab: React.FC = () => {
             <select
               value={bigFilter}
               onChange={(event) => {
+                userTouchedUnitFilterRef.current = true;
                 setBigFilter(event.target.value);
                 setMidFilter("");
               }}
@@ -1324,7 +1402,10 @@ const QuizLogTab: React.FC = () => {
             </select>
             <select
               value={midFilter}
-              onChange={(event) => setMidFilter(event.target.value)}
+              onChange={(event) => {
+                userTouchedUnitFilterRef.current = true;
+                setMidFilter(event.target.value);
+              }}
               className="min-w-0 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-700"
               aria-label="중단원 필터"
             >
