@@ -117,9 +117,9 @@ export const normalizeLessonPdfProcessingMeta = (
     normalizeText(fileSource.storagePath) || fallbackPdfStoragePath;
   const hasAttachedPdf = Boolean(
     fallbackPdfName ||
-      normalizedStoragePath ||
-      normalizeText(source.currentRevision) ||
-      normalizeText(source.extractedManifestPath),
+    normalizedStoragePath ||
+    normalizeText(source.currentRevision) ||
+    normalizeText(source.extractedManifestPath),
   );
   const extractionStatus = normalizeExtractionStatus(source.extractionStatus);
 
@@ -173,6 +173,8 @@ export const buildQueuedLessonPdfProcessingMeta = (params: {
     pdfName: params.pdfName,
     pdfStoragePath: params.pdfStoragePath,
   });
+  const nextStoragePath =
+    normalizeText(params.pdfStoragePath) || previous.file.storagePath;
 
   return {
     ...previous,
@@ -188,15 +190,13 @@ export const buildQueuedLessonPdfProcessingMeta = (params: {
     parseErrorMessage: "",
     file: {
       ...previous.file,
-      storagePath: previous.file.storagePath || normalizeText(params.pdfStoragePath),
+      storagePath: nextStoragePath,
       originalName: normalizeText(params.pdfName) || previous.file.originalName,
       mimeType: "application/pdf",
       byteSize: Math.max(0, Number(params.byteSize) || 0),
       width: 0,
       height: 0,
-      originalAvailable: Boolean(
-        previous.file.storagePath || normalizeText(params.pdfStoragePath),
-      ),
+      originalAvailable: Boolean(nextStoragePath),
       legacyPreviewOnly: false,
       pendingUploadToken: normalizeText(params.pendingUploadToken),
       pendingUploadPath: normalizeText(params.pendingUploadPath),

@@ -1194,7 +1194,9 @@ export function LessonPdfSection({
           >
             {pdfBusy ? "준비 중..." : "PDF 준비"}
           </button>
-          {(lessonPdfUrl || worksheetPageImages.length > 0) && (
+          {(lessonPdfUrl ||
+            pdfProcessing.file.storagePath ||
+            worksheetPageImages.length > 0) && (
             <button
               type="button"
               onClick={onRemovePdf}
@@ -1455,9 +1457,9 @@ export function LessonPdfSection({
               className={`pointer-events-auto max-w-[calc(100vw-2rem)] rounded-[30px] border bg-white/96 shadow-[0_18px_40px_rgba(15,23,42,0.14)] backdrop-blur transition-[width] duration-200 ${
                 isFloatingToolbarExpanded
                   ? "w-[17rem] border-slate-200 p-2"
-	                  : hasUnsavedPdfChanges
-	                    ? "w-[8.8rem] border-amber-200 p-2"
-	                    : "w-[8.8rem] border-slate-200 p-2"
+                  : hasUnsavedPdfChanges
+                    ? "w-[8.8rem] border-amber-200 p-2"
+                    : "w-[8.8rem] border-slate-200 p-2"
               }`}
             >
               <div className="flex items-start justify-between gap-2">
@@ -1485,30 +1487,30 @@ export function LessonPdfSection({
                     </div>
                   </div>
                 ) : (
-	                  <div className="flex min-w-0 flex-1 flex-col gap-2 rounded-2xl bg-slate-50 px-2 py-2 text-center">
-	                    <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
-	                      PDF 도구
-	                    </div>
-	                    <div className="mx-auto inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700">
-	                      <i className={`fas ${activeToolIcon} text-sm`}></i>
-	                    </div>
-	                    <div className="text-[11px] font-semibold text-slate-700">
-	                      {collapsedToolLabel}
-	                    </div>
-	                    <span
-	                      className={`inline-flex w-full items-center justify-center rounded-2xl px-2 py-1.5 text-[11px] font-semibold ${saveSummaryClassName}`}
-	                    >
-	                      {saveSummaryLabel}
-	                    </span>
-	                    <div className="text-[10px] font-semibold text-slate-500">
-	                      목록 {sortedBlanks.length + footnotes.length}
-	                    </div>
-	                    {teacherCurrentPage != null && (
-	                      <div className="text-[10px] font-semibold text-slate-400">
-	                        p.{teacherCurrentPage + 1}
-	                      </div>
-	                    )}
-	                  </div>
+                  <div className="flex min-w-0 flex-1 flex-col gap-2 rounded-2xl bg-slate-50 px-2 py-2 text-center">
+                    <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                      PDF 도구
+                    </div>
+                    <div className="mx-auto inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700">
+                      <i className={`fas ${activeToolIcon} text-sm`}></i>
+                    </div>
+                    <div className="text-[11px] font-semibold text-slate-700">
+                      {collapsedToolLabel}
+                    </div>
+                    <span
+                      className={`inline-flex w-full items-center justify-center rounded-2xl px-2 py-1.5 text-[11px] font-semibold ${saveSummaryClassName}`}
+                    >
+                      {saveSummaryLabel}
+                    </span>
+                    <div className="text-[10px] font-semibold text-slate-500">
+                      목록 {sortedBlanks.length + footnotes.length}
+                    </div>
+                    {teacherCurrentPage != null && (
+                      <div className="text-[10px] font-semibold text-slate-400">
+                        p.{teacherCurrentPage + 1}
+                      </div>
+                    )}
+                  </div>
                 )}
                 <button
                   type="button"

@@ -16,7 +16,6 @@ import {
 } from "firebase/firestore";
 import {
   deleteObject,
-  getBlob,
   getDownloadURL,
   listAll,
   ref,
@@ -1295,47 +1294,6 @@ const ManageLesson: React.FC = () => {
     [config, findLessonDocRefByUnitId],
   );
 
-  const loadStoredLessonPdfBlob = useCallback(async () => {
-    const normalizedProcessing = normalizeLessonPdfProcessingMeta(
-      lessonPdfProcessing,
-      {
-        pdfName: lessonPdfName,
-        pdfStoragePath: lessonPdfStoragePath,
-      },
-    );
-    const candidatePaths = [
-      normalizedProcessing.file.storagePath,
-      lessonPdfStoragePath,
-    ].filter(Boolean);
-
-    for (const storagePath of candidatePaths) {
-      try {
-        return await getBlob(ref(storage, storagePath));
-      } catch (error) {
-        console.error("Failed to load lesson PDF from storage path:", error, {
-          selectedNodeId,
-          storagePath,
-        });
-      }
-    }
-
-    if (lessonPdfUrl) {
-      const response = await fetch(lessonPdfUrl);
-      if (!response.ok) {
-        throw new Error(`lesson-pdf-fetch-failed:${response.status}`);
-      }
-      return response.blob();
-    }
-
-    throw new Error("lesson-pdf-source-missing");
-  }, [
-    lessonPdfName,
-    lessonPdfProcessing,
-    lessonPdfStoragePath,
-    lessonPdfUrl,
-    selectedNodeId,
-  ]);
-
   const refreshLessonPdfProcessing = useCallback(
     async (unitId: string) => {
       const lessonDocRef = await findLessonDocRefByUnitId(unitId);
@@ -1491,11 +1449,6 @@ const ManageLesson: React.FC = () => {
         throw new Error("lesson-doc-not-found");
       }
 
-      const originalPdfBlob = await runPdfExtractionStepWithTimeout(
-        loadStoredLessonPdfBlob(),
-        PDF_EXTRACTION_RETRY_REQUEST_TIMEOUT_MS,
-        "lesson-pdf-retry-request-timeout",
-      );
       const uploadToken = crypto.randomUUID();
       const basePath = `${getSemesterCollectionPath(config, "lesson_pdfs")}/${selectedNodeId}`;
       const pendingUploadPath = `${basePath}/incoming/${uploadToken}.pdf`;
@@ -1505,10 +1458,7 @@ const ManageLesson: React.FC = () => {
           lessonPdfProcessing.file.originalName ||
           "lesson.pdf",
         pdfStoragePath: retryPdfStoragePath,
-        byteSize:
-          originalPdfBlob.size ||
-          Number(lessonPdfProcessing.file.byteSize) ||
-          0,
+        byteSize: Number(lessonPdfProcessing.file.byteSize) || 0,
         pageCount:
           worksheetPageImages.length || lessonPdfProcessing.pageCount || 0,
         pendingUploadToken: uploadToken,
@@ -1525,14 +1475,26 @@ const ManageLesson: React.FC = () => {
         { merge: true },
       );
       await runPdfExtractionStepWithTimeout(
-        uploadBytes(ref(storage, pendingUploadPath), originalPdfBlob, {
-          contentType: originalPdfBlob.type || "application/pdf",
-          cacheControl: "private,no-store,max-age=0",
-          customMetadata: {
-            lessonDocId: lessonDocRef.id,
-            unitId: selectedNodeId,
+        uploadBytes(
+          ref(storage, pendingUploadPath),
+          new Blob([], { type: "application/pdf" }),
+          {
+            contentType: "application/pdf",
+            cacheControl: "private,no-store,max-age=0",
+            customMetadata: {
+              lessonDocId: lessonDocRef.id,
+              unitId: selectedNodeId,
+              sourceStoragePath: retryPdfStoragePath,
+              sourceOriginalName:
+                lessonPdfName ||
+                lessonPdfProcessing.file.originalName ||
+                "lesson.pdf",
+              sourceByteSize: String(
+                Number(lessonPdfProcessing.file.byteSize) || 0,
+              ),
+            },
           },
-        }),
+        ),
         PDF_EXTRACTION_RETRY_REQUEST_TIMEOUT_MS,
         "lesson-pdf-retry-request-timeout",
       );
@@ -1629,7 +1591,6 @@ const ManageLesson: React.FC = () => {
     lessonPdfProcessing,
     lessonPdfStoragePath,
     lessonPdfUrl,
-    loadStoredLessonPdfBlob,
     preparedPdf,
     selectedNodeId,
     selectedPdfFile,
@@ -2652,11 +2613,8 @@ const ManageLesson: React.FC = () => {
       };
     }
     const basePath = `${getSemesterCollectionPath(config, "lesson_pdfs")}/${unitId}`;
-    const pdfRef = ref(storage, `${basePath}/source.pdf`);
-    await uploadBytes(pdfRef, selectedPdfFile, {
-      contentType: "application/pdf",
-      cacheControl: LESSON_PDF_UPLOAD_CACHE_CONTROL,
-    });
+    const uploadToken = crypto.randomUUID();
+    const pendingUploadPath = `${basePath}/incoming/${uploadToken}.pdf`;
     const pageImages: LessonWorksheetPageImage[] = [];
     const uploadedPagePaths = new Set<string>();
     for (const page of preparedPdf.pageImages) {
@@ -2699,17 +2657,15 @@ const ManageLesson: React.FC = () => {
         }),
       );
     }
-    const uploadToken = crypto.randomUUID();
-    const pendingUploadPath = `${basePath}/incoming/${uploadToken}.pdf`;
     return {
       pdfName: selectedPdfFile.name,
-      pdfUrl: await getDownloadURL(pdfRef),
-      pdfStoragePath: pdfRef.fullPath,
+      pdfUrl: "",
+      pdfStoragePath: pendingUploadPath,
       pageImages,
       textRegions: preparedPdf.regions,
       pdfProcessing: buildQueuedLessonPdfProcessingMeta({
         pdfName: selectedPdfFile.name,
-        pdfStoragePath: pdfRef.fullPath,
+        pdfStoragePath: pendingUploadPath,
         byteSize: selectedPdfFile.size || 0,
         pageCount: preparedPdf.pageImages.length,
         pendingUploadToken: uploadToken,
@@ -3376,6 +3332,8 @@ const ManageLesson: React.FC = () => {
       const { footnotes: uploadedFootnotes, staleAssetPathsToDelete } =
         await uploadFootnoteAssets(selectedNodeId, normalizedDraft.footnotes);
       let resolvedPdfProcessing = uploadedWorksheet.pdfProcessing;
+      let resolvedPdfUrl = uploadedWorksheet.pdfUrl;
+      let resolvedPdfStoragePath = uploadedWorksheet.pdfStoragePath;
       const draftForPersist = buildNormalizedPdfEditorDraft({
         lessonContent: normalizedDraft.contentHtml,
         lessonFootnotes: uploadedFootnotes,
@@ -3425,13 +3383,27 @@ const ManageLesson: React.FC = () => {
             (error as { message?: string })?.message ||
               "lesson-pdf-extraction-upload-failed",
           );
-          resolvedPdfProcessing = buildFailedLessonPdfProcessingMeta(
+          const failedProcessing = buildFailedLessonPdfProcessingMeta(
             uploadedWorksheet.pdfProcessing,
             message,
           );
+          resolvedPdfProcessing = {
+            ...failedProcessing,
+            file: {
+              ...failedProcessing.file,
+              storagePath: "",
+              originalAvailable: false,
+              pendingUploadToken: "",
+              pendingUploadPath: "",
+            },
+          };
+          resolvedPdfUrl = "";
+          resolvedPdfStoragePath = "";
           await setDoc(
             lessonDocRef,
             {
+              pdfUrl: "",
+              pdfStoragePath: "",
               pdfProcessing: resolvedPdfProcessing,
               updatedAt: serverTimestamp(),
             },
@@ -3444,8 +3416,8 @@ const ManageLesson: React.FC = () => {
         lessonFootnotes: uploadedFootnotes,
         worksheetFootnoteAnchors: normalizedDraft.worksheetFootnoteAnchors,
         lessonPdfName: uploadedWorksheet.pdfName,
-        lessonPdfUrl: uploadedWorksheet.pdfUrl,
-        lessonPdfStoragePath: uploadedWorksheet.pdfStoragePath,
+        lessonPdfUrl: resolvedPdfUrl,
+        lessonPdfStoragePath: resolvedPdfStoragePath,
         lessonPdfProcessing: resolvedPdfProcessing,
         worksheetPageImages: uploadedWorksheet.pageImages,
         worksheetTextRegions: uploadedWorksheet.textRegions,

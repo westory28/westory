@@ -222,9 +222,13 @@ exports.processLessonPdfIncomingUpload = onObjectFinalized(
     let revisionPaths = null;
     let originalInfo = null;
     let generatedPaths = [];
+    let shouldDeleteIncomingFile = false;
+    let sourceStoragePath = "";
 
     try {
-      lessonRef = await resolveLessonDocRef(parsed, getCustomMetadata(event));
+      const customMetadata = getCustomMetadata(event);
+      sourceStoragePath = normalizeText(customMetadata.sourceStoragePath);
+      lessonRef = await resolveLessonDocRef(parsed, customMetadata);
       if (!lessonRef) {
         return;
       }
@@ -244,6 +248,7 @@ exports.processLessonPdfIncomingUpload = onObjectFinalized(
       );
 
       if (lessonPdfProcessing.file.pendingUploadToken !== parsed.uploadToken) {
+        shouldDeleteIncomingFile = true;
         return;
       }
 
@@ -260,7 +265,10 @@ exports.processLessonPdfIncomingUpload = onObjectFinalized(
         { merge: true },
       );
 
-      const [inputBuffer] = await incomingFile.download();
+      const sourceFile = sourceStoragePath
+        ? bucket.file(sourceStoragePath)
+        : incomingFile;
+      const [inputBuffer] = await sourceFile.download();
       const revision = `v-${Date.now()}`;
       const contentType =
         normalizeText(event.data.contentType) ||
@@ -308,6 +316,7 @@ exports.processLessonPdfIncomingUpload = onObjectFinalized(
 
       if (latestProcessing.file.pendingUploadToken !== parsed.uploadToken) {
         await deleteStoragePaths(bucket, generatedPaths);
+        shouldDeleteIncomingFile = true;
         return;
       }
 
@@ -317,6 +326,8 @@ exports.processLessonPdfIncomingUpload = onObjectFinalized(
 
       await lessonRef.set(
         {
+          pdfUrl: "",
+          pdfStoragePath: revisionPaths.originalPath,
           pdfProcessing: {
             ...latestProcessing,
             mediaKind: "pdf",
@@ -364,8 +375,14 @@ exports.processLessonPdfIncomingUpload = onObjectFinalized(
           `${parsed.baseStoragePath}/${previousRevision}/`,
         );
       }
+      shouldDeleteIncomingFile = true;
     } catch (error) {
       console.error("Failed to process lesson pdf extraction:", error);
+      shouldDeleteIncomingFile = Boolean(
+        sourceStoragePath ||
+          (revisionPaths?.originalPath &&
+            generatedPaths.includes(revisionPaths.originalPath)),
+      );
 
       if (revisionPaths?.extractedPath) {
         await deleteStoragePrefix(bucket, revisionPaths.extractedPath).catch(
@@ -435,6 +452,7 @@ exports.processLessonPdfIncomingUpload = onObjectFinalized(
           .catch(() => undefined);
       }
     } finally {
+      if (!shouldDeleteIncomingFile) return;
       await deleteFileIfExists(incomingFile);
     }
   },
