@@ -187,6 +187,7 @@ export interface PointOrder {
   productName: string;
   priceSnapshot: number;
   status: PointOrderStatus;
+  stockDeducted?: boolean;
   requestedAt?: any;
   reviewedAt?: any;
   reviewedBy: string;

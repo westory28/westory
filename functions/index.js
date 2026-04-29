@@ -2903,11 +2903,6 @@ exports.createPointPurchaseRequest = onCall({ region: REGION }, async (request) 
       lastTransactionAt: FieldValue.serverTimestamp(),
     }, { merge: true });
 
-    transaction.set(productRef, {
-      stock: Math.max(0, productStock - 1),
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
-
     transaction.set(orderRef, {
       uid,
       studentName: String(wallet.studentName || profile.name || '').trim(),
@@ -2915,6 +2910,7 @@ exports.createPointPurchaseRequest = onCall({ region: REGION }, async (request) 
       productName: String(product.name || '').trim(),
       priceSnapshot: productPrice,
       status: 'requested',
+      stockDeducted: false,
       requestedAt: FieldValue.serverTimestamp(),
       reviewedAt: null,
       reviewedBy: '',
@@ -3148,7 +3144,7 @@ exports.reviewTeacherPointOrder = onCall({ region: REGION }, async (request) => 
   if (!orderId) {
     throw new HttpsError('invalid-argument', 'orderId is required.');
   }
-  if (!['approved', 'rejected', 'fulfilled', 'cancelled'].includes(nextStatus)) {
+  if (!['requested', 'approved', 'rejected', 'fulfilled', 'cancelled'].includes(nextStatus)) {
     throw new HttpsError('invalid-argument', 'Unsupported nextStatus.');
   }
 
@@ -3171,7 +3167,7 @@ exports.reviewTeacherPointOrder = onCall({ region: REGION }, async (request) => 
 
     const canTransition = (
       (order.status === 'requested' && ['approved', 'rejected', 'cancelled'].includes(nextStatus))
-      || (order.status === 'approved' && nextStatus === 'fulfilled')
+      || (order.status === 'approved' && ['requested', 'fulfilled', 'cancelled'].includes(nextStatus))
     );
 
     if (!canTransition) {
@@ -3184,9 +3180,14 @@ exports.reviewTeacherPointOrder = onCall({ region: REGION }, async (request) => 
     const currentRankEarnedTotal = await getCurrentRankEarnedTotal(transaction, year, semester, order.uid, wallet);
     const productRef = db.doc(`${getPointCollectionPath(year, semester, 'point_products')}/${order.productId}`);
     const productSnap = await transaction.get(productRef);
+    const currentProductStock = productSnap.exists
+      ? Math.max(0, Math.floor(toFiniteNumber(productSnap.data().stock, 0)))
+      : 0;
+    const stockDeducted = order.stockDeducted !== false;
 
     transaction.set(orderRef, {
       status: nextStatus,
+      stockDeducted: nextStatus === 'approved' || nextStatus === 'fulfilled',
       reviewedAt: FieldValue.serverTimestamp(),
       reviewedBy: manager.uid,
       memo: memo || String(order.memo || '').trim(),
@@ -3194,6 +3195,27 @@ exports.reviewTeacherPointOrder = onCall({ region: REGION }, async (request) => 
 
     const transactionId = buildOrderReviewTransactionId(order.id, nextStatus);
     const txRef = db.doc(`${getPointCollectionPath(year, semester, 'point_transactions')}/${transactionId}`);
+
+    if (nextStatus === 'requested') {
+      if (stockDeducted && productSnap.exists) {
+        transaction.set(productRef, {
+          stock: currentProductStock + 1,
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
+
+      transaction.set(walletRef, {
+        ...buildWalletBase(order.uid, profile),
+        ...buildWalletRankState(currentRankEarnedTotal, policy.rankPolicy),
+      }, { merge: true });
+
+      return {
+        orderId: order.id,
+        transactionId: '',
+        status: nextStatus,
+        duplicate: false,
+      };
+    }
 
     if (nextStatus === 'rejected' || nextStatus === 'cancelled') {
       const restoredBalance = Number(wallet.balance || 0) + Number(order.priceSnapshot || 0);
@@ -3207,9 +3229,9 @@ exports.reviewTeacherPointOrder = onCall({ region: REGION }, async (request) => 
         lastTransactionAt: FieldValue.serverTimestamp(),
       }, { merge: true });
 
-      if (productSnap.exists) {
+      if (stockDeducted && productSnap.exists) {
         transaction.set(productRef, {
-          stock: Number(productSnap.data().stock || 0) + 1,
+          stock: currentProductStock + 1,
           updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
       }
@@ -3231,6 +3253,21 @@ exports.reviewTeacherPointOrder = onCall({ region: REGION }, async (request) => 
         status: nextStatus,
         duplicate: false,
       };
+    }
+
+    if (nextStatus === 'approved') {
+      if (!stockDeducted) {
+        if (!productSnap.exists) {
+          throw new HttpsError('not-found', 'Point product does not exist.');
+        }
+        if (currentProductStock <= 0) {
+          throw new HttpsError('failed-precondition', 'Point product is out of stock.');
+        }
+        transaction.set(productRef, {
+          stock: currentProductStock - 1,
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
     }
 
     transaction.set(walletRef, {

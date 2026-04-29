@@ -14,7 +14,7 @@ interface PointRequestsTabProps {
     onFilterChange: (value: 'all' | PointOrderStatus) => void;
     onSelectOrder: (orderId: string) => void;
     onOrderMemoChange: (value: string) => void;
-    onSaveOrder: (status: Extract<PointOrderStatus, 'approved' | 'rejected' | 'fulfilled' | 'cancelled'>) => void;
+    onSaveOrder: (status: PointOrderStatus) => void;
 }
 
 const PointRequestsTab: React.FC<PointRequestsTabProps> = ({
@@ -90,7 +90,14 @@ const PointRequestsTab: React.FC<PointRequestsTabProps> = ({
                     <textarea value={orderMemo} onChange={(event) => onOrderMemoChange(event.target.value)} rows={4} placeholder="처리 메모를 남기면 학생 화면에서도 참고할 수 있습니다." className="mt-5 w-full rounded-lg border border-gray-300 px-4 py-3 text-sm" disabled={!canManage} />
                     {!!orderFeedback && <div className={`mt-4 rounded-lg px-4 py-3 text-sm font-bold ${getPointFeedbackToneClass(orderFeedback)}`}>{orderFeedback}</div>}
                     <div className="mt-4 grid grid-cols-2 gap-3">
-                        <button type="button" disabled={!canManage || selectedOrder.status !== 'requested'} onClick={() => onSaveOrder('approved')} className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-bold text-white disabled:bg-blue-300">승인</button>
+                        <button
+                            type="button"
+                            disabled={!canManage || !['requested', 'approved'].includes(selectedOrder.status)}
+                            onClick={() => onSaveOrder(selectedOrder.status === 'approved' ? 'requested' : 'approved')}
+                            className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-bold text-white disabled:bg-blue-300"
+                        >
+                            {selectedOrder.status === 'approved' ? '승인 취소' : '승인'}
+                        </button>
                         <button type="button" disabled={!canManage || selectedOrder.status !== 'requested'} onClick={() => onSaveOrder('rejected')} className="rounded-lg bg-rose-500 px-4 py-2.5 text-sm font-bold text-white disabled:bg-rose-300">반려</button>
                         <button type="button" disabled={!canManage || selectedOrder.status !== 'approved'} onClick={() => onSaveOrder('fulfilled')} className="rounded-lg border border-emerald-500 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700 disabled:border-emerald-200 disabled:text-emerald-300">지급 완료</button>
                         <button type="button" disabled={!canManage || selectedOrder.status !== 'requested'} onClick={() => onSaveOrder('cancelled')} className="rounded-lg border border-gray-300 bg-gray-50 px-4 py-2.5 text-sm font-bold text-gray-700 disabled:text-gray-300">요청 취소 처리</button>

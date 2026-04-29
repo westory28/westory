@@ -1227,9 +1227,7 @@ const ManagePoints: React.FC = () => {
         }
     };
 
-    const handleSaveOrder = async (
-        nextStatus: Extract<PointOrderStatus, 'approved' | 'rejected' | 'fulfilled' | 'cancelled'>,
-    ) => {
+    const handleSaveOrder = async (nextStatus: PointOrderStatus) => {
         if (!selectedOrder || !canManage) return;
 
         try {

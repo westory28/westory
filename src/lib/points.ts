@@ -56,7 +56,7 @@ interface AdjustPointsInput {
 interface ReviewPointOrderInput {
     config: ConfigLike;
     orderId: string;
-    nextStatus: Extract<PointOrderStatus, 'approved' | 'rejected' | 'fulfilled' | 'cancelled'>;
+    nextStatus: PointOrderStatus;
     actor: ActorInfo;
     memo?: string;
 }
