@@ -2471,11 +2471,19 @@ const ManageHistoryClassroom: React.FC = () => {
         </div>
       </section>
 
-      <section className="space-y-8">
+      <section
+        className={`relative space-y-8 ${
+          pagedAssignmentGroups.length
+            ? "before:pointer-events-none before:absolute before:bottom-0 before:left-1.5 before:top-2 before:w-px before:bg-gray-200"
+            : ""
+        }`}
+      >
         {pagedAssignmentGroups.map((group) => (
-          <div key={group.dateKey} className="flex w-full items-start gap-4">
+          <div
+            key={group.dateKey}
+            className="relative flex w-full items-start gap-4"
+          >
             <div className="relative w-28 shrink-0 sm:w-32 lg:w-36">
-                <div className="absolute bottom-[-2rem] left-1.5 top-0 w-px bg-gray-200" />
                 <div className="relative z-10">
                   <div className="absolute left-0 top-2 h-3 w-3 rounded-full border-4 border-white bg-blue-600 shadow ring-1 ring-blue-200" />
                   <div className="ml-6">
