@@ -841,17 +841,6 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   ]);
 
   useEffect(() => {
-    if (!isStudentSolveMode || activeStudentPage == null) return;
-    if (activeStudentPage === studentCurrentPage) return;
-    onStudentCurrentPageChange?.(activeStudentPage);
-  }, [
-    activeStudentPage,
-    isStudentSolveMode,
-    onStudentCurrentPageChange,
-    studentCurrentPage,
-  ]);
-
-  useEffect(() => {
     setToolbarVisible(annotationUiMode === "always");
   }, [annotationUiMode]);
 
@@ -1022,6 +1011,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     setEditingTextNoteId(null);
     setTextNoteTransform(null);
     setActiveStudentPage(nextPage.page);
+    onStudentCurrentPageChange?.(nextPage.page);
   };
 
   const getTouchDistance = (touches: React.TouchList) => {

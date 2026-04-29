@@ -711,68 +711,62 @@ const LessonContent: React.FC<LessonContentProps> = ({
       pulseFootnote(footnote.anchorKey);
     }
   };
-  const saveStatusToneClass = isSaving
-    ? "bg-blue-50 text-blue-700"
-    : hasUnsavedChanges
-      ? "bg-amber-50 text-amber-700"
-      : saveMessage === "저장됨"
-        ? "bg-emerald-50 text-emerald-700"
-        : "bg-slate-100 text-slate-500";
-  const saveStatusLabel = isSaving
-    ? "저장 중..."
-    : saveMessage || (hasUnsavedChanges ? "저장 필요" : "저장 대기");
   const floatingSaveButtonLabel = isSaving
     ? "저장 중..."
     : hasUnsavedChanges
-      ? "저장"
-      : "저장됨";
+      ? "저장 가능"
+      : saveMessage === "저장됨"
+        ? "저장됨"
+        : "저장";
   const floatingSaveControls = canPersist ? (
     <div
       className={
         fullscreenPreview
           ? "pointer-events-none sticky top-[calc(env(safe-area-inset-top,0px)+0.75rem)] z-[70] mb-4 flex justify-end px-1"
-          : "pointer-events-none absolute right-3 top-4 z-[70] flex justify-end sm:right-0 sm:top-5 sm:translate-x-1/2"
+          : "pointer-events-none sticky top-[calc(env(safe-area-inset-top,0px)+4.5rem)] z-[70] -mb-[5.75rem] flex justify-end pr-1 sm:pr-0"
       }
     >
-      <div className="pointer-events-auto flex max-w-[calc(100vw-1.5rem)] items-center gap-2 rounded-full border border-blue-100 bg-white/95 p-1.5 shadow-[0_18px_42px_rgba(37,99,235,0.18)] backdrop-blur-xl">
+      <div className="pointer-events-auto flex w-[9.75rem] flex-col gap-2 rounded-[1.35rem] border border-blue-100 bg-white/95 p-2 shadow-[0_18px_42px_rgba(37,99,235,0.18)] backdrop-blur-xl sm:translate-x-1/2">
         {hasWorksheetPageControls && (
-          <button
-            type="button"
-            onClick={() => handleWorksheetPageChange(-1)}
-            disabled={activeWorksheetPageIndex === 0}
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
-            aria-label="이전 페이지"
-          >
-            <i className="fas fa-chevron-left text-xs"></i>
-          </button>
-        )}
-        {hasWorksheetPageControls && (
-          <div className="min-w-[3.25rem] text-center text-xs font-black text-slate-600">
-            {activeWorksheetPageIndex + 1} / {worksheet.pageImages.length}
+          <div className="flex items-center gap-1 rounded-full bg-blue-50/80 p-1">
+            <button
+              type="button"
+              onClick={() => handleWorksheetPageChange(-1)}
+              disabled={activeWorksheetPageIndex === 0}
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
+              aria-label="이전 페이지"
+            >
+              <i className="fas fa-chevron-left text-xs"></i>
+            </button>
+            <div className="min-w-0 flex-1 text-center text-xs font-black text-slate-700">
+              {activeWorksheetPageIndex + 1} / {worksheet.pageImages.length}
+            </div>
+            <button
+              type="button"
+              onClick={() => handleWorksheetPageChange(1)}
+              disabled={
+                activeWorksheetPageIndex === worksheet.pageImages.length - 1
+              }
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
+              aria-label="다음 페이지"
+            >
+              <i className="fas fa-chevron-right text-xs"></i>
+            </button>
           </div>
-        )}
-        {hasWorksheetPageControls && (
-          <button
-            type="button"
-            onClick={() => handleWorksheetPageChange(1)}
-            disabled={activeWorksheetPageIndex === worksheet.pageImages.length - 1}
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
-            aria-label="다음 페이지"
-          >
-            <i className="fas fa-chevron-right text-xs"></i>
-          </button>
         )}
         <button
           type="button"
           onClick={handleSaveAction}
           disabled={isSaving || !hasUnsavedChanges}
           data-session-action="true"
-          className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-bold transition focus-visible:outline-none focus-visible:ring-4 ${
+          className={`inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full px-4 text-sm font-bold transition focus-visible:outline-none focus-visible:ring-4 ${
             isSaving
               ? "bg-blue-600 text-white focus-visible:ring-blue-100"
               : hasUnsavedChanges
                 ? "bg-blue-600 text-white hover:bg-blue-700 focus-visible:ring-blue-100"
-                : "cursor-default bg-blue-50 text-blue-700 focus-visible:ring-blue-100"
+                : saveMessage === "저장됨"
+                  ? "cursor-default bg-blue-50 text-blue-700 focus-visible:ring-blue-100"
+                  : "cursor-not-allowed bg-slate-100 text-slate-400 focus-visible:ring-slate-100"
           }`}
           aria-label={floatingSaveButtonLabel}
         >
@@ -787,12 +781,6 @@ const LessonContent: React.FC<LessonContentProps> = ({
           ></i>
           <span>{floatingSaveButtonLabel}</span>
         </button>
-        <div
-          aria-live="polite"
-          className={`hidden rounded-full px-3 py-1.5 text-[11px] font-bold shadow-sm md:block ${saveStatusToneClass}`}
-        >
-          {saveStatusLabel}
-        </div>
       </div>
     </div>
   ) : null;
