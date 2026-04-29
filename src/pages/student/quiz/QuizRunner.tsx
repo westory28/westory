@@ -35,6 +35,8 @@ import {
 import { emitSessionActivity } from "../../../lib/sessionActivity";
 import { getSemesterCollectionPath } from "../../../lib/semesterScope";
 
+const QUIZ_PROGRESS_SAVE_DELAY_MS = 1500;
+
 interface Question {
   id: number;
   type: "choice" | "ox" | "short" | "word" | "order";
@@ -516,7 +518,7 @@ const QuizRunner: React.FC = () => {
     persistTimeoutRef.current = window.setTimeout(() => {
       persistTimeoutRef.current = null;
       void persistQuizProgress();
-    }, 420);
+    }, QUIZ_PROGRESS_SAVE_DELAY_MS);
   };
 
   useEffect(() => {
@@ -538,6 +540,8 @@ const QuizRunner: React.FC = () => {
       }
       if (persistTimeoutRef.current) {
         window.clearTimeout(persistTimeoutRef.current);
+        persistTimeoutRef.current = null;
+        void persistQuizProgress();
       }
     };
   }, [config, unitId, category, fallbackStudentUid]);
@@ -549,6 +553,7 @@ const QuizRunner: React.FC = () => {
       if (persistTimeoutRef.current) {
         window.clearTimeout(persistTimeoutRef.current);
         persistTimeoutRef.current = null;
+        void persistQuizProgress();
       }
     };
   }, [activeSubmissionPath, view]);

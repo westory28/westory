@@ -8,6 +8,10 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
     import.meta.url,
 ).toString();
 
+const PDF_PAGE_RENDER_SCALE = 1.6;
+const PDF_PAGE_IMAGE_TYPE = 'image/webp';
+const PDF_PAGE_IMAGE_QUALITY = 0.82;
+
 const canvasToBlob = (canvas: HTMLCanvasElement) =>
     new Promise<Blob>((resolve, reject) => {
         canvas.toBlob((blob) => {
@@ -16,8 +20,14 @@ const canvasToBlob = (canvas: HTMLCanvasElement) =>
                 return;
             }
             reject(new Error('pdf-page-image-blob-failed'));
-        }, 'image/png');
+        }, PDF_PAGE_IMAGE_TYPE, PDF_PAGE_IMAGE_QUALITY);
     });
+
+export const getPdfPageImageExtension = (blob: Blob) => {
+    if (blob.type === 'image/webp') return 'webp';
+    if (blob.type === 'image/jpeg') return 'jpg';
+    return 'png';
+};
 
 export interface ProcessedPdfMap {
     pageImages: Array<PdfMapPageImage & { blob: Blob }>;
@@ -32,7 +42,7 @@ export const processPdfMapFile = async (file: File): Promise<ProcessedPdfMap> =>
 
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
         const page = await pdf.getPage(pageNumber);
-        const viewport = page.getViewport({ scale: 1.8 });
+        const viewport = page.getViewport({ scale: PDF_PAGE_RENDER_SCALE });
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
 
@@ -62,7 +72,7 @@ export const processPdfMapFile = async (file: File): Promise<ProcessedPdfMap> =>
         const pageRegions = extractPdfTextRegions(
             textContent.items.filter((item): item is TextItem => 'str' in item),
             page.getViewport({ scale: 1 }).height,
-            1.8,
+            PDF_PAGE_RENDER_SCALE,
         ).map((region) => ({
             ...region,
             page: pageNumber,

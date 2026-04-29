@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, limit, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../contexts/AuthContext';
 import NoticeModal from './NoticeModal';
@@ -28,7 +28,7 @@ const TeacherNoticeBoard: React.FC = () => {
         const { year, semester } = getYearSemester(config);
 
         const path = `years/${year}/semesters/${semester}/notices`;
-        const q = query(collection(db, path), orderBy('createdAt', 'desc'));
+        const q = query(collection(db, path), orderBy('createdAt', 'desc'), limit(200));
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const loadedNotices: Notice[] = [];

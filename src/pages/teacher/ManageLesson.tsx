@@ -28,6 +28,7 @@ import {
   getSemesterDocPath,
 } from "../../lib/semesterScope";
 import {
+  getPdfPageImageExtension,
   processPdfMapFile,
   type ProcessedPdfMap,
 } from "../../lib/pdfMapProcessor";
@@ -265,6 +266,8 @@ type UploadedWorksheetAssets = {
   pdfProcessing: LessonPdfProcessingMeta;
   pendingIncomingUpload: PendingLessonPdfUpload | null;
 };
+
+const LESSON_PDF_UPLOAD_CACHE_CONTROL = "public,max-age=3600";
 
 type PendingFootnoteAnchorPlacement = {
   page: number;
@@ -2652,17 +2655,49 @@ const ManageLesson: React.FC = () => {
     const pdfRef = ref(storage, `${basePath}/source.pdf`);
     await uploadBytes(pdfRef, selectedPdfFile, {
       contentType: "application/pdf",
+      cacheControl: LESSON_PDF_UPLOAD_CACHE_CONTROL,
     });
     const pageImages: LessonWorksheetPageImage[] = [];
+    const uploadedPagePaths = new Set<string>();
     for (const page of preparedPdf.pageImages) {
-      const pageRef = ref(storage, `${basePath}/page-${page.page}.png`);
-      await uploadBytes(pageRef, page.blob, { contentType: "image/png" });
+      const pageExtension = getPdfPageImageExtension(page.blob);
+      const pagePath = `${basePath}/page-${page.page}.${pageExtension}`;
+      const pageRef = ref(storage, pagePath);
+      await uploadBytes(pageRef, page.blob, {
+        contentType: page.blob.type || "image/png",
+        cacheControl: LESSON_PDF_UPLOAD_CACHE_CONTROL,
+      });
+      uploadedPagePaths.add(pagePath);
       pageImages.push({
         page: page.page,
         imageUrl: await getDownloadURL(pageRef),
         width: page.width,
         height: page.height,
       });
+    }
+    const previousMaxPage = Math.max(
+      0,
+      ...savedLessonState.worksheetPageImages.map((item) => item.page || 0),
+    );
+    if (previousMaxPage > 0) {
+      const nextPages = new Set(pageImages.map((item) => item.page));
+      const cleanupPaths: string[] = [];
+      for (let page = 1; page <= previousMaxPage; page += 1) {
+        cleanupPaths.push(`${basePath}/page-${page}.png`);
+        if (!nextPages.has(page)) {
+          cleanupPaths.push(`${basePath}/page-${page}.webp`);
+        }
+      }
+      void Promise.all(
+        Array.from(new Set(cleanupPaths)).map(async (path) => {
+          if (uploadedPagePaths.has(path)) return;
+          try {
+            await deleteObject(ref(storage, path));
+          } catch {
+            // Best-effort cleanup only. Missing old page files are expected.
+          }
+        }),
+      );
     }
     const uploadToken = crypto.randomUUID();
     const pendingUploadPath = `${basePath}/incoming/${uploadToken}.pdf`;

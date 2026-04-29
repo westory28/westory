@@ -536,7 +536,7 @@ const ManagePoints: React.FC = () => {
                 getPointSchoolOptions(),
                 getPointPolicy(config),
                 listPointProducts(config, false),
-                listPointOrders(config),
+                listPointOrders(config, { limitCount: 200 }),
             ]);
             const nextRankManualAdjustEarnedPointsByUid = nextWallets.some((wallet) => needsPointRankLegacyFallback(wallet))
                 ? await getPointRankManualAdjustEarnedPointsMap(config)
@@ -1239,7 +1239,7 @@ const ManagePoints: React.FC = () => {
                 memo: orderMemo,
             });
             setOrderFeedback('구매 요청 상태를 반영했습니다.');
-            setOrders(await listPointOrders(config));
+            setOrders(await listPointOrders(config, { limitCount: 200 }));
         } catch (error: any) {
             console.error('Failed to review point order:', error);
             setOrderFeedback(error?.message || '요청 상태 변경에 실패했습니다.');

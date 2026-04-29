@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { collection, deleteDoc, doc, getDocs, orderBy, query, serverTimestamp, setDoc } from 'firebase/firestore';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import MapSidebar from '../../components/common/MapSidebar';
 import MapViewer from '../../components/common/MapViewer';
 import PdfMapViewer from '../../components/common/PdfMapViewer';
@@ -20,7 +20,7 @@ import {
     type PdfMapRegion,
     type PdfTagSection,
 } from '../../lib/mapResources';
-import { processPdfMapFile, type ProcessedPdfMap } from '../../lib/pdfMapProcessor';
+import { getPdfPageImageExtension, processPdfMapFile, type ProcessedPdfMap } from '../../lib/pdfMapProcessor';
 import { getSemesterCollectionPath } from '../../lib/semesterScope';
 import { canWriteLessonManagement } from '../../lib/permissions';
 
@@ -72,6 +72,8 @@ const clonePdfTagSections = (sections: PdfTagSection[]) => sections.map((section
 }));
 
 const fileNameWithoutExtension = (value: string) => value.replace(/\.[^.]+$/u, '').trim();
+
+const PDF_PAGE_UPLOAD_CACHE_CONTROL = 'public,max-age=3600';
 
 const getPreferredMapGroup = <T extends { key: string; title: string; items: Array<{ id: string }> }>(groups: T[]) => (
     groups.find((group) => group.title.includes('한국사'))
@@ -684,18 +686,24 @@ const ManageMaps: React.FC = () => {
     const uploadProcessedPdfPages = async (
         resourceId: string,
         processed: Awaited<ReturnType<typeof processPdfMapFile>>,
+        previousPages: Array<{ page?: number }> = [],
     ) => {
         const uploadedPages = [];
+        const uploadedPagePaths = new Set<string>();
 
         for (const page of processed.pageImages) {
-            const pageRef = ref(storage, `map-resources/${resourceId}/page-${page.page}.png`);
+            const pageExtension = getPdfPageImageExtension(page.blob);
+            const pagePath = `map-resources/${resourceId}/page-${page.page}.${pageExtension}`;
+            const pageRef = ref(storage, pagePath);
             await withTimeout(
                 uploadBytes(pageRef, page.blob, {
-                    contentType: 'image/png',
+                    contentType: page.blob.type || 'image/png',
+                    cacheControl: PDF_PAGE_UPLOAD_CACHE_CONTROL,
                 }),
                 20000,
                 `storage-upload-page-${page.page}`,
             );
+            uploadedPagePaths.add(pagePath);
             const pageUrl = await withTimeout(getDownloadURL(pageRef), 10000, `storage-page-url-${page.page}`);
             uploadedPages.push({
                 page: page.page,
@@ -703,6 +711,28 @@ const ManageMaps: React.FC = () => {
                 width: page.width,
                 height: page.height,
             });
+        }
+
+        const previousMaxPage = Math.max(0, ...previousPages.map((page) => Number(page.page || 0)));
+        if (previousMaxPage > 0) {
+            const nextPages = new Set(uploadedPages.map((page) => page.page));
+            const cleanupPaths: string[] = [];
+            for (let page = 1; page <= previousMaxPage; page += 1) {
+                cleanupPaths.push(`map-resources/${resourceId}/page-${page}.png`);
+                if (!nextPages.has(page)) {
+                    cleanupPaths.push(`map-resources/${resourceId}/page-${page}.webp`);
+                }
+            }
+            void Promise.all(
+                Array.from(new Set(cleanupPaths)).map(async (path) => {
+                    if (uploadedPagePaths.has(path)) return;
+                    try {
+                        await deleteObject(ref(storage, path));
+                    } catch {
+                        // Missing old page objects are fine; cleanup is best effort.
+                    }
+                }),
+            );
         }
 
         return uploadedPages;
@@ -780,7 +810,7 @@ const ManageMaps: React.FC = () => {
 
         if (draft.type === 'pdf') {
             const processed = processedOverride || await processPdfMapFile(targetFile);
-            const uploadedPages = await uploadProcessedPdfPages(resourceId, processed);
+            const uploadedPages = await uploadProcessedPdfPages(resourceId, processed, draft.pdfPageImages || []);
 
             return {
                 fileUrl,
@@ -1010,7 +1040,7 @@ const ManageMaps: React.FC = () => {
 
         try {
             const processed = await processPdfMapFile(sourceFile);
-            const uploadedPages = await uploadProcessedPdfPages(draft.id, processed);
+            const uploadedPages = await uploadProcessedPdfPages(draft.id, processed, draft.pdfPageImages || []);
             const payload: MapResource = {
                 ...normalizeMapResource(draft.id, draft),
                 pdfPageImages: uploadedPages,

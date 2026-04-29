@@ -2662,6 +2662,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     src={pageImage.imageUrl}
                     alt={`학습지 ${pageImage.page}페이지`}
                     className="block h-auto w-full select-none"
+                    loading="lazy"
+                    decoding="async"
                     draggable={false}
                     onDragStart={(event) => event.preventDefault()}
                   />

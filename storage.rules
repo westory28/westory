@@ -5,12 +5,24 @@ service firebase.storage {
       return request.auth != null;
     }
 
+    function hasAllowedSchoolEmail() {
+      return isSignedIn()
+        && request.auth.token.email is string
+        && request.auth.token.email.matches('.*@yongshin-ms\\.ms\\.kr$');
+    }
+
+    function canUseWestory() {
+      return isSignedIn()
+        && (hasAllowedSchoolEmail() || request.auth.token.email == "westoria28@gmail.com");
+    }
+
     function isAdmin() {
-      return isSignedIn() && request.auth.token.email == "westoria28@gmail.com";
+      return canUseWestory() && request.auth.token.email == "westoria28@gmail.com";
     }
 
     function hasUserProfile() {
-      return isSignedIn() && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid));
+      return canUseWestory()
+        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid));
     }
 
     function userProfile() {
@@ -36,38 +48,57 @@ service firebase.storage {
       return isAdmin() || isTeacherRole();
     }
 
+    function isLessonPdfAssetUpload() {
+      return request.resource != null
+        && request.resource.contentType is string
+        && (
+          (
+            request.resource.contentType == 'application/pdf'
+            && request.resource.size < 20 * 1024 * 1024
+          )
+          || (
+            request.resource.contentType.matches('image/.*')
+            && request.resource.size < 6 * 1024 * 1024
+          )
+        );
+    }
+
+    function isSafeLessonPdfWrite() {
+      return request.resource == null || isLessonPdfAssetUpload();
+    }
+
     match /map-resources/{resourceId}/{allPaths=**} {
-      allow read: if isSignedIn();
+      allow read: if canUseWestory();
       allow write: if isAdmin();
     }
 
     match /lesson_pdfs/{unitId}/{allPaths=**} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
+      allow read: if canUseWestory();
+      allow write: if isAdmin() && isSafeLessonPdfWrite();
     }
 
     match /years/{year}/semesters/{semester}/lesson_pdfs/{unitId}/{allPaths=**} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
+      allow read: if canUseWestory();
+      allow write: if isAdmin() && isSafeLessonPdfWrite();
     }
 
     match /years/{year}/semesters/{semester}/lesson_footnotes/{unitId}/{allPaths=**} {
-      allow read: if isSignedIn();
+      allow read: if canUseWestory();
       allow write: if isAdmin();
     }
 
     match /years/{year}/semesters/{semester}/point_products/{productId}/{allPaths=**} {
-      allow read: if isSignedIn();
+      allow read: if canUseWestory();
       allow write: if isAdmin();
     }
 
     match /site-settings/interface/hall-of-fame/{allPaths=**} {
-      allow read: if isSignedIn();
+      allow read: if canUseWestory();
       allow write: if isAdmin() || isTeacherRole() || hasStoragePermission('point_manage');
     }
 
     match /site-settings/interface/{allPaths=**} {
-      allow read: if isSignedIn();
+      allow read: if canUseWestory();
       allow write: if isAdmin();
     }
 

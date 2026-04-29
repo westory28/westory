@@ -1068,6 +1068,8 @@ const HistoryClassroomAssignmentView: React.FC<
                       src={pageImage.imageUrl}
                       alt={`${assignment.title} ${currentPage}`}
                       className="block h-full w-full"
+                      loading="lazy"
+                      decoding="async"
                       style={{ maxWidth: "none" }}
                     />
                     {orderedBlankPlacements.map((placement) => {

@@ -3,6 +3,7 @@ import {
     doc,
     getDoc,
     getDocs,
+    limit as queryLimit,
     orderBy,
     query,
     serverTimestamp,
@@ -777,27 +778,38 @@ export const getPointPolicy = async (config: ConfigLike) => {
     return normalizePointPolicy(snap.data() as Partial<PointPolicy>);
 };
 
-export const listPointTransactions = async (config: ConfigLike, options?: { uid?: string; type?: PointTransactionType }) => {
+export const listPointTransactions = async (config: ConfigLike, options?: { uid?: string; type?: PointTransactionType; limitCount?: number }) => {
     const constraints = [];
     if (options?.uid) constraints.push(where('uid', '==', options.uid));
     if (options?.type) constraints.push(where('type', '==', options.type));
+    const safeLimit = typeof options?.limitCount === 'number' && options.limitCount > 0 ? Math.floor(options.limitCount) : 0;
 
-    const snapshot = constraints.length > 0
-        ? await getDocs(query(
-            collection(db, getPointCollectionPath(config, 'point_transactions')),
-            ...constraints,
-        ))
-        : await getDocs(collection(db, getPointCollectionPath(config, 'point_transactions')));
+    let snapshot;
+    const baseRef = collection(db, getPointCollectionPath(config, 'point_transactions'));
+    if (safeLimit > 0) {
+        try {
+            snapshot = await getDocs(query(baseRef, ...constraints, orderBy('createdAt', 'desc'), queryLimit(safeLimit)));
+        } catch (error) {
+            console.warn('Falling back to unordered point transaction query:', error);
+            snapshot = constraints.length > 0
+                ? await getDocs(query(baseRef, ...constraints))
+                : await getDocs(baseRef);
+        }
+    } else {
+        snapshot = constraints.length > 0
+            ? await getDocs(query(baseRef, ...constraints))
+            : await getDocs(baseRef);
+    }
     const items: PointTransaction[] = [];
     snapshot.forEach((item) => {
         items.push({ id: item.id, ...(item.data() as Omit<PointTransaction, 'id'>) });
     });
-    return sortByTimestampDesc(items, 'createdAt');
+    const sorted = sortByTimestampDesc(items, 'createdAt');
+    return safeLimit > 0 ? sorted.slice(0, safeLimit) : sorted;
 };
 
 export const listPointTransactionsByUid = async (config: ConfigLike, uid: string, limitCount = 100) => {
-    const items = await listPointTransactions(config, { uid });
-    return items.slice(0, limitCount);
+    return listPointTransactions(config, { uid, limitCount });
 };
 
 export const getPointRankManualAdjustEarnedPointsByUid = async (config: ConfigLike, uid: string) => {
@@ -835,9 +847,21 @@ export const listPointProducts = async (config: ConfigLike, activeOnly = false) 
 
 export const listPointOrders = async (config: ConfigLike, options?: { uid?: string; limitCount?: number }) => {
     const baseRef = collection(db, getPointCollectionPath(config, 'point_orders'));
-    const snapshot = options?.uid
-        ? await getDocs(query(baseRef, where('uid', '==', options.uid)))
-        : await getDocs(query(baseRef, orderBy('requestedAt', 'desc')));
+    const safeLimit = typeof options?.limitCount === 'number' && options.limitCount > 0 ? Math.floor(options.limitCount) : 0;
+    let snapshot;
+    try {
+        const constraints = [
+            ...(options?.uid ? [where('uid', '==', options.uid)] : []),
+            orderBy('requestedAt', 'desc'),
+            ...(safeLimit > 0 ? [queryLimit(safeLimit)] : []),
+        ];
+        snapshot = await getDocs(query(baseRef, ...constraints));
+    } catch (error) {
+        console.warn('Falling back to broad point order query:', error);
+        snapshot = options?.uid
+            ? await getDocs(query(baseRef, where('uid', '==', options.uid)))
+            : await getDocs(query(baseRef, orderBy('requestedAt', 'desc')));
+    }
     const items: PointOrder[] = [];
     snapshot.forEach((item) => {
         items.push({ id: item.id, ...(item.data() as Omit<PointOrder, 'id'>) });
