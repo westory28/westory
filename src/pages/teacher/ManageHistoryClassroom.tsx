@@ -2189,6 +2189,7 @@ const ManageHistoryClassroom: React.FC = () => {
           .map((student) => student.number)
           .filter(Boolean)
           .join(", "),
+        retryResetByStudentUid: existingAssignment?.retryResetByStudentUid,
         isPublished: nextIsPublished,
         publishedAt: publishWindow.publishedAt || null,
         dueAt: publishWindow.dueAt || null,
