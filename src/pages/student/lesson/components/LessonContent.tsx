@@ -86,6 +86,9 @@ const LessonContent: React.FC<LessonContentProps> = ({
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
+  const [activeWorksheetPage, setActiveWorksheetPage] = useState<number | null>(
+    null,
+  );
   const [saveCompletionPopup, setSaveCompletionPopup] =
     useState<SaveCompletionPopupState>(null);
   const [activeFootnote, setActiveFootnote] = useState<LessonFootnote | null>(
@@ -118,6 +121,13 @@ const LessonContent: React.FC<LessonContentProps> = ({
       normalized.footnotes.map((footnote) => [footnote.anchorKey, footnote]),
     );
   }, [fallbackTitle, lesson]);
+  const worksheetPageImagesForNav = useMemo(() => {
+    if (!lesson) return [];
+    const normalized = normalizeLessonData(lesson, {
+      title: fallbackTitle || "",
+    });
+    return getLessonContentSections(normalized).worksheet.pageImages;
+  }, [fallbackTitle, lesson]);
 
   useEffect(
     () => () => {
@@ -127,6 +137,19 @@ const LessonContent: React.FC<LessonContentProps> = ({
     },
     [],
   );
+
+  useEffect(() => {
+    setActiveWorksheetPage((current) => {
+      if (!worksheetPageImagesForNav.length) return null;
+      if (
+        current != null &&
+        worksheetPageImagesForNav.some((pageImage) => pageImage.page === current)
+      ) {
+        return current;
+      }
+      return worksheetPageImagesForNav[0].page;
+    });
+  }, [worksheetPageImagesForNav]);
 
   useEffect(() => {
     const normalized = lessonOverride
@@ -611,6 +634,22 @@ const LessonContent: React.FC<LessonContentProps> = ({
   const hasInteractiveBlanks = Boolean(
     worksheet.blanks.length || /\[(?!fn:)(.*?)\]/.test(bodyHtml),
   );
+  const resolvedWorksheetPage =
+    activeWorksheetPage ?? worksheet.pageImages[0]?.page ?? null;
+  const activeWorksheetPageIndex =
+    resolvedWorksheetPage == null
+      ? -1
+      : worksheet.pageImages.findIndex(
+          (pageImage) => pageImage.page === resolvedWorksheetPage,
+        );
+  const hasWorksheetPageControls =
+    worksheet.pageImages.length > 1 && activeWorksheetPageIndex >= 0;
+  const handleWorksheetPageChange = (direction: -1 | 1) => {
+    if (!hasWorksheetPageControls) return;
+    const nextPage = worksheet.pageImages[activeWorksheetPageIndex + direction];
+    if (!nextPage) return;
+    setActiveWorksheetPage(nextPage.page);
+  };
 
   const focusReferenceCard = (anchorKey: string) => {
     window.requestAnimationFrame(() => {
@@ -692,27 +731,48 @@ const LessonContent: React.FC<LessonContentProps> = ({
       className={
         fullscreenPreview
           ? "pointer-events-none sticky top-[calc(env(safe-area-inset-top,0px)+0.75rem)] z-[70] mb-4 flex justify-end px-1"
-          : "pointer-events-none fixed right-4 top-[calc(env(safe-area-inset-top,0px)+5rem)] z-[70] flex flex-col items-end gap-2 md:right-6 md:top-[5.5rem]"
+          : "pointer-events-none absolute right-3 top-4 z-[70] flex justify-end sm:right-0 sm:top-5 sm:translate-x-1/2"
       }
     >
-      <div className="flex flex-col items-end gap-2">
-        <div
-          aria-live="polite"
-          className={`pointer-events-auto rounded-full px-4 py-2 text-xs font-bold shadow-sm ${saveStatusToneClass}`}
-        >
-          {saveStatusLabel}
-        </div>
+      <div className="pointer-events-auto flex max-w-[calc(100vw-1.5rem)] items-center gap-2 rounded-full border border-blue-100 bg-white/95 p-1.5 shadow-[0_18px_42px_rgba(37,99,235,0.18)] backdrop-blur-xl">
+        {hasWorksheetPageControls && (
+          <button
+            type="button"
+            onClick={() => handleWorksheetPageChange(-1)}
+            disabled={activeWorksheetPageIndex === 0}
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
+            aria-label="이전 페이지"
+          >
+            <i className="fas fa-chevron-left text-xs"></i>
+          </button>
+        )}
+        {hasWorksheetPageControls && (
+          <div className="min-w-[3.25rem] text-center text-xs font-black text-slate-600">
+            {activeWorksheetPageIndex + 1} / {worksheet.pageImages.length}
+          </div>
+        )}
+        {hasWorksheetPageControls && (
+          <button
+            type="button"
+            onClick={() => handleWorksheetPageChange(1)}
+            disabled={activeWorksheetPageIndex === worksheet.pageImages.length - 1}
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
+            aria-label="다음 페이지"
+          >
+            <i className="fas fa-chevron-right text-xs"></i>
+          </button>
+        )}
         <button
           type="button"
           onClick={handleSaveAction}
           disabled={isSaving || !hasUnsavedChanges}
           data-session-action="true"
-          className={`pointer-events-auto inline-flex min-h-14 items-center gap-3 rounded-full px-5 text-sm font-bold shadow-[0_18px_38px_rgba(15,23,42,0.18)] transition focus-visible:outline-none focus-visible:ring-4 ${
+          className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-bold transition focus-visible:outline-none focus-visible:ring-4 ${
             isSaving
               ? "bg-blue-600 text-white focus-visible:ring-blue-100"
               : hasUnsavedChanges
                 ? "bg-blue-600 text-white hover:bg-blue-700 focus-visible:ring-blue-100"
-                : "cursor-default border border-emerald-200 bg-white text-emerald-700 focus-visible:ring-emerald-100"
+                : "cursor-default bg-blue-50 text-blue-700 focus-visible:ring-blue-100"
           }`}
           aria-label={floatingSaveButtonLabel}
         >
@@ -727,6 +787,12 @@ const LessonContent: React.FC<LessonContentProps> = ({
           ></i>
           <span>{floatingSaveButtonLabel}</span>
         </button>
+        <div
+          aria-live="polite"
+          className={`hidden rounded-full px-3 py-1.5 text-[11px] font-bold shadow-sm md:block ${saveStatusToneClass}`}
+        >
+          {saveStatusLabel}
+        </div>
       </div>
     </div>
   ) : null;
@@ -735,8 +801,8 @@ const LessonContent: React.FC<LessonContentProps> = ({
     <div
       className={
         fullscreenPreview
-          ? "mx-auto w-full max-w-[min(100vw-1.5rem,1600px)] animate-fadeIn"
-          : "mx-auto max-w-4xl animate-fadeIn"
+          ? "relative mx-auto w-full max-w-[min(100vw-1.5rem,1600px)] animate-fadeIn"
+          : "relative mx-auto max-w-4xl animate-fadeIn"
       }
     >
       {floatingSaveControls}
@@ -814,6 +880,9 @@ const LessonContent: React.FC<LessonContentProps> = ({
                   )}
                   onActivateFootnoteAnchor={openWorksheetFootnoteAnchor}
                   mode="student-solve"
+                  studentCurrentPage={resolvedWorksheetPage}
+                  onStudentCurrentPageChange={setActiveWorksheetPage}
+                  hideStudentPageNavigator={canPersist}
                   studentAnswers={studentAnswers}
                   onStudentAnswerChange={handleWorksheetAnswerChange}
                   annotationEnabled={false}

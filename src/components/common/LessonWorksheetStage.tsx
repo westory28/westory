@@ -72,6 +72,9 @@ interface LessonWorksheetStageProps {
   onAnnotationChange?: (nextState: LessonWorksheetAnnotationState) => void;
   teacherCurrentPage?: number | null;
   onTeacherCurrentPageChange?: (page: number) => void;
+  studentCurrentPage?: number | null;
+  onStudentCurrentPageChange?: (page: number) => void;
+  hideStudentPageNavigator?: boolean;
   showPageLabel?: boolean;
 }
 
@@ -663,6 +666,9 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   onAnnotationChange,
   teacherCurrentPage,
   onTeacherCurrentPageChange,
+  studentCurrentPage,
+  onStudentCurrentPageChange,
+  hideStudentPageNavigator = false,
   showPageLabel = true,
 }) => {
   const capabilities = useMemo(
@@ -810,6 +816,14 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   }, [isTeacherViewMode, pageImages, teacherCurrentPage]);
 
   useEffect(() => {
+    if (!isStudentSolveMode || studentCurrentPage == null) return;
+    if (!pageImages.some((page) => page.page === studentCurrentPage)) return;
+    setActiveStudentPage((current) =>
+      current === studentCurrentPage ? current : studentCurrentPage,
+    );
+  }, [isStudentSolveMode, pageImages, studentCurrentPage]);
+
+  useEffect(() => {
     if (
       !isTeacherViewMode ||
       activeTeacherPage == null ||
@@ -824,6 +838,17 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     isTeacherViewMode,
     onTeacherCurrentPageChange,
     teacherCurrentPage,
+  ]);
+
+  useEffect(() => {
+    if (!isStudentSolveMode || activeStudentPage == null) return;
+    if (activeStudentPage === studentCurrentPage) return;
+    onStudentCurrentPageChange?.(activeStudentPage);
+  }, [
+    activeStudentPage,
+    isStudentSolveMode,
+    onStudentCurrentPageChange,
+    studentCurrentPage,
   ]);
 
   useEffect(() => {
@@ -2246,6 +2271,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
           </>
         )}
         {capabilities.showStudentPageNavigator &&
+          !hideStudentPageNavigator &&
           pageImages.length > 1 &&
           activeStudentPageIndex >= 0 && (
             <div className="flex items-center justify-between rounded-3xl border border-slate-200 bg-white/88 px-4 py-3 shadow-sm backdrop-blur">
@@ -2286,48 +2312,6 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
               <div className="text-sm font-semibold text-slate-700">
                 보기 전용 PDF에서 빈칸과 각주만 확인할 수 있습니다.
               </div>
-            </div>
-            <div className="flex shrink-0 items-center gap-2 rounded-full border border-slate-200 bg-white px-2 py-1.5 shadow-sm">
-              <button
-                type="button"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() =>
-                  applyViewportZoom(studentZoom - 0.1, {
-                    page: activeStudentPage ?? pageImages[0]?.page ?? undefined,
-                  })
-                }
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 transition hover:bg-slate-50"
-                aria-label="축소"
-              >
-                <i className="fas fa-minus text-xs"></i>
-              </button>
-              <button
-                type="button"
-                tabIndex={-1}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={(event) => {
-                  applyViewportZoom(1, {
-                    page: activeStudentPage ?? pageImages[0]?.page ?? undefined,
-                  });
-                  releaseToolbarFocus(event.currentTarget);
-                }}
-                className="min-w-[58px] select-none rounded-full bg-slate-50 px-3 py-1 text-center text-xs font-bold text-slate-700 transition hover:bg-slate-100"
-              >
-                {zoomPercent}%
-              </button>
-              <button
-                type="button"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() =>
-                  applyViewportZoom(studentZoom + 0.1, {
-                    page: activeStudentPage ?? pageImages[0]?.page ?? undefined,
-                  })
-                }
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 transition hover:bg-slate-50"
-                aria-label="확대"
-              >
-                <i className="fas fa-plus text-xs"></i>
-              </button>
             </div>
           </div>
         )}
