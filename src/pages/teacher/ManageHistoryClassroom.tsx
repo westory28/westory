@@ -973,6 +973,14 @@ const ManageHistoryClassroom: React.FC = () => {
     [editingAssignmentId, resultsByAssignment],
   );
 
+  const editingVisibleResults = useMemo(() => {
+    const assignedUidSet = new Set(editingStudentUids);
+    if (!assignedUidSet.size) return [];
+    return editingResults.filter(
+      (result) => result.uid && assignedUidSet.has(result.uid),
+    );
+  }, [editingResults, editingStudentUids]);
+
   const assignmentAttemptMetaById = useMemo(() => {
     const resolved = new Map<
       string,
@@ -1077,6 +1085,21 @@ const ManageHistoryClassroom: React.FC = () => {
           editingStudentReasons,
           editingStudentUids,
         ),
+        targetGrade: editingStudents[0]?.grade || "",
+        targetClass: editingStudents[0]?.className || "",
+        targetStudentUid: editingStudents[0]?.uid || "",
+        targetStudentUids: editingStudents.map((student) => student.uid),
+        targetStudentAccessMap: Object.fromEntries(
+          editingStudents.map((student) => [student.uid, true]),
+        ),
+        targetStudentName: editingStudents
+          .map((student) => student.name)
+          .join(", "),
+        targetStudentNames: editingStudents.map((student) => student.name),
+        targetStudentNumber: editingStudents
+          .map((student) => student.number)
+          .filter(Boolean)
+          .join(", "),
         timeLimitMinutes: Math.max(0, editingTimeLimitMinutes),
         cooldownMinutes: Math.max(0, editingCooldownMinutes),
         dueWindowDays: resolvedDueWindowDays,
@@ -1102,6 +1125,7 @@ const ManageHistoryClassroom: React.FC = () => {
     editingPassThresholdPercent,
     editingPreviewMap,
     editingSelectedMap,
+    editingStudents,
     editingStudentReasons,
     editingStudentUids,
     editingTimeLimitMinutes,
@@ -1917,6 +1941,9 @@ const ManageHistoryClassroom: React.FC = () => {
         targetClass: updatedStudents[0]?.className || "",
         targetStudentUid: updatedStudents[0]?.uid || "",
         targetStudentUids: updatedStudents.map((student) => student.uid),
+        targetStudentAccessMap: Object.fromEntries(
+          updatedStudents.map((student) => [student.uid, true]),
+        ),
         targetStudentName: updatedStudents
           .map((student) => student.name)
           .join(", "),
@@ -2444,11 +2471,11 @@ const ManageHistoryClassroom: React.FC = () => {
         </div>
       </section>
 
-      <section className="space-y-4">
+      <section className="space-y-8">
         {pagedAssignmentGroups.map((group) => (
-          <div key={group.dateKey} className="flex w-full items-stretch gap-4">
+          <div key={group.dateKey} className="flex w-full items-start gap-4">
             <div className="relative w-28 shrink-0 sm:w-32 lg:w-36">
-                <div className="absolute bottom-[-0.75rem] left-1.5 top-0 w-px bg-gray-200" />
+                <div className="absolute bottom-[-2rem] left-1.5 top-0 w-px bg-gray-200" />
                 <div className="relative z-10">
                   <div className="absolute left-0 top-2 h-3 w-3 rounded-full border-4 border-white bg-blue-600 shadow ring-1 ring-blue-200" />
                   <div className="ml-6">
@@ -3702,11 +3729,16 @@ const ManageHistoryClassroom: React.FC = () => {
                               </div>
                               <button
                                 type="button"
-                                onClick={() =>
+                                onClick={() => {
                                   setEditingStudentUids((prev) =>
                                     prev.filter((uid) => uid !== student.uid),
-                                  )
-                                }
+                                  );
+                                  setEditingStudentReasons((prev) => {
+                                    const next = { ...prev };
+                                    delete next[student.uid];
+                                    return next;
+                                  });
+                                }}
                                 className="shrink-0 text-[11px] font-bold text-red-500"
                               >
                                 삭제
@@ -3807,11 +3839,11 @@ const ManageHistoryClassroom: React.FC = () => {
                         결과
                       </div>
                       <div className="rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-bold text-gray-600">
-                        {editingResults.length}건
+                        {editingVisibleResults.length}건
                       </div>
                     </div>
                     <div className="mt-3 min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
-                      {editingResults.map((result) => (
+                      {editingVisibleResults.map((result) => (
                         <div
                           key={result.id}
                           className="rounded-xl border border-gray-200 bg-white px-3 py-1.5"
@@ -3865,7 +3897,7 @@ const ManageHistoryClassroom: React.FC = () => {
                           </div>
                         </div>
                       ))}
-                      {!editingResults.length && (
+                      {!editingVisibleResults.length && (
                         <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-4 py-6 text-center text-sm text-gray-400">
                           아직 결과가 없습니다.
                         </div>
