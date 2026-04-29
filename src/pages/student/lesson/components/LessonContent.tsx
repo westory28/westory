@@ -781,6 +781,15 @@ const LessonContent: React.FC<LessonContentProps> = ({
           ></i>
           <span>{floatingSaveButtonLabel}</span>
         </button>
+        <button
+          type="button"
+          onClick={handleReset}
+          disabled={isSaving}
+          className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-blue-50 px-4 text-sm font-bold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <i className="fas fa-rotate-left text-xs"></i>
+          <span>초기화</span>
+        </button>
       </div>
     </div>
   ) : null;
@@ -829,54 +838,31 @@ const LessonContent: React.FC<LessonContentProps> = ({
 
         <div
           ref={contentRef}
-          className={canPersist ? "space-y-6 pt-16 md:pt-[4.5rem]" : "space-y-6"}
+          className="space-y-6"
         >
           {!!worksheet.pageImages.length &&
-            <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
-              {!fullscreenPreview && (
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
-                  <div>
-                    <div className="text-sm font-bold text-slate-800">
-                      PDF 학습지
-                    </div>
-                    <div className="mt-1 text-xs text-slate-500">
-                      빈칸 풀이와 각주 확인을 바로 시작할 수 있습니다.
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setWorksheetScreenOpen(true)}
-                    className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-600 transition hover:bg-blue-100"
-                  >
-                    <i className="fas fa-expand text-[11px]"></i>
-                    전체화면
-                  </button>
-                </div>
+            <LessonWorksheetStage
+              pageImages={worksheet.pageImages}
+              blanks={worksheet.blanks}
+              textRegions={worksheet.textRegions}
+              footnoteAnchors={worksheet.footnoteAnchors}
+              selectedFootnoteAnchorId={activeWorksheetFootnoteAnchorId}
+              footnoteTitles={Object.fromEntries(
+                footnotes.map((footnote) => [
+                  footnote.id,
+                  footnote.title || footnote.label || "각주",
+                ]),
               )}
-              <div className={fullscreenPreview ? "" : "p-4"}>
-                <LessonWorksheetStage
-                  pageImages={worksheet.pageImages}
-                  blanks={worksheet.blanks}
-                  textRegions={worksheet.textRegions}
-                  footnoteAnchors={worksheet.footnoteAnchors}
-                  selectedFootnoteAnchorId={activeWorksheetFootnoteAnchorId}
-                  footnoteTitles={Object.fromEntries(
-                    footnotes.map((footnote) => [
-                      footnote.id,
-                      footnote.title || footnote.label || "각주",
-                    ]),
-                  )}
-                  onActivateFootnoteAnchor={openWorksheetFootnoteAnchor}
-                  mode="student-solve"
-                  studentCurrentPage={resolvedWorksheetPage}
-                  onStudentCurrentPageChange={setActiveWorksheetPage}
-                  hideStudentPageNavigator={canPersist}
-                  studentAnswers={studentAnswers}
-                  onStudentAnswerChange={handleWorksheetAnswerChange}
-                  annotationEnabled={false}
-                />
-              </div>
-            </section>}
+              onActivateFootnoteAnchor={openWorksheetFootnoteAnchor}
+              mode="student-solve"
+              studentCurrentPage={resolvedWorksheetPage}
+              onStudentCurrentPageChange={setActiveWorksheetPage}
+              hideStudentPageNavigator={canPersist}
+              studentAnswers={studentAnswers}
+              onStudentAnswerChange={handleWorksheetAnswerChange}
+              annotationEnabled={false}
+              showPageLabel={false}
+            />}
 
           {!!bodyHtml && (
             <section
@@ -941,20 +927,13 @@ const LessonContent: React.FC<LessonContentProps> = ({
           )}
         </div>
 
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-3 border-t border-slate-200 pt-5">
-          <button
-            type="button"
-            onClick={handleReset}
-            className="rounded-xl border-2 border-slate-200 bg-white px-6 py-3 font-bold text-slate-600 shadow-sm transition hover:bg-slate-50"
-          >
-            <i className="fas fa-undo mr-2"></i>다시 쓰기
-          </button>
-          {hasInteractiveBlanks && (
+        {hasInteractiveBlanks && (
+          <div className="mt-6 flex justify-center border-t border-slate-200 pt-5">
             <span className="rounded-full bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
               빈칸 입력 시 정답 여부가 바로 표시됩니다.
             </span>
-          )}
-        </div>
+          </div>
+        )}
 
         {saveCompletionPopup && (
           <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">

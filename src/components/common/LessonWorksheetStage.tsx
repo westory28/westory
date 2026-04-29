@@ -2293,18 +2293,6 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
               </button>
             </div>
           )}
-        {isStudentSolveMode && !isAnnotationEnabled && (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-slate-200 bg-white/88 px-4 py-3 shadow-sm backdrop-blur">
-            <div>
-              <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-400">
-                PDF 보기
-              </div>
-              <div className="text-sm font-semibold text-slate-700">
-                보기 전용 PDF에서 빈칸과 각주만 확인할 수 있습니다.
-              </div>
-            </div>
-          </div>
-        )}
         {capabilities.showTeacherPageNavigator &&
           pageImages.length > 1 &&
           activeTeacherPageIndex >= 0 && (
@@ -2404,7 +2392,11 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
           return (
             <section
               key={pageImage.page}
-              className={`rounded-[2rem] border border-gray-200 bg-white shadow-sm ${isStudentSolveMode ? "p-2 md:p-3" : "p-3 md:p-4"}`}
+              className={
+                isStudentSolveMode
+                  ? "bg-transparent"
+                  : "rounded-[2rem] border border-gray-200 bg-white p-3 shadow-sm md:p-4"
+              }
             >
               {(showPageLabel || capabilities.showTextRegionHints) && (
                 <div className="mb-3 flex items-center justify-between gap-2">
@@ -2426,11 +2418,17 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                 ref={(node) => {
                   scrollHostRefs.current[pageImage.page] = node;
                 }}
-                className={`rounded-2xl border border-gray-200 bg-gray-50 ${
-                  shouldUseBoundedViewportScroll
-                    ? "overflow-auto"
-                    : "overflow-x-auto overflow-y-visible"
-                }`}
+                className={
+                  isStudentSolveMode
+                    ? shouldUseBoundedViewportScroll
+                      ? "overflow-auto"
+                      : "overflow-x-auto overflow-y-visible"
+                    : `rounded-2xl border border-gray-200 bg-gray-50 ${
+                        shouldUseBoundedViewportScroll
+                          ? "overflow-auto"
+                          : "overflow-x-auto overflow-y-visible"
+                      }`
+                }
                 style={
                   isViewportInteractive
                     ? {
@@ -2457,6 +2455,18 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     return;
                   }
                   if (isTeacherEditMode) {
+                    const delta = getWheelZoomDelta(event);
+                    if (!delta) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    applyViewportZoom(studentZoomRef.current + delta, {
+                      page: pageImage.page,
+                      anchorClientX: event.clientX,
+                      anchorClientY: event.clientY,
+                    });
+                    return;
+                  }
+                  if (isStudentSolveMode && !isAnnotationEnabled) {
                     const delta = getWheelZoomDelta(event);
                     if (!delta) return;
                     event.preventDefault();
