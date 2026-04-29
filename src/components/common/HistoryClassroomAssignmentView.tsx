@@ -392,6 +392,11 @@ const HistoryClassroomAssignmentView: React.FC<
   const [fitScale, setFitScale] = useState(1);
   const [userScale, setUserScale] = useState(MIN_VIEWPORT_USER_SCALE);
   const [focusedBlankId, setFocusedBlankId] = useState("");
+  const [floatingViewport, setFloatingViewport] = useState({
+    offsetLeft: 0,
+    offsetTop: 0,
+    scale: 1,
+  });
 
   const enableInteractiveViewport =
     interactiveViewport && !isModalPreview && Boolean(pageImage);
@@ -502,6 +507,36 @@ const HistoryClassroomAssignmentView: React.FC<
     },
     [],
   );
+
+  useEffect(() => {
+    if (!showFloatingActions) return undefined;
+
+    const updateFloatingViewport = () => {
+      const viewport = window.visualViewport;
+      setFloatingViewport({
+        offsetLeft: viewport?.offsetLeft || 0,
+        offsetTop: viewport?.offsetTop || 0,
+        scale: Math.max(1, viewport?.scale || 1),
+      });
+    };
+
+    updateFloatingViewport();
+    window.visualViewport?.addEventListener("resize", updateFloatingViewport);
+    window.visualViewport?.addEventListener("scroll", updateFloatingViewport);
+    window.addEventListener("resize", updateFloatingViewport);
+
+    return () => {
+      window.visualViewport?.removeEventListener(
+        "resize",
+        updateFloatingViewport,
+      );
+      window.visualViewport?.removeEventListener(
+        "scroll",
+        updateFloatingViewport,
+      );
+      window.removeEventListener("resize", updateFloatingViewport);
+    };
+  }, [showFloatingActions]);
 
   useEffect(() => {
     setUserScale(MIN_VIEWPORT_USER_SCALE);
@@ -1256,19 +1291,21 @@ const HistoryClassroomAssignmentView: React.FC<
 
       {showFloatingActions && (
         <div
-          className="pointer-events-none fixed z-50 flex max-w-[calc(100vw-2rem)] justify-start sm:max-w-[22rem]"
+          className="pointer-events-none fixed z-[140] flex max-w-[calc(100vw-2rem)] justify-start sm:max-w-[22rem]"
           style={{
-            top: "calc(env(safe-area-inset-top, 0px) + 5rem)",
-            left: "calc(env(safe-area-inset-left, 0px) + 1rem)",
+            top: `calc(env(safe-area-inset-top, 0px) + ${floatingViewport.offsetTop + 12}px)`,
+            left: `calc(env(safe-area-inset-left, 0px) + ${floatingViewport.offsetLeft + 12}px)`,
+            transform: `scale(${1 / floatingViewport.scale})`,
+            transformOrigin: "top left",
           }}
         >
-          <div className="pointer-events-auto w-[min(20rem,calc(100vw-2rem))] rounded-3xl border border-gray-200 bg-white/95 p-4 shadow-[0_20px_45px_-24px_rgba(15,23,42,0.35)] backdrop-blur">
+          <div className="pointer-events-auto w-[min(18rem,calc(100vw-2rem))] rounded-2xl border border-gray-200 bg-white/95 p-3 shadow-[0_20px_45px_-24px_rgba(15,23,42,0.35)] backdrop-blur">
             {assignment.timeLimitMinutes > 0 && countdownLabel && (
-              <div className="rounded-2xl bg-gray-50 px-4 py-3">
+              <div className="rounded-xl bg-gray-50 px-3 py-2.5">
                 <div className="flex items-center justify-between gap-3 text-[11px] font-bold tracking-[0.18em] text-gray-400">
                   <span>남은 시간</span>
                   <span
-                    className={`font-mono text-2xl leading-none ${getCountdownToneClass(
+                    className={`font-mono text-xl leading-none ${getCountdownToneClass(
                       timeProgressPercent,
                     )}`}
                   >
@@ -1289,7 +1326,7 @@ const HistoryClassroomAssignmentView: React.FC<
               type="button"
               onClick={onSubmit}
               disabled={readOnly || submitting || completed || !onSubmit}
-              className="mt-3 min-h-11 w-full rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-2 min-h-10 w-full rounded-xl bg-blue-600 px-3 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {readOnly
                 ? "읽기 전용 미리보기"

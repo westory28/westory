@@ -51,6 +51,9 @@ import {
 } from "../../../lib/semesterScope";
 
 const HISTORY_CLASSROOM_LOCK_PREFIX = "westoryHistoryClassroomLock";
+const HISTORY_CLASSROOM_ATTEMPT_PREFIX = "westoryHistoryClassroomAttempt";
+const HISTORY_CLASSROOM_ROTATION_PREFIX = "westoryHistoryClassroomRotation";
+const SCREEN_ROTATION_GRACE_MS = 8000;
 
 const formatRemainingDuration = (remainMs: number) => {
   if (remainMs <= 0) return "마감";
@@ -74,27 +77,41 @@ const formatRemainingDuration = (remainMs: number) => {
 const getCooldownLockKey = (assignmentId: string, uid: string) =>
   `${HISTORY_CLASSROOM_LOCK_PREFIX}:${assignmentId}:${uid}`;
 
+const getAttemptProgressKey = (assignmentId: string, uid: string) =>
+  `${HISTORY_CLASSROOM_ATTEMPT_PREFIX}:${assignmentId}:${uid}`;
+
+const getRotationGraceKey = (assignmentId: string, uid: string) =>
+  `${HISTORY_CLASSROOM_ROTATION_PREFIX}:${assignmentId}:${uid}`;
+
+const readJsonObject = (raw: string | null): Record<string, unknown> | null => {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object"
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch (error) {
+    console.warn("Failed to parse history classroom local state", error);
+    return null;
+  }
+};
+
 const readCooldownLockUntil = (
   assignmentId: string,
   uid: string,
   resetAtMs: number | null = null,
 ): number => {
   const key = getCooldownLockKey(assignmentId, uid);
-  const raw = readLocalOnly(key);
-  if (!raw) return 0;
+  const parsed = readJsonObject(readLocalOnly(key));
+  if (!parsed) return 0;
 
-  try {
-    const parsed = JSON.parse(raw) as { blockedUntil?: number; savedAt?: number };
-    const savedAt = Number(parsed.savedAt) || 0;
-    if (resetAtMs && savedAt && savedAt <= resetAtMs) {
-      removeStorage(key);
-      return 0;
-    }
-    const blockedUntil = Number(parsed.blockedUntil) || 0;
-    if (blockedUntil > Date.now()) return blockedUntil;
-  } catch (error) {
-    console.warn("Failed to read history classroom cooldown lock", error);
+  const savedAt = Number(parsed.savedAt) || 0;
+  if (resetAtMs && savedAt && savedAt <= resetAtMs) {
+    removeStorage(key);
+    return 0;
   }
+  const blockedUntil = Number(parsed.blockedUntil) || 0;
+  if (blockedUntil > Date.now()) return blockedUntil;
 
   removeStorage(key);
   return 0;
@@ -121,6 +138,30 @@ const getExitCooldownUntil = (assignment: HistoryClassroomAssignment) =>
 
 const clearCooldownLock = (assignmentId: string, uid: string) => {
   removeStorage(getCooldownLockKey(assignmentId, uid));
+};
+
+const writeRotationGrace = (assignmentId: string, uid: string) => {
+  writeLocalOnly(
+    getRotationGraceKey(assignmentId, uid),
+    JSON.stringify({
+      until: Date.now() + SCREEN_ROTATION_GRACE_MS,
+      savedAt: Date.now(),
+    }),
+  );
+};
+
+const readRotationGraceUntil = (assignmentId: string, uid: string): number => {
+  const key = getRotationGraceKey(assignmentId, uid);
+  const parsed = readJsonObject(readLocalOnly(key));
+  const until = Number(parsed?.until) || 0;
+  if (until > Date.now()) return until;
+  if (parsed) removeStorage(key);
+  return 0;
+};
+
+const clearAttemptProgress = (assignmentId: string, uid: string) => {
+  removeStorage(getAttemptProgressKey(assignmentId, uid));
+  removeStorage(getRotationGraceKey(assignmentId, uid));
 };
 
 type HistoryClassroomResultWrongItem = {
@@ -209,6 +250,13 @@ const HistoryClassroomRunner: React.FC = () => {
     >();
   const autoSubmitHandledRef = useRef(false);
   const resultSummaryShownRef = useRef(false);
+  const attemptDeadlineMsRef = useRef(0);
+  const screenRotationGraceUntilRef = useRef(0);
+  const viewportOrientationRef = useRef<{
+    width: number;
+    height: number;
+    landscape: boolean;
+  } | null>(null);
 
   useEffect(() => {
     const loadAssignment = async () => {
@@ -334,7 +382,12 @@ const HistoryClassroomRunner: React.FC = () => {
           userData.uid,
           resetAtMs,
         );
-        if (localAvailableAt > Date.now()) {
+        const rotationGraceUntil = readRotationGraceUntil(
+          loaded.id,
+          userData.uid,
+        );
+        const isRotationResume = rotationGraceUntil > Date.now();
+        if (localAvailableAt > Date.now() && !isRotationResume) {
           const remain = Math.ceil((localAvailableAt - Date.now()) / 60000);
           throw new Error(`${remain}분 후 다시 응시할 수 있습니다.`);
         }
@@ -346,27 +399,66 @@ const HistoryClassroomRunner: React.FC = () => {
           throw new Error("응시 기간이 마감된 역사교실입니다.");
         }
 
+        const savedAttempt = isRotationResume
+          ? readJsonObject(
+              readLocalOnly(getAttemptProgressKey(loaded.id, userData.uid)),
+            )
+          : null;
+        const savedDeadlineMs = Number(savedAttempt?.deadlineMs) || 0;
+        const hasSavedDeadline = savedDeadlineMs > 0;
+        const savedAnswers =
+          savedAttempt?.answers && typeof savedAttempt.answers === "object"
+            ? Object.fromEntries(
+                Object.entries(savedAttempt.answers).map(([key, value]) => [
+                  key,
+                  String(value ?? ""),
+                ]),
+              )
+            : {};
+        const savedPage = Number(savedAttempt?.currentPage) || 0;
+        const nextDeadlineMs =
+          loaded.timeLimitMinutes > 0
+            ? hasSavedDeadline
+              ? savedDeadlineMs
+              : Date.now() + loaded.timeLimitMinutes * 60 * 1000
+            : 0;
+        const initialRemainingSeconds =
+          loaded.timeLimitMinutes > 0
+            ? Math.max(0, Math.ceil((nextDeadlineMs - Date.now()) / 1000))
+            : null;
+
         writeCooldownLock(
           loaded.id,
           userData.uid,
           getExitCooldownUntil(loaded),
           "attempt-started",
         );
+        if (loaded.timeLimitMinutes > 0) {
+          writeLocalOnly(
+            getAttemptProgressKey(loaded.id, userData.uid),
+            JSON.stringify({
+              deadlineMs: nextDeadlineMs,
+              currentPage: savedPage || loaded.pdfPageImages?.[0]?.page || 1,
+              answers: savedAnswers,
+              savedAt: Date.now(),
+            }),
+          );
+        }
         setAssignment(loaded);
-        setCurrentPage(loaded.pdfPageImages?.[0]?.page || 1);
-        setAnswers({});
+        setCurrentPage(savedPage || loaded.pdfPageImages?.[0]?.page || 1);
+        setAnswers(savedAnswers);
         setCompleted(false);
         setResultText("");
         setResultSummary(null);
         resultSummaryShownRef.current = false;
         setPointNotice("");
-        setRemainingSeconds(
-          loaded.timeLimitMinutes > 0 ? loaded.timeLimitMinutes * 60 : null,
-        );
+        setRemainingSeconds(initialRemainingSeconds);
         setRemainingDueMs(getHistoryClassroomRemainingMs(loaded));
         cancellationInFlightRef.current = false;
         exitNavigationAllowedRef.current = false;
         autoSubmitHandledRef.current = false;
+        attemptDeadlineMsRef.current = nextDeadlineMs;
+        screenRotationGraceUntilRef.current = rotationGraceUntil;
       } catch (loadError) {
         console.error(loadError);
         setError(
@@ -441,6 +533,9 @@ const HistoryClassroomRunner: React.FC = () => {
       cancellationReason: options.cancellationReason || "",
       createdAt: serverTimestamp(),
     });
+
+    clearAttemptProgress(assignment.id, userData.uid);
+    attemptDeadlineMsRef.current = 0;
 
     return { score, total, percent, status, passed, resultId: resultRef.id };
   };
@@ -537,6 +632,22 @@ const HistoryClassroomRunner: React.FC = () => {
     [getExitCooldownDurationLabel],
   );
 
+  const markScreenRotationGrace = useCallback(() => {
+    if (!assignment || !userData?.uid) return;
+    const until = Date.now() + SCREEN_ROTATION_GRACE_MS;
+    screenRotationGraceUntilRef.current = until;
+    writeRotationGrace(assignment.id, userData.uid);
+  }, [assignment, userData?.uid]);
+
+  const isScreenRotationGraceActive = useCallback(() => {
+    if (!assignment || !userData?.uid) return false;
+    const storedUntil = readRotationGraceUntil(assignment.id, userData.uid);
+    if (storedUntil > screenRotationGraceUntilRef.current) {
+      screenRotationGraceUntilRef.current = storedUntil;
+    }
+    return screenRotationGraceUntilRef.current > Date.now();
+  }, [assignment, userData?.uid]);
+
   const handleForcedCancel = async (
     reason: string,
     options: { redirectTo?: string | null; replace?: boolean } = {},
@@ -593,6 +704,75 @@ const HistoryClassroomRunner: React.FC = () => {
   };
 
   forcedCancelRef.current = handleForcedCancel;
+
+  useEffect(() => {
+    if (!assignment || !userData?.uid || completed) return undefined;
+
+    const getViewportState = () => {
+      const width = Math.round(window.visualViewport?.width || window.innerWidth);
+      const height = Math.round(
+        window.visualViewport?.height || window.innerHeight,
+      );
+      return {
+        width,
+        height,
+        landscape: width > height,
+      };
+    };
+
+    viewportOrientationRef.current = getViewportState();
+
+    const handlePossibleRotation = () => {
+      const previous = viewportOrientationRef.current;
+      const next = getViewportState();
+      viewportOrientationRef.current = next;
+      if (!previous || previous.landscape !== next.landscape) {
+        markScreenRotationGrace();
+      }
+    };
+
+    window.addEventListener("orientationchange", markScreenRotationGrace);
+    window.addEventListener("resize", handlePossibleRotation);
+    window.visualViewport?.addEventListener("resize", handlePossibleRotation);
+    window.screen.orientation?.addEventListener(
+      "change",
+      markScreenRotationGrace,
+    );
+
+    return () => {
+      window.removeEventListener("orientationchange", markScreenRotationGrace);
+      window.removeEventListener("resize", handlePossibleRotation);
+      window.visualViewport?.removeEventListener(
+        "resize",
+        handlePossibleRotation,
+      );
+      window.screen.orientation?.removeEventListener(
+        "change",
+        markScreenRotationGrace,
+      );
+    };
+  }, [assignment, completed, markScreenRotationGrace, userData?.uid]);
+
+  useEffect(() => {
+    if (!assignment || !userData?.uid || completed || submitting) {
+      return undefined;
+    }
+
+    const persistAttemptProgress = () => {
+      writeLocalOnly(
+        getAttemptProgressKey(assignment.id, userData.uid),
+        JSON.stringify({
+          deadlineMs: attemptDeadlineMsRef.current,
+          currentPage,
+          answers,
+          savedAt: Date.now(),
+        }),
+      );
+    };
+
+    persistAttemptProgress();
+    return persistAttemptProgress;
+  }, [answers, assignment, completed, currentPage, submitting, userData?.uid]);
 
   const finalizeExpiredAttempt = async (
     reason: "time-limit" | "due-window",
@@ -657,6 +837,7 @@ const HistoryClassroomRunner: React.FC = () => {
 
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       if (exitNavigationAllowedRef.current) return undefined;
+      if (isScreenRotationGraceActive()) return undefined;
       writeCooldownLock(
         assignment.id,
         userData.uid,
@@ -670,7 +851,14 @@ const HistoryClassroomRunner: React.FC = () => {
 
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [assignment, completed, getExitWarningMessage, submitting, userData]);
+  }, [
+    assignment,
+    completed,
+    getExitWarningMessage,
+    isScreenRotationGraceActive,
+    submitting,
+    userData,
+  ]);
 
   useEffect(() => {
     if (!assignment || completed || submitting) return undefined;
@@ -768,10 +956,12 @@ const HistoryClassroomRunner: React.FC = () => {
 
     const handleVisibility = () => {
       if (document.visibilityState === "hidden") {
+        if (isScreenRotationGraceActive()) return;
         void handleForcedCancel("visibility-hidden");
       }
     };
     const handlePageHide = () => {
+      if (isScreenRotationGraceActive()) return;
       void handleForcedCancel("pagehide");
     };
 
@@ -782,7 +972,14 @@ const HistoryClassroomRunner: React.FC = () => {
       document.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener("pagehide", handlePageHide);
     };
-  }, [assignment, completed, navigate, submitting, userData]);
+  }, [
+    assignment,
+    completed,
+    isScreenRotationGraceActive,
+    navigate,
+    submitting,
+    userData,
+  ]);
 
   useEffect(() => {
     if (!assignment || !userData || completed || submitting) {
@@ -806,26 +1003,35 @@ const HistoryClassroomRunner: React.FC = () => {
 
     return () => {
       window.clearInterval(timerId);
-      refreshExitCooldown("attempt-left");
+      if (!isScreenRotationGraceActive()) {
+        refreshExitCooldown("attempt-left");
+      }
     };
-  }, [assignment, completed, submitting, userData]);
+  }, [assignment, completed, isScreenRotationGraceActive, submitting, userData]);
 
   useEffect(() => {
     if (!assignment?.timeLimitMinutes || completed || submitting) {
       return undefined;
     }
 
-    const timerId = window.setInterval(() => {
-      setRemainingSeconds((prev) => {
-        if (prev == null) return prev;
-        if (prev <= 1) {
-          window.clearInterval(timerId);
-          void finalizeExpiredAttempt("time-limit");
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    if (!attemptDeadlineMsRef.current) {
+      attemptDeadlineMsRef.current =
+        Date.now() + assignment.timeLimitMinutes * 60 * 1000;
+    }
+
+    const updateRemainingTime = () => {
+      const nextRemainingSeconds = Math.max(
+        0,
+        Math.ceil((attemptDeadlineMsRef.current - Date.now()) / 1000),
+      );
+      setRemainingSeconds(nextRemainingSeconds);
+      if (nextRemainingSeconds <= 0) {
+        void finalizeExpiredAttempt("time-limit");
+      }
+    };
+
+    updateRemainingTime();
+    const timerId = window.setInterval(updateRemainingTime, 1000);
 
     return () => window.clearInterval(timerId);
   }, [assignment?.timeLimitMinutes, completed, submitting]);
