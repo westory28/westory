@@ -55,8 +55,9 @@ const MAX_VIEWPORT_USER_SCALE = 2.8;
 const VIEWPORT_FIT_PADDING = 24;
 const BLANK_TEXT_HORIZONTAL_PADDING = 24;
 const BLANK_TEXT_VERTICAL_PADDING = 4;
-const BLANK_TEXT_MIN_FONT_SIZE = 11;
+const BLANK_TEXT_MIN_FONT_SIZE = 4;
 const BLANK_TEXT_MAX_FONT_SIZE = 22;
+const BLANK_TEXT_LINE_HEIGHT_RATIO = 1.18;
 const BLANK_TEXT_FONT_FAMILY = '"Noto Sans KR", sans-serif';
 let blankTextMeasureContext: CanvasRenderingContext2D | null = null;
 
@@ -83,17 +84,40 @@ const clampViewportUserScale = (value: number) =>
 const getCenteredViewportOffset = (viewportSize: number, contentSize: number) =>
   Math.max(0, (viewportSize - contentSize) / 2);
 
+const getBlankTextPaddingX = (pixelWidth: number) =>
+  Math.max(2, Math.min(12, Math.floor(pixelWidth * 0.12)));
+
+const getBlankTextPaddingY = (pixelHeight: number) =>
+  Math.max(0, Math.min(3, Math.floor(pixelHeight * 0.08)));
+
 const getBlankFontSize = (
   pixelWidth: number,
   pixelHeight: number,
   content: string,
 ) => {
   const safeContent = String(content || "").trim() || "가";
-  const availableWidth = Math.max(1, pixelWidth - BLANK_TEXT_HORIZONTAL_PADDING);
-  const availableHeight = Math.max(1, pixelHeight - BLANK_TEXT_VERTICAL_PADDING);
+  const availableWidth = Math.max(
+    1,
+    pixelWidth -
+      Math.min(
+        BLANK_TEXT_HORIZONTAL_PADDING,
+        getBlankTextPaddingX(pixelWidth) * 2,
+      ),
+  );
+  const availableHeight = Math.max(
+    1,
+    pixelHeight -
+      Math.min(
+        BLANK_TEXT_VERTICAL_PADDING,
+        getBlankTextPaddingY(pixelHeight) * 2,
+      ),
+  );
   const heightLimitedFontSize = Math.max(
     BLANK_TEXT_MIN_FONT_SIZE,
-    Math.min(BLANK_TEXT_MAX_FONT_SIZE, Math.floor(availableHeight * 0.82)),
+    Math.min(
+      BLANK_TEXT_MAX_FONT_SIZE,
+      Math.floor(availableHeight / BLANK_TEXT_LINE_HEIGHT_RATIO),
+    ),
   );
 
   if (typeof document === "undefined") {
@@ -168,6 +192,8 @@ interface BlankRenderMetrics {
   fontSize: number;
   chipWidth: number;
   chipHeight: number;
+  textPaddingX: number;
+  textPaddingY: number;
   isFilled: boolean;
   isInputLocked: boolean;
 }
@@ -416,8 +442,19 @@ const HistoryClassroomAssignmentView: React.FC<
   const displayHeight = isModalPreview
     ? pageImage?.height || 0
     : scaledPageHeight;
+  const textLayoutScale = isModalPreview ? 1 : fitScale;
+  const textLayoutWidth = pageImage ? pageImage.width * textLayoutScale : 0;
+  const textLayoutHeight = pageImage ? pageImage.height * textLayoutScale : 0;
   const blankPlacements = useMemo(() => {
-    if (!pageImage || !displayWidth || !displayHeight) return [];
+    if (
+      !pageImage ||
+      !displayWidth ||
+      !displayHeight ||
+      !textLayoutWidth ||
+      !textLayoutHeight
+    ) {
+      return [];
+    }
 
     const metrics = currentBlanks.map((blank) => {
       const renderRect = getHistoryClassroomBlankRenderRect(
@@ -427,15 +464,19 @@ const HistoryClassroomAssignmentView: React.FC<
       );
       const pixelWidth = renderRect.widthRatio * displayWidth;
       const pixelHeight = renderRect.heightRatio * displayHeight;
+      const textPixelWidth = renderRect.widthRatio * textLayoutWidth;
+      const textPixelHeight = renderRect.heightRatio * textLayoutHeight;
       const answerValue = String(answers[blank.id] || "");
       const trimmedAnswerValue = answerValue.trim();
       const placeholder = blank.prompt || "정답 입력";
       const displayValue = trimmedAnswerValue || placeholder;
       const fontSize = getBlankFontSize(
-        pixelWidth,
-        pixelHeight,
+        textPixelWidth,
+        textPixelHeight,
         displayValue,
       );
+      const textPaddingX = getBlankTextPaddingX(textPixelWidth);
+      const textPaddingY = getBlankTextPaddingY(textPixelHeight);
       const isFilled = Boolean(trimmedAnswerValue);
       const isInputLocked =
         readOnly || completed || submitting || !onAnswerChange;
@@ -449,6 +490,8 @@ const HistoryClassroomAssignmentView: React.FC<
         fontSize,
         chipWidth: pixelWidth,
         chipHeight: pixelHeight,
+        textPaddingX,
+        textPaddingY,
         isFilled,
         isInputLocked,
       };
@@ -481,6 +524,8 @@ const HistoryClassroomAssignmentView: React.FC<
     readOnly,
     resolveBlankOverlap,
     submitting,
+    textLayoutHeight,
+    textLayoutWidth,
   ]);
   const orderedBlankPlacements = useMemo(
     () => sortPlacementsForFocus(blankPlacements),
@@ -1045,7 +1090,9 @@ const HistoryClassroomAssignmentView: React.FC<
                 style={
                   !isModalPreview
                     ? {
-                        touchAction: canPanViewport ? "none" : "manipulation",
+                        touchAction: enableInteractiveViewport
+                          ? "none"
+                          : "auto",
                         overscrollBehavior: "contain",
                       }
                     : undefined
@@ -1115,6 +1162,8 @@ const HistoryClassroomAssignmentView: React.FC<
                         fontSize,
                         chipWidth,
                         chipHeight,
+                        textPaddingX,
+                        textPaddingY,
                         isFilled,
                         isInputLocked,
                         leftPx,
@@ -1125,7 +1174,7 @@ const HistoryClassroomAssignmentView: React.FC<
                       return (
                         <div
                           key={blank.id}
-                          className={`absolute overflow-hidden rounded-xl border text-left font-bold shadow-[0_6px_18px_rgba(15,23,42,0.12)] transition focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-200 ${
+                          className={`absolute overflow-hidden rounded-xl border text-left font-bold shadow-[0_6px_18px_rgba(15,23,42,0.12)] transition-colors focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-200 ${
                             isFocused ? "z-20" : "z-10"
                           } ${
                             isFilled
@@ -1151,11 +1200,12 @@ const HistoryClassroomAssignmentView: React.FC<
                           ) : null}
                           {isInputLocked ? (
                             <span
-                              className="relative z-[1] flex h-full w-full items-center justify-center overflow-hidden whitespace-nowrap px-3 text-center leading-none"
+                              className="relative z-[1] flex h-full w-full items-center justify-center overflow-hidden whitespace-nowrap text-center"
                               style={{
                                 fontSize: `${fontSize}px`,
-                                letterSpacing:
-                                  chipWidth < 80 ? "-0.05em" : "-0.02em",
+                                letterSpacing: 0,
+                                lineHeight: BLANK_TEXT_LINE_HEIGHT_RATIO,
+                                padding: `${textPaddingY}px ${textPaddingX}px`,
                               }}
                             >
                               {trimmedAnswerValue || placeholder}
@@ -1182,16 +1232,17 @@ const HistoryClassroomAssignmentView: React.FC<
                                 blank.prompt || `${blank.id} 답안 입력`
                               }
                               placeholder={placeholder}
-                              className={`relative z-[1] h-full w-full border-0 bg-transparent px-3 text-center font-bold leading-none outline-none ${
+                              className={`relative z-[1] h-full w-full border-0 bg-transparent text-center font-bold outline-none ${
                                 isFilled
                                   ? "text-orange-800 placeholder:text-orange-300"
                                   : "text-slate-700 placeholder:text-slate-400"
                               }`}
                               style={{
                                 fontSize: `${fontSize}px`,
-                                letterSpacing:
-                                  chipWidth < 80 ? "-0.05em" : "-0.02em",
-                                touchAction: "manipulation",
+                                letterSpacing: 0,
+                                lineHeight: "normal",
+                                padding: `${textPaddingY}px ${textPaddingX}px`,
+                                touchAction: "none",
                               }}
                             />
                           )}
