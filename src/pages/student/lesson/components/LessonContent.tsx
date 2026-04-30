@@ -26,6 +26,7 @@ import {
   type LessonData,
   type LessonFootnote,
 } from "../../../../lib/lessonData";
+import { buildLessonAnswerSnapshot } from "../../../../lib/lessonProgressAnswers";
 import { claimPointActivityReward } from "../../../../lib/points";
 import { emitSessionActivity } from "../../../../lib/sessionActivity";
 import { getSemesterCollectionPath } from "../../../../lib/semesterScope";
@@ -245,37 +246,37 @@ const LessonContent: React.FC<LessonContentProps> = ({
 
   const getAnswerSnapshot = () => {
     const container = contentRef.current;
+    const currentWorksheetBlankIds = lesson
+      ? getLessonContentSections(
+          normalizeLessonData(lesson, { title: fallbackTitle || "" }),
+        ).worksheet.blanks.map((blank) => blank.id)
+      : [];
     if (!container) {
-      return {
-        answers: {} as Record<string, { value: string; status: AnswerStatus }>,
-        totalCount: 0,
-        filledCount: 0,
-      };
+      return buildLessonAnswerSnapshot({
+        existingAnswers: studentAnswers,
+        worksheetBlankIds: currentWorksheetBlankIds,
+      });
     }
     const inputs = container.querySelectorAll(
       ".cloze-input, .worksheet-blank-input",
     ) as NodeListOf<HTMLInputElement>;
-    const answers: Record<string, { value: string; status: AnswerStatus }> = {};
-    let filledCount = 0;
-    inputs.forEach((input, index) => {
-      const key =
-        input.dataset.blankId || input.dataset.blankIndex || String(index);
+    const renderedAnswers = Array.from(inputs).map((input, index) => {
       const status: AnswerStatus = input.classList.contains("correct")
         ? "correct"
         : input.classList.contains("wrong")
           ? "wrong"
           : "";
-      const value = input.value || "";
-      if (value.trim()) {
-        filledCount += 1;
-      }
-      answers[key] = { value, status };
+      return {
+        key: input.dataset.blankId || input.dataset.blankIndex || String(index),
+        value: input.value || "",
+        status,
+      };
     });
-    return {
-      answers,
-      totalCount: inputs.length,
-      filledCount,
-    };
+    return buildLessonAnswerSnapshot({
+      existingAnswers: studentAnswers,
+      renderedAnswers,
+      worksheetBlankIds: currentWorksheetBlankIds,
+    });
   };
 
   const saveProgressToFirestore = async () => {
@@ -533,6 +534,13 @@ const LessonContent: React.FC<LessonContentProps> = ({
       input.classList.remove("correct", "wrong");
       nextAnswers[key] = { value: "", status: "" };
     });
+    if (lesson) {
+      getLessonContentSections(
+        normalizeLessonData(lesson, { title: fallbackTitle || "" }),
+      ).worksheet.blanks.forEach((blank) => {
+        nextAnswers[blank.id] = { value: "", status: "" };
+      });
+    }
     setStudentAnswers(nextAnswers);
     setHasUnsavedChanges(true);
     setSaveMessage("저장 필요");
@@ -722,13 +730,13 @@ const LessonContent: React.FC<LessonContentProps> = ({
     <div
       className={
         fullscreenPreview
-          ? "pointer-events-none sticky top-[calc(env(safe-area-inset-top,0px)+0.75rem)] z-[70] mb-4 flex justify-end px-1"
-          : "pointer-events-none sticky top-[calc(env(safe-area-inset-top,0px)+4.5rem)] z-[70] -mb-[5.75rem] flex justify-end pr-1 sm:pr-0"
+          ? "pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] right-[calc(env(safe-area-inset-right,0px)+0.75rem)] z-[70] flex justify-end"
+          : "pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] right-[calc(env(safe-area-inset-right,0px)+1rem)] z-[70] flex justify-end sm:bottom-[calc(env(safe-area-inset-bottom,0px)+1.5rem)] sm:right-[calc(env(safe-area-inset-right,0px)+1.5rem)]"
       }
     >
-      <div className="pointer-events-auto flex w-[9.75rem] flex-col gap-2 rounded-[1.35rem] border border-blue-100 bg-white/95 p-2 shadow-[0_18px_42px_rgba(37,99,235,0.18)] backdrop-blur-xl sm:translate-x-1/2">
+      <div className="pointer-events-auto flex w-[11.75rem] flex-col gap-2 rounded-[1.35rem] border border-blue-100 bg-white/95 p-2 shadow-[0_18px_42px_rgba(37,99,235,0.18)] backdrop-blur-xl">
         {hasWorksheetPageControls && (
-          <div className="flex items-center gap-1 rounded-full bg-blue-50/80 p-1">
+          <div className="grid grid-cols-[2.25rem_minmax(0,1fr)_2.25rem] items-center gap-1 rounded-full bg-blue-50/80 p-1">
             <button
               type="button"
               onClick={() => handleWorksheetPageChange(-1)}
@@ -736,10 +744,11 @@ const LessonContent: React.FC<LessonContentProps> = ({
               className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
               aria-label="이전 페이지"
             >
-              <i className="fas fa-chevron-left text-xs"></i>
+              <span className="text-base font-black leading-none">&lt;</span>
             </button>
-            <div className="min-w-0 flex-1 text-center text-xs font-black text-slate-700">
-              {activeWorksheetPageIndex + 1} / {worksheet.pageImages.length}
+            <div className="min-w-0 text-center text-xs font-black leading-tight text-slate-700">
+              페이지 {activeWorksheetPageIndex + 1} /{" "}
+              {worksheet.pageImages.length}
             </div>
             <button
               type="button"
@@ -750,7 +759,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
               className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
               aria-label="다음 페이지"
             >
-              <i className="fas fa-chevron-right text-xs"></i>
+              <span className="text-base font-black leading-none">&gt;</span>
             </button>
           </div>
         )}
@@ -798,8 +807,8 @@ const LessonContent: React.FC<LessonContentProps> = ({
     <div
       className={
         fullscreenPreview
-          ? "relative mx-auto w-full max-w-[min(100vw-1.5rem,1600px)] animate-fadeIn"
-          : "relative mx-auto max-w-4xl animate-fadeIn"
+          ? `relative mx-auto w-full max-w-[min(100vw-1.5rem,1600px)] animate-fadeIn ${canPersist ? "pb-36" : ""}`
+          : `relative mx-auto max-w-4xl animate-fadeIn ${canPersist ? "pb-36" : ""}`
       }
     >
       {floatingSaveControls}
