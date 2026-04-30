@@ -85,16 +85,16 @@ const wait = (ms: number) =>
 
 const normalizeStudentText = (value: unknown) => String(value ?? "").trim();
 const normalizeStudentEmail = (value: unknown) =>
-  String(value ?? "").trim().toLowerCase();
+  String(value ?? "")
+    .trim()
+    .toLowerCase();
 
 const buildGradeClassLabel = (
-  userData?:
-    | {
-        grade?: unknown;
-        class?: unknown;
-        number?: unknown;
-      }
-    | null,
+  userData?: {
+    grade?: unknown;
+    class?: unknown;
+    number?: unknown;
+  } | null,
 ) => {
   const grade = normalizeStudentText(userData?.grade);
   const className = normalizeStudentText(userData?.class);
@@ -102,7 +102,9 @@ const buildGradeClassLabel = (
   return `${grade}학년 ${className}반 ${number}번`.trim();
 };
 
-const readCommittedQuizSubmission = async (submissionRef: ReturnType<typeof doc>) => {
+const readCommittedQuizSubmission = async (
+  submissionRef: ReturnType<typeof doc>,
+) => {
   for (let attempt = 0; attempt < 4; attempt += 1) {
     const snap = await getDoc(submissionRef);
     if (snap.exists()) {
@@ -151,9 +153,9 @@ const QuizRunner: React.FC = () => {
   const [revealedHints, setRevealedHints] = useState<Record<number, boolean>>(
     {},
   );
-  const [orderOptionMap, setOrderOptionMap] = useState<Record<number, string[]>>(
-    {},
-  );
+  const [orderOptionMap, setOrderOptionMap] = useState<
+    Record<number, string[]>
+  >({});
   const [startingQuiz, setStartingQuiz] = useState(false);
   const [serverTimeOffsetMs, setServerTimeOffsetMs] = useState(0);
   const [quizDeadlineMs, setQuizDeadlineMs] = useState<number | null>(null);
@@ -174,7 +176,8 @@ const QuizRunner: React.FC = () => {
 
   const maxHintUses = quizConfig?.hintLimit ?? 2;
   const fallbackStudentUid =
-    normalizeStudentText(currentUser?.uid) || normalizeStudentText(userData?.uid);
+    normalizeStudentText(currentUser?.uid) ||
+    normalizeStudentText(userData?.uid);
   const fallbackStudentEmail =
     normalizeStudentEmail(currentUser?.email) ||
     normalizeStudentEmail(userData?.email);
@@ -253,7 +256,9 @@ const QuizRunner: React.FC = () => {
       ),
     timeLimitSeconds: Math.max(60, Number(quizConfig?.timeLimit) || 60),
     clientStartedAtMs:
-      overrides.clientStartedAtMs ?? activeSubmission?.clientStartedAtMs ?? Date.now(),
+      overrides.clientStartedAtMs ??
+      activeSubmission?.clientStartedAtMs ??
+      Date.now(),
     lastClientSavedAtMs: Date.now(),
     resultId: overrides.resultId ?? activeSubmission?.resultId ?? "",
   });
@@ -360,7 +365,10 @@ const QuizRunner: React.FC = () => {
     questionList.forEach((question) => {
       const storedAnswer = answerMap[String(question.id)] || "";
       const userAnswer = storedAnswer.toString().replace(/\s+/g, "").trim();
-      const actualAnswer = question.answer.toString().replace(/\s+/g, "").trim();
+      const actualAnswer = question.answer
+        .toString()
+        .replace(/\s+/g, "")
+        .trim();
       const isCorrect = userAnswer === actualAnswer;
 
       if (isCorrect) {
@@ -588,6 +596,14 @@ const QuizRunner: React.FC = () => {
     };
   }, [view, quizDeadlineMs, serverTimeOffsetMs, finishSubmitting]);
 
+  useEffect(() => {
+    if (view !== "quiz" || finishSubmitting) return undefined;
+
+    emitSessionActivity();
+    const timerId = window.setInterval(emitSessionActivity, 60 * 1000);
+    return () => window.clearInterval(timerId);
+  }, [finishSubmitting, view]);
+
   const initializeQuiz = async () => {
     if (!unitId || !category || !fallbackStudentUid) return;
 
@@ -621,7 +637,9 @@ const QuizRunner: React.FC = () => {
         return;
       }
 
-      if (!isAssessmentVisibleToStudent(assessmentConfigMap[configKey], userData)) {
+      if (
+        !isAssessmentVisibleToStudent(assessmentConfigMap[configKey], userData)
+      ) {
         setBlockReason("현재 학급에는 공개되지 않은 평가입니다.");
         setView("intro");
         return;
@@ -690,12 +708,13 @@ const QuizRunner: React.FC = () => {
           .map((questionId) => questionMap.get(questionId))
           .filter((question): question is Question => Boolean(question));
 
-        if (restoredQuestions.length === existingSubmission.questionIds.length) {
+        if (
+          restoredQuestions.length === existingSubmission.questionIds.length
+        ) {
           restoreSubmissionState(existingSubmission, restoredQuestions);
 
-          const remainingSeconds = getQuizSubmissionRemainingSeconds(
-            existingSubmission,
-          );
+          const remainingSeconds =
+            getQuizSubmissionRemainingSeconds(existingSubmission);
           if (remainingSeconds <= 0) {
             const finalized = await finalizeQuizAttempt({
               isTimeout: true,
@@ -706,7 +725,9 @@ const QuizRunner: React.FC = () => {
             });
             setScore(finalized.finalScore);
             setResults(finalized.resultDetails);
-            setResumeNotice("저장된 응시가 종료 시각을 지나 자동 제출되었습니다.");
+            setResumeNotice(
+              "저장된 응시가 종료 시각을 지나 자동 제출되었습니다.",
+            );
             setView("result");
             return;
           }
@@ -717,7 +738,11 @@ const QuizRunner: React.FC = () => {
         }
       }
 
-      if (!nextQuizConfig.allowRetake && historyDocs.length > 0 && unitId !== "exam_prep") {
+      if (
+        !nextQuizConfig.allowRetake &&
+        historyDocs.length > 0 &&
+        unitId !== "exam_prep"
+      ) {
         setBlockReason("재응시가 허용되지 않는 평가입니다.");
         setView("intro");
         return;
@@ -728,8 +753,7 @@ const QuizRunner: React.FC = () => {
         const lastAttemptMs = readTimestampMs(historyDocs[0].data().timestamp);
         if (lastAttemptMs > 0) {
           const remainingMinutes =
-            cooldownMinutes -
-            (Date.now() - lastAttemptMs) / 1000 / 60;
+            cooldownMinutes - (Date.now() - lastAttemptMs) / 1000 / 60;
           if (remainingMinutes > 0) {
             setBlockReason(
               `재응시 대기 시간: ${Math.ceil(remainingMinutes)}분 남음`,
@@ -779,11 +803,17 @@ const QuizRunner: React.FC = () => {
   };
 
   const startQuiz = async () => {
-    if (!unitId || !category || !fallbackStudentUid || !selectedQuestions.length) {
+    if (
+      !unitId ||
+      !category ||
+      !fallbackStudentUid ||
+      !selectedQuestions.length
+    ) {
       return;
     }
 
     if (activeSubmission?.status === "in_progress") {
+      emitSessionActivity();
       setTimeLeft(getQuizSubmissionRemainingSeconds(activeSubmission));
       timeoutHandledRef.current = false;
       setView("quiz");
@@ -879,6 +909,7 @@ const QuizRunner: React.FC = () => {
     const question = selectedQuestions[currentIndex];
     if (!question) return;
 
+    emitSessionActivity();
     setAnswers((prev) => ({
       ...prev,
       [String(question.id)]: value,
@@ -901,7 +932,9 @@ const QuizRunner: React.FC = () => {
 
     const current = parseOrderAnswer(answers[String(question.id)] || "");
     handleAnswer(
-      current.filter((_, itemIndex) => itemIndex !== index).join(ORDER_DELIMITER),
+      current
+        .filter((_, itemIndex) => itemIndex !== index)
+        .join(ORDER_DELIMITER),
     );
   };
 
@@ -909,9 +942,12 @@ const QuizRunner: React.FC = () => {
     const questionId = question.id;
     if (revealedHints[questionId]) return;
     if (hintUsedCount >= maxHintUses) {
-      alert(`힌트는 한 번의 평가에서 최대 ${maxHintUses}회만 사용할 수 있습니다.`);
+      alert(
+        `힌트는 한 번의 평가에서 최대 ${maxHintUses}회만 사용할 수 있습니다.`,
+      );
       return;
     }
+    emitSessionActivity();
     setRevealedHints((prev) => ({
       ...prev,
       [questionId]: true,
@@ -921,6 +957,7 @@ const QuizRunner: React.FC = () => {
   };
 
   const nextQuestion = () => {
+    emitSessionActivity();
     if (currentIndex < selectedQuestions.length - 1) {
       setCurrentIndex((prev) => prev + 1);
       schedulePersistQuizProgress();
@@ -932,6 +969,7 @@ const QuizRunner: React.FC = () => {
 
   const prevQuestion = () => {
     if (currentIndex <= 0) return;
+    emitSessionActivity();
     setCurrentIndex((prev) => prev - 1);
     schedulePersistQuizProgress();
   };
@@ -966,7 +1004,10 @@ const QuizRunner: React.FC = () => {
           sourceId: `quiz-result-${finalized.resultId}`,
           sourceLabel: title || "문제 풀이 완료",
         });
-        if (pointResult.awarded && (pointResult.totalAwarded || pointResult.amount)) {
+        if (
+          pointResult.awarded &&
+          (pointResult.totalAwarded || pointResult.amount)
+        ) {
           notifyPointsUpdated();
         }
         if ((pointResult.totalAwarded || pointResult.amount) > 0) {
@@ -1026,7 +1067,8 @@ const QuizRunner: React.FC = () => {
     () =>
       Math.max(
         60,
-        Number(activeSubmission?.timeLimitSeconds || quizConfig?.timeLimit) || 60,
+        Number(activeSubmission?.timeLimitSeconds || quizConfig?.timeLimit) ||
+          60,
       ),
     [activeSubmission?.timeLimitSeconds, quizConfig?.timeLimit],
   );
@@ -1196,7 +1238,9 @@ const QuizRunner: React.FC = () => {
               <button
                 type="button"
                 onClick={() => revealHint(question)}
-                disabled={!!revealedHints[question.id] || hintUsedCount >= maxHintUses}
+                disabled={
+                  !!revealedHints[question.id] || hintUsedCount >= maxHintUses
+                }
                 className={`rounded-lg px-3 py-2 text-sm font-bold transition ${
                   revealedHints[question.id]
                     ? "bg-amber-100 text-amber-700"
@@ -1271,9 +1315,8 @@ const QuizRunner: React.FC = () => {
                 <div className="flex flex-wrap gap-2">
                   {(orderOptionMap[question.id] || question.options || []).map(
                     (option, index) => {
-                      const selected = parseOrderAnswer(currentAnswer).includes(
-                        option,
-                      );
+                      const selected =
+                        parseOrderAnswer(currentAnswer).includes(option);
                       return (
                         <button
                           key={`${option}-${index}`}
@@ -1354,7 +1397,9 @@ const QuizRunner: React.FC = () => {
       <div className="mx-auto min-h-screen max-w-2xl animate-fadeIn px-4 py-8 text-center">
         <div className="mb-8 rounded-2xl border-t-8 border-blue-500 bg-white p-8 shadow-xl">
           <h2 className="mb-2 text-3xl font-black text-gray-800">평가 종료</h2>
-          <p className="mb-8 text-gray-500">수고하셨습니다. 결과를 확인하세요.</p>
+          <p className="mb-8 text-gray-500">
+            수고하셨습니다. 결과를 확인하세요.
+          </p>
           {!!pointNotice && (
             <div
               className={`mb-6 rounded-xl px-4 py-3 text-sm font-bold ${
@@ -1378,7 +1423,9 @@ const QuizRunner: React.FC = () => {
             <button
               type="button"
               onClick={() =>
-                document.getElementById("review-section")?.classList.toggle("hidden")
+                document
+                  .getElementById("review-section")
+                  ?.classList.toggle("hidden")
               }
               className="rounded-xl border-2 border-gray-200 bg-white py-3 font-bold text-gray-700 transition hover:bg-gray-50"
             >

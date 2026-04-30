@@ -54,6 +54,7 @@ const HISTORY_CLASSROOM_LOCK_PREFIX = "westoryHistoryClassroomLock";
 const HISTORY_CLASSROOM_ATTEMPT_PREFIX = "westoryHistoryClassroomAttempt";
 const HISTORY_CLASSROOM_ROTATION_PREFIX = "westoryHistoryClassroomRotation";
 const SCREEN_ROTATION_GRACE_MS = 8000;
+const VISIBILITY_CANCEL_DELAY_MS = 3000;
 
 const formatRemainingDuration = (remainMs: number) => {
   if (remainMs <= 0) return "마감";
@@ -251,6 +252,7 @@ const HistoryClassroomRunner: React.FC = () => {
   const autoSubmitHandledRef = useRef(false);
   const resultSummaryShownRef = useRef(false);
   const attemptDeadlineMsRef = useRef(0);
+  const visibilityCancelTimerRef = useRef<number | null>(null);
   const screenRotationGraceUntilRef = useRef(0);
   const viewportOrientationRef = useRef<{
     width: number;
@@ -709,7 +711,9 @@ const HistoryClassroomRunner: React.FC = () => {
     if (!assignment || !userData?.uid || completed) return undefined;
 
     const getViewportState = () => {
-      const width = Math.round(window.visualViewport?.width || window.innerWidth);
+      const width = Math.round(
+        window.visualViewport?.width || window.innerWidth,
+      );
       const height = Math.round(
         window.visualViewport?.height || window.innerHeight,
       );
@@ -954,13 +958,30 @@ const HistoryClassroomRunner: React.FC = () => {
   useEffect(() => {
     if (!assignment || completed) return undefined;
 
-    const handleVisibility = () => {
-      if (document.visibilityState === "hidden") {
-        if (isScreenRotationGraceActive()) return;
-        void handleForcedCancel("visibility-hidden");
+    const clearVisibilityCancelTimer = () => {
+      if (visibilityCancelTimerRef.current != null) {
+        window.clearTimeout(visibilityCancelTimerRef.current);
+        visibilityCancelTimerRef.current = null;
       }
     };
+
+    const handleVisibility = () => {
+      if (document.visibilityState !== "hidden") {
+        clearVisibilityCancelTimer();
+        return;
+      }
+      if (isScreenRotationGraceActive()) return;
+
+      clearVisibilityCancelTimer();
+      visibilityCancelTimerRef.current = window.setTimeout(() => {
+        visibilityCancelTimerRef.current = null;
+        if (document.visibilityState !== "hidden") return;
+        if (isScreenRotationGraceActive()) return;
+        void handleForcedCancel("visibility-hidden");
+      }, VISIBILITY_CANCEL_DELAY_MS);
+    };
     const handlePageHide = () => {
+      clearVisibilityCancelTimer();
       if (isScreenRotationGraceActive()) return;
       void handleForcedCancel("pagehide");
     };
@@ -969,6 +990,7 @@ const HistoryClassroomRunner: React.FC = () => {
     window.addEventListener("pagehide", handlePageHide);
 
     return () => {
+      clearVisibilityCancelTimer();
       document.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener("pagehide", handlePageHide);
     };
@@ -996,18 +1018,27 @@ const HistoryClassroomRunner: React.FC = () => {
     };
 
     refreshExitCooldown("attempt-active");
-    const timerId = window.setInterval(
+    emitSessionActivity();
+    const activityTimerId = window.setInterval(emitSessionActivity, 60 * 1000);
+    const cooldownTimerId = window.setInterval(
       () => refreshExitCooldown("attempt-active"),
       15000,
     );
 
     return () => {
-      window.clearInterval(timerId);
+      window.clearInterval(activityTimerId);
+      window.clearInterval(cooldownTimerId);
       if (!isScreenRotationGraceActive()) {
         refreshExitCooldown("attempt-left");
       }
     };
-  }, [assignment, completed, isScreenRotationGraceActive, submitting, userData]);
+  }, [
+    assignment,
+    completed,
+    isScreenRotationGraceActive,
+    submitting,
+    userData,
+  ]);
 
   useEffect(() => {
     if (!assignment?.timeLimitMinutes || completed || submitting) {
@@ -1093,7 +1124,13 @@ const HistoryClassroomRunner: React.FC = () => {
 
   const handleAnswerChange = (blankId: string, value: string) => {
     if (completed || submitting) return;
+    emitSessionActivity();
     setAnswers((prev) => ({ ...prev, [blankId]: value }));
+  };
+
+  const handleCurrentPageChange = (page: number) => {
+    emitSessionActivity();
+    setCurrentPage(page);
   };
 
   const submitAnswers = async () => {
@@ -1160,7 +1197,7 @@ const HistoryClassroomRunner: React.FC = () => {
       <HistoryClassroomAssignmentView
         assignment={assignment}
         currentPage={currentPage}
-        onCurrentPageChange={setCurrentPage}
+        onCurrentPageChange={handleCurrentPageChange}
         answers={answers}
         interactiveViewport
         onAnswerChange={handleAnswerChange}
