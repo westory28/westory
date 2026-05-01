@@ -12,20 +12,33 @@ export const SCHEDULE_PERIOD_OPTIONS = [
   { value: "afterSchool", label: "방과 후", order: 10 },
 ] as const;
 
-export type SchedulePeriodValue = (typeof SCHEDULE_PERIOD_OPTIONS)[number]["value"];
+export const SCHEDULE_ALL_DAY_PERIOD_VALUE = "allDay" as const;
+
+export type SchedulePeriodValue =
+  | (typeof SCHEDULE_PERIOD_OPTIONS)[number]["value"]
+  | typeof SCHEDULE_ALL_DAY_PERIOD_VALUE;
 
 export const DEFAULT_SCHEDULE_PERIOD: SchedulePeriodValue = "period1";
 
 const PERIOD_OPTION_BY_VALUE = new Map(
-  SCHEDULE_PERIOD_OPTIONS.map((option) => [option.value, option]),
+  [
+    {
+      value: SCHEDULE_ALL_DAY_PERIOD_VALUE,
+      label: "\uD558\uB8E8\uC885\uC77C",
+      order: -1,
+    },
+    ...SCHEDULE_PERIOD_OPTIONS,
+  ].map((option) => [option.value, option]),
 );
 
-const LEGACY_PERIOD_VALUE_BY_LABEL = new Map<string, SchedulePeriodValue>(
-  SCHEDULE_PERIOD_OPTIONS.flatMap((option) => [
+const LEGACY_PERIOD_VALUE_BY_LABEL = new Map<string, SchedulePeriodValue>([
+  [SCHEDULE_ALL_DAY_PERIOD_VALUE, SCHEDULE_ALL_DAY_PERIOD_VALUE],
+  ["\uD558\uB8E8\uC885\uC77C", SCHEDULE_ALL_DAY_PERIOD_VALUE],
+  ...SCHEDULE_PERIOD_OPTIONS.flatMap((option) => [
     [option.label, option.value],
     [option.value, option.value],
   ]),
-);
+]);
 
 export const normalizeSchedulePeriod = (
   value: unknown,
@@ -51,7 +64,10 @@ export const compareSchedulePeriod = (
     getSchedulePeriodOrder(left.startPeriod ?? left.period) -
     getSchedulePeriodOrder(right.startPeriod ?? right.period);
   if (orderDiff !== 0) return orderDiff;
-  return String(left.title || "").localeCompare(String(right.title || ""), "ko");
+  return String(left.title || "").localeCompare(
+    String(right.title || ""),
+    "ko",
+  );
 };
 
 export const compareCalendarSchedule = <
