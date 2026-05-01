@@ -897,34 +897,6 @@ const SettingsNotifications: React.FC = () => {
               {saving ? "저장 중..." : "알림 설정 저장"}
             </button>
           </div>
-
-          <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
-              <div className="text-xs font-extrabold text-blue-700">
-                현재 운영 학기
-              </div>
-              <div className="mt-2 text-2xl font-extrabold text-blue-900">
-                {semesterConfig?.year || "2026"}학년도{" "}
-                {semesterConfig?.semester || "1"}학기
-              </div>
-            </div>
-            <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-4">
-              <div className="text-xs font-extrabold text-emerald-700">
-                바로 발송되는 알림
-              </div>
-              <div className="mt-2 text-2xl font-extrabold text-emerald-900">
-                {connectedCount}개
-              </div>
-            </div>
-            <div className="rounded-lg border border-amber-100 bg-amber-50 p-4">
-              <div className="text-xs font-extrabold text-amber-700">
-                앞으로 연결할 알림
-              </div>
-              <div className="mt-2 text-2xl font-extrabold text-amber-900">
-                {preparedCount}개
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -990,17 +962,7 @@ const SettingsNotifications: React.FC = () => {
       </div>
 
       <div className="rounded-xl border border-gray-200 bg-white px-5 pt-4 shadow-sm">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h4 className="text-base font-extrabold text-gray-900">
-              알림 목록
-            </h4>
-            <p className="mt-1 text-sm text-gray-500">
-              대상과 연결 상태별로 알림을 나누어 확인합니다.
-            </p>
-          </div>
-        </div>
-        <div className="mt-4 flex gap-6 overflow-x-auto border-t border-gray-100 pt-4">
+        <div className="flex gap-6 overflow-x-auto">
           {TAB_ITEMS.map((item) => (
             <button
               key={item.key}
