@@ -32,7 +32,7 @@ interface PolicyToggleProps {
 
 interface AmountFieldProps {
     title: string;
-    description: string;
+    description?: string;
     value: number;
     disabled?: boolean;
     suffix: string;
@@ -139,7 +139,6 @@ const QuickPolicyToggle = (props: PolicyToggleProps & { badge: string }) => (
 
 const AmountField = ({
     title,
-    description,
     value,
     disabled,
     suffix,
@@ -150,19 +149,17 @@ const AmountField = ({
         <span className="block text-sm font-extrabold text-slate-900">
             {title}
         </span>
-        <span className="mt-1 block min-h-[40px] text-xs leading-5 text-slate-500">
-            {description}
-        </span>
-        <span className="mt-3 grid grid-cols-[minmax(0,1fr)_92px] overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+        <span className="mt-3 flex min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
             <input
                 type="number"
                 min={min}
                 value={value}
+                inputMode="numeric"
                 onChange={(event) => onChange(Number(event.target.value || 0))}
-                className={`${inputClassName} rounded-none border-0 shadow-none focus:ring-0`}
+                className={`${inputClassName} min-w-0 flex-1 rounded-none border-0 shadow-none focus:ring-0`}
                 disabled={disabled}
             />
-            <span className="inline-flex items-center justify-center border-l border-slate-200 px-2 text-xs font-bold text-slate-700">
+            <span className="inline-flex w-24 shrink-0 items-center justify-center border-l border-slate-200 px-2 text-xs font-bold text-slate-700">
                 {suffix}
             </span>
         </span>
@@ -862,7 +859,7 @@ const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
                                         }))
                                     }
                                 >
-                                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                         <AmountField
                                             title={
                                                 POINT_POLICY_FIELD_LABELS.attendanceMilestone50
