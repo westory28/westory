@@ -618,7 +618,7 @@ const SettingsNotifications: React.FC = () => {
     const statusMeta = STATUS_META[event.status];
     return (
       <span
-        className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-extrabold ${statusMeta.className}`}
+        className={`inline-flex shrink-0 whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-extrabold ${statusMeta.className}`}
       >
         {statusMeta.label}
       </span>
@@ -739,7 +739,7 @@ const SettingsNotifications: React.FC = () => {
           isOpen ? "border-blue-300 shadow-sm" : "border-gray-200"
         }`}
       >
-        <div className="grid grid-cols-1 gap-3 p-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+        <div className="grid grid-cols-1 gap-3 p-3 2xl:grid-cols-[minmax(0,1fr)_auto] 2xl:items-center">
           <button
             type="button"
             onClick={() => setOpenEventKey(isOpen ? null : event.key)}
@@ -763,11 +763,11 @@ const SettingsNotifications: React.FC = () => {
             </span>
             <span className="min-w-0">
               <span className="flex flex-wrap items-center gap-2">
-                <span className="truncate text-sm font-extrabold text-gray-900">
+                <span className="min-w-[8rem] truncate text-sm font-extrabold text-gray-900">
                   {event.label}
                 </span>
                 {renderStatusBadge(event)}
-                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-extrabold text-gray-600">
+                <span className="shrink-0 whitespace-nowrap rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-extrabold text-gray-600">
                   {event.recipientLabel}
                 </span>
               </span>
@@ -783,7 +783,7 @@ const SettingsNotifications: React.FC = () => {
             ></i>
           </button>
 
-          <div className="flex flex-wrap items-center justify-end gap-3">
+          <div className="flex flex-wrap items-center justify-start gap-3 2xl:justify-end">
             <label className="inline-flex items-center gap-2 text-sm font-extrabold text-gray-700">
               {renderSwitch(
                 policy.enabled,
