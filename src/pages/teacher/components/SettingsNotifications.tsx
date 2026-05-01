@@ -630,9 +630,9 @@ const SettingsNotifications: React.FC = () => {
     const disabled = getEventDisabled(event);
     return (
       <div className="border-t border-gray-100 bg-gray-50/80 p-4">
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_260px]">
+        <div className="grid grid-cols-1 gap-3 2xl:grid-cols-[minmax(320px,1fr)_300px]">
           <div className="space-y-3">
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3">
               <div>
                 <label className="mb-1 block text-xs font-extrabold text-gray-500">
                   알림 제목
