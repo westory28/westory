@@ -94,11 +94,47 @@ const clamp = (value: number, min: number, max: number) => Math.min(max, Math.ma
 
 const getLengthAdjustedMaxFontSize = (text: string, baseMax: number, variant: 'default' | 'modal') => {
     const units = getTextUnits(text);
-    const maxWidth = WIDTH * (variant === 'modal' ? 0.5 : 0.38);
+    const maxWidth = WIDTH * (variant === 'modal' ? 0.7 : 0.46);
     const widthLimitedSize = maxWidth / Math.max(units + 1.2, 2.4);
-    const lengthScale = clamp(1 - Math.max(0, units - 4.8) * 0.07, 0.54, 1);
+    const lengthScale = clamp(1 - Math.max(0, units - 5.2) * 0.052, 0.62, 1);
 
     return Math.max(18, Math.min(baseMax, widthLimitedSize, baseMax * lengthScale));
+};
+
+const getDensityFontScale = (wordCount: number, variant: 'default' | 'modal') => {
+    const base = variant === 'modal' ? 1.22 : 1.12;
+    const crowding = Math.max(0, wordCount - 14) * (variant === 'modal' ? 0.012 : 0.01);
+    const sparseBoost = Math.max(0, 14 - wordCount) * 0.018;
+
+    return clamp(base + sparseBoost - crowding, variant === 'modal' ? 0.62 : 0.68, variant === 'modal' ? 1.38 : 1.24);
+};
+
+const getCloudFillScale = (placed: PositionedWord[], wordCount: number, variant: 'default' | 'modal') => {
+    if (placed.length === 0) return 1;
+
+    const extentX = placed.reduce((max, item) => Math.max(max, Math.abs(item.x - CENTER_X) + item.width / 2), 1);
+    const extentY = placed.reduce((max, item) => Math.max(max, Math.abs(item.y - CENTER_Y) + item.height / 2), 1);
+    const targetX = RADIUS_X * (variant === 'modal' ? 0.93 : 0.9);
+    const targetY = RADIUS_Y * (variant === 'modal' ? 0.88 : 0.84);
+    const desiredScale = Math.min(targetX / extentX, targetY / extentY);
+    const sparseCap = variant === 'modal'
+        ? clamp(2.16 - wordCount * 0.025, 1.02, 1.9)
+        : clamp(1.62 - wordCount * 0.014, 1.01, 1.38);
+
+    return clamp(desiredScale, 1, sparseCap);
+};
+
+const scalePositionedWords = (placed: PositionedWord[], scale: number) => {
+    if (scale <= 1.01) return placed;
+
+    return placed.map((item) => ({
+        ...item,
+        x: CENTER_X + (item.x - CENTER_X) * scale,
+        y: CENTER_Y + (item.y - CENTER_Y) * scale,
+        fontSize: item.fontSize * scale,
+        width: item.width * scale,
+        height: item.height * scale,
+    }));
 };
 
 const getPadding = (fontSize: number, variant: 'default' | 'modal') => ({
@@ -272,9 +308,10 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({
         const minCount = Math.min(...source.map((item) => item.count));
         const maxCount = Math.max(...source.map((item) => item.count));
         const fontRange = variant === 'modal'
-            ? { min: 26, max: 178, fallback: 18 }
-            : { min: 24, max: 118, fallback: 20 };
+            ? { min: 30, max: 220, fallback: 18 }
+            : { min: 26, max: 138, fallback: 20 };
         const secondCount = source[1]?.count ?? maxCount;
+        const densityFontScale = getDensityFontScale(source.length, variant);
 
         const placed: PositionedWord[] = [];
 
@@ -293,7 +330,10 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({
             const baseSize = Math.round(
                 Math.min(
                     itemMaxFontSize,
-                    (fontRange.min + easedRatio * (fontRange.max - fontRange.min)) * emphasisBoost * leaderBoost,
+                    (fontRange.min + easedRatio * (fontRange.max - fontRange.min)) *
+                        emphasisBoost *
+                        leaderBoost *
+                        densityFontScale,
                 ),
             );
 
@@ -392,7 +432,7 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({
             }
         });
 
-        return placed;
+        return scalePositionedWords(placed, getCloudFillScale(placed, source.length, variant));
     }, [entries, showSubmitters, variant]);
 
     const hoveredWord = hoveredText
