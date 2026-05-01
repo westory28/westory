@@ -15,6 +15,9 @@ interface LessonSidebarProps {
 
 type TreeItem = StudentCurriculumTreeItem;
 
+const shouldShowUnitTitleHint = (title?: string) =>
+  String(title || "").trim().length > 18;
+
 const LessonSidebar: React.FC<LessonSidebarProps> = ({
   isOpen,
   onClose,
@@ -27,6 +30,7 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
   const [expandedGroups, setExpandedGroups] = useState<Set<number>>(
     new Set([0]),
   ); // Default open first group
+  const [revealedUnitId, setRevealedUnitId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchTree = async () => {
@@ -49,6 +53,7 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
     } else {
       newSet.add(index);
     }
+    setRevealedUnitId(null);
     setExpandedGroups(newSet);
   };
 
@@ -138,16 +143,31 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
                           {mid.title}
                         </span>
                       </div>
-                      {(mid.children || []).map((small, smallIdx) => (
-                        <button
-                          type="button"
-                          key={small.id || smallIdx}
-                          onClick={() => {
-                            onSelectUnit(small.id, small.title);
-                            if (window.innerWidth < 1024) onClose();
-                          }}
-                          className={`
-                                                        mb-0.5 flex w-full items-start rounded-md px-2 py-2 text-left transition
+                      {(mid.children || []).map((small, smallIdx) => {
+                        const unitKey =
+                          small.id || `${bigIdx}-${midIdx}-${smallIdx}`;
+                        const showTitleHint = shouldShowUnitTitleHint(
+                          small.title,
+                        );
+
+                        return (
+                          <button
+                            type="button"
+                            key={unitKey}
+                            title={small.title}
+                            aria-label={small.title}
+                            onClick={() => {
+                              setRevealedUnitId(unitKey);
+                              onSelectUnit(small.id, small.title);
+                              if (window.innerWidth < 1024) onClose();
+                            }}
+                            onBlur={() => {
+                              if (revealedUnitId === unitKey) {
+                                setRevealedUnitId(null);
+                              }
+                            }}
+                            className={`
+                                                        group relative mb-0.5 flex w-full items-start rounded-md px-2 py-2 text-left transition
                                                         text-[0.9rem] no-underline
                                                         ${
                                                           selectedUnitId ===
@@ -156,15 +176,27 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
                                                             : "text-gray-600 hover:bg-blue-50 hover:text-blue-600"
                                                         }
                                                     `}
-                        >
-                          <i
-                            className={`far fa-file-alt mr-2 mt-0.5 shrink-0 text-sm ${selectedUnitId === small.id ? "text-blue-500" : "text-gray-400"}`}
-                          ></i>
-                          <span className="min-w-0 flex-1 whitespace-normal break-words leading-5">
-                            {small.title}
-                          </span>
-                        </button>
-                      ))}
+                          >
+                            <i
+                              className={`far fa-file-alt mr-2 mt-0.5 shrink-0 text-sm ${selectedUnitId === small.id ? "text-blue-500" : "text-gray-400"}`}
+                            ></i>
+                            <span className="min-w-0 flex-1 truncate leading-5">
+                              {small.title}
+                            </span>
+                            {showTitleHint && (
+                              <span
+                                className={`pointer-events-none absolute left-8 right-2 top-[calc(100%-2px)] z-20 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold leading-5 text-slate-700 shadow-lg ${
+                                  revealedUnitId === unitKey
+                                    ? "block"
+                                    : "hidden group-hover:block group-focus-visible:block"
+                                }`}
+                              >
+                                {small.title}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   ))}
                 </div>
