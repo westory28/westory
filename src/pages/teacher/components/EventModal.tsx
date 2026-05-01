@@ -128,7 +128,9 @@ const EventModal: React.FC<EventModalProps> = ({
 
   useEffect(() => {
     if (!categoryDrafts.some((item) => item.key === eventType)) {
-      setEventType(categoryDrafts[0]?.key || DEFAULT_SCHEDULE_CATEGORIES[0].key);
+      setEventType(
+        categoryDrafts[0]?.key || DEFAULT_SCHEDULE_CATEGORIES[0].key,
+      );
     }
   }, [categoryDrafts, eventType]);
 
@@ -186,6 +188,24 @@ const EventModal: React.FC<EventModalProps> = ({
     );
   };
 
+  const handleRemoveCategory = (category: ScheduleCategory) => {
+    if (categoryDrafts.length <= 1) {
+      showToast({
+        tone: "warning",
+        title: "분류는 하나 이상 필요합니다.",
+      });
+      return;
+    }
+
+    const nextDrafts = categoryDrafts.filter(
+      (item) => item.key !== category.key,
+    );
+    setCategoryDrafts(nextDrafts);
+    if (eventType === category.key) {
+      setEventType(nextDrafts[0]?.key || DEFAULT_SCHEDULE_CATEGORIES[0].key);
+    }
+  };
+
   const handleAddCategory = () => {
     const label = newCategoryLabel.trim();
     if (!label) {
@@ -214,23 +234,40 @@ const EventModal: React.FC<EventModalProps> = ({
   };
 
   const persistCategoryDrafts = async () => {
-    const items = resolveScheduleCategories(categoryDrafts).map(
-      (item, index) => ({
-        key: item.key,
-        label: item.label.trim(),
-        color: item.color,
-        emoji: item.emoji,
-        order: index,
-      }),
+    const visibleItems = categoryDrafts.map((item, index) => ({
+      key: item.key,
+      label: item.label.trim(),
+      color: item.color,
+      emoji: item.emoji,
+      order: index,
+    }));
+    const removedDefaultItems = DEFAULT_SCHEDULE_CATEGORIES.filter(
+      (defaultCategory) =>
+        !categoryDrafts.some((item) => item.key === defaultCategory.key),
+    ).map((item) => ({
+      key: item.key,
+      label: item.label,
+      color: item.color,
+      emoji: item.emoji,
+      order: item.order,
+      hidden: true,
+    }));
+    const items = [...visibleItems, ...removedDefaultItems];
+
+    const resolvedVisibleItems = resolveScheduleCategories(visibleItems).filter(
+      (item) =>
+        visibleItems.some((visibleItem) => visibleItem.key === item.key),
     );
 
-    if (items.some((item) => !item.label)) {
+    if (visibleItems.some((item) => !item.label)) {
       showToast({
         tone: "warning",
         title: "비어 있는 분류 이름을 확인해 주세요.",
       });
       return false;
     }
+
+    setCategoryDrafts(resolvedVisibleItems);
 
     await setDoc(
       doc(db, "site_settings", "schedule_categories"),
@@ -281,7 +318,9 @@ const EventModal: React.FC<EventModalProps> = ({
         if (!saved) return;
       }
       const path = `years/${config.year}/semesters/${config.semester}/calendar`;
-      const docRef = eventData ? doc(db, path, eventData.id) : doc(collection(db, path));
+      const docRef = eventData
+        ? doc(db, path, eventData.id)
+        : doc(collection(db, path));
       const finalEnd = end || start;
       const finalStartPeriod = normalizeSchedulePeriod(startPeriod);
 
@@ -294,7 +333,8 @@ const EventModal: React.FC<EventModalProps> = ({
         description: description.trim(),
         eventType,
         targetType,
-        targetClass: targetType === "class" ? `${targetGrade}-${targetClass}` : null,
+        targetClass:
+          targetType === "class" ? `${targetGrade}-${targetClass}` : null,
         updatedAt: serverTimestamp(),
       };
 
@@ -321,7 +361,8 @@ const EventModal: React.FC<EventModalProps> = ({
   };
 
   const handleDelete = async () => {
-    if (!eventData || !config || !confirm("이 일정을 삭제하시겠습니까?")) return;
+    if (!eventData || !config || !confirm("이 일정을 삭제하시겠습니까?"))
+      return;
     setLoading(true);
     try {
       const path = `years/${config.year}/semesters/${config.semester}/calendar`;
@@ -414,7 +455,9 @@ const EventModal: React.FC<EventModalProps> = ({
                   <select
                     value={startPeriod}
                     onChange={(event) =>
-                      setStartPeriod(normalizeSchedulePeriod(event.target.value))
+                      setStartPeriod(
+                        normalizeSchedulePeriod(event.target.value),
+                      )
                     }
                     className="h-12 rounded-lg border border-slate-300 bg-white px-3 text-base font-bold text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                     aria-label="시작 교시"
@@ -600,7 +643,7 @@ const EventModal: React.FC<EventModalProps> = ({
                         {categoryDrafts.map((category) => (
                           <div
                             key={category.key}
-                            className="grid grid-cols-[minmax(0,1fr)_78px] gap-2"
+                            className="grid grid-cols-[minmax(0,1fr)_78px_34px] gap-2"
                           >
                             <input
                               type="text"
@@ -631,6 +674,16 @@ const EventModal: React.FC<EventModalProps> = ({
                                 </option>
                               ))}
                             </select>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveCategory(category)}
+                              className="inline-flex h-10 items-center justify-center rounded-md border border-red-100 bg-red-50 text-sm font-black text-red-500 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-40"
+                              disabled={categoryDrafts.length <= 1}
+                              aria-label={`${category.label} 분류 삭제`}
+                              title="분류 삭제"
+                            >
+                              <i className="fas fa-minus"></i>
+                            </button>
                           </div>
                         ))}
                       </div>

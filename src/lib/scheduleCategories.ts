@@ -11,7 +11,7 @@ export interface ScheduleCategory {
     locked?: boolean;
 }
 
-type RawScheduleCategory = Partial<ScheduleCategory> & { id?: string };
+type RawScheduleCategory = Partial<ScheduleCategory> & { id?: string; hidden?: boolean };
 
 export const CATEGORY_COLOR_PRESETS = [
     { emoji: '🔴', color: '#ef4444' },
@@ -75,6 +75,10 @@ export const resolveScheduleCategories = (items?: RawScheduleCategory[]): Schedu
     (items || []).forEach((item, index) => {
         const key = sanitizeKey(item?.key || item?.id);
         if (!key) return;
+        if (item?.hidden) {
+            normalized.delete(key);
+            return;
+        }
         const fallback = DEFAULT_CATEGORY_MAP.get(key);
         const emoji = normalizeEmoji(item?.emoji, fallback?.emoji || '🔹');
         normalized.set(key, {
