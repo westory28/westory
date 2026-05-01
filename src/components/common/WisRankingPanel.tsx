@@ -137,18 +137,19 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({ config }) => {
                 key={entry.uid}
                 className={`grid grid-cols-[64px_minmax(0,1fr)_78px_minmax(74px,auto)] items-center gap-2 rounded-lg border px-2.5 py-2.5 sm:grid-cols-[72px_minmax(0,1fr)_92px_minmax(80px,auto)] sm:gap-3 sm:px-3 ${rankTone(rank)}`}
               >
-                <div className="flex items-center gap-2">
-                  {iconClassName ? (
-                    <i className={`${iconClassName} text-lg`}></i>
-                  ) : (
-                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-black text-white">
-                      {rank}
-                    </span>
-                  )}
-                  {rank <= 3 && (
-                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/70 text-sm font-black">
-                      {rank}
-                    </span>
+                <div className="grid grid-cols-[2rem_1.25rem] items-center gap-1.5">
+                  <span
+                    className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-sm font-black ${
+                      rank <= 3 ? "bg-white/70" : "bg-slate-900 text-white"
+                    }`}
+                  >
+                    {rank}
+                  </span>
+                  {iconClassName && (
+                    <i
+                      className={`${iconClassName} justify-self-center text-base`}
+                      aria-hidden="true"
+                    ></i>
                   )}
                 </div>
                 <div className="flex min-w-0 items-center gap-1.5">
