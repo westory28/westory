@@ -155,6 +155,20 @@ const getPopoverAnchor = (element: HTMLElement): ScheduleMorePopoverAnchor => {
   };
 };
 
+const resolveMoreLinkAnchor = (event: MouseEvent) => {
+  if (event.currentTarget instanceof HTMLElement) return event.currentTarget;
+  const target = event.target;
+  const element =
+    target instanceof HTMLElement
+      ? target
+      : target instanceof Node
+        ? target.parentElement
+        : null;
+  return element?.closest<HTMLElement>(".fc-more-link") ?? element;
+};
+
+const suppressFullCalendarMorePopover = true as unknown as string;
+
 const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
   events,
   onDateClick,
@@ -321,15 +335,15 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
   };
 
   const handleMoreLinkClick = (arg: { date: Date; jsEvent: MouseEvent }) => {
-    const anchorElement = arg.jsEvent.currentTarget as HTMLElement | null;
-    if (!anchorElement) return undefined;
     arg.jsEvent.preventDefault();
     arg.jsEvent.stopPropagation();
+    const anchorElement = resolveMoreLinkAnchor(arg.jsEvent);
+    if (!anchorElement) return suppressFullCalendarMorePopover;
     setMorePopover({
       date: toLocalYmd(arg.date),
       anchorRect: getPopoverAnchor(anchorElement),
     });
-    return undefined;
+    return suppressFullCalendarMorePopover;
   };
 
   const formatDayHeading = (dateText: string) => {
