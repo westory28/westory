@@ -4,6 +4,7 @@ import { storage } from '../../lib/firebase';
 import { useSearchParams } from 'react-router-dom';
 import { TEACHER_POINT_TAB_LABELS } from '../../constants/pointLabels';
 import { useAppToast } from '../../components/common/AppToastProvider';
+import { InlineLoading } from '../../components/common/LoadingState';
 import { useAuth } from '../../contexts/AuthContext';
 import {
     adjustPoints,
@@ -1359,12 +1360,7 @@ const ManagePoints: React.FC = () => {
 
                 <div className={usesSharedPanelFrame ? 'rounded-2xl border border-gray-200 bg-white p-6 shadow-sm' : ''}>
                     {loading && (
-                        <div className={usesSharedPanelFrame ? 'py-16 text-center text-gray-400' : 'rounded-2xl border border-gray-200 bg-white py-16 text-center text-gray-400 shadow-sm'}>
-                            <div className="mb-2 text-2xl">
-                                <i className="fas fa-spinner fa-spin"></i>
-                            </div>
-                            <p className="font-bold">위스 정보를 불러오는 중입니다.</p>
-                        </div>
+                        <InlineLoading message="위스 정보를 불러오는 중입니다." showWarning />
                     )}
 
                     {!loading && activeTab === 'overview' && (

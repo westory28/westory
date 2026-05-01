@@ -6,6 +6,7 @@ import {
   orderBy,
   query,
 } from "firebase/firestore";
+import { InlineLoading } from "../../../components/common/LoadingState";
 import { db } from "../../../lib/firebase";
 import { useAuth } from "../../../contexts/AuthContext";
 import NoticeModal from "./NoticeModal";
@@ -144,9 +145,7 @@ const TeacherNoticeBoard: React.FC = () => {
 
       <div className="min-h-0 flex-1">
         {loading && (
-          <div className="flex h-full min-h-[180px] items-center justify-center text-sm font-bold text-gray-400">
-            불러오는 중...
-          </div>
+          <InlineLoading className="flex h-full min-h-[180px] items-center" message="알림장을 불러오는 중입니다." showWarning />
         )}
 
         {!loading && !activeNotice && (

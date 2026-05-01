@@ -18,6 +18,7 @@ import {
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import HistoryClassroomAssignmentView from "../../../components/common/HistoryClassroomAssignmentView";
+import { PageLoading } from "../../../components/common/LoadingState";
 import { useAuth } from "../../../contexts/AuthContext";
 import { notifyPointsUpdated } from "../../../lib/appEvents";
 import { db } from "../../../lib/firebase";
@@ -1189,9 +1190,7 @@ const HistoryClassroomRunner: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="p-10 text-center text-gray-400">
-        역사교실을 준비하는 중입니다.
-      </div>
+      <PageLoading message="역사교실을 준비하는 중입니다." />
     );
   }
 

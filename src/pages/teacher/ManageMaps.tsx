@@ -1,6 +1,7 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { collection, deleteDoc, doc, getDocs, orderBy, query, serverTimestamp, setDoc } from 'firebase/firestore';
 import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { InlineLoading } from '../../components/common/LoadingState';
 import MapSidebar from '../../components/common/MapSidebar';
 import MapViewer from '../../components/common/MapViewer';
 import PdfMapViewer from '../../components/common/PdfMapViewer';
@@ -1286,10 +1287,7 @@ const ManageMaps: React.FC = () => {
 
                 <section className="min-w-0 flex-1 space-y-5 sm:space-y-6">
                     {loading ? (
-                        <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center text-gray-400 shadow-sm">
-                            <i className="fas fa-spinner fa-spin text-2xl"></i>
-                            <p className="mt-3">지도 자료를 불러오는 중입니다.</p>
-                        </div>
+                        <InlineLoading message="지도 자료를 불러오는 중입니다." showWarning />
                     ) : currentPreviewItem ? (
                         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
                             <div className="border-b border-gray-100 p-4 pb-4 sm:p-6 sm:pb-4 lg:p-8 lg:pb-4">

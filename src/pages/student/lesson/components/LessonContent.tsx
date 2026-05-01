@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useAppToast } from "../../../../components/common/AppToastProvider";
 import LessonFootnoteDialog from "../../../../components/common/LessonFootnoteDialog";
+import { LoadingOverlay } from "../../../../components/common/LoadingState";
 import {
   collection,
   deleteField,
@@ -573,16 +574,10 @@ const LessonContent: React.FC<LessonContentProps> = ({
     );
   if (loading)
     return (
-      <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/20 backdrop-blur-sm">
-        <div className="rounded-2xl bg-white px-6 py-5 text-center shadow-2xl">
-          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-blue-600">
-            <i className="fas fa-spinner fa-spin text-xl"></i>
-          </div>
-          <div className="text-sm font-bold text-gray-800">
-            수업 자료를 불러오는 중입니다.
-          </div>
-        </div>
-      </div>
+      <LoadingOverlay
+        zIndexClassName="z-[80]"
+        message="수업 자료를 불러오는 중입니다."
+      />
     );
   if (error || !lesson)
     return (

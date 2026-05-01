@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
+import { InlineLoading } from './LoadingState';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../lib/firebase';
 
@@ -70,9 +71,7 @@ const Footer: React.FC = () => {
                         </div>
                         <div className="p-6 overflow-y-auto flex-1 text-sm text-gray-700 leading-relaxed">
                             {loading ? (
-                                <p className="text-center text-gray-400 py-8">
-                                    <i className="fas fa-spinner fa-spin mr-2"></i>불러오는 중...
-                                </p>
+                                <InlineLoading message="약관을 불러오는 중입니다." showWarning />
                             ) : (
                                 <div className="policy-rich-text" dangerouslySetInnerHTML={{ __html: policyHtml }} />
                             )}

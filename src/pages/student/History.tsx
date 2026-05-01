@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
+import { PageLoading } from '../../components/common/LoadingState';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../lib/firebase';
 import { getSemesterDocPath } from '../../lib/semesterScope';
@@ -132,12 +133,7 @@ const StudentExamAnswer: React.FC = () => {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-                <div className="text-center text-gray-500">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-400 mx-auto mb-2"></div>
-                    <p className="font-bold">시험 답안을 불러오는 중...</p>
-                </div>
-            </div>
+            <PageLoading message="시험 답안을 불러오는 중입니다." />
         );
     }
 

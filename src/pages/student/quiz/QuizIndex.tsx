@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { InlineLoading } from "../../../components/common/LoadingState";
 import { db } from "../../../lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -79,9 +80,7 @@ const QuizIndex: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="loader-spinner"></div>
-      </div>
+      <InlineLoading message="퀴즈 목록을 불러오는 중입니다." showWarning />
     );
   }
 

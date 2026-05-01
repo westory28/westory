@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { collection, getDocs, orderBy, query } from 'firebase/firestore';
 import { useAppToast } from '../../../components/common/AppToastProvider';
+import { InlineLoading } from '../../../components/common/LoadingState';
 import MapSidebar from '../../../components/common/MapSidebar';
 import MapViewer from '../../../components/common/MapViewer';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -174,10 +175,7 @@ const StudentMaps: React.FC = () => {
 
                 <section className="min-w-0 flex-1">
                     {loading ? (
-                        <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center text-gray-400 shadow-sm">
-                            <i className="fas fa-spinner fa-spin text-2xl"></i>
-                            <p className="mt-3">지도를 불러오는 중입니다.</p>
-                        </div>
+                        <InlineLoading message="지도를 불러오는 중입니다." showWarning />
                     ) : selectedItem ? (
                         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
                             <div className="border-b border-gray-100 p-4 pb-4 sm:p-6 sm:pb-4 lg:p-8 lg:pb-4">

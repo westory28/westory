@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { InlineLoading } from "./LoadingState";
 import { getWisHallOfFameGradeLeaderboard, getWisHallOfFameSnapshot } from "../../lib/wisHallOfFame";
 import type { SystemConfig, WisHallOfFameEntry } from "../../types";
 
@@ -60,9 +61,7 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({ config }) => {
 
       <div className="min-h-0 flex-1 space-y-2">
         {loading && (
-          <div className="flex h-full min-h-[160px] items-center justify-center text-sm font-bold text-gray-400">
-            순위를 불러오는 중...
-          </div>
+          <InlineLoading className="flex h-full min-h-[160px] items-center" message="순위를 불러오는 중입니다." showWarning />
         )}
 
         {!loading && entries.length === 0 && (

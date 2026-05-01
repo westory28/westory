@@ -22,6 +22,7 @@ import {
 } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { auth, authPersistenceReady, configuredAuthDomain, db } from '../lib/firebase';
+import { InlineLoading, PageLoading } from '../components/common/LoadingState';
 import { markLoginPerf, measureLoginPerf } from '../lib/loginPerf';
 import { readSiteSettingDoc } from '../lib/siteSettings';
 import { readLocalOnly, readStorage, removeStorage, writeLocalOnly, writeStorage } from '../lib/safeStorage';
@@ -1513,7 +1514,7 @@ const Login: React.FC = () => {
         }
     };
 
-    if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+    if (loading) return <PageLoading message="로그인 상태를 확인하는 중입니다." />;
 
     return (
         <div className="min-h-screen bg-gray-50 relative">
@@ -1618,9 +1619,7 @@ const Login: React.FC = () => {
                         </div>
                         <div className="p-6 overflow-y-auto flex-1 text-sm text-gray-700 leading-relaxed">
                             {policyLoading ? (
-                                <p className="text-center text-gray-400 py-8">
-                                    <i className="fas fa-spinner fa-spin mr-2"></i>불러오는 중...
-                                </p>
+                                <InlineLoading message="약관을 불러오는 중입니다." showWarning />
                             ) : (
                                 <div className="policy-rich-text" dangerouslySetInnerHTML={{ __html: policyHtml }} />
                             )}

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { InlineLoading } from "../../../../components/common/LoadingState";
 import { db } from "../../../../lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 import { useAuth } from "../../../../contexts/AuthContext";
@@ -100,9 +101,7 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
 
         <div className="flex-1 overflow-y-auto p-3 custom-scroll">
           {loading && (
-            <div className="text-center text-gray-400 py-10 text-sm">
-              목차 로딩 중...
-            </div>
+            <InlineLoading message="목차를 불러오는 중입니다." showWarning />
           )}
           {!loading && tree.length === 0 && (
             <div className="p-4 text-center text-gray-400 text-sm">

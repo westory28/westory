@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { db } from '../../../lib/firebase';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useAppToast } from '../../../components/common/AppToastProvider';
+import { InlineLoading } from '../../../components/common/LoadingState';
 
 interface GradeItem {
     value: string;
@@ -137,7 +138,7 @@ const SettingsSchool: React.FC = () => {
         }
     };
 
-    if (loading) return <div className="text-center py-10">Loading...</div>;
+    if (loading) return <InlineLoading message="학교 설정을 불러오는 중입니다." showWarning />;
 
     return (
         <div className="max-w-3xl space-y-8">

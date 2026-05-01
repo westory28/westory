@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { inferToastFromAlertMessage, useAppToast } from '../common/AppToastProvider';
 import Header from '../common/Header';
 import Footer from '../common/Footer';
+import { PageLoading } from '../common/LoadingState';
 import StudentRankPromotionController from '../common/StudentRankPromotionController';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -70,7 +71,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         };
     }, [showToast]);
 
-    if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+    if (loading) return <PageLoading message="로그인 상태를 확인하는 중입니다." />;
 
     return (
         <div className="flex flex-col min-h-screen bg-gray-50">

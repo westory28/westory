@@ -3,6 +3,7 @@ import { HashRouter as Router, Routes, Route, Navigate, useLocation } from 'reac
 import { AuthProvider } from './contexts/AuthContext';
 import MainLayout from './components/layout/MainLayout';
 import { AppToastProvider } from './components/common/AppToastProvider';
+import { InlineLoading, PageLoading } from './components/common/LoadingState';
 import { lazyWithRetry } from './lib/lazyWithRetry';
 import Login from './pages/Login';
 
@@ -52,9 +53,7 @@ const LegacyRouteRedirect: React.FC<{ to: string }> = ({ to }) => {
 
 const RouteContentFallback: React.FC<{ message: string }> = ({ message }) => (
     <div className="mx-auto w-full max-w-7xl px-4 py-6">
-        <div className="rounded-xl border border-gray-200 bg-white px-5 py-8 text-sm font-semibold text-gray-500 shadow-sm">
-            {message}
-        </div>
+        <InlineLoading message={message} />
     </div>
 );
 
@@ -83,7 +82,7 @@ const App: React.FC = () => {
         <AuthProvider>
             <AppToastProvider>
                 <Router>
-                    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+                    <Suspense fallback={<PageLoading message="화면을 준비하는 중입니다." />}>
                         <div className="bg-gray-50 min-h-screen text-gray-900 font-sans">
                             <Routes>
                             <Route path="/" element={<Login />} />

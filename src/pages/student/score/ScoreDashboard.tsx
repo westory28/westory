@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { db } from '../../../lib/firebase';
 import { collection, query, orderBy, getDocs, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useAppToast } from '../../../components/common/AppToastProvider';
+import { PageLoading } from '../../../components/common/LoadingState';
 import { useAuth } from '../../../contexts/AuthContext';
 import GradeChart from './components/GradeChart';
 import ScoreCard from './components/ScoreCard';
@@ -432,7 +433,7 @@ const ScoreDashboard: React.FC = () => {
     const chartColors = displayPlans.map(p => getChartColor(p.currentScore, p.subject));
 
 
-    if (loading) return <div className="flex justify-center items-center h-screen"><div className="loader-spinner"></div></div>;
+    if (loading) return <PageLoading message="성적 데이터를 불러오는 중입니다." />;
 
     return (
         <div className="max-w-6xl mx-auto px-4 py-8 animate-fadeIn">

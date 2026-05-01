@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { PageLoading } from "../../../components/common/LoadingState";
 import {
   addDoc,
   collection,
@@ -1075,9 +1076,7 @@ const QuizRunner: React.FC = () => {
 
   if (view === "loading") {
     return (
-      <div className="flex h-screen items-center justify-center font-bold text-gray-500">
-        로딩 중...
-      </div>
+      <PageLoading message="퀴즈를 준비하는 중입니다." />
     );
   }
 

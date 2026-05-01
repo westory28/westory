@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
+import { InlineLoading } from "../../../components/common/LoadingState";
 import { useAuth } from "../../../contexts/AuthContext";
 import { db } from "../../../lib/firebase";
 import {
@@ -403,9 +404,7 @@ const HistoryClassroomIndex: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="p-10 text-center text-gray-400">
-        역사교실을 불러오는 중입니다.
-      </div>
+      <InlineLoading message="역사교실을 불러오는 중입니다." showWarning />
     );
   }
 

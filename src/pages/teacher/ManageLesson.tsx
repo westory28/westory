@@ -1,5 +1,6 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useCallback } from "react";
+import { LoadingOverlay } from "../../components/common/LoadingState";
 import { useAuth } from "../../contexts/AuthContext";
 import { db, storage } from "../../lib/firebase";
 import {
@@ -4054,25 +4055,20 @@ const ManageLesson: React.FC = () => {
         </div>
       )}
       {(screenBusyMessage || pdfExtractionRetryOverlay) && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/30 backdrop-blur-sm">
-          <div className="rounded-2xl bg-white px-6 py-5 text-center shadow-2xl">
-            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-blue-600">
-              <i className="fas fa-spinner fa-spin text-xl"></i>
-            </div>
-            <div className="text-sm font-bold text-gray-800">
-              {pdfExtractionRetryOverlay?.message ||
-                screenBusyMessage ||
-                "잠시만 기다려 주세요."}
-            </div>
-            <div className="mt-1 text-xs text-gray-500">
-              {screenBusyMessage
-                ? "잠시만 기다려 주세요."
-                : pdfExtractionRetryOverlay?.phase === "requesting"
-                  ? "재요청을 준비하는 중입니다."
-                  : "완료되면 이 창이 자동으로 닫힙니다."}
-            </div>
-          </div>
-        </div>
+        <LoadingOverlay
+          message={
+            pdfExtractionRetryOverlay?.message ||
+            screenBusyMessage ||
+            "잠시만 기다려 주세요."
+          }
+          detail={
+            screenBusyMessage
+              ? "잠시만 기다려 주세요."
+              : pdfExtractionRetryOverlay?.phase === "requesting"
+                ? "재요청을 준비하는 중입니다."
+                : "완료되면 이 창이 자동으로 닫힙니다."
+          }
+        />
       )}
     </div>
   );

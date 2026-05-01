@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAppToast } from '../../components/common/AppToastProvider';
+import { InlineLoading } from '../../components/common/LoadingState';
 import {
     POINT_HISTORY_FILTER_LABELS,
     STUDENT_POINT_TAB_LABELS,
@@ -332,12 +333,7 @@ const Points: React.FC = () => {
                     isHallOfFameTab ? 'p-4 sm:p-5 xl:p-6' : 'p-6'
                 }`}>
                     {loading && (
-                        <div className="py-16 text-center text-gray-400">
-                            <div className="mb-2 text-2xl">
-                                <i className="fas fa-spinner fa-spin"></i>
-                            </div>
-                            <p className="font-bold">위스 정보를 불러오는 중입니다.</p>
-                        </div>
+                        <InlineLoading message="위스 정보를 불러오는 중입니다." showWarning />
                     )}
 
                     {!loading && !!errorMessage && (
