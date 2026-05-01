@@ -209,7 +209,13 @@ const NoticeModal: React.FC<NoticeModalProps> = ({
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:text-sm file:font-extrabold file:text-blue-700"
               />
               <p className="mt-2 text-xs font-semibold text-gray-500">
-                업로드 시 최대 1280px 너비, 약 460KB 목표로 자동 압축됩니다.
+                권장 크기: 1280 x 720px (16:9). 최소 960 x 540px 이상이면 선명하게 보입니다.
+              </p>
+              <p className="mt-1 text-xs font-semibold text-gray-500">
+                세로형이나 정사각형 이미지는 잘리지 않지만 좌우 여백이 생길 수 있습니다.
+              </p>
+              <p className="mt-1 text-xs font-semibold text-gray-500">
+                업로드 시 WebP로 변환하고 선명도를 우선해 약 460KB 목표, 최대 680KB 이하로 압축합니다.
               </p>
             </label>
 

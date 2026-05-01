@@ -17,6 +17,8 @@ const MAX_NOTICE_IMAGE_WIDTH = 1280;
 const MAX_NOTICE_IMAGE_HEIGHT = 720;
 const TARGET_NOTICE_IMAGE_BYTES = 460 * 1024;
 const MAX_NOTICE_IMAGE_BYTES = 680 * 1024;
+const NOTICE_IMAGE_QUALITY_STEPS = [0.9, 0.84, 0.78, 0.72, 0.66, 0.6, 0.54, 0.48];
+const NOTICE_IMAGE_SIZE_STEPS = [1, 0.875, 0.75, 0.625];
 
 const loadImageElement = (file: File) =>
   new Promise<HTMLImageElement>((resolve, reject) => {
@@ -64,6 +66,27 @@ const getNoticeImageStoragePath = (config: ConfigLike, noticeId: string) => {
   return `years/${year}/semesters/${semester}/notice_images/${safeNoticeId}/notice-${Date.now()}.webp`;
 };
 
+const drawNoticeImageCanvas = (
+  source: HTMLImageElement,
+  width: number,
+  height: number,
+) => {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d", { alpha: false });
+  if (!context) {
+    throw new Error("이미지 처리 환경을 준비하지 못했습니다.");
+  }
+
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, width, height);
+  context.drawImage(source, 0, 0, width, height);
+  return canvas;
+};
+
 export const compressNoticeImage = async (file: File) => {
   if (!file.type.startsWith("image/")) {
     throw new Error("이미지 파일만 업로드할 수 있습니다.");
@@ -77,35 +100,58 @@ export const compressNoticeImage = async (file: File) => {
   );
   const width = Math.max(1, Math.round(source.naturalWidth * scale));
   const height = Math.max(1, Math.round(source.naturalHeight * scale));
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const context = canvas.getContext("2d", { alpha: false });
-  if (!context) {
-    throw new Error("이미지 처리 환경을 준비하지 못했습니다.");
-  }
 
-  context.fillStyle = "#ffffff";
-  context.fillRect(0, 0, width, height);
-  context.drawImage(source, 0, 0, width, height);
-
-  let blob = await canvasToBlob(canvas, "image/webp", 0.72);
-  if (blob.size > TARGET_NOTICE_IMAGE_BYTES) {
-    blob = await canvasToBlob(canvas, "image/webp", 0.58);
-  }
-  if (blob.size > MAX_NOTICE_IMAGE_BYTES) {
-    blob = await canvasToBlob(canvas, "image/jpeg", 0.62);
-  }
-  if (blob.size > MAX_NOTICE_IMAGE_BYTES) {
-    throw new Error("이미지를 더 작게 줄일 수 없습니다. 더 단순한 이미지를 사용해 주세요.");
-  }
-
-  return {
-    blob,
-    width,
-    height,
-    mimeType: blob.type || "image/webp",
+  type CompressionCandidate = {
+    blob: Blob;
+    width: number;
+    height: number;
+    mimeType: string;
+    quality: number;
+    sizeStep: number;
   };
+  const getCandidateScore = (candidate: CompressionCandidate) =>
+    candidate.quality * 1000 + candidate.sizeStep * 100;
+  let targetCandidate: CompressionCandidate | null = null;
+  let fallback: CompressionCandidate | null = null;
+
+  for (const sizeStep of NOTICE_IMAGE_SIZE_STEPS) {
+    const nextWidth = Math.max(1, Math.round(width * sizeStep));
+    const nextHeight = Math.max(1, Math.round(height * sizeStep));
+    const canvas = drawNoticeImageCanvas(source, nextWidth, nextHeight);
+
+    for (const quality of NOTICE_IMAGE_QUALITY_STEPS) {
+      const blob = await canvasToBlob(canvas, "image/webp", quality);
+      const candidate = {
+        blob,
+        width: nextWidth,
+        height: nextHeight,
+        mimeType: blob.type || "image/webp",
+        quality,
+        sizeStep,
+      };
+
+      if (blob.size <= TARGET_NOTICE_IMAGE_BYTES) {
+        if (!targetCandidate || getCandidateScore(candidate) > getCandidateScore(targetCandidate)) {
+          targetCandidate = candidate;
+        }
+      }
+      if (
+        blob.size <= MAX_NOTICE_IMAGE_BYTES
+        && (!fallback || getCandidateScore(candidate) > getCandidateScore(fallback))
+      ) {
+        fallback = candidate;
+      }
+    }
+  }
+
+  if (targetCandidate) {
+    return targetCandidate;
+  }
+  if (fallback) {
+    return fallback;
+  }
+
+  throw new Error("이미지를 더 작게 줄일 수 없습니다. 더 단순한 이미지를 사용해 주세요.");
 };
 
 export const uploadNoticeImage = async ({
