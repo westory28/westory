@@ -17,7 +17,7 @@ const Note: React.FC = () => {
 
   return (
     <div className="min-h-[calc(100vh-64px)] bg-gray-50">
-      <div className="mx-auto flex max-w-7xl flex-col gap-3 px-3 py-4 md:gap-4 md:px-4 lg:flex-row lg:items-start lg:px-6">
+      <div className="mx-auto flex max-w-[1500px] flex-col gap-4 px-3 py-4 md:px-5 lg:flex-row lg:items-start lg:px-8 xl:px-10">
         <LessonSidebar
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
@@ -25,7 +25,7 @@ const Note: React.FC = () => {
           selectedUnitId={unitId}
         />
 
-        <main className="relative min-w-0 flex-1 rounded-[1.5rem] border border-gray-200 bg-white shadow-sm">
+        <main className="relative min-w-0 flex-1 rounded-2xl border border-gray-200 bg-white shadow-sm">
           <div className="p-4 md:p-6">
             <LessonContent unitId={unitId} fallbackTitle={title} />
           </div>

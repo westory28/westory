@@ -65,27 +65,37 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
       <aside
         className={`
                     fixed inset-y-0 left-auto right-0 z-40
-                    w-[80%] max-w-[320px]
+                    w-[86%] max-w-[360px]
                     bg-white border-l border-gray-200 shadow-xl
                     transform transition-transform duration-300 ease-in-out
                     flex flex-col
                     mt-16
                     ${isOpen ? "translate-x-0" : "translate-x-full"}
-                    lg:sticky lg:top-[88px] lg:mt-0 lg:max-h-[calc(100vh-112px)] lg:w-[296px] lg:max-w-none lg:translate-x-0 lg:self-start lg:rounded-[1.6rem] lg:border lg:border-slate-200 lg:shadow-sm
+                    lg:sticky lg:top-[88px] lg:mt-0 lg:max-h-[calc(100vh-112px)] lg:w-[360px] lg:max-w-none lg:translate-x-0 lg:self-start lg:rounded-2xl lg:border lg:border-slate-200 lg:shadow-sm xl:w-[384px]
                 `}
         style={{ right: 0, left: "auto" }}
       >
-        <div className="sticky top-0 flex items-center justify-between border-b border-gray-100 bg-white p-4 font-extrabold text-gray-800 lg:rounded-t-[1.6rem]">
-          <span>📑 수업 목차</span>
+        <div className="sticky top-0 flex items-center justify-between border-b border-gray-200 bg-white px-4 py-4 lg:rounded-t-2xl">
+          <div>
+            <h2 className="flex items-center gap-2 text-lg font-bold text-gray-800">
+              <i className="fas fa-sitemap text-blue-500"></i>
+              <span>수업 목차</span>
+            </h2>
+            <p className="mt-0.5 text-xs font-medium text-gray-500">
+              단원별 수업 자료를 확인합니다.
+            </p>
+          </div>
           <button
+            type="button"
             onClick={onClose}
-            className="lg:hidden text-gray-400 hover:text-gray-600"
+            aria-label="수업 목차 닫기"
+            className="rounded-lg px-3 py-2 text-sm text-gray-500 hover:bg-gray-100 lg:hidden"
           >
             <i className="fas fa-times"></i>
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-3 custom-scroll">
+        <div className="custom-scroll flex-1 overflow-y-auto p-3">
           {loading && (
             <InlineLoading message="목차를 불러오는 중입니다." showWarning />
           )}
@@ -96,51 +106,64 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
           )}
 
           {tree.map((big, bigIdx) => (
-            <div key={bigIdx} className="mb-3">
-              <div
+            <div key={bigIdx} className="mb-2 select-none">
+              <button
+                type="button"
+                aria-expanded={expandedGroups.has(bigIdx)}
                 onClick={() => toggleGroup(bigIdx)}
                 className={`
-                                    flex items-center p-2 rounded-lg cursor-pointer transition select-none
+                                    flex w-full items-start rounded-lg p-2 text-left transition
                                     text-sm font-bold text-gray-700 hover:bg-gray-50
-                                    ${expandedGroups.has(bigIdx) ? "bg-gray-50" : ""}
+                                    ${expandedGroups.has(bigIdx) ? "bg-blue-50 text-blue-700" : ""}
                                 `}
               >
                 <i
-                  className={`fas fa-chevron-right text-xs text-gray-400 mr-2 transition-transform ${expandedGroups.has(bigIdx) ? "rotate-90 text-blue-500" : ""}`}
+                  className={`fas fa-caret-right mt-1 w-5 shrink-0 text-center text-xs text-gray-400 transition-transform ${expandedGroups.has(bigIdx) ? "rotate-90 text-blue-500" : ""}`}
                 ></i>
-                <span>{big.title}</span>
-              </div>
+                <i
+                  className={`fas ${expandedGroups.has(bigIdx) ? "fa-folder-open" : "fa-folder"} mr-2 mt-0.5 shrink-0 text-yellow-500`}
+                ></i>
+                <span className="min-w-0 flex-1 whitespace-normal break-words leading-5">
+                  {big.title}
+                </span>
+              </button>
 
               {expandedGroups.has(bigIdx) && (
-                <div className="pl-4 mt-1 border-l-2 border-gray-100 ml-2.5">
+                <div className="ml-4 mt-1 border-l-2 border-gray-100 pl-4">
                   {(big.children || []).map((mid, midIdx) => (
                     <div key={midIdx} className="mb-2">
-                      <div className="text-xs font-bold text-gray-400 px-2 py-1 select-none">
-                        {mid.title}
+                      <div className="flex items-start px-2 py-1 text-xs font-bold text-gray-500">
+                        <i className="fas fa-folder mr-2 mt-0.5 shrink-0 text-yellow-500"></i>
+                        <span className="min-w-0 whitespace-normal break-words leading-5">
+                          {mid.title}
+                        </span>
                       </div>
                       {(mid.children || []).map((small, smallIdx) => (
-                        <div
+                        <button
+                          type="button"
                           key={small.id || smallIdx}
                           onClick={() => {
                             onSelectUnit(small.id, small.title);
                             if (window.innerWidth < 1024) onClose();
                           }}
                           className={`
-                                                        flex items-center px-2 py-2 rounded-md cursor-pointer transition mb-0.5
-                                                        text-[0.9rem] no-underline select-none
+                                                        mb-0.5 flex w-full items-start rounded-md px-2 py-2 text-left transition
+                                                        text-[0.9rem] no-underline
                                                         ${
                                                           selectedUnitId ===
                                                           small.id
-                                                            ? "bg-blue-600 text-white font-bold shadow-sm"
-                                                            : "text-gray-500 hover:bg-blue-50 hover:text-blue-600"
+                                                            ? "bg-blue-50 font-bold text-blue-600"
+                                                            : "text-gray-600 hover:bg-blue-50 hover:text-blue-600"
                                                         }
                                                     `}
                         >
                           <i
-                            className={`far fa-file-alt mr-2 text-sm ${selectedUnitId === small.id ? "text-white" : ""}`}
+                            className={`far fa-file-alt mr-2 mt-0.5 shrink-0 text-sm ${selectedUnitId === small.id ? "text-blue-500" : "text-gray-400"}`}
                           ></i>
-                          <span className="truncate">{small.title}</span>
-                        </div>
+                          <span className="min-w-0 flex-1 whitespace-normal break-words leading-5">
+                            {small.title}
+                          </span>
+                        </button>
                       ))}
                     </div>
                   ))}
