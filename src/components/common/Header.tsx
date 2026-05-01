@@ -37,9 +37,6 @@ const resolveMenuTarget = (url: string, portal: 'student' | 'teacher') => {
     const normalized = (url || '').trim();
     if (!normalized) return normalized;
     const canonicalRoot = portal === 'teacher' ? '/teacher/quiz' : '/student/quiz';
-    if (portal === 'student' && normalized === '/student/quiz') {
-        return '/student/quiz?menu=history2';
-    }
     return /(^|\/)quiz\/history2(\/|$)|(^|\/)history2(\/|$)/.test(normalized)
         ? `${canonicalRoot}?menu=history2`
         : normalized;
@@ -117,6 +114,7 @@ const Header: React.FC = () => {
     const resolveTarget = (url: string) => resolveMenuTarget(url, portal);
     const desktopSubmenuParentUrls = new Set([
         '/student/lesson/note',
+        '/student/quiz',
         '/teacher/lesson',
     ]);
 
