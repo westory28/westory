@@ -29,18 +29,24 @@ const LoadingCard: React.FC<LoadingStateProps> = ({
   showWarning = true,
 }) => (
   <div
-    className={`rounded-lg border border-gray-200 bg-white px-6 py-5 text-center shadow-xl ${className}`}
+    className={`inline-block max-w-[calc(100vw-2rem)] rounded-lg border border-gray-200 bg-white px-6 py-5 text-center shadow-xl ${className}`}
     role="status"
     aria-live="polite"
     aria-busy="true"
   >
     <LoadingMark />
-    <p className="mt-3 text-sm font-bold text-gray-800">{message}</p>
+    <p className="mt-3 whitespace-nowrap text-[clamp(0.75rem,3.5vw,0.875rem)] font-bold text-gray-800">
+      {message}
+    </p>
     {detail && (
-      <p className="mt-1 text-xs font-medium text-gray-500">{detail}</p>
+      <p className="mt-1 whitespace-nowrap text-[clamp(0.625rem,3vw,0.75rem)] font-medium text-gray-500">
+        {detail}
+      </p>
     )}
     {showWarning && (
-      <p className="mt-2 text-xs font-semibold text-amber-700">{warning}</p>
+      <p className="mt-2 whitespace-nowrap text-[clamp(0.625rem,3vw,0.75rem)] font-semibold text-amber-700">
+        {warning}
+      </p>
     )}
   </div>
 );
@@ -49,7 +55,7 @@ export const PageLoading: React.FC<LoadingStateProps> = (props) => (
   <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
     <LoadingCard
       {...props}
-      className={`w-full max-w-sm ${props.className || ""}`}
+      className={`w-fit max-w-[calc(100vw-2rem)] ${props.className || ""}`}
     />
   </div>
 );
@@ -63,7 +69,7 @@ export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({
   >
     <LoadingCard
       {...props}
-      className={`w-full max-w-sm ${props.className || ""}`}
+      className={`w-fit max-w-[calc(100vw-2rem)] ${props.className || ""}`}
     />
   </div>
 );
@@ -77,7 +83,7 @@ export const InlineLoading: React.FC<LoadingStateProps> = ({
     <LoadingCard
       {...props}
       showWarning={showWarning}
-      className="mx-auto w-full max-w-sm shadow-sm"
+      className="mx-auto w-fit max-w-[calc(100vw-2rem)] shadow-sm"
     />
   </div>
 );
