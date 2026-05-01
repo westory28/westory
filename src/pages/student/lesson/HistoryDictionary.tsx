@@ -292,12 +292,6 @@ const HistoryDictionary: React.FC = () => {
   return (
     <div className="min-h-[calc(100vh-64px)] bg-slate-50 px-4 py-6 lg:px-6 xl:px-8">
       <div className="mx-auto max-w-7xl">
-        <header className="mb-5">
-          <h1 className="text-2xl font-extrabold tracking-tight text-slate-950">
-            역사 사전
-          </h1>
-        </header>
-
         <div className="grid gap-4 lg:grid-cols-[6.25rem_minmax(22rem,0.72fr)_minmax(0,1.15fr)]">
           <aside className="order-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm lg:order-1">
             <div className="grid grid-cols-5 gap-2 lg:grid-cols-1">
