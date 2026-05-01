@@ -655,6 +655,30 @@ const createPdfEditorSnapshot = (params: {
     preparedPdfPageCount: params.preparedPdf?.pageImages.length || 0,
   });
 
+const EMPTY_META_EDITOR_SNAPSHOT = createGeneralEditorSnapshot({
+  selectedNodeId: null,
+  lessonTitle: "",
+  lessonVideo: "",
+  lessonVisibleToStudents: true,
+});
+
+const EMPTY_PDF_EDITOR_SNAPSHOT = createPdfEditorSnapshot({
+  selectedNodeId: null,
+  lessonContent: "",
+  lessonFootnotes: [],
+  worksheetFootnoteAnchors: [],
+  lessonPdfName: "",
+  lessonPdfUrl: "",
+  lessonPdfStoragePath: "",
+  lessonPdfProcessing: createEmptyLessonPdfProcessingMeta(),
+  worksheetPageImages: [],
+  worksheetTextRegions: [],
+  worksheetBlanks: [],
+  selectedPdfFile: null,
+  preparedPdf: null,
+  footnoteImageDrafts: {},
+});
+
 const ManageLesson: React.FC = () => {
   const { config, userData, currentUser } = useAuth();
   const [treeData, setTreeData] = useState<TreeNode[]>([]);
@@ -762,8 +786,8 @@ const ManageLesson: React.FC = () => {
     message: string;
   } | null>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
-  const lastSavedMetaSnapshotRef = useRef("");
-  const lastSavedPdfSnapshotRef = useRef("");
+  const lastSavedMetaSnapshotRef = useRef(EMPTY_META_EDITOR_SNAPSHOT);
+  const lastSavedPdfSnapshotRef = useRef(EMPTY_PDF_EDITOR_SNAPSHOT);
   const deletedFootnoteAssetPathsRef = useRef<string[]>([]);
   const canEdit = canWriteLessonManagement(userData, currentUser?.email || "");
   const [savedLessonState, setSavedLessonState] =
