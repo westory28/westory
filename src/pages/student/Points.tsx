@@ -296,31 +296,41 @@ const Points: React.FC = () => {
             <main className={`mx-auto w-full flex-1 px-4 py-8 ${
                 isHallOfFameTab ? 'max-w-7xl' : 'max-w-6xl'
             }`}>
-                <div className="mb-6 rounded-2xl border border-gray-200 bg-white px-6 py-5 shadow-sm">
-                    <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                <div className={`mb-5 rounded-2xl border border-gray-200 bg-white shadow-sm ${
+                    isHallOfFameTab ? 'px-5 py-4' : 'px-6 py-5'
+                }`}>
+                    <div className={`flex flex-col gap-3 md:flex-row md:justify-between ${
+                        isHallOfFameTab ? 'md:items-center' : 'md:items-end'
+                    }`}>
                         <div>
                             <h1 className="text-2xl font-bold text-gray-800">위스</h1>
-                            <p className="mt-1 text-sm text-gray-500">
-                                내 위스 현황, 상점 상품, 구매 진행 상태를 한곳에서 확인할 수 있습니다.
-                            </p>
-                            <div className="mt-3 flex flex-wrap items-center gap-2">
-                                <span className="text-sm font-bold text-gray-700">{'현재 등급'}</span>
-                                {rank && <PointRankBadge rank={rank} size="md" />}
-                                <span className="text-xs text-gray-500">누적 획득 기준으로 유지되며, 구매나 환수로 내려가지 않습니다.</span>
-                            </div>
+                            {!isHallOfFameTab && (
+                                <>
+                                    <p className="mt-1 text-sm text-gray-500">
+                                        내 위스 현황, 상점 상품, 구매 진행 상태를 한곳에서 확인할 수 있습니다.
+                                    </p>
+                                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                                        <span className="text-sm font-bold text-gray-700">{'현재 등급'}</span>
+                                        {rank && <PointRankBadge rank={rank} size="md" />}
+                                        <span className="text-xs text-gray-500">누적 획득 기준으로 유지되며, 구매나 환수로 내려가지 않습니다.</span>
+                                    </div>
+                                </>
+                            )}
                         </div>
                         <div className="flex flex-col items-stretch gap-3 md:items-end">
-                            <div className="rounded-xl bg-blue-50 px-5 py-3 text-right">
+                            <div className="rounded-xl border border-blue-100 bg-blue-50 px-5 py-3 text-right">
                                 <div className="text-xs font-bold text-blue-500">현재 보유 위스</div>
-                                <div className="mt-1 whitespace-nowrap text-3xl font-black text-blue-700">{formatWisAmount(safeWallet.balance || 0)}</div>
+                                <div className="mt-1 whitespace-nowrap text-3xl font-black leading-none text-blue-700">{formatWisAmount(safeWallet.balance || 0)}</div>
                             </div>
-                            <button
-                                type="button"
-                                onClick={() => handleTabChange('hall-of-fame')}
-                                className="inline-flex min-h-11 items-center justify-center rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-black text-amber-900 transition hover:border-amber-300 hover:bg-amber-100"
-                            >
-                                화랑의 전당 보기
-                            </button>
+                            {!isHallOfFameTab && (
+                                <button
+                                    type="button"
+                                    onClick={() => handleTabChange('hall-of-fame')}
+                                    className="inline-flex min-h-11 items-center justify-center rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-black text-amber-900 transition hover:border-amber-300 hover:bg-amber-100"
+                                >
+                                    화랑의 전당 보기
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
