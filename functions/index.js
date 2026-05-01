@@ -2759,6 +2759,217 @@ const sortPointTransactionDocsDesc = (docs) => [...docs].sort((a, b) => {
   return Number(bCreatedAt?.nanoseconds || 0) - Number(aCreatedAt?.nanoseconds || 0);
 });
 
+const normalizeQuizCorrectionAnswer = (value) => String(value ?? '')
+  .replace(/\s+/g, '')
+  .trim();
+
+const quizDetailMatchesQuestion = (detail, questionDocId, questionId) => {
+  const detailQuestionId = String(detail?.id ?? detail?.qid ?? '').trim();
+  if (!detailQuestionId) return false;
+  return detailQuestionId === questionDocId || detailQuestionId === questionId;
+};
+
+const commitQuizCorrectionWrites = async (writes) => {
+  for (let index = 0; index < writes.length; index += 400) {
+    const batch = db.batch();
+    writes.slice(index, index + 400).forEach(({ ref, payload }) => {
+      batch.set(ref, payload, { merge: true });
+    });
+    await batch.commit();
+  }
+};
+
+const awardQuizCorrectionBonus = async ({ year, semester, uid, resultId, score }) => {
+  const sourceId = `quiz-result-${resultId}`;
+  let profile = {};
+  try {
+    ({ profile } = await ensureStudentProfile(uid));
+  } catch (error) {
+    console.warn('Awarding quiz correction bonus without an active user profile.', {
+      uid,
+      resultId,
+      errorMessage: String(error?.message || 'profile-missing'),
+    });
+  }
+
+  return db.runTransaction(async (transaction) => {
+    const policy = await loadPolicy(transaction, year, semester);
+    if (
+      !policy.quizBonusEnabled
+      || Number(policy.quizBonusAmount || 0) <= 0
+      || Number(score || 0) < Number(policy.quizBonusThreshold || 100)
+    ) {
+      return { awarded: false, amount: 0, duplicate: false };
+    }
+
+    const transactionId = buildActivityTransactionId(uid, 'quiz_bonus', sourceId);
+    const txRef = db.doc(`${getPointCollectionPath(year, semester, 'point_transactions')}/${transactionId}`);
+    const existingTx = await transaction.get(txRef);
+    if (existingTx.exists) {
+      return { awarded: false, amount: 0, duplicate: true, transactionId };
+    }
+
+    const { ref: walletRef, wallet } = await ensureWallet(transaction, year, semester, uid, profile);
+    const currentRankEarnedTotal = await getCurrentRankEarnedTotal(transaction, year, semester, uid, wallet);
+    const amount = Number(policy.quizBonusAmount || 0);
+    const nextBalance = Number(wallet.balance || 0) + amount;
+    const nextEarnedTotal = Number(wallet.earnedTotal || 0) + amount;
+    const nextRankEarnedTotal = currentRankEarnedTotal + amount;
+
+    transaction.set(walletRef, {
+      ...buildWalletBase(uid, profile),
+      balance: nextBalance,
+      earnedTotal: nextEarnedTotal,
+      ...buildWalletRankState(nextRankEarnedTotal, policy.rankPolicy),
+      spentTotal: Number(wallet.spentTotal || 0),
+      adjustedTotal: Number(wallet.adjustedTotal || 0),
+      lastTransactionAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    transaction.set(txRef, createTransactionPayload({
+      uid,
+      type: 'quiz_bonus',
+      delta: amount,
+      balanceAfter: nextBalance,
+      sourceId,
+      sourceLabel: 'Quiz correction bonus',
+      policyId: 'current',
+      createdBy: 'system:quiz-correction',
+    }));
+
+    return { awarded: true, amount, duplicate: false, transactionId };
+  });
+};
+
+exports.recalculateQuizResultsAfterQuestionCorrection = onCall(
+  { region: REGION, timeoutSeconds: 180, memory: '512MiB' },
+  async (request) => {
+    const { uid } = await assertQuizManager(request);
+    const { year, semester } = assertYearSemester(request.data || {});
+    const questionDocId = String(request.data?.questionDocId || '').trim();
+    const questionId = String(request.data?.questionId || '').trim();
+
+    if (!questionDocId && !questionId) {
+      throw new HttpsError(
+        'invalid-argument',
+        'questionDocId or questionId is required.',
+      );
+    }
+
+    const questionRef = questionDocId
+      ? db.doc(`${getSemesterRoot(year, semester)}/quiz_questions/${questionDocId}`)
+      : null;
+    const questionSnap = questionRef ? await questionRef.get() : null;
+    if (questionRef && !questionSnap.exists) {
+      throw new HttpsError('not-found', 'Question does not exist.');
+    }
+
+    const question = questionSnap?.data?.() || {};
+    const nextAnswer = normalizeQuizCorrectionAnswer(question.answer);
+    if (!nextAnswer) {
+      throw new HttpsError('failed-precondition', 'Question answer is empty.');
+    }
+
+    const quizResultsSnap = await db
+      .collection(`${getSemesterRoot(year, semester)}/quiz_results`)
+      .get();
+    const writes = [];
+    const bonusTargets = [];
+    let improvedAnswerCount = 0;
+
+    quizResultsSnap.forEach((docSnap) => {
+      const data = docSnap.data() || {};
+      const details = Array.isArray(data.details) ? data.details : [];
+      if (!details.length) return;
+
+      let changed = false;
+      const nextDetails = details.map((detail) => {
+        if (!quizDetailMatchesQuestion(detail, questionDocId, questionId)) {
+          return detail;
+        }
+        if (detail?.correct === true) return detail;
+
+        const studentAnswer = normalizeQuizCorrectionAnswer(
+          detail?.u ?? detail?.userAnswer ?? detail?.answer,
+        );
+        if (!studentAnswer || studentAnswer !== nextAnswer) return detail;
+
+        changed = true;
+        improvedAnswerCount += 1;
+        return {
+          ...detail,
+          correct: true,
+          correctedByAnswerKey: true,
+        };
+      });
+
+      if (!changed) return;
+
+      const totalCount = nextDetails.length;
+      const correctCount = nextDetails.filter((detail) => detail?.correct === true).length;
+      const previousScore = Math.max(0, Number(data.score || 0));
+      const nextScore = totalCount ? Math.round((correctCount / totalCount) * 100) : 0;
+      const resultUid = String(data.uid || '').trim();
+
+      writes.push({
+        ref: docSnap.ref,
+        payload: {
+          details: nextDetails,
+          score: nextScore,
+          correctedAt: FieldValue.serverTimestamp(),
+          correctedBy: uid,
+          correctionMeta: {
+            questionDocId,
+            questionId,
+            previousScore,
+            nextScore,
+            reason: 'answer_key_correction',
+          },
+        },
+      });
+
+      if (resultUid && nextScore > previousScore) {
+        bonusTargets.push({
+          uid: resultUid,
+          resultId: docSnap.id,
+          score: nextScore,
+        });
+      }
+    });
+
+    await commitQuizCorrectionWrites(writes);
+
+    let bonusAwardedCount = 0;
+    let bonusAmount = 0;
+    for (const target of bonusTargets) {
+      const bonusResult = await awardQuizCorrectionBonus({
+        year,
+        semester,
+        uid: target.uid,
+        resultId: target.resultId,
+        score: target.score,
+      });
+      if (bonusResult.awarded) {
+        bonusAwardedCount += 1;
+        bonusAmount += Number(bonusResult.amount || 0);
+      }
+    }
+
+    if (bonusAwardedCount > 0) {
+      await markWisHallOfFameDirtySafely(year, semester);
+    }
+
+    return {
+      scannedResultCount: quizResultsSnap.size,
+      updatedResultCount: writes.length,
+      improvedAnswerCount,
+      bonusAwardedCount,
+      bonusAmount,
+      hallOfFameDirty: bonusAwardedCount > 0,
+    };
+  },
+);
+
 exports.ensureWisHallOfFame = onCall({ region: REGION }, async (request) => {
   assertAllowedWestoryUser(request);
   const forceRefresh = request.data?.force === true;

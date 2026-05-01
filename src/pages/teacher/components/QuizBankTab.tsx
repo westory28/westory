@@ -10,11 +10,13 @@ import {
   serverTimestamp,
   setDoc,
 } from "firebase/firestore";
-import { db } from "../../../lib/firebase";
+import { httpsCallable } from "firebase/functions";
+import { db, functions } from "../../../lib/firebase";
 import { useAuth } from "../../../contexts/AuthContext";
 import {
   getSemesterCollectionPath,
   getSemesterDocPath,
+  getYearSemester,
 } from "../../../lib/semesterScope";
 
 interface TreeUnit {
@@ -103,6 +105,13 @@ interface StudentRosterItem {
 interface StudentRosterResult {
   students: StudentRosterItem[];
   accessLimited: boolean;
+}
+
+interface QuestionCorrectionResult {
+  scannedResultCount?: number;
+  updatedResultCount?: number;
+  improvedAnswerCount?: number;
+  bonusAwardedCount?: number;
 }
 
 type QuestionType = "choice" | "ox" | "word" | "order";
@@ -1210,7 +1219,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     };
   }, [classComparisons]);
 
-  const weakestMidUnit = useMemo(() => {
+  const weakestSmallUnit = useMemo(() => {
     const map = new Map<
       string,
       {
@@ -1220,24 +1229,46 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         questions: number;
         attempts: number;
         correct: number;
+        question: Question | null;
+        questionRate: number | null;
+        questionAttempts: number;
       }
     >();
 
     filteredQuestions.forEach((q) => {
       const meta = getQuestionUnitMeta(q);
       const stat = getScopedQuestionStat(q);
-      const key = meta.midId || meta.bigId || "unknown";
+      const key = meta.smallId || meta.midId || meta.bigId || "unknown";
       const current = map.get(key) || {
         key,
-        title: meta.midTitle || meta.bigTitle,
-        path: meta.bigTitle,
+        title: meta.smallId ? meta.smallTitle : meta.focusTitle,
+        path: meta.smallId
+          ? `${meta.bigTitle} > ${meta.midTitle}`
+          : meta.bigTitle,
         questions: 0,
         attempts: 0,
         correct: 0,
+        question: null,
+        questionRate: null,
+        questionAttempts: 0,
       };
+      const questionRate = stat.attempts
+        ? Math.round((stat.correct / stat.attempts) * 100)
+        : null;
       current.questions += 1;
       current.attempts += stat.attempts;
       current.correct += stat.correct;
+      if (
+        stat.attempts > 0 &&
+        (current.questionRate === null ||
+          (questionRate ?? 101) < current.questionRate ||
+          ((questionRate ?? 101) === current.questionRate &&
+            stat.attempts > current.questionAttempts))
+      ) {
+        current.question = q;
+        current.questionRate = questionRate;
+        current.questionAttempts = stat.attempts;
+      }
       map.set(key, current);
     });
 
@@ -1425,10 +1456,10 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
 
   const scopeTitle = useMemo(() => {
     if (filters.mid) return getNodeTitle(filters.mid);
-    if (weakestMidUnit) return weakestMidUnit.title;
+    if (weakestSmallUnit) return weakestSmallUnit.title;
     if (filters.big) return getNodeTitle(filters.big);
     return "최근 응시 평가";
-  }, [filters.big, filters.mid, treeData, weakestMidUnit]);
+  }, [filters.big, filters.mid, treeData, weakestSmallUnit]);
 
   const actionSuggestions = useMemo(() => {
     const weak = filteredQuestions
@@ -1845,6 +1876,10 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       hintEnabled: editHintEnabled,
       hint: editHintEnabled ? editHintText.trim() : "",
     };
+    const originalSnapshot = buildOriginalEditSnapshot(editingQuestion);
+    const shouldRecalculateCorrections =
+      originalSnapshot.type !== payload.type ||
+      String(originalSnapshot.answer || "") !== String(payload.answer || "");
 
     setSavingEdit(true);
     try {
@@ -1861,6 +1896,43 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         { ...persistedPayload, updatedAt: serverTimestamp() },
         { merge: true },
       );
+      if (shouldRecalculateCorrections) {
+        try {
+          const { year, semester } = getYearSemester(config);
+          const recalculateCorrections = httpsCallable<
+            {
+              year: string;
+              semester: string;
+              questionDocId: string;
+              questionId: number;
+            },
+            QuestionCorrectionResult
+          >(functions, "recalculateQuizResultsAfterQuestionCorrection");
+          const correction = await recalculateCorrections({
+            year,
+            semester,
+            questionDocId: String(editingQuestion.docId),
+            questionId: Number(editingQuestion.id),
+          });
+          if (Number(correction.data?.updatedResultCount || 0) > 0) {
+            const statsResult = await loadQuestionAnalytics();
+            setQuestionStats(statsResult.questionStats);
+            setClassAverageByClass(statsResult.classAverageByClass);
+            setParticipationByClass(statsResult.participationByClass);
+            setTotalParticipants(statsResult.totalParticipants);
+            setRecentClassFocus(statsResult.recentClassFocus);
+            setLastAttemptAt(statsResult.lastAttemptAt);
+          }
+        } catch (correctionError) {
+          console.error(
+            "Failed to recalculate quiz results after answer correction",
+            correctionError,
+          );
+          alert(
+            "문제는 저장되었지만 기존 응시 결과와 위스 보너스를 자동 반영하지 못했습니다. 잠시 후 다시 저장해 주세요.",
+          );
+        }
+      }
       setQuestions((prev) =>
         prev.map((q) => (q.docId === editingQuestion.docId ? payload : q)),
       );
@@ -2068,15 +2140,23 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
           <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2 xl:grid-cols-4">
             {[
               {
-                label: "취약 중단원",
-                value: weakestMidUnit
-                  ? formatPercent(weakestMidUnit.rate)
+                label: "취약 소단원",
+                value: weakestSmallUnit
+                  ? formatPercent(weakestSmallUnit.rate)
                   : "-",
-                sub: weakestMidUnit
-                  ? `${weakestMidUnit.title} · ${weakestMidUnit.attempts}응시`
-                  : "분석할 중단원 없음",
+                sub: weakestSmallUnit
+                  ? weakestSmallUnit.question
+                    ? `${weakestSmallUnit.title} · 문항 ${
+                        questionDisplayCodes[weakestSmallUnit.question.docId] ||
+                        weakestSmallUnit.question.id
+                      } 수정`
+                    : `${weakestSmallUnit.title} · ${weakestSmallUnit.attempts}응시`
+                  : "분석할 소단원 없음",
                 icon: "fa-layer-group",
                 tone: "text-orange-700 bg-orange-50",
+                onClick: weakestSmallUnit?.question
+                  ? () => openEditModal(weakestSmallUnit.question as Question)
+                  : undefined,
               },
               {
                 label: "학급 간 격차",
@@ -2106,7 +2186,29 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                 tone: "text-slate-600 bg-slate-100",
               },
             ].map((item) => (
-              <div key={item.label} className="rounded-lg bg-slate-50 p-4">
+              <div
+                key={item.label}
+                className={`rounded-lg bg-slate-50 p-4 transition ${
+                  item.onClick && canEdit
+                    ? "cursor-pointer hover:bg-blue-50"
+                    : ""
+                }`}
+                role={item.onClick && canEdit ? "button" : undefined}
+                tabIndex={item.onClick && canEdit ? 0 : undefined}
+                onClick={item.onClick && canEdit ? item.onClick : undefined}
+                onKeyDown={(event) => {
+                  if (!item.onClick || !canEdit) return;
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    item.onClick();
+                  }
+                }}
+                title={
+                  item.onClick && canEdit
+                    ? "가장 취약한 문항 수정창 열기"
+                    : undefined
+                }
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="text-xs font-black text-slate-400">
