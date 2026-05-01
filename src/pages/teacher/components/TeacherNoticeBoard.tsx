@@ -133,11 +133,44 @@ const TeacherNoticeBoard: React.FC = () => {
 
   return (
     <div className="flex h-full min-h-[260px] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:min-h-0">
-      <div className="mb-3 flex items-center">
+      <div className="mb-3 flex items-center justify-between gap-3">
         <h3 className="flex items-center text-lg font-extrabold text-gray-900">
           <i className="fas fa-bullhorn mr-2 text-blue-600"></i>
           알림장
         </h3>
+        {showCarousel && (
+          <div className="ml-auto inline-flex shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+            <button
+              type="button"
+              onClick={() => move(-1)}
+              className="inline-flex h-9 w-9 items-center justify-center text-blue-700 transition hover:bg-blue-50"
+              aria-label="이전 알림"
+            >
+              <i className="fas fa-chevron-left text-xs"></i>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsPaused((prev) => !prev)}
+              className="inline-flex h-9 w-9 items-center justify-center border-x border-gray-200 text-blue-700 transition hover:bg-blue-50"
+              aria-label={
+                isPaused ? "알림 자동 넘김 재생" : "알림 자동 넘김 일시정지"
+              }
+              title={isPaused ? "재생" : "일시정지"}
+            >
+              <i
+                className={`fas ${isPaused ? "fa-play" : "fa-pause"} text-xs`}
+              ></i>
+            </button>
+            <button
+              type="button"
+              onClick={() => move(1)}
+              className="inline-flex h-9 w-9 items-center justify-center text-blue-700 transition hover:bg-blue-50"
+              aria-label="다음 알림"
+            >
+              <i className="fas fa-chevron-right text-xs"></i>
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="min-h-0 flex-1">
@@ -178,46 +211,7 @@ const TeacherNoticeBoard: React.FC = () => {
                   style={{ aspectRatio: activeImageRatio }}
                 />
               </button>
-              {showCarousel && (
-                <div className="absolute right-3 top-3 z-10 inline-flex overflow-hidden rounded-lg border border-white/70 bg-white/95 shadow-sm backdrop-blur">
-                  <button
-                    type="button"
-                    onClick={() => move(-1)}
-                    className="inline-flex h-8 w-8 items-center justify-center text-blue-700 transition hover:bg-blue-50"
-                    aria-label="이전 알림"
-                  >
-                    <i className="fas fa-chevron-left text-xs"></i>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsPaused((prev) => !prev)}
-                    className="inline-flex h-8 w-8 items-center justify-center border-x border-gray-200 text-blue-700 transition hover:bg-blue-50"
-                    aria-label={
-                      isPaused
-                        ? "알림 자동 넘김 재생"
-                        : "알림 자동 넘김 일시정지"
-                    }
-                    title={isPaused ? "재생" : "일시정지"}
-                  >
-                    <i
-                      className={`fas ${isPaused ? "fa-play" : "fa-pause"} text-xs`}
-                    ></i>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => move(1)}
-                    className="inline-flex h-8 w-8 items-center justify-center text-blue-700 transition hover:bg-blue-50"
-                    aria-label="다음 알림"
-                  >
-                    <i className="fas fa-chevron-right text-xs"></i>
-                  </button>
-                </div>
-              )}
-              <span
-                className={`absolute right-4 ${
-                  showCarousel ? "top-14" : "top-4"
-                } rounded-full bg-blue-600 px-3 py-1 text-xs font-extrabold text-white shadow-sm`}
-              >
+              <span className="absolute right-4 top-4 rounded-full bg-blue-600 px-3 py-1 text-xs font-extrabold text-white shadow-sm">
                 {getCategoryLabel(activeNotice.category)}
               </span>
             </div>
