@@ -202,14 +202,24 @@ const TeacherNoticeBoard: React.FC = () => {
                 className="group block h-full w-full text-left"
                 title="알림장 이미지 수정"
               >
-                <img
-                  src={activeNotice.imageUrl}
-                  alt="알림장"
-                  loading="lazy"
-                  decoding="async"
-                  className="h-full min-h-[180px] w-full object-contain transition group-hover:scale-[1.01]"
-                  style={{ aspectRatio: activeImageRatio }}
-                />
+                <div
+                  className="flex h-full min-h-[180px] w-full transition-transform duration-500 ease-out will-change-transform motion-reduce:transition-none"
+                  style={{
+                    aspectRatio: activeImageRatio,
+                    transform: `translateX(-${activeIndex * 100}%)`,
+                  }}
+                >
+                  {notices.map((notice) => (
+                    <img
+                      key={notice.id}
+                      src={notice.imageUrl}
+                      alt="알림장"
+                      loading="lazy"
+                      decoding="async"
+                      className="h-full min-h-[180px] w-full shrink-0 object-contain transition-transform duration-500 group-hover:scale-[1.01]"
+                    />
+                  ))}
+                </div>
               </button>
               <span className="absolute right-4 top-4 rounded-full bg-blue-600 px-3 py-1 text-xs font-extrabold text-white shadow-sm">
                 {getCategoryLabel(activeNotice.category)}
