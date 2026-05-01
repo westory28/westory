@@ -89,7 +89,7 @@ const NoticeBoard: React.FC = () => {
 
         {!loading && activeNotice && (
           <div className="flex h-full flex-col">
-            <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-blue-100 bg-slate-100">
+            <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl">
               <img
                 src={activeNotice.imageUrl}
                 alt="알림장"
@@ -98,7 +98,7 @@ const NoticeBoard: React.FC = () => {
                 className="h-full min-h-[180px] w-full object-contain"
                 style={{ aspectRatio: activeImageRatio }}
               />
-              <span className="absolute left-4 top-4 rounded-full bg-blue-600 px-3 py-1 text-xs font-extrabold text-white shadow-sm">
+              <span className="absolute right-4 top-4 rounded-full bg-blue-600 px-3 py-1 text-xs font-extrabold text-white shadow-sm">
                 {getCategoryLabel(activeNotice.category)}
               </span>
             </div>

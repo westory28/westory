@@ -13,8 +13,8 @@ export interface NoticeImageUploadResult {
   imageMimeType: string;
 }
 
-const MAX_NOTICE_IMAGE_WIDTH = 1280;
-const MAX_NOTICE_IMAGE_HEIGHT = 720;
+const MAX_NOTICE_IMAGE_WIDTH = 1200;
+const MAX_NOTICE_IMAGE_HEIGHT = 800;
 const TARGET_NOTICE_IMAGE_BYTES = 460 * 1024;
 const MAX_NOTICE_IMAGE_BYTES = 680 * 1024;
 const NOTICE_IMAGE_QUALITY_STEPS = [0.9, 0.84, 0.78, 0.72, 0.66, 0.6, 0.54, 0.48];

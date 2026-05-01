@@ -209,10 +209,10 @@ const NoticeModal: React.FC<NoticeModalProps> = ({
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:text-sm file:font-extrabold file:text-blue-700"
               />
               <p className="mt-2 text-xs font-semibold text-gray-500">
-                권장 크기: 1280 x 720px (16:9). 최소 960 x 540px 이상이면 선명하게 보입니다.
+                권장 크기: 1200 x 800px (3:2). 최소 900 x 600px 이상이면 선명하게 보입니다.
               </p>
               <p className="mt-1 text-xs font-semibold text-gray-500">
-                세로형이나 정사각형 이미지는 잘리지 않지만 좌우 여백이 생길 수 있습니다.
+                16:9, 세로형, 정사각형 이미지는 잘리지 않지만 위아래 또는 좌우 여백이 생길 수 있습니다.
               </p>
               <p className="mt-1 text-xs font-semibold text-gray-500">
                 업로드 시 WebP로 변환하고 선명도를 우선해 약 460KB 목표, 최대 680KB 이하로 압축합니다.
@@ -224,10 +224,10 @@ const NoticeModal: React.FC<NoticeModalProps> = ({
                 <img
                   src={previewUrl}
                   alt="알림장 미리보기"
-                  className="aspect-[16/9] w-full object-contain"
+                  className="aspect-[3/2] w-full object-contain"
                 />
               ) : (
-                <div className="flex aspect-[16/9] items-center justify-center text-sm font-bold text-gray-400">
+                <div className="flex aspect-[3/2] items-center justify-center text-sm font-bold text-gray-400">
                   이미지를 선택해 주세요.
                 </div>
               )}
