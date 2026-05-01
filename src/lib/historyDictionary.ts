@@ -24,7 +24,10 @@ const TERMS_COLLECTION = "history_dictionary_terms";
 const REQUESTS_COLLECTION = "history_dictionary_requests";
 
 export const normalizeHistoryDictionaryWord = (value: string) =>
-  String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
+  String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
 
 const mapDoc = <T extends { id: string }>(docSnap: {
   id: string;
@@ -59,7 +62,9 @@ export const subscribeStudentHistoryDictionaryWords = (
       limit(20),
     ),
     (snapshot) => {
-      onChange(snapshot.docs.map((item) => mapDoc<StudentHistoryDictionaryWord>(item)));
+      onChange(
+        snapshot.docs.map((item) => mapDoc<StudentHistoryDictionaryWord>(item)),
+      );
     },
   );
 
@@ -67,9 +72,15 @@ export const subscribeTeacherHistoryDictionaryRequests = (
   onChange: (requests: HistoryDictionaryRequest[]) => void,
 ): Unsubscribe =>
   onSnapshot(
-    query(collection(db, REQUESTS_COLLECTION), orderBy("updatedAt", "desc"), limit(100)),
+    query(
+      collection(db, REQUESTS_COLLECTION),
+      orderBy("updatedAt", "desc"),
+      limit(100),
+    ),
     (snapshot) => {
-      onChange(snapshot.docs.map((item) => mapDoc<HistoryDictionaryRequest>(item)));
+      onChange(
+        snapshot.docs.map((item) => mapDoc<HistoryDictionaryRequest>(item)),
+      );
     },
   );
 
@@ -77,9 +88,15 @@ export const subscribeTeacherHistoryDictionaryTerms = (
   onChange: (terms: HistoryDictionaryTerm[]) => void,
 ): Unsubscribe =>
   onSnapshot(
-    query(collection(db, TERMS_COLLECTION), orderBy("updatedAt", "desc"), limit(100)),
+    query(
+      collection(db, TERMS_COLLECTION),
+      orderBy("updatedAt", "desc"),
+      limit(100),
+    ),
     (snapshot) => {
-      onChange(snapshot.docs.map((item) => mapDoc<HistoryDictionaryTerm>(item)));
+      onChange(
+        snapshot.docs.map((item) => mapDoc<HistoryDictionaryTerm>(item)),
+      );
     },
   );
 
@@ -111,7 +128,10 @@ export const saveStudentHistoryDictionaryEntry = async (input: {
   word: string;
   definition: string;
 }) => {
-  const callable = httpsCallable(functions, "saveStudentHistoryDictionaryEntry");
+  const callable = httpsCallable(
+    functions,
+    "saveStudentHistoryDictionaryEntry",
+  );
   await callable({
     word: input.word,
     definition: input.definition,
@@ -125,6 +145,7 @@ export const saveHistoryDictionaryTerm = async (
     definition: string;
     studentLevel: string;
     relatedUnitId?: string;
+    tags?: string[];
   },
 ) => {
   const { year, semester } = getYearSemester(config);
@@ -136,6 +157,7 @@ export const saveHistoryDictionaryTerm = async (
     definition: input.definition,
     studentLevel: input.studentLevel,
     relatedUnitId: input.relatedUnitId || "",
+    tags: input.tags || [],
   });
 };
 
@@ -147,7 +169,10 @@ export const approveHistoryDictionaryTermForRequests = async (
   },
 ) => {
   const { year, semester } = getYearSemester(config);
-  const callable = httpsCallable(functions, "approveHistoryDictionaryTermForRequests");
+  const callable = httpsCallable(
+    functions,
+    "approveHistoryDictionaryTermForRequests",
+  );
   await callable({
     year,
     semester,

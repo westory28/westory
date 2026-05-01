@@ -43,6 +43,12 @@ const getTimestampMs = (value: unknown) => {
   return date?.getTime() || 0;
 };
 
+const normalizeTag = (value: string) =>
+  String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 24);
+
 const ManageHistoryDictionary: React.FC = () => {
   const { config } = useAuth();
   const { showToast } = useAppToast();
@@ -54,6 +60,8 @@ const ManageHistoryDictionary: React.FC = () => {
   const [definition, setDefinition] = useState("");
   const [studentLevel, setStudentLevel] = useState("중학생 수준");
   const [relatedUnitId, setRelatedUnitId] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState("");
   const [busyMessage, setBusyMessage] = useState("");
   const [requestSearch, setRequestSearch] = useState("");
   const [termSearch, setTermSearch] = useState("");
@@ -96,7 +104,8 @@ const ManageHistoryDictionary: React.FC = () => {
         return (
           item.word.toLowerCase().includes(keyword) ||
           (item.definition || "").toLowerCase().includes(keyword) ||
-          (item.studentLevel || "").toLowerCase().includes(keyword)
+          (item.studentLevel || "").toLowerCase().includes(keyword) ||
+          (item.tags || []).some((tag) => tag.toLowerCase().includes(keyword))
         );
       })
       .sort(
@@ -147,6 +156,8 @@ const ManageHistoryDictionary: React.FC = () => {
     setDefinition(term?.definition || "");
     setStudentLevel(term?.studentLevel || "중학생 수준");
     setRelatedUnitId(term?.relatedUnitId || "");
+    setTags(term?.tags || []);
+    setTagInput("");
   }, [selectedRequest?.id, terms]);
 
   useEffect(() => {
@@ -155,6 +166,8 @@ const ManageHistoryDictionary: React.FC = () => {
     setDefinition(selectedTerm.definition || "");
     setStudentLevel(selectedTerm.studentLevel || "중학생 수준");
     setRelatedUnitId(selectedTerm.relatedUnitId || "");
+    setTags(selectedTerm.tags || []);
+    setTagInput("");
   }, [selectedTerm]);
 
   const handleSelectRequest = (requestId: string) => {
@@ -174,6 +187,24 @@ const ManageHistoryDictionary: React.FC = () => {
     setDefinition("");
     setStudentLevel("중학생 수준");
     setRelatedUnitId("");
+    setTags([]);
+    setTagInput("");
+  };
+
+  const handleAddTag = () => {
+    const nextTag = normalizeTag(tagInput);
+    if (!nextTag) return;
+    setTags((prev) => {
+      if (prev.some((item) => item.toLowerCase() === nextTag.toLowerCase())) {
+        return prev;
+      }
+      return [...prev, nextTag].slice(0, 12);
+    });
+    setTagInput("");
+  };
+
+  const handleRemoveTag = (target: string) => {
+    setTags((prev) => prev.filter((item) => item !== target));
   };
 
   const handleSaveTerm = async () => {
@@ -187,6 +218,7 @@ const ManageHistoryDictionary: React.FC = () => {
         definition,
         studentLevel,
         relatedUnitId,
+        tags,
       });
       showToast({
         tone: "success",
@@ -235,25 +267,6 @@ const ManageHistoryDictionary: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-6 lg:px-6 xl:px-8">
       <div className="mx-auto max-w-7xl">
-        <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-extrabold tracking-tight text-slate-950">
-              역사 사전 관리
-            </h1>
-            <p className="mt-1 text-sm font-medium text-slate-500">
-              학생 요청을 확인하고 수업 맥락에 맞는 뜻풀이를 등록합니다.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <span className="rounded-full border border-blue-100 bg-white px-4 py-2 text-sm font-extrabold text-blue-700 shadow-sm">
-              대기 요청 {openRequests.length}건
-            </span>
-            <span className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-extrabold text-slate-600 shadow-sm">
-              등록 풀이 {terms.length}개
-            </span>
-          </div>
-        </header>
-
         <div className="grid gap-4 xl:grid-cols-[minmax(20rem,0.62fr)_minmax(21rem,0.72fr)_minmax(0,1.15fr)]">
           <aside className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between gap-3">
@@ -404,6 +417,23 @@ const ManageHistoryDictionary: React.FC = () => {
                       <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500">
                         {item.definition}
                       </p>
+                      {!!item.tags?.length && (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {item.tags.slice(0, 4).map((tag) => (
+                            <span
+                              key={`${item.id}-${tag}`}
+                              className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-500"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                          {item.tags.length > 4 && (
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-400">
+                              +{item.tags.length - 4}
+                            </span>
+                          )}
+                        </div>
+                      )}
                       <div className="mt-2 text-[11px] font-bold text-slate-400">
                         {timestampLabel(
                           item.updatedAt || item.publishedAt || item.createdAt,
@@ -558,19 +588,79 @@ const ManageHistoryDictionary: React.FC = () => {
                 </span>
               </label>
 
-              <label className="block">
-                <span className="text-sm font-extrabold text-slate-800">
-                  관련 단원 ID
-                </span>
+              <section>
+                <div className="mb-2 text-sm font-extrabold text-slate-800">
+                  관련 단원 / 태그
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {relatedUnitId && (
+                    <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600">
+                      {relatedUnitId}
+                      <button
+                        type="button"
+                        onClick={() => setRelatedUnitId("")}
+                        className="text-slate-400 transition hover:text-slate-700"
+                        aria-label={`${relatedUnitId} 태그 제거`}
+                      >
+                        <i className="fas fa-times text-[10px]"></i>
+                      </button>
+                    </span>
+                  )}
+                  {tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600"
+                    >
+                      {tag}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveTag(tag)}
+                        className="text-slate-400 transition hover:text-slate-700"
+                        aria-label={`${tag} 태그 제거`}
+                      >
+                        <i className="fas fa-times text-[10px]"></i>
+                      </button>
+                    </span>
+                  ))}
+                  {!relatedUnitId && !tags.length && (
+                    <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-400">
+                      태그 없음
+                    </span>
+                  )}
+                </div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_8.25rem]">
+                  <input
+                    type="text"
+                    value={tagInput}
+                    onChange={(event) => setTagInput(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter") return;
+                      event.preventDefault();
+                      handleAddTag();
+                    }}
+                    maxLength={24}
+                    className="h-11 w-full rounded-lg border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                    placeholder="태그 입력 후 Enter"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddTag}
+                    disabled={!normalizeTag(tagInput) || tags.length >= 12}
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-4 text-sm font-extrabold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+                  >
+                    <i className="fas fa-plus text-xs" aria-hidden="true"></i>
+                    태그 추가
+                  </button>
+                </div>
                 <input
                   type="text"
                   value={relatedUnitId}
                   onChange={(event) => setRelatedUnitId(event.target.value)}
                   maxLength={120}
                   className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-                  placeholder="선택 사항"
+                  placeholder="관련 단원 ID 또는 단원명"
                 />
-              </label>
+              </section>
 
               <section>
                 <div className="mb-2 text-sm font-extrabold text-slate-800">
@@ -592,6 +682,14 @@ const ManageHistoryDictionary: React.FC = () => {
                         : selectedTerm.status}
                     </span>
                   )}
+                  {tags.map((tag) => (
+                    <span
+                      key={`scope-${tag}`}
+                      className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600"
+                    >
+                      {tag}
+                    </span>
+                  ))}
                 </div>
               </section>
             </section>

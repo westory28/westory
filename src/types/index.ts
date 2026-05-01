@@ -247,6 +247,7 @@ export interface HistoryDictionaryTerm {
   definition: string;
   studentLevel: string;
   relatedUnitId: string;
+  tags?: string[];
   status: HistoryDictionaryTermStatus;
   createdBy: string;
   updatedBy: string;
@@ -289,6 +290,7 @@ export interface StudentHistoryDictionaryWord {
   normalizedWord: string;
   definition: string;
   studentLevel: string;
+  tags?: string[];
   status: StudentHistoryDictionaryWordStatus;
   requestId: string;
   createdAt?: any;

@@ -708,6 +708,23 @@ const sanitizeHistoryDictionaryWord = (value) =>
 const sanitizeHistoryDictionaryText = (value, maxLength) =>
   String(value || '').replace(/\s+/g, ' ').trim().slice(0, maxLength);
 
+const sanitizeHistoryDictionaryTags = (value) => {
+  const rawItems = Array.isArray(value)
+    ? value
+    : String(value || '').split(',');
+  const seen = new Set();
+  return rawItems
+    .map((item) => sanitizeHistoryDictionaryText(item, 24))
+    .filter(Boolean)
+    .filter((item) => {
+      const key = item.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 12);
+};
+
 const buildHistoryDictionaryHash = (value) =>
   crypto.createHash('sha1').update(String(value || '')).digest('hex');
 
@@ -4341,6 +4358,7 @@ exports.saveStudentHistoryDictionaryWord = onCall({ region: REGION }, async (req
       normalizedWord: normalizeHistoryDictionaryWord(term.normalizedWord || term.word),
       definition: sanitizeHistoryDictionaryText(term.definition, 1200),
       studentLevel: sanitizeHistoryDictionaryText(term.studentLevel, 80),
+      tags: sanitizeHistoryDictionaryTags(term.tags),
       status: 'saved',
       requestId: '',
       updatedAt: FieldValue.serverTimestamp(),
@@ -4436,6 +4454,7 @@ const resolveHistoryDictionaryRequestsWithTerm = async ({
         normalizedWord,
         definition: sanitizeHistoryDictionaryText(term.definition, 1200),
         studentLevel: sanitizeHistoryDictionaryText(term.studentLevel, 80),
+        tags: sanitizeHistoryDictionaryTags(term.tags),
         status: 'saved',
         requestId: docSnap.ref.id,
         updatedAt: FieldValue.serverTimestamp(),
@@ -4465,6 +4484,7 @@ exports.saveHistoryDictionaryTerm = onCall({ region: REGION }, async (request) =
   const definition = sanitizeHistoryDictionaryText(request.data?.definition, 1200);
   const studentLevel = sanitizeHistoryDictionaryText(request.data?.studentLevel || '중학생 수준', 80);
   const relatedUnitId = sanitizeHistoryDictionaryText(request.data?.relatedUnitId, 120);
+  const tags = sanitizeHistoryDictionaryTags(request.data?.tags);
 
   if (!word || !normalizedWord) {
     throw new HttpsError('invalid-argument', 'A word is required.');
@@ -4483,6 +4503,7 @@ exports.saveHistoryDictionaryTerm = onCall({ region: REGION }, async (request) =
       definition,
       studentLevel,
       relatedUnitId,
+      tags,
       status: 'published',
       createdBy: termSnap.exists ? (termSnap.data()?.createdBy || manager.uid) : manager.uid,
       updatedBy: manager.uid,
