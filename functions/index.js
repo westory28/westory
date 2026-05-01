@@ -1766,19 +1766,20 @@ const shouldCountTowardsEarnedTotal = (pointTransaction = {}) => {
   return true;
 };
 
-const buildQuizResetWalletSnapshot = ({ uid, profile, transactionDocs, rankPolicy }) => {
-  const sortedDocs = sortPointTransactionDocsDesc(transactionDocs);
-  const balance = transactionDocs.reduce(
+const calculatePointWalletTotals = (transactionDocs) => {
+  const safeTransactionDocs = Array.isArray(transactionDocs) ? transactionDocs : [];
+  const sortedDocs = sortPointTransactionDocsDesc(safeTransactionDocs);
+  const balance = safeTransactionDocs.reduce(
     (total, docSnap) => total + Number(docSnap.data()?.delta || 0),
     0,
   );
-  const earnedTotal = transactionDocs.reduce((total, docSnap) => {
+  const earnedTotal = safeTransactionDocs.reduce((total, docSnap) => {
     const pointTransaction = docSnap.data() || {};
     return shouldCountTowardsEarnedTotal(pointTransaction)
       ? total + Number(pointTransaction.delta || 0)
       : total;
   }, 0);
-  const spentTotal = transactionDocs.reduce((total, docSnap) => {
+  const spentTotal = safeTransactionDocs.reduce((total, docSnap) => {
     const pointTransaction = docSnap.data() || {};
     const type = String(pointTransaction.type || '').trim();
     if (type !== 'purchase_hold' && type !== 'purchase_cancel') {
@@ -1786,7 +1787,7 @@ const buildQuizResetWalletSnapshot = ({ uid, profile, transactionDocs, rankPolic
     }
     return total - Number(pointTransaction.delta || 0);
   }, 0);
-  const adjustedTotal = transactionDocs.reduce((total, docSnap) => {
+  const adjustedTotal = safeTransactionDocs.reduce((total, docSnap) => {
     const pointTransaction = docSnap.data() || {};
     const type = String(pointTransaction.type || '').trim();
     if (type !== 'manual_adjust' && type !== 'manual_reclaim') {
@@ -1794,16 +1795,146 @@ const buildQuizResetWalletSnapshot = ({ uid, profile, transactionDocs, rankPolic
     }
     return total + Number(pointTransaction.delta || 0);
   }, 0);
-  const latestCreatedAt = sortedDocs[0]?.data()?.createdAt || null;
+
+  return {
+    balance,
+    earnedTotal,
+    spentTotal: Math.max(0, spentTotal),
+    adjustedTotal,
+    lastTransactionAt: sortedDocs[0]?.data()?.createdAt || null,
+  };
+};
+
+const buildQuizResetWalletSnapshot = ({ uid, profile, transactionDocs, rankPolicy }) => {
+  const totals = calculatePointWalletTotals(transactionDocs);
 
   return {
     ...buildWalletBase(uid, profile),
-    balance,
-    earnedTotal,
-    ...buildWalletRankState(earnedTotal, rankPolicy),
-    spentTotal: Math.max(0, spentTotal),
-    adjustedTotal,
-    lastTransactionAt: latestCreatedAt,
+    balance: totals.balance,
+    earnedTotal: totals.earnedTotal,
+    ...buildWalletRankState(totals.earnedTotal, rankPolicy),
+    spentTotal: totals.spentTotal,
+    adjustedTotal: totals.adjustedTotal,
+    lastTransactionAt: totals.lastTransactionAt,
+  };
+};
+
+const walletRankFieldsNeedRebuild = (wallet, rankEarnedTotal, rankPolicy) => {
+  const safeRankEarnedTotal = Math.max(0, Number(rankEarnedTotal || 0));
+  const nextRankSnapshot = buildRankSnapshot(safeRankEarnedTotal, rankPolicy);
+  const currentRankSnapshot = wallet?.rankSnapshot || {};
+  return Number(wallet?.earnedTotal) !== safeRankEarnedTotal
+    || Number(wallet?.rankEarnedTotal) !== safeRankEarnedTotal
+    || String(currentRankSnapshot.tierCode || '') !== String(nextRankSnapshot.tierCode || '')
+    || Number(currentRankSnapshot.metricValue) !== safeRankEarnedTotal
+    || String(currentRankSnapshot.basedOn || '') !== String(nextRankSnapshot.basedOn || '');
+};
+
+const commitPointWalletBackfillWrites = async (writes) => {
+  for (let index = 0; index < writes.length; index += 400) {
+    const batch = db.batch();
+    writes.slice(index, index + 400).forEach(({ ref, payload }) => {
+      batch.set(ref, payload, { merge: true });
+    });
+    await batch.commit();
+  }
+};
+
+const buildPointWalletRankBackfillPlan = async ({ year, semester, rankPolicy }) => {
+  const [walletSnapshot, transactionSnapshot] = await Promise.all([
+    db.collection(getPointCollectionPath(year, semester, 'point_wallets')).get(),
+    db.collection(getPointCollectionPath(year, semester, 'point_transactions')).get(),
+  ]);
+  const walletsByUid = new Map();
+  const transactionDocsByUid = new Map();
+  const uidSet = new Set();
+
+  walletSnapshot.docs.forEach((docSnap) => {
+    const wallet = docSnap.data() || {};
+    const uid = String(wallet.uid || docSnap.id || '').trim();
+    if (!uid) return;
+    walletsByUid.set(uid, { ref: docSnap.ref, wallet });
+    uidSet.add(uid);
+  });
+
+  transactionSnapshot.docs.forEach((docSnap) => {
+    const transaction = docSnap.data() || {};
+    const uid = String(transaction.uid || '').trim();
+    if (!uid) return;
+    if (!transactionDocsByUid.has(uid)) {
+      transactionDocsByUid.set(uid, []);
+    }
+    transactionDocsByUid.get(uid).push(docSnap);
+    uidSet.add(uid);
+  });
+
+  const writes = [];
+  let skippedMissingProfileCount = 0;
+
+  for (const uid of uidSet) {
+    const transactionDocs = transactionDocsByUid.get(uid) || [];
+    const totals = calculatePointWalletTotals(transactionDocs);
+    const existingWallet = walletsByUid.get(uid);
+    const rankEarnedTotal = Math.max(0, Number(
+      transactionDocs.length > 0
+        ? totals.earnedTotal
+        : existingWallet?.wallet?.rankEarnedTotal ?? existingWallet?.wallet?.earnedTotal ?? 0,
+    ));
+
+    if (existingWallet) {
+      if (!walletRankFieldsNeedRebuild(existingWallet.wallet, rankEarnedTotal, rankPolicy)) {
+        continue;
+      }
+      writes.push({
+        ref: existingWallet.ref,
+        payload: {
+          earnedTotal: rankEarnedTotal,
+          ...buildWalletRankState(rankEarnedTotal, rankPolicy),
+        },
+        create: false,
+      });
+      continue;
+    }
+
+    if (!transactionDocs.length) {
+      continue;
+    }
+
+    let profile = {};
+    try {
+      ({ profile } = await ensureStudentProfile(uid));
+    } catch (error) {
+      skippedMissingProfileCount += 1;
+      console.warn('Skipping point wallet rank backfill for uid without profile.', {
+        uid,
+        errorMessage: String(error?.message || 'profile-missing'),
+      });
+      continue;
+    }
+
+    writes.push({
+      ref: db.doc(getPointWalletPath(year, semester, uid)),
+      payload: {
+        ...buildWalletBase(uid, profile),
+        balance: totals.balance,
+        earnedTotal: rankEarnedTotal,
+        ...buildWalletRankState(rankEarnedTotal, rankPolicy),
+        spentTotal: totals.spentTotal,
+        adjustedTotal: totals.adjustedTotal,
+        lastTransactionAt: totals.lastTransactionAt,
+      },
+      create: true,
+    });
+  }
+
+  return {
+    writes,
+    scannedWalletCount: walletSnapshot.size,
+    scannedTransactionCount: transactionSnapshot.size,
+    processedUidCount: uidSet.size,
+    skippedMissingProfileCount,
+    createdWalletCount: writes.filter((write) => write.create).length,
+    updatedWalletCount: writes.filter((write) => !write.create).length,
   };
 };
 
@@ -2973,6 +3104,42 @@ exports.refreshWisHallOfFameOnSchedule = onSchedule(
     }
   },
 );
+
+exports.rebuildPointWalletRankTotals = onCall({ region: REGION, timeoutSeconds: 540, memory: '1GiB' }, async (request) => {
+  const manager = await assertPointManager(request);
+  const { year, semester } = assertYearSemester(request.data);
+  const dryRun = request.data?.dryRun === true;
+  const policySnap = await db.doc(getPointPolicyPath(year, semester)).get();
+  const policy = policySnap.exists
+    ? normalizePointPolicy(policySnap.data() || {})
+    : getDefaultPointPolicy();
+  const plan = await buildPointWalletRankBackfillPlan({
+    year,
+    semester,
+    rankPolicy: policy.rankPolicy,
+  });
+  const changedWalletCount = plan.writes.length;
+
+  if (!dryRun && changedWalletCount > 0) {
+    await commitPointWalletBackfillWrites(plan.writes);
+    await markWisHallOfFameDirtySafely(year, semester);
+  }
+
+  return {
+    year,
+    semester,
+    dryRun,
+    scannedWalletCount: plan.scannedWalletCount,
+    scannedTransactionCount: plan.scannedTransactionCount,
+    processedUidCount: plan.processedUidCount,
+    updatedWalletCount: plan.updatedWalletCount,
+    createdWalletCount: plan.createdWalletCount,
+    changedWalletCount,
+    skippedMissingProfileCount: plan.skippedMissingProfileCount,
+    hallOfFameDirty: !dryRun && changedWalletCount > 0,
+    actorUid: manager.uid,
+  };
+});
 
 exports.applyPointActivityReward = onCall({ region: REGION }, async (request) => {
   const { uid } = assertAllowedWestoryUser(request);

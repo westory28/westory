@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     addDoc,
     collection,
@@ -41,6 +41,7 @@ const ThinkCloud: React.FC = () => {
     const { config, currentUser, userData } = useAuth();
     const { showToast } = useAppToast();
     const [activeSessionId, setActiveSessionId] = useState('');
+    const activeSessionIdRef = useRef('');
     const [sessions, setSessions] = useState<SessionWithId[]>([]);
     const [selectedSessionId, setSelectedSessionId] = useState('');
     const [responses, setResponses] = useState<Array<ThinkCloudResponse & { id: string }>>([]);
@@ -58,26 +59,37 @@ const ThinkCloud: React.FC = () => {
     const options: ThinkCloudOptions = selectedSession?.options || DEFAULT_THINK_CLOUD_OPTIONS;
     const studentGrade = normalizeSchoolField(userData?.grade);
     const studentClass = normalizeSchoolField(userData?.class);
+    const stateDocPath = useMemo(() => buildThinkCloudStateDocPath(config), [config]);
+    const sessionCollectionPath = useMemo(() => buildThinkCloudSessionCollectionPath(config), [config]);
+    const responseSessionId = selectedSession?.id || '';
+    const responsesCollectionPath = useMemo(
+        () => responseSessionId ? buildThinkCloudResponsesCollectionPath(config, responseSessionId) : '',
+        [config, responseSessionId],
+    );
 
     useEffect(() => {
-        const stateRef = doc(db, buildThinkCloudStateDocPath(config));
+        const stateRef = doc(db, stateDocPath);
         const unsubscribe = onSnapshot(stateRef, (snap) => {
             if (!snap.exists()) {
+                activeSessionIdRef.current = '';
                 setActiveSessionId('');
                 return;
             }
-            setActiveSessionId(String(snap.data().activeSessionId || '').trim());
+            const nextActiveSessionId = String(snap.data().activeSessionId || '').trim();
+            activeSessionIdRef.current = nextActiveSessionId;
+            setActiveSessionId(nextActiveSessionId);
         });
         return () => unsubscribe();
-    }, [config]);
+    }, [stateDocPath]);
 
     useEffect(() => {
         if (!studentGrade || !studentClass) {
             setSessions([]);
+            setSelectedSessionId('');
             return;
         }
 
-        const sessionsRef = collection(db, buildThinkCloudSessionCollectionPath(config));
+        const sessionsRef = collection(db, sessionCollectionPath);
         const q = query(
             sessionsRef,
             where('targetGrade', '==', studentGrade),
@@ -99,25 +111,28 @@ const ThinkCloud: React.FC = () => {
                 return tb - ta;
             });
             setSessions(loaded);
-            if (!selectedSessionId && loaded.length > 0) {
-                const defaultId = loaded.find((item) => item.id === activeSessionId)?.id || loaded[0].id;
-                setSelectedSessionId(defaultId);
-            }
-            if (selectedSessionId && !loaded.some((item) => item.id === selectedSessionId)) {
-                setSelectedSessionId(loaded.length > 0 ? loaded[0].id : '');
-            }
+            setSelectedSessionId((currentSelectedSessionId) => {
+                if (currentSelectedSessionId && loaded.some((item) => item.id === currentSelectedSessionId)) {
+                    return currentSelectedSessionId;
+                }
+                if (loaded.length === 0) {
+                    return '';
+                }
+                const defaultId = loaded.find((item) => item.id === activeSessionIdRef.current)?.id || loaded[0].id;
+                return defaultId;
+            });
         });
 
         return () => unsubscribe();
-    }, [activeSessionId, config, selectedSessionId, studentClass, studentGrade]);
+    }, [sessionCollectionPath, studentClass, studentGrade]);
 
     useEffect(() => {
-        if (!selectedSessionId) {
+        if (!responsesCollectionPath) {
             setResponses([]);
             return;
         }
 
-        const responsesRef = collection(db, buildThinkCloudResponsesCollectionPath(config, selectedSessionId));
+        const responsesRef = collection(db, responsesCollectionPath);
         const unsubscribe = onSnapshot(responsesRef, (snap) => {
             const loaded = snap.docs.map((item) => ({
                 id: item.id,
@@ -132,7 +147,7 @@ const ThinkCloud: React.FC = () => {
         });
 
         return () => unsubscribe();
-    }, [config, selectedSessionId]);
+    }, [responsesCollectionPath]);
 
     const cloudEntries = useMemo(() => {
         const buckets = new Map<string, { count: number; submitters: Set<string> }>();

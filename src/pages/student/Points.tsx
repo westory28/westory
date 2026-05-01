@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAppToast } from '../../components/common/AppToastProvider';
 import { InlineLoading } from '../../components/common/LoadingState';
@@ -41,6 +41,8 @@ import StudentPointSummaryTab from './components/points/StudentPointSummaryTab';
 type StudentPointTab = keyof typeof STUDENT_POINT_TAB_LABELS;
 type HistoryFilter = keyof typeof POINT_HISTORY_FILTER_LABELS;
 type OrderFilter = 'all' | PointOrderStatus;
+type DeferredLoadOptions = { force?: boolean };
+type CoreLoadOptions = { showLoading?: boolean; setRecentTransactions?: boolean };
 
 const DEFAULT_WALLET: PointWallet = {
     uid: '',
@@ -89,6 +91,15 @@ const Points: React.FC = () => {
     const [rankManualAdjustPoints, setRankManualAdjustPoints] = useState(0);
     const [loading, setLoading] = useState(true);
     const [errorMessage, setErrorMessage] = useState('');
+    const [historyLoading, setHistoryLoading] = useState(false);
+    const [ordersLoading, setOrdersLoading] = useState(false);
+    const [shopLoading, setShopLoading] = useState(false);
+    const [historyLoaded, setHistoryLoaded] = useState(false);
+    const [ordersLoaded, setOrdersLoaded] = useState(false);
+    const [shopLoaded, setShopLoaded] = useState(false);
+    const [historyErrorMessage, setHistoryErrorMessage] = useState('');
+    const [ordersErrorMessage, setOrdersErrorMessage] = useState('');
+    const [shopErrorMessage, setShopErrorMessage] = useState('');
     const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('all');
     const [orderFilter, setOrderFilter] = useState<OrderFilter>('all');
     const [selectedProductId, setSelectedProductId] = useState('');
@@ -97,6 +108,9 @@ const Points: React.FC = () => {
     const [purchaseFeedback, setPurchaseFeedback] = useState('');
     const [purchaseRequestKey, setPurchaseRequestKey] = useState('');
     const { showToast } = useAppToast();
+    const historyLoadInFlightRef = useRef(false);
+    const ordersLoadInFlightRef = useRef(false);
+    const shopLoadInFlightRef = useRef(false);
 
     const uid = currentUser?.uid || userData?.uid || '';
 
@@ -110,11 +124,9 @@ const Points: React.FC = () => {
     }, [searchParams]);
 
     const loadCorePointData = async () => {
-        const [loadedWallet, loadedTransactions, loadedProducts, loadedOrders, loadedPolicy] = await Promise.all([
+        const [loadedWallet, loadedRecentTransactions, loadedPolicy] = await Promise.all([
             getPointWalletByUid(config, uid),
-            listPointTransactionsByUid(config, uid, 100),
-            listPointProducts(config, true),
-            listPointOrders(config, { uid, limitCount: 100 }),
+            listPointTransactionsByUid(config, uid, 5),
             getPointPolicy(config),
         ]);
         const loadedRankManualAdjustPoints = loadedWallet && needsPointRankLegacyFallback(loadedWallet)
@@ -123,9 +135,7 @@ const Points: React.FC = () => {
 
         return {
             loadedWallet,
-            loadedTransactions,
-            loadedProducts,
-            loadedOrders,
+            loadedRecentTransactions,
             loadedPolicy,
             loadedRankManualAdjustPoints,
         };
@@ -145,24 +155,22 @@ const Points: React.FC = () => {
         }
     };
 
-    const loadPointData = async () => {
+    const loadPointData = async ({ showLoading = true, setRecentTransactions = true }: CoreLoadOptions = {}) => {
         if (!uid) return;
 
-        setLoading(true);
+        if (showLoading) setLoading(true);
         setErrorMessage('');
         try {
             const {
                 loadedWallet,
-                loadedTransactions,
-                loadedProducts,
-                loadedOrders,
+                loadedRecentTransactions,
                 loadedPolicy,
                 loadedRankManualAdjustPoints,
             } = await loadCorePointData();
             setWallet(loadedWallet);
-            setTransactions(loadedTransactions);
-            setProducts(loadedProducts);
-            setOrders(loadedOrders);
+            if (setRecentTransactions) {
+                setTransactions(loadedRecentTransactions);
+            }
             setPolicy(loadedPolicy);
             setRankManualAdjustPoints(loadedRankManualAdjustPoints);
             void loadHallOfFameData();
@@ -170,21 +178,117 @@ const Points: React.FC = () => {
             console.error('Failed to load student point data:', error);
             setErrorMessage('위스 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
         } finally {
-            setLoading(false);
+            if (showLoading) setLoading(false);
         }
     };
 
+    const loadHistoryData = async ({ force = false }: DeferredLoadOptions = {}) => {
+        if (!uid || (!force && historyLoaded) || historyLoadInFlightRef.current) return;
+
+        historyLoadInFlightRef.current = true;
+        setHistoryLoading(true);
+        setHistoryErrorMessage('');
+        try {
+            const loadedTransactions = await listPointTransactionsByUid(config, uid, 100);
+            setTransactions(loadedTransactions);
+            setHistoryLoaded(true);
+        } catch (error) {
+            console.error('Failed to load student point history:', error);
+            setHistoryErrorMessage('포인트 내역을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
+        } finally {
+            historyLoadInFlightRef.current = false;
+            setHistoryLoading(false);
+        }
+    };
+
+    const loadOrdersData = async ({ force = false }: DeferredLoadOptions = {}) => {
+        if (!uid || (!force && ordersLoaded) || ordersLoadInFlightRef.current) return;
+
+        ordersLoadInFlightRef.current = true;
+        setOrdersLoading(true);
+        setOrdersErrorMessage('');
+        try {
+            const loadedOrders = await listPointOrders(config, { uid, limitCount: 100 });
+            setOrders(loadedOrders);
+            setOrdersLoaded(true);
+        } catch (error) {
+            console.error('Failed to load student point orders:', error);
+            setOrdersErrorMessage('구매 내역을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
+        } finally {
+            ordersLoadInFlightRef.current = false;
+            setOrdersLoading(false);
+        }
+    };
+
+    const loadShopData = async ({ force = false }: DeferredLoadOptions = {}) => {
+        if (!uid || (!force && shopLoaded) || shopLoadInFlightRef.current) return;
+
+        shopLoadInFlightRef.current = true;
+        setShopLoading(true);
+        setShopErrorMessage('');
+        try {
+            const loadedProducts = await listPointProducts(config, true);
+            setProducts(loadedProducts);
+            setShopLoaded(true);
+        } catch (error) {
+            console.error('Failed to load student point products:', error);
+            setShopErrorMessage('상품 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
+        } finally {
+            shopLoadInFlightRef.current = false;
+            setShopLoading(false);
+        }
+    };
+
+    const refreshLoadedPointData = async () => {
+        await loadPointData({ showLoading: false, setRecentTransactions: !historyLoaded });
+        await Promise.all([
+            historyLoaded ? loadHistoryData({ force: true }) : Promise.resolve(),
+            ordersLoaded ? loadOrdersData({ force: true }) : Promise.resolve(),
+            shopLoaded ? loadShopData({ force: true }) : Promise.resolve(),
+        ]);
+    };
+
+    useEffect(() => {
+        setTransactions([]);
+        setProducts([]);
+        setOrders([]);
+        setHistoryLoaded(false);
+        setOrdersLoaded(false);
+        setShopLoaded(false);
+        setHistoryErrorMessage('');
+        setOrdersErrorMessage('');
+        setShopErrorMessage('');
+        setSelectedProductId('');
+        setPurchaseMemo('');
+        setPurchaseFeedback('');
+        setPurchaseRequestKey('');
+
+        if (!uid) {
+            setWallet(null);
+            setHallOfFame(null);
+            setLoading(false);
+            return;
+        }
+        void loadPointData({ setRecentTransactions: true });
+    }, [config, uid]);
+
     useEffect(() => {
         if (!uid) return;
-        void loadPointData();
-    }, [config, uid]);
+        if (activeTab === 'history') {
+            void loadHistoryData();
+        } else if (activeTab === 'orders') {
+            void loadOrdersData();
+        } else if (activeTab === 'shop') {
+            void loadShopData();
+        }
+    }, [activeTab, config, uid, historyLoaded, ordersLoaded, shopLoaded]);
 
     useEffect(() => {
         if (!uid) return undefined;
         return subscribePointsUpdated(() => {
-            void loadPointData();
+            void refreshLoadedPointData();
         });
-    }, [config, uid]);
+    }, [config, uid, historyLoaded, ordersLoaded, shopLoaded]);
 
     const safeWallet = wallet || DEFAULT_WALLET;
     const legacyUserData = (userData || null) as Record<string, unknown> | null;
@@ -249,7 +353,12 @@ const Points: React.FC = () => {
                 memo: purchaseMemo,
                 requestKey,
             });
-            await loadPointData();
+            await Promise.all([
+                loadPointData({ showLoading: false, setRecentTransactions: !historyLoaded }),
+                loadOrdersData({ force: true }),
+                shopLoaded ? loadShopData({ force: true }) : Promise.resolve(),
+                historyLoaded ? loadHistoryData({ force: true }) : Promise.resolve(),
+            ]);
             setPurchaseMemo('');
             setSelectedProductId('');
             setPurchaseRequestKey('');
@@ -290,6 +399,23 @@ const Points: React.FC = () => {
     };
 
     const isHallOfFameTab = activeTab === 'hall-of-fame';
+    const activeTabLoading = (
+        (activeTab === 'history' && historyLoading)
+        || (activeTab === 'orders' && ordersLoading)
+        || (activeTab === 'shop' && shopLoading)
+    );
+    const activeTabErrorMessage = (
+        activeTab === 'history' ? historyErrorMessage
+            : activeTab === 'orders' ? ordersErrorMessage
+                : activeTab === 'shop' ? shopErrorMessage
+                    : ''
+    );
+    const activeTabLoadingMessage = (
+        activeTab === 'history' ? '포인트 내역을 불러오는 중입니다.'
+            : activeTab === 'orders' ? '구매 내역을 불러오는 중입니다.'
+                : activeTab === 'shop' ? '상품 목록을 불러오는 중입니다.'
+                    : ''
+    );
 
     return (
         <div className="flex min-h-screen flex-col bg-gray-50">
@@ -342,7 +468,17 @@ const Points: React.FC = () => {
                         </div>
                     )}
 
-                    {!loading && !errorMessage && activeTab === 'overview' && (
+                    {!loading && !errorMessage && activeTabLoading && (
+                        <InlineLoading message={activeTabLoadingMessage} showWarning />
+                    )}
+
+                    {!loading && !errorMessage && !activeTabLoading && !!activeTabErrorMessage && (
+                        <div className="rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-bold text-red-700">
+                            {activeTabErrorMessage}
+                        </div>
+                    )}
+
+                    {!loading && !errorMessage && !activeTabLoading && !activeTabErrorMessage && activeTab === 'overview' && (
                         <StudentPointSummaryTab
                             wallet={safeWallet}
                             rank={rank}
@@ -351,7 +487,7 @@ const Points: React.FC = () => {
                         />
                     )}
 
-                    {!loading && !errorMessage && activeTab === 'hall-of-fame' && (
+                    {!loading && !errorMessage && !activeTabLoading && !activeTabErrorMessage && activeTab === 'hall-of-fame' && (
                         <StudentPointHallOfFameTab
                             snapshot={hallOfFame}
                             hallOfFameConfig={interfaceConfig?.hallOfFame}
@@ -360,7 +496,7 @@ const Points: React.FC = () => {
                         />
                     )}
 
-                    {!loading && !errorMessage && activeTab === 'history' && (
+                    {!loading && !errorMessage && !activeTabLoading && !activeTabErrorMessage && activeTab === 'history' && (
                         <StudentPointHistoryTab
                             historyFilter={historyFilter}
                             transactions={filteredTransactions}
@@ -368,7 +504,7 @@ const Points: React.FC = () => {
                         />
                     )}
 
-                    {!loading && !errorMessage && activeTab === 'shop' && (
+                    {!loading && !errorMessage && !activeTabLoading && !activeTabErrorMessage && activeTab === 'shop' && (
                         <StudentPointShopTab
                             wallet={safeWallet}
                             products={products}
@@ -388,7 +524,7 @@ const Points: React.FC = () => {
                         />
                     )}
 
-                    {!loading && !errorMessage && activeTab === 'orders' && (
+                    {!loading && !errorMessage && !activeTabLoading && !activeTabErrorMessage && activeTab === 'orders' && (
                         <StudentPointOrdersTab
                             orderFilter={orderFilter}
                             orders={filteredOrders}

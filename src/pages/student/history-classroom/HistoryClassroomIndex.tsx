@@ -123,6 +123,11 @@ const compareResultCreatedAt = (
   (getHistoryClassroomTimestampMs(right.createdAt) || 0) -
   (getHistoryClassroomTimestampMs(left.createdAt) || 0);
 
+const chunk = <T,>(items: T[], size: number) =>
+  Array.from({ length: Math.ceil(items.length / size) }, (_, index) =>
+    items.slice(index * size, index * size + size),
+  );
+
 const getResultLabel = (status: HistoryClassroomResult["status"]) => {
   if (status === "passed") return "통과";
   if (status === "failed") return "미통과";
@@ -245,24 +250,45 @@ const HistoryClassroomIndex: React.FC = () => {
         }
         setAssignments(loadedAssignments);
 
-        const resultPath = getSemesterCollectionPath(
-          config,
-          "history_classroom_results",
+        const assignmentIds = loadedAssignments.map((item) => item.id);
+        const readResultDocs = async (path: string) => {
+          if (!assignmentIds.length) return [];
+          try {
+            const snapshots = await Promise.all(
+              chunk(assignmentIds, 10).map((ids) =>
+                getDocs(
+                  query(
+                    collection(db, path),
+                    where("uid", "==", userData.uid),
+                    where("assignmentId", "in", ids),
+                  ),
+                ),
+              ),
+            );
+            return snapshots.flatMap((snapshot) => snapshot.docs);
+          } catch (error) {
+            console.warn(
+              "Falling back to broad history classroom result query:",
+              error,
+            );
+            const snapshot = await getDocs(
+              query(collection(db, path), where("uid", "==", userData.uid)),
+            );
+            return snapshot.docs.filter((docSnap) =>
+              assignmentIds.includes(String(docSnap.data().assignmentId || "")),
+            );
+          }
+        };
+
+        let resultDocs = await readResultDocs(
+          getSemesterCollectionPath(config, "history_classroom_results"),
         );
-        let resultSnap = await getDocs(
-          query(collection(db, resultPath), where("uid", "==", userData.uid)),
-        );
-        if (resultSnap.empty) {
-          resultSnap = await getDocs(
-            query(
-              collection(db, "history_classroom_results"),
-              where("uid", "==", userData.uid),
-            ),
-          );
+        if (!resultDocs.length) {
+          resultDocs = await readResultDocs("history_classroom_results");
         }
 
         const grouped: Record<string, HistoryClassroomResult[]> = {};
-        resultSnap.docs.forEach((docSnap) => {
+        resultDocs.forEach((docSnap) => {
           const item = normalizeHistoryClassroomResult(
             docSnap.id,
             docSnap.data(),

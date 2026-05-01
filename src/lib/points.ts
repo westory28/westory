@@ -131,6 +131,26 @@ interface UpdateStudentProfileIconInput {
     emojiId: string;
 }
 
+interface RebuildPointWalletRankTotalsInput {
+    config: ConfigLike;
+    dryRun?: boolean;
+}
+
+export interface RebuildPointWalletRankTotalsResult {
+    year: string;
+    semester: string;
+    dryRun: boolean;
+    scannedWalletCount: number;
+    scannedTransactionCount: number;
+    processedUidCount: number;
+    updatedWalletCount: number;
+    createdWalletCount: number;
+    changedWalletCount: number;
+    skippedMissingProfileCount: number;
+    hallOfFameDirty: boolean;
+    actorUid: string;
+}
+
 interface SchoolOption {
     value: string;
     label: string;
@@ -1024,6 +1044,17 @@ export const updateStudentProfileIcon = async ({ config, emojiId }: UpdateStuden
         emojiId: string;
         profileIcon: string;
     };
+};
+
+export const rebuildPointWalletRankTotals = async ({ config, dryRun = false }: RebuildPointWalletRankTotalsInput) => {
+    const { year, semester } = getYearSemester(config);
+    const callable = httpsCallable(functions, 'rebuildPointWalletRankTotals');
+    const result = await callable({
+        year,
+        semester,
+        dryRun,
+    });
+    return result.data as RebuildPointWalletRankTotalsResult;
 };
 
 // Student trusted-callable wrappers
