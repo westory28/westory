@@ -512,7 +512,7 @@ const StudentHistoryDictionaryController: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setWarningAccepted(true)}
-                className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 text-sm font-extrabold transition ${
+                className={`inline-flex min-h-11 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 text-xs font-extrabold transition sm:px-4 sm:text-sm ${
                   warningAccepted
                     ? "bg-emerald-50 text-emerald-700"
                     : "border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100"

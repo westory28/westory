@@ -222,8 +222,8 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     defaultEnabled: true,
     defaultPriority: "normal",
     titleTemplate: "역사 사전 요청",
-    bodyTemplate: '{studentName} 학생이 "{word}" 뜻풀이를 요청했습니다.',
-    targetUrl: "/teacher/lesson/history-dictionary",
+    bodyTemplate: "{studentName} 학생이 {word} 뜻풀이를 요청했습니다.",
+    targetUrl: "/teacher/lesson/history-dictionary?panel=requests",
     targetLabel: "교사 역사 사전 관리 화면",
     tokens: [
       { key: "studentName", label: "학생 이름" },

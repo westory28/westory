@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import {
   clearNotifications,
@@ -7,7 +6,10 @@ import {
   markNotificationsRead,
   subscribeNotificationInbox,
 } from "../../lib/notifications";
-import type { WestoryNotification, WestoryNotificationInbox } from "../../types";
+import type {
+  WestoryNotification,
+  WestoryNotificationInbox,
+} from "../../types";
 import { useAppToast } from "./AppToastProvider";
 
 const formatNotificationTime = (value: unknown) => {
@@ -45,7 +47,6 @@ const NotificationBell: React.FC = () => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState<WestoryNotification[]>([]);
   const [inbox, setInbox] = useState<WestoryNotificationInbox | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [clearing, setClearing] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
@@ -212,7 +213,6 @@ const NotificationBell: React.FC = () => {
             )}
 
             {notifications.map((notification) => {
-              const expanded = expandedId === notification.id;
               const unread = !notification.readAt;
               return (
                 <div
@@ -221,15 +221,7 @@ const NotificationBell: React.FC = () => {
                     unread ? "bg-blue-50/60" : "bg-white"
                   }`}
                 >
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setExpandedId((current) =>
-                        current === notification.id ? null : notification.id,
-                      )
-                    }
-                    className="flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-stone-50"
-                  >
+                  <div className="flex w-full items-start gap-3 px-4 py-3 text-left">
                     <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-stone-100 text-stone-500">
                       <i
                         className={`${getNotificationIconClassName(notification.type)} text-xs`}
@@ -254,32 +246,7 @@ const NotificationBell: React.FC = () => {
                         {formatNotificationTime(notification.createdAt)}
                       </span>
                     </span>
-                    <i
-                      className={`fas fa-chevron-down mt-1 text-[10px] text-stone-400 transition ${
-                        expanded ? "rotate-180" : ""
-                      }`}
-                      aria-hidden="true"
-                    ></i>
-                  </button>
-
-                  {expanded && (
-                    <div className="px-4 pb-4 pl-[4.25rem] text-sm leading-6 text-stone-700">
-                      {notification.body || "자세한 내용이 없습니다."}
-                      {notification.targetUrl && (
-                        <Link
-                          to={notification.targetUrl}
-                          onClick={() => setOpen(false)}
-                          className="mt-3 inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-xs font-extrabold text-white transition hover:bg-blue-700"
-                        >
-                          바로가기
-                          <i
-                            className="fas fa-arrow-right text-[10px]"
-                            aria-hidden="true"
-                          ></i>
-                        </Link>
-                      )}
-                    </div>
-                  )}
+                  </div>
                 </div>
               );
             })}

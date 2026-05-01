@@ -840,12 +840,17 @@ const prepareNotificationInput = async (year, semester, input, fallbackAudience 
   }
 
   const templateValues = normalizeNotificationTemplateValues(input.templateValues);
+  const resolvedTitle = resolveNotificationTemplateText(policy?.titleTemplate, input.title, templateValues);
+  const resolvedBody = resolveNotificationTemplateText(policy?.bodyTemplate, input.body, templateValues);
+  const body = type === 'history_dictionary_requested'
+    ? resolvedBody.replace(/학생이\s+"([^"]+)"\s+뜻풀이를 요청했습니다\./g, '학생이 $1 뜻풀이를 요청했습니다.')
+    : resolvedBody;
   return {
     skipped: false,
     type,
     audience,
-    title: resolveNotificationTemplateText(policy?.titleTemplate, input.title, templateValues),
-    body: resolveNotificationTemplateText(policy?.bodyTemplate, input.body, templateValues),
+    title: resolvedTitle,
+    body,
     targetUrl: resolveNotificationTargetUrl(policy?.targetUrl, input.targetUrl, templateValues),
     entityType: input.entityType,
     entityId: input.entityId,
@@ -4708,8 +4713,8 @@ exports.requestHistoryDictionaryTerm = onCall({ region: REGION }, async (request
     await createUserNotifications(year, semester, recipients, {
       type: 'history_dictionary_requested',
       title: '역사 사전 요청',
-      body: `${profile.name || '학생'} 학생이 "${word}" 뜻풀이를 요청했습니다.`,
-      targetUrl: '/teacher/lesson/history-dictionary',
+      body: `${profile.name || '학생'} 학생이 ${word} 뜻풀이를 요청했습니다.`,
+      targetUrl: '/teacher/lesson/history-dictionary?panel=requests',
       entityType: 'history_dictionary_request',
       entityId: requestId,
       actorUid: uid,

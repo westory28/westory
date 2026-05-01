@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { LoadingOverlay } from "../../components/common/LoadingState";
 import { useAppToast } from "../../components/common/AppToastProvider";
 import { useAuth } from "../../contexts/AuthContext";
@@ -85,6 +86,7 @@ const normalizeTag = (value: string) =>
 const ManageHistoryDictionary: React.FC = () => {
   const { config } = useAuth();
   const { showToast } = useAppToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [requests, setRequests] = useState<HistoryDictionaryRequest[]>([]);
   const [terms, setTerms] = useState<HistoryDictionaryTerm[]>([]);
   const [selectedRequestId, setSelectedRequestId] = useState("");
@@ -111,6 +113,20 @@ const ManageHistoryDictionary: React.FC = () => {
       unsubscribeTerms();
     };
   }, []);
+
+  useEffect(() => {
+    const panel = searchParams.get("panel");
+    const requestId = searchParams.get("requestId");
+    if (panel === "requests") {
+      setActivePanel("requests");
+      setSelectedTermId("");
+    }
+    if (requestId) {
+      setActivePanel("requests");
+      setSelectedTermId("");
+      setSelectedRequestId(requestId);
+    }
+  }, [searchParams]);
 
   const openRequests = useMemo(
     () =>
@@ -233,18 +249,21 @@ const ManageHistoryDictionary: React.FC = () => {
     setActivePanel("requests");
     setSelectedRequestId(requestId);
     setSelectedTermId("");
+    setSearchParams({ panel: "requests", requestId });
   };
 
   const handleSelectTerm = (term: HistoryDictionaryTerm) => {
     setActivePanel("terms");
     setSelectedTermId(term.id);
     setSelectedRequestId("");
+    setSearchParams({});
   };
 
   const handleNewTerm = () => {
     setActivePanel("terms");
     setSelectedRequestId("");
     setSelectedTermId("__new__");
+    setSearchParams({});
     setWord("");
     setDefinition("");
     setStudentLevel("중학생 수준");
@@ -398,8 +417,10 @@ const ManageHistoryDictionary: React.FC = () => {
                       setActivePanel(item.id);
                       if (item.id === "terms") {
                         setSelectedRequestId("");
+                        setSearchParams({});
                       } else {
                         setSelectedTermId("");
+                        setSearchParams({ panel: "requests" });
                       }
                     }}
                     className={`relative block min-h-[3.75rem] w-full px-4 py-3 text-left transition ${
