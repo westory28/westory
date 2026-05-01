@@ -99,6 +99,13 @@ interface RecentDefaultUnitStat {
   latestMs: number;
 }
 
+interface RecentClassFocus {
+  classOnly: string;
+  studentCount: number;
+  latestMs: number;
+  thresholdMs: number;
+}
+
 type SortKey =
   | "scoreAsc"
   | "scoreDesc"
@@ -120,6 +127,7 @@ const FIRESTORE_IN_CHUNK_SIZE = 10;
 const BACKFILL_BASIC_LIMIT = 50;
 const BACKFILL_FILTERED_LIMIT = 150;
 const BACKFILL_CLASS_LIMIT = 300;
+const RECENT_CLASS_FOCUS_MIN_STUDENTS = 10;
 
 const normalizeClass = (value: unknown): string => {
   const raw = String(value || "").trim();
@@ -202,6 +210,67 @@ const buildDedupKey = (log: Log): string => {
     String(getTimestampMs(log.timestamp)),
     String(log.score),
   ].join("::");
+};
+
+const findRecentClassFocus = (logs: Log[]): RecentClassFocus | null => {
+  const byClass = new Map<
+    string,
+    {
+      studentKeys: Set<string>;
+      latestMs: number;
+      thresholdMs: number;
+    }
+  >();
+
+  [...logs]
+    .sort((a, b) => getTimestampMs(b.timestamp) - getTimestampMs(a.timestamp))
+    .forEach((log) => {
+      const classOnly = toText(log.classOnly);
+      if (!classOnly || classOnly === "-") return;
+      const studentKey = buildStudentKey({
+        uid: log.uid,
+        email: log.email,
+        classOnly: log.classOnly,
+        number: log.studentNumber,
+        name: log.studentName,
+      });
+      const timestampMs = getTimestampMs(log.timestamp);
+      const current =
+        byClass.get(classOnly) ||
+        {
+          studentKeys: new Set<string>(),
+          latestMs: 0,
+          thresholdMs: 0,
+        };
+      const previousSize = current.studentKeys.size;
+      current.studentKeys.add(studentKey);
+      current.latestMs = Math.max(current.latestMs, timestampMs);
+      if (
+        previousSize < RECENT_CLASS_FOCUS_MIN_STUDENTS &&
+        current.studentKeys.size >= RECENT_CLASS_FOCUS_MIN_STUDENTS
+      ) {
+        current.thresholdMs = timestampMs;
+      }
+      byClass.set(classOnly, current);
+    });
+
+  return (
+    Array.from(byClass.entries())
+      .filter(
+        ([, item]) => item.studentKeys.size >= RECENT_CLASS_FOCUS_MIN_STUDENTS,
+      )
+      .map(([classOnly, item]) => ({
+        classOnly,
+        studentCount: item.studentKeys.size,
+        latestMs: item.latestMs,
+        thresholdMs: item.thresholdMs,
+      }))
+      .sort((a, b) => {
+        if (a.thresholdMs !== b.thresholdMs) return b.thresholdMs - a.thresholdMs;
+        if (a.latestMs !== b.latestMs) return b.latestMs - a.latestMs;
+        return Number(a.classOnly) - Number(b.classOnly);
+      })[0] || null
+  );
 };
 
 const buildUnitMetaMap = (treeData: TreeUnit[]) => {
@@ -376,6 +445,7 @@ const QuizLogTab: React.FC = () => {
   const pendingCloseButtonRef = useRef<HTMLButtonElement>(null);
   const autoUnitFilterAppliedRef = useRef(false);
   const userTouchedUnitFilterRef = useRef(false);
+  const userTouchedClassFilterRef = useRef(false);
 
   const unitMetaById = useMemo(() => buildUnitMetaMap(treeData), [treeData]);
 
@@ -793,6 +863,17 @@ const QuizLogTab: React.FC = () => {
     [mergedLogs, profileMap],
   );
 
+  const recentClassFocus = useMemo(
+    () => findRecentClassFocus(canonicalLogs),
+    [canonicalLogs],
+  );
+
+  useEffect(() => {
+    if (userTouchedClassFilterRef.current || !recentClassFocus) return;
+    if (classFilter === recentClassFocus.classOnly) return;
+    setClassFilter(recentClassFocus.classOnly);
+  }, [classFilter, recentClassFocus]);
+
   const analysisLogs = useMemo(() => {
     return canonicalLogs.filter((log) => {
       if (categoryFilter && log.category !== categoryFilter) return false;
@@ -949,9 +1030,13 @@ const QuizLogTab: React.FC = () => {
       if (log.classOnly && log.classOnly !== "-") classes.add(log.classOnly);
     });
     return Array.from(classes).sort(
-      (a, b) => Number(a) - Number(b) || a.localeCompare(b),
+      (a, b) => {
+        if (recentClassFocus?.classOnly === a) return -1;
+        if (recentClassFocus?.classOnly === b) return 1;
+        return Number(a) - Number(b) || a.localeCompare(b);
+      },
     );
-  }, [allStudentProfiles, canonicalLogs]);
+  }, [allStudentProfiles, canonicalLogs, recentClassFocus]);
 
   const buildStudentSummaries = (sourceLogs: Log[], selectedClass: string) => {
     const targetProfiles = selectedClass
@@ -1420,7 +1505,10 @@ const QuizLogTab: React.FC = () => {
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-[150px_190px_auto] sm:justify-end">
             <select
               value={classFilter}
-              onChange={(event) => setClassFilter(event.target.value)}
+              onChange={(event) => {
+                userTouchedClassFilterRef.current = true;
+                setClassFilter(event.target.value);
+              }}
               className="min-w-0 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-700"
               aria-label="반 필터"
             >
@@ -1574,7 +1662,10 @@ const QuizLogTab: React.FC = () => {
                 <button
                   key={item.classOnly}
                   type="button"
-                  onClick={() => setClassFilter(selected ? "" : item.classOnly)}
+                  onClick={() => {
+                    userTouchedClassFilterRef.current = true;
+                    setClassFilter(selected ? "" : item.classOnly);
+                  }}
                   className={`grid w-full grid-cols-[48px_minmax(0,250px)] items-center gap-2 rounded-lg px-2.5 py-2 text-left transition focus:outline-none focus:ring-2 focus:ring-blue-200 ${
                     selected
                       ? "bg-blue-50 ring-1 ring-blue-200"

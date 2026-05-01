@@ -74,9 +74,22 @@ interface MutableQuestionAggregate extends MutableQuestionStat {
 
 interface BankAnalyticsResult {
   questionStats: Record<string, QuestionAggregate>;
+  classAverageByClass: Record<string, ClassAverageSummary>;
   participationByClass: Record<string, number>;
   totalParticipants: number;
   lastAttemptAt: number;
+  recentClassFocus: RecentClassFocus | null;
+}
+
+interface ClassAverageSummary {
+  average: number | null;
+}
+
+interface RecentClassFocus {
+  classOnly: string;
+  studentCount: number;
+  latestMs: number;
+  thresholdMs: number;
 }
 
 interface StudentRosterItem {
@@ -111,6 +124,7 @@ interface BankDefaultFocus {
 const ORDER_DELIMITER = "||";
 const DEFAULT_OPTION_COUNT = 4;
 const QUESTION_PAGE_SIZE = 50;
+const RECENT_CLASS_FOCUS_MIN_STUDENTS = 10;
 const createDefaultOptionItems = () =>
   Array.from({ length: DEFAULT_OPTION_COUNT }, () => "");
 
@@ -230,10 +244,15 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const [questionStats, setQuestionStats] = useState<
     Record<string, QuestionAggregate>
   >({});
+  const [classAverageByClass, setClassAverageByClass] = useState<
+    Record<string, ClassAverageSummary>
+  >({});
   const [participationByClass, setParticipationByClass] = useState<
     Record<string, number>
   >({});
   const [totalParticipants, setTotalParticipants] = useState(0);
+  const [recentClassFocus, setRecentClassFocus] =
+    useState<RecentClassFocus | null>(null);
   const [studentRoster, setStudentRoster] = useState<StudentRosterItem[]>([]);
   const [rosterAccessLimited, setRosterAccessLimited] = useState(false);
   const [lastAttemptAt, setLastAttemptAt] = useState(0);
@@ -258,6 +277,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
+  const userTouchedClassScopeRef = React.useRef(false);
 
   const toRoman = (value: number) => {
     const romans = [
@@ -350,8 +370,10 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         setQuestions(questionsResult);
         setTreeData(treeResult);
         setQuestionStats(statsResult.questionStats);
+        setClassAverageByClass(statsResult.classAverageByClass);
         setParticipationByClass(statsResult.participationByClass);
         setTotalParticipants(statsResult.totalParticipants);
+        setRecentClassFocus(statsResult.recentClassFocus);
         setLastAttemptAt(statsResult.lastAttemptAt);
         setStudentRoster(rosterResult.students);
         setRosterAccessLimited(rosterResult.accessLimited);
@@ -524,6 +546,21 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       const mutableStats: Record<string, MutableQuestionAggregate> = {};
       const participants = new Set<string>();
       const classParticipants: Record<string, Set<string>> = {};
+      const classScoreTotals: Record<
+        string,
+        {
+          scoreSum: number;
+          scoreCount: number;
+        }
+      > = {};
+      const recentClassCandidates: Record<
+        string,
+        {
+          studentKeys: Set<string>;
+          latestMs: number;
+          thresholdMs: number;
+        }
+      > = {};
       let latestAttemptAt = 0;
 
       snap.forEach((d) => {
@@ -551,6 +588,27 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
           classParticipants[classOnly] =
             classParticipants[classOnly] || new Set<string>();
           classParticipants[classOnly].add(studentKey);
+          classScoreTotals[classOnly] = classScoreTotals[classOnly] || {
+            scoreSum: 0,
+            scoreCount: 0,
+          };
+          classScoreTotals[classOnly].scoreSum += Number(raw.score || 0);
+          classScoreTotals[classOnly].scoreCount += 1;
+          const current = recentClassCandidates[classOnly] || {
+            studentKeys: new Set<string>(),
+            latestMs: 0,
+            thresholdMs: 0,
+          };
+          const previousSize = current.studentKeys.size;
+          current.studentKeys.add(studentKey);
+          current.latestMs = Math.max(current.latestMs, attemptedAt);
+          if (
+            previousSize < RECENT_CLASS_FOCUS_MIN_STUDENTS &&
+            current.studentKeys.size >= RECENT_CLASS_FOCUS_MIN_STUDENTS
+          ) {
+            current.thresholdMs = attemptedAt;
+          }
+          recentClassCandidates[classOnly] = current;
         }
         latestAttemptAt = Math.max(latestAttemptAt, attemptedAt);
 
@@ -595,6 +653,16 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
 
       return {
         questionStats: questionStatsResult,
+        classAverageByClass: Object.fromEntries(
+          Object.entries(classScoreTotals).map(([classOnly, item]) => [
+            classOnly,
+            {
+              average: item.scoreCount
+                ? Math.round(item.scoreSum / item.scoreCount)
+                : null,
+            },
+          ]),
+        ),
         participationByClass: Object.fromEntries(
           Object.entries(classParticipants).map(([classOnly, classSet]) => [
             classOnly,
@@ -603,14 +671,34 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         ),
         totalParticipants: participants.size,
         lastAttemptAt: latestAttemptAt,
+        recentClassFocus:
+          Object.entries(recentClassCandidates)
+            .filter(
+              ([, item]) =>
+                item.studentKeys.size >= RECENT_CLASS_FOCUS_MIN_STUDENTS,
+            )
+            .map(([classOnly, item]) => ({
+              classOnly,
+              studentCount: item.studentKeys.size,
+              latestMs: item.latestMs,
+              thresholdMs: item.thresholdMs,
+            }))
+            .sort((a, b) => {
+              if (a.thresholdMs !== b.thresholdMs)
+                return b.thresholdMs - a.thresholdMs;
+              if (a.latestMs !== b.latestMs) return b.latestMs - a.latestMs;
+              return Number(a.classOnly) - Number(b.classOnly);
+            })[0] || null,
       };
     } catch (error) {
       console.error(error);
       return {
         questionStats: {},
+        classAverageByClass: {},
         participationByClass: {},
         totalParticipants: 0,
         lastAttemptAt: 0,
+        recentClassFocus: null,
       };
     }
   };
@@ -766,9 +854,13 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       stat.affectedClasses.forEach((classOnly) => values.add(classOnly));
     });
     return Array.from(values).sort(
-      (a, b) => Number(a) - Number(b) || a.localeCompare(b),
+      (a, b) => {
+        if (recentClassFocus?.classOnly === a) return -1;
+        if (recentClassFocus?.classOnly === b) return 1;
+        return Number(a) - Number(b) || a.localeCompare(b);
+      },
     );
-  }, [participationByClass, questionStats, studentRoster]);
+  }, [participationByClass, questionStats, recentClassFocus, studentRoster]);
 
   const rosterCountByClass = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -784,6 +876,13 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     if (classFilter && classOptions.includes(classFilter)) return;
     setClassFilter(classOptions[0] || "");
   }, [analyticsScope, classFilter, classOptions]);
+
+  useEffect(() => {
+    if (userTouchedClassScopeRef.current || !recentClassFocus) return;
+    if (!classOptions.includes(recentClassFocus.classOnly)) return;
+    setAnalyticsScope("class");
+    setClassFilter(recentClassFocus.classOnly);
+  }, [classOptions, recentClassFocus]);
 
   const getRawQuestionStat = (q: Question) =>
     questionStats[String(q.docId)] || questionStats[String(q.id)];
@@ -1092,49 +1191,11 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   ]);
 
   const classComparisons = useMemo(() => {
-    return classOptions.map((classOnly) => {
-      const totals = filteredQuestions.reduce(
-        (acc, q) => {
-          const rawStat = getRawQuestionStat(q);
-          const stat = rawStat?.classStats[classOnly] || createEmptyStat();
-          const rate = stat.attempts
-            ? Math.round((stat.correct / stat.attempts) * 100)
-            : 0;
-          acc.attempts += stat.attempts;
-          acc.correct += stat.correct;
-          acc.uniqueWrongStudents += stat.uniqueWrongStudents;
-          if (stat.attempts >= 3 && rate < 60) acc.weakQuestions += 1;
-          return acc;
-        },
-        {
-          attempts: 0,
-          correct: 0,
-          uniqueWrongStudents: 0,
-          weakQuestions: 0,
-        },
-      );
-      const rosterCount = rosterCountByClass[classOnly] || 0;
-      const participants = participationByClass[classOnly] || 0;
-      return {
-        classOnly,
-        ...totals,
-        participants,
-        rosterCount,
-        rate: totals.attempts
-          ? Math.round((totals.correct / totals.attempts) * 100)
-          : null,
-        coverageRate: rosterCount
-          ? Math.round((participants / rosterCount) * 100)
-          : null,
-      };
-    });
-  }, [
-    classOptions,
-    filteredQuestions,
-    participationByClass,
-    questionStats,
-    rosterCountByClass,
-  ]);
+    return classOptions.map((classOnly) => ({
+      classOnly,
+      rate: classAverageByClass[classOnly]?.average ?? null,
+    }));
+  }, [classAverageByClass, classOptions]);
 
   const classGapSummary = useMemo(() => {
     const withRate = classComparisons.filter((item) => item.rate !== null);
@@ -1855,7 +1916,10 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                 <button
                   key={scope}
                   type="button"
-                  onClick={() => setAnalyticsScope(scope)}
+                  onClick={() => {
+                    userTouchedClassScopeRef.current = true;
+                    setAnalyticsScope(scope);
+                  }}
                   className={`flex-1 rounded-md px-3 py-2 text-xs font-black transition ${
                     analyticsScope === scope
                       ? "bg-white text-blue-700 shadow-sm"
@@ -1868,7 +1932,10 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
             </div>
             <select
               value={classFilter}
-              onChange={(e) => setClassFilter(e.target.value)}
+              onChange={(e) => {
+                userTouchedClassScopeRef.current = true;
+                setClassFilter(e.target.value);
+              }}
               disabled={analyticsScope !== "class" || classOptions.length === 0}
               className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 disabled:bg-slate-100 disabled:text-slate-400 lg:col-span-2"
               aria-label="학급 선택"
@@ -2521,6 +2588,8 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                 {classComparisons
                   .slice()
                   .sort((a, b) => {
+                    if (recentClassFocus?.classOnly === a.classOnly) return -1;
+                    if (recentClassFocus?.classOnly === b.classOnly) return 1;
                     const ar = a.rate ?? 101;
                     const br = b.rate ?? 101;
                     if (ar !== br) return ar - br;
@@ -2534,6 +2603,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                         key={item.classOnly}
                         type="button"
                         onClick={() => {
+                          userTouchedClassScopeRef.current = true;
                           setAnalyticsScope("class");
                           setClassFilter(item.classOnly);
                         }}
@@ -2559,14 +2629,8 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                             style={{ width: `${rate}%` }}
                           ></div>
                         </div>
-                        <div className="mt-2 flex items-center justify-between text-[11px] font-bold text-slate-500">
-                          <span>{item.attempts}응시</span>
-                          <span>우선 확인 {item.weakQuestions}문항</span>
-                          <span>
-                            {item.coverageRate === null
-                              ? `${item.participants}명`
-                              : `참여 ${item.coverageRate}%`}
-                          </span>
+                        <div className="mt-2 flex items-center justify-end text-[11px] font-bold text-slate-500">
+                          <span>평균 정답률</span>
                         </div>
                       </button>
                     );
