@@ -69,6 +69,17 @@ const getResolvedChildUrls = (
     resolvedUrl: resolveChildMenuTarget(parentUrl, child.name, child.url, portal),
 }));
 
+const getDesktopSubmenuChildren = (
+    parentUrl: string,
+    children: Array<{ name: string; url: string; resolvedUrl: string }>,
+) => {
+    if (parentUrl !== '/student/score') return children;
+    return children.filter((child) => (
+        child.resolvedUrl === '/student/score' ||
+        child.resolvedUrl === '/student/score/report'
+    ));
+};
+
 const Header: React.FC = () => {
     const { currentUser, userData, logout, config } = useAuth();
     const { showToast } = useAppToast();
@@ -118,6 +129,7 @@ const Header: React.FC = () => {
     const desktopSubmenuParentUrls = new Set([
         '/student/lesson/note',
         '/student/quiz',
+        '/student/score',
         '/teacher/lesson',
     ]);
 
@@ -169,10 +181,11 @@ const Header: React.FC = () => {
         .map((item) => {
             const visibleChildren = getVisibleChildren(item);
             const resolvedChildren = getResolvedChildUrls(item.url, visibleChildren, portal);
-            const active = isActive(item.url) || resolvedChildren.some((child) => isChildActive(child.resolvedUrl, resolvedChildren));
+            const desktopChildren = getDesktopSubmenuChildren(item.url, resolvedChildren);
+            const active = isActive(item.url) || desktopChildren.some((child) => isChildActive(child.resolvedUrl, desktopChildren));
             return {
                 item,
-                resolvedChildren,
+                resolvedChildren: desktopChildren,
                 active,
             };
         })

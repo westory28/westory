@@ -6,7 +6,6 @@ import { PageLoading } from '../../../components/common/LoadingState';
 import { useAuth } from '../../../contexts/AuthContext';
 import GradeChart from './components/GradeChart';
 import ScoreCard from './components/ScoreCard';
-import ScoreSubTabs from './components/ScoreSubTabs';
 import { getSemesterCollectionPath } from '../../../lib/semesterScope';
 import { getAchievementColor, getSubjectPriorityIndex } from '../../../lib/studentScores';
 
@@ -449,8 +448,6 @@ const ScoreDashboard: React.FC = () => {
                     </div>
                 </div>
             )}
-
-            <ScoreSubTabs />
 
             {/* Controls */}
             <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 mb-6 flex flex-wrap gap-4 items-center">
