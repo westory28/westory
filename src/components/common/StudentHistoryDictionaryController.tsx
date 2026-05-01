@@ -37,6 +37,7 @@ const StudentHistoryDictionaryController: React.FC = () => {
   const [definition, setDefinition] = useState("");
   const [memo, setMemo] = useState("");
   const [warningAccepted, setWarningAccepted] = useState(false);
+  const [requestDialogOpen, setRequestDialogOpen] = useState(false);
   const [checkingTeacherTerm, setCheckingTeacherTerm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [teacherChecked, setTeacherChecked] = useState(false);
@@ -184,6 +185,7 @@ const StudentHistoryDictionaryController: React.FC = () => {
       });
       setMemo("");
       setWarningAccepted(false);
+      setRequestDialogOpen(false);
       showToast({
         tone: "success",
         title: "선생님께 요청을 보냈습니다.",
@@ -199,6 +201,12 @@ const StudentHistoryDictionaryController: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const openRequestDialog = () => {
+    if (!currentWord || hasRequestedCurrentWord || loading) return;
+    setWarningAccepted(false);
+    setRequestDialogOpen(true);
   };
 
   return (
@@ -278,10 +286,15 @@ const StudentHistoryDictionaryController: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleSaveOwnEntry}
-                  disabled={!currentWord || definition.trim().length < 2 || loading}
+                  disabled={
+                    !currentWord || definition.trim().length < 2 || loading
+                  }
                   className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-extrabold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
                 >
-                  <i className="fas fa-floppy-disk text-xs" aria-hidden="true"></i>
+                  <i
+                    className="fas fa-floppy-disk text-xs"
+                    aria-hidden="true"
+                  ></i>
                   내 역사 사전에 저장
                 </button>
               </section>
@@ -319,7 +332,10 @@ const StudentHistoryDictionaryController: React.FC = () => {
                       disabled={loading}
                       className="mt-3 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-extrabold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      <i className="fas fa-bookmark text-[11px]" aria-hidden="true"></i>
+                      <i
+                        className="fas fa-bookmark text-[11px]"
+                        aria-hidden="true"
+                      ></i>
                       선생님 뜻풀이로 저장
                     </button>
                   </div>
@@ -332,40 +348,20 @@ const StudentHistoryDictionaryController: React.FC = () => {
                 )}
               </section>
 
-              <section className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
-                <div className="text-sm font-extrabold text-amber-900">
-                  선생님께 공식 뜻풀이 요청
-                </div>
-                <p className="mt-2 text-xs leading-5 text-amber-800">
-                  장난 요청이나 수업과 관련 없는 요청은 기록에 남습니다. 실제로
-                  학습 중 궁금한 역사 용어만 요청해 주세요.
-                </p>
-                <label className="mt-3 flex items-start gap-2 rounded-lg bg-white/70 p-3 text-xs font-bold leading-5 text-amber-900">
-                  <input
-                    type="checkbox"
-                    checked={warningAccepted}
-                    onChange={(event) => setWarningAccepted(event.target.checked)}
-                    className="mt-1 h-4 w-4 rounded border-amber-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  학습 중 실제로 궁금한 역사 용어만 요청하겠습니다.
-                </label>
-                <textarea
-                  value={memo}
-                  onChange={(event) => setMemo(event.target.value)}
-                  maxLength={240}
-                  className="mt-3 min-h-[4.5rem] w-full resize-none rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-                  placeholder="어디에서 봤는지, 어떤 점이 헷갈렸는지 적어도 됩니다."
-                />
-                <button
-                  type="button"
-                  onClick={handleRequest}
-                  disabled={loading || !currentWord || !warningAccepted || hasRequestedCurrentWord}
-                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-extrabold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
-                >
-                  <i className="fas fa-paper-plane text-xs" aria-hidden="true"></i>
-                  {hasRequestedCurrentWord ? "이미 요청한 단어입니다" : "선생님께 요청"}
-                </button>
-              </section>
+              <button
+                type="button"
+                onClick={openRequestDialog}
+                disabled={loading || !currentWord || hasRequestedCurrentWord}
+                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-extrabold text-amber-800 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+              >
+                <i
+                  className="fas fa-paper-plane text-xs"
+                  aria-hidden="true"
+                ></i>
+                {hasRequestedCurrentWord
+                  ? "이미 공식 뜻풀이를 요청한 단어입니다"
+                  : "공식 뜻풀이 요청"}
+              </button>
 
               <section className="mt-5">
                 <div className="mb-2 text-xs font-extrabold uppercase tracking-[0.18em] text-slate-400">
@@ -405,6 +401,87 @@ const StudentHistoryDictionaryController: React.FC = () => {
                   ))}
                 </div>
               </section>
+            </div>
+          </div>
+        </div>
+      )}
+      {requestDialogOpen && (
+        <div className="fixed inset-0 z-[145] flex items-center justify-center bg-slate-950/45 px-4 py-6 backdrop-blur-sm">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="floating-history-dictionary-request-title"
+            className="w-full max-w-md rounded-2xl border border-amber-200 bg-white p-5 shadow-2xl"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3
+                  id="floating-history-dictionary-request-title"
+                  className="text-base font-extrabold text-amber-900"
+                >
+                  공식 뜻풀이 요청
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-amber-800">
+                  장난 요청이나 수업과 관련 없는 요청은 기록에 남습니다. 실제로
+                  학습 중 궁금한 역사 용어만 요청해 주세요.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRequestDialogOpen(false)}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                aria-label="요청 팝업 닫기"
+              >
+                <i className="fas fa-times text-sm" aria-hidden="true"></i>
+              </button>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
+              <div className="text-xs font-bold text-amber-900">요청 단어</div>
+              <div className="mt-1 text-lg font-extrabold text-slate-950">
+                {currentWord}
+              </div>
+            </div>
+
+            <textarea
+              value={memo}
+              onChange={(event) => setMemo(event.target.value)}
+              maxLength={240}
+              className="mt-4 min-h-[5.5rem] w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+              placeholder="어디에서 봤는지, 어떤 점이 헷갈렸는지 적어도 됩니다."
+            />
+            <div className="mt-1 text-right text-xs font-semibold text-slate-400">
+              {memo.length} / 240
+            </div>
+
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setWarningAccepted(true)}
+                className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 text-sm font-extrabold transition ${
+                  warningAccepted
+                    ? "bg-emerald-50 text-emerald-700"
+                    : "border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100"
+                }`}
+              >
+                <i
+                  className={`fas ${warningAccepted ? "fa-check" : "fa-triangle-exclamation"} text-xs`}
+                  aria-hidden="true"
+                ></i>
+                {warningAccepted ? "동의 완료" : "실제 궁금한 요청입니다"}
+              </button>
+              <button
+                type="button"
+                onClick={handleRequest}
+                disabled={!warningAccepted || loading}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-extrabold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+              >
+                <i
+                  className="fas fa-paper-plane text-xs"
+                  aria-hidden="true"
+                ></i>
+                요청하기
+              </button>
             </div>
           </div>
         </div>
