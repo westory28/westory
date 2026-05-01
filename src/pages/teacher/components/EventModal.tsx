@@ -458,7 +458,7 @@ const EventModal: React.FC<EventModalProps> = ({
               />
             </label>
 
-            <div className="grid gap-5 lg:grid-cols-2">
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
               <div>
                 <span className="mb-2 block text-sm font-extrabold text-gray-800">
                   시작 일자
@@ -519,25 +519,17 @@ const EventModal: React.FC<EventModalProps> = ({
                   </select>
                 </div>
               </div>
-            </div>
 
-            <label className="inline-flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-gray-800 transition hover:bg-slate-100">
-              <input
-                type="checkbox"
-                checked={isAllDay}
-                onChange={(event) => setIsAllDay(event.target.checked)}
-                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-              />
-              <span>
-                <span className="block text-sm font-extrabold text-gray-900">
-                  하루종일
-                </span>
-                <span className="mt-0.5 block text-xs font-semibold text-gray-500">
-                  특정 교시가 아닌 해당 일자 전체에 해당되는 일정으로
-                  저장합니다.
-                </span>
-              </span>
-            </label>
+              <label className="inline-flex h-12 cursor-pointer items-center gap-2 self-end rounded-lg border border-slate-300 bg-white px-4 text-sm font-extrabold text-gray-800 transition hover:bg-slate-50">
+                <input
+                  type="checkbox"
+                  checked={isAllDay}
+                  onChange={(event) => setIsAllDay(event.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="whitespace-nowrap">하루종일</span>
+              </label>
+            </div>
 
             <div className="border-t border-slate-200 pt-5">
               <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.78fr)]">
