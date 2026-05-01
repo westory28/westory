@@ -54,6 +54,7 @@ const NEIGHBOR_DIRECTIONS = [
     { x: -1, y: -1 },
 ];
 const FILL_SCALES = [0.72, 0.88, 1, 1.14];
+const SPIRAL_ANGLE = Math.PI * (3 - Math.sqrt(5));
 
 const hashCode = (value: string) => {
     let hash = 0;
@@ -76,22 +77,33 @@ const buildTooltip = (entry: WordCloudEntry, showSubmitters: boolean) => {
     return `${base}\n${preview}${suffix}`;
 };
 
-const estimateWordWidth = (text: string, fontSize: number) => {
-    const units = Array.from(text).reduce((sum, char) => {
+const getTextUnits = (text: string) =>
+    Array.from(text).reduce((sum, char) => {
         if (/[A-Z0-9]/.test(char)) return sum + 0.74;
         if (/[a-z]/.test(char)) return sum + 0.62;
         if (/[\uAC00-\uD7A3]/.test(char)) return sum + 0.96;
         return sum + 0.82;
     }, 0);
 
+const estimateWordWidth = (text: string, fontSize: number) => {
+    const units = getTextUnits(text);
     return Math.max(fontSize * 2.4, fontSize * (units + 1.2));
 };
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
+const getLengthAdjustedMaxFontSize = (text: string, baseMax: number, variant: 'default' | 'modal') => {
+    const units = getTextUnits(text);
+    const maxWidth = WIDTH * (variant === 'modal' ? 0.5 : 0.38);
+    const widthLimitedSize = maxWidth / Math.max(units + 1.2, 2.4);
+    const lengthScale = clamp(1 - Math.max(0, units - 4.8) * 0.07, 0.54, 1);
+
+    return Math.max(18, Math.min(baseMax, widthLimitedSize, baseMax * lengthScale));
+};
+
 const getPadding = (fontSize: number, variant: 'default' | 'modal') => ({
-    x: Math.max(1.5, fontSize * (variant === 'modal' ? 0.02 : 0.034)),
-    y: Math.max(1.5, fontSize * (variant === 'modal' ? 0.014 : 0.024)),
+    x: Math.max(2, fontSize * (variant === 'modal' ? 0.026 : 0.046)),
+    y: Math.max(2, fontSize * (variant === 'modal' ? 0.02 : 0.032)),
 });
 
 const isInsideEllipse = (x: number, y: number, width: number, height: number) => {
@@ -117,8 +129,10 @@ const overlaps = (candidate: PositionedWord, placed: PositionedWord[], variant: 
         const xGap = Math.abs(candidate.x - item.x);
         const yGap = Math.abs(candidate.y - item.y);
 
-        return xGap < (candidate.width + item.width) / 2 + candidatePadding.x + itemPadding.x
-            && yGap < (candidate.height + item.height) / 2 + candidatePadding.y + itemPadding.y;
+        return (
+            xGap < (candidate.width + item.width) / 2 + candidatePadding.x + itemPadding.x &&
+            yGap < (candidate.height + item.height) / 2 + candidatePadding.y + itemPadding.y
+        );
     });
 };
 
@@ -130,8 +144,11 @@ const getNeighborGapScore = (candidate: PositionedWord, placed: PositionedWord[]
 
     placed.forEach((item) => {
         const itemPadding = getPadding(item.fontSize, variant);
-        const dx = Math.abs(candidate.x - item.x) - ((candidate.width + item.width) / 2 + candidatePadding.x + itemPadding.x);
-        const dy = Math.abs(candidate.y - item.y) - ((candidate.height + item.height) / 2 + candidatePadding.y + itemPadding.y);
+        const dx =
+            Math.abs(candidate.x - item.x) - ((candidate.width + item.width) / 2 + candidatePadding.x + itemPadding.x);
+        const dy =
+            Math.abs(candidate.y - item.y) -
+            ((candidate.height + item.height) / 2 + candidatePadding.y + itemPadding.y);
         const gap = Math.max(dx, dy, 0);
         nearest = Math.min(nearest, gap);
     });
@@ -185,18 +202,57 @@ const buildNeighborCandidates = (
     return candidates;
 };
 
+const buildSpiralCandidate = (
+    item: WordCloudEntry,
+    fontSize: number,
+    width: number,
+    height: number,
+    rotate: 0 | 90,
+    step: number,
+    index: number,
+    variant: 'default' | 'modal',
+    showSubmitters: boolean,
+) => {
+    const seed = hashCode(item.text);
+    const angle = seed * 0.017 + step * SPIRAL_ANGLE;
+    const stepRatio = Math.sqrt(step + 0.5);
+    const radius = index === 0 ? 0 : stepRatio * (variant === 'modal' ? 13 : 16);
+    const wobble = 1 + ((hashCode(`${item.text}-${step}`) % 9) - 4) * 0.006;
+    const horizontalBias = index < 12 ? 1.04 : 0.98;
+    const verticalBias = index < 12 ? 0.72 : 0.82;
+    const x = CENTER_X + Math.cos(angle) * radius * horizontalBias * wobble;
+    const y = CENTER_Y + Math.sin(angle) * radius * verticalBias * wobble;
+
+    return {
+        ...item,
+        x,
+        y,
+        fontSize,
+        width,
+        height,
+        color: COLORS[seed % COLORS.length],
+        rotate,
+        tooltip: buildTooltip(item, showSubmitters),
+    };
+};
+
 const getPlacementScore = (candidate: PositionedWord, placed: PositionedWord[], variant: 'default' | 'modal') => {
     const dx = candidate.x - CENTER_X;
     const dy = candidate.y - CENTER_Y;
-    const centerDistance = Math.hypot(dx * 0.78, dy * 1.02);
+    const centerDistance = Math.hypot(dx * 0.7, dy * 1.05);
     const neighborGap = getNeighborGapScore(candidate, placed, variant);
-    const preferredGap = variant === 'modal' ? 0.35 : 1.2;
-    const gapPenalty = Math.abs(neighborGap - preferredGap) * (variant === 'modal' ? 9.6 : 6.8);
-    const verticalPenalty = candidate.rotate === 90 ? 5 : 0;
-    const bandPenalty = Math.abs(dy) * (variant === 'modal' ? 0.022 : 0.04);
+    const preferredGap = variant === 'modal' ? 2.8 : 4.4;
+    const gapPenalty = Math.abs(neighborGap - preferredGap) * (variant === 'modal' ? 7.8 : 5.2);
+    const verticalPenalty = candidate.rotate === 90 ? 11 : 0;
+    const bandPenalty = Math.abs(dy) * (variant === 'modal' ? 0.018 : 0.032);
     const edgePenalty = Math.max(0, Math.abs(dx) - RADIUS_X * 0.78) * 0.07;
+    const balancePenalty = placed.reduce((penalty, item) => {
+        const sameBand = Math.abs(item.y - candidate.y) < (candidate.height + item.height) * 0.55;
+        if (!sameBand) return penalty;
+        return penalty + Math.max(0, RADIUS_X * 0.34 - Math.abs(item.x - candidate.x)) * 0.012;
+    }, 0);
 
-    return centerDistance + gapPenalty + verticalPenalty + bandPenalty + edgePenalty;
+    return centerDistance + gapPenalty + verticalPenalty + bandPenalty + edgePenalty + balancePenalty;
 };
 
 const WordCloudView: React.FC<WordCloudViewProps> = ({
@@ -223,26 +279,35 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({
         const placed: PositionedWord[] = [];
 
         source.forEach((item, index) => {
-            const ratio = maxCount === minCount ? 0.55 : (item.count - minCount) / (maxCount - minCount);
+            const uniformRatio = source.length > 18 ? 0.16 : source.length > 8 ? 0.24 : 0.34;
+            const ratio = maxCount === minCount ? uniformRatio : (item.count - minCount) / Math.max(maxCount, 1);
             const easedRatio = Math.pow(ratio, 0.45);
             const dominance = maxCount > 0 ? item.count / maxCount : 0;
             const rankFalloff = Math.max(0, 1 - index / Math.max(source.length - 1, 1));
-            const leaderBoost = index === 0 && maxCount > secondCount
-                ? Math.min(1.22, 1 + (maxCount - secondCount) / Math.max(secondCount, 1) * 0.56)
-                : 1;
-            const emphasisBoost = 1 + dominance * 0.2 + rankFalloff * 0.08;
-            const baseSize = Math.round((fontRange.min + easedRatio * (fontRange.max - fontRange.min)) * emphasisBoost * leaderBoost);
+            const itemMaxFontSize = getLengthAdjustedMaxFontSize(item.text, fontRange.max, variant);
+            const leaderBoost =
+                index === 0 && maxCount > secondCount
+                    ? Math.min(1.14, 1 + ((maxCount - secondCount) / Math.max(maxCount, 1)) * 0.18)
+                    : 1;
+            const emphasisBoost = 1 + dominance * 0.14 + rankFalloff * 0.06;
+            const baseSize = Math.round(
+                Math.min(
+                    itemMaxFontSize,
+                    (fontRange.min + easedRatio * (fontRange.max - fontRange.min)) * emphasisBoost * leaderBoost,
+                ),
+            );
 
             let fontSize = baseSize;
             let bestCandidate: PositionedWord | null = null;
 
             for (let shrink = 0; shrink < 8 && !bestCandidate; shrink += 1) {
-                const rotate: 0 | 90 = index > 8 && fontSize < 72 && hashCode(item.text) % 5 === 0 ? 90 : 0;
+                const textUnits = getTextUnits(item.text);
+                const rotate: 0 | 90 =
+                    index > 16 && textUnits <= 4.4 && fontSize < 54 && hashCode(item.text) % 7 === 0 ? 90 : 0;
                 const baseWidth = estimateWordWidth(item.text, fontSize);
                 const baseHeight = Math.max(28, fontSize * 0.94);
                 const width = rotate === 90 ? baseHeight : baseWidth;
                 const height = rotate === 90 ? baseWidth : baseHeight;
-                const angleSeed = hashCode(item.text) % 360;
                 let bestScore = Number.POSITIVE_INFINITY;
 
                 if (index < PRIMARY_ANCHORS.length) {
@@ -261,14 +326,26 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({
                         tooltip: buildTooltip(item, showSubmitters),
                     };
 
-                    if (isInsideEllipse(anchorX, anchorY, width, height) && !overlaps(anchoredCandidate, placed, variant)) {
+                    if (
+                        isInsideEllipse(anchorX, anchorY, width, height) &&
+                        !overlaps(anchoredCandidate, placed, variant)
+                    ) {
                         bestCandidate = anchoredCandidate;
                     }
                 }
 
                 if (bestCandidate) break;
 
-                const neighborCandidates = buildNeighborCandidates(item, fontSize, width, height, rotate, placed, variant, showSubmitters);
+                const neighborCandidates = buildNeighborCandidates(
+                    item,
+                    fontSize,
+                    width,
+                    height,
+                    rotate,
+                    placed,
+                    variant,
+                    showSubmitters,
+                );
                 neighborCandidates.forEach((candidate) => {
                     if (!isInsideEllipse(candidate.x, candidate.y, width, height)) return;
                     if (overlaps(candidate, placed, variant)) return;
@@ -282,28 +359,20 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({
 
                 if (bestCandidate && bestScore < 14) break;
 
-                for (let step = 0; step < 5200; step += 1) {
-                    const angle = ((angleSeed + step * 9) * Math.PI) / 180;
-                    const radius = index === 0 ? 0 : 1 + step * (variant === 'modal' ? 0.28 : 0.38);
-                    const wobble = 1 + ((hashCode(`${item.text}-${step}`) % 5) - 2) * 0.008;
-                    const horizontalBias = index < 10 ? 0.92 : 0.9;
-                    const verticalBias = index < 10 ? 0.76 : 0.82;
-                    const x = CENTER_X + Math.cos(angle) * radius * horizontalBias * wobble;
-                    const y = CENTER_Y + Math.sin(angle) * radius * verticalBias * wobble;
-
-                    const candidate: PositionedWord = {
-                        ...item,
-                        x,
-                        y,
+                for (let step = 0; step < 6200; step += 1) {
+                    const candidate = buildSpiralCandidate(
+                        item,
                         fontSize,
                         width,
                         height,
-                        color: COLORS[hashCode(item.text) % COLORS.length],
                         rotate,
-                        tooltip: buildTooltip(item, showSubmitters),
-                    };
+                        step,
+                        index,
+                        variant,
+                        showSubmitters,
+                    );
 
-                    if (!isInsideEllipse(x, y, width, height)) continue;
+                    if (!isInsideEllipse(candidate.x, candidate.y, width, height)) continue;
                     if (overlaps(candidate, placed, variant)) continue;
 
                     const score = getPlacementScore(candidate, placed, variant);
@@ -378,7 +447,7 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({
                             fontSize={item.fontSize}
                             fill={item.color}
                             stroke={hoveredText === item.text ? '#111827' : 'none'}
-                            strokeWidth={hoveredText === item.text ? Math.max(1.4, item.fontSize * 0.055) : 0}
+                            strokeWidth={hoveredText === item.text ? Math.max(1.2, item.fontSize * 0.03) : 0}
                             paintOrder="stroke fill"
                             strokeLinejoin="round"
                             fontWeight={900}
