@@ -29,35 +29,25 @@ const StudentPointSummaryTab: React.FC<StudentPointSummaryTabProps> = ({
   recentTransactions,
   onOpenHistory,
 }) => (
-  <div className="space-y-6">
+  <div className="space-y-5">
     {rank && (
-      <section className="rounded-[1.6rem] border border-blue-200 bg-gradient-to-br from-blue-50 via-white to-slate-50 p-5 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <section className="rounded-2xl border border-gray-200 bg-white px-5 py-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
-            <div className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">
-              Current Rank
-            </div>
-            <div className="mt-2 flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-sm font-bold text-gray-600">현재 등급</span>
               <PointRankBadge rank={rank} size="md" />
               <span className="inline-flex whitespace-nowrap rounded-full border border-blue-100 bg-white px-3 py-1 text-xs font-bold text-blue-700">
                 누적 기준 {formatWisAmount(rank.metricValue)}
               </span>
             </div>
-            <div className="mt-3 text-sm leading-6 text-gray-600">
-              {rank.description}
-            </div>
           </div>
-          <div className="rounded-2xl border border-white/70 bg-white/85 px-4 py-3">
+          <div className="flex items-center gap-3 lg:text-right">
             <div className="text-xs font-bold text-gray-500">다음 단계까지</div>
-            <div className="mt-1 whitespace-nowrap text-xl font-black text-gray-900">
+            <div className="whitespace-nowrap text-xl font-black text-gray-900">
               {rank.nextLabel
                 ? formatWisAmount(rank.remainingToNext)
                 : "최고 등급"}
-            </div>
-            <div className="mt-1 text-xs text-gray-500 whitespace-nowrap">
-              {rank.nextLabel
-                ? `${rank.nextLabel}까지 남은 위스`
-                : "현재 최고 등급을 유지 중입니다."}
             </div>
           </div>
         </div>
@@ -91,7 +81,7 @@ const StudentPointSummaryTab: React.FC<StudentPointSummaryTabProps> = ({
       </div>
     </div>
 
-    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+    <div>
       <section className="rounded-2xl border border-gray-200 bg-white p-5">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-bold text-gray-800">최근 위스 내역</h2>
@@ -145,28 +135,6 @@ const StudentPointSummaryTab: React.FC<StudentPointSummaryTabProps> = ({
               </div>
             );
           })}
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-gray-200 bg-blue-50 p-5">
-        <h2 className="text-lg font-bold text-gray-800">내 위스 안내</h2>
-        <div className="mt-4 space-y-3 text-sm leading-6 text-gray-700">
-          <div className="rounded-xl bg-white/80 px-4 py-3">
-            출석, 문제 풀이, 수업 자료 확인, 생각모아, 지도 태그 탐색,
-            역사교실 같은 활동으로 위스를 받을 수 있습니다.
-          </div>
-          <div className="rounded-xl bg-white/80 px-4 py-3">
-            한 달 동안 매일 출석하면 월간 개근 보너스가 추가로 지급될 수
-            있습니다.
-          </div>
-          <div className="rounded-xl bg-white/80 px-4 py-3">
-            상점 상품은 구매 요청 후 교사 확인을 거쳐 처리됩니다.
-          </div>
-          <div className="rounded-xl bg-white/80 px-4 py-3">
-            구매 진행 상태는{" "}
-            <span className="font-bold text-blue-700">구매 내역</span> 탭에서
-            바로 확인할 수 있습니다.
-          </div>
         </div>
       </section>
     </div>

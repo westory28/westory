@@ -14,7 +14,6 @@ const StudentPointOrdersTab: React.FC<StudentPointOrdersTabProps> = ({ orderFilt
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
                 <h2 className="text-lg font-bold text-gray-800">{'\uAD6C\uB9E4 \uB0B4\uC5ED'}</h2>
-                <p className="mt-1 text-sm text-gray-500">{'\uAD6C\uB9E4 \uC694\uCCAD \uC0C1\uD0DC\uC640 \uCC98\uB9AC \uACB0\uACFC\uB97C \uD655\uC778\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.'}</p>
             </div>
             <div className="flex flex-wrap gap-2">
                 <button
@@ -69,16 +68,11 @@ const StudentPointOrdersTab: React.FC<StudentPointOrdersTabProps> = ({ orderFilt
                                 <div className="text-2xl font-black text-blue-700 whitespace-nowrap">{formatWisAmount(order.priceSnapshot)}</div>
                             </div>
                         </div>
-                        <div className="mt-4 grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
-                            <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-                                <div className="text-gray-500">{'\uD604\uC7AC \uC0C1\uD0DC'}</div>
-                                <div className="mt-1 font-bold text-gray-800">{POINT_ORDER_STATUS_LABELS[order.status]}</div>
+                        {order.memo && (
+                            <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-bold text-gray-800">
+                                {order.memo}
                             </div>
-                            <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-                                <div className="text-gray-500">{'\uBA54\uBAA8'}</div>
-                                <div className="mt-1 font-bold text-gray-800">{order.memo || '\uBA54\uBAA8\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.'}</div>
-                            </div>
-                        </div>
+                        )}
                     </article>
                 ))}
             </div>

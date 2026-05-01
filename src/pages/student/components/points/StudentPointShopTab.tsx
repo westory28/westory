@@ -44,10 +44,6 @@ const StudentPointShopTab: React.FC<StudentPointShopTabProps> = ({
       <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
         <div className="min-w-0">
           <h2 className="text-lg font-bold text-gray-800">위스 상점</h2>
-          <p className="mt-1 text-sm text-gray-500">
-            현재 보유 위스로 요청할 수 있는 상품을 확인하고 바로 구매 요청까지
-            진행할 수 있습니다.
-          </p>
         </div>
         <div className="text-sm font-bold text-gray-500 whitespace-nowrap">
           사용 가능 위스{" "}

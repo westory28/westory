@@ -28,9 +28,6 @@ const StudentPointHistoryTab: React.FC<StudentPointHistoryTabProps> = ({
     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
       <div>
         <h2 className="text-lg font-bold text-gray-800">위스 내역</h2>
-        <p className="mt-1 text-sm text-gray-500">
-          획득과 사용 내역을 최신순으로 확인할 수 있습니다.
-        </p>
       </div>
       <div className="flex flex-wrap gap-2">
         {(Object.keys(POINT_HISTORY_FILTER_LABELS) as HistoryFilter[]).map(
