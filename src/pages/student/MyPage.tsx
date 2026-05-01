@@ -50,8 +50,10 @@ import { formatWisAmount } from "../../lib/pointFormatters";
 import { getDefaultProfileEmojiValue } from "../../lib/profileEmojis";
 import { getSemesterCollectionPath } from "../../lib/semesterScope";
 import {
+  loadStudentQuizResults,
   loadStudentProgressSummary,
   type StudentProgressSummary,
+  type StudentQuizResultDoc,
 } from "../../lib/studentProgressSummary";
 import type { PointPolicy, PointWallet } from "../../types";
 
@@ -127,21 +129,8 @@ interface SubjectScoreInsight {
   mood: "good" | "care";
 }
 
-interface QuizResultDetail {
-  id: string | number;
-  correct: boolean;
-  u?: string;
-}
-
-interface QuizResultDoc {
-  id: string;
-  unitId?: string;
-  category?: string;
-  score?: number;
-  timestamp?: { seconds?: number };
-  timeString?: string;
-  details?: QuizResultDetail[];
-}
+type QuizResultDoc = StudentQuizResultDoc;
+type QuizResultSource = QuizResultDoc[] | Promise<QuizResultDoc[]>;
 
 interface WrongNoteItem {
   key: string;
@@ -360,21 +349,28 @@ const MyPage: React.FC = () => {
   }, [user, config]);
 
   const loadMyPage = async () => {
+    if (!user || !config) return;
     const titles = await loadUnitTitles();
+    const quizResults = loadStudentQuizResults(config, user.uid);
     await Promise.all([
       loadProfileAndEmoji(),
       loadPointRankState(),
       loadScoreData(),
-      loadQuizData(titles),
-      loadProgressSummary(),
+      loadQuizData(titles, quizResults),
+      loadProgressSummary(quizResults),
     ]);
   };
 
-  const loadProgressSummary = async () => {
+  const loadProgressSummary = async (quizResults?: QuizResultSource) => {
     if (!user || !config) return;
     setProgressSummaryLoading(true);
     try {
-      setProgressSummary(await loadStudentProgressSummary(config, user.uid));
+      const preloadedQuizResults = quizResults ? await quizResults : undefined;
+      setProgressSummary(
+        await loadStudentProgressSummary(config, user.uid, {
+          preloadedQuizResults,
+        }),
+      );
     } finally {
       setProgressSummaryLoading(false);
     }
@@ -565,24 +561,18 @@ const MyPage: React.FC = () => {
     );
   };
 
-  const loadQuizData = async (titleMap: Record<string, string>) => {
+  const loadQuizData = async (
+    titleMap: Record<string, string>,
+    preloadedQuizResults?: QuizResultSource,
+  ) => {
     if (!user || !config) return;
     setLoadingWrong(true);
 
-    const resultSnap = await getDocs(
-      query(
-        collection(db, getSemesterCollectionPath(config, "quiz_results")),
-        where("uid", "==", user.uid),
-      ),
-    );
-
-    const results: QuizResultDoc[] = [];
-    resultSnap.forEach((item) => {
-      results.push({
-        id: item.id,
-        ...(item.data() as Omit<QuizResultDoc, "id">),
-      });
-    });
+    const results = (
+      preloadedQuizResults === undefined
+        ? await loadStudentQuizResults(config, user.uid)
+        : await preloadedQuizResults
+    ).slice();
     results.sort(
       (a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0),
     );

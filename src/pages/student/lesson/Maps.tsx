@@ -1,12 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { collection, getDocs, orderBy, query } from 'firebase/firestore';
 import { useAppToast } from '../../../components/common/AppToastProvider';
 import { InlineLoading } from '../../../components/common/LoadingState';
 import MapSidebar from '../../../components/common/MapSidebar';
 import MapViewer from '../../../components/common/MapViewer';
 import { useAuth } from '../../../contexts/AuthContext';
 import { notifyPointsUpdated } from '../../../lib/appEvents';
-import { db } from '../../../lib/firebase';
 import {
     buildMapTagRewardSourceId,
     claimPointActivityReward,
@@ -15,10 +13,9 @@ import {
     groupMapResourcesForDisplay,
     getGoogleMapsExternalUrl,
     mergeMapResources,
-    normalizeMapResource,
     type MapResource,
 } from '../../../lib/mapResources';
-import { getSemesterCollectionPath } from '../../../lib/semesterScope';
+import { readStudentMapResources } from '../../../lib/studentLessonReadCache';
 
 const getPreferredMapGroup = <T extends { key: string; title: string; items: Array<{ id: string }> }>(groups: T[]) => (
     groups.find((group) => group.title.includes('한국사'))
@@ -46,19 +43,7 @@ const StudentMaps: React.FC = () => {
         const loadMaps = async () => {
             setLoading(true);
             try {
-                const scopedQuery = query(
-                    collection(db, getSemesterCollectionPath(config, 'map_resources')),
-                    orderBy('sortOrder', 'asc'),
-                );
-                let snap = await getDocs(scopedQuery);
-
-                if (snap.empty) {
-                    const legacyQuery = query(collection(db, 'map_resources'), orderBy('sortOrder', 'asc'));
-                    snap = await getDocs(legacyQuery);
-                }
-
-                const resources = snap.docs.map((docSnap) => normalizeMapResource(docSnap.id, docSnap.data()));
-                const merged = mergeMapResources(resources);
+                const merged = await readStudentMapResources(config);
                 const firstGroup = getPreferredMapGroup(groupMapResourcesForDisplay(merged));
 
                 setItems(merged);

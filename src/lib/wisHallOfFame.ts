@@ -33,6 +33,15 @@ export const DEFAULT_WIS_HALL_OF_FAME_PUBLIC_RANK_LIMIT = 10;
 export const DEFAULT_WIS_HALL_OF_FAME_STORED_RANK_LIMIT = 20;
 
 const WIS_HALL_OF_FAME_SEEN_KEY_PREFIX = 'wisHallOfFameSeen';
+const WIS_HALL_OF_FAME_SNAPSHOT_CACHE_TTL_MS = 30 * 1000;
+
+type WisHallOfFameSnapshotCacheEntry = {
+  expiresAt: number;
+  value?: WisHallOfFameSnapshot | null;
+  promise?: Promise<WisHallOfFameSnapshot | null>;
+};
+
+const wisHallOfFameSnapshotCache = new Map<string, WisHallOfFameSnapshotCacheEntry>();
 
 const DEFAULT_DESKTOP_POSITIONS: HallOfFamePodiumPositions = {
   first: { leftPercent: 50, topPercent: 26, widthPercent: 21 },
@@ -338,6 +347,19 @@ const resolveHallOfFameYearSemester = (config: ConfigLike) => {
   return { year, semester };
 };
 
+const buildWisHallOfFameSnapshotCacheKey = (year: unknown, semester: unknown) => {
+  const safeYear = toSafeText(year);
+  const safeSemester = toSafeText(semester);
+  return safeYear && safeSemester ? `${safeYear}:${safeSemester}` : '';
+};
+
+const invalidateWisHallOfFameSnapshotCache = (year: unknown, semester: unknown) => {
+  const cacheKey = buildWisHallOfFameSnapshotCacheKey(year, semester);
+  if (cacheKey) {
+    wisHallOfFameSnapshotCache.delete(cacheKey);
+  }
+};
+
 export const getWisHallOfFameDocPath = (config: ConfigLike) => {
   const { year, semester } = getYearSemester(config);
   return `years/${year}/semesters/${semester}/point_public/${WIS_HALL_OF_FAME_DOC_ID}`;
@@ -421,10 +443,47 @@ export const normalizeWisHallOfFameSnapshot = (
 export const getWisHallOfFameSnapshot = async (
   config: ConfigLike,
 ): Promise<WisHallOfFameSnapshot | null> => {
-  if (!resolveHallOfFameYearSemester(config)) return null;
-  const snapshot = await getDoc(doc(db, getWisHallOfFameDocPath(config)));
-  if (!snapshot.exists()) return null;
-  return normalizeWisHallOfFameSnapshot(snapshot.data());
+  const targetYearSemester = resolveHallOfFameYearSemester(config);
+  if (!targetYearSemester) return null;
+
+  const { year, semester } = targetYearSemester;
+  const cacheKey = buildWisHallOfFameSnapshotCacheKey(year, semester);
+  const cached = wisHallOfFameSnapshotCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    if (cached.promise) {
+      return cached.promise;
+    }
+    if ('value' in cached) {
+      return cached.value ?? null;
+    }
+  }
+
+  const pendingEntry: WisHallOfFameSnapshotCacheEntry = {
+    expiresAt: Date.now() + WIS_HALL_OF_FAME_SNAPSHOT_CACHE_TTL_MS,
+  };
+  const promise = getDoc(doc(db, getWisHallOfFameDocPath({ year, semester })))
+    .then((snapshot) => {
+      const value = snapshot.exists()
+        ? normalizeWisHallOfFameSnapshot(snapshot.data())
+        : null;
+      if (wisHallOfFameSnapshotCache.get(cacheKey) === pendingEntry) {
+        wisHallOfFameSnapshotCache.set(cacheKey, {
+          expiresAt: Date.now() + WIS_HALL_OF_FAME_SNAPSHOT_CACHE_TTL_MS,
+          value,
+        });
+      }
+      return value;
+    })
+    .catch((error) => {
+      if (wisHallOfFameSnapshotCache.get(cacheKey) === pendingEntry) {
+        wisHallOfFameSnapshotCache.delete(cacheKey);
+      }
+      throw error;
+    });
+
+  pendingEntry.promise = promise;
+  wisHallOfFameSnapshotCache.set(cacheKey, pendingEntry);
+  return promise;
 };
 
 export const ensureWisHallOfFameSnapshot = async (
@@ -442,7 +501,12 @@ export const ensureWisHallOfFameSnapshot = async (
     semester,
     force: options?.force === true,
   });
-  return result.data as WisHallOfFameEnsureResult;
+  const payload = result.data as WisHallOfFameEnsureResult;
+  const ensureMeta = payload as WisHallOfFameEnsureResult & { stale?: boolean };
+  if (options?.force === true || payload?.ensured === true || ensureMeta?.stale === true) {
+    invalidateWisHallOfFameSnapshotCache(year, semester);
+  }
+  return payload;
 };
 
 export const getWisHallOfFame = getWisHallOfFameSnapshot;
@@ -467,6 +531,9 @@ export const saveWisHallOfFameConfig = async (
     saved?: boolean;
     hallOfFame?: HallOfFameInterfaceConfig | null;
   };
+  if (payload?.saved === true) {
+    invalidateWisHallOfFameSnapshotCache(year, semester);
+  }
   return {
     saved: payload?.saved === true,
     hallOfFame: resolveHallOfFameInterfaceConfig(payload?.hallOfFame || hallOfFame),

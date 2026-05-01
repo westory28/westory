@@ -6,6 +6,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { notifySystemConfigUpdated } from '../../../lib/appEvents';
 import { db } from '../../../lib/firebase';
 import { getDefaultPointPolicy } from '../../../lib/points';
+import { invalidateSiteSettingDocCache } from '../../../lib/siteSettings';
 import {
     loadSemesterReadiness,
     type SemesterReadinessResult,
@@ -490,6 +491,7 @@ const SettingsGeneral: React.FC = () => {
             }, { merge: true });
             setActiveSemester({ year, semester });
             setAvailableSemesters(nextRegistry);
+            invalidateSiteSettingDocCache('config');
             await refreshConfig();
             notifySystemConfigUpdated();
             showToast({

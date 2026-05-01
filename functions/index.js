@@ -2940,6 +2940,18 @@ exports.refreshWisHallOfFameOnSchedule = onSchedule(
 
     const { year, semester } = currentYearSemester;
     try {
+      const snapshot = await db.doc(getWisHallOfFamePath(year, semester)).get();
+      const data = snapshot.exists ? (snapshot.data() || {}) : null;
+      if (!isWisHallOfFameSnapshotStale(data)) {
+        console.log('Skipped scheduled hall of fame refresh because snapshot is fresh:', {
+          year,
+          semester,
+          snapshotKey: String(data?.snapshotKey || '').trim(),
+          snapshotVersion: Number(data?.snapshotVersion || WIS_HALL_OF_FAME_SNAPSHOT_VERSION),
+        });
+        return;
+      }
+
       const result = await refreshWisHallOfFame(year, semester, {
         source: 'schedule',
       });

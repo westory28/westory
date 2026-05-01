@@ -20,7 +20,9 @@ import { readLocalOnly, writeLocalOnly } from './safeStorage';
 type ConfigLike = Pick<SystemConfig, 'year' | 'semester'> | null | undefined;
 
 const STORAGE_PREFIX = 'westory:student-rank-promotion:v1';
+const SNAPSHOT_CACHE_TTL_MS = 60_000;
 const pendingLoads = new Map<string, Promise<StudentRankPromotionSnapshot>>();
+const snapshotCache = new Map<string, { expiresAt: number; value: StudentRankPromotionSnapshot }>();
 
 export interface StudentRankPromotionSnapshot {
     policy: PointPolicy;
@@ -129,6 +131,19 @@ export const buildStudentRankPromotionPreview = (
     };
 };
 
+export const invalidateStudentRankPromotionSnapshotCache = (config?: ConfigLike, uid?: string) => {
+    const normalizedUid = String(uid || '').trim();
+    if (!config || !normalizedUid) {
+        pendingLoads.clear();
+        snapshotCache.clear();
+        return;
+    }
+    const { year, semester } = getYearSemester(config);
+    const cacheKey = `${year}:${semester}:${normalizedUid}`;
+    pendingLoads.delete(cacheKey);
+    snapshotCache.delete(cacheKey);
+};
+
 export const loadStudentRankPromotionSnapshot = async (
     config: ConfigLike,
     uid: string,
@@ -140,6 +155,10 @@ export const loadStudentRankPromotionSnapshot = async (
 
     const { year, semester } = getYearSemester(config);
     const cacheKey = `${year}:${semester}:${normalizedUid}`;
+    const cached = snapshotCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+        return cached.value;
+    }
     const pending = pendingLoads.get(cacheKey);
     if (pending) return pending;
 
@@ -170,7 +189,12 @@ export const loadStudentRankPromotionSnapshot = async (
     pendingLoads.set(cacheKey, promise);
 
     try {
-        return await promise;
+        const value = await promise;
+        snapshotCache.set(cacheKey, {
+            expiresAt: Date.now() + SNAPSHOT_CACHE_TTL_MS,
+            value,
+        });
+        return value;
     } finally {
         pendingLoads.delete(cacheKey);
     }

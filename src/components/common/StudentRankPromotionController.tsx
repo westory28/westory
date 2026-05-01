@@ -21,9 +21,9 @@ const StudentRankPromotionController: React.FC = () => {
     const location = useLocation();
     const [promotionState, setPromotionState] = useState<StudentRankPromotionState | null>(null);
     const requestSeqRef = useRef(0);
+    const isStudentRoute = location.pathname.startsWith('/student');
 
     useEffect(() => {
-        const isStudentRoute = location.pathname.startsWith('/student');
         if (!currentUser || !config || !isStudentRoute) {
             setPromotionState(null);
             return;
@@ -92,7 +92,7 @@ const StudentRankPromotionController: React.FC = () => {
         return () => {
             cancelled = true;
         };
-    }, [config?.year, config?.semester, currentUser?.uid, location.pathname, location.search]);
+    }, [config?.year, config?.semester, currentUser?.uid, isStudentRoute]);
 
     if (!promotionState?.rank) return null;
 

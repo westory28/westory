@@ -35,14 +35,14 @@ interface LessonProgressDoc {
   updatedAt?: FirestoreTimestampLike;
 }
 
-interface QuizResultDoc {
+export interface StudentQuizResultDoc {
   id: string;
   unitId?: string;
   category?: string;
   score?: number;
   timestamp?: FirestoreTimestampLike;
   timeString?: string;
-  details?: Array<{ correct?: boolean }>;
+  details?: Array<{ id?: string | number; correct?: boolean; u?: string }>;
 }
 
 interface HistoryClassroomResultDoc {
@@ -391,10 +391,33 @@ const loadLessonSummary = async (
   }
 };
 
+export const loadStudentQuizResults = async (
+  config: ConfigLike,
+  uid: string,
+): Promise<StudentQuizResultDoc[]> => {
+  const safeUid = String(uid || "").trim();
+  if (!safeUid) return [];
+
+  const resultSnap = await getDocs(
+    query(
+      collection(db, getSemesterCollectionPath(config, "quiz_results")),
+      where("uid", "==", safeUid),
+    ),
+  );
+
+  return resultSnap.docs
+    .map((item) => ({
+      id: item.id,
+      ...(item.data() as Omit<StudentQuizResultDoc, "id">),
+    }))
+    .sort((a, b) => timestampMs(b.timestamp) - timestampMs(a.timestamp));
+};
+
 const loadQuizSummary = async (
   config: ConfigLike,
   uid: string,
   lessonsFromCatalog?: Awaited<ReturnType<typeof readLessons>> | null,
+  preloadedQuizResults?: StudentQuizResultDoc[],
 ): Promise<StudentQuizProgressSummary> => {
   try {
     const titleByUnitId = new Map(
@@ -403,17 +426,10 @@ const loadQuizSummary = async (
         lesson.title || lesson.unitId,
       ]),
     );
-    const resultSnap = await getDocs(
-      query(
-        collection(db, getSemesterCollectionPath(config, "quiz_results")),
-        where("uid", "==", uid),
-      ),
-    );
-    const results = resultSnap.docs
-      .map((item) => ({
-        id: item.id,
-        ...(item.data() as Omit<QuizResultDoc, "id">),
-      }))
+    const results = (
+      preloadedQuizResults ?? (await loadStudentQuizResults(config, uid))
+    )
+      .slice()
       .sort((a, b) => timestampMs(b.timestamp) - timestampMs(a.timestamp));
     if (!results.length) return emptyQuizSummary();
 
@@ -618,6 +634,7 @@ const loadWisSummary = async (
 export const loadStudentProgressSummary = async (
   config: ConfigLike,
   uid: string,
+  options: { preloadedQuizResults?: StudentQuizResultDoc[] } = {},
 ): Promise<StudentProgressSummary> => {
   const safeUid = String(uid || "").trim();
   if (!safeUid) {
@@ -642,7 +659,12 @@ export const loadStudentProgressSummary = async (
 
   const [lesson, quiz, historyClassroom, wis] = await Promise.all([
     loadLessonSummary(config, safeUid, lessonCatalog),
-    loadQuizSummary(config, safeUid, lessonCatalog),
+    loadQuizSummary(
+      config,
+      safeUid,
+      lessonCatalog,
+      options.preloadedQuizResults,
+    ),
     loadHistoryClassroomSummary(config, safeUid),
     loadWisSummary(config, safeUid),
   ]);

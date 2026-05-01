@@ -3,16 +3,11 @@ import { useAppToast } from "../../../../components/common/AppToastProvider";
 import LessonFootnoteDialog from "../../../../components/common/LessonFootnoteDialog";
 import { LoadingOverlay } from "../../../../components/common/LoadingState";
 import {
-  collection,
   deleteField,
   doc,
   getDoc,
-  getDocs,
-  limit,
-  query,
   serverTimestamp,
   setDoc,
-  where,
 } from "firebase/firestore";
 import LessonWorksheetStage from "../../../../components/common/LessonWorksheetStage";
 import { useAuth } from "../../../../contexts/AuthContext";
@@ -31,6 +26,7 @@ import { buildLessonAnswerSnapshot } from "../../../../lib/lessonProgressAnswers
 import { claimPointActivityReward } from "../../../../lib/points";
 import { emitSessionActivity } from "../../../../lib/sessionActivity";
 import { getSemesterCollectionPath } from "../../../../lib/semesterScope";
+import { readStudentLesson } from "../../../../lib/studentLessonReadCache";
 
 type AnswerStatus = "" | "correct" | "wrong";
 type SaveCompletionPopupState = {
@@ -190,22 +186,9 @@ const LessonContent: React.FC<LessonContentProps> = ({
       setError(false);
       setIsBlocked(false);
       try {
-        const semesterQuery = query(
-          collection(db, getSemesterCollectionPath(config, "lessons")),
-          where("unitId", "==", unitId),
-          limit(1),
-        );
-        let snap = await getDocs(semesterQuery);
-        if (snap.empty)
-          snap = await getDocs(
-            query(
-              collection(db, "lessons"),
-              where("unitId", "==", unitId),
-              limit(1),
-            ),
-          );
-        if (!snap.empty) {
-          const data = normalizeLessonData(snap.docs[0].data(), {
+        const lessonData = await readStudentLesson(config, unitId);
+        if (lessonData) {
+          const data = normalizeLessonData(lessonData, {
             unitId,
             title: fallbackTitle || "",
           });

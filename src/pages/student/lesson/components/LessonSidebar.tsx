@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { InlineLoading } from "../../../../components/common/LoadingState";
-import { db } from "../../../../lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
 import { useAuth } from "../../../../contexts/AuthContext";
-import { getSemesterDocPath } from "../../../../lib/semesterScope";
+import {
+  readStudentCurriculumTree,
+  type StudentCurriculumTreeItem,
+} from "../../../../lib/studentLessonReadCache";
 
 interface LessonSidebarProps {
   isOpen: boolean;
@@ -12,11 +13,7 @@ interface LessonSidebarProps {
   selectedUnitId: string | null;
 }
 
-interface TreeItem {
-  id: string;
-  title: string;
-  children?: TreeItem[];
-}
+type TreeItem = StudentCurriculumTreeItem;
 
 const LessonSidebar: React.FC<LessonSidebarProps> = ({
   isOpen,
@@ -34,18 +31,7 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
   useEffect(() => {
     const fetchTree = async () => {
       try {
-        const semesterTree = await getDoc(
-          doc(db, getSemesterDocPath(config, "curriculum", "tree")),
-        );
-        if (semesterTree.exists() && semesterTree.data().tree) {
-          setTree(semesterTree.data().tree);
-          return;
-        }
-
-        const globalTree = await getDoc(doc(db, "curriculum", "tree"));
-        if (globalTree.exists() && globalTree.data().tree) {
-          setTree(globalTree.data().tree);
-        }
+        setTree(await readStudentCurriculumTree(config));
       } catch (error) {
         console.error("Error fetching curriculum:", error);
       } finally {

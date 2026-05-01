@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { collection, documentId, getDocs, query, where } from 'firebase/firestore';
+import { collection, doc, documentId, getDoc, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../contexts/AuthContext';
 import { getSemesterCollectionPath } from '../../../lib/semesterScope';
@@ -108,16 +108,13 @@ const StudentWrongNoteModal: React.FC<StudentWrongNoteModalProps> = ({
 
             const unitTitleMap: Record<string, string> = { exam_prep: '학기 시험 대비' };
             try {
-                const treeSnap = await getDocs(query(collection(db, curriculumCollectionPath)));
-                treeSnap.forEach((doc) => {
-                    if (doc.id !== 'tree') return;
-                    const tree = (doc.data() as any).tree || [];
-                    tree.forEach((big: any) =>
-                        (big.children || []).forEach((mid: any) => {
-                            if (mid?.id && mid?.title) unitTitleMap[mid.id] = mid.title;
-                        }),
-                    );
-                });
+                const treeSnap = await getDoc(doc(db, curriculumCollectionPath, 'tree'));
+                const tree = treeSnap.exists() ? ((treeSnap.data() as any).tree || []) : [];
+                tree.forEach((big: any) =>
+                    (big.children || []).forEach((mid: any) => {
+                        if (mid?.id && mid?.title) unitTitleMap[mid.id] = mid.title;
+                    }),
+                );
             } catch (error) {
                 console.error(error);
             }

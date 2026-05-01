@@ -7,7 +7,10 @@ import { useAuth } from '../../contexts/AuthContext';
 import { MENUS, cloneDefaultMenus, sanitizeMenuConfig, type MenuConfig } from '../../constants/menus';
 import { runWhenIdle } from '../../lib/browserTasks';
 import { getDefaultProfileEmojiValue } from '../../lib/profileEmojis';
-import { loadStudentRankPromotionSnapshot } from '../../lib/pointRankPromotion';
+import {
+    invalidateStudentRankPromotionSnapshotCache,
+    loadStudentRankPromotionSnapshot,
+} from '../../lib/pointRankPromotion';
 import { readLocalOnly, removeStorage, writeLocalOnly } from '../../lib/safeStorage';
 import { SESSION_ACTIVITY_EVENT } from '../../lib/sessionActivity';
 import { getPointRankDefaultEmojiValue, type PointRankDisplay } from '../../lib/pointRanks';
@@ -357,16 +360,17 @@ const Header: React.FC = () => {
         };
 
         const triggerRankLoad = () => {
+            invalidateStudentRankPromotionSnapshotCache(config, currentUser?.uid);
             void loadStudentHeaderRank();
         };
 
-        triggerRankLoad();
+        void loadStudentHeaderRank();
         window.addEventListener('westory:points-updated', triggerRankLoad);
         return () => {
             cancelled = true;
             window.removeEventListener('westory:points-updated', triggerRankLoad);
         };
-    }, [config?.year, config?.semester, currentUser?.uid, isTeacherPortal, location.pathname, location.search]);
+    }, [config?.year, config?.semester, currentUser?.uid, isTeacherPortal]);
 
     if (!isReady) return null;
 

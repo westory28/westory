@@ -6,6 +6,7 @@ import { db } from '../../../lib/firebase';
 import { cloneDefaultMenus, sanitizeMenuConfig, type MenuConfig, type PortalType } from '../../../constants/menus';
 import { useAuth } from '../../../contexts/AuthContext';
 import { notifyMenuConfigUpdated } from '../../../lib/appEvents';
+import { invalidateSiteSettingDocCache } from '../../../lib/siteSettings';
 import {
     DEFAULT_WIS_HALL_OF_FAME_PODIUM_POSITIONS,
     DEFAULT_WIS_HALL_OF_FAME_POSITION_PRESET,
@@ -300,6 +301,7 @@ const SettingsInterface: React.FC = () => {
                 footerText: config.footerText.trim(),
                 updatedAt: serverTimestamp(),
             }, { merge: true });
+            invalidateSiteSettingDocCache('interface_config');
             await refreshInterfaceConfig();
             showToast({
                 tone: 'success',
@@ -327,6 +329,7 @@ const SettingsInterface: React.FC = () => {
                 updatedAt: serverTimestamp(),
             });
             setMenuConfig(normalized);
+            invalidateSiteSettingDocCache('menu_config');
             notifyMenuConfigUpdated();
             showToast({
                 tone: 'success',
