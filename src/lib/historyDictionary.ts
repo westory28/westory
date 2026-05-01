@@ -107,6 +107,17 @@ export const saveStudentHistoryDictionaryWord = async (termId: string) => {
   await callable({ termId });
 };
 
+export const saveStudentHistoryDictionaryEntry = async (input: {
+  word: string;
+  definition: string;
+}) => {
+  const callable = httpsCallable(functions, "saveStudentHistoryDictionaryEntry");
+  await callable({
+    word: input.word,
+    definition: input.definition,
+  });
+};
+
 export const saveHistoryDictionaryTerm = async (
   config: ConfigLike,
   input: {

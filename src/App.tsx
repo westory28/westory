@@ -9,6 +9,7 @@ import Login from './pages/Login';
 
 const StudentDashboard = lazyWithRetry(() => import('./pages/student/Dashboard'), 'student-dashboard');
 const StudentNote = lazyWithRetry(() => import('./pages/student/lesson/Note'), 'student-note');
+const StudentHistoryDictionary = lazyWithRetry(() => import('./pages/student/lesson/HistoryDictionary'), 'student-history-dictionary');
 const StudentMaps = lazyWithRetry(() => import('./pages/student/lesson/Maps'), 'student-maps');
 const StudentThinkCloud = lazyWithRetry(() => import('./pages/student/lesson/ThinkCloud'), 'student-think-cloud');
 const StudentQuizIndex = lazyWithRetry(() => import('./pages/student/quiz/QuizIndex'), 'student-quiz-index');
@@ -94,6 +95,11 @@ const App: React.FC = () => {
                             <Route path="/student/lesson/note" element={
                                 <MainLayout>
                                     <StudentNote />
+                                </MainLayout>
+                            } />
+                            <Route path="/student/lesson/history-dictionary" element={
+                                <MainLayout>
+                                    <StudentHistoryDictionary />
                                 </MainLayout>
                             } />
                             <Route path="/student/lesson/maps" element={

@@ -4350,6 +4350,37 @@ exports.saveStudentHistoryDictionaryWord = onCall({ region: REGION }, async (req
   });
 });
 
+exports.saveStudentHistoryDictionaryEntry = onCall({ region: REGION }, async (request) => {
+  const { uid } = assertAllowedWestoryUser(request);
+  const word = sanitizeHistoryDictionaryWord(request.data?.word);
+  const normalizedWord = normalizeHistoryDictionaryWord(word);
+  const definition = sanitizeHistoryDictionaryText(request.data?.definition, 1200);
+
+  if (!word || !normalizedWord) {
+    throw new HttpsError('invalid-argument', 'A word is required.');
+  }
+  if (!definition || definition.length < 2) {
+    throw new HttpsError('invalid-argument', 'Definition is required.');
+  }
+
+  const termId = buildHistoryDictionaryTermId(normalizedWord);
+  const wordRef = db.doc(getStudentHistoryDictionaryWordPath(uid, termId));
+  await wordRef.set({
+    termId,
+    word,
+    normalizedWord,
+    definition,
+    studentLevel: '내가 정리한 뜻풀이',
+    status: 'saved',
+    requestId: '',
+    definitionSource: 'student',
+    updatedAt: FieldValue.serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  return { termId, saved: true };
+});
+
 const resolveHistoryDictionaryRequestsWithTerm = async ({
   managerUid,
   termId,
