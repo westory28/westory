@@ -330,6 +330,8 @@ export const saveHistoryDictionaryTerm = async (
     studentLevel: string;
     relatedUnitId?: string;
     tags?: string[];
+    fallbackRequestId?: string;
+    fallbackUid?: string;
   },
 ) => {
   const { year, semester } = getYearSemester(config);
@@ -342,6 +344,8 @@ export const saveHistoryDictionaryTerm = async (
     studentLevel: input.studentLevel,
     relatedUnitId: input.relatedUnitId || "",
     tags: input.tags || [],
+    fallbackRequestId: input.fallbackRequestId || "",
+    fallbackUid: input.fallbackUid || "",
   });
 };
 

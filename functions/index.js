@@ -4946,6 +4946,29 @@ exports.deleteStudentHistoryDictionaryWordByTeacher = onCall({ region: REGION },
         rejectionReason: reason,
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
+    } else if (requestRef) {
+      transaction.set(requestRef, {
+        word: word || wordData.word || termId,
+        normalizedWord,
+        uid: targetUid,
+        studentName: sanitizeHistoryDictionaryText(profile.name, 40) || '학생',
+        grade: sanitizeHistoryDictionaryText(profile.grade, 8),
+        class: sanitizeHistoryDictionaryText(profile.class, 8),
+        number: sanitizeHistoryDictionaryText(profile.number, 8),
+        memo: '알림 기록에서 복구해 반려한 요청입니다.',
+        status: 'rejected',
+        matchedTermId: termId,
+        resolvedTermId: '',
+        resolvedBy: '',
+        rejectedBy: manager.uid,
+        rejectedAt: FieldValue.serverTimestamp(),
+        rejectionReason: reason,
+        year,
+        semester,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        resolvedAt: null,
+      }, { merge: true });
     }
 
     return {
@@ -4982,6 +5005,8 @@ const resolveHistoryDictionaryRequestsWithTerm = async ({
   managerUid,
   termId,
   requestId = '',
+  fallbackRequestId = '',
+  fallbackUid = '',
   year = '',
   semester = '',
 }) => {
@@ -5046,6 +5071,47 @@ const resolveHistoryDictionaryRequestsWithTerm = async ({
       });
     });
 
+    if (fallbackUid && !resolved.some((item) => item.uid === fallbackUid)) {
+      if (fallbackRequestId) {
+        transaction.set(db.doc(getHistoryDictionaryRequestPath(fallbackRequestId)), {
+          word: sanitizeHistoryDictionaryWord(term.word),
+          normalizedWord,
+          uid: fallbackUid,
+          studentName: '',
+          grade: '',
+          class: '',
+          number: '',
+          memo: '알림 기록에서 복구해 처리한 요청입니다.',
+          status: 'resolved',
+          matchedTermId: termId,
+          resolvedTermId: termId,
+          resolvedBy: managerUid,
+          year,
+          semester,
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+          resolvedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
+      transaction.set(db.doc(getStudentHistoryDictionaryWordPath(fallbackUid, termId)), {
+        termId,
+        word: sanitizeHistoryDictionaryWord(term.word),
+        normalizedWord,
+        definition: sanitizeHistoryDictionaryText(term.definition, 1200),
+        studentLevel: sanitizeHistoryDictionaryText(term.studentLevel, 80),
+        tags: sanitizeHistoryDictionaryTags(term.tags),
+        status: 'saved',
+        requestId: fallbackRequestId,
+        updatedAt: FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+      resolved.push({
+        uid: fallbackUid,
+        requestId: fallbackRequestId,
+        word: sanitizeHistoryDictionaryWord(term.word),
+      });
+    }
+
     return {
       termId,
       normalizedWord,
@@ -5064,6 +5130,8 @@ exports.saveHistoryDictionaryTerm = onCall({ region: REGION }, async (request) =
   const studentLevel = sanitizeHistoryDictionaryText(request.data?.studentLevel || '중학생 수준', 80);
   const relatedUnitId = sanitizeHistoryDictionaryText(request.data?.relatedUnitId, 120);
   const tags = sanitizeHistoryDictionaryTags(request.data?.tags);
+  const fallbackRequestId = sanitizeHistoryDictionaryText(request.data?.fallbackRequestId, 120);
+  const fallbackUid = sanitizeHistoryDictionaryText(request.data?.fallbackUid, 80);
 
   if (!word || !normalizedWord) {
     throw new HttpsError('invalid-argument', 'A word is required.');
@@ -5096,6 +5164,8 @@ exports.saveHistoryDictionaryTerm = onCall({ region: REGION }, async (request) =
   const resolvedResult = await resolveHistoryDictionaryRequestsWithTerm({
     managerUid: manager.uid,
     termId,
+    fallbackRequestId,
+    fallbackUid,
     year: scoped?.year || '',
     semester: scoped?.semester || '',
   });

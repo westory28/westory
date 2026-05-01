@@ -11,9 +11,11 @@ import {
   subscribeTeacherHistoryDictionaryRequests,
   subscribeTeacherHistoryDictionaryTerms,
 } from "../../lib/historyDictionary";
+import { loadNotifications } from "../../lib/notifications";
 import type {
   HistoryDictionaryRequest,
   HistoryDictionaryTerm,
+  WestoryNotification,
 } from "../../types";
 
 const OPEN_REQUEST_STATUSES = new Set(["requested", "needs_approval"]);
@@ -83,11 +85,79 @@ const normalizeTag = (value: string) =>
     .trim()
     .slice(0, 24);
 
+const mapNotificationToHistoryDictionaryRequest = (
+  notification: WestoryNotification,
+): HistoryDictionaryRequest | null => {
+  if (notification.type !== "history_dictionary_requested") return null;
+
+  const requestId = String(notification.entityId || notification.id || "");
+  const uid = String(notification.actorUid || "");
+  const body = String(notification.body || "")
+    .replace(/"/g, "")
+    .trim();
+  const match = body.match(
+    /^(.+?)\s+학생이\s+(.+?)\s+뜻풀이를 요청했습니다\.$/,
+  );
+  const studentName = String(match?.[1] || "학생").trim();
+  const word = String(match?.[2] || "").trim();
+  const normalizedWord = normalizeHistoryDictionaryWord(word);
+  if (!requestId || !uid || !word || !normalizedWord) return null;
+
+  return {
+    id: requestId,
+    word,
+    normalizedWord,
+    uid,
+    studentName,
+    grade: "",
+    class: "",
+    number: "",
+    memo: "알림 기록에서 확인한 요청입니다.",
+    status: "requested",
+    matchedTermId: "",
+    resolvedTermId: "",
+    resolvedBy: "",
+    createdAt: notification.createdAt || null,
+    updatedAt: notification.createdAt || null,
+    resolvedAt: null,
+  };
+};
+
+const mergeRequestSources = (
+  primaryRequests: HistoryDictionaryRequest[],
+  fallbackRequests: HistoryDictionaryRequest[],
+) => {
+  const byKey = new Map<string, HistoryDictionaryRequest>();
+
+  primaryRequests.forEach((request) => {
+    const key = request.id || `${request.uid}:${request.normalizedWord}`;
+    byKey.set(key, request);
+    if (request.uid && request.normalizedWord) {
+      byKey.set(`${request.uid}:${request.normalizedWord}`, request);
+    }
+  });
+
+  fallbackRequests.forEach((request) => {
+    const requestKey = request.id || `${request.uid}:${request.normalizedWord}`;
+    const wordKey = `${request.uid}:${request.normalizedWord}`;
+    if (byKey.has(requestKey) || byKey.has(wordKey)) return;
+    byKey.set(requestKey, request);
+    if (request.uid && request.normalizedWord) {
+      byKey.set(wordKey, request);
+    }
+  });
+
+  return Array.from(new Set(byKey.values()));
+};
+
 const ManageHistoryDictionary: React.FC = () => {
-  const { config } = useAuth();
+  const { config, currentUser } = useAuth();
   const { showToast } = useAppToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const [requests, setRequests] = useState<HistoryDictionaryRequest[]>([]);
+  const [notificationRequests, setNotificationRequests] = useState<
+    HistoryDictionaryRequest[]
+  >([]);
   const [terms, setTerms] = useState<HistoryDictionaryTerm[]>([]);
   const [selectedRequestId, setSelectedRequestId] = useState("");
   const [selectedTermId, setSelectedTermId] = useState("");
@@ -115,6 +185,37 @@ const ManageHistoryDictionary: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (!config || !currentUser?.uid) {
+      setNotificationRequests([]);
+      return;
+    }
+    let cancelled = false;
+
+    const loadFallbackRequests = async () => {
+      try {
+        const notifications = await loadNotifications(config, currentUser.uid);
+        if (cancelled) return;
+        setNotificationRequests(
+          notifications
+            .map(mapNotificationToHistoryDictionaryRequest)
+            .filter((item): item is HistoryDictionaryRequest => Boolean(item)),
+        );
+      } catch (error) {
+        console.error(
+          "Failed to load history dictionary request notifications:",
+          error,
+        );
+        if (!cancelled) setNotificationRequests([]);
+      }
+    };
+
+    void loadFallbackRequests();
+    return () => {
+      cancelled = true;
+    };
+  }, [config?.semester, config?.year, currentUser?.uid]);
+
+  useEffect(() => {
     const panel = searchParams.get("panel");
     const requestId = searchParams.get("requestId");
     if (panel === "requests") {
@@ -128,12 +229,17 @@ const ManageHistoryDictionary: React.FC = () => {
     }
   }, [searchParams]);
 
+  const mergedRequests = useMemo(
+    () => mergeRequestSources(requests, notificationRequests),
+    [notificationRequests, requests],
+  );
+
   const openRequests = useMemo(
     () =>
-      requests.filter((item) =>
+      mergedRequests.filter((item) =>
         OPEN_REQUEST_STATUSES.has(String(item.status || "")),
       ),
-    [requests],
+    [mergedRequests],
   );
 
   const visibleRequests = useMemo(() => {
@@ -195,7 +301,7 @@ const ManageHistoryDictionary: React.FC = () => {
       ? openRequests.find((item) => item.id === selectedRequestId)
       : null) ||
     (activePanel === "requests" && !selectedTermId ? openRequests[0] : null) ||
-    requests.find((item) => item.id === selectedRequestId) ||
+    mergedRequests.find((item) => item.id === selectedRequestId) ||
     null;
 
   const selectedTerm = terms.find((item) => item.id === selectedTermId) || null;
@@ -300,6 +406,16 @@ const ManageHistoryDictionary: React.FC = () => {
         studentLevel,
         relatedUnitId,
         tags,
+        fallbackRequestId:
+          selectedRequest &&
+          !requests.some((item) => item.id === selectedRequest.id)
+            ? selectedRequest.id
+            : undefined,
+        fallbackUid:
+          selectedRequest &&
+          !requests.some((item) => item.id === selectedRequest.id)
+            ? selectedRequest.uid
+            : undefined,
       });
       showToast({
         tone: "success",
