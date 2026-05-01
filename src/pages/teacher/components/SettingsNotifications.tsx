@@ -835,6 +835,86 @@ const SettingsNotifications: React.FC = () => {
     );
   };
 
+  const renderOverviewEventRow = (event: NotificationEventDefinition) => {
+    const policy = getPolicy(event);
+    const disabled = getEventDisabled(event);
+    return (
+      <div
+        key={event.key}
+        className="rounded-lg border border-gray-200 bg-white p-3"
+      >
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-start gap-3">
+            <div
+              className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                event.audience === "students"
+                  ? "bg-blue-50 text-blue-600"
+                  : "bg-indigo-50 text-indigo-600"
+              }`}
+            >
+              <i
+                className={
+                  event.audience === "students"
+                    ? "fas fa-user-graduate"
+                    : "fas fa-chalkboard-teacher"
+                }
+                aria-hidden="true"
+              ></i>
+            </div>
+            <div className="min-w-0">
+              <div className="truncate text-sm font-extrabold text-gray-900">
+                {event.label}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {renderStatusBadge(event)}
+                <span className="shrink-0 whitespace-nowrap rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-extrabold text-gray-600">
+                  {event.recipientLabel}
+                </span>
+              </div>
+              <div className="mt-2 truncate text-xs font-bold text-gray-500">
+                {event.triggerLabel}
+              </div>
+            </div>
+          </div>
+          <label className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap text-sm font-extrabold text-gray-700 sm:ml-4">
+            {renderSwitch(
+              policy.enabled,
+              disabled,
+              (checked) => updatePolicy(event.key, { enabled: checked }),
+              `${event.label} 보내기`,
+            )}
+            보내기
+          </label>
+        </div>
+      </div>
+    );
+  };
+
+  const renderOverviewEventGroup = (
+    title: string,
+    description: string,
+    icon: string,
+    events: NotificationEventDefinition[],
+  ) => (
+    <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="mb-4 flex items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+          <i className={icon} aria-hidden="true"></i>
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h4 className="text-base font-extrabold text-gray-900">{title}</h4>
+            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-extrabold text-emerald-700">
+              {events.length}개
+            </span>
+          </div>
+          <p className="mt-1 text-sm text-gray-500">{description}</p>
+        </div>
+      </div>
+      <div className="space-y-2">{events.map(renderOverviewEventRow)}</div>
+    </section>
+  );
+
   const renderAllEvents = (events: NotificationEventDefinition[]) => (
     <div className="space-y-2">{events.map(renderEventRow)}</div>
   );
@@ -951,6 +1031,23 @@ const SettingsNotifications: React.FC = () => {
           ))}
         </div>
       </div>
+
+      {activeTab === "overview" && (
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+          {renderOverviewEventGroup(
+            AUDIENCE_META.students.title,
+            "학생에게 보내는 알림의 사용 여부만 빠르게 조정합니다.",
+            AUDIENCE_META.students.icon,
+            studentEvents,
+          )}
+          {renderOverviewEventGroup(
+            AUDIENCE_META.teachers.title,
+            "교사에게 보내는 알림의 사용 여부만 빠르게 조정합니다.",
+            AUDIENCE_META.teachers.icon,
+            teacherEvents,
+          )}
+        </div>
+      )}
 
       {activeTab !== "overview" && (
         <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
