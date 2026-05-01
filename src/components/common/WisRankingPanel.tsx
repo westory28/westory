@@ -1,7 +1,21 @@
 import React, { useEffect, useState } from "react";
 import { InlineLoading } from "./LoadingState";
-import { getWisHallOfFameGradeLeaderboard, getWisHallOfFameSnapshot } from "../../lib/wisHallOfFame";
-import type { SystemConfig, WisHallOfFameEntry } from "../../types";
+import PointRankBadge from "./PointRankBadge";
+import {
+  getWisHallOfFameGradeLeaderboard,
+  getWisHallOfFameSnapshot,
+} from "../../lib/wisHallOfFame";
+import { getPointPolicy } from "../../lib/points";
+import {
+  getPointRankDefaultEmojiValue,
+  getPointRankDisplay,
+} from "../../lib/pointRanks";
+import type {
+  PointPolicy,
+  PointWallet,
+  SystemConfig,
+  WisHallOfFameEntry,
+} from "../../types";
 
 interface WisRankingPanelProps {
   config: SystemConfig | null | undefined;
@@ -9,7 +23,7 @@ interface WisRankingPanelProps {
 
 const formatWis = (value: unknown) => {
   const amount = Math.max(0, Number(value || 0));
-  return `${amount.toLocaleString("ko-KR")} W$`;
+  return `${amount.toLocaleString("ko-KR")} ₩s`;
 };
 
 const rankTone = (rank: number) => {
@@ -26,25 +40,59 @@ const rankIcon = (rank: number) => {
   return "";
 };
 
+const buildRankWallet = (entry: WisHallOfFameEntry): PointWallet => ({
+  uid: entry.uid,
+  studentName: entry.studentName,
+  grade: entry.grade,
+  class: entry.class,
+  number: "",
+  balance: Number(entry.currentBalance || 0),
+  earnedTotal: Number(entry.cumulativeEarned || 0),
+  rankEarnedTotal: Number(entry.cumulativeEarned || 0),
+  spentTotal: 0,
+  adjustedTotal: 0,
+  rankSnapshot: null,
+});
+
 const WisRankingPanel: React.FC<WisRankingPanelProps> = ({ config }) => {
   const [entries, setEntries] = useState<WisHallOfFameEntry[]>([]);
+  const [rankPolicy, setRankPolicy] = useState<
+    PointPolicy["rankPolicy"] | null
+  >(null);
+  const [defaultProfileIcon, setDefaultProfileIcon] = useState("😀");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    void getWisHallOfFameSnapshot(config)
-      .then((snapshot) => {
+    void (async () => {
+      try {
+        const [snapshot, pointPolicy] = await Promise.all([
+          getWisHallOfFameSnapshot(config),
+          getPointPolicy(config).catch((error) => {
+            console.warn("Failed to load wis ranking policy:", error);
+            return null;
+          }),
+        ]);
         if (cancelled) return;
         setEntries(getWisHallOfFameGradeLeaderboard(snapshot).slice(0, 5));
-      })
-      .catch((error) => {
+        setRankPolicy(pointPolicy?.rankPolicy || null);
+        setDefaultProfileIcon(
+          pointPolicy?.rankPolicy
+            ? getPointRankDefaultEmojiValue(pointPolicy.rankPolicy)
+            : "😀",
+        );
+      } catch (error) {
         console.warn("Failed to load wis ranking:", error);
-        if (!cancelled) setEntries([]);
-      })
-      .finally(() => {
+        if (!cancelled) {
+          setEntries([]);
+          setRankPolicy(null);
+          setDefaultProfileIcon("😀");
+        }
+      } finally {
         if (!cancelled) setLoading(false);
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };
@@ -61,7 +109,11 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({ config }) => {
 
       <div className="min-h-0 flex-1 space-y-2">
         {loading && (
-          <InlineLoading className="flex h-full min-h-[160px] items-center" message="순위를 불러오는 중입니다." showWarning />
+          <InlineLoading
+            className="flex h-full min-h-[160px] items-center"
+            message="순위를 불러오는 중입니다."
+            showWarning
+          />
         )}
 
         {!loading && entries.length === 0 && (
@@ -74,10 +126,16 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({ config }) => {
           entries.map((entry, index) => {
             const rank = Number(entry.rank || index + 1);
             const iconClassName = rankIcon(rank);
+            const entryRank = rankPolicy
+              ? getPointRankDisplay({
+                  rankPolicy,
+                  wallet: buildRankWallet(entry),
+                })
+              : null;
             return (
               <div
                 key={entry.uid}
-                className={`grid grid-cols-[72px_minmax(0,1fr)_92px_minmax(80px,auto)] items-center gap-3 rounded-lg border px-3 py-2.5 ${rankTone(rank)}`}
+                className={`grid grid-cols-[64px_minmax(0,1fr)_78px_minmax(74px,auto)] items-center gap-2 rounded-lg border px-2.5 py-2.5 sm:grid-cols-[72px_minmax(0,1fr)_92px_minmax(80px,auto)] sm:gap-3 sm:px-3 ${rankTone(rank)}`}
               >
                 <div className="flex items-center gap-2">
                   {iconClassName ? (
@@ -93,8 +151,14 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({ config }) => {
                     </span>
                   )}
                 </div>
-                <div className="truncate text-base font-extrabold text-gray-900">
-                  {entry.displayName || entry.studentName}
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/80 text-sm shadow-sm">
+                    {entry.profileIcon || defaultProfileIcon}
+                  </span>
+                  <span className="min-w-0 truncate text-base font-extrabold text-gray-900">
+                    {entry.displayName || entry.studentName}
+                  </span>
+                  <PointRankBadge rank={entryRank} size="sm" />
                 </div>
                 <div className="truncate text-sm font-bold text-gray-500">
                   {entry.grade}학년 {entry.class}반
