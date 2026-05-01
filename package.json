@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "verify:academic-year-scope": "node scripts/verify-academic-year-scope.mjs",
     "verify:assessment-attempt-safety": "node scripts/verify-assessment-attempt-safety.mjs",
     "verify:teacher-nav": "node scripts/verify-teacher-nav.mjs",
     "verify:score-warning-rules": "node scripts/verify-score-warning-rules.mjs",
