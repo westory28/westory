@@ -18,7 +18,6 @@ import {
     listPointTransactionsByUid,
     POINT_POLICY_FALLBACK,
 } from '../../lib/points';
-import { formatWisAmount } from '../../lib/pointFormatters';
 import { getPointRankDisplay, needsPointRankLegacyFallback } from '../../lib/pointRanks';
 import {
     findWisHallOfFameEntryByUid,
@@ -422,37 +421,21 @@ const Points: React.FC = () => {
             <main className={`mx-auto w-full flex-1 px-4 py-8 ${
                 isHallOfFameTab ? 'max-w-7xl' : 'max-w-6xl'
             }`}>
-                <div className={`mb-5 rounded-2xl border border-gray-200 bg-white shadow-sm ${
-                    isHallOfFameTab ? 'px-5 py-4' : 'px-6 py-5'
-                }`}>
-                    <div className={`flex flex-col gap-3 md:flex-row md:justify-between ${
-                        isHallOfFameTab ? 'md:items-center' : 'md:items-end'
-                    }`}>
-                        <div className="flex items-center">
-                            <h1 className="text-2xl font-bold text-gray-800">위스</h1>
-                        </div>
-                        <div className="flex flex-col items-stretch gap-3 md:items-end">
-                            <div className="rounded-xl border border-blue-100 bg-blue-50 px-5 py-3 text-right">
-                                <div className="text-xs font-bold text-blue-500">현재 보유 위스</div>
-                                <div className="mt-1 whitespace-nowrap text-3xl font-black leading-none text-blue-700">{formatWisAmount(safeWallet.balance || 0)}</div>
-                            </div>
-                        </div>
+                <div className="mb-4 overflow-x-auto rounded-t-lg bg-white border-b border-gray-200">
+                    <div className="flex min-w-max gap-2 px-2">
+                        {(Object.keys(STUDENT_POINT_TAB_LABELS) as StudentPointTab[]).map((tab) => (
+                            <button
+                                key={tab}
+                                type="button"
+                                onClick={() => handleTabChange(tab)}
+                                className={`border-b-2 px-5 py-4 text-sm font-bold transition whitespace-nowrap ${
+                                    activeTab === tab ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-600 hover:text-gray-800'
+                                }`}
+                            >
+                                {STUDENT_POINT_TAB_LABELS[tab]}
+                            </button>
+                        ))}
                     </div>
-                </div>
-
-                <div className="mb-4 flex flex-wrap gap-2 border-b border-gray-200">
-                    {(Object.keys(STUDENT_POINT_TAB_LABELS) as StudentPointTab[]).map((tab) => (
-                        <button
-                            key={tab}
-                            type="button"
-                            onClick={() => handleTabChange(tab)}
-                            className={`border-b-2 px-4 py-3 text-sm font-bold transition whitespace-nowrap ${
-                                activeTab === tab ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
-                            }`}
-                        >
-                            {STUDENT_POINT_TAB_LABELS[tab]}
-                        </button>
-                    ))}
                 </div>
 
                 <div className={`rounded-2xl border border-gray-200 bg-white shadow-sm ${
