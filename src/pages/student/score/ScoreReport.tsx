@@ -76,6 +76,22 @@ const formatScore = (value: number) => `${formatNumber(value)}점`;
 
 const formatPercent = (value: number) => `${formatNumber(value)}%`;
 
+const hasFinalConsonant = (value: string) => {
+  const chars = Array.from(String(value || "").trim());
+  const lastChar = chars[chars.length - 1];
+  if (!lastChar) return false;
+
+  const code = lastChar.charCodeAt(0) - 0xac00;
+  return code >= 0 && code <= 11171 && code % 28 !== 0;
+};
+
+const withParticle = (value: string, pair: "은/는" | "이/가") => {
+  const safeValue = String(value || "").trim();
+  if (!safeValue) return safeValue;
+  if (pair === "은/는") return `${safeValue}${hasFinalConsonant(safeValue) ? "은" : "는"}`;
+  return `${safeValue}${hasFinalConsonant(safeValue) ? "이" : "가"}`;
+};
+
 const readDraftScores = (uid: string, year: string, semester: string) => {
   try {
     const raw = localStorage.getItem(`scoreDraft:${uid}:${year}:${semester}`);
@@ -137,16 +153,16 @@ const getActionText = (analysis: SubjectAnalysis | null) => {
 
   const { row, nextOpenItem, dominantType } = analysis;
   if (nextOpenItem) {
-    return `${row.subject}의 ${nextOpenItem.name}은 ${formatScore(
+    return `${row.subject}의 ${withParticle(nextOpenItem.name, "은/는")} ${formatScore(
       Number(nextOpenItem.ratio || 0),
     )} 반영 항목입니다. 먼저 입력 여부와 준비 일정을 확인하세요.`;
   }
 
   if (dominantType) {
-    return `${row.subject}은 ${categoryMeta[dominantType].label} 영향이 큽니다. 이 유형을 기준으로 복습 시간을 배치하세요.`;
+    return `${withParticle(row.subject, "은/는")} ${categoryMeta[dominantType].label} 영향이 큽니다. 이 유형을 기준으로 복습 시간을 배치하세요.`;
   }
 
-  return `${row.subject}은 아직 분석할 점수가 부족합니다. 실제 입력값이 모두 저장되었는지 확인하세요.`;
+  return `${withParticle(row.subject, "은/는")} 아직 분석할 점수가 부족합니다. 실제 입력값이 모두 저장되었는지 확인하세요.`;
 };
 
 const ContributionPopover: React.FC<{
@@ -305,10 +321,10 @@ const ScoreReport: React.FC = () => {
   const summaryItems = [
     `${categoryMeta[dominantOverallType].label} 비중이 가장 높습니다.`,
     strongestAnalysis
-      ? `${strongestAnalysis.row.subject}가 가장 안정적입니다.`
+      ? `${withParticle(strongestAnalysis.row.subject, "이/가")} 가장 안정적입니다.`
       : "아직 강점 과목을 판단할 점수가 부족합니다.",
     focusAnalysis
-      ? `${focusAnalysis.row.subject}은 우선 확인이 필요합니다.`
+      ? `${withParticle(focusAnalysis.row.subject, "은/는")} 우선 확인이 필요합니다.`
       : "점수를 입력하면 보완 과목이 표시됩니다.",
   ];
 
