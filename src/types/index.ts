@@ -204,6 +204,7 @@ export type WestoryNotificationType =
   | "history_classroom_submitted"
   | "history_dictionary_requested"
   | "history_dictionary_resolved"
+  | "history_dictionary_rejected"
   | "point_order_requested"
   | "point_order_reviewed"
   | "lesson_worksheet_published"

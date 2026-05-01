@@ -4,9 +4,10 @@ import SettingsSchool from './components/SettingsSchool';
 import SettingsInterface from './components/SettingsInterface';
 import SettingsPrivacy from './components/SettingsPrivacy';
 import SettingsAccess from './components/SettingsAccess';
+import SettingsNotifications from './components/SettingsNotifications';
 
 const Settings: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<'general' | 'school' | 'interface' | 'privacy' | 'access'>('general');
+    const [activeTab, setActiveTab] = useState<'general' | 'school' | 'interface' | 'privacy' | 'access' | 'notifications'>('general');
 
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -48,6 +49,13 @@ const Settings: React.FC = () => {
                                 세부 권한 관리
                             </button>
                             <button
+                                onClick={() => setActiveTab('notifications')}
+                                className={`p-4 text-left font-bold text-sm transition-colors flex items-center gap-3 ${activeTab === 'notifications' ? 'bg-blue-50 text-blue-600 border-l-4 border-blue-600' : 'text-gray-600 hover:bg-gray-50 border-l-4 border-transparent'}`}
+                            >
+                                <div className="w-6 text-center"><i className="fas fa-bell"></i></div>
+                                알림 관리
+                            </button>
+                            <button
                                 onClick={() => setActiveTab('privacy')}
                                 className={`p-4 text-left font-bold text-sm transition-colors flex items-center gap-3 ${activeTab === 'privacy' ? 'bg-blue-50 text-blue-600 border-l-4 border-blue-600' : 'text-gray-600 hover:bg-gray-50 border-l-4 border-transparent'}`}
                             >
@@ -63,6 +71,7 @@ const Settings: React.FC = () => {
                     {activeTab === 'school' && <SettingsSchool />}
                     {activeTab === 'interface' && <SettingsInterface />}
                     {activeTab === 'access' && <SettingsAccess />}
+                    {activeTab === 'notifications' && <SettingsNotifications />}
                     {activeTab === 'privacy' && <SettingsPrivacy />}
                 </div>
             </main>
