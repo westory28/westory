@@ -40,6 +40,17 @@ const getNotificationIconClassName = (type: WestoryNotification["type"]) => {
   return "fas fa-circle-info";
 };
 
+const getNotificationBodyText = (notification: WestoryNotification) => {
+  const body = String(notification.body || "").trim();
+  if (notification.type === "history_dictionary_requested") {
+    return body.replace(
+      /학생이\s+"([^"]+)"\s+뜻풀이를 요청했습니다\./g,
+      "학생이 $1 뜻풀이를 요청했습니다.",
+    );
+  }
+  return body;
+};
+
 const NotificationBell: React.FC = () => {
   const { currentUser, config, userData } = useAuth();
   const { showToast } = useAppToast();
@@ -214,6 +225,7 @@ const NotificationBell: React.FC = () => {
 
             {notifications.map((notification) => {
               const unread = !notification.readAt;
+              const bodyText = getNotificationBodyText(notification);
               return (
                 <div
                   key={notification.id}
@@ -237,9 +249,9 @@ const NotificationBell: React.FC = () => {
                           <span className="h-2 w-2 shrink-0 rounded-full bg-blue-500"></span>
                         )}
                       </span>
-                      {notification.body && (
+                      {bodyText && (
                         <span className="mt-1 block truncate text-xs font-medium leading-5 text-stone-600">
-                          {notification.body}
+                          {bodyText}
                         </span>
                       )}
                       <span className="mt-1 block text-[11px] font-bold text-stone-400">
