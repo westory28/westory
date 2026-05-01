@@ -137,16 +137,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
   );
 
   useEffect(() => {
-    setActiveWorksheetPage((current) => {
-      if (!worksheetPageImagesForNav.length) return null;
-      if (
-        current != null &&
-        worksheetPageImagesForNav.some((pageImage) => pageImage.page === current)
-      ) {
-        return current;
-      }
-      return worksheetPageImagesForNav[0].page;
-    });
+    setActiveWorksheetPage(worksheetPageImagesForNav[0]?.page ?? null);
   }, [worksheetPageImagesForNav]);
 
   useEffect(() => {
@@ -167,6 +158,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
     setHasUnsavedChanges(false);
     setSaveMessage("");
     setSaveCompletionPopup(null);
+    setActiveWorksheetPage(null);
     setActiveFootnote(null);
     setFootnotePanelOpen(false);
     setActiveWorksheetFootnoteAnchorId(null);
@@ -185,6 +177,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
       setLoading(true);
       setError(false);
       setIsBlocked(false);
+      setActiveWorksheetPage(null);
       try {
         const lessonData = await readStudentLesson(config, unitId);
         if (lessonData) {
@@ -203,6 +196,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
         setHasUnsavedChanges(false);
         setSaveMessage("");
         setSaveCompletionPopup(null);
+        setActiveWorksheetPage(null);
         setActiveFootnote(null);
         setFootnotePanelOpen(false);
         setActiveWorksheetFootnoteAnchorId(null);
