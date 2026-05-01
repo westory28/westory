@@ -1989,6 +1989,9 @@ const ManageHistoryClassroom: React.FC = () => {
           entityType: "history_classroom",
           entityId: targetAssignment.id,
           dedupeKey: `history_classroom_assigned:${targetAssignment.id}`,
+          templateValues: {
+            assignmentTitle: nextMapTitle,
+          },
         }).catch((notificationError) => {
           console.error(
             "Failed to create history classroom assignment notifications:",
@@ -2267,6 +2270,9 @@ const ManageHistoryClassroom: React.FC = () => {
           entityType: "history_classroom",
           entityId: assignmentId,
           dedupeKey: `history_classroom_assigned:${assignmentId}`,
+          templateValues: {
+            assignmentTitle: resolvedMapTitle,
+          },
         }).catch((notificationError) => {
           console.error(
             "Failed to create history classroom assignment notifications:",

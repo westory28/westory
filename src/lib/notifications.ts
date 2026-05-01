@@ -32,6 +32,7 @@ export interface ManagedNotificationInput {
   entityId?: string;
   priority?: WestoryNotificationPriority;
   dedupeKey?: string;
+  templateValues?: Record<string, string | number | boolean | null | undefined>;
 }
 
 const NOTIFICATION_LIMIT = 10;

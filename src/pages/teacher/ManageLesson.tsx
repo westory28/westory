@@ -3527,15 +3527,20 @@ const ManageLesson: React.FC = () => {
       const shouldNotifyStudents =
         source === "header" && isNewlyVisibleToStudents;
       if (shouldNotifyStudents) {
+        const notificationLessonTitle =
+          persistedMetaTitle || selectedNodeTitle || "수업자료";
         void createManagedNotifications(config, {
           recipientMode: "all_students",
           type: "lesson_worksheet_published",
           title: "새 학습지가 업데이트되었습니다",
-          body: `${persistedMetaTitle || selectedNodeTitle || "수업자료"} 자료를 확인해 보세요.`,
+          body: `${notificationLessonTitle} 자료를 확인해 보세요.`,
           targetUrl: `/student/lesson/note?id=${encodeURIComponent(selectedNodeId)}&title=${encodeURIComponent(persistedMetaTitle || selectedNodeTitle || "")}`,
           entityType: "lesson",
           entityId: selectedNodeId,
           dedupeKey: `lesson_worksheet_published:${selectedNodeId}`,
+          templateValues: {
+            lessonTitle: notificationLessonTitle,
+          },
         }).catch((notificationError) => {
           console.error(
             "Failed to create lesson worksheet notifications:",

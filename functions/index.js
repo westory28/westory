@@ -709,6 +709,23 @@ const getPointPolicyPath = (year, semester) => `${getPointCollectionPath(year, s
 const getNotificationInboxPath = (year, semester, uid) => `${getSemesterRoot(year, semester)}/notification_inboxes/${uid}`;
 const getNotificationItemsPath = (year, semester, uid) => `${getNotificationInboxPath(year, semester, uid)}/items`;
 const getBroadcastNotificationsPath = (year, semester) => `${getSemesterRoot(year, semester)}/broadcast_notifications`;
+const NOTIFICATION_CONFIG_PATH = 'site_settings/notification_config';
+const NOTIFICATION_EVENT_AUDIENCE = {
+  history_classroom_assigned: 'students',
+  history_classroom_submitted: 'teachers',
+  history_dictionary_requested: 'teachers',
+  history_dictionary_resolved: 'students',
+  history_dictionary_rejected: 'students',
+  point_order_requested: 'teachers',
+  point_order_reviewed: 'students',
+  lesson_worksheet_published: 'students',
+  question_created: 'teachers',
+  question_replied: 'students',
+  quiz_submitted: 'teachers',
+  lesson_unit_completed: 'teachers',
+  think_cloud_submitted: 'teachers',
+  system_notice: 'students',
+};
 const HISTORY_DICTIONARY_TERMS_COLLECTION = 'history_dictionary_terms';
 const HISTORY_DICTIONARY_REQUESTS_COLLECTION = 'history_dictionary_requests';
 const NOTIFICATION_RETENTION_DAYS = 30;
@@ -739,6 +756,103 @@ const buildNotificationId = (dedupeKey) => {
   const normalized = sanitizeNotificationText(dedupeKey, 240);
   if (!normalized) return crypto.randomUUID();
   return `n_${crypto.createHash('sha1').update(normalized).digest('hex')}`;
+};
+
+const resolveNotificationAudience = (type, fallbackAudience = '') => {
+  const requested = String(fallbackAudience || '').trim();
+  if (requested === 'students' || requested === 'teachers') return requested;
+  return NOTIFICATION_EVENT_AUDIENCE[type] || 'students';
+};
+
+const loadNotificationConfigSafely = async () => {
+  try {
+    const snap = await db.doc(NOTIFICATION_CONFIG_PATH).get();
+    return snap.exists ? snap.data() || {} : {};
+  } catch (error) {
+    console.warn('Failed to load notification config. Notifications will use defaults.', error);
+    return {};
+  }
+};
+
+const normalizeNotificationTemplateValues = (value) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.entries(value).reduce((acc, [key, raw]) => {
+    const normalizedKey = String(key || '').trim();
+    if (!normalizedKey) return acc;
+    acc[normalizedKey] = String(raw ?? '').trim();
+    return acc;
+  }, {});
+};
+
+const getNotificationTemplateKeys = (template) => {
+  const keys = new Set();
+  for (const match of String(template || '').matchAll(/\{([a-zA-Z0-9_]+)\}/g)) {
+    keys.add(match[1]);
+  }
+  return Array.from(keys);
+};
+
+const renderNotificationTemplate = (template, values) => {
+  const text = String(template || '').trim();
+  if (!text) return '';
+  const keys = getNotificationTemplateKeys(text);
+  if (keys.some((key) => !Object.prototype.hasOwnProperty.call(values, key))) {
+    return '';
+  }
+  return text.replace(/\{([a-zA-Z0-9_]+)\}/g, (_, key) => values[key] || '');
+};
+
+const resolveNotificationTemplateText = (template, fallback, values) => {
+  const rendered = renderNotificationTemplate(template, values);
+  return rendered || String(fallback || '').trim();
+};
+
+const resolveNotificationTargetUrl = (template, fallback, values) => {
+  const fallbackUrl = String(fallback || '').trim();
+  const policyUrl = String(template || '').trim();
+  if (!policyUrl) return fallbackUrl;
+  if (!fallbackUrl) return renderNotificationTemplate(policyUrl, values) || policyUrl;
+  return getNotificationTemplateKeys(policyUrl).length > 0
+    ? renderNotificationTemplate(policyUrl, values) || fallbackUrl
+    : fallbackUrl;
+};
+
+const getNotificationPolicy = (config, type) => {
+  const policies = config?.eventPolicies;
+  if (!policies || typeof policies !== 'object') return null;
+  const policy = policies[type];
+  return policy && typeof policy === 'object' ? policy : null;
+};
+
+const prepareNotificationInput = async (year, semester, input, fallbackAudience = '') => {
+  const type = sanitizeNotificationText(input.type, 80, 'system_notice');
+  const audience = resolveNotificationAudience(type, fallbackAudience || input.audience);
+  const config = await loadNotificationConfigSafely();
+  const policy = getNotificationPolicy(config, type);
+
+  if (
+    config.enabled === false
+    || (audience === 'students' && config.studentNotificationsEnabled === false)
+    || (audience === 'teachers' && config.teacherNotificationsEnabled === false)
+    || policy?.enabled === false
+  ) {
+    return { skipped: true, type, audience, reason: 'disabled_by_notification_config' };
+  }
+
+  const templateValues = normalizeNotificationTemplateValues(input.templateValues);
+  return {
+    skipped: false,
+    type,
+    audience,
+    title: resolveNotificationTemplateText(policy?.titleTemplate, input.title, templateValues),
+    body: resolveNotificationTemplateText(policy?.bodyTemplate, input.body, templateValues),
+    targetUrl: resolveNotificationTargetUrl(policy?.targetUrl, input.targetUrl, templateValues),
+    entityType: input.entityType,
+    entityId: input.entityId,
+    actorUid: input.actorUid,
+    priority: policy?.priority === 'high' || input.priority === 'high' ? 'high' : 'normal',
+    dedupeKey: input.dedupeKey,
+  };
 };
 
 const normalizeHistoryDictionaryWord = (value) => String(value || '')
@@ -1676,11 +1790,11 @@ const runInChunks = async (items, chunkSize, handler) => {
   }
 };
 
-const createUserNotification = async (year, semester, recipientUid, input) => {
+const createUserNotificationWithPreparedInput = async (year, semester, recipientUid, input) => {
   const uid = String(recipientUid || '').trim();
   if (!uid) return { created: false, recipientUid: uid };
 
-  const type = sanitizeNotificationText(input.type, 80, 'system_notice');
+  const type = input.type;
   const entityType = sanitizeNotificationText(input.entityType, 80);
   const entityId = sanitizeNotificationText(input.entityId, 160);
   const dedupeKey = sanitizeNotificationText(
@@ -1723,12 +1837,30 @@ const createUserNotification = async (year, semester, recipientUid, input) => {
   });
 };
 
+const createUserNotification = async (year, semester, recipientUid, input) => {
+  const preparedInput = await prepareNotificationInput(year, semester, input);
+  if (preparedInput.skipped) {
+    return {
+      created: false,
+      skipped: true,
+      recipientUid: String(recipientUid || '').trim(),
+      reason: preparedInput.reason,
+    };
+  }
+  return createUserNotificationWithPreparedInput(year, semester, recipientUid, preparedInput);
+};
+
 const createBroadcastNotification = async (year, semester, input) => {
-  const type = sanitizeNotificationText(input.type, 80, 'system_notice');
+  const preparedInput = await prepareNotificationInput(year, semester, input, 'students');
+  if (preparedInput.skipped) {
+    return { created: false, skipped: true, reason: preparedInput.reason };
+  }
+
+  const type = preparedInput.type;
   const entityType = sanitizeNotificationText(input.entityType, 80);
   const entityId = sanitizeNotificationText(input.entityId, 160);
   const dedupeKey = sanitizeNotificationText(
-    input.dedupeKey || `${type}:${entityType}:${entityId}:${input.title}`,
+    preparedInput.dedupeKey || `${type}:${entityType}:${entityId}:${preparedInput.title}`,
     240,
   );
   const notificationId = buildNotificationId(`broadcast:${dedupeKey}`);
@@ -1742,15 +1874,15 @@ const createBroadcastNotification = async (year, semester, input) => {
 
     transaction.set(itemRef, {
       type,
-      title: sanitizeNotificationText(input.title, 80, '알림'),
-      body: sanitizeNotificationText(input.body, 500),
-      targetUrl: sanitizeNotificationText(input.targetUrl, 240),
+      title: sanitizeNotificationText(preparedInput.title, 80, '알림'),
+      body: sanitizeNotificationText(preparedInput.body, 500),
+      targetUrl: sanitizeNotificationText(preparedInput.targetUrl, 240),
       entityType,
       entityId,
-      actorUid: sanitizeNotificationText(input.actorUid, 160),
+      actorUid: sanitizeNotificationText(preparedInput.actorUid, 160),
       recipientUid: '',
       audience: 'all_students',
-      priority: input.priority === 'high' ? 'high' : 'normal',
+      priority: preparedInput.priority === 'high' ? 'high' : 'normal',
       dedupeKey,
       createdAt: FieldValue.serverTimestamp(),
       expiresAt: getNotificationExpiryTimestamp(),
@@ -1761,9 +1893,18 @@ const createBroadcastNotification = async (year, semester, input) => {
 
 const createUserNotifications = async (year, semester, recipientUids, input) => {
   const targets = uniqueNonEmptyStrings(recipientUids, 500);
+  const preparedInput = await prepareNotificationInput(year, semester, input);
+  if (preparedInput.skipped) {
+    return targets.map((recipientUid) => ({
+      created: false,
+      skipped: true,
+      recipientUid,
+      reason: preparedInput.reason,
+    }));
+  }
   const results = [];
   await runInChunks(targets, 20, async (recipientUid) => {
-    results.push(await createUserNotification(year, semester, recipientUid, input));
+    results.push(await createUserNotificationWithPreparedInput(year, semester, recipientUid, preparedInput));
   });
   return results;
 };
@@ -3218,6 +3359,7 @@ exports.createManagedNotifications = onCall({ region: REGION }, async (request) 
       priority: request.data?.priority,
       dedupeKey: request.data?.dedupeKey,
       actorUid: manager.uid,
+      templateValues: request.data?.templateValues,
     });
     return {
       createdCount: result.created ? 1 : 0,
@@ -3241,6 +3383,7 @@ exports.createManagedNotifications = onCall({ region: REGION }, async (request) 
     priority: request.data?.priority,
     dedupeKey: request.data?.dedupeKey,
     actorUid: manager.uid,
+    templateValues: request.data?.templateValues,
   });
 
   return {
@@ -3277,6 +3420,11 @@ exports.notifyHistoryClassroomSubmitted = onCall({ region: REGION }, async (requ
     actorUid: uid,
     priority: 'normal',
     dedupeKey: `history_classroom_submitted:${year}:${semester}:${resultId}`,
+    templateValues: {
+      studentName,
+      assignmentTitle,
+      percent,
+    },
   });
 
   return {
@@ -3861,6 +4009,10 @@ exports.createPointPurchaseRequest = onCall({ region: REGION }, async (request) 
       actorUid: uid,
       priority: 'normal',
       dedupeKey: `point_order_requested:${year}:${semester}:${result.orderId}`,
+      templateValues: {
+        studentName: result.studentName || '학생',
+        productName: result.productName || '상품',
+      },
     });
   }
   return result;
@@ -4240,6 +4392,10 @@ exports.reviewTeacherPointOrder = onCall({ region: REGION }, async (request) => 
       actorUid: manager.uid,
       priority: result.status === 'rejected' || result.status === 'cancelled' ? 'high' : 'normal',
       dedupeKey: `point_order_reviewed:${year}:${semester}:${result.orderId}:${result.status}`,
+      templateValues: {
+        productName: result.productName || '상품',
+        statusLabel,
+      },
     });
   }
   return result;
@@ -4559,6 +4715,10 @@ exports.requestHistoryDictionaryTerm = onCall({ region: REGION }, async (request
       actorUid: uid,
       priority: result.status === 'needs_approval' ? 'normal' : 'high',
       dedupeKey: `history_dictionary_requested:${year}:${semester}:${requestId}`,
+      templateValues: {
+        studentName: profile.name || '학생',
+        word,
+      },
     });
   }
 
@@ -4789,6 +4949,9 @@ exports.deleteStudentHistoryDictionaryWordByTeacher = onCall({ region: REGION },
     actorUid: manager.uid,
     priority: 'normal',
     dedupeKey: `history_dictionary_rejected:${year}:${semester}:${targetUid}:${termId}:${Date.now()}`,
+    templateValues: {
+      word: word || '요청한 단어',
+    },
   });
 
   return result;
@@ -4926,6 +5089,9 @@ exports.saveHistoryDictionaryTerm = onCall({ region: REGION }, async (request) =
       actorUid: manager.uid,
       priority: 'normal',
       dedupeKey: `history_dictionary_resolved:${termId}:${Date.now()}`,
+      templateValues: {
+        word,
+      },
     });
   }
 
@@ -4962,6 +5128,9 @@ exports.approveHistoryDictionaryTermForRequests = onCall({ region: REGION }, asy
     actorUid: manager.uid,
     priority: 'normal',
     dedupeKey: `history_dictionary_approved:${year}:${semester}:${termId}:${requestId || 'all'}`,
+    templateValues: {
+      word: result.resolved[0]?.word || '요청한 단어',
+    },
   });
 
   return {
