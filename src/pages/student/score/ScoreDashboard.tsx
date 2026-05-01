@@ -3,10 +3,11 @@ import { db } from '../../../lib/firebase';
 import { collection, query, orderBy, getDocs, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useAppToast } from '../../../components/common/AppToastProvider';
 import { PageLoading } from '../../../components/common/LoadingState';
+import SegmentedAchievementChart from '../../../components/common/SegmentedAchievementChart';
 import { useAuth } from '../../../contexts/AuthContext';
-import GradeChart from './components/GradeChart';
 import ScoreCard from './components/ScoreCard';
 import { getSemesterCollectionPath } from '../../../lib/semesterScope';
+import { buildScoreRows, getSubjectPriorityIndex } from '../../../lib/studentScores';
 
 interface GradingPlan {
     id: string;
@@ -390,19 +391,10 @@ const ScoreDashboard: React.FC = () => {
             return { ...p, currentScore: parseFloat(total.toFixed(1)), hasData };
         });
 
-        // Sort
-        const SUBJECT_PRIORITY = ['국어', '영어', '수학', '사회', '역사', '도덕', '과학', '기술', '가정', '기술가정', '기가', '정보', '음악', '미술', '체육'];
-
         if (sortMode === 'name') {
             processed.sort((a, b) => a.subject.localeCompare(b.subject));
         } else if (sortMode === 'importance') {
-            processed.sort((a, b) => {
-                const getIdx = (subj: string) => {
-                    const idx = SUBJECT_PRIORITY.findIndex(key => subj.includes(key));
-                    return idx === -1 ? 999 : idx;
-                };
-                return getIdx(a.subject) - getIdx(b.subject) || a.subject.localeCompare(b.subject);
-            });
+            processed.sort((a, b) => getSubjectPriorityIndex(a.subject) - getSubjectPriorityIndex(b.subject) || a.subject.localeCompare(b.subject));
         } else {
             // Latest
             processed.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
@@ -412,25 +404,10 @@ const ScoreDashboard: React.FC = () => {
     };
 
     const displayPlans = getFilteredAndSortedPlans();
-
-    // Chart Data
-    const chartLabels = displayPlans.map(p => p.subject);
-    const chartData = displayPlans.map(p => p.currentScore);
-    // Determine colors helper
-    const getChartColor = (score: number, subj: string) => {
-        const isArtsPE = ['음악', '미술', '체육'].some(key => subj.includes(key));
-        if (isArtsPE) {
-            if (score >= 80) return '#fa5252';
-            if (score >= 60) return '#fab005';
-            return '#339af0';
-        }
-        if (score >= 90) return '#fa5252';
-        if (score >= 80) return '#fd7e14';
-        if (score >= 70) return '#fab005';
-        if (score >= 60) return '#51cf66';
-        return '#339af0';
-    };
-    const chartColors = displayPlans.map(p => getChartColor(p.currentScore, p.subject));
+    const chartRows = buildScoreRows(displayPlans, userScores, {
+        filterByGrade: false,
+        sortMode: sortMode as 'importance' | 'name' | 'latest',
+    });
 
 
     if (loading) return <PageLoading message="성적 데이터를 불러오는 중입니다." />;
@@ -562,20 +539,10 @@ const ScoreDashboard: React.FC = () => {
                 <div>
                     <div className="bg-white p-5 rounded-xl border border-gray-100 sticky top-20 shadow-sm">
                         <div className="text-base font-bold text-gray-800 border-b border-gray-100 pb-2 mb-4">성취도 그래프</div>
-                        <div className="h-[300px]">
-                            <GradeChart labels={chartLabels} data={chartData} colors={chartColors} />
-                        </div>
-                        {/* Legend Bar */}
-                        <div className="flex h-8 rounded-lg overflow-hidden mt-6 text-xs font-bold text-white shadow-inner">
-                            <div className="flex-1 flex items-center justify-center bg-red-500">A</div>
-                            <div className="flex-1 flex items-center justify-center bg-orange-500">B</div>
-                            <div className="flex-1 flex items-center justify-center bg-yellow-500">C</div>
-                            <div className="flex-1 flex items-center justify-center bg-green-500">D</div>
-                            <div className="flex-1 flex items-center justify-center bg-blue-500">E</div>
-                        </div>
-                        <div className="text-[10px] text-gray-400 text-right mt-2 w-full pr-1">
-                            * 예체능은 A/B/C 3단계 평가
-                        </div>
+                        <SegmentedAchievementChart
+                            rows={chartRows}
+                            emptyMessage="입력된 점수를 그래프로 표시할 수 없습니다."
+                        />
                     </div>
                 </div>
             </div>

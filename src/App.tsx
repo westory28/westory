@@ -16,6 +16,7 @@ const QuizRunner = lazyWithRetry(() => import('./pages/student/quiz/QuizRunner')
 const HistoryClassroomIndex = lazyWithRetry(() => import('./pages/student/history-classroom/HistoryClassroomIndex'), 'history-classroom-index');
 const HistoryClassroomRunner = lazyWithRetry(() => import('./pages/student/history-classroom/HistoryClassroomRunner'), 'history-classroom-runner');
 const StudentScoreDashboard = lazyWithRetry(() => import('./pages/student/score/ScoreDashboard'), 'student-score-dashboard');
+const StudentScoreReport = lazyWithRetry(() => import('./pages/student/score/ScoreReport'), 'student-score-report');
 const TeacherDashboard = lazyWithRetry(() => import('./pages/teacher/Dashboard'), 'teacher-dashboard');
 const StudentList = lazyWithRetry(() => import('./pages/teacher/StudentList'), 'student-list');
 const ManageQuiz = lazyWithRetry(() => import('./pages/teacher/ManageQuiz'), 'manage-quiz');
@@ -133,6 +134,11 @@ const App: React.FC = () => {
                             <Route path="/student/score" element={
                                 <MainLayout>
                                     <StudentScoreDashboard />
+                                </MainLayout>
+                            } />
+                            <Route path="/student/score/report" element={
+                                <MainLayout>
+                                    <StudentScoreReport />
                                 </MainLayout>
                             } />
                             <Route path="/teacher/dashboard" element={

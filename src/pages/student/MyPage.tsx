@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   collection,
   doc,
@@ -1135,7 +1136,6 @@ const MyPage: React.FC = () => {
 
   const leftMenus: Array<{ key: MainMenu; title: string; icon: string }> = [
     { key: "profile", title: "나의 기본 정보", icon: "fa-id-card" },
-    { key: "score", title: "나의 성적표", icon: "fa-chart-column" },
     { key: "wrong_note", title: "오답 노트", icon: "fa-book-open" },
   ];
   const profileGradeValue = normalizeClassValue(
@@ -1363,12 +1363,7 @@ const MyPage: React.FC = () => {
                       onClick={
                         item.label === "역사교실 참여"
                           ? undefined
-                          : () =>
-                              setMenu(
-                                item.label === "최근 평가"
-                                  ? "score"
-                                  : "profile",
-                              )
+                          : () => setMenu("profile")
                       }
                       className="rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-[0_14px_30px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(15,23,42,0.10)]"
                     >
@@ -1414,6 +1409,54 @@ const MyPage: React.FC = () => {
                     </button>
                   ))}
                 </div>
+
+                <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
+                  <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <div className="flex items-center gap-3">
+                        <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                          <i className="fas fa-chart-column"></i>
+                        </span>
+                        <h3 className="text-xl font-black text-slate-900">
+                          성적 요약
+                        </h3>
+                      </div>
+                      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                        <div className="rounded-xl border border-slate-200 px-4 py-3">
+                          <div className="text-xs font-bold text-slate-400">
+                            전체 평균
+                          </div>
+                          <div className="mt-1 text-2xl font-black text-blue-600">
+                            {scoreAverage}점
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 px-4 py-3">
+                          <div className="text-xs font-bold text-slate-400">
+                            목표 달성
+                          </div>
+                          <div className="mt-1 text-2xl font-black text-emerald-600">
+                            {targetMetCount}개
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 px-4 py-3">
+                          <div className="text-xs font-bold text-slate-400">
+                            다음 확인
+                          </div>
+                          <div className="mt-1 truncate text-lg font-black text-slate-700">
+                            {topNeedsCareSubject?.subject || "목표 유지"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <Link
+                      to="/student/score/report"
+                      className="inline-flex shrink-0 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-extrabold text-blue-700 transition hover:bg-blue-100"
+                    >
+                      성적 리포트 보기
+                      <i className="fas fa-chevron-right ml-2 text-xs"></i>
+                    </Link>
+                  </div>
+                </section>
 
                 <div className="grid gap-5 lg:grid-cols-[1fr_1fr_1.1fr]">
                   <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
