@@ -309,15 +309,6 @@ const Points: React.FC = () => {
                                 <div className="text-xs font-bold text-blue-500">현재 보유 위스</div>
                                 <div className="mt-1 whitespace-nowrap text-3xl font-black leading-none text-blue-700">{formatWisAmount(safeWallet.balance || 0)}</div>
                             </div>
-                            {!isHallOfFameTab && (
-                                <button
-                                    type="button"
-                                    onClick={() => handleTabChange('hall-of-fame')}
-                                    className="inline-flex min-h-11 items-center justify-center rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-black text-amber-900 transition hover:border-amber-300 hover:bg-amber-100"
-                                >
-                                    화랑의 전당 보기
-                                </button>
-                            )}
                         </div>
                     </div>
                 </div>
