@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { db } from '../../../lib/firebase';
 import { collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, getDocs, query, orderBy } from 'firebase/firestore';
+import SegmentedAchievementChart from '../../../components/common/SegmentedAchievementChart';
 import { useAuth } from '../../../contexts/AuthContext';
 import { getSemesterCollectionPath, getSemesterDocPath } from '../../../lib/semesterScope';
+import { buildScoreRows, getScoreKey, getTypeLabel, normalizePlanItemType } from '../../../lib/studentScores';
 
 interface GradingItem {
     type: '정기' | '수행';
@@ -129,6 +131,9 @@ const ExamGradingPlan: React.FC = () => {
     const { userConfig } = useAuth();
     const [plans, setPlans] = useState<GradingPlan[]>([]);
     const [loading, setLoading] = useState(false);
+    const [previewOpen, setPreviewOpen] = useState(false);
+    const [previewPlan, setPreviewPlan] = useState<Omit<GradingPlan, 'id'> | null>(null);
+    const [previewScores, setPreviewScores] = useState<Record<string, string>>({});
 
     // Form State
     const [editId, setEditId] = useState<string | null>(null);
@@ -225,6 +230,45 @@ const ExamGradingPlan: React.FC = () => {
         }
     };
 
+    const buildDraftPreviewPlan = (): Omit<GradingPlan, 'id'> => ({
+        subject: subject.trim() || '미리보기 과목',
+        targetGrade: grade,
+        items: items.map((item, idx) => ({
+            ...item,
+            name: item.name.trim() || `${idx + 1}번 항목`,
+            maxScore: Number(item.maxScore || 0),
+            ratio: Number(item.ratio || 0),
+        })),
+        academicYear: userConfig?.year || '2025',
+        semester: userConfig?.semester || '1',
+    });
+
+    const openPreview = (plan?: GradingPlan) => {
+        const nextPlan = plan
+            ? {
+                subject: plan.subject,
+                targetGrade: plan.targetGrade || grade,
+                items: (plan.items || []).map((item, idx) => ({
+                    ...item,
+                    name: item.name || `${idx + 1}번 항목`,
+                    maxScore: Number(item.maxScore || 0),
+                    ratio: Number(item.ratio || 0),
+                })),
+                academicYear: plan.academicYear,
+                semester: plan.semester,
+            }
+            : buildDraftPreviewPlan();
+        setPreviewPlan(nextPlan);
+        setPreviewScores({});
+        setPreviewOpen(true);
+    };
+
+    const closePreview = () => {
+        setPreviewOpen(false);
+        setPreviewPlan(null);
+        setPreviewScores({});
+    };
+
     const resetForm = () => {
         setEditId(null);
         setGrade('3');
@@ -270,9 +314,129 @@ const ExamGradingPlan: React.FC = () => {
     };
 
     const filteredPlans = getSortedPlans().filter((plan) => (plan.targetGrade || '3') === grade);
+    const previewValidItems = (previewPlan?.items || []).filter((item) => item.maxScore > 0 && item.ratio > 0);
+    const previewRatioTotal = previewValidItems.reduce((sum, item) => sum + Number(item.ratio || 0), 0);
+    const previewRows = previewPlan
+        ? buildScoreRows([{
+            id: 'preview-plan',
+            ...previewPlan,
+            items: previewValidItems,
+        }], previewScores, { filterByGrade: false })
+        : [];
+    const previewRow = previewRows[0] || null;
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full">
+            {previewOpen && previewPlan && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
+                    <div className="flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+                        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+                            <div>
+                                <h3 className="text-lg font-black text-slate-900">
+                                    평가 반영 미리보기
+                                </h3>
+                                <p className="mt-1 text-sm font-semibold text-slate-500">
+                                    {previewPlan.targetGrade || grade}학년 {previewPlan.subject} 기준으로 학생 입력 결과를 확인합니다.
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={closePreview}
+                                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50"
+                                aria-label="미리보기 닫기"
+                            >
+                                <i className="fas fa-times text-sm" aria-hidden="true"></i>
+                            </button>
+                        </div>
+
+                        <div className="overflow-y-auto px-5 py-5">
+                            {previewValidItems.length === 0 ? (
+                                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm font-bold text-slate-400">
+                                    만점과 반영 비율이 입력된 평가 항목이 있어야 미리보기를 볼 수 있습니다.
+                                </div>
+                            ) : (
+                                <div className="grid gap-5 lg:grid-cols-[1fr_1.1fr]">
+                                    <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                        <div className="mb-3 flex items-center justify-between gap-3">
+                                            <h4 className="text-sm font-black text-slate-800">
+                                                학생 점수 입력 예시
+                                            </h4>
+                                            <span className={`rounded-full px-3 py-1 text-xs font-black ${previewRatioTotal === 100 ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-800'}`}>
+                                                반영 합계 {previewRatioTotal}%
+                                            </span>
+                                        </div>
+                                        <div className="space-y-3">
+                                            {previewValidItems.map((item, idx) => {
+                                                const key = getScoreKey('preview-plan', idx);
+                                                const maxScore = Number(item.maxScore || 0);
+                                                return (
+                                                    <label key={`${item.name}-${idx}`} className="block rounded-lg border border-slate-200 bg-white px-3 py-3">
+                                                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                                                            <div className="min-w-0">
+                                                                <div className="truncate text-sm font-black text-slate-800">
+                                                                    {item.name || `${idx + 1}번 항목`}
+                                                                </div>
+                                                                <div className="text-xs font-bold text-slate-400">
+                                                                    {getTypeLabel(normalizePlanItemType(item.type, item.name))} · {maxScore}점 만점 · {item.ratio}% 반영
+                                                                </div>
+                                                            </div>
+                                                            <input
+                                                                type="number"
+                                                                min={0}
+                                                                max={maxScore}
+                                                                value={previewScores[key] || ''}
+                                                                onChange={(event) => {
+                                                                    const raw = event.target.value;
+                                                                    const numeric = Number(raw);
+                                                                    const nextValue = raw === ''
+                                                                        ? ''
+                                                                        : String(Math.max(0, Math.min(maxScore, Number.isFinite(numeric) ? numeric : 0)));
+                                                                    setPreviewScores((prev) => ({ ...prev, [key]: nextValue }));
+                                                                }}
+                                                                placeholder="점수"
+                                                                className="w-24 rounded-lg border border-slate-300 px-3 py-2 text-center text-sm font-bold focus:border-blue-500 focus:outline-none"
+                                                            />
+                                                        </div>
+                                                    </label>
+                                                );
+                                            })}
+                                        </div>
+                                    </section>
+
+                                    <section className="rounded-xl border border-slate-200 bg-white p-4">
+                                        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+                                            <div>
+                                                <h4 className="text-sm font-black text-slate-800">
+                                                    실시간 반영 그래프
+                                                </h4>
+                                                <p className="mt-1 text-xs font-semibold text-slate-400">
+                                                    입력한 점수가 항목별 반영 점수로 나뉘어 표시됩니다.
+                                                </p>
+                                            </div>
+                                            <div className="text-right">
+                                                <div className="text-xs font-bold text-slate-400">환산 점수</div>
+                                                <div className="text-3xl font-black text-blue-600">
+                                                    {previewRow ? previewRow.total : 0}점
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <SegmentedAchievementChart
+                                            rows={previewRows}
+                                            emptyMessage="점수를 입력하면 그래프가 표시됩니다."
+                                        />
+                                        {previewRatioTotal !== 100 && (
+                                            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-800">
+                                                저장하려면 반영 비율 합계가 100%가 되어야 합니다. 현재 미리보기는 입력된 비율 그대로 계산합니다.
+                                            </div>
+                                        )}
+                                    </section>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Left: Form */}
             <div className="lg:col-span-5">
                 <div className="bg-blue-50 p-6 rounded-xl border border-blue-100 sticky top-4">
@@ -359,12 +523,21 @@ const ExamGradingPlan: React.FC = () => {
                             </button>
                         </div>
 
-                        <button
-                            onClick={handleSave}
-                            className={`w-full text-white font-bold py-3 rounded-lg shadow-md transition transform active:scale-95 mt-4 ${editId ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-600 hover:bg-blue-700'}`}
-                        >
-                            {editId ? "수정사항 저장" : "기준 저장하기"}
-                        </button>
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-[0.8fr_1.2fr]">
+                            <button
+                                type="button"
+                                onClick={() => openPreview()}
+                                className="w-full rounded-lg border border-blue-200 bg-white py-3 text-sm font-bold text-blue-700 shadow-sm transition hover:bg-blue-50 active:scale-95"
+                            >
+                                <i className="fas fa-chart-simple mr-2"></i>미리보기
+                            </button>
+                            <button
+                                onClick={handleSave}
+                                className={`w-full text-white font-bold py-3 rounded-lg shadow-md transition transform active:scale-95 ${editId ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-600 hover:bg-blue-700'}`}
+                            >
+                                {editId ? "수정사항 저장" : "기준 저장하기"}
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -444,6 +617,9 @@ const ExamGradingPlan: React.FC = () => {
                                         </div>
                                     </div>
                                     <div className="flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition duration-200 border-l pl-4 border-gray-100 ml-4">
+                                        <button onClick={() => openPreview(p)} className="text-emerald-600 hover:bg-emerald-50 p-2 rounded flex items-center text-xs font-bold bg-white border border-emerald-100 shadow-sm">
+                                            <i className="fas fa-chart-simple mr-1"></i>미리보기
+                                        </button>
                                         <button onClick={() => handleEdit(p)} className="text-blue-500 hover:bg-blue-50 p-2 rounded flex items-center text-xs font-bold bg-white border border-blue-100 shadow-sm">
                                             <i className="fas fa-pen mr-1"></i>수정
                                         </button>

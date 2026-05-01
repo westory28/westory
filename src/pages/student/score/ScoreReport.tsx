@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import {
   collection,
   doc,
@@ -10,7 +9,6 @@ import {
   serverTimestamp,
   setDoc,
 } from "firebase/firestore";
-import SegmentedAchievementChart from "../../../components/common/SegmentedAchievementChart";
 import { PageLoading } from "../../../components/common/LoadingState";
 import { useAuth } from "../../../contexts/AuthContext";
 import { db } from "../../../lib/firebase";
@@ -18,11 +16,14 @@ import { getSemesterCollectionPath } from "../../../lib/semesterScope";
 import {
   buildScoreRows,
   buildSubjectScoreInsights,
+  getAchievementColor,
   getTeacherAdviceText,
   type GradingPlanLike,
   type ScoreRow,
   type SubjectScoreInsight,
 } from "../../../lib/studentScores";
+import GradeChart from "./components/GradeChart";
+import ScoreSubTabs from "./components/ScoreSubTabs";
 
 interface UserGoalDoc {
   myPageGoalScore?: string;
@@ -123,6 +124,9 @@ const ScoreReport: React.FC = () => {
     insights
       .filter((item) => item.gap > 0)
       .sort((a, b) => b.gap - a.gap)[0] || selectedInsight;
+  const chartLabels = rows.map((row) => row.subject);
+  const chartData = rows.map((row) => row.total);
+  const chartColors = rows.map((row) => getAchievementColor(row.total, row.subject));
 
   const saveGoal = async () => {
     if (!user) return;
@@ -146,22 +150,7 @@ const ScoreReport: React.FC = () => {
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8">
-      <div className="mb-7 flex flex-col gap-3 border-b-2 border-slate-800 pb-4 md:flex-row md:items-end md:justify-between">
-        <div>
-          <h1 className="text-2xl font-black tracking-tight text-slate-900">
-            나의 성적 리포트
-          </h1>
-          <p className="mt-2 text-sm font-semibold text-slate-500">
-            저장된 성적 입력값을 기준으로 목표와 보완 과목을 확인합니다.
-          </p>
-        </div>
-        <Link
-          to="/student/score"
-          className="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-extrabold text-blue-700 transition hover:bg-blue-100"
-        >
-          성적 입력으로 이동
-        </Link>
-      </div>
+      <ScoreSubTabs />
 
       <div className="grid gap-5 lg:grid-cols-3">
         {[
@@ -187,8 +176,18 @@ const ScoreReport: React.FC = () => {
       <div className="mt-6 grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
         <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
           <h2 className="text-xl font-black text-slate-900">성취도 그래프</h2>
-          <div className="mt-6">
-            <SegmentedAchievementChart rows={rows} />
+          <div className="mt-6 h-[320px]">
+            <GradeChart labels={chartLabels} data={chartData} colors={chartColors} />
+          </div>
+          <div className="mt-6 flex h-8 overflow-hidden rounded-lg text-xs font-bold text-white shadow-inner">
+            <div className="flex flex-1 items-center justify-center bg-red-500">A</div>
+            <div className="flex flex-1 items-center justify-center bg-orange-500">B</div>
+            <div className="flex flex-1 items-center justify-center bg-yellow-500">C</div>
+            <div className="flex flex-1 items-center justify-center bg-green-500">D</div>
+            <div className="flex flex-1 items-center justify-center bg-blue-500">E</div>
+          </div>
+          <div className="mt-2 text-right text-xs font-semibold text-slate-400">
+            * 음악·미술·체육은 A/B/C 3단계 평가입니다.
           </div>
         </section>
 

@@ -128,6 +128,20 @@ export const getGradeBand = (score: number, subject: string): ScoreBand => {
   return "E";
 };
 
+export const getScoreBandColor = (band: ScoreBand) => {
+  const palette: Record<ScoreBand, string> = {
+    A: "#ef4444",
+    B: "#f97316",
+    C: "#eab308",
+    D: "#22c55e",
+    E: "#3b82f6",
+  };
+  return palette[band];
+};
+
+export const getAchievementColor = (score: number, subject: string) =>
+  getScoreBandColor(getGradeBand(score, subject));
+
 export const getSubjectPriorityIndex = (subject: string) => {
   const idx = SUBJECT_PRIORITY.findIndex((key) => subject.includes(key));
   return idx === -1 ? 999 : idx;

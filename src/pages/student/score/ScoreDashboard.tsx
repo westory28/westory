@@ -3,11 +3,12 @@ import { db } from '../../../lib/firebase';
 import { collection, query, orderBy, getDocs, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useAppToast } from '../../../components/common/AppToastProvider';
 import { PageLoading } from '../../../components/common/LoadingState';
-import SegmentedAchievementChart from '../../../components/common/SegmentedAchievementChart';
 import { useAuth } from '../../../contexts/AuthContext';
+import GradeChart from './components/GradeChart';
 import ScoreCard from './components/ScoreCard';
+import ScoreSubTabs from './components/ScoreSubTabs';
 import { getSemesterCollectionPath } from '../../../lib/semesterScope';
-import { buildScoreRows, getSubjectPriorityIndex } from '../../../lib/studentScores';
+import { getAchievementColor, getSubjectPriorityIndex } from '../../../lib/studentScores';
 
 interface GradingPlan {
     id: string;
@@ -404,10 +405,9 @@ const ScoreDashboard: React.FC = () => {
     };
 
     const displayPlans = getFilteredAndSortedPlans();
-    const chartRows = buildScoreRows(displayPlans, userScores, {
-        filterByGrade: false,
-        sortMode: sortMode as 'importance' | 'name' | 'latest',
-    });
+    const chartLabels = displayPlans.map((p) => p.subject);
+    const chartData = displayPlans.map((p) => p.currentScore);
+    const chartColors = displayPlans.map((p) => getAchievementColor(p.currentScore, p.subject));
 
 
     if (loading) return <PageLoading message="성적 데이터를 불러오는 중입니다." />;
@@ -450,16 +450,7 @@ const ScoreDashboard: React.FC = () => {
                 </div>
             )}
 
-            {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-end justify-between border-b-2 border-gray-800 pb-4 mb-6">
-                <h1 className="text-2xl font-bold text-gray-900 flex items-baseline">
-                    성적 계산기
-                    <span className="text-lg font-normal text-gray-500 ml-2">({config?.year}학년도)</span>
-                </h1>
-                <div className="text-blue-600 font-bold mt-2 md:mt-0">
-                    {userData?.name || '학생'} 학생, 화이팅!
-                </div>
-            </div>
+            <ScoreSubTabs />
 
             {/* Controls */}
             <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 mb-6 flex flex-wrap gap-4 items-center">
@@ -539,10 +530,19 @@ const ScoreDashboard: React.FC = () => {
                 <div>
                     <div className="bg-white p-5 rounded-xl border border-gray-100 sticky top-20 shadow-sm">
                         <div className="text-base font-bold text-gray-800 border-b border-gray-100 pb-2 mb-4">성취도 그래프</div>
-                        <SegmentedAchievementChart
-                            rows={chartRows}
-                            emptyMessage="입력된 점수를 그래프로 표시할 수 없습니다."
-                        />
+                        <div className="h-[300px]">
+                            <GradeChart labels={chartLabels} data={chartData} colors={chartColors} />
+                        </div>
+                        <div className="mt-6 flex h-8 overflow-hidden rounded-lg text-xs font-bold text-white shadow-inner">
+                            <div className="flex flex-1 items-center justify-center bg-red-500">A</div>
+                            <div className="flex flex-1 items-center justify-center bg-orange-500">B</div>
+                            <div className="flex flex-1 items-center justify-center bg-yellow-500">C</div>
+                            <div className="flex flex-1 items-center justify-center bg-green-500">D</div>
+                            <div className="flex flex-1 items-center justify-center bg-blue-500">E</div>
+                        </div>
+                        <div className="mt-2 text-right text-[10px] text-gray-400">
+                            * 음악·미술·체육은 A/B/C 3단계 평가입니다.
+                        </div>
                     </div>
                 </div>
             </div>
