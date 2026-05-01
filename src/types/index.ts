@@ -120,6 +120,8 @@ export type PointTransactionType =
   | "lesson"
   | "think_cloud"
   | "map_tag"
+  | "history_dictionary"
+  | "history_dictionary_reclaim"
   | "history_classroom"
   | "history_classroom_bonus"
   | "manual_adjust"
@@ -404,6 +406,8 @@ export interface PointPolicyRewardRule {
 export interface PointPolicyActivityRewardRule extends PointPolicyRewardRule {
   cooldownHours?: number;
   maxClaims?: number;
+  maxDailyClaims?: number;
+  minDefinitionLength?: number;
 }
 
 export interface PointPolicyQuizBonusRule {
@@ -429,6 +433,7 @@ export interface PointRewardPolicy {
   lesson: PointPolicyRewardRule;
   thinkCloud: PointPolicyActivityRewardRule;
   mapTag: PointPolicyActivityRewardRule;
+  historyDictionary: PointPolicyActivityRewardRule;
   historyClassroom: PointPolicyActivityRewardRule;
   attendanceMonthlyBonus: PointPolicyRewardRule;
   quizBonus: PointPolicyQuizBonusRule;
@@ -452,6 +457,10 @@ export interface PointPolicy {
   mapTagEnabled: boolean;
   mapTagAmount: number;
   mapTagMaxClaims: number;
+  historyDictionaryEnabled: boolean;
+  historyDictionaryAmount: number;
+  historyDictionaryMaxDailyClaims: number;
+  historyDictionaryMinDefinitionLength: number;
   historyClassroomEnabled: boolean;
   historyClassroomAmount: number;
   historyClassroomBonusEnabled: boolean;

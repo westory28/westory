@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../../contexts/AuthContext";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import {
+  deleteStudentHistoryDictionaryWord,
   loadPublishedHistoryDictionaryTerm,
   normalizeHistoryDictionaryWord,
   requestHistoryDictionaryTerm,
@@ -188,14 +189,17 @@ const HistoryDictionary: React.FC = () => {
     if (!currentWord || definition.trim().length < 2 || busy) return;
     setBusy(true);
     try {
-      await saveStudentHistoryDictionaryEntry({
+      const result = await saveStudentHistoryDictionaryEntry({
+        config,
         word: currentWord,
         definition: definition.trim(),
       });
       showToast({
         tone: "success",
         title: "내 역사 사전에 저장했습니다.",
-        message: `"${currentWord}"을 직접 정리한 단어로 저장했습니다.`,
+        message: result.reward?.awarded
+          ? `"${currentWord}"을 저장하고 ${Number(result.reward.amount || 0)}위스를 받았습니다.`
+          : `"${currentWord}"을 직접 정리한 단어로 저장했습니다.`,
       });
     } catch (error) {
       console.error("Failed to save student dictionary entry:", error);
@@ -203,6 +207,38 @@ const HistoryDictionary: React.FC = () => {
         tone: "error",
         title: "단어 저장에 실패했습니다.",
         message: "단어와 뜻풀이를 확인한 뒤 다시 시도해 주세요.",
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!selectedWord?.termId || busy) return;
+    const confirmed = window.confirm(
+      `"${selectedWord.word}" 단어를 내 역사 사전에서 삭제할까요?\n지급된 역사 사전 위스가 있으면 함께 회수됩니다.`,
+    );
+    if (!confirmed) return;
+    setBusy(true);
+    try {
+      const result = await deleteStudentHistoryDictionaryWord(
+        config,
+        selectedWord.termId,
+      );
+      handleNewEntry();
+      showToast({
+        tone: "success",
+        title: "단어를 삭제했습니다.",
+        message: result.reward?.reclaimed
+          ? `지급된 ${Number(result.reward.amount || 0)}위스를 회수했습니다.`
+          : "내 역사 사전에서 단어를 삭제했습니다.",
+      });
+    } catch (error) {
+      console.error("Failed to delete student dictionary entry:", error);
+      showToast({
+        tone: "error",
+        title: "단어 삭제에 실패했습니다.",
+        message: "잠시 후 다시 시도해 주세요.",
       });
     } finally {
       setBusy(false);
@@ -587,6 +623,20 @@ const HistoryDictionary: React.FC = () => {
             </section>
 
             <div className="mt-7 flex flex-wrap justify-end gap-3 border-t border-slate-100 pt-5">
+              {selectedWord && (
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={busy}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-rose-100 bg-white px-5 text-sm font-extrabold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <i
+                    className="fas fa-trash-can text-xs"
+                    aria-hidden="true"
+                  ></i>
+                  삭제
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handleNewEntry}

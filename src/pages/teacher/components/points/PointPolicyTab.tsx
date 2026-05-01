@@ -68,6 +68,8 @@ const feedbackToneClassName: Record<'success' | 'error' | 'warning', string> = {
 
 const formatClaims = (value: number) =>
     `${Math.max(1, Math.round(Number(value || 0)))}회`;
+const formatCharacters = (value: number) =>
+    `${Math.max(1, Math.round(Number(value || 0)))}자 이상`;
 const formatScoreThreshold = (value: number) => `${Number(value || 0)}점 이상`;
 const formatPercentThreshold = (value: number) => `${Number(value || 0)}% 이상`;
 
@@ -601,6 +603,120 @@ const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
                                                         1,
                                                         Math.round(value || 0),
                                                     ),
+                                                }))
+                                            }
+                                        />
+                                    </div>
+                                </PolicyRuleCard>
+
+                                <PolicyRuleCard
+                                    title={
+                                        POINT_POLICY_FIELD_LABELS.historyDictionaryEnabled
+                                    }
+                                    description={
+                                        POINT_POLICY_FIELD_HELPERS.historyDictionaryEnabled
+                                    }
+                                    checked={policy.historyDictionaryEnabled}
+                                    disabled={
+                                        !canManage || !policy.autoRewardEnabled
+                                    }
+                                    summary={`하루 최대 ${formatWisAmount(policy.historyDictionaryAmount * policy.historyDictionaryMaxDailyClaims)}`}
+                                    footer="역사 사전 보상은 학생이 직접 단어와 뜻풀이를 저장할 때 지급됩니다. 단어를 삭제하면 지급된 위스는 회수되지만, 하루 최대 인정 횟수는 되돌아가지 않습니다."
+                                    onChange={(checked) =>
+                                        onPolicyChange((prev) => ({
+                                            ...prev,
+                                            historyDictionaryEnabled: checked,
+                                        }))
+                                    }
+                                >
+                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                                        <AmountField
+                                            title={
+                                                POINT_POLICY_FIELD_LABELS.historyDictionaryAmount
+                                            }
+                                            description={
+                                                POINT_POLICY_FIELD_HELPERS.historyDictionaryAmount
+                                            }
+                                            value={
+                                                policy.historyDictionaryAmount
+                                            }
+                                            disabled={
+                                                !canManage ||
+                                                !policy.autoRewardEnabled ||
+                                                !policy.historyDictionaryEnabled
+                                            }
+                                            suffix={formatWisAmount(
+                                                policy.historyDictionaryAmount,
+                                            )}
+                                            onChange={(value) =>
+                                                onPolicyChange((prev) => ({
+                                                    ...prev,
+                                                    historyDictionaryAmount:
+                                                        value,
+                                                }))
+                                            }
+                                        />
+                                        <AmountField
+                                            title={
+                                                POINT_POLICY_FIELD_LABELS.historyDictionaryMaxDailyClaims
+                                            }
+                                            description={
+                                                POINT_POLICY_FIELD_HELPERS.historyDictionaryMaxDailyClaims
+                                            }
+                                            value={
+                                                policy.historyDictionaryMaxDailyClaims
+                                            }
+                                            disabled={
+                                                !canManage ||
+                                                !policy.autoRewardEnabled ||
+                                                !policy.historyDictionaryEnabled
+                                            }
+                                            suffix={formatClaims(
+                                                policy.historyDictionaryMaxDailyClaims,
+                                            )}
+                                            min={1}
+                                            onChange={(value) =>
+                                                onPolicyChange((prev) => ({
+                                                    ...prev,
+                                                    historyDictionaryMaxDailyClaims:
+                                                        Math.max(
+                                                            1,
+                                                            Math.round(
+                                                                value || 0,
+                                                            ),
+                                                        ),
+                                                }))
+                                            }
+                                        />
+                                        <AmountField
+                                            title={
+                                                POINT_POLICY_FIELD_LABELS.historyDictionaryMinDefinitionLength
+                                            }
+                                            description={
+                                                POINT_POLICY_FIELD_HELPERS.historyDictionaryMinDefinitionLength
+                                            }
+                                            value={
+                                                policy.historyDictionaryMinDefinitionLength
+                                            }
+                                            disabled={
+                                                !canManage ||
+                                                !policy.autoRewardEnabled ||
+                                                !policy.historyDictionaryEnabled
+                                            }
+                                            suffix={formatCharacters(
+                                                policy.historyDictionaryMinDefinitionLength,
+                                            )}
+                                            min={1}
+                                            onChange={(value) =>
+                                                onPolicyChange((prev) => ({
+                                                    ...prev,
+                                                    historyDictionaryMinDefinitionLength:
+                                                        Math.max(
+                                                            1,
+                                                            Math.round(
+                                                                value || 0,
+                                                            ),
+                                                        ),
                                                 }))
                                             }
                                         />

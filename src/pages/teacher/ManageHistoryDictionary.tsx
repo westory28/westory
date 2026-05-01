@@ -4,6 +4,7 @@ import { useAppToast } from "../../components/common/AppToastProvider";
 import { useAuth } from "../../contexts/AuthContext";
 import {
   approveHistoryDictionaryTermForRequests,
+  deleteStudentHistoryDictionaryWordByTeacher,
   normalizeHistoryDictionaryWord,
   saveHistoryDictionaryTerm,
   subscribeTeacherHistoryDictionaryRequests,
@@ -325,11 +326,53 @@ const ManageHistoryDictionary: React.FC = () => {
     }
   };
 
+  const handleRejectRequestWord = async () => {
+    if (!selectedRequest || busyMessage) return;
+    const confirmed = window.confirm(
+      `"${selectedRequest.word}" 요청 단어를 삭제할까요?\n부적절하거나 내용이 부족한 단어라면 학생 단어장에서 삭제되고, 지급된 역사 사전 위스가 있으면 함께 회수됩니다.`,
+    );
+    if (!confirmed) return;
+    setBusyMessage("요청 단어를 삭제하고 지급된 위스를 확인하는 중입니다.");
+    try {
+      const result = await deleteStudentHistoryDictionaryWordByTeacher(config, {
+        uid: selectedRequest.uid,
+        requestId: selectedRequest.id,
+        termId: selectedRequest.matchedTermId || selectedRequest.resolvedTermId,
+        word: selectedRequest.word,
+        normalizedWord: selectedRequest.normalizedWord,
+        reason: "teacher_rejected_history_dictionary_word",
+      });
+      showToast({
+        tone: "success",
+        title: "요청 단어를 삭제했습니다.",
+        message: result.reward?.reclaimed
+          ? `지급된 ${Number(result.reward.amount || 0)}위스를 회수했습니다.`
+          : "요청을 반려하고 학생 단어장 항목을 정리했습니다.",
+      });
+      setSelectedRequestId("");
+      setWord("");
+      setDefinition("");
+      setStudentLevel("중학생 수준");
+      setRelatedUnitId("");
+      setTags([]);
+      setTagInput("");
+    } catch (error) {
+      console.error("Failed to reject history dictionary request:", error);
+      showToast({
+        tone: "error",
+        title: "요청 단어 삭제에 실패했습니다.",
+        message: "잠시 후 다시 시도해 주세요.",
+      });
+    } finally {
+      setBusyMessage("");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-6 lg:px-6 xl:px-8">
       <div className="mx-auto max-w-7xl">
         <div className="grid gap-4 xl:grid-cols-[13rem_minmax(24rem,0.78fr)_minmax(0,1.2fr)]">
-          <aside className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <aside className="self-start overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
             <nav
               className="divide-y divide-slate-200"
               aria-label="역사 사전 관리 메뉴"
@@ -359,7 +402,7 @@ const ManageHistoryDictionary: React.FC = () => {
                         setSelectedTermId("");
                       }
                     }}
-                    className={`relative block min-h-[4.75rem] w-full px-5 py-4 text-left transition ${
+                    className={`relative block min-h-[3.75rem] w-full px-4 py-3 text-left transition ${
                       active
                         ? "bg-blue-50 text-blue-700"
                         : "bg-white text-slate-800 hover:bg-slate-50"
@@ -375,7 +418,7 @@ const ManageHistoryDictionary: React.FC = () => {
                       {item.label}
                     </span>
                     <span
-                      className={`mt-2 block text-xs font-bold ${
+                      className={`mt-1 block text-xs font-bold ${
                         active ? "text-blue-600" : "text-slate-500"
                       }`}
                     >
@@ -657,8 +700,22 @@ const ManageHistoryDictionary: React.FC = () => {
                       {selectedRequest.studentName || "학생"}
                     </div>
                   </div>
-                  <div className="rounded-full bg-white px-3 py-1.5 text-xs font-extrabold text-slate-600 shadow-sm">
-                    같은 단어 대기 {sameWordOpenCount}건
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="rounded-full bg-white px-3 py-1.5 text-xs font-extrabold text-slate-600 shadow-sm">
+                      같은 단어 대기 {sameWordOpenCount}건
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleRejectRequestWord()}
+                      disabled={Boolean(busyMessage)}
+                      className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-rose-100 bg-white px-3 text-xs font-extrabold text-rose-600 shadow-sm transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <i
+                        className="fas fa-trash-can text-[11px]"
+                        aria-hidden="true"
+                      ></i>
+                      요청 삭제
+                    </button>
                   </div>
                 </div>
                 {selectedRequest.memo && (

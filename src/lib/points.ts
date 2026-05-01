@@ -205,6 +205,10 @@ export const getDefaultPointPolicy = (): PointPolicy => ({
     mapTagEnabled: true,
     mapTagAmount: 10,
     mapTagMaxClaims: 5,
+    historyDictionaryEnabled: true,
+    historyDictionaryAmount: 50,
+    historyDictionaryMaxDailyClaims: 4,
+    historyDictionaryMinDefinitionLength: 20,
     historyClassroomEnabled: true,
     historyClassroomAmount: 50,
     historyClassroomBonusEnabled: false,
@@ -228,6 +232,12 @@ export const getDefaultPointPolicy = (): PointPolicy => ({
         lesson: { enabled: true, amount: 3 },
         thinkCloud: { enabled: true, amount: 20, cooldownHours: 24, maxClaims: 5 },
         mapTag: { enabled: true, amount: 10, cooldownHours: 24, maxClaims: 5 },
+        historyDictionary: {
+            enabled: true,
+            amount: 50,
+            maxDailyClaims: 4,
+            minDefinitionLength: 20,
+        },
         historyClassroom: { enabled: true, amount: 50, cooldownHours: 24 },
         attendanceMonthlyBonus: { enabled: true, amount: 20 },
         quizBonus: { enabled: false, thresholdScore: 100, amount: 0 },
@@ -262,6 +272,7 @@ export const normalizePointPolicy = (policy?: Partial<PointPolicy> | null): Poin
     const allowNegativeBalance = (controlPolicy?.allowNegativeBalance ?? policy?.allowNegativeBalance) === true;
     const thinkCloudRule = rewardPolicy?.thinkCloud || {};
     const mapTagRule = rewardPolicy?.mapTag || {};
+    const historyDictionaryRule = rewardPolicy?.historyDictionary || {};
     const historyClassroomRule = rewardPolicy?.historyClassroom || {};
     const historyClassroomBonusRule = rewardPolicy?.historyClassroomBonus || {};
     const attendanceMilestoneBonusRule = rewardPolicy?.attendanceMilestoneBonus || {};
@@ -282,6 +293,19 @@ export const normalizePointPolicy = (policy?: Partial<PointPolicy> | null): Poin
     const mapTagMaxClaims = toPositiveInteger(
         (policy as any)?.mapTagMaxClaims ?? mapTagRule?.maxClaims,
         defaults.mapTagMaxClaims,
+    );
+    const historyDictionaryEnabled = ((policy as any)?.historyDictionaryEnabled ?? historyDictionaryRule?.enabled ?? defaults.historyDictionaryEnabled) === true;
+    const historyDictionaryAmount = toNonNegativeNumber(
+        (policy as any)?.historyDictionaryAmount ?? historyDictionaryRule?.amount,
+        defaults.historyDictionaryAmount,
+    );
+    const historyDictionaryMaxDailyClaims = toPositiveInteger(
+        (policy as any)?.historyDictionaryMaxDailyClaims ?? historyDictionaryRule?.maxDailyClaims,
+        defaults.historyDictionaryMaxDailyClaims,
+    );
+    const historyDictionaryMinDefinitionLength = toPositiveInteger(
+        (policy as any)?.historyDictionaryMinDefinitionLength ?? historyDictionaryRule?.minDefinitionLength,
+        defaults.historyDictionaryMinDefinitionLength,
     );
     const historyClassroomEnabled = ((policy as any)?.historyClassroomEnabled ?? historyClassroomRule?.enabled ?? defaults.historyClassroomEnabled) === true;
     const historyClassroomAmount = toNonNegativeNumber(
@@ -332,6 +356,10 @@ export const normalizePointPolicy = (policy?: Partial<PointPolicy> | null): Poin
         mapTagEnabled,
         mapTagAmount,
         mapTagMaxClaims,
+        historyDictionaryEnabled,
+        historyDictionaryAmount,
+        historyDictionaryMaxDailyClaims,
+        historyDictionaryMinDefinitionLength,
         historyClassroomEnabled,
         historyClassroomAmount,
         historyClassroomBonusEnabled,
@@ -379,6 +407,12 @@ export const normalizePointPolicy = (policy?: Partial<PointPolicy> | null): Poin
                     defaults.rewardPolicy.mapTag.cooldownHours,
                 ),
                 maxClaims: mapTagMaxClaims,
+            },
+            historyDictionary: {
+                enabled: autoRewardEnabled && historyDictionaryEnabled,
+                amount: historyDictionaryAmount,
+                maxDailyClaims: historyDictionaryMaxDailyClaims,
+                minDefinitionLength: historyDictionaryMinDefinitionLength,
             },
             historyClassroom: {
                 enabled: autoRewardEnabled && historyClassroomEnabled,
@@ -933,6 +967,10 @@ export const buildPointPolicyPayload = (policy: Partial<PointPolicy>, actor: Act
         mapTagEnabled: normalizedPolicy.mapTagEnabled,
         mapTagAmount: normalizedPolicy.mapTagAmount,
         mapTagMaxClaims: normalizedPolicy.mapTagMaxClaims,
+        historyDictionaryEnabled: normalizedPolicy.historyDictionaryEnabled,
+        historyDictionaryAmount: normalizedPolicy.historyDictionaryAmount,
+        historyDictionaryMaxDailyClaims: normalizedPolicy.historyDictionaryMaxDailyClaims,
+        historyDictionaryMinDefinitionLength: normalizedPolicy.historyDictionaryMinDefinitionLength,
         historyClassroomEnabled: normalizedPolicy.historyClassroomEnabled,
         historyClassroomAmount: normalizedPolicy.historyClassroomAmount,
         historyClassroomBonusEnabled: normalizedPolicy.historyClassroomBonusEnabled,

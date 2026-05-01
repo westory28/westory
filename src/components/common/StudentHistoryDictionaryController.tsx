@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import {
+  deleteStudentHistoryDictionaryWord,
   loadPublishedHistoryDictionaryTerm,
   normalizeHistoryDictionaryWord,
   requestHistoryDictionaryTerm,
@@ -107,14 +108,17 @@ const StudentHistoryDictionaryController: React.FC = () => {
     if (!currentWord || definition.trim().length < 2 || loading) return;
     setLoading(true);
     try {
-      await saveStudentHistoryDictionaryEntry({
+      const result = await saveStudentHistoryDictionaryEntry({
+        config,
         word: currentWord,
         definition: definition.trim(),
       });
       showToast({
         tone: "success",
         title: "내 역사 사전에 저장했습니다.",
-        message: `"${currentWord}"을 직접 정리한 단어로 저장했습니다.`,
+        message: result.reward?.awarded
+          ? `"${currentWord}"을 저장하고 ${Number(result.reward.amount || 0)}위스를 받았습니다.`
+          : `"${currentWord}"을 직접 정리한 단어로 저장했습니다.`,
       });
     } catch (error) {
       console.error("Failed to save student dictionary entry:", error);
@@ -122,6 +126,40 @@ const StudentHistoryDictionaryController: React.FC = () => {
         tone: "error",
         title: "단어를 저장하지 못했습니다.",
         message: "단어와 뜻풀이를 확인한 뒤 다시 시도해 주세요.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteOwnEntry = async () => {
+    if (!currentSavedWord?.termId || loading) return;
+    const confirmed = window.confirm(
+      `"${currentSavedWord.word}" 단어를 내 역사 사전에서 삭제할까요?\n지급된 역사 사전 위스가 있으면 함께 회수됩니다.`,
+    );
+    if (!confirmed) return;
+    setLoading(true);
+    try {
+      const result = await deleteStudentHistoryDictionaryWord(
+        config,
+        currentSavedWord.termId,
+      );
+      setWord("");
+      setDefinition("");
+      setMemo("");
+      showToast({
+        tone: "success",
+        title: "단어를 삭제했습니다.",
+        message: result.reward?.reclaimed
+          ? `지급된 ${Number(result.reward.amount || 0)}위스를 회수했습니다.`
+          : "내 역사 사전에서 단어를 삭제했습니다.",
+      });
+    } catch (error) {
+      console.error("Failed to delete student dictionary entry:", error);
+      showToast({
+        tone: "error",
+        title: "단어 삭제에 실패했습니다.",
+        message: "잠시 후 다시 시도해 주세요.",
       });
     } finally {
       setLoading(false);
@@ -283,20 +321,36 @@ const StudentHistoryDictionaryController: React.FC = () => {
                     placeholder="수업 내용을 바탕으로 내가 이해한 뜻을 적어 보세요."
                   />
                 </label>
-                <button
-                  type="button"
-                  onClick={handleSaveOwnEntry}
-                  disabled={
-                    !currentWord || definition.trim().length < 2 || loading
-                  }
-                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-extrabold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
-                >
-                  <i
-                    className="fas fa-floppy-disk text-xs"
-                    aria-hidden="true"
-                  ></i>
-                  내 역사 사전에 저장
-                </button>
+                <div className="mt-3 flex gap-2">
+                  {currentSavedWord && (
+                    <button
+                      type="button"
+                      onClick={handleDeleteOwnEntry}
+                      disabled={loading}
+                      className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-rose-100 bg-white px-4 text-sm font-extrabold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <i
+                        className="fas fa-trash-can text-xs"
+                        aria-hidden="true"
+                      ></i>
+                      삭제
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleSaveOwnEntry}
+                    disabled={
+                      !currentWord || definition.trim().length < 2 || loading
+                    }
+                    className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-extrabold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+                  >
+                    <i
+                      className="fas fa-floppy-disk text-xs"
+                      aria-hidden="true"
+                    ></i>
+                    내 역사 사전에 저장
+                  </button>
+                </div>
               </section>
 
               <section className="mt-4 rounded-xl border border-slate-200 bg-white p-4">

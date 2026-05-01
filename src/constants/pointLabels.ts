@@ -187,6 +187,8 @@ export const POINT_TRANSACTION_TYPE_LABELS: Record<
   lesson: "수업 자료 확인",
   think_cloud: "생각모아 참여",
   map_tag: "지도 태그 탐색",
+  history_dictionary: "역사 사전",
+  history_dictionary_reclaim: "역사 사전 회수",
   history_classroom: "역사교실 참여",
   history_classroom_bonus: "역사교실 성과 보너스",
   manual_adjust: "교사 직접 지급",
@@ -209,6 +211,10 @@ export const POINT_POLICY_FIELD_LABELS: Record<
     | "mapTagEnabled"
     | "mapTagAmount"
     | "mapTagMaxClaims"
+    | "historyDictionaryEnabled"
+    | "historyDictionaryAmount"
+    | "historyDictionaryMaxDailyClaims"
+    | "historyDictionaryMinDefinitionLength"
     | "historyClassroomEnabled"
     | "historyClassroomAmount"
     | "historyClassroomBonusEnabled"
@@ -238,6 +244,10 @@ export const POINT_POLICY_FIELD_LABELS: Record<
   mapTagEnabled: "지도 태그 자동 지급 사용",
   mapTagAmount: "지도 태그 1회 지급 위스",
   mapTagMaxClaims: "지도 태그 누적 최대 인정 횟수",
+  historyDictionaryEnabled: "역사 사전 자동 지급 사용",
+  historyDictionaryAmount: "역사 사전 1회 지급 위스",
+  historyDictionaryMaxDailyClaims: "역사 사전 하루 최대 인정 횟수",
+  historyDictionaryMinDefinitionLength: "역사 사전 뜻풀이 최소 길이",
   historyClassroomEnabled: "역사교실 기본 자동 지급 사용",
   historyClassroomAmount: "역사교실 기본 지급 위스",
   historyClassroomBonusEnabled: "역사교실 성과 보너스 사용",
@@ -269,6 +279,10 @@ export const POINT_POLICY_FIELD_HELPERS: Record<
     | "mapTagEnabled"
     | "mapTagAmount"
     | "mapTagMaxClaims"
+    | "historyDictionaryEnabled"
+    | "historyDictionaryAmount"
+    | "historyDictionaryMaxDailyClaims"
+    | "historyDictionaryMinDefinitionLength"
     | "historyClassroomEnabled"
     | "historyClassroomAmount"
     | "historyClassroomBonusEnabled"
@@ -304,6 +318,14 @@ export const POINT_POLICY_FIELD_HELPERS: Record<
     "지도 팝업 모달 안에서 태그를 눌렀을 때만 별도 위스를 적립합니다. 최근 지급 시점 기준 24시간마다 1회입니다.",
   mapTagAmount: "지도 팝업 모달 태그 클릭 1회에 적립할 위스입니다.",
   mapTagMaxClaims: "학생당 지도 태그 활동으로 인정할 최대 횟수입니다.",
+  historyDictionaryEnabled:
+    "학생이 직접 역사 사전에 단어와 뜻풀이를 저장했을 때 위스를 적립합니다.",
+  historyDictionaryAmount:
+    "조건을 만족한 역사 사전 단어 등록 1회에 지급할 위스입니다.",
+  historyDictionaryMaxDailyClaims:
+    "하루 동안 학생 1명에게 역사 사전 보상을 인정할 최대 횟수입니다.",
+  historyDictionaryMinDefinitionLength:
+    "공백을 제외한 뜻풀이 글자 수가 이 기준 이상일 때만 지급합니다.",
   historyClassroomEnabled:
     "역사교실 제출 완료 시 기본 위스를 적립합니다. 최근 지급 시점 기준 24시간마다 1회만 기본 지급됩니다.",
   historyClassroomAmount:
@@ -349,6 +371,8 @@ export const POINT_HISTORY_FILTER_LABELS = {
   lesson: "수업 자료",
   think_cloud: "생각모아",
   map_tag: "지도 태그",
+  history_dictionary: "역사 사전",
+  history_dictionary_reclaim: "역사 사전 회수",
   history_classroom: "역사교실",
   history_classroom_bonus: "역사교실 성과 보너스",
   manual_adjust: "교사 지급",

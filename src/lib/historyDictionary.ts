@@ -125,17 +125,90 @@ export const saveStudentHistoryDictionaryWord = async (termId: string) => {
 };
 
 export const saveStudentHistoryDictionaryEntry = async (input: {
+  config?: ConfigLike;
   word: string;
   definition: string;
 }) => {
+  const { year, semester } = getYearSemester(input.config);
   const callable = httpsCallable(
     functions,
     "saveStudentHistoryDictionaryEntry",
   );
-  await callable({
+  const result = await callable({
+    year,
+    semester,
     word: input.word,
     definition: input.definition,
   });
+  return result.data as {
+    termId: string;
+    saved: boolean;
+    reward?: {
+      awarded?: boolean;
+      amount?: number;
+      blockedReason?: string;
+    };
+  };
+};
+
+export const deleteStudentHistoryDictionaryWord = async (
+  config: ConfigLike,
+  termId: string,
+) => {
+  const { year, semester } = getYearSemester(config);
+  const callable = httpsCallable(functions, "deleteStudentHistoryDictionaryWord");
+  const result = await callable({
+    year,
+    semester,
+    termId,
+  });
+  return result.data as {
+    termId: string;
+    deleted: boolean;
+    reward?: {
+      reclaimed?: boolean;
+      amount?: number;
+      blockedReason?: string;
+    };
+  };
+};
+
+export const deleteStudentHistoryDictionaryWordByTeacher = async (
+  config: ConfigLike,
+  input: {
+    uid: string;
+    termId?: string;
+    requestId?: string;
+    word?: string;
+    normalizedWord?: string;
+    reason?: string;
+  },
+) => {
+  const { year, semester } = getYearSemester(config);
+  const callable = httpsCallable(
+    functions,
+    "deleteStudentHistoryDictionaryWordByTeacher",
+  );
+  const result = await callable({
+    year,
+    semester,
+    uid: input.uid,
+    termId: input.termId || "",
+    requestId: input.requestId || "",
+    word: input.word || "",
+    normalizedWord: input.normalizedWord || "",
+    reason: input.reason || "",
+  });
+  return result.data as {
+    termId: string;
+    requestId?: string;
+    deleted: boolean;
+    reward?: {
+      reclaimed?: boolean;
+      amount?: number;
+      blockedReason?: string;
+    };
+  };
 };
 
 export const saveHistoryDictionaryTerm = async (

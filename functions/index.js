@@ -394,6 +394,10 @@ const getDefaultPointPolicy = () => ({
   mapTagEnabled: true,
   mapTagAmount: 10,
   mapTagMaxClaims: 5,
+  historyDictionaryEnabled: true,
+  historyDictionaryAmount: 50,
+  historyDictionaryMaxDailyClaims: 4,
+  historyDictionaryMinDefinitionLength: 20,
   historyClassroomEnabled: true,
   historyClassroomAmount: 50,
   historyClassroomBonusEnabled: false,
@@ -417,6 +421,12 @@ const getDefaultPointPolicy = () => ({
     lesson: { enabled: true, amount: 3 },
     thinkCloud: { enabled: true, amount: 20, cooldownHours: 24, maxClaims: 5 },
     mapTag: { enabled: true, amount: 10, cooldownHours: 24, maxClaims: 5 },
+    historyDictionary: {
+      enabled: true,
+      amount: 50,
+      maxDailyClaims: 4,
+      minDefinitionLength: 20,
+    },
     historyClassroom: { enabled: true, amount: 50, cooldownHours: 24 },
     attendanceMonthlyBonus: { enabled: true, amount: 20 },
     quizBonus: { enabled: false, thresholdScore: 100, amount: 0 },
@@ -456,6 +466,7 @@ const normalizePointPolicy = (policy) => {
   const allowNegativeBalance = (controlPolicy?.allowNegativeBalance ?? policy?.allowNegativeBalance) === true;
   const thinkCloudRule = rewardPolicy?.thinkCloud || {};
   const mapTagRule = rewardPolicy?.mapTag || {};
+  const historyDictionaryRule = rewardPolicy?.historyDictionary || {};
   const historyClassroomRule = rewardPolicy?.historyClassroom || {};
   const historyClassroomBonusRule = rewardPolicy?.historyClassroomBonus || {};
   const attendanceMilestoneBonusRule = rewardPolicy?.attendanceMilestoneBonus || {};
@@ -481,6 +492,25 @@ const normalizePointPolicy = (policy) => {
     Math.round(toFiniteNumber(
       policy?.mapTagMaxClaims ?? mapTagRule?.maxClaims,
       defaults.mapTagMaxClaims,
+    )),
+  );
+  const historyDictionaryEnabled = (policy?.historyDictionaryEnabled ?? historyDictionaryRule?.enabled ?? defaults.historyDictionaryEnabled) === true;
+  const historyDictionaryAmount = toNonNegativeNumber(
+    policy?.historyDictionaryAmount ?? historyDictionaryRule?.amount,
+    defaults.historyDictionaryAmount,
+  );
+  const historyDictionaryMaxDailyClaims = Math.max(
+    1,
+    Math.round(toFiniteNumber(
+      policy?.historyDictionaryMaxDailyClaims ?? historyDictionaryRule?.maxDailyClaims,
+      defaults.historyDictionaryMaxDailyClaims,
+    )),
+  );
+  const historyDictionaryMinDefinitionLength = Math.max(
+    1,
+    Math.round(toFiniteNumber(
+      policy?.historyDictionaryMinDefinitionLength ?? historyDictionaryRule?.minDefinitionLength,
+      defaults.historyDictionaryMinDefinitionLength,
     )),
   );
   const historyClassroomEnabled = (policy?.historyClassroomEnabled ?? historyClassroomRule?.enabled ?? defaults.historyClassroomEnabled) === true;
@@ -532,6 +562,10 @@ const normalizePointPolicy = (policy) => {
     mapTagEnabled,
     mapTagAmount,
     mapTagMaxClaims,
+    historyDictionaryEnabled,
+    historyDictionaryAmount,
+    historyDictionaryMaxDailyClaims,
+    historyDictionaryMinDefinitionLength,
     historyClassroomEnabled,
     historyClassroomAmount,
     historyClassroomBonusEnabled,
@@ -579,6 +613,12 @@ const normalizePointPolicy = (policy) => {
           defaults.rewardPolicy.mapTag.cooldownHours,
         ))),
         maxClaims: mapTagMaxClaims,
+      },
+      historyDictionary: {
+        enabled: autoRewardEnabled && historyDictionaryEnabled,
+        amount: historyDictionaryAmount,
+        maxDailyClaims: historyDictionaryMaxDailyClaims,
+        minDefinitionLength: historyDictionaryMinDefinitionLength,
       },
       historyClassroom: {
         enabled: autoRewardEnabled && historyClassroomEnabled,
@@ -634,6 +674,10 @@ const buildPointPolicyPayload = (policy, actorUid) => {
     mapTagEnabled: normalizedPolicy.mapTagEnabled,
     mapTagAmount: normalizedPolicy.mapTagAmount,
     mapTagMaxClaims: normalizedPolicy.mapTagMaxClaims,
+    historyDictionaryEnabled: normalizedPolicy.historyDictionaryEnabled,
+    historyDictionaryAmount: normalizedPolicy.historyDictionaryAmount,
+    historyDictionaryMaxDailyClaims: normalizedPolicy.historyDictionaryMaxDailyClaims,
+    historyDictionaryMinDefinitionLength: normalizedPolicy.historyDictionaryMinDefinitionLength,
     historyClassroomEnabled: normalizedPolicy.historyClassroomEnabled,
     historyClassroomAmount: normalizedPolicy.historyClassroomAmount,
     historyClassroomBonusEnabled: normalizedPolicy.historyClassroomBonusEnabled,
@@ -1836,6 +1880,9 @@ const quizAttemptMatchesClass = (attempt = {}, normalizedClassId) => {
 const shouldCountTowardsEarnedTotal = (pointTransaction = {}) => {
   const type = String(pointTransaction.type || '').trim();
   const delta = Number(pointTransaction.delta || 0);
+  if (type === 'history_dictionary' && pointTransaction.reclaimed === true) {
+    return false;
+  }
   if (delta <= 0) return false;
   if (type === 'manual_adjust') return true;
   if (type === 'manual_reclaim') return false;
@@ -4198,6 +4245,191 @@ exports.reviewTeacherPointOrder = onCall({ region: REGION }, async (request) => 
   return result;
 });
 
+const getHistoryDictionaryRewardSourceId = (termId) =>
+  `history-dictionary:${sanitizeKeyPart(termId)}`;
+
+const getHistoryDictionaryRewardTransactionId = (uid, termId) =>
+  buildActivityTransactionId(uid, 'history_dictionary', getHistoryDictionaryRewardSourceId(termId));
+
+const getHistoryDictionaryDefinitionQualityLength = (definition) =>
+  String(definition || '').replace(/\s+/g, '').trim().length;
+
+const awardHistoryDictionaryRewardIfEligible = async ({
+  transaction,
+  year,
+  semester,
+  uid,
+  profile,
+  termId,
+  word,
+  definition,
+}) => {
+  const policy = await loadPolicy(transaction, year, semester);
+  const rule = policy.rewardPolicy?.historyDictionary || {};
+  const amount = Number(rule.amount || 0);
+  const minDefinitionLength = Math.max(1, Number(rule.minDefinitionLength || 20));
+  const qualityLength = getHistoryDictionaryDefinitionQualityLength(definition);
+  if (!policy.autoRewardEnabled || rule.enabled !== true || amount <= 0 || qualityLength < minDefinitionLength) {
+    return {
+      awarded: false,
+      amount: 0,
+      blockedReason: qualityLength < minDefinitionLength ? 'definition_too_short' : 'policy_disabled',
+    };
+  }
+
+  const todayKey = getKstDateKey();
+  const sourceId = getHistoryDictionaryRewardSourceId(termId);
+  const transactionId = getHistoryDictionaryRewardTransactionId(uid, termId);
+  const txRef = db.doc(`${getPointCollectionPath(year, semester, 'point_transactions')}/${transactionId}`);
+  const txSnap = await transaction.get(txRef);
+  if (txSnap.exists) {
+    return {
+      awarded: false,
+      amount: 0,
+      transactionId,
+      blockedReason: 'duplicate_source',
+    };
+  }
+
+  const dailySnapshot = await transaction.get(
+    db.collection(getPointCollectionPath(year, semester, 'point_transactions'))
+      .where('uid', '==', uid)
+      .where('type', '==', 'history_dictionary')
+      .where('targetDate', '==', todayKey),
+  );
+  const maxDailyClaims = Math.max(1, Number(rule.maxDailyClaims || 4));
+  if (dailySnapshot.size >= maxDailyClaims) {
+    return {
+      awarded: false,
+      amount: 0,
+      blockedReason: 'daily_max_reached',
+      claimCount: dailySnapshot.size,
+      maxDailyClaims,
+    };
+  }
+
+  const { ref: walletRef, wallet } = await ensureWallet(transaction, year, semester, uid, profile);
+  const currentRankEarnedTotal = await getCurrentRankEarnedTotal(transaction, year, semester, uid, wallet);
+  const nextBalance = Number(wallet.balance || 0) + amount;
+  const nextRankEarnedTotal = currentRankEarnedTotal + amount;
+  const nextEarnedTotal = Number(wallet.earnedTotal || 0) + amount;
+
+  transaction.set(walletRef, {
+    ...buildWalletBase(uid, profile),
+    balance: nextBalance,
+    earnedTotal: nextEarnedTotal,
+    ...buildWalletRankState(nextRankEarnedTotal, policy.rankPolicy),
+    spentTotal: Number(wallet.spentTotal || 0),
+    adjustedTotal: Number(wallet.adjustedTotal || 0),
+    lastTransactionAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  transaction.set(txRef, createTransactionPayload({
+    uid,
+    type: 'history_dictionary',
+    delta: amount,
+    balanceAfter: nextBalance,
+    sourceId,
+    sourceLabel: `역사 사전 단어 등록: ${sanitizeHistoryDictionaryWord(word)}`,
+    policyId: 'current',
+    createdBy: 'system:auto',
+    targetDate: todayKey,
+  }));
+
+  return {
+    awarded: true,
+    amount,
+    transactionId,
+    balance: nextBalance,
+    claimCount: dailySnapshot.size + 1,
+    maxDailyClaims,
+  };
+};
+
+const reclaimHistoryDictionaryRewardIfNeeded = async ({
+  transaction,
+  year,
+  semester,
+  uid,
+  profile,
+  termId,
+  word,
+  actorUid,
+  reason,
+}) => {
+  const rewardTransactionId = getHistoryDictionaryRewardTransactionId(uid, termId);
+  const rewardTxRef = db.doc(`${getPointCollectionPath(year, semester, 'point_transactions')}/${rewardTransactionId}`);
+  const rewardTxSnap = await transaction.get(rewardTxRef);
+  if (!rewardTxSnap.exists) {
+    return { reclaimed: false, amount: 0, blockedReason: 'reward_not_found' };
+  }
+
+  const rewardTx = rewardTxSnap.data() || {};
+  if (rewardTx.reclaimed === true) {
+    return { reclaimed: false, amount: 0, blockedReason: 'already_reclaimed' };
+  }
+
+  const amount = Math.max(0, Number(rewardTx.delta || 0));
+  if (amount <= 0) {
+    return { reclaimed: false, amount: 0, blockedReason: 'empty_reward' };
+  }
+
+  const reclaimTxRef = db.doc(`${getPointCollectionPath(year, semester, 'point_transactions')}/${rewardTransactionId}_reclaim`);
+  const reclaimTxSnap = await transaction.get(reclaimTxRef);
+  if (reclaimTxSnap.exists) {
+    transaction.set(rewardTxRef, {
+      reclaimed: true,
+      reclaimedAt: rewardTx.reclaimedAt || FieldValue.serverTimestamp(),
+      reclaimedBy: rewardTx.reclaimedBy || actorUid,
+      reclaimReason: rewardTx.reclaimReason || reason,
+    }, { merge: true });
+    return { reclaimed: false, amount: 0, blockedReason: 'reclaim_exists' };
+  }
+
+  const policy = await loadPolicy(transaction, year, semester);
+  const { ref: walletRef, wallet } = await ensureWallet(transaction, year, semester, uid, profile);
+  const currentRankEarnedTotal = await getCurrentRankEarnedTotal(transaction, year, semester, uid, wallet);
+  const nextBalance = Number(wallet.balance || 0) - amount;
+  const nextRankEarnedTotal = Math.max(0, currentRankEarnedTotal - amount);
+  const nextEarnedTotal = Math.max(0, Number(wallet.earnedTotal || 0) - amount);
+
+  transaction.set(walletRef, {
+    ...buildWalletBase(uid, profile),
+    balance: nextBalance,
+    earnedTotal: nextEarnedTotal,
+    ...buildWalletRankState(nextRankEarnedTotal, policy.rankPolicy),
+    spentTotal: Number(wallet.spentTotal || 0),
+    adjustedTotal: Number(wallet.adjustedTotal || 0),
+    lastTransactionAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  transaction.set(rewardTxRef, {
+    reclaimed: true,
+    reclaimedAt: FieldValue.serverTimestamp(),
+    reclaimedBy: actorUid,
+    reclaimReason: reason,
+  }, { merge: true });
+
+  transaction.set(reclaimTxRef, createTransactionPayload({
+    uid,
+    type: 'history_dictionary_reclaim',
+    delta: -amount,
+    balanceAfter: nextBalance,
+    sourceId: String(rewardTx.sourceId || getHistoryDictionaryRewardSourceId(termId)),
+    sourceLabel: `역사 사전 보상 회수: ${sanitizeHistoryDictionaryWord(word)}`,
+    policyId: String(rewardTx.policyId || 'current'),
+    createdBy: actorUid,
+    targetDate: String(rewardTx.targetDate || ''),
+  }));
+
+  return {
+    reclaimed: true,
+    amount,
+    transactionId: reclaimTxRef.id,
+    balance: nextBalance,
+  };
+};
+
 exports.requestHistoryDictionaryTerm = onCall({ region: REGION }, async (request) => {
   const { uid } = assertAllowedWestoryUser(request);
   const { year, semester } = assertYearSemester(request.data);
@@ -4373,6 +4605,7 @@ exports.saveStudentHistoryDictionaryEntry = onCall({ region: REGION }, async (re
   const word = sanitizeHistoryDictionaryWord(request.data?.word);
   const normalizedWord = normalizeHistoryDictionaryWord(word);
   const definition = sanitizeHistoryDictionaryText(request.data?.definition, 1200);
+  const scoped = getOptionalYearSemester(request.data) || await getCurrentConfiguredYearSemester();
 
   if (!word || !normalizedWord) {
     throw new HttpsError('invalid-argument', 'A word is required.');
@@ -4383,20 +4616,182 @@ exports.saveStudentHistoryDictionaryEntry = onCall({ region: REGION }, async (re
 
   const termId = buildHistoryDictionaryTermId(normalizedWord);
   const wordRef = db.doc(getStudentHistoryDictionaryWordPath(uid, termId));
-  await wordRef.set({
-    termId,
-    word,
-    normalizedWord,
-    definition,
-    studentLevel: '내가 정리한 뜻풀이',
-    status: 'saved',
-    requestId: '',
-    definitionSource: 'student',
-    updatedAt: FieldValue.serverTimestamp(),
-    createdAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
+  const { profile } = await ensureStudentProfile(uid);
+  const result = await db.runTransaction(async (transaction) => {
+    const wordSnap = await transaction.get(wordRef);
+    let reward = { awarded: false, amount: 0 };
+    if (scoped) {
+      reward = await awardHistoryDictionaryRewardIfEligible({
+        transaction,
+        year: scoped.year,
+        semester: scoped.semester,
+        uid,
+        profile,
+        termId,
+        word,
+        definition,
+      });
+    }
 
-  return { termId, saved: true };
+    const existingWord = wordSnap.data() || {};
+    transaction.set(wordRef, {
+      termId,
+      word,
+      normalizedWord,
+      definition,
+      studentLevel: '내가 정리한 뜻풀이',
+      status: 'saved',
+      requestId: '',
+      definitionSource: 'student',
+      rewardTransactionId: reward.transactionId || existingWord.rewardTransactionId || '',
+      rewardAmount: reward.awarded ? reward.amount : Number(existingWord.rewardAmount || 0),
+      rewardAwardedAt: reward.awarded ? FieldValue.serverTimestamp() : (existingWord.rewardAwardedAt || null),
+      updatedAt: FieldValue.serverTimestamp(),
+      createdAt: wordSnap.exists ? (existingWord.createdAt || FieldValue.serverTimestamp()) : FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    return reward;
+  });
+
+  if (result.awarded && scoped) {
+    await markWisHallOfFameDirtySafely(scoped.year, scoped.semester);
+  }
+
+  return {
+    termId,
+    saved: true,
+    reward: result,
+  };
+});
+
+exports.deleteStudentHistoryDictionaryWord = onCall({ region: REGION }, async (request) => {
+  const { uid } = assertAllowedWestoryUser(request);
+  const termId = sanitizeHistoryDictionaryText(request.data?.termId, 80);
+  const scoped = getOptionalYearSemester(request.data) || await getCurrentConfiguredYearSemester();
+  if (!termId) {
+    throw new HttpsError('invalid-argument', 'termId is required.');
+  }
+
+  const wordRef = db.doc(getStudentHistoryDictionaryWordPath(uid, termId));
+  const { profile } = await ensureStudentProfile(uid);
+  const result = await db.runTransaction(async (transaction) => {
+    const wordSnap = await transaction.get(wordRef);
+    if (!wordSnap.exists) {
+      return {
+        termId,
+        deleted: false,
+        reward: { reclaimed: false, amount: 0, blockedReason: 'word_not_found' },
+      };
+    }
+
+    const wordData = wordSnap.data() || {};
+    let reward = { reclaimed: false, amount: 0 };
+    if (scoped) {
+      reward = await reclaimHistoryDictionaryRewardIfNeeded({
+        transaction,
+        year: scoped.year,
+        semester: scoped.semester,
+        uid,
+        profile,
+        termId,
+        word: wordData.word || termId,
+        actorUid: uid,
+        reason: 'student_deleted_history_dictionary_word',
+      });
+    }
+
+    transaction.delete(wordRef);
+    return {
+      termId,
+      deleted: true,
+      reward,
+    };
+  });
+
+  if (result.reward?.reclaimed && scoped) {
+    await markWisHallOfFameDirtySafely(scoped.year, scoped.semester);
+  }
+
+  return result;
+});
+
+exports.deleteStudentHistoryDictionaryWordByTeacher = onCall({ region: REGION }, async (request) => {
+  const manager = await assertHistoryDictionaryManager(request);
+  const { year, semester } = assertYearSemester(request.data);
+  const targetUid = String(request.data?.uid || '').trim();
+  const requestId = sanitizeHistoryDictionaryText(request.data?.requestId, 100);
+  const word = sanitizeHistoryDictionaryWord(request.data?.word);
+  const normalizedWord = normalizeHistoryDictionaryWord(request.data?.normalizedWord || word);
+  const termId = sanitizeHistoryDictionaryText(request.data?.termId, 80)
+    || (normalizedWord ? buildHistoryDictionaryTermId(normalizedWord) : '');
+  const reason = sanitizeHistoryDictionaryText(
+    request.data?.reason || 'teacher_deleted_inappropriate_history_dictionary_word',
+    160,
+  );
+  if (!targetUid || !termId) {
+    throw new HttpsError('invalid-argument', 'uid and termId are required.');
+  }
+
+  const wordRef = db.doc(getStudentHistoryDictionaryWordPath(targetUid, termId));
+  const requestRef = requestId ? db.doc(getHistoryDictionaryRequestPath(requestId)) : null;
+  const { profile } = await ensureStudentProfile(targetUid);
+  const result = await db.runTransaction(async (transaction) => {
+    const [wordSnap, requestSnap] = await Promise.all([
+      transaction.get(wordRef),
+      requestRef ? transaction.get(requestRef) : Promise.resolve(null),
+    ]);
+    const wordData = wordSnap.exists ? wordSnap.data() || {} : {};
+    let reward = { reclaimed: false, amount: 0 };
+    reward = await reclaimHistoryDictionaryRewardIfNeeded({
+      transaction,
+      year,
+      semester,
+      uid: targetUid,
+      profile,
+      termId,
+      word: wordData.word || word || termId,
+      actorUid: manager.uid,
+      reason,
+    });
+
+    if (wordSnap.exists) {
+      transaction.delete(wordRef);
+    }
+    if (requestRef && requestSnap?.exists) {
+      transaction.set(requestRef, {
+        status: 'rejected',
+        rejectedBy: manager.uid,
+        rejectedAt: FieldValue.serverTimestamp(),
+        rejectionReason: reason,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+
+    return {
+      termId,
+      requestId,
+      deleted: wordSnap.exists,
+      reward,
+    };
+  });
+
+  if (result.reward?.reclaimed) {
+    await markWisHallOfFameDirtySafely(year, semester);
+  }
+
+  await createUserNotification(year, semester, targetUid, {
+    type: 'history_dictionary_rejected',
+    title: '역사 사전 단어 삭제',
+    body: `"${word || '요청한 단어'}" 항목이 선생님 확인 후 삭제되었습니다.`,
+    targetUrl: '/student/lesson/history-dictionary',
+    entityType: 'history_dictionary_request',
+    entityId: requestId || termId,
+    actorUid: manager.uid,
+    priority: 'normal',
+    dedupeKey: `history_dictionary_rejected:${year}:${semester}:${targetUid}:${termId}:${Date.now()}`,
+  });
+
+  return result;
 });
 
 const resolveHistoryDictionaryRequestsWithTerm = async ({
