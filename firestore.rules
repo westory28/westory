@@ -631,6 +631,16 @@ service cloud.firestore {
         allow create, update, delete: if canManagePointData();
       }
 
+      match /notification_inboxes/{userId} {
+        allow read: if canReadOwnPointResource(userId);
+        allow create, update, delete: if false;
+
+        match /items/{notificationId} {
+          allow read: if canReadOwnPointResource(userId);
+          allow create, update, delete: if false;
+        }
+      }
+
       match /calendar/{docId} {
         allow read: if canUseWestory();
         allow write: if isAdmin();

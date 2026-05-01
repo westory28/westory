@@ -42,6 +42,7 @@ import {
   type LessonWorksheetTextRegion,
 } from "../../lib/lessonWorksheet";
 import { normalizeMapResource, type MapResource } from "../../lib/mapResources";
+import { createManagedNotifications } from "../../lib/notifications";
 import { getSemesterCollectionPath } from "../../lib/semesterScope";
 
 interface StudentOption {
@@ -1970,6 +1971,23 @@ const ManageHistoryClassroom: React.FC = () => {
         ),
         payload,
       );
+      if (editingIsPublished && !targetAssignment.isPublished) {
+        void createManagedNotifications(config, {
+          recipientUids: updatedStudents.map((student) => student.uid),
+          type: "history_classroom_assigned",
+          title: "역사교실이 배정되었습니다",
+          body: `${nextMapTitle} 과제가 새로 열렸습니다.`,
+          targetUrl: "/student/history-classroom",
+          entityType: "history_classroom",
+          entityId: targetAssignment.id,
+          dedupeKey: `history_classroom_assigned:${targetAssignment.id}`,
+        }).catch((notificationError) => {
+          console.error(
+            "Failed to create history classroom assignment notifications:",
+            notificationError,
+          );
+        });
+      }
       setAssignments((prev) =>
         prev.map((assignment) =>
           assignment.id === targetAssignment.id
@@ -2231,6 +2249,23 @@ const ManageHistoryClassroom: React.FC = () => {
         ),
         payload,
       );
+      if (nextIsPublished && !existingAssignment?.isPublished) {
+        void createManagedNotifications(config, {
+          recipientUids: selectedStudents.map((student) => student.uid),
+          type: "history_classroom_assigned",
+          title: "역사교실이 배정되었습니다",
+          body: `${resolvedMapTitle} 과제가 새로 열렸습니다.`,
+          targetUrl: "/student/history-classroom",
+          entityType: "history_classroom",
+          entityId: assignmentId,
+          dedupeKey: `history_classroom_assigned:${assignmentId}`,
+        }).catch((notificationError) => {
+          console.error(
+            "Failed to create history classroom assignment notifications:",
+            notificationError,
+          );
+        });
+      }
       setAssignments((prev) => {
         const normalizedAssignment = normalizeHistoryClassroomAssignment(
           assignmentId,

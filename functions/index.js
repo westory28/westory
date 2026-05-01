@@ -662,6 +662,8 @@ const getSemesterRoot = (year, semester) => `years/${year}/semesters/${semester}
 const getPointCollectionPath = (year, semester, collectionName) => `${getSemesterRoot(year, semester)}/${collectionName}`;
 const getPointWalletPath = (year, semester, uid) => `${getPointCollectionPath(year, semester, 'point_wallets')}/${uid}`;
 const getPointPolicyPath = (year, semester) => `${getPointCollectionPath(year, semester, 'point_policies')}/current`;
+const getNotificationInboxPath = (year, semester, uid) => `${getSemesterRoot(year, semester)}/notification_inboxes/${uid}`;
+const getNotificationItemsPath = (year, semester, uid) => `${getNotificationInboxPath(year, semester, uid)}/items`;
 const WIS_HALL_OF_FAME_DOC_ID = 'hall_of_fame';
 const WIS_HALL_OF_FAME_SNAPSHOT_VERSION = 6;
 const WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS = 4;
@@ -679,6 +681,17 @@ const sanitizeKeyPart = (value) => String(value || '')
   .replace(/[^a-zA-Z0-9_-]+/g, '_')
   .replace(/^_+|_+$/g, '')
   .slice(0, 120) || 'empty';
+
+const sanitizeNotificationText = (value, maxLength, fallback = '') => {
+  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  return (text || fallback).slice(0, maxLength);
+};
+
+const buildNotificationId = (dedupeKey) => {
+  const normalized = sanitizeNotificationText(dedupeKey, 240);
+  if (!normalized) return crypto.randomUUID();
+  return `n_${crypto.createHash('sha1').update(normalized).digest('hex')}`;
+};
 
 const normalizeHallOfFameText = (value) => String(value || '').trim();
 
@@ -1529,6 +1542,129 @@ const assertQuizManager = async (request) => {
     );
   }
   return { uid, email, profile };
+};
+
+const assertNotificationManager = async (request) => {
+  const { uid, email } = assertAllowedWestoryUser(request);
+  if (email === ADMIN_EMAIL) {
+    return { uid, email, profile: null };
+  }
+
+  const { profile } = await getUserProfile(uid);
+  if (
+    String(profile?.role || '').trim() !== 'teacher'
+    && !hasStaffPermission(profile, 'lesson_read')
+    && !hasStaffPermission(profile, 'quiz_read')
+    && !hasStaffPermission(profile, 'point_manage')
+  ) {
+    throw new HttpsError(
+      'permission-denied',
+      'teacher or staff permission is required.',
+    );
+  }
+  return { uid, email, profile };
+};
+
+const uniqueNonEmptyStrings = (values, maxCount = 200) => Array.from(new Set(
+  (Array.isArray(values) ? values : [])
+    .map((value) => String(value || '').trim())
+    .filter(Boolean),
+)).slice(0, maxCount);
+
+const runInChunks = async (items, chunkSize, handler) => {
+  for (let index = 0; index < items.length; index += chunkSize) {
+    const chunk = items.slice(index, index + chunkSize);
+    await Promise.all(chunk.map(handler));
+  }
+};
+
+const createUserNotification = async (year, semester, recipientUid, input) => {
+  const uid = String(recipientUid || '').trim();
+  if (!uid) return { created: false, recipientUid: uid };
+
+  const type = sanitizeNotificationText(input.type, 80, 'system_notice');
+  const entityType = sanitizeNotificationText(input.entityType, 80);
+  const entityId = sanitizeNotificationText(input.entityId, 160);
+  const dedupeKey = sanitizeNotificationText(
+    input.dedupeKey || `${type}:${entityType}:${entityId}:${uid}:${input.title}`,
+    240,
+  );
+  const notificationId = buildNotificationId(dedupeKey);
+  const inboxRef = db.doc(getNotificationInboxPath(year, semester, uid));
+  const itemRef = db.doc(`${getNotificationItemsPath(year, semester, uid)}/${notificationId}`);
+
+  return db.runTransaction(async (transaction) => {
+    const existing = await transaction.get(itemRef);
+    if (existing.exists) {
+      return { created: false, recipientUid: uid, notificationId };
+    }
+
+    const payload = {
+      type,
+      title: sanitizeNotificationText(input.title, 80, '알림'),
+      body: sanitizeNotificationText(input.body, 500),
+      targetUrl: sanitizeNotificationText(input.targetUrl, 240),
+      entityType,
+      entityId,
+      actorUid: sanitizeNotificationText(input.actorUid, 160),
+      recipientUid: uid,
+      priority: input.priority === 'high' ? 'high' : 'normal',
+      dedupeKey,
+      readAt: null,
+      createdAt: FieldValue.serverTimestamp(),
+    };
+
+    transaction.set(inboxRef, {
+      uid,
+      unreadCount: FieldValue.increment(1),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    transaction.set(itemRef, payload);
+    return { created: true, recipientUid: uid, notificationId };
+  });
+};
+
+const createUserNotifications = async (year, semester, recipientUids, input) => {
+  const targets = uniqueNonEmptyStrings(recipientUids, 500);
+  const results = [];
+  await runInChunks(targets, 20, async (recipientUid) => {
+    results.push(await createUserNotification(year, semester, recipientUid, input));
+  });
+  return results;
+};
+
+const getAdminRecipientUids = async () => {
+  const snap = await db.collection('users').where('email', '==', ADMIN_EMAIL).get();
+  return snap.docs.map((docSnap) => docSnap.id);
+};
+
+const resolvePointManagerRecipientUids = async () => {
+  const [adminUids, managerSnap] = await Promise.all([
+    getAdminRecipientUids(),
+    db.collection('users').where('staffPermissions', 'array-contains', 'point_manage').get(),
+  ]);
+  return uniqueNonEmptyStrings([
+    ...adminUids,
+    ...managerSnap.docs.map((docSnap) => docSnap.id),
+  ]);
+};
+
+const resolveTeacherNotificationRecipientUids = async () => {
+  const [adminUids, teacherSnap, quizStaffSnap] = await Promise.all([
+    getAdminRecipientUids(),
+    db.collection('users').where('role', '==', 'teacher').get(),
+    db.collection('users').where('staffPermissions', 'array-contains', 'quiz_read').get(),
+  ]);
+  return uniqueNonEmptyStrings([
+    ...adminUids,
+    ...teacherSnap.docs.map((docSnap) => docSnap.id),
+    ...quizStaffSnap.docs.map((docSnap) => docSnap.id),
+  ]);
+};
+
+const resolveStudentRecipientUids = async () => {
+  const snap = await db.collection('users').where('role', '==', 'student').get();
+  return uniqueNonEmptyStrings(snap.docs.map((docSnap) => docSnap.id), 500);
 };
 
 const ensureStudentProfile = async (uid) => {
@@ -2426,6 +2562,140 @@ exports.ensureWisHallOfFame = onCall({ region: REGION }, async (request) => {
   };
 });
 
+exports.markNotificationsRead = onCall({ region: REGION }, async (request) => {
+  const { uid } = assertAllowedWestoryUser(request);
+  const { year, semester } = assertYearSemester(request.data);
+  const inboxRef = db.doc(getNotificationInboxPath(year, semester, uid));
+  const unreadSnap = await db.collection(getNotificationItemsPath(year, semester, uid))
+    .where('readAt', '==', null)
+    .limit(100)
+    .get();
+
+  const batch = db.batch();
+  unreadSnap.docs.forEach((docSnap) => {
+    batch.set(docSnap.ref, { readAt: FieldValue.serverTimestamp() }, { merge: true });
+  });
+  batch.set(inboxRef, {
+    uid,
+    unreadCount: 0,
+    lastReadAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  await batch.commit();
+
+  return { updatedCount: unreadSnap.size };
+});
+
+exports.clearNotifications = onCall({ region: REGION }, async (request) => {
+  const { uid } = assertAllowedWestoryUser(request);
+  const { year, semester } = assertYearSemester(request.data);
+  const inboxRef = db.doc(getNotificationInboxPath(year, semester, uid));
+  let deletedCount = 0;
+
+  while (true) {
+    const snap = await db.collection(getNotificationItemsPath(year, semester, uid))
+      .limit(450)
+      .get();
+    if (snap.empty) break;
+
+    const batch = db.batch();
+    snap.docs.forEach((docSnap) => {
+      batch.delete(docSnap.ref);
+      deletedCount += 1;
+    });
+    batch.set(inboxRef, {
+      uid,
+      unreadCount: 0,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    await batch.commit();
+  }
+
+  await inboxRef.set({
+    uid,
+    unreadCount: 0,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  return { deletedCount };
+});
+
+exports.createManagedNotifications = onCall({ region: REGION }, async (request) => {
+  const manager = await assertNotificationManager(request);
+  const { year, semester } = assertYearSemester(request.data);
+  const recipientMode = String(request.data?.recipientMode || 'explicit').trim();
+  const type = sanitizeNotificationText(request.data?.type, 80, 'system_notice');
+  const allowedTypes = new Set([
+    'history_classroom_assigned',
+    'lesson_worksheet_published',
+    'question_replied',
+    'system_notice',
+  ]);
+  if (!allowedTypes.has(type)) {
+    throw new HttpsError('invalid-argument', 'Unsupported notification type.');
+  }
+
+  const recipientUids = recipientMode === 'all_students'
+    ? await resolveStudentRecipientUids()
+    : uniqueNonEmptyStrings(request.data?.recipientUids, 300);
+  if (!recipientUids.length) {
+    return { createdCount: 0, recipientCount: 0 };
+  }
+
+  const results = await createUserNotifications(year, semester, recipientUids, {
+    type,
+    title: request.data?.title,
+    body: request.data?.body,
+    targetUrl: request.data?.targetUrl,
+    entityType: request.data?.entityType,
+    entityId: request.data?.entityId,
+    priority: request.data?.priority,
+    dedupeKey: request.data?.dedupeKey,
+    actorUid: manager.uid,
+  });
+
+  return {
+    createdCount: results.filter((result) => result.created).length,
+    recipientCount: recipientUids.length,
+  };
+});
+
+exports.notifyHistoryClassroomSubmitted = onCall({ region: REGION }, async (request) => {
+  const { uid } = assertAllowedWestoryUser(request);
+  const { year, semester } = assertYearSemester(request.data);
+  const assignmentId = sanitizeNotificationText(request.data?.assignmentId, 160);
+  const resultId = sanitizeNotificationText(request.data?.resultId, 160);
+  const assignmentTitle = sanitizeNotificationText(
+    request.data?.assignmentTitle,
+    80,
+    '역사교실',
+  );
+  const percent = Math.max(0, Math.min(100, Number(request.data?.percent || 0)));
+  if (!assignmentId || !resultId) {
+    throw new HttpsError('invalid-argument', 'assignmentId and resultId are required.');
+  }
+
+  const { profile } = await getUserProfile(uid);
+  const studentName = sanitizeNotificationText(profile.name, 40, '학생');
+  const recipients = await resolveTeacherNotificationRecipientUids();
+  const results = await createUserNotifications(year, semester, recipients, {
+    type: 'history_classroom_submitted',
+    title: '역사교실 제출 알림',
+    body: `${studentName} 학생이 ${assignmentTitle}을(를) 제출했습니다. 정답률 ${percent}%`,
+    targetUrl: '/teacher/quiz?menu=history2',
+    entityType: 'history_classroom_result',
+    entityId: resultId,
+    actorUid: uid,
+    priority: 'normal',
+    dedupeKey: `history_classroom_submitted:${year}:${semester}:${resultId}`,
+  });
+
+  return {
+    createdCount: results.filter((result) => result.created).length,
+    recipientCount: recipients.length,
+  };
+});
+
 exports.saveWisHallOfFameConfig = onCall({ region: REGION }, async (request) => {
   const { uid } = await assertHallOfFameManager(request);
   const { year, semester } = await resolveHallOfFameTargetYearSemester(
@@ -2936,11 +3206,25 @@ exports.createPointPurchaseRequest = onCall({ region: REGION }, async (request) 
       orderId,
       transactionId,
       balance: nextBalance,
+      productName: String(product.name || '').trim(),
+      studentName: String(wallet.studentName || profile.name || '').trim(),
     };
   });
 
   if (result.created) {
     await markWisHallOfFameDirtySafely(year, semester);
+    const recipients = await resolvePointManagerRecipientUids();
+    await createUserNotifications(year, semester, recipients, {
+      type: 'point_order_requested',
+      title: '상점 구매 요청',
+      body: `${result.studentName || '학생'} 학생이 ${result.productName || '상품'} 구매를 요청했습니다.`,
+      targetUrl: '/teacher/points',
+      entityType: 'point_order',
+      entityId: result.orderId,
+      actorUid: uid,
+      priority: 'normal',
+      dedupeKey: `point_order_requested:${year}:${semester}:${result.orderId}`,
+    });
   }
   return result;
 });
@@ -3214,6 +3498,8 @@ exports.reviewTeacherPointOrder = onCall({ region: REGION }, async (request) => 
         transactionId: '',
         status: nextStatus,
         duplicate: false,
+        uid: order.uid,
+        productName: String(order.productName || '').trim(),
       };
     }
 
@@ -3252,6 +3538,8 @@ exports.reviewTeacherPointOrder = onCall({ region: REGION }, async (request) => 
         transactionId,
         status: nextStatus,
         duplicate: false,
+        uid: order.uid,
+        productName: String(order.productName || '').trim(),
       };
     }
 
@@ -3291,11 +3579,31 @@ exports.reviewTeacherPointOrder = onCall({ region: REGION }, async (request) => 
       transactionId,
       status: nextStatus,
       duplicate: false,
+      uid: order.uid,
+      productName: String(order.productName || '').trim(),
     };
   });
 
   if (!result.duplicate) {
     await markWisHallOfFameDirtySafely(year, semester);
+    const statusLabel = {
+      requested: '검토 대기',
+      approved: '승인',
+      rejected: '거절',
+      fulfilled: '확정',
+      cancelled: '취소',
+    }[result.status] || result.status;
+    await createUserNotification(year, semester, result.uid, {
+      type: 'point_order_reviewed',
+      title: '상점 구매 처리',
+      body: `${result.productName || '상품'} 구매 요청이 ${statusLabel} 처리되었습니다.`,
+      targetUrl: '/student/points',
+      entityType: 'point_order',
+      entityId: result.orderId,
+      actorUid: manager.uid,
+      priority: result.status === 'rejected' || result.status === 'cancelled' ? 'high' : 'normal',
+      dedupeKey: `point_order_reviewed:${year}:${semester}:${result.orderId}:${result.status}`,
+    });
   }
   return result;
 });

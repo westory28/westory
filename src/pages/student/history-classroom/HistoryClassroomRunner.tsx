@@ -35,6 +35,7 @@ import {
   type HistoryClassroomAssignment,
 } from "../../../lib/historyClassroom";
 import { normalizeMapResource } from "../../../lib/mapResources";
+import { notifyHistoryClassroomSubmitted } from "../../../lib/notifications";
 import {
   buildHistoryClassroomRewardSourceId,
   claimPointActivityReward,
@@ -534,6 +535,18 @@ const HistoryClassroomRunner: React.FC = () => {
       status,
       cancellationReason: options.cancellationReason || "",
       createdAt: serverTimestamp(),
+    });
+
+    void notifyHistoryClassroomSubmitted(config, {
+      assignmentId: assignment.id,
+      assignmentTitle: assignment.title,
+      resultId: resultRef.id,
+      percent,
+    }).catch((notificationError) => {
+      console.error(
+        "Failed to create history classroom submission notification:",
+        notificationError,
+      );
     });
 
     clearAttemptProgress(assignment.id, userData.uid);

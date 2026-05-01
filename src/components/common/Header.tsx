@@ -1,5 +1,6 @@
 ﻿import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import NotificationBell from './NotificationBell';
 import PointRankBadge from './PointRankBadge';
 import { useAppToast } from './AppToastProvider';
 import { useAuth } from '../../contexts/AuthContext';
@@ -443,6 +444,8 @@ const Header: React.FC = () => {
                             <PointRankBadge rank={studentRank} size="sm" className="shrink-0" />
                         )}
                     </Link>
+
+                    <NotificationBell />
 
                     <button
                         type="button"

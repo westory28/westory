@@ -194,6 +194,41 @@ export interface PointOrder {
   memo: string;
 }
 
+export type WestoryNotificationType =
+  | "history_classroom_assigned"
+  | "history_classroom_submitted"
+  | "point_order_requested"
+  | "point_order_reviewed"
+  | "lesson_worksheet_published"
+  | "question_created"
+  | "question_replied"
+  | "system_notice";
+
+export type WestoryNotificationPriority = "normal" | "high";
+
+export interface WestoryNotification {
+  id: string;
+  type: WestoryNotificationType;
+  title: string;
+  body: string;
+  targetUrl: string;
+  entityType: string;
+  entityId: string;
+  actorUid: string;
+  recipientUid: string;
+  priority: WestoryNotificationPriority;
+  dedupeKey: string;
+  readAt?: any;
+  createdAt?: any;
+}
+
+export interface WestoryNotificationInbox {
+  uid: string;
+  unreadCount: number;
+  updatedAt?: any;
+  lastReadAt?: any;
+}
+
 export type PointRankTierCode = `tier_${number}`;
 
 export type PointRankThemeId = "korean_golpum" | "world_nobility";

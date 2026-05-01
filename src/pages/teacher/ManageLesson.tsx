@@ -68,6 +68,7 @@ import {
   uploadLessonFootnoteAsset,
 } from "../../lib/lessonFootnoteAssets";
 import { canWriteLessonManagement } from "../../lib/permissions";
+import { createManagedNotifications } from "../../lib/notifications";
 import { subscribeSourceArchiveAssets } from "../../lib/sourceArchive";
 import {
   buildTeacherPresentationClassId,
@@ -3496,6 +3497,31 @@ const ManageLesson: React.FC = () => {
         setLessonSaveState("saved");
       }
       setPdfSaveState("saved");
+      const isNewlyVisibleToStudents =
+        shouldSaveMeta &&
+        persistedMetaVisibleToStudents &&
+        savedLessonState.isVisibleToStudents === false;
+      const shouldNotifyStudents =
+        source === "header" &&
+        persistedMetaVisibleToStudents &&
+        (shouldSavePdf || isNewlyVisibleToStudents);
+      if (shouldNotifyStudents) {
+        void createManagedNotifications(config, {
+          recipientMode: "all_students",
+          type: "lesson_worksheet_published",
+          title: "새 학습지가 업데이트되었습니다",
+          body: `${persistedMetaTitle || selectedNodeTitle || "수업자료"} 자료를 확인해 보세요.`,
+          targetUrl: `/student/lesson/note?id=${encodeURIComponent(selectedNodeId)}&title=${encodeURIComponent(persistedMetaTitle || selectedNodeTitle || "")}`,
+          entityType: "lesson",
+          entityId: selectedNodeId,
+          dedupeKey: `lesson_worksheet_published:${selectedNodeId}:${shouldSavePdf ? Date.now() : "published"}`,
+        }).catch((notificationError) => {
+          console.error(
+            "Failed to create lesson worksheet notifications:",
+            notificationError,
+          );
+        });
+      }
       const successMessage =
         resolvedPdfProcessing.extractionStatus === "failed"
           ? shouldSaveMeta
