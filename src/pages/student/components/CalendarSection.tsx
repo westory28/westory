@@ -349,6 +349,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
     const dateStr = toLocalYmd(date);
     const dayLabel = dayNumberText.replace(/[^\d]/g, "");
     const holidayLabel = holidayLabelByDate.get(dateStr);
+    const isAttended = attendanceDateSet.has(dateStr);
 
     return (
       <span className="student-calendar-day-head">
@@ -361,6 +362,20 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             {holidayLabel}
           </span>
         )}
+        <span
+          className={`student-calendar-attendance-marker ${
+            isAttended ? "is-attended" : ""
+          }`}
+          title={isAttended ? LABELS.attendanceDoneTitle : LABELS.attendance}
+          aria-label={
+            isAttended ? LABELS.attendanceDoneTitle : LABELS.attendance
+          }
+        >
+          <i
+            className={isAttended ? "fas fa-check-circle" : "far fa-circle"}
+            aria-hidden="true"
+          ></i>
+        </span>
       </span>
     );
   };
@@ -670,8 +685,6 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             const classes: string[] = [];
             if (holidayDateSet.has(dateStr)) classes.push("fc-day-holiday");
             if (selectedDate === dateStr) classes.push("fc-day-selected");
-            classes.push("student-calendar-attendance-day");
-            if (attendanceDateSet.has(dateStr)) classes.push("is-attended");
             return classes;
           }}
           fixedWeekCount
