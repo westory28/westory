@@ -48,6 +48,17 @@ service firebase.storage {
       return isAdmin() || isTeacherRole();
     }
 
+    function canManageNoticeImages() {
+      return isAdmin() || isTeacherRole();
+    }
+
+    function isNoticeImageUpload() {
+      return request.resource != null
+        && request.resource.contentType is string
+        && request.resource.contentType.matches('image/.*')
+        && request.resource.size < 700 * 1024;
+    }
+
     function isLessonPdfAssetUpload() {
       return request.resource != null
         && request.resource.contentType is string
@@ -89,11 +100,8 @@ service firebase.storage {
 
     match /years/{year}/semesters/{semester}/notice_images/{noticeId}/{fileName} {
       allow read: if canUseWestory();
-      allow write: if isAdmin()
-        && request.resource != null
-        && request.resource.contentType is string
-        && request.resource.contentType.matches('image/.*')
-        && request.resource.size < 700 * 1024;
+      allow create, update: if canManageNoticeImages() && isNoticeImageUpload();
+      allow delete: if canManageNoticeImages();
     }
 
     match /years/{year}/semesters/{semester}/point_products/{productId}/{allPaths=**} {
