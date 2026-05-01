@@ -6,12 +6,12 @@ import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import TeacherNoticeBoard from "./components/TeacherNoticeBoard";
 import TeacherCalendarSection from "./components/TeacherCalendarSection";
-import EventDetailPanel from "../student/components/EventDetailPanel"; // Reuse student panel for basic viewing
 import SearchModal from "../student/components/SearchModal"; // Reuse search modal
 import EventModal from "./components/EventModal";
 import { useScheduleCategories } from "../../lib/scheduleCategories";
-import { compareCalendarSchedule } from "../../lib/schedulePeriods";
 import { getYearSemester } from "../../lib/semesterScope";
+import ScheduleEventDetailModal from "../../components/common/ScheduleEventDetailModal";
+import WisRankingPanel from "../../components/common/WisRankingPanel";
 import {
   ensureKoreanPublicHolidaysSynced,
   getKoreanPublicHolidays,
@@ -43,11 +43,11 @@ const TeacherDashboard: React.FC = () => {
   const { config } = useAuth();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [dailyEvents, setDailyEvents] = useState<CalendarEvent[]>([]);
 
   // UI State
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
+  const [detailEvent, setDetailEvent] = useState<CalendarEvent | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | undefined>(
     undefined,
   );
@@ -131,11 +131,13 @@ const TeacherDashboard: React.FC = () => {
   };
 
   const handleEventClick = (event: CalendarEvent) => {
-    if (event.eventType === "holiday") {
-      setSelectedDate(event.start);
-      return;
-    }
+    setSelectedDate(event.start);
+    setDetailEvent(event);
+  };
+
+  const handleEditEvent = (event: CalendarEvent) => {
     setSelectedEvent(event);
+    setDetailEvent(null);
     setIsEventModalOpen(true);
   };
 
@@ -153,27 +155,6 @@ const TeacherDashboard: React.FC = () => {
       handleDateClick(dateStr);
     }
   };
-
-  useEffect(() => {
-    if (!selectedDate) {
-      setDailyEvents([]);
-      return;
-    }
-
-    const filtered = visibleEvents
-      .filter((event) => {
-        const start = new Date(event.start);
-        const end = new Date(event.end || event.start);
-        const target = new Date(selectedDate);
-        start.setHours(0, 0, 0, 0);
-        end.setHours(0, 0, 0, 0);
-        target.setHours(0, 0, 0, 0);
-        return target >= start && target <= end;
-      })
-      .sort(compareCalendarSchedule);
-
-    setDailyEvents(filtered);
-  }, [selectedDate, visibleEvents]);
 
   return (
     <div className="dashboard-container w-full max-w-7xl mx-auto px-4 py-6 flex-1">
@@ -214,15 +195,10 @@ const TeacherDashboard: React.FC = () => {
           />
         </div>
 
-        {/* 3. Event Details (Mobile: Order 3 / Desktop: Order 3, Right Bottom) */}
+        {/* 3. Wis Ranking (Mobile: Order 3 / Desktop: Order 3, Right Bottom) */}
         <div className="order-3 md:order-3 md:col-span-2 md:row-span-1">
           <div className="min-h-[260px] h-full">
-            <EventDetailPanel
-              categories={categories}
-              selectedDate={selectedDate}
-              events={dailyEvents}
-              onEventClick={handleEventClick}
-            />
+            <WisRankingPanel config={config} />
           </div>
         </div>
       </div>
@@ -242,6 +218,13 @@ const TeacherDashboard: React.FC = () => {
         onSave={() => {
           /* Real-time updates handle refresh */
         }}
+      />
+
+      <ScheduleEventDetailModal
+        event={detailEvent}
+        categories={categories}
+        onClose={() => setDetailEvent(null)}
+        onEdit={handleEditEvent}
       />
     </div>
   );

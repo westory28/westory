@@ -17,6 +17,13 @@ export interface VisibleNotice {
   targetClass?: string;
   category: string;
   content: string;
+  imageUrl?: string;
+  imageStoragePath?: string;
+  imageWidth?: number;
+  imageHeight?: number;
+  imageByteSize?: number;
+  imageMimeType?: string;
+  noticeOrder?: number;
   createdAt: any;
   targetDate?: string;
 }
@@ -38,6 +45,14 @@ const timestampMs = (value: unknown) => {
   const seconds = Number((value as { seconds?: number }).seconds || 0);
   return seconds > 0 ? seconds * 1000 : 0;
 };
+
+const noticeSortValue = (notice: Pick<VisibleNotice, "noticeOrder" | "createdAt">) => {
+  const order = Number(notice.noticeOrder);
+  return Number.isFinite(order) ? order : -timestampMs(notice.createdAt);
+};
+
+const sortVisibleNotices = (notices: VisibleNotice[]) =>
+  notices.sort((a, b) => noticeSortValue(a) - noticeSortValue(b));
 
 const buildCalendarQueries = (
   db: Firestore,
@@ -145,10 +160,10 @@ export const loadVisibleNotices = async (
   const snapshots = await Promise.all(
     buildNoticeQueries(db, path, classKey).map((item) => getDocs(item)),
   );
-  return mergeDocs(
+  return sortVisibleNotices(mergeDocs(
     snapshots.map((snapshot) => snapshot.docs),
     (docSnap) => ({ id: docSnap.id, ...docSnap.data() }) as VisibleNotice,
-  ).sort((a, b) => timestampMs(b.createdAt) - timestampMs(a.createdAt));
+  ));
 };
 
 export const subscribeVisibleNotices = (
@@ -161,12 +176,10 @@ export const subscribeVisibleNotices = (
   const latestDocs = new Map<number, QueryDocumentSnapshot[]>();
   const emit = () => {
     onChange(
-      mergeDocs(Array.from(latestDocs.values()), (docSnap) => ({
+      sortVisibleNotices(mergeDocs(Array.from(latestDocs.values()), (docSnap) => ({
         id: docSnap.id,
         ...docSnap.data(),
-      }) as VisibleNotice).sort(
-        (a, b) => timestampMs(b.createdAt) - timestampMs(a.createdAt),
-      ),
+      }) as VisibleNotice)),
     );
   };
   const unsubscribes = buildNoticeQueries(db, path, classKey).map(

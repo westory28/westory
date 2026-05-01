@@ -87,6 +87,15 @@ service firebase.storage {
       allow write: if isAdmin();
     }
 
+    match /years/{year}/semesters/{semester}/notice_images/{noticeId}/{fileName} {
+      allow read: if canUseWestory();
+      allow write: if isAdmin()
+        && request.resource != null
+        && request.resource.contentType is string
+        && request.resource.contentType.matches('image/.*')
+        && request.resource.size < 700 * 1024;
+    }
+
     match /years/{year}/semesters/{semester}/point_products/{productId}/{allPaths=**} {
       allow read: if canUseWestory();
       allow write: if isAdmin();

@@ -29,7 +29,6 @@ import {
   getPointActivityTransaction,
 } from "../../lib/points";
 import { useScheduleCategories } from "../../lib/scheduleCategories";
-import { compareCalendarSchedule } from "../../lib/schedulePeriods";
 import { readSiteSettingDoc } from "../../lib/siteSettings";
 import { getYearSemester } from "../../lib/semesterScope";
 import {
@@ -48,7 +47,8 @@ import {
   markHallOfFameRecognitionSeen,
   type HallOfFameRecognition,
 } from "../../lib/wisHallOfFameRecognition";
-import EventDetailPanel from "./components/EventDetailPanel";
+import ScheduleEventDetailModal from "../../components/common/ScheduleEventDetailModal";
+import WisRankingPanel from "../../components/common/WisRankingPanel";
 
 const CalendarSection = lazy(() => import("./components/CalendarSection"));
 const NoticeBoard = lazy(() => import("./components/NoticeBoard"));
@@ -90,7 +90,7 @@ const StudentDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [dailyEvents, setDailyEvents] = useState<CalendarEvent[]>([]);
+  const [detailEvent, setDetailEvent] = useState<CalendarEvent | null>(null);
   const [welcomeText, setWelcomeText] = useState("학생 정보를 불러오는 중");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [gradeLabelMap, setGradeLabelMap] = useState<Record<string, string>>(
@@ -337,22 +337,11 @@ const StudentDashboard: React.FC = () => {
 
   const handleDateClick = (dateStr: string) => {
     setSelectedDate(dateStr);
-    const filtered = events
-      .filter((event) => {
-        const start = new Date(event.start);
-        const end = new Date(event.end || event.start);
-        const target = new Date(dateStr);
-        start.setHours(0, 0, 0, 0);
-        end.setHours(0, 0, 0, 0);
-        target.setHours(0, 0, 0, 0);
-        return target >= start && target <= end;
-      })
-      .sort(compareCalendarSchedule);
-    setDailyEvents(filtered);
   };
 
   const handleEventClick = (event: CalendarEvent) => {
     handleDateClick(event.start);
+    setDetailEvent(event);
   };
 
   const handleSelectSearchResults = (dateStr: string) => {
@@ -482,11 +471,7 @@ const StudentDashboard: React.FC = () => {
         </div>
 
         <div className="order-3 md:order-3 md:col-span-2 md:row-span-1">
-          <EventDetailPanel
-            categories={categories}
-            selectedDate={selectedDate}
-            events={dailyEvents}
-          />
+          <WisRankingPanel config={config} />
         </div>
       </div>
 
@@ -522,6 +507,12 @@ const StudentDashboard: React.FC = () => {
           setHallOfFameRecognition(null);
           navigate("/student/points?tab=hall-of-fame");
         }}
+      />
+
+      <ScheduleEventDetailModal
+        event={detailEvent}
+        categories={categories}
+        onClose={() => setDetailEvent(null)}
       />
     </div>
   );
