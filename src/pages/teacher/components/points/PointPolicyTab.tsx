@@ -43,17 +43,17 @@ interface AmountFieldProps {
 const policySections: PolicySectionItem[] = [
     {
         id: 'policy-auto-reward',
-        label: 'A. 기본 자동 지급',
+        label: '기본 자동 지급',
         description: '기본 행동 보상',
     },
     {
         id: 'policy-bonus',
-        label: 'B. 조건부 보너스',
+        label: '조건부 보너스',
         description: '추가 조건 달성 보상',
     },
     {
         id: 'policy-control',
-        label: 'C. 운영 제어',
+        label: '운영 제어',
         description: '운영 관련 설정',
     },
 ];
@@ -402,7 +402,7 @@ const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
                     {activeSectionId === 'policy-auto-reward' && (
                         <SectionPanel
                             id="policy-auto-reward"
-                            label="A. 기본 자동 지급"
+                            label="기본 자동 지급"
                             description="학생이 기본 활동을 완료했을 때 지급할 위스와 반복 인정 조건을 정합니다."
                             badge="핵심 자동 지급"
                         >
@@ -661,7 +661,7 @@ const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
                     {activeSectionId === 'policy-bonus' && (
                         <SectionPanel
                             id="policy-bonus"
-                            label="B. 조건부 보너스"
+                            label="조건부 보너스"
                             description="기본 지급과 별도로 조건 달성 시 한 번 더 지급되는 보너스를 관리합니다."
                             badge="추가 조건 달성 보상"
                         >
@@ -974,7 +974,7 @@ const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
                     {activeSectionId === 'policy-control' && (
                         <SectionPanel
                             id="policy-control"
-                            label="C. 운영 제어"
+                            label="운영 제어"
                             description="상단 공통 옵션에서 제어한 정책이 실제 운영에 어떤 의미인지 확인합니다."
                             badge="공통 옵션 영향"
                         >
