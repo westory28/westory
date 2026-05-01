@@ -873,24 +873,7 @@ const SettingsNotifications: React.FC = () => {
 
   return (
     <div className="space-y-5">
-      <div className="rounded-xl border border-gray-200 bg-white px-5 pt-4 shadow-sm">
-        <div className="flex gap-6 overflow-x-auto border-b border-gray-100">
-          {TAB_ITEMS.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => setActiveTab(item.key)}
-              className={`whitespace-nowrap border-b-2 px-1 pb-3 text-sm font-extrabold transition ${
-                activeTab === item.key
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-500 hover:text-gray-900"
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-
+      <div className="rounded-xl border border-gray-200 bg-white px-5 shadow-sm">
         <div className="py-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <h3 className="flex items-center text-2xl font-extrabold text-gray-900">
@@ -1003,6 +986,35 @@ const SettingsNotifications: React.FC = () => {
               </div>
             ))}
           </div>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-gray-200 bg-white px-5 pt-4 shadow-sm">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h4 className="text-base font-extrabold text-gray-900">
+              알림 목록
+            </h4>
+            <p className="mt-1 text-sm text-gray-500">
+              대상과 연결 상태별로 알림을 나누어 확인합니다.
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 flex gap-6 overflow-x-auto border-t border-gray-100 pt-4">
+          {TAB_ITEMS.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => setActiveTab(item.key)}
+              className={`whitespace-nowrap border-b-2 px-1 pb-3 text-sm font-extrabold transition ${
+                activeTab === item.key
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-900"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
         </div>
       </div>
 
