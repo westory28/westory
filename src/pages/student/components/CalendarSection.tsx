@@ -217,34 +217,41 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
     return `${gradeValue}\ud559\ub144 ${classValue}\ubc18`;
   };
 
-  const fcEvents = events.map((event) => {
-    const meta = getScheduleCategoryMeta(event.eventType, categories);
-    const isHoliday = event.eventType === "holiday";
-    const inclusiveSpanDays = getInclusiveSpanDays(event.start, event.end);
-    const isMultiDayRange = inclusiveSpanDays > 1;
+  const fcEvents = events
+    .filter(
+      (event) =>
+        currentViewType !== "dayGridMonth" || event.eventType !== "holiday",
+    )
+    .map((event) => {
+      const meta = getScheduleCategoryMeta(event.eventType, categories);
+      const isHoliday = event.eventType === "holiday";
+      const inclusiveSpanDays = getInclusiveSpanDays(event.start, event.end);
+      const isMultiDayRange = inclusiveSpanDays > 1;
 
-    return {
-      id: event.id,
-      title: event.title,
-      start: event.start,
-      end: toExclusiveEnd(event.start, event.end),
-      backgroundColor: isHoliday ? "#ef4444" : meta.color,
-      borderColor: isHoliday ? "#ef4444" : meta.color,
-      textColor: isHoliday ? "#ffffff" : undefined,
-      classNames: [
-        ...(isHoliday ? ["holiday-text-event"] : []),
-        ...(isMultiDayRange
-          ? ["student-calendar-range-event"]
-          : ["student-calendar-single-event"]),
-      ],
-      extendedProps: {
-        ...event,
-        inclusiveSpanDays,
-        isMultiDayRange,
-        periodOrder: getSchedulePeriodOrder(event.startPeriod ?? event.period),
-      },
-    };
-  });
+      return {
+        id: event.id,
+        title: event.title,
+        start: event.start,
+        end: toExclusiveEnd(event.start, event.end),
+        backgroundColor: isHoliday ? "#ef4444" : meta.color,
+        borderColor: isHoliday ? "#ef4444" : meta.color,
+        textColor: isHoliday ? "#ffffff" : undefined,
+        classNames: [
+          ...(isHoliday ? ["holiday-text-event"] : []),
+          ...(isMultiDayRange
+            ? ["student-calendar-range-event"]
+            : ["student-calendar-single-event"]),
+        ],
+        extendedProps: {
+          ...event,
+          inclusiveSpanDays,
+          isMultiDayRange,
+          periodOrder: getSchedulePeriodOrder(
+            event.startPeriod ?? event.period,
+          ),
+        },
+      };
+    });
 
   const holidayDateSet = useMemo(() => {
     const set = new Set<string>();
@@ -254,6 +261,19 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
       }
     });
     return set;
+  }, [events]);
+
+  const holidayLabelByDate = useMemo(() => {
+    const map = new Map<string, string>();
+    events.forEach((event) => {
+      if (event.eventType !== "holiday") return;
+      const dateKey = String(event.start || "").split("T")[0];
+      const title = String(event.title || LABELS.holiday).trim();
+      if (!dateKey || !title) return;
+      const current = map.get(dateKey);
+      map.set(dateKey, current ? `${current} · ${title}` : title);
+    });
+    return map;
   }, [events]);
 
   const toLocalYmd = (date: Date) => {
@@ -328,10 +348,19 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
   const renderDayCellHeader = (date: Date, dayNumberText: string) => {
     const dateStr = toLocalYmd(date);
     const dayLabel = dayNumberText.replace(/[^\d]/g, "");
+    const holidayLabel = holidayLabelByDate.get(dateStr);
 
     return (
       <span className="student-calendar-day-head">
         <span className="student-calendar-day-label">{dayLabel}</span>
+        {holidayLabel && (
+          <span
+            className="student-calendar-day-holiday-label"
+            title={holidayLabel}
+          >
+            {holidayLabel}
+          </span>
+        )}
         {attendanceDateSet.has(dateStr) && (
           <span className="student-calendar-day-badge">
             {LABELS.attendance}
