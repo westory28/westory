@@ -665,6 +665,8 @@ const getPointPolicyPath = (year, semester) => `${getPointCollectionPath(year, s
 const getNotificationInboxPath = (year, semester, uid) => `${getSemesterRoot(year, semester)}/notification_inboxes/${uid}`;
 const getNotificationItemsPath = (year, semester, uid) => `${getNotificationInboxPath(year, semester, uid)}/items`;
 const getBroadcastNotificationsPath = (year, semester) => `${getSemesterRoot(year, semester)}/broadcast_notifications`;
+const HISTORY_DICTIONARY_TERMS_COLLECTION = 'history_dictionary_terms';
+const HISTORY_DICTIONARY_REQUESTS_COLLECTION = 'history_dictionary_requests';
 const NOTIFICATION_RETENTION_DAYS = 30;
 const WIS_HALL_OF_FAME_DOC_ID = 'hall_of_fame';
 const WIS_HALL_OF_FAME_SNAPSHOT_VERSION = 6;
@@ -694,6 +696,35 @@ const buildNotificationId = (dedupeKey) => {
   if (!normalized) return crypto.randomUUID();
   return `n_${crypto.createHash('sha1').update(normalized).digest('hex')}`;
 };
+
+const normalizeHistoryDictionaryWord = (value) => String(value || '')
+  .trim()
+  .replace(/\s+/g, ' ')
+  .toLowerCase();
+
+const sanitizeHistoryDictionaryWord = (value) =>
+  String(value || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+
+const sanitizeHistoryDictionaryText = (value, maxLength) =>
+  String(value || '').replace(/\s+/g, ' ').trim().slice(0, maxLength);
+
+const buildHistoryDictionaryHash = (value) =>
+  crypto.createHash('sha1').update(String(value || '')).digest('hex');
+
+const buildHistoryDictionaryTermId = (normalizedWord) =>
+  `term_${buildHistoryDictionaryHash(normalizedWord)}`;
+
+const buildHistoryDictionaryRequestId = (year, semester, uid, normalizedWord) =>
+  `req_${buildHistoryDictionaryHash(`${year}:${semester}:${uid}:${normalizedWord}`)}`;
+
+const getHistoryDictionaryTermPath = (termId) =>
+  `${HISTORY_DICTIONARY_TERMS_COLLECTION}/${termId}`;
+
+const getHistoryDictionaryRequestPath = (requestId) =>
+  `${HISTORY_DICTIONARY_REQUESTS_COLLECTION}/${requestId}`;
+
+const getStudentHistoryDictionaryWordPath = (uid, termId) =>
+  `users/${uid}/history_dictionary_words/${termId}`;
 
 const getNotificationExpiryTimestamp = () => Timestamp.fromMillis(
   Date.now() + NOTIFICATION_RETENTION_DAYS * 24 * 60 * 60 * 1000,
@@ -1703,6 +1734,35 @@ const resolveTeacherNotificationRecipientUids = async () => {
     ...teacherSnap.docs.map((docSnap) => docSnap.id),
     ...quizStaffSnap.docs.map((docSnap) => docSnap.id),
   ]);
+};
+
+const resolveHistoryDictionaryManagerRecipientUids = async () => {
+  const [adminUids, teacherSnap, lessonStaffSnap] = await Promise.all([
+    getAdminRecipientUids(),
+    db.collection('users').where('role', '==', 'teacher').get(),
+    db.collection('users').where('staffPermissions', 'array-contains', 'lesson_read').get(),
+  ]);
+  return uniqueNonEmptyStrings([
+    ...adminUids,
+    ...teacherSnap.docs.map((docSnap) => docSnap.id),
+    ...lessonStaffSnap.docs.map((docSnap) => docSnap.id),
+  ]);
+};
+
+const assertHistoryDictionaryManager = async (request) => {
+  const { uid, email } = assertAllowedWestoryUser(request);
+  if (email === ADMIN_EMAIL) {
+    return { uid, email, profile: null };
+  }
+
+  const { profile } = await getUserProfile(uid);
+  if (String(profile?.role || '').trim() !== 'teacher' && !hasStaffPermission(profile, 'lesson_read')) {
+    throw new HttpsError(
+      'permission-denied',
+      'teacher or lesson_read permission is required.',
+    );
+  }
+  return { uid, email, profile };
 };
 
 const ensureStudentProfile = async (uid) => {
@@ -3908,6 +3968,348 @@ exports.reviewTeacherPointOrder = onCall({ region: REGION }, async (request) => 
     });
   }
   return result;
+});
+
+exports.requestHistoryDictionaryTerm = onCall({ region: REGION }, async (request) => {
+  const { uid } = assertAllowedWestoryUser(request);
+  const { year, semester } = assertYearSemester(request.data);
+  const word = sanitizeHistoryDictionaryWord(request.data?.word);
+  const normalizedWord = normalizeHistoryDictionaryWord(word);
+  const memo = sanitizeHistoryDictionaryText(request.data?.memo, 240);
+  const warningAccepted = request.data?.warningAccepted === true;
+
+  if (!word || !normalizedWord) {
+    throw new HttpsError('invalid-argument', 'A word is required.');
+  }
+  if (word.length > 40) {
+    throw new HttpsError('invalid-argument', 'Word is too long.');
+  }
+  if (!warningAccepted) {
+    throw new HttpsError('failed-precondition', 'Dictionary request warning must be accepted.');
+  }
+
+  const { profile } = await ensureStudentProfile(uid);
+  const termId = buildHistoryDictionaryTermId(normalizedWord);
+  const requestId = buildHistoryDictionaryRequestId(year, semester, uid, normalizedWord);
+  const termRef = db.doc(getHistoryDictionaryTermPath(termId));
+  const requestRef = db.doc(getHistoryDictionaryRequestPath(requestId));
+  const wordRef = db.doc(getStudentHistoryDictionaryWordPath(uid, termId));
+
+  const result = await db.runTransaction(async (transaction) => {
+    const [termSnap, requestSnap] = await Promise.all([
+      transaction.get(termRef),
+      transaction.get(requestRef),
+    ]);
+    const termData = termSnap.exists ? termSnap.data() || {} : null;
+    const hasPublishedTerm = termData?.status === 'published' && String(termData.definition || '').trim();
+    const nextStatus = hasPublishedTerm ? 'needs_approval' : 'requested';
+
+    if (requestSnap.exists) {
+      const existing = requestSnap.data() || {};
+      const existingStatus = String(existing.status || '').trim();
+      if (existingStatus === 'resolved') {
+        return {
+          requestId,
+          termId,
+          created: false,
+          alreadyResolved: true,
+          status: existingStatus,
+          matchedTermId: String(existing.resolvedTermId || existing.matchedTermId || ''),
+        };
+      }
+      transaction.set(requestRef, {
+        word,
+        normalizedWord,
+        memo,
+        status: existingStatus === 'needs_approval' || existingStatus === 'requested'
+          ? existingStatus
+          : nextStatus,
+        matchedTermId: hasPublishedTerm ? termId : String(existing.matchedTermId || ''),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+      transaction.set(wordRef, {
+        termId,
+        word,
+        normalizedWord,
+        definition: '',
+        studentLevel: '',
+        status: 'requested',
+        requestId,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+      return {
+        requestId,
+        termId,
+        created: false,
+        alreadyResolved: false,
+        status: existingStatus || nextStatus,
+        matchedTermId: hasPublishedTerm ? termId : String(existing.matchedTermId || ''),
+      };
+    }
+
+    transaction.set(requestRef, {
+      word,
+      normalizedWord,
+      uid,
+      studentName: sanitizeHistoryDictionaryText(profile.name, 40) || '학생',
+      grade: sanitizeHistoryDictionaryText(profile.grade, 8),
+      class: sanitizeHistoryDictionaryText(profile.class, 8),
+      number: sanitizeHistoryDictionaryText(profile.number, 8),
+      memo,
+      status: nextStatus,
+      matchedTermId: hasPublishedTerm ? termId : '',
+      resolvedTermId: '',
+      resolvedBy: '',
+      year,
+      semester,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+      resolvedAt: null,
+    });
+    transaction.set(wordRef, {
+      termId,
+      word,
+      normalizedWord,
+      definition: '',
+      studentLevel: '',
+      status: 'requested',
+      requestId,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return {
+      requestId,
+      termId,
+      created: true,
+      alreadyResolved: false,
+      status: nextStatus,
+      matchedTermId: hasPublishedTerm ? termId : '',
+    };
+  });
+
+  if (result.created) {
+    const recipients = await resolveHistoryDictionaryManagerRecipientUids();
+    await createUserNotifications(year, semester, recipients, {
+      type: 'history_dictionary_requested',
+      title: '역사 사전 요청',
+      body: `${profile.name || '학생'} 학생이 "${word}" 뜻풀이를 요청했습니다.`,
+      targetUrl: '/teacher/lesson/history-dictionary',
+      entityType: 'history_dictionary_request',
+      entityId: requestId,
+      actorUid: uid,
+      priority: result.status === 'needs_approval' ? 'normal' : 'high',
+      dedupeKey: `history_dictionary_requested:${year}:${semester}:${requestId}`,
+    });
+  }
+
+  return result;
+});
+
+exports.saveStudentHistoryDictionaryWord = onCall({ region: REGION }, async (request) => {
+  const { uid } = assertAllowedWestoryUser(request);
+  const termId = sanitizeHistoryDictionaryText(request.data?.termId, 80);
+  if (!termId) {
+    throw new HttpsError('invalid-argument', 'termId is required.');
+  }
+
+  const termRef = db.doc(getHistoryDictionaryTermPath(termId));
+  const wordRef = db.doc(getStudentHistoryDictionaryWordPath(uid, termId));
+  return db.runTransaction(async (transaction) => {
+    const termSnap = await transaction.get(termRef);
+    if (!termSnap.exists) {
+      throw new HttpsError('not-found', 'Dictionary term does not exist.');
+    }
+    const term = termSnap.data() || {};
+    if (term.status !== 'published' || !String(term.definition || '').trim()) {
+      throw new HttpsError('failed-precondition', 'Dictionary term is not published.');
+    }
+
+    transaction.set(wordRef, {
+      termId,
+      word: sanitizeHistoryDictionaryWord(term.word),
+      normalizedWord: normalizeHistoryDictionaryWord(term.normalizedWord || term.word),
+      definition: sanitizeHistoryDictionaryText(term.definition, 1200),
+      studentLevel: sanitizeHistoryDictionaryText(term.studentLevel, 80),
+      status: 'saved',
+      requestId: '',
+      updatedAt: FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return { termId, saved: true };
+  });
+});
+
+const resolveHistoryDictionaryRequestsWithTerm = async ({
+  managerUid,
+  termId,
+  requestId = '',
+  year = '',
+  semester = '',
+}) => {
+  const termRef = db.doc(getHistoryDictionaryTermPath(termId));
+  const result = await db.runTransaction(async (transaction) => {
+    const termSnap = await transaction.get(termRef);
+    if (!termSnap.exists) {
+      throw new HttpsError('not-found', 'Dictionary term does not exist.');
+    }
+    const term = termSnap.data() || {};
+    if (term.status !== 'published' || !String(term.definition || '').trim()) {
+      throw new HttpsError('failed-precondition', 'Dictionary term is not published.');
+    }
+
+    const normalizedWord = normalizeHistoryDictionaryWord(term.normalizedWord || term.word);
+    let docs = [];
+    if (requestId) {
+      const requestSnap = await transaction.get(db.doc(getHistoryDictionaryRequestPath(requestId)));
+      docs = [{ ref: requestSnap.ref, exists: requestSnap.exists, data: () => requestSnap.data() }];
+    } else {
+      const requestSnap = await transaction.get(
+        db.collection(HISTORY_DICTIONARY_REQUESTS_COLLECTION)
+          .where('normalizedWord', '==', normalizedWord)
+          .limit(100),
+      );
+      docs = requestSnap.docs;
+    }
+
+    const resolved = [];
+    docs.forEach((docSnap) => {
+      if (!docSnap.exists) return;
+      const data = docSnap.data() || {};
+      if (year && String(data.year || '') !== year) return;
+      if (semester && String(data.semester || '') !== semester) return;
+      if (!['requested', 'needs_approval'].includes(String(data.status || '').trim())) return;
+      const targetUid = String(data.uid || '').trim();
+      if (!targetUid) return;
+      transaction.set(docSnap.ref, {
+        status: 'resolved',
+        matchedTermId: termId,
+        resolvedTermId: termId,
+        resolvedBy: managerUid,
+        resolvedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+      transaction.set(db.doc(getStudentHistoryDictionaryWordPath(targetUid, termId)), {
+        termId,
+        word: sanitizeHistoryDictionaryWord(term.word),
+        normalizedWord,
+        definition: sanitizeHistoryDictionaryText(term.definition, 1200),
+        studentLevel: sanitizeHistoryDictionaryText(term.studentLevel, 80),
+        status: 'saved',
+        requestId: docSnap.ref.id,
+        updatedAt: FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+      resolved.push({
+        uid: targetUid,
+        requestId: docSnap.ref.id,
+        word: sanitizeHistoryDictionaryWord(term.word),
+      });
+    });
+
+    return {
+      termId,
+      normalizedWord,
+      resolved,
+    };
+  });
+
+  return result;
+};
+
+exports.saveHistoryDictionaryTerm = onCall({ region: REGION }, async (request) => {
+  const manager = await assertHistoryDictionaryManager(request);
+  const word = sanitizeHistoryDictionaryWord(request.data?.word);
+  const normalizedWord = normalizeHistoryDictionaryWord(word);
+  const definition = sanitizeHistoryDictionaryText(request.data?.definition, 1200);
+  const studentLevel = sanitizeHistoryDictionaryText(request.data?.studentLevel || '중학생 수준', 80);
+  const relatedUnitId = sanitizeHistoryDictionaryText(request.data?.relatedUnitId, 120);
+
+  if (!word || !normalizedWord) {
+    throw new HttpsError('invalid-argument', 'A word is required.');
+  }
+  if (!definition || definition.length < 5) {
+    throw new HttpsError('invalid-argument', 'Definition is too short.');
+  }
+
+  const termId = buildHistoryDictionaryTermId(normalizedWord);
+  const termRef = db.doc(getHistoryDictionaryTermPath(termId));
+  await db.runTransaction(async (transaction) => {
+    const termSnap = await transaction.get(termRef);
+    transaction.set(termRef, {
+      word,
+      normalizedWord,
+      definition,
+      studentLevel,
+      relatedUnitId,
+      status: 'published',
+      createdBy: termSnap.exists ? (termSnap.data()?.createdBy || manager.uid) : manager.uid,
+      updatedBy: manager.uid,
+      createdAt: termSnap.exists ? (termSnap.data()?.createdAt || FieldValue.serverTimestamp()) : FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+      publishedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  });
+
+  const scoped = getOptionalYearSemester(request.data) || await getCurrentConfiguredYearSemester();
+  const resolvedResult = await resolveHistoryDictionaryRequestsWithTerm({
+    managerUid: manager.uid,
+    termId,
+    year: scoped?.year || '',
+    semester: scoped?.semester || '',
+  });
+  if (scoped) {
+    await createUserNotifications(scoped.year, scoped.semester, resolvedResult.resolved.map((item) => item.uid), {
+      type: 'history_dictionary_resolved',
+      title: '역사 사전 등록 완료',
+      body: `요청한 "${word}" 뜻풀이가 등록되었습니다.`,
+      targetUrl: '/student/dashboard',
+      entityType: 'history_dictionary_term',
+      entityId: termId,
+      actorUid: manager.uid,
+      priority: 'normal',
+      dedupeKey: `history_dictionary_resolved:${termId}:${Date.now()}`,
+    });
+  }
+
+  return {
+    termId,
+    resolvedCount: resolvedResult.resolved.length,
+  };
+});
+
+exports.approveHistoryDictionaryTermForRequests = onCall({ region: REGION }, async (request) => {
+  const manager = await assertHistoryDictionaryManager(request);
+  const { year, semester } = assertYearSemester(request.data);
+  const termId = sanitizeHistoryDictionaryText(request.data?.termId, 80);
+  const requestId = sanitizeHistoryDictionaryText(request.data?.requestId, 100);
+  if (!termId) {
+    throw new HttpsError('invalid-argument', 'termId is required.');
+  }
+
+  const result = await resolveHistoryDictionaryRequestsWithTerm({
+    managerUid: manager.uid,
+    termId,
+    requestId,
+    year,
+    semester,
+  });
+
+  await createUserNotifications(year, semester, result.resolved.map((item) => item.uid), {
+    type: 'history_dictionary_resolved',
+    title: '역사 사전 등록 완료',
+    body: `"${result.resolved[0]?.word || '요청한 단어'}" 뜻풀이가 선생님 승인 후 단어장에 들어왔습니다.`,
+    targetUrl: '/student/dashboard',
+    entityType: 'history_dictionary_term',
+    entityId: termId,
+    actorUid: manager.uid,
+    priority: 'normal',
+    dedupeKey: `history_dictionary_approved:${year}:${semester}:${termId}:${requestId || 'all'}`,
+  });
+
+  return {
+    termId,
+    resolvedCount: result.resolved.length,
+  };
 });
 
 exports.updateStudentProfileIcon = onCall({ region: REGION }, async (request) => {

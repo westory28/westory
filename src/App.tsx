@@ -25,6 +25,7 @@ const ManageExam = lazyWithRetry(() => import('./pages/teacher/ManageExam'), 'ma
 const Settings = lazyWithRetry(() => import('./pages/teacher/Settings'), 'settings');
 const ManageSchedule = lazyWithRetry(() => import('./pages/teacher/ManageSchedule'), 'manage-schedule');
 const ManageLesson = lazyWithRetry(() => import('./pages/teacher/ManageLesson'), 'manage-lesson');
+const ManageHistoryDictionary = lazyWithRetry(() => import('./pages/teacher/ManageHistoryDictionary'), 'manage-history-dictionary');
 const ManageMaps = lazyWithRetry(() => import('./pages/teacher/ManageMaps'), 'manage-maps');
 const ManageSourceArchive = lazyWithRetry(() => import('./pages/teacher/ManageSourceArchive'), 'manage-source-archive');
 const ManageThinkCloud = lazyWithRetry(() => import('./pages/teacher/ManageThinkCloud'), 'manage-think-cloud');
@@ -190,6 +191,11 @@ const App: React.FC = () => {
                             <Route path="/teacher/lesson" element={
                                 <MainLayout>
                                     <ManageLesson />
+                                </MainLayout>
+                            } />
+                            <Route path="/teacher/lesson/history-dictionary" element={
+                                <MainLayout>
+                                    <ManageHistoryDictionary />
                                 </MainLayout>
                             } />
                             <Route path="/teacher/lesson/maps" element={

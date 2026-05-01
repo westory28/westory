@@ -31,6 +31,7 @@ const formatNotificationTime = (value: unknown) => {
 
 const getNotificationIconClassName = (type: WestoryNotification["type"]) => {
   if (type.startsWith("history_classroom")) return "fas fa-landmark";
+  if (type.startsWith("history_dictionary")) return "fas fa-book-open";
   if (type.startsWith("point_order")) return "fas fa-store";
   if (type.startsWith("lesson")) return "fas fa-file-lines";
   if (type.startsWith("question")) return "fas fa-circle-question";

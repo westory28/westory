@@ -129,6 +129,16 @@ service cloud.firestore {
       return isAdmin() || isTeacherRole();
     }
 
+    function canReadHistoryDictionaryRequest(data) {
+      return canUseWestory()
+        && (
+          data.uid == request.auth.uid
+          || isAdmin()
+          || isTeacherRole()
+          || hasPermission('lesson_read')
+        );
+    }
+
     function canReadOwnPointResource(targetUid) {
       return canUseWestory() && targetUid == request.auth.uid;
     }
@@ -491,6 +501,17 @@ service cloud.firestore {
           && request.resource.data.date is string;
         allow delete: if isAdmin();
       }
+
+      match /history_dictionary_words/{wordId} {
+        allow read: if canUseWestory()
+          && (
+            isOwnUser(userId)
+            || isAdmin()
+            || isTeacherRole()
+            || hasPermission('lesson_read')
+          );
+        allow create, update, delete: if false;
+      }
     }
 
     match /site_settings/{docId} {
@@ -526,6 +547,16 @@ service cloud.firestore {
     match /source_archive/{docId} {
       allow read: if canReadSourceArchive();
       allow write: if canWriteSourceArchive();
+    }
+
+    match /history_dictionary_terms/{termId} {
+      allow read: if canUseWestory();
+      allow create, update, delete: if false;
+    }
+
+    match /history_dictionary_requests/{requestId} {
+      allow read: if canReadHistoryDictionaryRequest(resource.data);
+      allow create, update, delete: if false;
     }
 
     match /quiz_questions/{docId} {

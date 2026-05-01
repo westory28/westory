@@ -200,6 +200,8 @@ export interface PointOrder {
 export type WestoryNotificationType =
   | "history_classroom_assigned"
   | "history_classroom_submitted"
+  | "history_dictionary_requested"
+  | "history_dictionary_resolved"
   | "point_order_requested"
   | "point_order_reviewed"
   | "lesson_worksheet_published"
@@ -234,6 +236,63 @@ export interface WestoryNotificationInbox {
   lastReadAt?: any;
   lastBroadcastReadAt?: any;
   broadcastClearedAt?: any;
+}
+
+export type HistoryDictionaryTermStatus = "draft" | "published" | "hidden";
+
+export interface HistoryDictionaryTerm {
+  id: string;
+  word: string;
+  normalizedWord: string;
+  definition: string;
+  studentLevel: string;
+  relatedUnitId: string;
+  status: HistoryDictionaryTermStatus;
+  createdBy: string;
+  updatedBy: string;
+  createdAt?: any;
+  updatedAt?: any;
+  publishedAt?: any;
+}
+
+export type HistoryDictionaryRequestStatus =
+  | "requested"
+  | "needs_approval"
+  | "resolved"
+  | "rejected";
+
+export interface HistoryDictionaryRequest {
+  id: string;
+  word: string;
+  normalizedWord: string;
+  uid: string;
+  studentName: string;
+  grade: string;
+  class: string;
+  number: string;
+  memo: string;
+  status: HistoryDictionaryRequestStatus;
+  matchedTermId: string;
+  resolvedTermId: string;
+  resolvedBy: string;
+  createdAt?: any;
+  updatedAt?: any;
+  resolvedAt?: any;
+}
+
+export type StudentHistoryDictionaryWordStatus = "requested" | "saved";
+
+export interface StudentHistoryDictionaryWord {
+  id: string;
+  termId: string;
+  word: string;
+  normalizedWord: string;
+  definition: string;
+  studentLevel: string;
+  status: StudentHistoryDictionaryWordStatus;
+  requestId: string;
+  createdAt?: any;
+  updatedAt?: any;
 }
 
 export type PointRankTierCode = `tier_${number}`;

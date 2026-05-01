@@ -3,6 +3,7 @@ import { inferToastFromAlertMessage, useAppToast } from '../common/AppToastProvi
 import Header from '../common/Header';
 import Footer from '../common/Footer';
 import { PageLoading } from '../common/LoadingState';
+import StudentHistoryDictionaryController from '../common/StudentHistoryDictionaryController';
 import StudentRankPromotionController from '../common/StudentRankPromotionController';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -77,6 +78,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         <div className="flex flex-col min-h-screen bg-gray-50">
             <Header />
             <StudentRankPromotionController />
+            <StudentHistoryDictionaryController />
             <main className="flex-1 w-full">
                 {children}
             </main>
