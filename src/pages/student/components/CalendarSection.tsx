@@ -372,9 +372,21 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
           }
         >
           <i
-            className={isAttended ? "fas fa-check-circle" : "far fa-circle"}
+            className="far fa-circle student-calendar-attendance-marker__outline"
             aria-hidden="true"
           ></i>
+          {isAttended && (
+            <>
+              <i
+                className="fas fa-circle student-calendar-attendance-marker__fill"
+                aria-hidden="true"
+              ></i>
+              <i
+                className="fas fa-check student-calendar-attendance-marker__check"
+                aria-hidden="true"
+              ></i>
+            </>
+          )}
         </span>
       </span>
     );
