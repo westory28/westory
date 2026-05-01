@@ -7,10 +7,13 @@
 - 앱 이름: 위스토리
 - 앱 표시 이름: 위스토리
 - 웹앱 주소: `https://westory.kr`
+- 실제 TWA 신뢰 대상 host: `www.westory.kr`
 - Web Manifest: `https://westory.kr/manifest.webmanifest`
 - 시작 URL: `/`
 - 표시 방식: `standalone`
 - 임시 Android 패키지명: `kr.westory.app`
+
+현재 `https://westory.kr`는 `https://www.westory.kr`로 리다이렉트됩니다. Android Digital Asset Links 검증은 리다이렉트를 허용하지 않으므로, APK의 TWA host는 `www.westory.kr` 기준으로 빌드합니다. 사용자는 계속 `https://westory.kr`로 접속해도 되지만, APK 재빌드 시 `twa-manifest.json`의 `host`는 `www.westory.kr`로 유지하세요.
 
 패키지명은 나중에 확정 명칭으로 바꿀 수 있습니다. Bubblewrap 프로젝트 생성 후 `twa-manifest.json`의 `packageId` 값을 수정하고 `bubblewrap update`를 실행하면 됩니다.
 
@@ -117,8 +120,8 @@ alias가 `westory`가 아니라면 Bubblewrap 생성 과정에서 사용한 alia
 
 그 다음 웹앱을 다시 배포하고 아래 주소가 브라우저에서 열리는지 확인합니다.
 
-- `https://westory.kr/.well-known/assetlinks.json`
-- `https://westory.kr/manifest.webmanifest`
+- `https://www.westory.kr/.well-known/assetlinks.json`
+- `https://www.westory.kr/manifest.webmanifest`
 
 이 단계가 빠지면 APK가 설치되어도 TWA가 완전한 앱 화면이 아니라 브라우저 UI가 붙은 Custom Tab처럼 보일 수 있습니다.
 
