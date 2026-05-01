@@ -666,15 +666,19 @@
   bottom: 0.38rem;
   z-index: 20;
   box-sizing: border-box;
-  width: 0.78rem;
-  height: 0.78rem;
-  border: 1.5px solid #cbd5e1;
-  border-radius: 50%;
-  background: #ffffff;
+  width: 0.84rem;
+  height: 0.84rem;
+  border: 0;
+  border-radius: 9999px;
+  background: radial-gradient(
+    circle at center,
+    #ffffff 0 48%,
+    #cbd5e1 49% 62%,
+    #ffffff 63% 100%
+  );
+  clip-path: circle(50% at 50% 50%);
   color: #ffffff;
-  box-shadow:
-    0 0 0 3px #ffffff,
-    0 1px 2px rgba(15, 23, 42, 0.1);
+  filter: drop-shadow(0 1px 2px rgba(15, 23, 42, 0.1));
   pointer-events: none;
 }
 
@@ -682,8 +686,11 @@
   .fc
   .student-calendar-attendance-day.is-attended
   .fc-daygrid-day-frame::after {
-  border-color: #059669;
-  background: #059669;
+  background: radial-gradient(
+    circle at center,
+    #059669 0 62%,
+    #ffffff 63% 100%
+  );
 }
 
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
@@ -692,8 +699,8 @@
   .fc-daygrid-day-frame::before {
   content: "";
   position: absolute;
-  right: 0.63rem;
-  bottom: 0.61rem;
+  right: 0.66rem;
+  bottom: 0.63rem;
   z-index: 21;
   width: 0.28rem;
   height: 0.46rem;
@@ -1180,16 +1187,16 @@
     .fc-daygrid-day-frame::after {
     right: 0.32rem;
     bottom: 0.32rem;
-    width: 0.72rem;
-    height: 0.72rem;
+    width: 0.78rem;
+    height: 0.78rem;
   }
 
   .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
     .fc
     .student-calendar-attendance-day.is-attended
     .fc-daygrid-day-frame::before {
-    right: 0.49rem;
-    bottom: 0.53rem;
+    right: 0.51rem;
+    bottom: 0.54rem;
     width: 0.26rem;
     height: 0.42rem;
   }
