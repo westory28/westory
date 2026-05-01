@@ -1,15 +1,19 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useId, useState } from "react";
 import {
   collection,
   deleteDoc,
   doc,
   serverTimestamp,
   setDoc,
+  Timestamp,
 } from "firebase/firestore";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { useAuth } from "../../../contexts/AuthContext";
 import { db } from "../../../lib/firebase";
-import { uploadNoticeImage, tryDeleteNoticeImage } from "../../../lib/noticeImages";
+import {
+  uploadNoticeImage,
+  tryDeleteNoticeImage,
+} from "../../../lib/noticeImages";
 
 interface NoticeModalProps {
   isOpen: boolean;
@@ -27,6 +31,21 @@ const NOTICE_CATEGORIES = [
   { val: "dday", label: "D-Day" },
 ] as const;
 
+const toLocalDateTimeInputValue = (value?: unknown) => {
+  if (!value) return "";
+  const date =
+    typeof (value as { toDate?: () => Date }).toDate === "function"
+      ? (value as { toDate: () => Date }).toDate()
+      : new Date(value as string | number | Date);
+  if (Number.isNaN(date.getTime())) return "";
+  const offsetDate = new Date(
+    date.getTime() - date.getTimezoneOffset() * 60000,
+  );
+  return offsetDate.toISOString().slice(0, 16);
+};
+
+const getDefaultPublishAt = () => toLocalDateTimeInputValue(new Date());
+
 const NoticeModal: React.FC<NoticeModalProps> = ({
   isOpen,
   onClose,
@@ -35,11 +54,14 @@ const NoticeModal: React.FC<NoticeModalProps> = ({
 }) => {
   const { config } = useAuth();
   const { showToast } = useAppToast();
+  const fileInputId = useId();
   const [category, setCategory] = useState("event");
   const [targetType, setTargetType] = useState("common");
   const [targetGrade, setTargetGrade] = useState("1");
   const [targetClass, setTargetClass] = useState("1");
   const [targetDate, setTargetDate] = useState("");
+  const [publishAt, setPublishAt] = useState(getDefaultPublishAt);
+  const [expiresAt, setExpiresAt] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [loading, setLoading] = useState(false);
@@ -54,6 +76,11 @@ const NoticeModal: React.FC<NoticeModalProps> = ({
       setTargetGrade(grade || "1");
       setTargetClass(className || "1");
       setTargetDate(noticeData.targetDate || "");
+      setPublishAt(
+        toLocalDateTimeInputValue(noticeData.publishAt) ||
+          getDefaultPublishAt(),
+      );
+      setExpiresAt(toLocalDateTimeInputValue(noticeData.expiresAt));
       setPreviewUrl(noticeData.imageUrl || "");
       setImageFile(null);
       return;
@@ -64,6 +91,8 @@ const NoticeModal: React.FC<NoticeModalProps> = ({
     setTargetGrade("1");
     setTargetClass("1");
     setTargetDate("");
+    setPublishAt(getDefaultPublishAt());
+    setExpiresAt("");
     setPreviewUrl("");
     setImageFile(null);
   }, [isOpen, noticeData]);
@@ -87,11 +116,39 @@ const NoticeModal: React.FC<NoticeModalProps> = ({
       });
       return;
     }
+    const publishDate = publishAt ? new Date(publishAt) : new Date();
+    const expireDate = expiresAt ? new Date(expiresAt) : null;
+    if (Number.isNaN(publishDate.getTime())) {
+      showToast({
+        tone: "warning",
+        title: "공개 시작 일시를 확인해 주세요.",
+        message: "예약 공개에 사용할 시작 일시가 올바르지 않습니다.",
+      });
+      return;
+    }
+    if (expireDate && Number.isNaN(expireDate.getTime())) {
+      showToast({
+        tone: "warning",
+        title: "공개 종료 일시를 확인해 주세요.",
+        message: "알림장이 내려갈 종료 일시가 올바르지 않습니다.",
+      });
+      return;
+    }
+    if (expireDate && expireDate <= publishDate) {
+      showToast({
+        tone: "warning",
+        title: "공개 기간을 확인해 주세요.",
+        message: "종료 일시는 시작 일시보다 뒤여야 합니다.",
+      });
+      return;
+    }
     setLoading(true);
 
     try {
       const path = `years/${config.year}/semesters/${config.semester}/notices`;
-      const docRef = noticeData ? doc(db, path, noticeData.id) : doc(collection(db, path));
+      const docRef = noticeData
+        ? doc(db, path, noticeData.id)
+        : doc(collection(db, path));
       let imagePayload = {
         imageUrl: noticeData?.imageUrl || "",
         imageStoragePath: noticeData?.imageStoragePath || "",
@@ -113,8 +170,11 @@ const NoticeModal: React.FC<NoticeModalProps> = ({
         category,
         content: "",
         targetType,
-        targetClass: targetType === "class" ? `${targetGrade}-${targetClass}` : null,
+        targetClass:
+          targetType === "class" ? `${targetGrade}-${targetClass}` : null,
         targetDate: category === "dday" && targetDate ? targetDate : null,
+        publishAt: Timestamp.fromDate(publishDate),
+        expiresAt: expireDate ? Timestamp.fromDate(expireDate) : null,
         ...imagePayload,
         updatedAt: serverTimestamp(),
       };
@@ -131,7 +191,9 @@ const NoticeModal: React.FC<NoticeModalProps> = ({
       onSave();
       showToast({
         tone: "success",
-        title: noticeData ? "알림장 이미지가 수정되었습니다." : "알림장 이미지가 게시되었습니다.",
+        title: noticeData
+          ? "알림장 이미지가 수정되었습니다."
+          : "알림장 이미지가 게시되었습니다.",
         message: "학생 화면에는 압축된 이미지로 표시됩니다.",
       });
       onClose();
@@ -140,7 +202,10 @@ const NoticeModal: React.FC<NoticeModalProps> = ({
       showToast({
         tone: "error",
         title: "알림장 저장에 실패했습니다.",
-        message: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
+        message:
+          error instanceof Error
+            ? error.message
+            : "잠시 후 다시 시도해 주세요.",
       });
     } finally {
       setLoading(false);
@@ -148,7 +213,12 @@ const NoticeModal: React.FC<NoticeModalProps> = ({
   };
 
   const handleDelete = async () => {
-    if (!noticeData || !config || !confirm("이 알림장 이미지를 삭제하시겠습니까?")) return;
+    if (
+      !noticeData ||
+      !config ||
+      !confirm("이 알림장 이미지를 삭제하시겠습니까?")
+    )
+      return;
     setLoading(true);
     try {
       const path = `years/${config.year}/semesters/${config.semester}/notices`;
@@ -198,26 +268,35 @@ const NoticeModal: React.FC<NoticeModalProps> = ({
 
         <div className="grid gap-5 px-6 py-5 md:grid-cols-[minmax(0,1fr)_220px]">
           <div className="space-y-4">
-            <label className="block">
+            <div className="block">
               <span className="mb-2 block text-sm font-extrabold text-gray-800">
                 알림장 이미지
               </span>
               <input
+                id={fileInputId}
                 type="file"
                 accept="image/*"
-                onChange={(event) => setImageFile(event.target.files?.[0] || null)}
-                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:text-sm file:font-extrabold file:text-blue-700"
+                onChange={(event) =>
+                  setImageFile(event.target.files?.[0] || null)
+                }
+                className="sr-only"
               />
-              <p className="mt-2 text-xs font-semibold text-gray-500">
-                권장 크기: 1200 x 800px (3:2). 최소 900 x 600px 이상이면 선명하게 보입니다.
-              </p>
-              <p className="mt-1 text-xs font-semibold text-gray-500">
-                16:9, 세로형, 정사각형 이미지는 잘리지 않지만 위아래 또는 좌우 여백이 생길 수 있습니다.
-              </p>
-              <p className="mt-1 text-xs font-semibold text-gray-500">
-                업로드 시 WebP로 변환하고 선명도를 우선해 약 460KB 목표, 최대 680KB 이하로 압축합니다.
-              </p>
-            </label>
+              <label
+                htmlFor={fileInputId}
+                className={`group flex min-h-14 cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 text-sm font-extrabold transition focus-within:ring-2 focus-within:ring-blue-200 ${
+                  imageFile
+                    ? "border-blue-300 bg-blue-50 text-blue-800 hover:bg-blue-100 active:bg-blue-200"
+                    : "border-gray-300 bg-white text-gray-700 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 active:bg-blue-100"
+                }`}
+              >
+                <span className="rounded-md bg-blue-600 px-3 py-2 text-white transition group-hover:bg-blue-700 group-active:bg-blue-800">
+                  파일 선택
+                </span>
+                <span className="min-w-0 truncate">
+                  {imageFile?.name || "선택된 파일 없음"}
+                </span>
+              </label>
+            </div>
 
             <div className="overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
               {previewUrl ? (
@@ -235,6 +314,36 @@ const NoticeModal: React.FC<NoticeModalProps> = ({
           </div>
 
           <div className="space-y-4">
+            <div>
+              <span className="mb-2 block text-sm font-extrabold text-gray-800">
+                공개 기간
+              </span>
+              <div className="grid grid-cols-1 gap-2">
+                <label className="block">
+                  <span className="mb-1 block text-xs font-extrabold text-gray-700">
+                    공개 시작
+                  </span>
+                  <input
+                    type="datetime-local"
+                    value={publishAt}
+                    onChange={(event) => setPublishAt(event.target.value)}
+                    className="h-10 w-full rounded-lg border border-gray-300 px-3 text-sm font-bold outline-none focus:border-blue-500"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-extrabold text-gray-700">
+                    공개 종료
+                  </span>
+                  <input
+                    type="datetime-local"
+                    value={expiresAt}
+                    onChange={(event) => setExpiresAt(event.target.value)}
+                    className="h-10 w-full rounded-lg border border-gray-300 px-3 text-sm font-bold outline-none focus:border-blue-500"
+                  />
+                </label>
+              </div>
+            </div>
+
             <div>
               <span className="mb-2 block text-sm font-extrabold text-gray-800">
                 분류

@@ -26,9 +26,14 @@ export interface VisibleNotice {
   noticeOrder?: number;
   createdAt: any;
   targetDate?: string;
+  publishAt?: any;
+  expiresAt?: any;
 }
 
-const normalizeClassKey = (grade?: string | null, className?: string | null) => {
+const normalizeClassKey = (
+  grade?: string | null,
+  className?: string | null,
+) => {
   const gradeValue = String(grade || "").trim();
   const classValue = String(className || "").trim();
   return gradeValue && classValue ? `${gradeValue}-${classValue}` : "";
@@ -46,13 +51,34 @@ const timestampMs = (value: unknown) => {
   return seconds > 0 ? seconds * 1000 : 0;
 };
 
-const noticeSortValue = (notice: Pick<VisibleNotice, "noticeOrder" | "createdAt">) => {
+const noticeSortValue = (
+  notice: Pick<VisibleNotice, "noticeOrder" | "createdAt">,
+) => {
   const order = Number(notice.noticeOrder);
   return Number.isFinite(order) ? order : -timestampMs(notice.createdAt);
 };
 
 const sortVisibleNotices = (notices: VisibleNotice[]) =>
   notices.sort((a, b) => noticeSortValue(a) - noticeSortValue(b));
+
+const toTime = (value: unknown) => {
+  if (!value) return 0;
+  if (typeof (value as { toMillis?: () => number }).toMillis === "function") {
+    return (value as { toMillis: () => number }).toMillis();
+  }
+  if (typeof (value as { toDate?: () => Date }).toDate === "function") {
+    return (value as { toDate: () => Date }).toDate().getTime();
+  }
+  const parsed = new Date(value as string | number | Date).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const filterActiveNotices = (notices: VisibleNotice[], now = Date.now()) =>
+  notices.filter((notice) => {
+    const publishAt = toTime(notice.publishAt);
+    const expiresAt = toTime(notice.expiresAt);
+    return (!publishAt || publishAt <= now) && (!expiresAt || expiresAt > now);
+  });
 
 const buildCalendarQueries = (
   db: Firestore,
@@ -76,11 +102,7 @@ const buildCalendarQueries = (
   return queries;
 };
 
-const buildNoticeQueries = (
-  db: Firestore,
-  path: string,
-  classKey?: string,
-) => {
+const buildNoticeQueries = (db: Firestore, path: string, classKey?: string) => {
   const baseRef = collection(db, path);
   const queries: Query[] = [
     query(baseRef, where("targetType", "in", ["common", "all"])),
@@ -132,10 +154,14 @@ export const subscribeVisibleCalendarEvents = (
   const latestDocs = new Map<number, QueryDocumentSnapshot[]>();
   const emit = () => {
     onChange(
-      mergeDocs(Array.from(latestDocs.values()), (docSnap) => ({
-        id: docSnap.id,
-        ...docSnap.data(),
-      }) as CalendarEvent),
+      mergeDocs(
+        Array.from(latestDocs.values()),
+        (docSnap) =>
+          ({
+            id: docSnap.id,
+            ...docSnap.data(),
+          }) as CalendarEvent,
+      ),
     );
   };
   const unsubscribes = buildCalendarQueries(db, path, classKey).map(
@@ -160,10 +186,14 @@ export const loadVisibleNotices = async (
   const snapshots = await Promise.all(
     buildNoticeQueries(db, path, classKey).map((item) => getDocs(item)),
   );
-  return sortVisibleNotices(mergeDocs(
-    snapshots.map((snapshot) => snapshot.docs),
-    (docSnap) => ({ id: docSnap.id, ...docSnap.data() }) as VisibleNotice,
-  ));
+  return sortVisibleNotices(
+    filterActiveNotices(
+      mergeDocs(
+        snapshots.map((snapshot) => snapshot.docs),
+        (docSnap) => ({ id: docSnap.id, ...docSnap.data() }) as VisibleNotice,
+      ),
+    ),
+  );
 };
 
 export const subscribeVisibleNotices = (
@@ -176,12 +206,21 @@ export const subscribeVisibleNotices = (
   const latestDocs = new Map<number, QueryDocumentSnapshot[]>();
   const emit = () => {
     onChange(
-      sortVisibleNotices(mergeDocs(Array.from(latestDocs.values()), (docSnap) => ({
-        id: docSnap.id,
-        ...docSnap.data(),
-      }) as VisibleNotice)),
+      sortVisibleNotices(
+        filterActiveNotices(
+          mergeDocs(
+            Array.from(latestDocs.values()),
+            (docSnap) =>
+              ({
+                id: docSnap.id,
+                ...docSnap.data(),
+              }) as VisibleNotice,
+          ),
+        ),
+      ),
     );
   };
+  const visibilityTimerId = window.setInterval(emit, 30000);
   const unsubscribes = buildNoticeQueries(db, path, classKey).map(
     (item, index) =>
       onSnapshot(
@@ -193,7 +232,10 @@ export const subscribeVisibleNotices = (
         (error) => onError?.(error),
       ),
   );
-  return () => unsubscribes.forEach((unsubscribe) => unsubscribe());
+  return () => {
+    window.clearInterval(visibilityTimerId);
+    unsubscribes.forEach((unsubscribe) => unsubscribe());
+  };
 };
 
 export const getStudentClassKey = (
