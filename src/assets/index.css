@@ -591,6 +591,7 @@
   .fc-daygrid-day-frame {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
+  position: relative;
   min-width: 0;
   min-height: 0;
   height: 100%;
@@ -657,21 +658,37 @@
 
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
   .fc
-  .student-calendar-day-badge {
+  .student-calendar-attendance-marker {
   display: inline-flex;
-  flex: 0 0 auto;
+  position: absolute;
+  right: 0.44rem;
+  bottom: 0.38rem;
+  z-index: 2;
   align-items: center;
   justify-content: center;
-  min-height: 1.35rem;
-  border: 1px solid #fecaca;
+  width: 0.72rem;
+  height: 0.72rem;
+  border: 1.5px solid #cbd5e1;
   border-radius: 9999px;
-  background: #fef2f2;
-  color: #dc2626;
-  font-size: 0.64rem;
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: -0.01em;
-  padding: 0.2rem 0.42rem;
+  background: #ffffff;
+  color: #ffffff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+  pointer-events: none;
+}
+
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .student-calendar-attendance-marker.is-attended {
+  border-color: #059669;
+  background: #059669;
+}
+
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .student-calendar-attendance-marker
+  svg {
+  width: 0.5rem;
+  height: 0.5rem;
 }
 
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
@@ -1142,10 +1159,11 @@
 
   .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
     .fc
-    .student-calendar-day-badge {
-    min-height: 1.22rem;
-    font-size: 0.56rem;
-    padding: 0.17rem 0.34rem;
+    .student-calendar-attendance-marker {
+    right: 0.32rem;
+    bottom: 0.32rem;
+    width: 0.66rem;
+    height: 0.66rem;
   }
 
   .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
