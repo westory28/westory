@@ -53,7 +53,7 @@ const NEIGHBOR_DIRECTIONS = [
     { x: 1, y: -1 },
     { x: -1, y: -1 },
 ];
-const FILL_SCALES = [0.72, 0.88, 1, 1.14];
+const FILL_SCALES = [0.5, 0.62, 0.76, 0.9, 1.04];
 const SPIRAL_ANGLE = Math.PI * (3 - Math.sqrt(5));
 
 const hashCode = (value: string) => {
@@ -137,9 +137,29 @@ const scalePositionedWords = (placed: PositionedWord[], scale: number) => {
     }));
 };
 
+const getWordRotation = (
+    text: string,
+    textUnits: number,
+    fontSize: number,
+    index: number,
+    wordCount: number,
+    variant: 'default' | 'modal',
+): 0 | 90 => {
+    if (index <= 5) return 0;
+    if (textUnits > 6.2) return 0;
+
+    const maxRotatedSize = variant === 'modal' ? 112 : 82;
+    if (fontSize > maxRotatedSize) return 0;
+
+    const hash = hashCode(text);
+    const rotationRate = wordCount > 36 ? 2 : wordCount > 20 ? 3 : 4;
+
+    return hash % rotationRate === 0 ? 90 : 0;
+};
+
 const getPadding = (fontSize: number, variant: 'default' | 'modal') => ({
-    x: Math.max(2, fontSize * (variant === 'modal' ? 0.026 : 0.046)),
-    y: Math.max(2, fontSize * (variant === 'modal' ? 0.02 : 0.032)),
+    x: Math.max(1, fontSize * (variant === 'modal' ? 0.012 : 0.024)),
+    y: Math.max(1, fontSize * (variant === 'modal' ? 0.01 : 0.018)),
 });
 
 const isInsideEllipse = (x: number, y: number, width: number, height: number) => {
@@ -277,15 +297,15 @@ const getPlacementScore = (candidate: PositionedWord, placed: PositionedWord[], 
     const dy = candidate.y - CENTER_Y;
     const centerDistance = Math.hypot(dx * 0.7, dy * 1.05);
     const neighborGap = getNeighborGapScore(candidate, placed, variant);
-    const preferredGap = variant === 'modal' ? 2.8 : 4.4;
-    const gapPenalty = Math.abs(neighborGap - preferredGap) * (variant === 'modal' ? 7.8 : 5.2);
-    const verticalPenalty = candidate.rotate === 90 ? 11 : 0;
+    const preferredGap = variant === 'modal' ? 0.8 : 1.6;
+    const gapPenalty = Math.abs(neighborGap - preferredGap) * (variant === 'modal' ? 4.6 : 3.4);
+    const verticalPenalty = candidate.rotate === 90 ? 3 : 0;
     const bandPenalty = Math.abs(dy) * (variant === 'modal' ? 0.018 : 0.032);
     const edgePenalty = Math.max(0, Math.abs(dx) - RADIUS_X * 0.78) * 0.07;
     const balancePenalty = placed.reduce((penalty, item) => {
         const sameBand = Math.abs(item.y - candidate.y) < (candidate.height + item.height) * 0.55;
         if (!sameBand) return penalty;
-        return penalty + Math.max(0, RADIUS_X * 0.34 - Math.abs(item.x - candidate.x)) * 0.012;
+        return penalty + Math.max(0, RADIUS_X * 0.34 - Math.abs(item.x - candidate.x)) * 0.004;
     }, 0);
 
     return centerDistance + gapPenalty + verticalPenalty + bandPenalty + edgePenalty + balancePenalty;
@@ -342,8 +362,7 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({
 
             for (let shrink = 0; shrink < 8 && !bestCandidate; shrink += 1) {
                 const textUnits = getTextUnits(item.text);
-                const rotate: 0 | 90 =
-                    index > 16 && textUnits <= 4.4 && fontSize < 54 && hashCode(item.text) % 7 === 0 ? 90 : 0;
+                const rotate = getWordRotation(item.text, textUnits, fontSize, index, source.length, variant);
                 const baseWidth = estimateWordWidth(item.text, fontSize);
                 const baseHeight = Math.max(28, fontSize * 0.94);
                 const width = rotate === 90 ? baseHeight : baseWidth;
