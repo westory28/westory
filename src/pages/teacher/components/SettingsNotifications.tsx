@@ -898,65 +898,64 @@ const SettingsNotifications: React.FC = () => {
             </button>
           </div>
         </div>
-      </div>
-
-      <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div>
-            <h4 className="text-base font-extrabold text-gray-900">
-              알림 설정
-            </h4>
-            <p className="mt-1 text-sm text-gray-500">
-              전체 및 대상별 알림 사용 여부를 설정합니다.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:min-w-[660px]">
-            {[
-              {
-                title: "전체 알림",
-                subtitle: "모든 알림 사용",
-                checked: config.enabled,
-                disabled: false,
-                onChange: (checked: boolean) =>
-                  updateRootField("enabled", checked),
-              },
-              {
-                title: "학생 알림",
-                subtitle: "학생 대상 알림 사용",
-                checked: config.studentNotificationsEnabled,
-                disabled: !config.enabled,
-                onChange: (checked: boolean) =>
-                  updateRootField("studentNotificationsEnabled", checked),
-              },
-              {
-                title: "교사 알림",
-                subtitle: "교사 대상 알림 사용",
-                checked: config.teacherNotificationsEnabled,
-                disabled: !config.enabled,
-                onChange: (checked: boolean) =>
-                  updateRootField("teacherNotificationsEnabled", checked),
-              },
-            ].map((item) => (
-              <div
-                key={item.title}
-                className="flex items-center justify-between gap-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"
-              >
-                <div>
-                  <div className="text-sm font-extrabold text-gray-900">
-                    {item.title}
+        <div className="border-t border-gray-100 py-5">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <div>
+              <h4 className="text-base font-extrabold text-gray-900">
+                알림 설정
+              </h4>
+              <p className="mt-1 text-sm text-gray-500">
+                전체 및 대상별 알림 사용 여부를 설정합니다.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:min-w-[660px]">
+              {[
+                {
+                  title: "전체 알림",
+                  subtitle: "모든 알림 사용",
+                  checked: config.enabled,
+                  disabled: false,
+                  onChange: (checked: boolean) =>
+                    updateRootField("enabled", checked),
+                },
+                {
+                  title: "학생 알림",
+                  subtitle: "학생 대상 알림 사용",
+                  checked: config.studentNotificationsEnabled,
+                  disabled: !config.enabled,
+                  onChange: (checked: boolean) =>
+                    updateRootField("studentNotificationsEnabled", checked),
+                },
+                {
+                  title: "교사 알림",
+                  subtitle: "교사 대상 알림 사용",
+                  checked: config.teacherNotificationsEnabled,
+                  disabled: !config.enabled,
+                  onChange: (checked: boolean) =>
+                    updateRootField("teacherNotificationsEnabled", checked),
+                },
+              ].map((item) => (
+                <div
+                  key={item.title}
+                  className="flex items-center justify-between gap-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"
+                >
+                  <div>
+                    <div className="text-sm font-extrabold text-gray-900">
+                      {item.title}
+                    </div>
+                    <div className="mt-0.5 text-xs font-bold text-gray-500">
+                      {item.subtitle}
+                    </div>
                   </div>
-                  <div className="mt-0.5 text-xs font-bold text-gray-500">
-                    {item.subtitle}
-                  </div>
+                  {renderSwitch(
+                    item.checked,
+                    item.disabled,
+                    item.onChange,
+                    item.title,
+                  )}
                 </div>
-                {renderSwitch(
-                  item.checked,
-                  item.disabled,
-                  item.onChange,
-                  item.title,
-                )}
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       </div>
