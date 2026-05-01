@@ -10,6 +10,11 @@ type NotificationPriority = "normal" | "high";
 type NotificationAudience = "students" | "teachers";
 type NotificationEventStatus = "connected" | "needs-hook";
 
+type NotificationTemplateToken = {
+  key: string;
+  label: string;
+};
+
 type NotificationEventDefinition = {
   key: string;
   label: string;
@@ -23,6 +28,8 @@ type NotificationEventDefinition = {
   titleTemplate: string;
   bodyTemplate: string;
   targetUrl: string;
+  targetLabel: string;
+  tokens?: NotificationTemplateToken[];
 };
 
 type NotificationEventPolicy = {
@@ -46,7 +53,7 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     label: "수업자료·학습지 공개",
     audience: "students",
     description: "교사가 수업자료를 학생에게 공개했을 때 학생에게 안내합니다.",
-    triggerLabel: "수업자료 공개 저장",
+    triggerLabel: "수업자료를 학생에게 공개했을 때",
     recipientLabel: "전체 학생",
     status: "connected",
     defaultEnabled: true,
@@ -54,6 +61,8 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     titleTemplate: "새 학습지가 업데이트되었습니다",
     bodyTemplate: "{lessonTitle} 자료를 확인해 보세요.",
     targetUrl: "/student/lesson/note",
+    targetLabel: "학생 수업자료 화면",
+    tokens: [{ key: "lessonTitle", label: "수업자료 이름" }],
   },
   {
     key: "history_classroom_assigned",
@@ -61,7 +70,7 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     audience: "students",
     description:
       "역사교실 과제가 공개되거나 새로 배정되었을 때 대상 학생에게 안내합니다.",
-    triggerLabel: "역사교실 배정 공개",
+    triggerLabel: "역사교실 과제를 학생에게 배정했을 때",
     recipientLabel: "배정 대상 학생",
     status: "connected",
     defaultEnabled: true,
@@ -69,14 +78,16 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     titleTemplate: "역사교실이 배정되었습니다",
     bodyTemplate: "{assignmentTitle} 과제가 새로 열렸습니다.",
     targetUrl: "/student/history-classroom",
+    targetLabel: "학생 역사교실 화면",
+    tokens: [{ key: "assignmentTitle", label: "과제 이름" }],
   },
   {
     key: "point_order_reviewed",
-    label: "상점 구매 처리 결과",
+    label: "위스 상점 신청 결과",
     audience: "students",
     description:
       "교사가 위스 상점 구매 요청을 승인하거나 반려했을 때 학생에게 처리 결과를 안내합니다.",
-    triggerLabel: "구매 요청 처리",
+    triggerLabel: "위스 상점 신청을 처리했을 때",
     recipientLabel: "요청 학생",
     status: "connected",
     defaultEnabled: true,
@@ -84,14 +95,19 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     titleTemplate: "상점 구매 처리",
     bodyTemplate: "{productName} 구매 요청이 {statusLabel} 처리되었습니다.",
     targetUrl: "/student/points",
+    targetLabel: "학생 위스 상점 화면",
+    tokens: [
+      { key: "productName", label: "상품 이름" },
+      { key: "statusLabel", label: "처리 결과" },
+    ],
   },
   {
     key: "history_dictionary_resolved",
-    label: "역사 사전 요청 해결",
+    label: "역사 사전 요청 처리 완료",
     audience: "students",
     description:
       "학생이 요청한 역사 사전 뜻풀이가 등록되거나 승인되었을 때 안내합니다.",
-    triggerLabel: "뜻풀이 등록·승인",
+    triggerLabel: "요청한 뜻풀이를 등록하거나 승인했을 때",
     recipientLabel: "요청 학생",
     status: "connected",
     defaultEnabled: true,
@@ -99,6 +115,8 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     titleTemplate: "역사 사전 등록 완료",
     bodyTemplate: '요청한 "{word}" 뜻풀이가 등록되었습니다.',
     targetUrl: "/student/dashboard",
+    targetLabel: "학생 첫 화면",
+    tokens: [{ key: "word", label: "요청한 단어" }],
   },
   {
     key: "history_dictionary_rejected",
@@ -106,7 +124,7 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     audience: "students",
     description:
       "요청한 역사 사전 단어가 교사 확인 후 삭제되거나 반려되었을 때 학생에게 안내합니다.",
-    triggerLabel: "뜻풀이 요청 삭제·반려",
+    triggerLabel: "요청한 단어를 삭제하거나 반려했을 때",
     recipientLabel: "요청 학생",
     status: "connected",
     defaultEnabled: true,
@@ -114,6 +132,8 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     titleTemplate: "역사 사전 단어 삭제",
     bodyTemplate: '"{word}" 항목이 선생님 확인 후 삭제되었습니다.',
     targetUrl: "/student/lesson/history-dictionary",
+    targetLabel: "학생 역사 사전 화면",
+    tokens: [{ key: "word", label: "요청한 단어" }],
   },
   {
     key: "question_replied",
@@ -121,7 +141,7 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     audience: "students",
     description:
       "교사가 학생 질문에 답변했을 때 학생에게 안내하도록 준비하는 항목입니다.",
-    triggerLabel: "질문 답변 저장",
+    triggerLabel: "학생 질문에 답변을 저장했을 때",
     recipientLabel: "질문 작성 학생",
     status: "needs-hook",
     defaultEnabled: false,
@@ -129,14 +149,16 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     titleTemplate: "질문에 답변이 등록되었습니다",
     bodyTemplate: "{questionTitle} 답변을 확인해 보세요.",
     targetUrl: "/student/dashboard",
+    targetLabel: "학생 첫 화면",
+    tokens: [{ key: "questionTitle", label: "질문 제목" }],
   },
   {
     key: "system_notice",
     label: "전체 학생 공지",
     audience: "students",
     description:
-      "관리자가 전체 학생에게 직접 공지성 알림을 보낼 때 사용할 기본 정책입니다.",
-    triggerLabel: "관리자 직접 발송",
+      "교사가 전체 학생에게 직접 안내를 보낼 때 사용할 기본 설정입니다.",
+    triggerLabel: "교사가 전체 학생에게 직접 보낼 때",
     recipientLabel: "전체 학생",
     status: "needs-hook",
     defaultEnabled: true,
@@ -144,6 +166,7 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     titleTemplate: "알림",
     bodyTemplate: "확인할 안내가 있습니다.",
     targetUrl: "/student/dashboard",
+    targetLabel: "학생 첫 화면",
   },
   {
     key: "history_classroom_submitted",
@@ -151,7 +174,7 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     audience: "teachers",
     description:
       "학생이 역사교실 과제를 제출했을 때 교사에게 제출 사실과 정답률을 안내합니다.",
-    triggerLabel: "학생 제출 완료",
+    triggerLabel: "학생이 역사교실 과제를 제출했을 때",
     recipientLabel: "교사·평가 권한자",
     status: "connected",
     defaultEnabled: true,
@@ -159,21 +182,32 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     titleTemplate: "역사교실 제출 알림",
     bodyTemplate: "{studentName} 학생이 {assignmentTitle}을(를) 제출했습니다.",
     targetUrl: "/teacher/quiz?menu=history2",
+    targetLabel: "교사 역사교실 관리 화면",
+    tokens: [
+      { key: "studentName", label: "학생 이름" },
+      { key: "assignmentTitle", label: "과제 이름" },
+      { key: "percent", label: "정답률" },
+    ],
   },
   {
     key: "point_order_requested",
-    label: "상점 구매 요청",
+    label: "위스 상점 신청",
     audience: "teachers",
     description:
       "학생이 위스 상점 구매를 요청했을 때 포인트 관리 담당자에게 안내합니다.",
-    triggerLabel: "구매 요청 확정",
-    recipientLabel: "관리자·위스 관리자",
+    triggerLabel: "학생이 위스 상점 상품을 신청했을 때",
+    recipientLabel: "위스 담당 교사",
     status: "connected",
     defaultEnabled: true,
     defaultPriority: "normal",
     titleTemplate: "상점 구매 요청",
     bodyTemplate: "{studentName} 학생이 {productName} 구매를 요청했습니다.",
     targetUrl: "/teacher/points",
+    targetLabel: "교사 위스 관리 화면",
+    tokens: [
+      { key: "studentName", label: "학생 이름" },
+      { key: "productName", label: "상품 이름" },
+    ],
   },
   {
     key: "history_dictionary_requested",
@@ -181,14 +215,19 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     audience: "teachers",
     description:
       "학생이 역사 사전 뜻풀이를 요청했을 때 수업자료 담당자에게 안내합니다.",
-    triggerLabel: "뜻풀이 요청 제출",
-    recipientLabel: "관리자·수업자료 담당자",
+    triggerLabel: "학생이 역사 사전 뜻풀이를 요청했을 때",
+    recipientLabel: "수업자료 담당 교사",
     status: "connected",
     defaultEnabled: true,
     defaultPriority: "normal",
     titleTemplate: "역사 사전 요청",
     bodyTemplate: '{studentName} 학생이 "{word}" 뜻풀이를 요청했습니다.',
     targetUrl: "/teacher/lesson/history-dictionary",
+    targetLabel: "교사 역사 사전 관리 화면",
+    tokens: [
+      { key: "studentName", label: "학생 이름" },
+      { key: "word", label: "요청한 단어" },
+    ],
   },
   {
     key: "quiz_submitted",
@@ -196,7 +235,7 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     audience: "teachers",
     description:
       "학생이 퀴즈를 제출했을 때 교사에게 제출 완료를 안내하도록 준비하는 항목입니다.",
-    triggerLabel: "퀴즈 제출",
+    triggerLabel: "학생이 퀴즈를 제출했을 때",
     recipientLabel: "교사·평가 권한자",
     status: "needs-hook",
     defaultEnabled: false,
@@ -204,6 +243,11 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     titleTemplate: "퀴즈 제출 알림",
     bodyTemplate: "{studentName} 학생이 {quizTitle}을(를) 제출했습니다.",
     targetUrl: "/teacher/quiz?tab=log",
+    targetLabel: "교사 퀴즈 관리 화면",
+    tokens: [
+      { key: "studentName", label: "학생 이름" },
+      { key: "quizTitle", label: "퀴즈 이름" },
+    ],
   },
   {
     key: "lesson_unit_completed",
@@ -211,14 +255,19 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     audience: "teachers",
     description:
       "학생이 수업자료 빈칸 학습을 완료했을 때 교사에게 안내하도록 준비하는 항목입니다.",
-    triggerLabel: "모든 빈칸 저장 완료",
-    recipientLabel: "교사·수업자료 담당자",
+    triggerLabel: "학생이 수업자료 학습을 완료했을 때",
+    recipientLabel: "수업자료 담당 교사",
     status: "needs-hook",
     defaultEnabled: false,
     defaultPriority: "normal",
     titleTemplate: "수업자료 학습 완료",
     bodyTemplate: "{studentName} 학생이 {lessonTitle} 학습을 완료했습니다.",
     targetUrl: "/teacher/lesson",
+    targetLabel: "교사 수업자료 관리 화면",
+    tokens: [
+      { key: "studentName", label: "학생 이름" },
+      { key: "lessonTitle", label: "수업자료 이름" },
+    ],
   },
   {
     key: "think_cloud_submitted",
@@ -226,16 +275,58 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     audience: "teachers",
     description:
       "학생이 생각모아 활동에 참여했을 때 교사에게 안내하도록 준비하는 항목입니다.",
-    triggerLabel: "생각모아 응답 제출",
-    recipientLabel: "교사·수업자료 담당자",
+    triggerLabel: "학생이 생각모아 활동에 참여했을 때",
+    recipientLabel: "수업자료 담당 교사",
     status: "needs-hook",
     defaultEnabled: false,
     defaultPriority: "normal",
     titleTemplate: "생각모아 참여 알림",
     bodyTemplate: "{studentName} 학생이 {topic}에 응답했습니다.",
     targetUrl: "/teacher/lesson/think-cloud",
+    targetLabel: "교사 생각모아 관리 화면",
+    tokens: [
+      { key: "studentName", label: "학생 이름" },
+      { key: "topic", label: "활동 주제" },
+    ],
   },
 ];
+
+const escapeRegExp = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const toFriendlyNotificationText = (
+  event: NotificationEventDefinition,
+  value: string,
+) =>
+  (event.tokens || []).reduce(
+    (text, token) =>
+      text.replace(
+        new RegExp(`\\{${escapeRegExp(token.key)}\\}`, "g"),
+        `[${token.label}]`,
+      ),
+    value,
+  );
+
+const toStoredNotificationText = (
+  event: NotificationEventDefinition,
+  value: string,
+) =>
+  (event.tokens || []).reduce(
+    (text, token) =>
+      text.replace(
+        new RegExp(`\\[${escapeRegExp(token.label)}\\]`, "g"),
+        `{${token.key}}`,
+      ),
+    value,
+  );
+
+const getTargetDisplayLabel = (
+  event: NotificationEventDefinition,
+  targetUrl: string,
+) =>
+  targetUrl && targetUrl !== event.targetUrl
+    ? `${event.targetLabel} 외 별도 지정 화면`
+    : event.targetLabel;
 
 const buildDefaultPolicy = (
   event: NotificationEventDefinition,
@@ -327,11 +418,11 @@ const STATUS_META: Record<
   { label: string; className: string }
 > = {
   connected: {
-    label: "연동됨",
+    label: "바로 사용 중",
     className: "border-emerald-200 bg-emerald-50 text-emerald-700",
   },
   "needs-hook": {
-    label: "연동 준비",
+    label: "준비 중",
     className: "border-amber-200 bg-amber-50 text-amber-800",
   },
 };
@@ -342,12 +433,12 @@ const AUDIENCE_META: Record<
 > = {
   students: {
     title: "학생이 받는 알림",
-    description: "학생 화면의 알림 버튼에서 확인하는 인앱 알림입니다.",
+    description: "학생 화면의 알림 버튼에서 확인하는 안내입니다.",
     icon: "fas fa-user-graduate",
   },
   teachers: {
     title: "교사가 받는 알림",
-    description: "교사와 담당 권한자가 학생 행동을 확인하는 운영 알림입니다.",
+    description: "교사와 담당자가 학생 활동을 확인하는 안내입니다.",
     icon: "fas fa-chalkboard-teacher",
   },
 };
@@ -448,7 +539,7 @@ const SettingsNotifications: React.FC = () => {
       showToast({
         tone: "success",
         title: "알림 관리 설정이 저장되었습니다.",
-        message: "후속 발송 제어 연결 기준으로 사용할 수 있습니다.",
+        message: "다음 알림부터 저장한 기준이 적용됩니다.",
       });
     } catch (error: any) {
       console.error("Failed to save notification config:", error);
@@ -495,9 +586,7 @@ const SettingsNotifications: React.FC = () => {
                   {event.description}
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2 text-xs font-bold text-gray-500">
-                  <span>트리거: {event.triggerLabel}</span>
-                  <span className="text-gray-300">/</span>
-                  <span>키: {event.key}</span>
+                  <span>알림이 보내지는 때: {event.triggerLabel}</span>
                 </div>
               </div>
 
@@ -520,7 +609,7 @@ const SettingsNotifications: React.FC = () => {
                     }
                     className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                   />
-                  발송
+                  보내기
                 </label>
                 <select
                   value={policy.priority}
@@ -542,7 +631,7 @@ const SettingsNotifications: React.FC = () => {
                   onClick={() => resetPolicy(event)}
                   className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-500 transition hover:border-blue-200 hover:text-blue-600"
                 >
-                  기본값
+                  처음 문구로
                 </button>
               </div>
             </div>
@@ -550,15 +639,21 @@ const SettingsNotifications: React.FC = () => {
             <div className="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-2">
               <div>
                 <label className="mb-1 block text-xs font-bold text-gray-500">
-                  제목 템플릿
+                  알림 제목
                 </label>
                 <input
                   type="text"
-                  value={policy.titleTemplate}
+                  value={toFriendlyNotificationText(
+                    event,
+                    policy.titleTemplate,
+                  )}
                   disabled={disabled}
                   onChange={(eventTarget) =>
                     updatePolicy(event.key, {
-                      titleTemplate: eventTarget.target.value,
+                      titleTemplate: toStoredNotificationText(
+                        event,
+                        eventTarget.target.value,
+                      ),
                     })
                   }
                   className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
@@ -566,35 +661,49 @@ const SettingsNotifications: React.FC = () => {
               </div>
               <div>
                 <label className="mb-1 block text-xs font-bold text-gray-500">
-                  바로가기
+                  알림을 누르면 열리는 화면
                 </label>
-                <input
-                  type="text"
-                  value={policy.targetUrl}
-                  disabled={disabled}
-                  onChange={(eventTarget) =>
-                    updatePolicy(event.key, {
-                      targetUrl: eventTarget.target.value,
-                    })
-                  }
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 font-mono text-sm outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
-                />
+                <div
+                  className={`w-full rounded-lg border px-3 py-2 text-sm font-bold ${
+                    disabled
+                      ? "border-gray-200 bg-gray-50 text-gray-400"
+                      : "border-gray-300 bg-white text-gray-700"
+                  }`}
+                >
+                  {getTargetDisplayLabel(event, policy.targetUrl)}
+                </div>
               </div>
               <div className="xl:col-span-2">
                 <label className="mb-1 block text-xs font-bold text-gray-500">
-                  본문 템플릿
+                  알림 내용
                 </label>
                 <textarea
-                  value={policy.bodyTemplate}
+                  value={toFriendlyNotificationText(event, policy.bodyTemplate)}
                   disabled={disabled}
                   rows={2}
                   onChange={(eventTarget) =>
                     updatePolicy(event.key, {
-                      bodyTemplate: eventTarget.target.value,
+                      bodyTemplate: toStoredNotificationText(
+                        event,
+                        eventTarget.target.value,
+                      ),
                     })
                   }
                   className="w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm leading-6 outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
                 />
+                {event.tokens && event.tokens.length > 0 && (
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
+                    <span className="font-bold">자동으로 채워지는 말</span>
+                    {event.tokens.map((token) => (
+                      <span
+                        key={token.key}
+                        className="rounded-full bg-gray-100 px-2 py-0.5 font-bold text-gray-600"
+                      >
+                        [{token.label}]
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -620,8 +729,7 @@ const SettingsNotifications: React.FC = () => {
             알림 관리
           </h3>
           <p className="mt-1 text-sm text-gray-500">
-            교사와 학생에게 전달할 인앱 알림 정책을 현재 운영 흐름에 맞게
-            관리합니다.
+            교사와 학생에게 어떤 안내를 보낼지 현재 운영 흐름에 맞게 관리합니다.
           </p>
         </div>
 
@@ -637,7 +745,7 @@ const SettingsNotifications: React.FC = () => {
           </div>
           <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-4">
             <div className="text-xs font-bold text-emerald-700">
-              현재 연동된 알림
+              바로 발송되는 알림
             </div>
             <div className="mt-1 text-lg font-extrabold text-emerald-900">
               {connectedCount}개
@@ -645,7 +753,7 @@ const SettingsNotifications: React.FC = () => {
           </div>
           <div className="rounded-lg border border-amber-100 bg-amber-50 p-4">
             <div className="text-xs font-bold text-amber-700">
-              후속 연결 준비 항목
+              앞으로 연결할 알림
             </div>
             <div className="mt-1 text-lg font-extrabold text-amber-900">
               {preparedCount}개
@@ -658,11 +766,10 @@ const SettingsNotifications: React.FC = () => {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <h4 className="text-base font-extrabold text-gray-900">
-              기본 발송 범위
+              전체 발송 범위
             </h4>
             <p className="mt-1 text-sm text-gray-500">
-              전체 알림을 끄면 학생·교사 알림 정책이 모두 비활성 상태로
-              저장됩니다.
+              전체 알림을 끄면 학생과 교사에게 보내는 알림이 모두 멈춥니다.
             </p>
           </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -743,8 +850,8 @@ const SettingsNotifications: React.FC = () => {
 
       <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold leading-6 text-amber-900">
         <i className="fas fa-exclamation-triangle mr-2" aria-hidden="true"></i>
-        연동 준비 항목은 정책을 미리 저장할 수 있지만, 실제 발송은 해당 학생
-        행동 지점과 Functions 발송부 연결 후 적용됩니다.
+        준비 중인 알림은 문구와 발송 여부를 미리 정해 둘 수 있습니다. 실제
+        발송은 해당 활동의 자동 알림 연결이 완료된 뒤 적용됩니다.
       </div>
 
       <div className="pb-8 text-right">
