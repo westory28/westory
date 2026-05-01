@@ -597,7 +597,6 @@ const createGeneralEditorSnapshot = (params: {
   lessonVisibleToStudents: boolean;
 }) =>
   JSON.stringify({
-    selectedNodeId: params.selectedNodeId,
     lesson: buildNormalizedGeneralLessonDraft(params),
   });
 
@@ -631,7 +630,6 @@ const createPdfEditorSnapshot = (params: {
   } | null;
 }) =>
   JSON.stringify({
-    selectedNodeId: params.selectedNodeId,
     lesson: buildNormalizedPdfEditorDraft({
       lessonContent: params.lessonContent,
       lessonFootnotes: params.lessonFootnotes,
