@@ -19,6 +19,7 @@ interface Student {
 }
 
 type DetailTab = "summary" | "profile";
+type SummaryPanel = "overview" | "lesson" | "quiz";
 
 interface StudentDetailModalProps {
   isOpen: boolean;
@@ -43,6 +44,9 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   const [activeTab, setActiveTab] = useState<DetailTab>(initialTab);
   const [summary, setSummary] = useState<StudentProgressSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryPanel, setSummaryPanel] = useState<SummaryPanel>("overview");
+  const [quizUnitFilter, setQuizUnitFilter] = useState("all");
+  const [quizCategoryFilter, setQuizCategoryFilter] = useState("all");
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState<Student>({
     id: "",
@@ -56,6 +60,9 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
     setActiveTab(initialTab);
+    setSummaryPanel("overview");
+    setQuizUnitFilter("all");
+    setQuizCategoryFilter("all");
   }, [initialTab, isOpen]);
 
   useEffect(() => {
@@ -120,9 +127,29 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   const quiz = summary?.quiz;
   const historyClassroom = summary?.historyClassroom;
   const wis = summary?.wis;
+  const lessonWorksheetTotal =
+    lesson?.worksheetUnits || lesson?.totalLessons || 0;
+  const lessonCompletedTotal = lesson?.completedUnits || 0;
+  const quizGroups = quiz?.groups || [];
+  const quizUnitOptions = Array.from(
+    new Set(quizGroups.map((item) => item.unitTitle).filter(Boolean)),
+  );
+  const quizCategoryOptions = Array.from(
+    new Map(
+      quizGroups.map((item) => [
+        item.category,
+        { category: item.category, label: item.categoryLabel },
+      ]),
+    ).values(),
+  );
+  const filteredQuizGroups = quizGroups.filter(
+    (item) =>
+      (quizUnitFilter === "all" || item.unitTitle === quizUnitFilter) &&
+      (quizCategoryFilter === "all" || item.category === quizCategoryFilter),
+  );
 
   const summaryCardClassName =
-    "rounded-xl border border-gray-200 bg-white p-4 shadow-sm";
+    "rounded-xl border border-gray-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md";
 
   return (
     <div
@@ -145,7 +172,7 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
               </span>
             </div>
             <div className="mt-1 truncate font-mono text-xs text-gray-500">
-              {student.email || student.id}
+              {student.email || "이메일 없음"}
             </div>
           </div>
           <button
@@ -201,7 +228,12 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
               {!summaryLoading && (
                 <>
                   <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                    <section className={summaryCardClassName}>
+                    <button
+                      type="button"
+                      onClick={() => setSummaryPanel("lesson")}
+                      className={summaryCardClassName}
+                      title="완료한 수업 자료 상세 보기"
+                    >
                       <div className="flex items-center justify-between gap-2">
                         <div className="text-sm font-extrabold text-gray-800">
                           수업 자료
@@ -211,16 +243,21 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                       <div className="mt-4 text-3xl font-black text-blue-700">
                         {lesson?.unavailable
                           ? EMPTY_SUMMARY_TEXT
-                          : `${lesson?.savedUnits || 0}/${lesson?.totalLessons || 0}`}
+                          : `${lessonCompletedTotal}/${lessonWorksheetTotal}`}
                       </div>
                       <div className="mt-2 text-xs font-semibold leading-5 text-gray-500">
                         {lesson?.unavailable
                           ? lesson.message
-                          : `완료 추정 ${lesson?.completedUnits || 0}개 · 최근 ${lesson?.latestUnitTitle || "기록 없음"}`}
+                          : `완료 ${lessonCompletedTotal}개 · 최근 ${lesson?.latestUnitTitle || "기록 없음"}`}
                       </div>
-                    </section>
+                    </button>
 
-                    <section className={summaryCardClassName}>
+                    <button
+                      type="button"
+                      onClick={() => setSummaryPanel("quiz")}
+                      className={summaryCardClassName}
+                      title="평가 기록 상세 보기"
+                    >
                       <div className="flex items-center justify-between gap-2">
                         <div className="text-sm font-extrabold text-gray-800">
                           평가 기록
@@ -237,7 +274,7 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                           ? quiz.message
                           : `평균 ${quiz?.averageScore || 0}점 · 오답 ${quiz?.wrongCount || 0}개`}
                       </div>
-                    </section>
+                    </button>
 
                     <section className={summaryCardClassName}>
                       <div className="flex items-center justify-between gap-2">
@@ -295,6 +332,144 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                     </section>
                   </div>
 
+                  {summaryPanel === "lesson" && (
+                    <section className="rounded-xl border border-blue-100 bg-white p-4 shadow-sm">
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                        <h4 className="text-sm font-extrabold text-gray-900">
+                          수업 자료 완료 상세
+                        </h4>
+                        <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
+                          전체 빈칸 정답 기준
+                        </span>
+                      </div>
+                      <div className="grid gap-2 md:grid-cols-2">
+                        {(lesson?.units || []).map((unit) => (
+                          <div
+                            key={unit.unitId}
+                            className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="truncate text-sm font-extrabold text-gray-800">
+                                  {unit.title}
+                                </div>
+                                <div className="mt-1 text-xs font-semibold text-gray-500">
+                                  정답 {unit.correctCount}/{unit.blankCount} ·
+                                  입력 {unit.filledCount}/{unit.blankCount}
+                                </div>
+                              </div>
+                              <span
+                                className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-extrabold ${
+                                  unit.status === "completed"
+                                    ? "bg-emerald-50 text-emerald-700"
+                                    : unit.status === "in_progress"
+                                      ? "bg-amber-50 text-amber-700"
+                                      : unit.status === "no_blanks"
+                                        ? "bg-gray-100 text-gray-500"
+                                        : "bg-slate-100 text-slate-600"
+                                }`}
+                              >
+                                {unit.statusLabel}
+                              </span>
+                            </div>
+                            {unit.latestUpdatedAtText && (
+                              <div className="mt-2 text-xs font-semibold text-gray-400">
+                                마지막 저장 {unit.latestUpdatedAtText}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                        {!lesson?.units?.length && (
+                          <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-6 text-center text-sm font-bold text-gray-400 md:col-span-2">
+                            조회할 수업 자료 진행 기록이 없습니다.
+                          </div>
+                        )}
+                      </div>
+                    </section>
+                  )}
+
+                  {summaryPanel === "quiz" && (
+                    <section className="rounded-xl border border-emerald-100 bg-white p-4 shadow-sm">
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                        <h4 className="text-sm font-extrabold text-gray-900">
+                          평가 결과 상세
+                        </h4>
+                        <div className="flex flex-wrap gap-2">
+                          <select
+                            value={quizUnitFilter}
+                            onChange={(event) =>
+                              setQuizUnitFilter(event.target.value)
+                            }
+                            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-700"
+                            aria-label="평가 단원 필터"
+                          >
+                            <option value="all">전체 단원</option>
+                            {quizUnitOptions.map((unitTitle) => (
+                              <option key={unitTitle} value={unitTitle}>
+                                {unitTitle}
+                              </option>
+                            ))}
+                          </select>
+                          <select
+                            value={quizCategoryFilter}
+                            onChange={(event) =>
+                              setQuizCategoryFilter(event.target.value)
+                            }
+                            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-700"
+                            aria-label="평가 유형 필터"
+                          >
+                            <option value="all">전체 유형</option>
+                            {quizCategoryOptions.map((category) => (
+                              <option
+                                key={category.category}
+                                value={category.category}
+                              >
+                                {category.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                      <div className="grid gap-2 md:grid-cols-2">
+                        {filteredQuizGroups.map((group) => (
+                          <div
+                            key={`${group.unitTitle}-${group.category}`}
+                            className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="truncate text-sm font-extrabold text-gray-800">
+                                  {group.unitTitle}
+                                </div>
+                                <div className="mt-1 text-xs font-bold text-emerald-700">
+                                  {group.categoryLabel}
+                                </div>
+                              </div>
+                              <span className="shrink-0 text-lg font-black text-emerald-700">
+                                평균 {group.averageScore}점
+                              </span>
+                            </div>
+                            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold text-gray-500">
+                              <span>응시 {group.totalAttempts}회</span>
+                              <span>최근 {group.latestScore ?? 0}점</span>
+                              <span>오답 {group.wrongCount}개</span>
+                            </div>
+                            {group.latestDateText && (
+                              <div className="mt-1 text-xs font-semibold text-gray-400">
+                                최근 응시 {group.latestDateText}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                        {!filteredQuizGroups.length && (
+                          <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-6 text-center text-sm font-bold text-gray-400 md:col-span-2">
+                            조건에 맞는 평가 기록이 없습니다.
+                          </div>
+                        )}
+                      </div>
+                    </section>
+                  )}
+
                   <div className="grid gap-4 lg:grid-cols-2">
                     <section className={summaryCardClassName}>
                       <h4 className="text-sm font-extrabold text-gray-800">
@@ -336,12 +511,12 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                       </h4>
                       <div className="mt-3 space-y-2 text-sm text-gray-600">
                         <div className="rounded-lg bg-blue-50 px-3 py-2 font-semibold text-blue-800">
-                          수업 자료 저장은 학생이 학습지 입력 내용을 저장했을 때
-                          집계됩니다.
+                          수업 자료 완료는 해당 소단원의 모든 빈칸을 채우고 모두
+                          정답일 때만 집계됩니다.
                         </div>
                         <div className="rounded-lg bg-emerald-50 px-3 py-2 font-semibold text-emerald-800">
-                          평가는 현재 학기 응시 기록 기준이며, 이름 클릭 기록
-                          팝업의 이전 기록 조회와 별도입니다.
+                          평가 카드를 누르면 현재 학기 응시 기록을 단원과 평가
+                          유형별로 나누어 볼 수 있습니다.
                         </div>
                         <div className="rounded-lg bg-amber-50 px-3 py-2 font-semibold text-amber-800">
                           권한이 없는 항목은 표시되지 않습니다. 위스는 위스 조회

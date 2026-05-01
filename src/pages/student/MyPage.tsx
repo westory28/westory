@@ -591,7 +591,7 @@ const MyPage: React.FC = () => {
     const points: TrendPoint[] = latest.map((result, idx) => {
       const unitId = result.unitId || "unknown";
       const category = (result.category || "other") as CategoryTab | "other";
-      const unitTitle = titleMap[unitId] || unitId;
+      const unitTitle = titleMap[unitId] || "단원명 없음";
       return {
         label: `${idx + 1}회 · ${unitTitle} · ${getCategoryShort(category)}`,
         unitId,
@@ -682,7 +682,7 @@ const MyPage: React.FC = () => {
         explanation: question.explanation || "해설이 등록되지 않았습니다.",
         userAnswer: log.userAnswer,
         unitId: log.unitId,
-        unitTitle: titleMap[log.unitId] || log.unitId,
+        unitTitle: titleMap[log.unitId] || "단원명 없음",
         category: log.category,
         categoryLabel: getCategoryLabel(log.category),
         dateText: log.dateText,
@@ -898,7 +898,7 @@ const MyPage: React.FC = () => {
       if (!grouped[key]) {
         grouped[key] = {
           unitId: point.unitId,
-          unitTitle: unitTitleMap[point.unitId] || point.unitId,
+          unitTitle: unitTitleMap[point.unitId] || "단원명 없음",
           category: point.category,
           scores: [],
         };
@@ -924,7 +924,7 @@ const MyPage: React.FC = () => {
     trendPoints.forEach((point) => source.add(point.unitId));
     return Array.from(source).map((unitId) => ({
       id: unitId,
-      title: unitTitleMap[unitId] || unitId,
+      title: unitTitleMap[unitId] || "단원명 없음",
     }));
   }, [wrongItems, trendPoints, unitTitleMap]);
 
@@ -1162,10 +1162,12 @@ const MyPage: React.FC = () => {
     classLabelMap[profileClassValue] || profileClassValue || "--";
   const lessonDoneCount = progressSummary?.lesson.unavailable
     ? 0
-    : progressSummary?.lesson.savedUnits || 0;
+    : progressSummary?.lesson.completedUnits || 0;
   const lessonTotalCount = progressSummary?.lesson.unavailable
     ? 0
-    : progressSummary?.lesson.totalLessons || 0;
+    : progressSummary?.lesson.worksheetUnits ||
+      progressSummary?.lesson.totalLessons ||
+      0;
   const lessonProgressPercent =
     lessonTotalCount > 0
       ? Math.min(100, Math.round((lessonDoneCount / lessonTotalCount) * 100))
