@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { db } from '../../../lib/firebase';
 import { collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, getDocs, query, orderBy } from 'firebase/firestore';
-import SegmentedAchievementChart from '../../../components/common/SegmentedAchievementChart';
 import { useAuth } from '../../../contexts/AuthContext';
 import { getSemesterCollectionPath, getSemesterDocPath } from '../../../lib/semesterScope';
-import { buildScoreRows, getScoreKey, getTypeLabel, normalizePlanItemType } from '../../../lib/studentScores';
+import { buildScoreRows, getScoreKey, getTypeLabel, normalizePlanItemType, type ScoreItemType } from '../../../lib/studentScores';
 
 interface GradingItem {
     type: '정기' | '수행';
@@ -25,6 +24,40 @@ interface GradingPlan {
 
 const isRegularExamItem = (type: string) => type === '정기' || type === '정기시험';
 const isPerformanceItem = (type: string) => type === '수행' || type === '수행평가';
+const previewScoreTypes: ScoreItemType[] = ['exam', 'performance', 'other'];
+const previewCategoryMeta: Record<ScoreItemType, { label: string; shortLabel: string; dotClass: string; barClass: string; textClass: string }> = {
+    exam: {
+        label: '정기시험',
+        shortLabel: '정기',
+        dotClass: 'bg-blue-600',
+        barClass: 'bg-blue-600',
+        textClass: 'text-blue-700',
+    },
+    performance: {
+        label: '수행평가',
+        shortLabel: '수행',
+        dotClass: 'bg-orange-500',
+        barClass: 'bg-orange-500',
+        textClass: 'text-orange-700',
+    },
+    other: {
+        label: '기타',
+        shortLabel: '기타',
+        dotClass: 'bg-slate-400',
+        barClass: 'bg-slate-400',
+        textClass: 'text-slate-600',
+    },
+};
+
+const formatPreviewNumber = (value: number) => {
+    const rounded = Number(value.toFixed(1));
+    return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+};
+
+const formatPreviewScore = (value: number) => `${formatPreviewNumber(value)}점`;
+
+const formatPreviewPercent = (value: number) => `${formatPreviewNumber(value)}%`;
+
 const initialIndexByKey: Record<string, number> = { r: 0, R: 1, s: 2, e: 3, E: 4, f: 5, a: 6, q: 7, Q: 8, t: 9, T: 10, d: 11, w: 12, W: 13, c: 14, z: 15, x: 16, v: 17, g: 18 };
 const medialIndexByKey: Record<string, number> = { k: 0, o: 1, i: 2, O: 3, j: 4, p: 5, u: 6, P: 7, h: 8, y: 12, n: 13, b: 17, m: 18, l: 20 };
 const medialComboIndexByKeys: Record<string, number> = { hk: 9, ho: 10, hl: 11, nj: 14, np: 15, nl: 16, ml: 19 };
@@ -134,6 +167,7 @@ const ExamGradingPlan: React.FC = () => {
     const [previewOpen, setPreviewOpen] = useState(false);
     const [previewPlan, setPreviewPlan] = useState<Omit<GradingPlan, 'id'> | null>(null);
     const [previewScores, setPreviewScores] = useState<Record<string, string>>({});
+    const [previewActiveType, setPreviewActiveType] = useState<ScoreItemType | null>(null);
 
     // Form State
     const [editId, setEditId] = useState<string | null>(null);
@@ -260,6 +294,7 @@ const ExamGradingPlan: React.FC = () => {
             : buildDraftPreviewPlan();
         setPreviewPlan(nextPlan);
         setPreviewScores({});
+        setPreviewActiveType(null);
         setPreviewOpen(true);
     };
 
@@ -267,6 +302,7 @@ const ExamGradingPlan: React.FC = () => {
         setPreviewOpen(false);
         setPreviewPlan(null);
         setPreviewScores({});
+        setPreviewActiveType(null);
     };
 
     const resetForm = () => {
@@ -324,6 +360,16 @@ const ExamGradingPlan: React.FC = () => {
         }], previewScores, { filterByGrade: false })
         : [];
     const previewRow = previewRows[0] || null;
+    const previewContribution = previewScoreTypes.reduce((acc, type) => {
+        acc[type] = previewRow?.breakdown
+            .filter((item) => item.entered && item.type === type)
+            .reduce((sum, item) => sum + Number(item.weighted || 0), 0) || 0;
+        return acc;
+    }, { exam: 0, performance: 0, other: 0 } as Record<ScoreItemType, number>);
+    const previewTotalScore = Number(previewRow?.total || 0);
+    const previewRemainingWidth = Math.max(0, 100 - previewTotalScore);
+    const previewEnteredItems = previewRow?.breakdown.filter((item) => item.entered) || [];
+    const previewActiveMeta = previewActiveType ? previewCategoryMeta[previewActiveType] : null;
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full">
@@ -410,20 +456,132 @@ const ExamGradingPlan: React.FC = () => {
                                                     실시간 반영 그래프
                                                 </h4>
                                                 <p className="mt-1 text-xs font-semibold text-slate-400">
-                                                    입력한 점수가 항목별 반영 점수로 나뉘어 표시됩니다.
+                                                    학생 성적 리포트와 같은 누적 막대로 반영 점수를 확인합니다.
                                                 </p>
                                             </div>
                                             <div className="text-right">
                                                 <div className="text-xs font-bold text-slate-400">환산 점수</div>
                                                 <div className="text-3xl font-black text-blue-600">
-                                                    {previewRow ? previewRow.total : 0}점
+                                                    {formatPreviewScore(previewTotalScore)}
                                                 </div>
                                             </div>
                                         </div>
-                                        <SegmentedAchievementChart
-                                            rows={previewRows}
-                                            emptyMessage="점수를 입력하면 그래프가 표시됩니다."
-                                        />
+                                        <div className="mb-4 flex flex-wrap gap-3">
+                                            {previewScoreTypes.map((type) => (
+                                                <span key={type} className="inline-flex items-center gap-2 text-xs font-bold text-slate-600">
+                                                    <span className={`h-3 w-3 rounded-full ${previewCategoryMeta[type].dotClass}`} />
+                                                    {previewCategoryMeta[type].label}
+                                                </span>
+                                            ))}
+                                        </div>
+
+                                        <div className="rounded-xl border border-slate-100 p-4">
+                                            <div className="mb-3 flex items-center justify-between gap-3">
+                                                <span className="min-w-0 truncate text-base font-black text-slate-900">
+                                                    {previewPlan.subject}
+                                                </span>
+                                                <span className="shrink-0 text-xl font-black text-blue-600">
+                                                    {formatPreviewScore(previewTotalScore)}
+                                                </span>
+                                            </div>
+
+                                            <div
+                                                className="relative"
+                                                onMouseLeave={() => setPreviewActiveType(null)}
+                                            >
+                                                <div className="flex h-6 w-full overflow-hidden rounded-full bg-slate-200">
+                                                    {previewScoreTypes.map((type) => {
+                                                        const value = previewContribution[type];
+                                                        if (value <= 0) return null;
+                                                        return (
+                                                            <span
+                                                                key={type}
+                                                                role="button"
+                                                                tabIndex={0}
+                                                                aria-label={`${previewCategoryMeta[type].label} ${formatPreviewScore(value)}`}
+                                                                onMouseEnter={() => setPreviewActiveType(type)}
+                                                                onFocus={() => setPreviewActiveType(type)}
+                                                                onClick={() => setPreviewActiveType(type)}
+                                                                onKeyDown={(event) => {
+                                                                    if (event.key === 'Enter' || event.key === ' ') {
+                                                                        event.preventDefault();
+                                                                        setPreviewActiveType(type);
+                                                                    }
+                                                                }}
+                                                                className={`${previewCategoryMeta[type].barClass} min-w-[3px] border-r-2 border-white outline-none transition hover:brightness-105 focus:ring-2 focus:ring-blue-300`}
+                                                                style={{ width: `${Math.min(100, value)}%` }}
+                                                            />
+                                                        );
+                                                    })}
+                                                    {previewRemainingWidth > 0 && (
+                                                        <span className="bg-slate-200" style={{ width: `${previewRemainingWidth}%` }} />
+                                                    )}
+                                                </div>
+
+                                                {previewActiveType && (
+                                                    <div className="absolute left-1/2 top-8 z-20 w-60 -translate-x-1/2 rounded-xl border border-slate-200 bg-white p-4 text-sm shadow-[0_18px_40px_rgba(15,23,42,0.18)]">
+                                                        <div className="flex items-center justify-between gap-3">
+                                                            <span className="flex items-center gap-2 font-bold text-slate-700">
+                                                                <span className={`h-2.5 w-2.5 rounded-full ${previewCategoryMeta[previewActiveType].dotClass}`} />
+                                                                {previewCategoryMeta[previewActiveType].label}
+                                                            </span>
+                                                            <span className="font-black text-slate-900">
+                                                                {formatPreviewScore(previewContribution[previewActiveType])}
+                                                            </span>
+                                                        </div>
+                                                        <div className="mt-3 flex items-end justify-between border-t border-slate-100 pt-3">
+                                                            <span className="font-bold text-slate-500">현재 점수</span>
+                                                            <span className="text-xl font-black text-slate-900">
+                                                                {formatPreviewScore(previewTotalScore)}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                                                {previewScoreTypes.map((type) => {
+                                                    const value = previewContribution[type];
+                                                    const percent = previewTotalScore > 0 ? (value / previewTotalScore) * 100 : 0;
+                                                    return (
+                                                        <div key={type} className="rounded-lg bg-slate-50 px-3 py-2">
+                                                            <div className={`text-xs font-black ${previewCategoryMeta[type].textClass}`}>
+                                                                {previewCategoryMeta[type].label}
+                                                            </div>
+                                                            <div className="mt-1 flex items-end justify-between gap-2">
+                                                                <span className="text-sm font-black text-slate-900">
+                                                                    {formatPreviewScore(value)}
+                                                                </span>
+                                                                <span className="text-[11px] font-extrabold text-slate-500">
+                                                                    {formatPreviewPercent(percent)}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+
+                                            <div className="mt-4 flex flex-wrap gap-2">
+                                                {previewEnteredItems.length === 0 ? (
+                                                    <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-400">
+                                                        점수를 입력하면 항목별 반영 점수가 표시됩니다.
+                                                    </span>
+                                                ) : (
+                                                    previewEnteredItems.map((item) => (
+                                                        <span
+                                                            key={item.key}
+                                                            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600"
+                                                        >
+                                                            {previewCategoryMeta[item.type].shortLabel} · {item.name} · {formatPreviewScore(item.weighted)} 반영
+                                                        </span>
+                                                    ))
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <p className="mt-3 text-xs font-bold leading-5 text-slate-400">
+                                            PC에서는 막대에 마우스를 올리고, 모바일과 태블릿에서는 막대를 터치하면 반영 점수를 확인할 수 있습니다.
+                                        </p>
                                         {previewRatioTotal !== 100 && (
                                             <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-800">
                                                 저장하려면 반영 비율 합계가 100%가 되어야 합니다. 현재 미리보기는 입력된 비율 그대로 계산합니다.
