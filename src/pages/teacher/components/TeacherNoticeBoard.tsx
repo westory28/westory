@@ -46,6 +46,7 @@ const TeacherNoticeBoard: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
 
   useEffect(() => {
     const { year, semester } = getYearSemester(config);
@@ -67,13 +68,16 @@ const TeacherNoticeBoard: React.FC = () => {
             const explicitOrder = Number(notice.noticeOrder);
             loadedNotices.push({
               ...notice,
-              noticeOrder: Number.isFinite(explicitOrder) ? explicitOrder : index,
+              noticeOrder: Number.isFinite(explicitOrder)
+                ? explicitOrder
+                : index,
             });
           }
         });
         setNotices(
           loadedNotices.sort(
-            (left, right) => Number(left.noticeOrder || 0) - Number(right.noticeOrder || 0),
+            (left, right) =>
+              Number(left.noticeOrder || 0) - Number(right.noticeOrder || 0),
           ),
         );
         setLoading(false);
@@ -89,12 +93,14 @@ const TeacherNoticeBoard: React.FC = () => {
 
   useEffect(() => {
     setActiveIndex(0);
+    setIsPaused(false);
   }, [notices.length]);
 
   const activeNotice = notices[activeIndex] || notices[0] || null;
   const showCarousel = notices.length > 1;
   const activeImageRatio = useMemo(() => {
-    if (!activeNotice?.imageWidth || !activeNotice?.imageHeight) return "16 / 9";
+    if (!activeNotice?.imageWidth || !activeNotice?.imageHeight)
+      return "16 / 9";
     return `${activeNotice.imageWidth} / ${activeNotice.imageHeight}`;
   }, [activeNotice]);
 
@@ -114,6 +120,16 @@ const TeacherNoticeBoard: React.FC = () => {
       return (prev + direction + notices.length) % notices.length;
     });
   };
+
+  useEffect(() => {
+    if (!showCarousel || isPaused) return undefined;
+
+    const timerId = window.setInterval(() => {
+      move(1);
+    }, 5000);
+
+    return () => window.clearInterval(timerId);
+  }, [showCarousel, isPaused, notices.length]);
 
   return (
     <div className="flex h-full min-h-[260px] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:min-h-0">
@@ -145,7 +161,11 @@ const TeacherNoticeBoard: React.FC = () => {
 
       <div className="min-h-0 flex-1">
         {loading && (
-          <InlineLoading className="flex h-full min-h-[180px] items-center" message="알림장을 불러오는 중입니다." showWarning />
+          <InlineLoading
+            className="flex h-full min-h-[180px] items-center"
+            message="알림장을 불러오는 중입니다."
+            showWarning
+          />
         )}
 
         {!loading && !activeNotice && (
@@ -161,24 +181,65 @@ const TeacherNoticeBoard: React.FC = () => {
 
         {!loading && activeNotice && (
           <div className="flex h-full flex-col">
-            <button
-              type="button"
-              onClick={() => handleEdit(activeNotice)}
-              className="group relative block min-h-0 flex-1 overflow-hidden rounded-xl text-left"
-              title="알림장 이미지 수정"
-            >
-              <img
-                src={activeNotice.imageUrl}
-                alt="알림장"
-                loading="lazy"
-                decoding="async"
-                className="h-full min-h-[180px] w-full object-contain transition group-hover:scale-[1.01]"
-                style={{ aspectRatio: activeImageRatio }}
-              />
-              <span className="absolute right-4 top-4 rounded-full bg-blue-600 px-3 py-1 text-xs font-extrabold text-white shadow-sm">
+            <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl">
+              <button
+                type="button"
+                onClick={() => handleEdit(activeNotice)}
+                className="group block h-full w-full text-left"
+                title="알림장 이미지 수정"
+              >
+                <img
+                  src={activeNotice.imageUrl}
+                  alt="알림장"
+                  loading="lazy"
+                  decoding="async"
+                  className="h-full min-h-[180px] w-full object-contain transition group-hover:scale-[1.01]"
+                  style={{ aspectRatio: activeImageRatio }}
+                />
+              </button>
+              {showCarousel && (
+                <div className="absolute right-3 top-3 z-10 inline-flex overflow-hidden rounded-lg border border-white/70 bg-white/95 shadow-sm backdrop-blur">
+                  <button
+                    type="button"
+                    onClick={() => move(-1)}
+                    className="inline-flex h-8 w-8 items-center justify-center text-blue-700 transition hover:bg-blue-50"
+                    aria-label="이전 알림"
+                  >
+                    <i className="fas fa-chevron-left text-xs"></i>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsPaused((prev) => !prev)}
+                    className="inline-flex h-8 w-8 items-center justify-center border-x border-gray-200 text-blue-700 transition hover:bg-blue-50"
+                    aria-label={
+                      isPaused
+                        ? "알림 자동 넘김 재생"
+                        : "알림 자동 넘김 일시정지"
+                    }
+                    title={isPaused ? "재생" : "일시정지"}
+                  >
+                    <i
+                      className={`fas ${isPaused ? "fa-play" : "fa-pause"} text-xs`}
+                    ></i>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => move(1)}
+                    className="inline-flex h-8 w-8 items-center justify-center text-blue-700 transition hover:bg-blue-50"
+                    aria-label="다음 알림"
+                  >
+                    <i className="fas fa-chevron-right text-xs"></i>
+                  </button>
+                </div>
+              )}
+              <span
+                className={`absolute right-4 ${
+                  showCarousel ? "top-14" : "top-4"
+                } rounded-full bg-blue-600 px-3 py-1 text-xs font-extrabold text-white shadow-sm`}
+              >
                 {getCategoryLabel(activeNotice.category)}
               </span>
-            </button>
+            </div>
 
             <div className="mt-3 flex items-center justify-between gap-3">
               <button
@@ -191,36 +252,20 @@ const TeacherNoticeBoard: React.FC = () => {
               </button>
 
               {showCarousel && (
-                <div className="flex items-center gap-2">
-                  <div className="mr-1 flex items-center gap-1.5">
-                    {notices.map((notice, index) => (
-                      <button
-                        key={`${notice.id}-dot`}
-                        type="button"
-                        onClick={() => setActiveIndex(index)}
-                        className={`h-2.5 rounded-full transition ${
-                          activeIndex === index ? "w-6 bg-blue-600" : "w-2.5 bg-gray-200"
-                        }`}
-                        aria-label={`${index + 1}번째 알림 보기`}
-                      />
-                    ))}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => move(-1)}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-blue-600 transition hover:bg-blue-50"
-                    aria-label="이전 알림"
-                  >
-                    <i className="fas fa-chevron-left"></i>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => move(1)}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-blue-600 transition hover:bg-blue-50"
-                    aria-label="다음 알림"
-                  >
-                    <i className="fas fa-chevron-right"></i>
-                  </button>
+                <div className="flex items-center gap-1.5">
+                  {notices.map((notice, index) => (
+                    <button
+                      key={`${notice.id}-dot`}
+                      type="button"
+                      onClick={() => setActiveIndex(index)}
+                      className={`h-2.5 rounded-full transition ${
+                        activeIndex === index
+                          ? "w-6 bg-blue-600"
+                          : "w-2.5 bg-gray-200"
+                      }`}
+                      aria-label={`${index + 1}번째 알림 보기`}
+                    />
+                  ))}
                 </div>
               )}
             </div>
