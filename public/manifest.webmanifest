@@ -1,0 +1,26 @@
+{
+  "name": "위스토리",
+  "short_name": "위스토리",
+  "description": "위스토리 웹앱",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0f5cff",
+  "lang": "ko-KR",
+  "icons": [
+    {
+      "src": "/icons/westory-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/westory-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

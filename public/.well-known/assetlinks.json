@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "kr.westory.app",
+      "sha256_cert_fingerprints": [
+        "F0:B6:CE:01:1E:EA:BE:EE:9B:81:9F:2E:D6:4B:8D:46:18:05:87:E0:B1:DB:98:8B:E2:DF:A2:2D:6D:A6:F9:17"
+      ]
+    }
+  }
+]

@@ -23,3 +23,15 @@ dist-ssr
 *.sln
 *.sw?
 .vercel
+
+# Android / TWA signing secrets
+android.keystore
+*.jks
+*.keystore
+*.p12
+*.storepass
+*.keypass
+keystore.properties
+signing.properties
+twa-keystore-password.txt
+twa-key-password.txt
