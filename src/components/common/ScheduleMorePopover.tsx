@@ -199,7 +199,7 @@ const ScheduleMorePopover: React.FC<ScheduleMorePopoverProps> = ({
                 }}
                 className="group w-full rounded-lg border border-slate-100 bg-white px-3 py-2.5 text-left transition hover:border-blue-200 hover:bg-blue-50/50 focus:outline-none focus:ring-2 focus:ring-blue-200"
               >
-                <div className="flex min-w-0 items-center gap-2">
+                <div className="flex min-w-0 items-center gap-2 whitespace-nowrap">
                   <span
                     className="inline-flex max-w-[96px] shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-black text-white"
                     style={{ backgroundColor: categoryColor }}
@@ -211,14 +211,12 @@ const ScheduleMorePopover: React.FC<ScheduleMorePopoverProps> = ({
                     {title}
                   </span>
                 </div>
-                <div className="mt-1 flex min-w-0 items-center gap-1.5 text-xs font-bold text-slate-500">
+                <div className="mt-1 min-w-0 truncate whitespace-nowrap text-xs font-bold text-slate-500">
                   {!isHoliday && (
-                    <>
-                      <span className="text-blue-600">{periodLabel}</span>
-                      <span className="text-slate-300">·</span>
-                    </>
+                    <span className="text-blue-600">{periodLabel}</span>
                   )}
-                  <span className="truncate">{targetLabel}</span>
+                  {!isHoliday && <span className="text-slate-300"> · </span>}
+                  <span>{targetLabel}</span>
                 </div>
               </button>
             );

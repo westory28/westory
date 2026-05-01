@@ -985,6 +985,12 @@
   line-height: 1.2;
 }
 
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-popover {
+  display: none !important;
+}
+
 .teacher-calendar-shell .student-calendar-shell__toolbar {
   align-items: center;
 }
