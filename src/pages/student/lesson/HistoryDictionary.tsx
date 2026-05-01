@@ -296,9 +296,6 @@ const HistoryDictionary: React.FC = () => {
           <h1 className="text-2xl font-extrabold tracking-tight text-slate-950">
             역사 사전
           </h1>
-          <p className="mt-1 text-sm font-medium text-slate-500">
-            내가 저장한 역사 용어를 찾아보고, 뜻을 정리하고 수정할 수 있습니다.
-          </p>
         </header>
 
         <div className="grid gap-4 lg:grid-cols-[6.25rem_minmax(22rem,0.72fr)_minmax(0,1.15fr)]">
