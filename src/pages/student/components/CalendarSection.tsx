@@ -349,7 +349,6 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
     const dateStr = toLocalYmd(date);
     const dayLabel = dayNumberText.replace(/[^\d]/g, "");
     const holidayLabel = holidayLabelByDate.get(dateStr);
-    const isAttended = attendanceDateSet.has(dateStr);
 
     return (
       <span className="student-calendar-day-head">
@@ -362,32 +361,6 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             {holidayLabel}
           </span>
         )}
-        <span
-          className={`student-calendar-attendance-marker ${
-            isAttended ? "is-attended" : ""
-          }`}
-          title={isAttended ? LABELS.attendanceDoneTitle : LABELS.attendance}
-          aria-label={
-            isAttended ? LABELS.attendanceDoneTitle : LABELS.attendance
-          }
-        >
-          <i
-            className="far fa-circle student-calendar-attendance-marker__outline"
-            aria-hidden="true"
-          ></i>
-          {isAttended && (
-            <>
-              <i
-                className="fas fa-circle student-calendar-attendance-marker__fill"
-                aria-hidden="true"
-              ></i>
-              <i
-                className="fas fa-check student-calendar-attendance-marker__check"
-                aria-hidden="true"
-              ></i>
-            </>
-          )}
-        </span>
       </span>
     );
   };
@@ -697,6 +670,8 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             const classes: string[] = [];
             if (holidayDateSet.has(dateStr)) classes.push("fc-day-holiday");
             if (selectedDate === dateStr) classes.push("fc-day-selected");
+            classes.push("student-calendar-attendance-day");
+            if (attendanceDateSet.has(dateStr)) classes.push("is-attended");
             return classes;
           }}
           fixedWeekCount
