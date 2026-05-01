@@ -86,18 +86,6 @@ const QuizIndex: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-4xl animate-fadeIn px-4 py-8">
-      <div className="mb-8 flex items-center gap-3 rounded-xl border border-gray-100 bg-white p-4 shadow-sm animate-slideIn">
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-xl">
-          🔥
-        </div>
-        <div>
-          <div className="font-bold text-gray-800">
-            <span className="text-blue-600">{userData?.name || "학생"}</span>님,
-            오늘도 화이팅!
-          </div>
-        </div>
-      </div>
-
       <section className="mb-10">
         <h2 className="mb-3 ml-1 flex items-center gap-2 text-lg font-bold text-gray-800">
           <i className="fas fa-flag-checkered text-blue-600"></i> 실전 대비
