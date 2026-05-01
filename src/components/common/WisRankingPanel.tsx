@@ -135,9 +135,44 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({ config }) => {
             return (
               <div
                 key={entry.uid}
-                className={`grid grid-cols-[64px_minmax(0,1fr)_78px_minmax(74px,auto)] items-center gap-2 rounded-lg border px-2.5 py-2.5 sm:grid-cols-[72px_minmax(0,1fr)_92px_minmax(80px,auto)] sm:gap-3 sm:px-3 ${rankTone(rank)}`}
+                className={`rounded-lg border px-2 py-2 sm:grid sm:grid-cols-[72px_minmax(0,1fr)_92px_minmax(80px,auto)] sm:items-center sm:gap-3 sm:px-3 sm:py-2.5 ${rankTone(rank)}`}
               >
-                <div className="grid grid-cols-[2rem_1.25rem] items-center gap-1.5">
+                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 sm:hidden">
+                  <span
+                    className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-black ${
+                      rank <= 3 ? "bg-white/70" : "bg-slate-900 text-white"
+                    }`}
+                  >
+                    {rank}
+                  </span>
+                  {iconClassName && (
+                    <i
+                      className={`${iconClassName} shrink-0 text-xs`}
+                      aria-hidden="true"
+                    ></i>
+                  )}
+                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/80 text-[11px] shadow-sm">
+                    {entry.profileIcon || defaultProfileIcon}
+                  </span>
+                  <span className="text-sm font-extrabold leading-snug text-gray-900">
+                    {entry.displayName || entry.studentName}
+                  </span>
+                  {entryRank && (
+                    <span
+                      className={`inline-flex min-h-[1.25rem] shrink-0 items-center justify-center rounded-full border px-1.5 text-[10px] font-bold leading-none ${entryRank.badgeClass}`}
+                    >
+                      {entryRank.shortLabel || entryRank.label}
+                    </span>
+                  )}
+                  <span className="text-[11px] font-bold leading-snug text-gray-500">
+                    {entry.grade}학년 {entry.class}반
+                  </span>
+                  <span className="ml-auto shrink-0 text-xs font-black leading-snug text-blue-600">
+                    {formatWis(entry.currentBalance)}
+                  </span>
+                </div>
+
+                <div className="hidden grid-cols-[2rem_1.25rem] items-center gap-1.5 sm:grid">
                   <span
                     className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-sm font-black ${
                       rank <= 3 ? "bg-white/70" : "bg-slate-900 text-white"
@@ -152,7 +187,7 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({ config }) => {
                     ></i>
                   )}
                 </div>
-                <div className="flex min-w-0 items-center gap-1.5">
+                <div className="hidden min-w-0 items-center gap-1.5 sm:flex">
                   <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/80 text-sm shadow-sm">
                     {entry.profileIcon || defaultProfileIcon}
                   </span>
@@ -161,10 +196,10 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({ config }) => {
                   </span>
                   <PointRankBadge rank={entryRank} size="sm" />
                 </div>
-                <div className="truncate text-sm font-bold text-gray-500">
+                <div className="hidden truncate text-sm font-bold text-gray-500 sm:block">
                   {entry.grade}학년 {entry.class}반
                 </div>
-                <div className="text-right text-base font-black text-blue-600">
+                <div className="hidden text-right text-base font-black text-blue-600 sm:block">
                   {formatWis(entry.currentBalance)}
                 </div>
               </div>
