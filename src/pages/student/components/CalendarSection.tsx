@@ -11,6 +11,8 @@ import {
 } from "../../../lib/schedulePeriods";
 import type { ScheduleCategory } from "../../../lib/scheduleCategories";
 import type { CalendarEvent } from "../../../types";
+import ScheduleMorePopover from "../../../components/common/ScheduleMorePopover";
+import type { ScheduleMorePopoverAnchor } from "../../../components/common/ScheduleMorePopover";
 
 type CalendarViewType = "dayGridMonth" | "listMonth";
 
@@ -139,6 +141,18 @@ const SearchIcon = () => (
   </svg>
 );
 
+const getPopoverAnchor = (element: HTMLElement): ScheduleMorePopoverAnchor => {
+  const rect = element.getBoundingClientRect();
+  return {
+    top: rect.top,
+    right: rect.right,
+    bottom: rect.bottom,
+    left: rect.left,
+    width: rect.width,
+    height: rect.height,
+  };
+};
+
 const CalendarBadgeIcon = () => (
   <svg
     viewBox="0 0 20 20"
@@ -186,6 +200,10 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
     start: string;
     end: string;
   }>({ start: "", end: "" });
+  const [morePopover, setMorePopover] = useState<{
+    date: string;
+    anchorRect: ScheduleMorePopoverAnchor;
+  } | null>(null);
 
   const attendanceDateSet = useMemo(
     () => new Set(attendanceDates),
@@ -279,6 +297,18 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
   const toLocalYmd = (date: Date) => {
     const offset = date.getTimezoneOffset() * 60000;
     return new Date(date.getTime() - offset).toISOString().split("T")[0];
+  };
+
+  const handleMoreLinkClick = (arg: { date: Date; jsEvent: MouseEvent }) => {
+    const anchorElement = arg.jsEvent.currentTarget as HTMLElement | null;
+    if (!anchorElement) return undefined;
+    arg.jsEvent.preventDefault();
+    arg.jsEvent.stopPropagation();
+    setMorePopover({
+      date: toLocalYmd(arg.date),
+      anchorRect: getPopoverAnchor(anchorElement),
+    });
+    return undefined;
   };
 
   const formatDayHeading = (dateText: string) => {
@@ -523,6 +553,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             )
           }
           datesSet={(arg) => {
+            setMorePopover(null);
             setCurrentViewType(arg.view.type as CalendarViewType);
             setCurrentTitle(arg.view.title);
             setVisibleRange({
@@ -530,10 +561,14 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
               end: toLocalYmd(arg.end),
             });
           }}
-          dateClick={(arg) => onDateClick(arg.dateStr)}
-          eventClick={(arg) =>
-            onEventClick(arg.event.extendedProps as CalendarEvent)
-          }
+          dateClick={(arg) => {
+            setMorePopover(null);
+            onDateClick(arg.dateStr);
+          }}
+          eventClick={(arg) => {
+            setMorePopover(null);
+            onEventClick(arg.event.extendedProps as CalendarEvent);
+          }}
           eventDidMount={(arg) => {
             const event = arg.event.extendedProps as CalendarEvent & {
               inclusiveSpanDays?: number;
@@ -664,6 +699,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
           expandRows
           eventDisplay="block"
           dayMaxEvents={2}
+          moreLinkClick={handleMoreLinkClick}
           showNonCurrentDates={false}
           dayCellClassNames={(arg) => {
             const dateStr = toLocalYmd(arg.date);
@@ -676,6 +712,18 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
           }}
           fixedWeekCount
         />
+
+        {morePopover && (
+          <ScheduleMorePopover
+            date={morePopover.date}
+            anchorRect={morePopover.anchorRect}
+            events={events}
+            categories={categories}
+            hideHolidays={currentViewType === "dayGridMonth"}
+            onClose={() => setMorePopover(null)}
+            onEventClick={onEventClick}
+          />
+        )}
 
         {currentViewType === "listMonth" && (
           <div className="custom-schedule-list absolute inset-0 overflow-y-auto rounded-xl border border-gray-200 bg-white">

@@ -11,6 +11,23 @@ interface ScheduleEventDetailModalProps {
   onEdit?: (event: CalendarEvent) => void;
 }
 
+const formatEventTargetLabel = (event: CalendarEvent) => {
+  if (
+    event.eventType === "holiday" ||
+    event.targetType === "all" ||
+    event.targetType === "common"
+  ) {
+    return "전체 공통";
+  }
+
+  const [gradeValue, classValue] = String(event.targetClass || "").split("-");
+  if (gradeValue && classValue) {
+    return `${gradeValue}학년 ${classValue}반`;
+  }
+
+  return "반별 지정";
+};
+
 const ScheduleEventDetailModal: React.FC<ScheduleEventDetailModalProps> = ({
   event,
   categories,
@@ -21,9 +38,12 @@ const ScheduleEventDetailModal: React.FC<ScheduleEventDetailModalProps> = ({
 
   const isHoliday = event.eventType === "holiday";
   const categoryMeta = getScheduleCategoryMeta(event.eventType, categories);
-  const categoryLabel = isHoliday ? "공휴일" : `${categoryMeta.emoji} ${categoryMeta.label}`;
+  const categoryLabel = isHoliday
+    ? "공휴일"
+    : `${categoryMeta.emoji} ${categoryMeta.label}`;
   const categoryColor = isHoliday ? "#ef4444" : categoryMeta.color;
   const periodLabel = getSchedulePeriodLabel(event.startPeriod ?? event.period);
+  const targetLabel = formatEventTargetLabel(event);
 
   return (
     <div
@@ -59,14 +79,16 @@ const ScheduleEventDetailModal: React.FC<ScheduleEventDetailModalProps> = ({
             </h3>
           </div>
 
-          <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+          <div className="space-y-3 rounded-lg border border-gray-100 bg-gray-50 p-4">
             <div className="flex items-start gap-3 text-sm">
               <i className="fas fa-calendar-day mt-1 text-blue-500"></i>
               <div>
                 <div className="font-extrabold text-gray-800">일자</div>
                 <div className="mt-0.5 font-semibold text-gray-600">
                   {event.start}
-                  {event.end && event.start !== event.end ? ` ~ ${event.end}` : ""}
+                  {event.end && event.start !== event.end
+                    ? ` ~ ${event.end}`
+                    : ""}
                   {!isHoliday && (
                     <span className="ml-2 font-extrabold text-blue-600">
                       {periodLabel}
@@ -75,10 +97,21 @@ const ScheduleEventDetailModal: React.FC<ScheduleEventDetailModalProps> = ({
                 </div>
               </div>
             </div>
+            <div className="flex items-start gap-3 text-sm">
+              <i className="fas fa-users mt-1 text-blue-500"></i>
+              <div>
+                <div className="font-extrabold text-gray-800">대상</div>
+                <div className="mt-0.5 font-semibold text-gray-600">
+                  {targetLabel}
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="rounded-lg border border-gray-100 bg-white p-4">
-            <div className="mb-2 text-sm font-extrabold text-gray-800">메모</div>
+            <div className="mb-2 text-sm font-extrabold text-gray-800">
+              메모
+            </div>
             <p className="whitespace-pre-wrap text-sm leading-6 text-gray-700">
               {event.description?.trim() || "상세 내용이 등록되지 않았습니다."}
             </p>

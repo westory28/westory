@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   collection,
   deleteDoc,
@@ -85,14 +85,6 @@ const EventModal: React.FC<EventModalProps> = ({
     DEFAULT_SCHEDULE_CATEGORIES[3]?.emoji || COLOR_EMOJI_OPTIONS[0],
   );
   const [showCategoryManager, setShowCategoryManager] = useState(false);
-
-  const selectedCategory = useMemo(
-    () =>
-      categoryDrafts.find((category) => category.key === eventType) ||
-      categoryDrafts[0] ||
-      DEFAULT_SCHEDULE_CATEGORIES[0],
-    [categoryDrafts, eventType],
-  );
 
   useEffect(() => {
     const loadSchoolConfig = async () => {
@@ -534,29 +526,6 @@ const EventModal: React.FC<EventModalProps> = ({
             <div className="border-t border-slate-200 pt-5">
               <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.78fr)]">
                 <div className="space-y-5">
-                  <label className="block">
-                    <span className="mb-2 block text-sm font-extrabold text-gray-800">
-                      일정 분류
-                    </span>
-                    <div className="relative">
-                      <span
-                        className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full"
-                        style={{ backgroundColor: selectedCategory.color }}
-                      ></span>
-                      <select
-                        value={eventType}
-                        onChange={(event) => setEventType(event.target.value)}
-                        className="h-12 w-full rounded-lg border border-slate-300 bg-white pl-12 pr-4 text-base font-bold text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                      >
-                        {categoryDrafts.map((category) => (
-                          <option key={category.key} value={category.key}>
-                            {category.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </label>
-
                   <div>
                     <span className="mb-3 block text-sm font-extrabold text-gray-800">
                       대상 선택
@@ -625,9 +594,9 @@ const EventModal: React.FC<EventModalProps> = ({
                           event.target.value.slice(0, DESCRIPTION_LIMIT),
                         )
                       }
-                      rows={4}
+                      rows={7}
                       maxLength={DESCRIPTION_LIMIT}
-                      className="w-full resize-none rounded-lg border border-slate-300 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                      className="min-h-[180px] w-full resize-y rounded-lg border border-slate-300 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                       placeholder="메모를 입력하세요."
                     ></textarea>
                     <span className="mt-1 block text-right text-sm font-semibold text-gray-400">
