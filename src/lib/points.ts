@@ -19,7 +19,7 @@ import {
     resolvePointRankPolicy,
     sumPointRankEarnedPoints,
 } from './pointRanks';
-import { getYearSemester } from './semesterScope';
+import { getSameYearSemesterCandidates, getYearSemester } from './semesterScope';
 import type {
     PointOrder,
     PointOrderStatus,
@@ -477,6 +477,22 @@ export const getPointWalletDocPath = (config: ConfigLike, uid: string) =>
 export const getPointPolicyDocPath = (config: ConfigLike) =>
     `${getPointCollectionPath(config, 'point_policies')}/current`;
 
+const getSameYearPointCollectionPaths = (config: ConfigLike, collectionName: string) =>
+    getSameYearSemesterCandidates(config).map((candidate) => getPointCollectionPath(candidate, collectionName));
+
+const getSameYearPointWalletDocPaths = (config: ConfigLike, uid: string) =>
+    getSameYearSemesterCandidates(config).map((candidate) => getPointWalletDocPath(candidate, uid));
+
+const getSameYearPointPolicyDocPaths = (config: ConfigLike) =>
+    getSameYearSemesterCandidates(config).map((candidate) => getPointPolicyDocPath(candidate));
+
+const getSameYearPointActivityTransactionPaths = (
+    config: ConfigLike,
+    uid: string,
+    type: PointActivityRewardType,
+    sourceId: string,
+) => getSameYearSemesterCandidates(config).map((candidate) => getPointActivityTransactionPath(candidate, uid, type, sourceId));
+
 const normalizePointKeyPart = (value: string) => String(value || '')
     .trim()
     .replace(/[^a-zA-Z0-9_-]+/g, '_')
@@ -676,17 +692,25 @@ export const resolveActivityReward = ({
 
 // Read helpers
 export const getPointWalletByUid = async (config: ConfigLike, uid: string) => {
-    const snap = await getDoc(doc(db, getPointWalletDocPath(config, uid)));
-    if (!snap.exists()) return null;
-    return snap.data() as PointWallet;
+    for (const path of getSameYearPointWalletDocPaths(config, uid)) {
+        const snap = await getDoc(doc(db, path));
+        if (snap.exists()) return snap.data() as PointWallet;
+    }
+    return null;
 };
 
 export const listPointWallets = async (config: ConfigLike) => {
-    const snapshot = await getDocs(collection(db, getPointCollectionPath(config, 'point_wallets')));
-    const items: PointWallet[] = [];
-    snapshot.forEach((item) => {
-        items.push(item.data() as PointWallet);
-    });
+    const walletsByUid = new Map<string, PointWallet>();
+    for (const path of getSameYearPointCollectionPaths(config, 'point_wallets')) {
+        const snapshot = await getDocs(collection(db, path));
+        snapshot.forEach((item) => {
+            const wallet = item.data() as PointWallet;
+            const uid = String(wallet.uid || item.id || '').trim();
+            if (!uid || walletsByUid.has(uid)) return;
+            walletsByUid.set(uid, wallet);
+        });
+    }
+    const items = [...walletsByUid.values()];
     return [...items].sort((a, b) => {
         const balanceGap = Number(b.balance || 0) - Number(a.balance || 0);
         if (balanceGap !== 0) return balanceGap;
@@ -827,9 +851,11 @@ export const listPointStudentTargetsByClass = async (grade: string, className: s
 };
 
 export const getPointPolicy = async (config: ConfigLike) => {
-    const snap = await getDoc(doc(db, getPointPolicyDocPath(config)));
-    if (!snap.exists()) return POINT_POLICY_FALLBACK;
-    return normalizePointPolicy(snap.data() as Partial<PointPolicy>);
+    for (const path of getSameYearPointPolicyDocPaths(config)) {
+        const snap = await getDoc(doc(db, path));
+        if (snap.exists()) return normalizePointPolicy(snap.data() as Partial<PointPolicy>);
+    }
+    return POINT_POLICY_FALLBACK;
 };
 
 export const listPointTransactions = async (config: ConfigLike, options?: { uid?: string; type?: PointTransactionType; limitCount?: number }) => {
@@ -838,27 +864,30 @@ export const listPointTransactions = async (config: ConfigLike, options?: { uid?
     if (options?.type) constraints.push(where('type', '==', options.type));
     const safeLimit = typeof options?.limitCount === 'number' && options.limitCount > 0 ? Math.floor(options.limitCount) : 0;
 
-    let snapshot;
-    const baseRef = collection(db, getPointCollectionPath(config, 'point_transactions'));
-    if (safeLimit > 0) {
-        try {
-            snapshot = await getDocs(query(baseRef, ...constraints, orderBy('createdAt', 'desc'), queryLimit(safeLimit)));
-        } catch (error) {
-            console.warn('Falling back to unordered point transaction query:', error);
+    const itemsById = new Map<string, PointTransaction>();
+    for (const path of getSameYearPointCollectionPaths(config, 'point_transactions')) {
+        let snapshot;
+        const baseRef = collection(db, path);
+        if (safeLimit > 0) {
+            try {
+                snapshot = await getDocs(query(baseRef, ...constraints, orderBy('createdAt', 'desc'), queryLimit(safeLimit)));
+            } catch (error) {
+                console.warn('Falling back to unordered point transaction query:', error);
+                snapshot = constraints.length > 0
+                    ? await getDocs(query(baseRef, ...constraints))
+                    : await getDocs(baseRef);
+            }
+        } else {
             snapshot = constraints.length > 0
                 ? await getDocs(query(baseRef, ...constraints))
                 : await getDocs(baseRef);
         }
-    } else {
-        snapshot = constraints.length > 0
-            ? await getDocs(query(baseRef, ...constraints))
-            : await getDocs(baseRef);
+        snapshot.forEach((item) => {
+            if (itemsById.has(item.id)) return;
+            itemsById.set(item.id, { id: item.id, ...(item.data() as Omit<PointTransaction, 'id'>) });
+        });
     }
-    const items: PointTransaction[] = [];
-    snapshot.forEach((item) => {
-        items.push({ id: item.id, ...(item.data() as Omit<PointTransaction, 'id'>) });
-    });
-    const sorted = sortByTimestampDesc(items, 'createdAt');
+    const sorted = sortByTimestampDesc([...itemsById.values()], 'createdAt');
     return safeLimit > 0 ? sorted.slice(0, safeLimit) : sorted;
 };
 
@@ -882,45 +911,53 @@ export const getPointActivityTransaction = async (
     type: PointActivityRewardType,
     sourceId: string,
 ) => {
-    const snap = await getDoc(doc(db, getPointActivityTransactionPath(config, uid, type, sourceId)));
-    if (!snap.exists()) return null;
-    return { id: snap.id, ...(snap.data() as Omit<PointTransaction, 'id'>) } as PointTransaction;
+    for (const path of getSameYearPointActivityTransactionPaths(config, uid, type, sourceId)) {
+        const snap = await getDoc(doc(db, path));
+        if (snap.exists()) return { id: snap.id, ...(snap.data() as Omit<PointTransaction, 'id'>) } as PointTransaction;
+    }
+    return null;
 };
 
 export const listPointProducts = async (config: ConfigLike, activeOnly = false) => {
-    const snapshot = await getDocs(query(
-        collection(db, getPointCollectionPath(config, 'point_products')),
-        orderBy('sortOrder', 'asc'),
-    ));
     const items: PointProduct[] = [];
-    snapshot.forEach((item) => {
-        items.push({ id: item.id, ...(item.data() as Omit<PointProduct, 'id'>) });
-    });
+    for (const path of getSameYearPointCollectionPaths(config, 'point_products')) {
+        const snapshot = await getDocs(query(
+            collection(db, path),
+            orderBy('sortOrder', 'asc'),
+        ));
+        snapshot.forEach((item) => {
+            items.push({ id: item.id, ...(item.data() as Omit<PointProduct, 'id'>) });
+        });
+        if (items.length > 0) break;
+    }
     return activeOnly ? items.filter((item) => item.isActive) : items;
 };
 
 export const listPointOrders = async (config: ConfigLike, options?: { uid?: string; limitCount?: number }) => {
-    const baseRef = collection(db, getPointCollectionPath(config, 'point_orders'));
     const safeLimit = typeof options?.limitCount === 'number' && options.limitCount > 0 ? Math.floor(options.limitCount) : 0;
-    let snapshot;
-    try {
-        const constraints = [
-            ...(options?.uid ? [where('uid', '==', options.uid)] : []),
-            orderBy('requestedAt', 'desc'),
-            ...(safeLimit > 0 ? [queryLimit(safeLimit)] : []),
-        ];
-        snapshot = await getDocs(query(baseRef, ...constraints));
-    } catch (error) {
-        console.warn('Falling back to broad point order query:', error);
-        snapshot = options?.uid
-            ? await getDocs(query(baseRef, where('uid', '==', options.uid)))
-            : await getDocs(query(baseRef, orderBy('requestedAt', 'desc')));
+    const itemsById = new Map<string, PointOrder>();
+    for (const path of getSameYearPointCollectionPaths(config, 'point_orders')) {
+        const baseRef = collection(db, path);
+        let snapshot;
+        try {
+            const constraints = [
+                ...(options?.uid ? [where('uid', '==', options.uid)] : []),
+                orderBy('requestedAt', 'desc'),
+                ...(safeLimit > 0 ? [queryLimit(safeLimit)] : []),
+            ];
+            snapshot = await getDocs(query(baseRef, ...constraints));
+        } catch (error) {
+            console.warn('Falling back to broad point order query:', error);
+            snapshot = options?.uid
+                ? await getDocs(query(baseRef, where('uid', '==', options.uid)))
+                : await getDocs(query(baseRef, orderBy('requestedAt', 'desc')));
+        }
+        snapshot.forEach((item) => {
+            if (itemsById.has(item.id)) return;
+            itemsById.set(item.id, { id: item.id, ...(item.data() as Omit<PointOrder, 'id'>) });
+        });
     }
-    const items: PointOrder[] = [];
-    snapshot.forEach((item) => {
-        items.push({ id: item.id, ...(item.data() as Omit<PointOrder, 'id'>) });
-    });
-    const sorted = sortByTimestampDesc(items, 'requestedAt');
+    const sorted = sortByTimestampDesc([...itemsById.values()], 'requestedAt');
     return typeof options?.limitCount === 'number' ? sorted.slice(0, options.limitCount) : sorted;
 };
 

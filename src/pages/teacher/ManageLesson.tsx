@@ -24,6 +24,7 @@ import {
   uploadBytes,
 } from "firebase/storage";
 import {
+  getSameYearSemesterCandidates,
   getSemesterCollectionPath,
   getSemesterDocPath,
 } from "../../lib/semesterScope";
@@ -1279,15 +1280,17 @@ const ManageLesson: React.FC = () => {
 
   const findLessonDocRefByUnitId = useCallback(
     async (unitId: string) => {
-      const scopedRef = collection(
-        db,
-        getSemesterCollectionPath(config, "lessons"),
-      );
-      const scopedSnap = await getDocs(
-        query(scopedRef, where("unitId", "==", unitId), limit(1)),
-      );
-      if (!scopedSnap.empty) {
-        return doc(scopedRef, scopedSnap.docs[0].id);
+      for (const candidate of getSameYearSemesterCandidates(config)) {
+        const scopedRef = collection(
+          db,
+          getSemesterCollectionPath(candidate, "lessons"),
+        );
+        const scopedSnap = await getDocs(
+          query(scopedRef, where("unitId", "==", unitId), limit(1)),
+        );
+        if (!scopedSnap.empty) {
+          return doc(scopedRef, scopedSnap.docs[0].id);
+        }
       }
 
       const legacyRef = collection(db, "lessons");
@@ -2195,11 +2198,13 @@ const ManageLesson: React.FC = () => {
 
   const loadTree = async () => {
     try {
-      const scopedDoc = await getDoc(
-        doc(db, getSemesterDocPath(config, "curriculum", "tree")),
-      );
-      if (scopedDoc.exists() && scopedDoc.data().tree)
-        return setTreeData(scopedDoc.data().tree);
+      for (const candidate of getSameYearSemesterCandidates(config)) {
+        const scopedDoc = await getDoc(
+          doc(db, getSemesterDocPath(candidate, "curriculum", "tree")),
+        );
+        if (scopedDoc.exists() && scopedDoc.data().tree)
+          return setTreeData(scopedDoc.data().tree);
+      }
       const legacyDoc = await getDoc(doc(db, "curriculum", "tree"));
       if (legacyDoc.exists() && legacyDoc.data().tree)
         return setTreeData(legacyDoc.data().tree);
@@ -2336,17 +2341,21 @@ const ManageLesson: React.FC = () => {
     deletedFootnoteAssetPathsRef.current = [];
     setScreenBusyMessage("수업 자료를 불러오는 중입니다...");
     try {
-      const scopedRef = collection(
-        db,
-        getSemesterCollectionPath(config, "lessons"),
-      );
-      const scopedQuery = query(
-        scopedRef,
-        where("unitId", "==", unitId),
-        limit(1),
-      );
-      let snap = await getDocs(scopedQuery);
-      if (snap.empty)
+      let snap = null;
+      for (const candidate of getSameYearSemesterCandidates(config)) {
+        const scopedRef = collection(
+          db,
+          getSemesterCollectionPath(candidate, "lessons"),
+        );
+        const candidateSnap = await getDocs(
+          query(scopedRef, where("unitId", "==", unitId), limit(1)),
+        );
+        if (!candidateSnap.empty) {
+          snap = candidateSnap;
+          break;
+        }
+      }
+      if (!snap)
         snap = await getDocs(
           query(
             collection(db, "lessons"),

@@ -741,6 +741,15 @@ const DEFAULT_HALL_OF_FAME_STORED_RANK_LIMIT = 20;
 const DEFAULT_HALL_OF_FAME_INCLUDE_TIES = true;
 const getWisHallOfFamePath = (year, semester) => `${getPointCollectionPath(year, semester, 'point_public')}/${WIS_HALL_OF_FAME_DOC_ID}`;
 
+const getSameYearSemesterCandidates = (year, semester) => {
+  const normalizedYear = String(year || '').trim();
+  const items = [String(semester || '').trim(), '1', '2'].filter(Boolean);
+  return Array.from(new Set(items)).map((item) => ({
+    year: normalizedYear,
+    semester: item,
+  }));
+};
+
 const sanitizeKeyPart = (value) => String(value || '')
   .trim()
   .replace(/[^a-zA-Z0-9_-]+/g, '_')
@@ -1292,13 +1301,27 @@ const buildWisHallOfFamePayload = async (year, semester) => {
     () => resolveHallOfFameLeaderboardPolicy(),
     'Failed to read hall of fame leaderboard policy.',
   );
-  const walletSnapshot = await runHallOfFameRefreshStage(
+  const walletSnapshots = await runHallOfFameRefreshStage(
     'wallet_read',
-    () => db.collection(getPointCollectionPath(year, semester, 'point_wallets')).get(),
-    'Failed to read point_wallets for the selected semester.',
+    () => Promise.all(
+      getSameYearSemesterCandidates(year, semester).map((candidate) =>
+        db.collection(getPointCollectionPath(candidate.year, candidate.semester, 'point_wallets')).get(),
+      ),
+    ),
+    'Failed to read point_wallets for the selected academic year.',
   );
-  const wallets = walletSnapshot.docs
-    .map((docSnapshot) => ({ uid: docSnapshot.id, ...(docSnapshot.data() || {}) }))
+  const walletsByUid = new Map();
+  walletSnapshots.forEach((snapshot) => {
+    snapshot.docs.forEach((docSnapshot) => {
+      if (!walletsByUid.has(docSnapshot.id)) {
+        walletsByUid.set(docSnapshot.id, {
+          uid: docSnapshot.id,
+          ...(docSnapshot.data() || {}),
+        });
+      }
+    });
+  });
+  const wallets = Array.from(walletsByUid.values())
     .filter((wallet) => normalizeHallOfFameText(wallet.uid));
   const profileSnapshots = await runHallOfFameRefreshStage(
     'profile_read',
@@ -2597,6 +2620,24 @@ const ensureWallet = async (transaction, year, semester, uid, profile) => {
     };
   }
 
+  for (const candidate of getSameYearSemesterCandidates(year, semester)) {
+    if (candidate.semester === String(semester || '').trim()) continue;
+    const legacyWalletRef = db.doc(getPointWalletPath(candidate.year, candidate.semester, uid));
+    const legacyWalletSnap = await transaction.get(legacyWalletRef);
+    if (legacyWalletSnap.exists) {
+      return {
+        ref: walletRef,
+        wallet: {
+          ...legacyWalletSnap.data(),
+          ...buildWalletBase(uid, {
+            ...(legacyWalletSnap.data() || {}),
+            ...profile,
+          }),
+        },
+      };
+    }
+  }
+
   const wallet = {
     ...buildWalletBase(uid, profile),
     balance: 0,
@@ -2614,13 +2655,28 @@ const ensureWallet = async (transaction, year, semester, uid, profile) => {
 };
 
 const loadPolicy = async (transaction, year, semester) => {
-  const policyRef = db.doc(getPointPolicyPath(year, semester));
-  const policySnap = await transaction.get(policyRef);
-  if (!policySnap.exists) {
-    return getDefaultPointPolicy();
+  for (const candidate of getSameYearSemesterCandidates(year, semester)) {
+    const policyRef = db.doc(getPointPolicyPath(candidate.year, candidate.semester));
+    const policySnap = await transaction.get(policyRef);
+    if (policySnap.exists) {
+      return normalizePointPolicy(policySnap.data() || {});
+    }
   }
 
-  return normalizePointPolicy(policySnap.data() || {});
+  return getDefaultPointPolicy();
+};
+
+const loadPointProductForSameYear = async (transaction, year, semester, productId) => {
+  const normalizedProductId = String(productId || '').trim();
+  if (!normalizedProductId) return null;
+  for (const candidate of getSameYearSemesterCandidates(year, semester)) {
+    const productRef = db.doc(`${getPointCollectionPath(candidate.year, candidate.semester, 'point_products')}/${normalizedProductId}`);
+    const productSnap = await transaction.get(productRef);
+    if (productSnap.exists) {
+      return { ref: productRef, snap: productSnap };
+    }
+  }
+  return null;
 };
 
 const createTransactionPayload = ({
@@ -2698,11 +2754,19 @@ const getTransactionCreatedAtMs = (docOrData) => {
 };
 
 const listActivityTransactionsByType = async (transaction, year, semester, uid, type) => {
-  const activityQuery = db.collection(getPointCollectionPath(year, semester, 'point_transactions'))
-    .where('uid', '==', uid)
-    .where('type', '==', type);
-  const activitySnapshot = await transaction.get(activityQuery);
-  return sortPointTransactionDocsDesc(activitySnapshot.docs);
+  const docsById = new Map();
+  for (const candidate of getSameYearSemesterCandidates(year, semester)) {
+    const activityQuery = db.collection(getPointCollectionPath(candidate.year, candidate.semester, 'point_transactions'))
+      .where('uid', '==', uid)
+      .where('type', '==', type);
+    const activitySnapshot = await transaction.get(activityQuery);
+    activitySnapshot.docs.forEach((docSnapshot) => {
+      if (!docsById.has(docSnapshot.id)) {
+        docsById.set(docSnapshot.id, docSnapshot);
+      }
+    });
+  }
+  return sortPointTransactionDocsDesc(Array.from(docsById.values()));
 };
 
 const safeDecodeURIComponent = (value) => {
@@ -3912,12 +3976,13 @@ exports.createPointPurchaseRequest = onCall({ region: REGION }, async (request) 
     const { ref: walletRef, wallet } = await ensureWallet(transaction, year, semester, uid, profile);
     const policy = await loadPolicy(transaction, year, semester);
     const currentRankEarnedTotal = await getCurrentRankEarnedTotal(transaction, year, semester, uid, wallet);
-    const productRef = db.doc(`${getPointCollectionPath(year, semester, 'point_products')}/${productId}`);
-    const productSnap = await transaction.get(productRef);
-    if (!productSnap.exists) {
+    const productEntry = await loadPointProductForSameYear(transaction, year, semester, productId);
+    if (!productEntry) {
       throw new HttpsError('not-found', 'Point product does not exist.');
     }
 
+    const productRef = productEntry.ref;
+    const productSnap = productEntry.snap;
     const product = { id: productSnap.id, ...(productSnap.data() || {}) };
     const productPrice = toNonNegativeNumber(product.price, 0);
     const productStock = Math.max(0, Math.floor(toFiniteNumber(product.stock, 0)));
@@ -4251,9 +4316,10 @@ exports.reviewTeacherPointOrder = onCall({ region: REGION }, async (request) => 
     const { ref: walletRef, wallet } = await ensureWallet(transaction, year, semester, order.uid, profile);
     const policy = await loadPolicy(transaction, year, semester);
     const currentRankEarnedTotal = await getCurrentRankEarnedTotal(transaction, year, semester, order.uid, wallet);
-    const productRef = db.doc(`${getPointCollectionPath(year, semester, 'point_products')}/${order.productId}`);
-    const productSnap = await transaction.get(productRef);
-    const currentProductStock = productSnap.exists
+    const productEntry = await loadPointProductForSameYear(transaction, year, semester, order.productId);
+    const productRef = productEntry?.ref || null;
+    const productSnap = productEntry?.snap || null;
+    const currentProductStock = productSnap?.exists
       ? Math.max(0, Math.floor(toFiniteNumber(productSnap.data().stock, 0)))
       : 0;
     const stockDeducted = order.stockDeducted !== false;
@@ -4270,7 +4336,7 @@ exports.reviewTeacherPointOrder = onCall({ region: REGION }, async (request) => 
     const txRef = db.doc(`${getPointCollectionPath(year, semester, 'point_transactions')}/${transactionId}`);
 
     if (nextStatus === 'requested') {
-      if (stockDeducted && productSnap.exists) {
+      if (stockDeducted && productRef && productSnap?.exists) {
         transaction.set(productRef, {
           stock: currentProductStock + 1,
           updatedAt: FieldValue.serverTimestamp(),
@@ -4304,7 +4370,7 @@ exports.reviewTeacherPointOrder = onCall({ region: REGION }, async (request) => 
         lastTransactionAt: FieldValue.serverTimestamp(),
       }, { merge: true });
 
-      if (stockDeducted && productSnap.exists) {
+      if (stockDeducted && productRef && productSnap?.exists) {
         transaction.set(productRef, {
           stock: currentProductStock + 1,
           updatedAt: FieldValue.serverTimestamp(),
@@ -4334,7 +4400,7 @@ exports.reviewTeacherPointOrder = onCall({ region: REGION }, async (request) => 
 
     if (nextStatus === 'approved') {
       if (!stockDeducted) {
-        if (!productSnap.exists) {
+        if (!productRef || !productSnap?.exists) {
           throw new HttpsError('not-found', 'Point product does not exist.');
         }
         if (currentProductStock <= 0) {

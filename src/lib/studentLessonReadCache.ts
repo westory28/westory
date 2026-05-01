@@ -16,6 +16,7 @@ import {
   type MapResource,
 } from "./mapResources";
 import {
+  getSameYearSemesterCandidates,
   getSemesterCollectionPath,
   getSemesterDocPath,
   getYearSemester,
@@ -46,8 +47,8 @@ const lessonCache = new Map<string, CacheEntry<Partial<LessonData> | null>>();
 const mapResourcesCache = new Map<string, CacheEntry<MapResource[]>>();
 
 const getScopeKey = (config: ConfigLike) => {
-  const { year, semester } = getYearSemester(config);
-  return `${year}:${semester}`;
+  const { year } = getYearSemester(config);
+  return `${year}:academic-year`;
 };
 
 const readCached = <T>(
@@ -79,11 +80,13 @@ const readCached = <T>(
 
 export const readStudentCurriculumTree = (config: ConfigLike) =>
   readCached(curriculumTreeCache, getScopeKey(config), async () => {
-    const semesterTree = await getDoc(
-      doc(db, getSemesterDocPath(config, "curriculum", "tree")),
-    );
-    if (semesterTree.exists() && semesterTree.data().tree) {
-      return semesterTree.data().tree as StudentCurriculumTreeItem[];
+    for (const candidate of getSameYearSemesterCandidates(config)) {
+      const semesterTree = await getDoc(
+        doc(db, getSemesterDocPath(candidate, "curriculum", "tree")),
+      );
+      if (semesterTree.exists() && semesterTree.data().tree) {
+        return semesterTree.data().tree as StudentCurriculumTreeItem[];
+      }
     }
 
     const globalTree = await getDoc(doc(db, "curriculum", "tree"));
@@ -96,42 +99,49 @@ export const readStudentCurriculumTree = (config: ConfigLike) =>
 
 export const readStudentLesson = (config: ConfigLike, unitId: string) =>
   readCached(lessonCache, `${getScopeKey(config)}:${unitId}`, async () => {
-    const semesterQuery = query(
-      collection(db, getSemesterCollectionPath(config, "lessons")),
-      where("unitId", "==", unitId),
-      limit(1),
-    );
-    let snap = await getDocs(semesterQuery);
-    if (snap.empty) {
-      snap = await getDocs(
+    for (const candidate of getSameYearSemesterCandidates(config)) {
+      const snap = await getDocs(
         query(
-          collection(db, "lessons"),
+          collection(db, getSemesterCollectionPath(candidate, "lessons")),
           where("unitId", "==", unitId),
           limit(1),
         ),
       );
+      if (!snap.empty) {
+        return snap.docs[0].data() as Partial<LessonData>;
+      }
     }
 
-    return snap.empty ? null : (snap.docs[0].data() as Partial<LessonData>);
+    const legacySnap = await getDocs(
+      query(collection(db, "lessons"), where("unitId", "==", unitId), limit(1)),
+    );
+
+    return legacySnap.empty
+      ? null
+      : (legacySnap.docs[0].data() as Partial<LessonData>);
   });
 
 export const readStudentMapResources = (config: ConfigLike) =>
   readCached(mapResourcesCache, getScopeKey(config), async () => {
-    const scopedQuery = query(
-      collection(db, getSemesterCollectionPath(config, "map_resources")),
-      orderBy("sortOrder", "asc"),
-    );
-    let snap = await getDocs(scopedQuery);
-
-    if (snap.empty) {
-      const legacyQuery = query(
-        collection(db, "map_resources"),
-        orderBy("sortOrder", "asc"),
+    for (const candidate of getSameYearSemesterCandidates(config)) {
+      const snap = await getDocs(
+        query(
+          collection(db, getSemesterCollectionPath(candidate, "map_resources")),
+          orderBy("sortOrder", "asc"),
+        ),
       );
-      snap = await getDocs(legacyQuery);
+      if (!snap.empty) {
+        const resources = snap.docs.map((docSnap) =>
+          normalizeMapResource(docSnap.id, docSnap.data()),
+        );
+        return mergeMapResources(resources);
+      }
     }
 
-    const resources = snap.docs.map((docSnap) =>
+    const legacySnap = await getDocs(
+      query(collection(db, "map_resources"), orderBy("sortOrder", "asc")),
+    );
+    const resources = legacySnap.docs.map((docSnap) =>
       normalizeMapResource(docSnap.id, docSnap.data()),
     );
     return mergeMapResources(resources);

@@ -49,7 +49,11 @@ import {
 } from "../../lib/pointRanks";
 import { formatWisAmount } from "../../lib/pointFormatters";
 import { getDefaultProfileEmojiValue } from "../../lib/profileEmojis";
-import { getSemesterCollectionPath } from "../../lib/semesterScope";
+import {
+  getSameYearSemesterCandidates,
+  getSemesterCollectionPath,
+  getYearSemester,
+} from "../../lib/semesterScope";
 import {
   loadStudentQuizResults,
   loadStudentProgressSummary,
@@ -82,6 +86,8 @@ interface UserProfileDoc {
   profileEmojiId?: string;
   myPageGoalScore?: string;
   myPageSubjectGoals?: Record<string, number>;
+  myPageGoalScoresBySemester?: Record<string, string>;
+  myPageSubjectGoalsBySemester?: Record<string, Record<string, number>>;
 }
 
 interface GradingPlanItem {
@@ -387,10 +393,18 @@ const MyPage: React.FC = () => {
 
     if (userSnap.exists()) {
       const data = userSnap.data() as UserProfileDoc;
+      const { year, semester } = getYearSemester(config);
+      const scoreScopeKey = `${year}_${semester}`;
       setProfile(data);
       setProfileIcon(data.profileIcon || getDefaultProfileEmojiValue());
-      setGoalScore(data.myPageGoalScore || "");
-      setSubjectGoals(data.myPageSubjectGoals || {});
+      setGoalScore(
+        data.myPageGoalScoresBySemester?.[scoreScopeKey] ||
+          (semester === "1" ? data.myPageGoalScore || "" : ""),
+      );
+      setSubjectGoals(
+        data.myPageSubjectGoalsBySemester?.[scoreScopeKey] ||
+          (semester === "1" ? data.myPageSubjectGoals || {} : {}),
+      );
     } else {
       setProfile(null);
       setProfileIcon(getDefaultProfileEmojiValue());
@@ -450,15 +464,23 @@ const MyPage: React.FC = () => {
   const loadUnitTitles = async () => {
     if (!config) return { exam_prep: "학기 시험 대비" };
 
-    let treeSnap = await getDoc(
-      doc(db, getSemesterCollectionPath(config, "curriculum"), "tree"),
-    );
-    if (!treeSnap.exists()) {
-      treeSnap = await getDoc(doc(db, "curriculum", "tree"));
+    let treeSnap = null;
+    for (const candidate of getSameYearSemesterCandidates(config)) {
+      const candidateSnap = await getDoc(
+        doc(db, getSemesterCollectionPath(candidate, "curriculum"), "tree"),
+      );
+      if (candidateSnap.exists()) {
+        treeSnap = candidateSnap;
+        break;
+      }
+    }
+    if (!treeSnap) {
+      const legacySnap = await getDoc(doc(db, "curriculum", "tree"));
+      if (legacySnap.exists()) treeSnap = legacySnap;
     }
 
     const map: Record<string, string> = { exam_prep: "학기 시험 대비" };
-    if (treeSnap.exists()) {
+    if (treeSnap?.exists()) {
       const tree = treeSnap.data().tree || [];
       tree.forEach((big: any) => {
         (big.children || []).forEach((mid: any) => {
@@ -811,14 +833,20 @@ const MyPage: React.FC = () => {
   }, [currentRank?.tierCode, emojiGroups, iconModalOpen]);
 
   const saveGoal = async () => {
-    if (!user) return;
+    if (!user || !config) return;
     setSavingGoal(true);
     try {
+      const { year, semester } = getYearSemester(config);
+      const scoreScopeKey = `${year}_${semester}`;
       await setDoc(
         doc(db, "users", user.uid),
         {
-          myPageGoalScore: goalScore.trim(),
-          myPageSubjectGoals: subjectGoals,
+          myPageGoalScoresBySemester: {
+            [scoreScopeKey]: goalScore.trim(),
+          },
+          myPageSubjectGoalsBySemester: {
+            [scoreScopeKey]: subjectGoals,
+          },
           updatedAt: serverTimestamp(),
         },
         { merge: true },

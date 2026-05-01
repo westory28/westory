@@ -167,6 +167,8 @@ service cloud.firestore {
         'profileEmojiId',
         'myPageGoalScore',
         'myPageSubjectGoals',
+        'myPageGoalScoresBySemester',
+        'myPageSubjectGoalsBySemester',
         'scoreWarningAcknowledged',
         'scoreWarningAcknowledgedAt',
         'createdAt',
@@ -198,6 +200,14 @@ service cloud.firestore {
         && (!request.resource.data.keys().hasAny(['myPageSubjectGoals']) || (
           request.resource.data.myPageSubjectGoals is map
           && request.resource.data.myPageSubjectGoals.keys().size() <= 30
+        ))
+        && (!request.resource.data.keys().hasAny(['myPageGoalScoresBySemester']) || (
+          request.resource.data.myPageGoalScoresBySemester is map
+          && request.resource.data.myPageGoalScoresBySemester.keys().size() <= 12
+        ))
+        && (!request.resource.data.keys().hasAny(['myPageSubjectGoalsBySemester']) || (
+          request.resource.data.myPageSubjectGoalsBySemester is map
+          && request.resource.data.myPageSubjectGoalsBySemester.keys().size() <= 12
         ))
         && (!request.resource.data.keys().hasAny(['scoreWarningAcknowledged']) || request.resource.data.scoreWarningAcknowledged is bool);
     }
@@ -246,6 +256,8 @@ service cloud.firestore {
             'updatedAt',
             'myPageGoalScore',
             'myPageSubjectGoals',
+            'myPageGoalScoresBySemester',
+            'myPageSubjectGoalsBySemester',
             'scoreWarningAcknowledged',
             'scoreWarningAcknowledgedAt',
             'privacyAgreed',
