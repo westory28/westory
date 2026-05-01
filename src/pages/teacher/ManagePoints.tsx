@@ -1327,7 +1327,7 @@ const ManagePoints: React.FC = () => {
         );
     }
 
-    const usesSharedPanelFrame = activeTab !== 'ranks' && activeTab !== 'hall-of-fame';
+    const usesSharedPanelFrame = activeTab !== 'policy' && activeTab !== 'ranks' && activeTab !== 'hall-of-fame';
 
     return (
         <div className="flex min-h-screen flex-col bg-gray-50">
