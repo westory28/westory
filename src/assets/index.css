@@ -664,14 +664,17 @@
   position: absolute;
   right: 0.44rem;
   bottom: 0.38rem;
-  z-index: 2;
-  width: 0.72rem;
-  height: 0.72rem;
+  z-index: 20;
+  box-sizing: border-box;
+  width: 0.78rem;
+  height: 0.78rem;
   border: 1.5px solid #cbd5e1;
-  border-radius: 9999px;
+  border-radius: 50%;
   background: #ffffff;
   color: #ffffff;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+  box-shadow:
+    0 0 0 3px #ffffff,
+    0 1px 2px rgba(15, 23, 42, 0.1);
   pointer-events: none;
 }
 
@@ -687,20 +690,17 @@
   .fc
   .student-calendar-attendance-day.is-attended
   .fc-daygrid-day-frame::before {
-  content: "✓";
+  content: "";
   position: absolute;
-  right: 0.44rem;
-  bottom: 0.38rem;
-  z-index: 3;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 0.72rem;
-  height: 0.72rem;
-  color: #ffffff;
-  font-size: 0.52rem;
-  font-weight: 900;
-  line-height: 1;
+  right: 0.63rem;
+  bottom: 0.61rem;
+  z-index: 21;
+  width: 0.28rem;
+  height: 0.46rem;
+  border-right: 2px solid #ffffff;
+  border-bottom: 2px solid #ffffff;
+  transform: rotate(45deg);
+  transform-origin: center;
   pointer-events: none;
 }
 
@@ -1177,11 +1177,21 @@
   .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
     .fc
     .student-calendar-attendance-day.is-attended
-    .fc-daygrid-day-frame::before {
+    .fc-daygrid-day-frame::after {
     right: 0.32rem;
     bottom: 0.32rem;
-    width: 0.66rem;
-    height: 0.66rem;
+    width: 0.72rem;
+    height: 0.72rem;
+  }
+
+  .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+    .fc
+    .student-calendar-attendance-day.is-attended
+    .fc-daygrid-day-frame::before {
+    right: 0.49rem;
+    bottom: 0.53rem;
+    width: 0.26rem;
+    height: 0.42rem;
   }
 
   .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
