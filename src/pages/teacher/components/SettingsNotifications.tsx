@@ -9,6 +9,7 @@ import { invalidateSiteSettingDocCache } from "../../../lib/siteSettings";
 type NotificationPriority = "normal" | "high";
 type NotificationAudience = "students" | "teachers";
 type NotificationEventStatus = "connected" | "needs-hook";
+type NotificationTab = "overview" | "students" | "teachers" | "pending";
 
 type NotificationTemplateToken = {
   key: string;
@@ -443,6 +444,13 @@ const AUDIENCE_META: Record<
   },
 };
 
+const TAB_ITEMS: Array<{ key: NotificationTab; label: string }> = [
+  { key: "overview", label: "개요" },
+  { key: "students", label: "학생 알림" },
+  { key: "teachers", label: "교사 알림" },
+  { key: "pending", label: "미연동 항목" },
+];
+
 const SettingsNotifications: React.FC = () => {
   const { currentUser, config: semesterConfig } = useAuth();
   const { showToast } = useAppToast();
@@ -451,6 +459,8 @@ const SettingsNotifications: React.FC = () => {
   );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState<NotificationTab>("overview");
+  const [openEventKey, setOpenEventKey] = useState<string | null>(null);
 
   useEffect(() => {
     const loadConfig = async () => {
@@ -489,6 +499,9 @@ const SettingsNotifications: React.FC = () => {
   const teacherEvents = NOTIFICATION_EVENTS.filter(
     (event) => event.audience === "teachers",
   );
+  const pendingEvents = NOTIFICATION_EVENTS.filter(
+    (event) => event.status === "needs-hook",
+  );
 
   const updateRootField = (
     field: keyof Omit<NotificationConfigState, "eventPolicies">,
@@ -519,6 +532,21 @@ const SettingsNotifications: React.FC = () => {
   const resetPolicy = (event: NotificationEventDefinition) => {
     updatePolicy(event.key, buildDefaultPolicy(event));
   };
+
+  const getPolicy = (event: NotificationEventDefinition) =>
+    config.eventPolicies[event.key] || buildDefaultPolicy(event);
+
+  const getAudienceDisabled = (event: NotificationEventDefinition) =>
+    event.audience === "students"
+      ? !config.studentNotificationsEnabled
+      : !config.teacherNotificationsEnabled;
+
+  const getEventDisabled = (event: NotificationEventDefinition) =>
+    !config.enabled || getAudienceDisabled(event);
+
+  const enabledCount = NOTIFICATION_EVENTS.filter(
+    (event) => !getEventDisabled(event) && getPolicy(event).enabled,
+  ).length;
 
   const saveConfig = async () => {
     setSaving(true);
@@ -553,92 +581,60 @@ const SettingsNotifications: React.FC = () => {
     }
   };
 
-  const renderEventRows = (events: NotificationEventDefinition[]) => (
-    <div className="divide-y divide-gray-100">
-      {events.map((event) => {
-        const policy =
-          config.eventPolicies[event.key] || buildDefaultPolicy(event);
-        const statusMeta = STATUS_META[event.status];
-        const audienceDisabled =
-          event.audience === "students"
-            ? !config.studentNotificationsEnabled
-            : !config.teacherNotificationsEnabled;
-        const disabled = !config.enabled || audienceDisabled;
+  const renderSwitch = (
+    checked: boolean,
+    disabled: boolean,
+    onChange: (checked: boolean) => void,
+    label: string,
+  ) => (
+    <label
+      className={`relative inline-flex items-center ${
+        disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"
+      }`}
+      aria-label={label}
+    >
+      <input
+        type="checkbox"
+        className="sr-only"
+        checked={checked}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      <span
+        className={`inline-flex h-6 w-11 items-center rounded-full p-0.5 transition ${
+          checked ? "bg-blue-600" : "bg-gray-300"
+        }`}
+      >
+        <span
+          className={`h-5 w-5 rounded-full bg-white shadow-sm transition ${
+            checked ? "translate-x-5" : "translate-x-0"
+          }`}
+        />
+      </span>
+    </label>
+  );
 
-        return (
-          <div key={event.key} className="p-4 lg:p-5">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h4 className="text-sm font-extrabold text-gray-900">
-                    {event.label}
-                  </h4>
-                  <span
-                    className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-bold ${statusMeta.className}`}
-                  >
-                    {statusMeta.label}
-                  </span>
-                  <span className="inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-bold text-gray-600">
-                    {event.recipientLabel}
-                  </span>
-                </div>
-                <p className="mt-1 text-sm leading-6 text-gray-600">
-                  {event.description}
-                </p>
-                <div className="mt-2 flex flex-wrap gap-2 text-xs font-bold text-gray-500">
-                  <span>알림이 보내지는 때: {event.triggerLabel}</span>
-                </div>
-              </div>
+  const renderStatusBadge = (event: NotificationEventDefinition) => {
+    const statusMeta = STATUS_META[event.status];
+    return (
+      <span
+        className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-extrabold ${statusMeta.className}`}
+      >
+        {statusMeta.label}
+      </span>
+    );
+  };
 
-              <div className="flex flex-wrap items-center gap-3">
-                <label
-                  className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-bold ${
-                    disabled
-                      ? "border-gray-200 bg-gray-50 text-gray-400"
-                      : "border-gray-200 bg-white text-gray-700"
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={policy.enabled}
-                    disabled={disabled}
-                    onChange={(eventTarget) =>
-                      updatePolicy(event.key, {
-                        enabled: eventTarget.target.checked,
-                      })
-                    }
-                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  보내기
-                </label>
-                <select
-                  value={policy.priority}
-                  disabled={disabled || !policy.enabled}
-                  onChange={(eventTarget) =>
-                    updatePolicy(event.key, {
-                      priority: eventTarget.target
-                        .value as NotificationPriority,
-                    })
-                  }
-                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
-                  aria-label={`${event.label} 중요도`}
-                >
-                  <option value="normal">일반</option>
-                  <option value="high">중요</option>
-                </select>
-                <button
-                  type="button"
-                  onClick={() => resetPolicy(event)}
-                  className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-500 transition hover:border-blue-200 hover:text-blue-600"
-                >
-                  처음 문구로
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-2">
+  const renderEventEditor = (event: NotificationEventDefinition) => {
+    const policy = getPolicy(event);
+    const disabled = getEventDisabled(event);
+    return (
+      <div className="border-t border-gray-100 bg-gray-50/80 p-4">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_260px]">
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div>
-                <label className="mb-1 block text-xs font-bold text-gray-500">
+                <label className="mb-1 block text-xs font-extrabold text-gray-500">
                   알림 제목
                 </label>
                 <input
@@ -656,60 +652,217 @@ const SettingsNotifications: React.FC = () => {
                       ),
                     })
                   }
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-bold text-gray-500">
+                <label className="mb-1 block text-xs font-extrabold text-gray-500">
                   알림을 누르면 열리는 화면
                 </label>
                 <div
                   className={`w-full rounded-lg border px-3 py-2 text-sm font-bold ${
                     disabled
-                      ? "border-gray-200 bg-gray-50 text-gray-400"
+                      ? "border-gray-200 bg-gray-100 text-gray-400"
                       : "border-gray-300 bg-white text-gray-700"
                   }`}
                 >
                   {getTargetDisplayLabel(event, policy.targetUrl)}
                 </div>
               </div>
-              <div className="xl:col-span-2">
-                <label className="mb-1 block text-xs font-bold text-gray-500">
-                  알림 내용
-                </label>
-                <textarea
-                  value={toFriendlyNotificationText(event, policy.bodyTemplate)}
-                  disabled={disabled}
-                  rows={2}
-                  onChange={(eventTarget) =>
-                    updatePolicy(event.key, {
-                      bodyTemplate: toStoredNotificationText(
-                        event,
-                        eventTarget.target.value,
-                      ),
-                    })
-                  }
-                  className="w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm leading-6 outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
-                />
-                {event.tokens && event.tokens.length > 0 && (
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
-                    <span className="font-bold">자동으로 채워지는 말</span>
-                    {event.tokens.map((token) => (
-                      <span
-                        key={token.key}
-                        className="rounded-full bg-gray-100 px-2 py-0.5 font-bold text-gray-600"
-                      >
-                        [{token.label}]
-                      </span>
-                    ))}
-                  </div>
-                )}
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-extrabold text-gray-500">
+                알림 내용
+              </label>
+              <textarea
+                value={toFriendlyNotificationText(event, policy.bodyTemplate)}
+                disabled={disabled}
+                rows={2}
+                onChange={(eventTarget) =>
+                  updatePolicy(event.key, {
+                    bodyTemplate: toStoredNotificationText(
+                      event,
+                      eventTarget.target.value,
+                    ),
+                  })
+                }
+                className="w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm leading-6 outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400"
+              />
+              {event.tokens && event.tokens.length > 0 && (
+                <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
+                  <span className="font-bold">자동으로 채워지는 말</span>
+                  {event.tokens.map((token) => (
+                    <span
+                      key={token.key}
+                      className="rounded-full bg-white px-2 py-0.5 font-bold text-gray-600 ring-1 ring-gray-200"
+                    >
+                      [{token.label}]
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="rounded-lg border border-blue-100 bg-white p-4">
+            <div className="text-xs font-extrabold text-blue-700">
+              알림 예시
+            </div>
+            <div className="mt-3 rounded-xl border border-gray-200 bg-gradient-to-br from-blue-50 to-white p-4 shadow-sm">
+              <div className="flex items-center gap-2 text-xs font-bold text-gray-500">
+                <span className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-100 text-blue-700">
+                  W
+                </span>
+                Westory
+                <span className="ml-auto">지금</span>
+              </div>
+              <div className="mt-3 text-sm font-extrabold text-gray-900">
+                {toFriendlyNotificationText(event, policy.titleTemplate)}
+              </div>
+              <div className="mt-2 text-xs leading-5 text-gray-600">
+                {toFriendlyNotificationText(event, policy.bodyTemplate)}
               </div>
             </div>
           </div>
-        );
-      })}
-    </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderEventRow = (event: NotificationEventDefinition) => {
+    const policy = getPolicy(event);
+    const disabled = getEventDisabled(event);
+    const isOpen = openEventKey === event.key;
+    return (
+      <div
+        key={event.key}
+        className={`overflow-hidden rounded-lg border bg-white transition ${
+          isOpen ? "border-blue-300 shadow-sm" : "border-gray-200"
+        }`}
+      >
+        <div className="grid grid-cols-1 gap-3 p-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+          <button
+            type="button"
+            onClick={() => setOpenEventKey(isOpen ? null : event.key)}
+            className="flex min-w-0 items-center gap-3 text-left"
+          >
+            <span
+              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
+                event.audience === "students"
+                  ? "bg-blue-50 text-blue-600"
+                  : "bg-indigo-50 text-indigo-600"
+              }`}
+            >
+              <i
+                className={
+                  event.audience === "students"
+                    ? "fas fa-user-graduate"
+                    : "fas fa-chalkboard-teacher"
+                }
+                aria-hidden="true"
+              ></i>
+            </span>
+            <span className="min-w-0">
+              <span className="flex flex-wrap items-center gap-2">
+                <span className="truncate text-sm font-extrabold text-gray-900">
+                  {event.label}
+                </span>
+                {renderStatusBadge(event)}
+                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-extrabold text-gray-600">
+                  {event.recipientLabel}
+                </span>
+              </span>
+              <span className="mt-1 block truncate text-xs font-bold text-gray-500">
+                {event.triggerLabel}
+              </span>
+            </span>
+            <i
+              className={`fas fa-chevron-down ml-auto text-xs text-gray-400 transition lg:hidden ${
+                isOpen ? "rotate-180" : ""
+              }`}
+              aria-hidden="true"
+            ></i>
+          </button>
+
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <label className="inline-flex items-center gap-2 text-sm font-extrabold text-gray-700">
+              {renderSwitch(
+                policy.enabled,
+                disabled,
+                (checked) => updatePolicy(event.key, { enabled: checked }),
+                `${event.label} 보내기`,
+              )}
+              보내기
+            </label>
+            <select
+              value={policy.priority}
+              disabled={disabled || !policy.enabled}
+              onChange={(eventTarget) =>
+                updatePolicy(event.key, {
+                  priority: eventTarget.target.value as NotificationPriority,
+                })
+              }
+              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
+              aria-label={`${event.label} 중요도`}
+            >
+              <option value="normal">일반</option>
+              <option value="high">중요</option>
+            </select>
+            <button
+              type="button"
+              onClick={() => resetPolicy(event)}
+              className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-extrabold text-gray-500 transition hover:border-blue-200 hover:text-blue-600"
+            >
+              기본값
+            </button>
+            <button
+              type="button"
+              onClick={() => setOpenEventKey(isOpen ? null : event.key)}
+              className="hidden h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-blue-600 lg:inline-flex"
+              aria-label={`${event.label} 상세 설정`}
+            >
+              <i
+                className={`fas fa-chevron-down text-xs transition ${
+                  isOpen ? "rotate-180" : ""
+                }`}
+                aria-hidden="true"
+              ></i>
+            </button>
+          </div>
+        </div>
+        {isOpen && renderEventEditor(event)}
+      </div>
+    );
+  };
+
+  const renderEventGroup = (
+    title: string,
+    description: string,
+    icon: string,
+    events: NotificationEventDefinition[],
+    action?: React.ReactNode,
+  ) => (
+    <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="mb-4 flex items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+          <i className={icon} aria-hidden="true"></i>
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h4 className="text-base font-extrabold text-gray-900">{title}</h4>
+            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-extrabold text-emerald-700">
+              {events.filter((event) => event.status === "connected").length}개
+            </span>
+          </div>
+          <p className="mt-1 text-sm text-gray-500">{description}</p>
+        </div>
+      </div>
+      <div className="space-y-2">{events.map(renderEventRow)}</div>
+      {action && <div className="mt-3">{action}</div>}
+    </section>
+  );
+
+  const renderAllEvents = (events: NotificationEventDefinition[]) => (
+    <div className="space-y-2">{events.map(renderEventRow)}</div>
   );
 
   if (loading)
@@ -718,152 +871,219 @@ const SettingsNotifications: React.FC = () => {
     );
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-        <div className="border-b border-gray-100 pb-4">
-          <h3 className="text-lg font-bold text-gray-900">
-            <i
-              className="fas fa-bell text-blue-500 mr-2"
-              aria-hidden="true"
-            ></i>
-            알림 관리
-          </h3>
-          <p className="mt-1 text-sm text-gray-500">
-            교사와 학생에게 어떤 안내를 보낼지 현재 운영 흐름에 맞게 관리합니다.
-          </p>
+    <div className="space-y-5">
+      <div className="rounded-xl border border-gray-200 bg-white px-5 pt-4 shadow-sm">
+        <div className="flex gap-6 overflow-x-auto border-b border-gray-100">
+          {TAB_ITEMS.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => setActiveTab(item.key)}
+              className={`whitespace-nowrap border-b-2 px-1 pb-3 text-sm font-extrabold transition ${
+                activeTab === item.key
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-900"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
         </div>
 
-        <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
-          <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
-            <div className="text-xs font-bold text-blue-700">
-              현재 운영 학기
-            </div>
-            <div className="mt-1 text-lg font-extrabold text-blue-900">
-              {semesterConfig?.year || "2026"}학년도{" "}
-              {semesterConfig?.semester || "1"}학기
-            </div>
-          </div>
-          <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-4">
-            <div className="text-xs font-bold text-emerald-700">
-              바로 발송되는 알림
-            </div>
-            <div className="mt-1 text-lg font-extrabold text-emerald-900">
-              {connectedCount}개
-            </div>
-          </div>
-          <div className="rounded-lg border border-amber-100 bg-amber-50 p-4">
-            <div className="text-xs font-bold text-amber-700">
-              앞으로 연결할 알림
-            </div>
-            <div className="mt-1 text-lg font-extrabold text-amber-900">
-              {preparedCount}개
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="py-6">
           <div>
-            <h4 className="text-base font-extrabold text-gray-900">
-              전체 발송 범위
-            </h4>
-            <p className="mt-1 text-sm text-gray-500">
-              전체 알림을 끄면 학생과 교사에게 보내는 알림이 모두 멈춥니다.
+            <h3 className="flex items-center text-2xl font-extrabold text-gray-900">
+              <span className="mr-3 flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                <i className="fas fa-bell" aria-hidden="true"></i>
+              </span>
+              알림 관리
+            </h3>
+            <p className="mt-2 text-sm text-gray-500">
+              학생과 교사에게 전달되는 알림을 상황별로 관리합니다.
             </p>
           </div>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-            <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
-              <span className="text-sm font-bold text-gray-700">전체 알림</span>
-              <input
-                type="checkbox"
-                checked={config.enabled}
-                onChange={(event) =>
-                  updateRootField("enabled", event.target.checked)
-                }
-                className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-              />
-            </label>
-            <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
-              <span className="text-sm font-bold text-gray-700">학생 알림</span>
-              <input
-                type="checkbox"
-                checked={config.studentNotificationsEnabled}
-                disabled={!config.enabled}
-                onChange={(event) =>
-                  updateRootField(
-                    "studentNotificationsEnabled",
-                    event.target.checked,
-                  )
-                }
-                className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
-              />
-            </label>
-            <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
-              <span className="text-sm font-bold text-gray-700">교사 알림</span>
-              <input
-                type="checkbox"
-                checked={config.teacherNotificationsEnabled}
-                disabled={!config.enabled}
-                onChange={(event) =>
-                  updateRootField(
-                    "teacherNotificationsEnabled",
-                    event.target.checked,
-                  )
-                }
-                className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
-              />
-            </label>
+
+          <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
+              <div className="text-xs font-extrabold text-blue-700">
+                현재 운영 학기
+              </div>
+              <div className="mt-2 text-2xl font-extrabold text-blue-900">
+                {semesterConfig?.year || "2026"}학년도{" "}
+                {semesterConfig?.semester || "1"}학기
+              </div>
+            </div>
+            <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-4">
+              <div className="text-xs font-extrabold text-emerald-700">
+                바로 발송되는 알림
+              </div>
+              <div className="mt-2 text-2xl font-extrabold text-emerald-900">
+                {connectedCount}개
+              </div>
+            </div>
+            <div className="rounded-lg border border-amber-100 bg-amber-50 p-4">
+              <div className="text-xs font-extrabold text-amber-700">
+                앞으로 연결할 알림
+              </div>
+              <div className="mt-2 text-2xl font-extrabold text-amber-900">
+                {preparedCount}개
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {[
-        { audience: "students" as const, events: studentEvents },
-        { audience: "teachers" as const, events: teacherEvents },
-      ].map(({ audience, events }) => {
-        const meta = AUDIENCE_META[audience];
-        return (
-          <section
-            key={audience}
-            className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm"
-          >
-            <div className="border-b border-gray-100 p-5">
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-                  <i className={meta.icon} aria-hidden="true"></i>
-                </div>
+      <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div>
+            <h4 className="text-base font-extrabold text-gray-900">
+              알림 설정
+            </h4>
+            <p className="mt-1 text-sm text-gray-500">
+              전체 및 대상별 알림 사용 여부를 설정합니다.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:min-w-[660px]">
+            {[
+              {
+                title: "전체 알림",
+                subtitle: "모든 알림 사용",
+                checked: config.enabled,
+                disabled: false,
+                onChange: (checked: boolean) =>
+                  updateRootField("enabled", checked),
+              },
+              {
+                title: "학생 알림",
+                subtitle: "학생 대상 알림 사용",
+                checked: config.studentNotificationsEnabled,
+                disabled: !config.enabled,
+                onChange: (checked: boolean) =>
+                  updateRootField("studentNotificationsEnabled", checked),
+              },
+              {
+                title: "교사 알림",
+                subtitle: "교사 대상 알림 사용",
+                checked: config.teacherNotificationsEnabled,
+                disabled: !config.enabled,
+                onChange: (checked: boolean) =>
+                  updateRootField("teacherNotificationsEnabled", checked),
+              },
+            ].map((item) => (
+              <div
+                key={item.title}
+                className="flex items-center justify-between gap-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"
+              >
                 <div>
-                  <h4 className="text-base font-extrabold text-gray-900">
-                    {meta.title}
-                  </h4>
-                  <p className="mt-1 text-sm text-gray-500">
-                    {meta.description}
-                  </p>
+                  <div className="text-sm font-extrabold text-gray-900">
+                    {item.title}
+                  </div>
+                  <div className="mt-0.5 text-xs font-bold text-gray-500">
+                    {item.subtitle}
+                  </div>
                 </div>
+                {renderSwitch(
+                  item.checked,
+                  item.disabled,
+                  item.onChange,
+                  item.title,
+                )}
               </div>
-            </div>
-            {renderEventRows(events)}
-          </section>
-        );
-      })}
-
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold leading-6 text-amber-900">
-        <i className="fas fa-exclamation-triangle mr-2" aria-hidden="true"></i>
-        준비 중인 알림은 문구와 발송 여부를 미리 정해 둘 수 있습니다. 실제
-        발송은 해당 활동의 자동 알림 연결이 완료된 뒤 적용됩니다.
+            ))}
+          </div>
+        </div>
       </div>
 
-      <div className="pb-8 text-right">
+      {activeTab === "overview" && (
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+          {renderEventGroup(
+            AUDIENCE_META.students.title,
+            "학생 화면에 표시되는 주요 알림입니다.",
+            AUDIENCE_META.students.icon,
+            studentEvents.slice(0, 4),
+            <button
+              type="button"
+              onClick={() => setActiveTab("students")}
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm font-extrabold text-blue-600 transition hover:border-blue-200 hover:bg-blue-50"
+            >
+              전체 학생 알림 보기
+              <i className="fas fa-chevron-right text-xs" aria-hidden="true" />
+            </button>,
+          )}
+          {renderEventGroup(
+            AUDIENCE_META.teachers.title,
+            "교사 화면에 표시되는 주요 알림입니다.",
+            AUDIENCE_META.teachers.icon,
+            teacherEvents.slice(0, 4),
+            <button
+              type="button"
+              onClick={() => setActiveTab("teachers")}
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm font-extrabold text-blue-600 transition hover:border-blue-200 hover:bg-blue-50"
+            >
+              전체 교사 알림 보기
+              <i className="fas fa-chevron-right text-xs" aria-hidden="true" />
+            </button>,
+          )}
+        </div>
+      )}
+
+      {activeTab !== "overview" && (
+        <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h4 className="text-base font-extrabold text-gray-900">
+                {activeTab === "students" && "학생 알림"}
+                {activeTab === "teachers" && "교사 알림"}
+                {activeTab === "pending" && "미연동 항목"}
+              </h4>
+              <p className="mt-1 text-sm text-gray-500">
+                {activeTab === "students" &&
+                  "학생에게 전달되는 알림을 한 번에 관리합니다."}
+                {activeTab === "teachers" &&
+                  "교사와 담당자에게 전달되는 알림을 한 번에 관리합니다."}
+                {activeTab === "pending" &&
+                  "자동 발송 연결을 앞두고 미리 정해 둘 알림입니다."}
+              </p>
+            </div>
+            <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-extrabold text-blue-700">
+              {activeTab === "students" && `${studentEvents.length}개`}
+              {activeTab === "teachers" && `${teacherEvents.length}개`}
+              {activeTab === "pending" && `${pendingEvents.length}개`}
+            </span>
+          </div>
+          {renderAllEvents(
+            activeTab === "students"
+              ? studentEvents
+              : activeTab === "teachers"
+                ? teacherEvents
+                : pendingEvents,
+          )}
+        </section>
+      )}
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_auto] xl:items-center">
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold leading-6 text-amber-900">
+          <i
+            className="fas fa-exclamation-triangle mr-2"
+            aria-hidden="true"
+          ></i>
+          준비 중인 알림은 문구와 발송 여부를 미리 정해 둘 수 있습니다. 실제
+          발송은 해당 활동의 자동 알림 연결이 완료된 뒤 적용됩니다.
+        </div>
+
         <button
           type="button"
           onClick={() => void saveConfig()}
           disabled={saving}
-          className="rounded-xl bg-blue-600 px-8 py-3 font-bold text-white shadow-lg transition hover:bg-blue-700 disabled:bg-blue-300"
+          className="inline-flex min-h-[56px] items-center justify-center rounded-xl bg-blue-600 px-8 font-extrabold text-white shadow-lg transition hover:bg-blue-700 disabled:bg-blue-300 xl:min-w-[220px]"
         >
           <i className="fas fa-save mr-2" aria-hidden="true"></i>
           {saving ? "저장 중..." : "알림 설정 저장"}
         </button>
+      </div>
+
+      <div className="sr-only" aria-live="polite">
+        현재 사용 중인 알림 {enabledCount}개
       </div>
     </div>
   );
