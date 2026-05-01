@@ -739,18 +739,17 @@ const SettingsNotifications: React.FC = () => {
           isOpen ? "border-blue-300 shadow-sm" : "border-gray-200"
         }`}
       >
-        <div className="grid grid-cols-1 gap-3 p-3 2xl:grid-cols-[minmax(0,1fr)_auto] 2xl:items-center">
-          <button
-            type="button"
-            onClick={() => setOpenEventKey(isOpen ? null : event.key)}
-            className="flex min-w-0 items-center gap-3 text-left"
-          >
-            <span
-              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
+        <div className="p-3">
+          <div className="flex items-start gap-3">
+            <button
+              type="button"
+              onClick={() => setOpenEventKey(isOpen ? null : event.key)}
+              className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
                 event.audience === "students"
                   ? "bg-blue-50 text-blue-600"
                   : "bg-indigo-50 text-indigo-600"
               }`}
+              aria-label={`${event.label} 상세 설정`}
             >
               <i
                 className={
@@ -760,73 +759,75 @@ const SettingsNotifications: React.FC = () => {
                 }
                 aria-hidden="true"
               ></i>
-            </span>
-            <span className="min-w-0">
-              <span className="flex flex-wrap items-center gap-2">
-                <span className="min-w-[8rem] truncate text-sm font-extrabold text-gray-900">
+            </button>
+
+            <div className="min-w-0 flex-1">
+              <button
+                type="button"
+                onClick={() => setOpenEventKey(isOpen ? null : event.key)}
+                className="block w-full min-w-0 text-left"
+              >
+                <span className="block truncate text-sm font-extrabold text-gray-900">
                   {event.label}
                 </span>
-                {renderStatusBadge(event)}
-                <span className="shrink-0 whitespace-nowrap rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-extrabold text-gray-600">
-                  {event.recipientLabel}
+                <span className="mt-2 flex flex-wrap gap-1.5">
+                  {renderStatusBadge(event)}
+                  <span className="shrink-0 whitespace-nowrap rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-extrabold text-gray-600">
+                    {event.recipientLabel}
+                  </span>
                 </span>
-              </span>
-              <span className="mt-1 block truncate text-xs font-bold text-gray-500">
-                {event.triggerLabel}
-              </span>
-            </span>
-            <i
-              className={`fas fa-chevron-down ml-auto text-xs text-gray-400 transition lg:hidden ${
-                isOpen ? "rotate-180" : ""
-              }`}
-              aria-hidden="true"
-            ></i>
-          </button>
+                <span className="mt-2 block truncate text-xs font-bold text-gray-500">
+                  {event.triggerLabel}
+                </span>
+              </button>
 
-          <div className="flex flex-wrap items-center justify-start gap-3 2xl:justify-end">
-            <label className="inline-flex items-center gap-2 text-sm font-extrabold text-gray-700">
-              {renderSwitch(
-                policy.enabled,
-                disabled,
-                (checked) => updatePolicy(event.key, { enabled: checked }),
-                `${event.label} 보내기`,
-              )}
-              보내기
-            </label>
-            <select
-              value={policy.priority}
-              disabled={disabled || !policy.enabled}
-              onChange={(eventTarget) =>
-                updatePolicy(event.key, {
-                  priority: eventTarget.target.value as NotificationPriority,
-                })
-              }
-              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
-              aria-label={`${event.label} 중요도`}
-            >
-              <option value="normal">일반</option>
-              <option value="high">중요</option>
-            </select>
-            <button
-              type="button"
-              onClick={() => resetPolicy(event)}
-              className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-extrabold text-gray-500 transition hover:border-blue-200 hover:text-blue-600"
-            >
-              기본값
-            </button>
-            <button
-              type="button"
-              onClick={() => setOpenEventKey(isOpen ? null : event.key)}
-              className="hidden h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-blue-600 lg:inline-flex"
-              aria-label={`${event.label} 상세 설정`}
-            >
-              <i
-                className={`fas fa-chevron-down text-xs transition ${
-                  isOpen ? "rotate-180" : ""
-                }`}
-                aria-hidden="true"
-              ></i>
-            </button>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <label className="inline-flex items-center gap-2 whitespace-nowrap text-sm font-extrabold text-gray-700">
+                  {renderSwitch(
+                    policy.enabled,
+                    disabled,
+                    (checked) => updatePolicy(event.key, { enabled: checked }),
+                    `${event.label} 보내기`,
+                  )}
+                  보내기
+                </label>
+                <select
+                  value={policy.priority}
+                  disabled={disabled || !policy.enabled}
+                  onChange={(eventTarget) =>
+                    updatePolicy(event.key, {
+                      priority: eventTarget.target
+                        .value as NotificationPriority,
+                    })
+                  }
+                  className="min-w-[84px] rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
+                  aria-label={`${event.label} 중요도`}
+                >
+                  <option value="normal">일반</option>
+                  <option value="high">중요</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => resetPolicy(event)}
+                  className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-extrabold text-gray-500 transition hover:border-blue-200 hover:text-blue-600"
+                >
+                  기본값
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOpenEventKey(isOpen ? null : event.key)}
+                  className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-blue-600"
+                  aria-label={`${event.label} 상세 설정`}
+                >
+                  <i
+                    className={`fas fa-chevron-down text-xs transition ${
+                      isOpen ? "rotate-180" : ""
+                    }`}
+                    aria-hidden="true"
+                  ></i>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
         {isOpen && renderEventEditor(event)}
@@ -891,16 +892,27 @@ const SettingsNotifications: React.FC = () => {
         </div>
 
         <div className="py-6">
-          <div>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <h3 className="flex items-center text-2xl font-extrabold text-gray-900">
               <span className="mr-3 flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
                 <i className="fas fa-bell" aria-hidden="true"></i>
               </span>
-              알림 관리
+              <span>
+                알림 관리
+                <span className="mt-2 block text-sm font-medium text-gray-500">
+                  학생과 교사에게 전달되는 알림을 상황별로 관리합니다.
+                </span>
+              </span>
             </h3>
-            <p className="mt-2 text-sm text-gray-500">
-              학생과 교사에게 전달되는 알림을 상황별로 관리합니다.
-            </p>
+            <button
+              type="button"
+              onClick={() => void saveConfig()}
+              disabled={saving}
+              className="inline-flex min-h-[48px] items-center justify-center rounded-xl bg-blue-600 px-6 font-extrabold text-white shadow-lg transition hover:bg-blue-700 disabled:bg-blue-300"
+            >
+              <i className="fas fa-save mr-2" aria-hidden="true"></i>
+              {saving ? "저장 중..." : "알림 설정 저장"}
+            </button>
           </div>
 
           <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -1061,7 +1073,7 @@ const SettingsNotifications: React.FC = () => {
         </section>
       )}
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_auto] xl:items-center">
+      <div>
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold leading-6 text-amber-900">
           <i
             className="fas fa-exclamation-triangle mr-2"
@@ -1070,16 +1082,6 @@ const SettingsNotifications: React.FC = () => {
           준비 중인 알림은 문구와 발송 여부를 미리 정해 둘 수 있습니다. 실제
           발송은 해당 활동의 자동 알림 연결이 완료된 뒤 적용됩니다.
         </div>
-
-        <button
-          type="button"
-          onClick={() => void saveConfig()}
-          disabled={saving}
-          className="inline-flex min-h-[56px] items-center justify-center rounded-xl bg-blue-600 px-8 font-extrabold text-white shadow-lg transition hover:bg-blue-700 disabled:bg-blue-300 xl:min-w-[220px]"
-        >
-          <i className="fas fa-save mr-2" aria-hidden="true"></i>
-          {saving ? "저장 중..." : "알림 설정 저장"}
-        </button>
       </div>
 
       <div className="sr-only" aria-live="polite">
