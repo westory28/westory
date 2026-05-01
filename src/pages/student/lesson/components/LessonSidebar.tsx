@@ -132,7 +132,7 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
                 <div className="ml-4 mt-1 border-l-2 border-gray-100 pl-4">
                   {(big.children || []).map((mid, midIdx) => (
                     <div key={midIdx} className="mb-2">
-                      <div className="flex items-start px-2 py-1 text-xs font-bold text-gray-500">
+                      <div className="flex items-start px-2 py-1 text-sm font-bold text-gray-700">
                         <i className="fas fa-folder mr-2 mt-0.5 shrink-0 text-yellow-500"></i>
                         <span className="min-w-0 whitespace-normal break-words leading-5">
                           {mid.title}
