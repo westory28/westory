@@ -1,5 +1,6 @@
 import {
   collection,
+  collectionGroup,
   getDocs,
   limit,
   onSnapshot,
@@ -33,6 +34,72 @@ const mapDoc = <T extends { id: string }>(docSnap: {
   id: string;
   data: () => Record<string, unknown>;
 }) => ({ id: docSnap.id, ...docSnap.data() }) as T;
+
+const getTimestampMs = (value: unknown) => {
+  if (!value) return 0;
+  if (typeof (value as { toMillis?: () => number }).toMillis === "function") {
+    return (value as { toMillis: () => number }).toMillis();
+  }
+  if (typeof (value as { toDate?: () => Date }).toDate === "function") {
+    return (value as { toDate: () => Date }).toDate().getTime();
+  }
+  return Number((value as { seconds?: number }).seconds || 0) * 1000;
+};
+
+const mapStudentWordRequestDoc = (docSnap: {
+  id: string;
+  ref: { parent: { parent: { id: string } | null } };
+  data: () => Record<string, unknown>;
+}): HistoryDictionaryRequest => {
+  const data = docSnap.data();
+  const uid = String(data.uid || docSnap.ref.parent.parent?.id || "");
+  const normalizedWord = normalizeHistoryDictionaryWord(
+    String(data.normalizedWord || data.word || ""),
+  );
+  return {
+    id: String(data.requestId || docSnap.id),
+    word: String(data.word || ""),
+    normalizedWord,
+    uid,
+    studentName: String(data.studentName || data.name || "학생"),
+    grade: String(data.grade || ""),
+    class: String(data.class || ""),
+    number: String(data.number || ""),
+    memo: String(data.memo || ""),
+    status: "requested",
+    matchedTermId: String(data.termId || ""),
+    resolvedTermId: "",
+    resolvedBy: "",
+    createdAt: data.createdAt || data.updatedAt || null,
+    updatedAt: data.updatedAt || data.createdAt || null,
+    resolvedAt: null,
+  };
+};
+
+const mergeHistoryDictionaryRequests = (
+  rootRequests: HistoryDictionaryRequest[],
+  studentWordRequests: HistoryDictionaryRequest[],
+) => {
+  const byKey = new Map<string, HistoryDictionaryRequest>();
+
+  rootRequests.forEach((request) => {
+    const key = request.id || `${request.uid}:${request.normalizedWord}`;
+    byKey.set(key, request);
+  });
+
+  studentWordRequests.forEach((request) => {
+    const key = request.id || `${request.uid}:${request.normalizedWord}`;
+    if (!byKey.has(key)) {
+      byKey.set(key, request);
+    }
+  });
+
+  return Array.from(byKey.values()).sort(
+    (a, b) =>
+      getTimestampMs(b.updatedAt || b.createdAt) -
+      getTimestampMs(a.updatedAt || a.createdAt),
+  );
+};
 
 export const loadPublishedHistoryDictionaryTerm = async (word: string) => {
   const normalizedWord = normalizeHistoryDictionaryWord(word);
@@ -70,19 +137,60 @@ export const subscribeStudentHistoryDictionaryWords = (
 
 export const subscribeTeacherHistoryDictionaryRequests = (
   onChange: (requests: HistoryDictionaryRequest[]) => void,
-): Unsubscribe =>
-  onSnapshot(
+): Unsubscribe => {
+  let rootRequests: HistoryDictionaryRequest[] = [];
+  let studentWordRequests: HistoryDictionaryRequest[] = [];
+
+  const emit = () => {
+    onChange(mergeHistoryDictionaryRequests(rootRequests, studentWordRequests));
+  };
+
+  const unsubscribeRootRequests = onSnapshot(
     query(
       collection(db, REQUESTS_COLLECTION),
       orderBy("updatedAt", "desc"),
       limit(100),
     ),
     (snapshot) => {
-      onChange(
-        snapshot.docs.map((item) => mapDoc<HistoryDictionaryRequest>(item)),
+      rootRequests = snapshot.docs.map((item) =>
+        mapDoc<HistoryDictionaryRequest>(item),
       );
+      emit();
+    },
+    (error) => {
+      console.error("Failed to subscribe history dictionary requests:", error);
+      rootRequests = [];
+      emit();
     },
   );
+
+  const unsubscribeStudentWordRequests = onSnapshot(
+    query(
+      collectionGroup(db, "history_dictionary_words"),
+      where("status", "==", "requested"),
+      limit(100),
+    ),
+    (snapshot) => {
+      studentWordRequests = snapshot.docs.map((item) =>
+        mapStudentWordRequestDoc(item),
+      );
+      emit();
+    },
+    (error) => {
+      console.error(
+        "Failed to subscribe student history dictionary word requests:",
+        error,
+      );
+      studentWordRequests = [];
+      emit();
+    },
+  );
+
+  return () => {
+    unsubscribeRootRequests();
+    unsubscribeStudentWordRequests();
+  };
+};
 
 export const subscribeTeacherHistoryDictionaryTerms = (
   onChange: (terms: HistoryDictionaryTerm[]) => void,
@@ -156,7 +264,10 @@ export const deleteStudentHistoryDictionaryWord = async (
   termId: string,
 ) => {
   const { year, semester } = getYearSemester(config);
-  const callable = httpsCallable(functions, "deleteStudentHistoryDictionaryWord");
+  const callable = httpsCallable(
+    functions,
+    "deleteStudentHistoryDictionaryWord",
+  );
   const result = await callable({
     year,
     semester,

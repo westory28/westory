@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import {
   clearNotifications,
@@ -51,7 +52,22 @@ const getNotificationBodyText = (notification: WestoryNotification) => {
   return body;
 };
 
+const getNotificationTargetUrl = (notification: WestoryNotification) => {
+  const targetUrl = String(notification.targetUrl || "").trim();
+  if (notification.type === "history_dictionary_requested") {
+    const requestId = String(notification.entityId || "").trim();
+    const requestsUrl =
+      !targetUrl || targetUrl === "/teacher/lesson/history-dictionary"
+        ? "/teacher/lesson/history-dictionary?panel=requests"
+        : targetUrl;
+    if (!requestId || requestsUrl.includes("requestId=")) return requestsUrl;
+    return `${requestsUrl}${requestsUrl.includes("?") ? "&" : "?"}requestId=${encodeURIComponent(requestId)}`;
+  }
+  return targetUrl;
+};
+
 const NotificationBell: React.FC = () => {
+  const navigate = useNavigate();
   const { currentUser, config, userData } = useAuth();
   const { showToast } = useAppToast();
   const [open, setOpen] = useState(false);
@@ -156,7 +172,6 @@ const NotificationBell: React.FC = () => {
       await clearNotifications(config);
       setNotifications([]);
       setUnreadCount(0);
-      setExpandedId(null);
     } catch (error) {
       console.error("Failed to clear notifications:", error);
       showToast({
@@ -226,6 +241,40 @@ const NotificationBell: React.FC = () => {
             {notifications.map((notification) => {
               const unread = !notification.readAt;
               const bodyText = getNotificationBodyText(notification);
+              const targetUrl = getNotificationTargetUrl(notification);
+              const rowClassName = `flex w-full items-start gap-3 px-4 py-3 text-left ${
+                targetUrl
+                  ? "transition hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
+                  : ""
+              }`;
+              const rowContent = (
+                <>
+                  <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-stone-100 text-stone-500">
+                    <i
+                      className={`${getNotificationIconClassName(notification.type)} text-xs`}
+                      aria-hidden="true"
+                    ></i>
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-2">
+                      <span className="truncate text-sm font-extrabold text-stone-900">
+                        {notification.title}
+                      </span>
+                      {unread && (
+                        <span className="h-2 w-2 shrink-0 rounded-full bg-blue-500"></span>
+                      )}
+                    </span>
+                    {bodyText && (
+                      <span className="mt-1 block truncate text-xs font-medium leading-5 text-stone-600">
+                        {bodyText}
+                      </span>
+                    )}
+                    <span className="mt-1 block text-[11px] font-bold text-stone-400">
+                      {formatNotificationTime(notification.createdAt)}
+                    </span>
+                  </span>
+                </>
+              );
               return (
                 <div
                   key={notification.id}
@@ -233,32 +282,21 @@ const NotificationBell: React.FC = () => {
                     unread ? "bg-blue-50/60" : "bg-white"
                   }`}
                 >
-                  <div className="flex w-full items-start gap-3 px-4 py-3 text-left">
-                    <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-stone-100 text-stone-500">
-                      <i
-                        className={`${getNotificationIconClassName(notification.type)} text-xs`}
-                        aria-hidden="true"
-                      ></i>
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-center gap-2">
-                        <span className="truncate text-sm font-extrabold text-stone-900">
-                          {notification.title}
-                        </span>
-                        {unread && (
-                          <span className="h-2 w-2 shrink-0 rounded-full bg-blue-500"></span>
-                        )}
-                      </span>
-                      {bodyText && (
-                        <span className="mt-1 block truncate text-xs font-medium leading-5 text-stone-600">
-                          {bodyText}
-                        </span>
-                      )}
-                      <span className="mt-1 block text-[11px] font-bold text-stone-400">
-                        {formatNotificationTime(notification.createdAt)}
-                      </span>
-                    </span>
-                  </div>
+                  {targetUrl ? (
+                    <button
+                      type="button"
+                      className={rowClassName}
+                      onClick={() => {
+                        setOpen(false);
+                        navigate(targetUrl);
+                      }}
+                      data-session-action="true"
+                    >
+                      {rowContent}
+                    </button>
+                  ) : (
+                    <div className={rowClassName}>{rowContent}</div>
+                  )}
                 </div>
               );
             })}

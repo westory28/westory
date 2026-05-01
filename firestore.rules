@@ -514,6 +514,17 @@ service cloud.firestore {
       }
     }
 
+    match /{path=**}/history_dictionary_words/{wordId} {
+      allow read: if canUseWestory()
+        && (
+          isAdmin()
+          || isTeacherRole()
+          || hasPermission('lesson_read')
+          || resource.data.uid == request.auth.uid
+        );
+      allow create, update, delete: if false;
+    }
+
     match /site_settings/{docId} {
       allow read: if docId in ['terms', 'privacy', 'school_config', 'interface_config'] || canUseWestory();
       allow write: if isAdmin();
