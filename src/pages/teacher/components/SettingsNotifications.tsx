@@ -630,7 +630,7 @@ const SettingsNotifications: React.FC = () => {
     const disabled = getEventDisabled(event);
     return (
       <div className="border-t border-gray-100 bg-gray-50/80 p-4">
-        <div className="grid grid-cols-1 gap-3 2xl:grid-cols-[minmax(320px,1fr)_300px]">
+        <div className="grid grid-cols-1 gap-3">
           <div className="space-y-3">
             <div className="grid grid-cols-1 gap-3">
               <div>
@@ -703,11 +703,11 @@ const SettingsNotifications: React.FC = () => {
               )}
             </div>
           </div>
-          <div className="rounded-lg border border-blue-100 bg-white p-4">
+          <div className="min-w-0 rounded-lg border border-blue-100 bg-white p-4">
             <div className="text-xs font-extrabold text-blue-700">
               알림 예시
             </div>
-            <div className="mt-3 rounded-xl border border-gray-200 bg-gradient-to-br from-blue-50 to-white p-4 shadow-sm">
+            <div className="mt-3 max-w-full rounded-xl border border-gray-200 bg-gradient-to-br from-blue-50 to-white p-4 shadow-sm">
               <div className="flex items-center gap-2 text-xs font-bold text-gray-500">
                 <span className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-100 text-blue-700">
                   W
