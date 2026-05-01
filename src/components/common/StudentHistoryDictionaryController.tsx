@@ -20,12 +20,9 @@ const getFloatingOffsetClassName = (pathname: string) => {
     return "hidden";
   }
   if (pathname.startsWith("/student/lesson/note")) {
-    return "bottom-[calc(env(safe-area-inset-bottom,0px)+9.75rem)] right-[calc(env(safe-area-inset-right,0px)+1rem)]";
+    return "bottom-[calc(env(safe-area-inset-bottom,0px)+11.75rem)] right-[calc(env(safe-area-inset-right,0px)+1rem)] sm:bottom-[calc(env(safe-area-inset-bottom,0px)+12.25rem)] sm:right-[calc(env(safe-area-inset-right,0px)+1.5rem)]";
   }
-  if (pathname.startsWith("/student/score")) {
-    return "bottom-[calc(env(safe-area-inset-bottom,0px)+5.5rem)] right-[calc(env(safe-area-inset-right,0px)+1rem)]";
-  }
-  return "bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] right-[calc(env(safe-area-inset-right,0px)+1rem)]";
+  return "bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] right-[calc(env(safe-area-inset-right,0px)+1rem)] sm:bottom-[calc(env(safe-area-inset-bottom,0px)+1.5rem)] sm:right-[calc(env(safe-area-inset-right,0px)+1.5rem)]";
 };
 
 const formatStatusLabel = (status: StudentHistoryDictionaryWord["status"]) =>
@@ -210,7 +207,7 @@ const StudentHistoryDictionaryController: React.FC = () => {
         ref={buttonRef}
         type="button"
         onClick={() => setOpen(true)}
-        className={`fixed z-[80] inline-flex h-14 w-14 items-center justify-center rounded-full border border-blue-100 bg-white text-blue-700 shadow-[0_18px_42px_rgba(37,99,235,0.22)] transition hover:-translate-y-0.5 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 ${getFloatingOffsetClassName(location.pathname)}`}
+        className={`fixed z-[80] inline-flex h-14 w-14 items-center justify-center rounded-full border border-blue-100 bg-white text-blue-700 shadow-[0_18px_42px_rgba(37,99,235,0.22)] transition-colors hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 ${getFloatingOffsetClassName(location.pathname)}`}
         aria-label="역사 사전 열기"
         title="역사 사전"
       >
