@@ -4,6 +4,11 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import listPlugin from "@fullcalendar/list";
 import { getScheduleCategoryMeta } from "../../../lib/scheduleCategories";
+import {
+  compareCalendarSchedule,
+  compareSchedulePeriod,
+  getSchedulePeriodOrder,
+} from "../../../lib/schedulePeriods";
 import type { ScheduleCategory } from "../../../lib/scheduleCategories";
 import type { CalendarEvent } from "../../../types";
 
@@ -232,7 +237,12 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
           ? ["student-calendar-range-event"]
           : ["student-calendar-single-event"]),
       ],
-      extendedProps: { ...event, inclusiveSpanDays, isMultiDayRange },
+      extendedProps: {
+        ...event,
+        inclusiveSpanDays,
+        isMultiDayRange,
+        periodOrder: getSchedulePeriodOrder(event.startPeriod ?? event.period),
+      },
     };
   });
 
@@ -285,12 +295,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
         const dateKey = String(event.start).split("T")[0];
         return dateKey >= visibleRange.start && dateKey < visibleRange.end;
       })
-      .sort((left, right) => {
-        const leftDate = String(left.start).split("T")[0];
-        const rightDate = String(right.start).split("T")[0];
-        if (leftDate !== rightDate) return leftDate.localeCompare(rightDate);
-        return left.title.localeCompare(right.title);
-      });
+      .sort(compareCalendarSchedule);
 
     const grouped = new Map<string, CalendarEvent[]>();
     filtered.forEach((event) => {
@@ -487,6 +492,12 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
           displayEventTime={false}
           headerToolbar={false}
           events={fcEvents}
+          eventOrder={(left, right) =>
+            compareSchedulePeriod(
+              left.extendedProps as CalendarEvent,
+              right.extendedProps as CalendarEvent,
+            )
+          }
           datesSet={(arg) => {
             setCurrentViewType(arg.view.type as CalendarViewType);
             setCurrentTitle(arg.view.title);

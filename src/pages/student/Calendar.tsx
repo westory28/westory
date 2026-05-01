@@ -10,6 +10,11 @@ import {
   getKoreanPublicHolidays,
   mergeEventsWithKoreanPublicHolidays,
 } from "../../lib/koreanPublicHolidays";
+import {
+  compareSchedulePeriod,
+  getSchedulePeriodLabel,
+  getSchedulePeriodOrder,
+} from "../../lib/schedulePeriods";
 import { loadVisibleCalendarEvents } from "../../lib/visibleSchedule";
 
 interface CalendarEvent {
@@ -17,6 +22,9 @@ interface CalendarEvent {
   title: string;
   start: string; // ISO string YYYY-MM-DD
   end?: string;
+  startPeriod?: string;
+  endPeriod?: string;
+  period?: string;
   eventType:
     | "exam"
     | "performance"
@@ -192,6 +200,9 @@ const Calendar = () => {
               ...event,
               inclusiveSpanDays,
               isMultiDayRange,
+              periodOrder: getSchedulePeriodOrder(
+                event.startPeriod ?? event.period,
+              ),
             },
           };
         });
@@ -262,6 +273,12 @@ const Calendar = () => {
                 right: "dayGridMonth,listMonth",
               }}
               events={events}
+              eventOrder={(left, right) =>
+                compareSchedulePeriod(
+                  left.extendedProps as CalendarEvent,
+                  right.extendedProps as CalendarEvent,
+                )
+              }
               dateClick={handleDateClick}
               eventClick={handleEventClick}
               eventDidMount={(arg) => {
@@ -343,6 +360,11 @@ const Calendar = () => {
                     selectedEvent.end !== selectedEvent.start
                       ? `~ ${selectedEvent.end}`
                       : ""}
+                    <span className="ml-2 font-bold text-blue-600">
+                      {getSchedulePeriodLabel(
+                        selectedEvent.startPeriod ?? selectedEvent.period,
+                      )}
+                    </span>
                   </p>
                 </div>
               </div>

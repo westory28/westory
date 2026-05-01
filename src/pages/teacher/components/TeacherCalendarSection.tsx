@@ -4,14 +4,16 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import listPlugin from "@fullcalendar/list";
 import { doc, getDoc } from "firebase/firestore";
-import { useAuth } from "../../../contexts/AuthContext";
 import { db } from "../../../lib/firebase";
-import { syncKoreanPublicHolidaysToFirestore } from "../../../lib/koreanPublicHolidays";
+import {
+  compareCalendarSchedule,
+  compareSchedulePeriod,
+  getSchedulePeriodOrder,
+} from "../../../lib/schedulePeriods";
 import {
   getScheduleCategoryMeta,
   useScheduleCategories,
 } from "../../../lib/scheduleCategories";
-import { getYearSemester } from "../../../lib/semesterScope";
 import { CalendarEvent } from "../../../types";
 
 interface TeacherCalendarSectionProps {
@@ -152,8 +154,6 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
   onFilterChange,
   selectedDate,
 }) => {
-  const { config } = useAuth();
-  const { year, semester } = getYearSemester(config);
   const { categories } = useScheduleCategories();
   const [gradeOptions, setGradeOptions] = useState<SchoolOption[]>([
     { value: "1", label: "1학년" },
@@ -194,7 +194,12 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
           ? ["student-calendar-range-event"]
           : ["student-calendar-single-event"]),
       ],
-      extendedProps: { ...event, inclusiveSpanDays, isMultiDayRange },
+      extendedProps: {
+        ...event,
+        inclusiveSpanDays,
+        isMultiDayRange,
+        periodOrder: getSchedulePeriodOrder(event.startPeriod ?? event.period),
+      },
     };
   });
 
@@ -307,10 +312,7 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
         (event) =>
           event.start >= visibleRange.start && event.start < visibleRange.end,
       )
-      .sort((a, b) => {
-        if (a.start !== b.start) return a.start.localeCompare(b.start);
-        return a.title.localeCompare(b.title);
-      });
+      .sort(compareCalendarSchedule);
 
     const grouped = new Map<string, CalendarEvent[]>();
     filtered.forEach((event) => {
@@ -325,23 +327,6 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
       events: dateEvents,
     }));
   }, [currentViewType, events, visibleRange.end, visibleRange.start]);
-
-  const populateHolidays = async () => {
-    if (!config) return;
-    if (!confirm("공식 공휴일을 최신 기준으로 다시 적용하시겠습니까?")) return;
-
-    try {
-      const result = await syncKoreanPublicHolidaysToFirestore({
-        db,
-        year,
-        semester,
-      });
-      alert(`공휴일 ${result.count}건을 최신 기준으로 적용했습니다.`);
-    } catch (error: any) {
-      console.error(error);
-      alert(`공휴일 적용 실패: ${error.message}`);
-    }
-  };
 
   const handleNavigate = (action: "prev" | "next" | "today") => {
     const api = calendarRef.current?.getApi();
@@ -480,15 +465,6 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                 <i className="fas fa-plus mr-1"></i>
                 추가
               </button>
-              <button
-                type="button"
-                onClick={populateHolidays}
-                className="student-calendar-shell__control-button student-calendar-shell__action-button student-calendar-shell__action-button--success"
-                title="공휴일 불러오기"
-              >
-                <i className="fas fa-calendar-check mr-1"></i>
-                공휴일
-              </button>
             </div>
           </div>
         </div>
@@ -507,6 +483,12 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
           displayEventTime={false}
           headerToolbar={false}
           events={fcEvents}
+          eventOrder={(left, right) =>
+            compareSchedulePeriod(
+              left.extendedProps as CalendarEvent,
+              right.extendedProps as CalendarEvent,
+            )
+          }
           datesSet={(arg) => {
             setCurrentViewType(arg.view.type as CalendarViewType);
             setCurrentTitle(arg.view.title);

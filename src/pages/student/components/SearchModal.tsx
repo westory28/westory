@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { db } from "../../../lib/firebase";
 import { getScheduleCategoryMeta } from "../../../lib/scheduleCategories";
+import {
+  compareCalendarSchedule,
+  getSchedulePeriodLabel,
+} from "../../../lib/schedulePeriods";
 import type { ScheduleCategory } from "../../../lib/scheduleCategories";
 import { useAuth } from "../../../contexts/AuthContext";
 import { CalendarEvent } from "../../../types";
@@ -79,12 +83,14 @@ const SearchModal: React.FC<SearchModalProps> = ({
       const matched = mergeEventsWithKoreanPublicHolidays(
         visibleEvents,
         holidays,
-      ).filter((event) => {
-        const titleMatch = event.title?.toLowerCase().includes(qLower);
-        const descMatch = event.description?.toLowerCase().includes(qLower);
+      )
+        .filter((event) => {
+          const titleMatch = event.title?.toLowerCase().includes(qLower);
+          const descMatch = event.description?.toLowerCase().includes(qLower);
 
-        return titleMatch || descMatch;
-      });
+          return titleMatch || descMatch;
+        })
+        .sort(compareCalendarSchedule);
 
       setResults(matched);
     } catch (error) {
@@ -211,6 +217,13 @@ const SearchModal: React.FC<SearchModalProps> = ({
                     {result.end && result.start !== result.end
                       ? ` ~ ${result.end}`
                       : ""}
+                    {result.eventType !== "holiday" && (
+                      <span className="ml-2 font-bold text-blue-600">
+                        {getSchedulePeriodLabel(
+                          result.startPeriod ?? result.period,
+                        )}
+                      </span>
+                    )}
                   </div>
                 </button>
               );

@@ -102,6 +102,9 @@ export interface CalendarEvent {
   description?: string;
   start: string;
   end?: string;
+  startPeriod?: string;
+  endPeriod?: string;
+  period?: string;
   eventType: string;
   targetType: "all" | "common" | "class";
   targetClass?: string;

@@ -10,6 +10,7 @@ import EventDetailPanel from "../student/components/EventDetailPanel"; // Reuse 
 import SearchModal from "../student/components/SearchModal"; // Reuse search modal
 import EventModal from "./components/EventModal";
 import { useScheduleCategories } from "../../lib/scheduleCategories";
+import { compareCalendarSchedule } from "../../lib/schedulePeriods";
 import { getYearSemester } from "../../lib/semesterScope";
 import {
   ensureKoreanPublicHolidaysSynced,
@@ -130,6 +131,10 @@ const TeacherDashboard: React.FC = () => {
   };
 
   const handleEventClick = (event: CalendarEvent) => {
+    if (event.eventType === "holiday") {
+      setSelectedDate(event.start);
+      return;
+    }
     setSelectedEvent(event);
     setIsEventModalOpen(true);
   };
@@ -155,15 +160,17 @@ const TeacherDashboard: React.FC = () => {
       return;
     }
 
-    const filtered = visibleEvents.filter((event) => {
-      const start = new Date(event.start);
-      const end = new Date(event.end || event.start);
-      const target = new Date(selectedDate);
-      start.setHours(0, 0, 0, 0);
-      end.setHours(0, 0, 0, 0);
-      target.setHours(0, 0, 0, 0);
-      return target >= start && target <= end;
-    });
+    const filtered = visibleEvents
+      .filter((event) => {
+        const start = new Date(event.start);
+        const end = new Date(event.end || event.start);
+        const target = new Date(selectedDate);
+        start.setHours(0, 0, 0, 0);
+        end.setHours(0, 0, 0, 0);
+        target.setHours(0, 0, 0, 0);
+        return target >= start && target <= end;
+      })
+      .sort(compareCalendarSchedule);
 
     setDailyEvents(filtered);
   }, [selectedDate, visibleEvents]);

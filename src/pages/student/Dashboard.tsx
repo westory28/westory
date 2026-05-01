@@ -29,6 +29,7 @@ import {
   getPointActivityTransaction,
 } from "../../lib/points";
 import { useScheduleCategories } from "../../lib/scheduleCategories";
+import { compareCalendarSchedule } from "../../lib/schedulePeriods";
 import { readSiteSettingDoc } from "../../lib/siteSettings";
 import { getYearSemester } from "../../lib/semesterScope";
 import {
@@ -336,15 +337,17 @@ const StudentDashboard: React.FC = () => {
 
   const handleDateClick = (dateStr: string) => {
     setSelectedDate(dateStr);
-    const filtered = events.filter((event) => {
-      const start = new Date(event.start);
-      const end = new Date(event.end || event.start);
-      const target = new Date(dateStr);
-      start.setHours(0, 0, 0, 0);
-      end.setHours(0, 0, 0, 0);
-      target.setHours(0, 0, 0, 0);
-      return target >= start && target <= end;
-    });
+    const filtered = events
+      .filter((event) => {
+        const start = new Date(event.start);
+        const end = new Date(event.end || event.start);
+        const target = new Date(dateStr);
+        start.setHours(0, 0, 0, 0);
+        end.setHours(0, 0, 0, 0);
+        target.setHours(0, 0, 0, 0);
+        return target >= start && target <= end;
+      })
+      .sort(compareCalendarSchedule);
     setDailyEvents(filtered);
   };
 

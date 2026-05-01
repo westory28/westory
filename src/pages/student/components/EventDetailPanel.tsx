@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { getScheduleCategoryMeta } from '../../../lib/scheduleCategories';
+import { getSchedulePeriodLabel } from '../../../lib/schedulePeriods';
 import type { ScheduleCategory } from '../../../lib/scheduleCategories';
 import { CalendarEvent } from '../../../types';
 
@@ -60,6 +61,7 @@ const EventDetailPanel: React.FC<EventDetailPanelProps> = ({ categories, selecte
                         const isHoliday = event.eventType === 'holiday';
                         const categoryMeta = getScheduleCategoryMeta(event.eventType, categories);
                         const typeLabel = isHoliday ? '공휴일' : `${categoryMeta.emoji} ${categoryMeta.label}`;
+                        const periodLabel = getSchedulePeriodLabel(event.startPeriod ?? event.period);
 
                         if (isHoliday) {
                             return (
@@ -96,6 +98,7 @@ const EventDetailPanel: React.FC<EventDetailPanelProps> = ({ categories, selecte
                                 <p className="text-xs text-gray-500">
                                     {event.start}
                                     {event.end && event.start !== event.end ? ` ~ ${event.end}` : ''}
+                                    <span className="ml-2 font-bold text-blue-600">{periodLabel}</span>
                                 </p>
                             </div>
                         );
@@ -133,6 +136,9 @@ const EventDetailPanel: React.FC<EventDetailPanelProps> = ({ categories, selecte
                             <p className="text-xs text-gray-500">
                                 {detailModalEvent.start}
                                 {detailModalEvent.end && detailModalEvent.start !== detailModalEvent.end ? ` ~ ${detailModalEvent.end}` : ''}
+                                <span className="ml-2 font-bold text-blue-600">
+                                    {getSchedulePeriodLabel(detailModalEvent.startPeriod ?? detailModalEvent.period)}
+                                </span>
                             </p>
                             <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
                                 <p className="whitespace-pre-wrap text-sm text-gray-700">
