@@ -390,6 +390,10 @@ export const getGrade3ClassIdsFromSchoolConfig = async () => {
       .filter((item) => !isTestOption(item?.value, item?.label))
       .map((item) => item?.value ?? item?.label),
   );
+  if (configuredClassIds.length > 0) {
+    return configuredClassIds;
+  }
+
   const rosterSnapshots = await Promise.all(
     ["studentGrade", "grade"].map((gradeField) =>
       getDocs(

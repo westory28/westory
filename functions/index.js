@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const { initializeApp } = require('firebase-admin/app');
-const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 
@@ -664,6 +664,8 @@ const getPointWalletPath = (year, semester, uid) => `${getPointCollectionPath(ye
 const getPointPolicyPath = (year, semester) => `${getPointCollectionPath(year, semester, 'point_policies')}/current`;
 const getNotificationInboxPath = (year, semester, uid) => `${getSemesterRoot(year, semester)}/notification_inboxes/${uid}`;
 const getNotificationItemsPath = (year, semester, uid) => `${getNotificationInboxPath(year, semester, uid)}/items`;
+const getBroadcastNotificationsPath = (year, semester) => `${getSemesterRoot(year, semester)}/broadcast_notifications`;
+const NOTIFICATION_RETENTION_DAYS = 30;
 const WIS_HALL_OF_FAME_DOC_ID = 'hall_of_fame';
 const WIS_HALL_OF_FAME_SNAPSHOT_VERSION = 6;
 const WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS = 4;
@@ -692,6 +694,10 @@ const buildNotificationId = (dedupeKey) => {
   if (!normalized) return crypto.randomUUID();
   return `n_${crypto.createHash('sha1').update(normalized).digest('hex')}`;
 };
+
+const getNotificationExpiryTimestamp = () => Timestamp.fromMillis(
+  Date.now() + NOTIFICATION_RETENTION_DAYS * 24 * 60 * 60 * 1000,
+);
 
 const normalizeHallOfFameText = (value) => String(value || '').trim();
 
@@ -1612,6 +1618,7 @@ const createUserNotification = async (year, semester, recipientUid, input) => {
       dedupeKey,
       readAt: null,
       createdAt: FieldValue.serverTimestamp(),
+      expiresAt: getNotificationExpiryTimestamp(),
     };
 
     transaction.set(inboxRef, {
@@ -1621,6 +1628,42 @@ const createUserNotification = async (year, semester, recipientUid, input) => {
     }, { merge: true });
     transaction.set(itemRef, payload);
     return { created: true, recipientUid: uid, notificationId };
+  });
+};
+
+const createBroadcastNotification = async (year, semester, input) => {
+  const type = sanitizeNotificationText(input.type, 80, 'system_notice');
+  const entityType = sanitizeNotificationText(input.entityType, 80);
+  const entityId = sanitizeNotificationText(input.entityId, 160);
+  const dedupeKey = sanitizeNotificationText(
+    input.dedupeKey || `${type}:${entityType}:${entityId}:${input.title}`,
+    240,
+  );
+  const notificationId = buildNotificationId(`broadcast:${dedupeKey}`);
+  const itemRef = db.doc(`${getBroadcastNotificationsPath(year, semester)}/${notificationId}`);
+
+  return db.runTransaction(async (transaction) => {
+    const existing = await transaction.get(itemRef);
+    if (existing.exists) {
+      return { created: false, notificationId };
+    }
+
+    transaction.set(itemRef, {
+      type,
+      title: sanitizeNotificationText(input.title, 80, '알림'),
+      body: sanitizeNotificationText(input.body, 500),
+      targetUrl: sanitizeNotificationText(input.targetUrl, 240),
+      entityType,
+      entityId,
+      actorUid: sanitizeNotificationText(input.actorUid, 160),
+      recipientUid: '',
+      audience: 'all_students',
+      priority: input.priority === 'high' ? 'high' : 'normal',
+      dedupeKey,
+      createdAt: FieldValue.serverTimestamp(),
+      expiresAt: getNotificationExpiryTimestamp(),
+    });
+    return { created: true, notificationId };
   });
 };
 
@@ -1660,11 +1703,6 @@ const resolveTeacherNotificationRecipientUids = async () => {
     ...teacherSnap.docs.map((docSnap) => docSnap.id),
     ...quizStaffSnap.docs.map((docSnap) => docSnap.id),
   ]);
-};
-
-const resolveStudentRecipientUids = async () => {
-  const snap = await db.collection('users').where('role', '==', 'student').get();
-  return uniqueNonEmptyStrings(snap.docs.map((docSnap) => docSnap.id), 500);
 };
 
 const ensureStudentProfile = async (uid) => {
@@ -2579,6 +2617,7 @@ exports.markNotificationsRead = onCall({ region: REGION }, async (request) => {
     uid,
     unreadCount: 0,
     lastReadAt: FieldValue.serverTimestamp(),
+    lastBroadcastReadAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
   await batch.commit();
@@ -2614,11 +2653,78 @@ exports.clearNotifications = onCall({ region: REGION }, async (request) => {
   await inboxRef.set({
     uid,
     unreadCount: 0,
+    lastBroadcastReadAt: FieldValue.serverTimestamp(),
+    broadcastClearedAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
 
   return { deletedCount };
 });
+
+const deleteNotificationQueryBatch = async (querySnapshot) => {
+  if (querySnapshot.empty) return 0;
+  const batch = db.batch();
+  querySnapshot.docs.forEach((docSnap) => batch.delete(docSnap.ref));
+  await batch.commit();
+  return querySnapshot.size;
+};
+
+const cleanupSemesterNotifications = async (year, semester, cutoff) => {
+  const inboxRefs = await db
+    .collection(getPointCollectionPath(year, semester, 'notification_inboxes'))
+    .listDocuments();
+  let deletedCount = 0;
+
+  for (const inboxRef of inboxRefs) {
+    while (true) {
+      const oldItems = await inboxRef
+        .collection('items')
+        .where('createdAt', '<', cutoff)
+        .limit(400)
+        .get();
+      const deleted = await deleteNotificationQueryBatch(oldItems);
+      deletedCount += deleted;
+      if (!deleted) break;
+    }
+  }
+
+  while (true) {
+    const oldBroadcasts = await db
+      .collection(getBroadcastNotificationsPath(year, semester))
+      .where('createdAt', '<', cutoff)
+      .limit(400)
+      .get();
+    const deleted = await deleteNotificationQueryBatch(oldBroadcasts);
+    deletedCount += deleted;
+    if (!deleted) break;
+  }
+
+  return deletedCount;
+};
+
+exports.cleanupOldNotifications = onSchedule(
+  {
+    region: REGION,
+    schedule: '25 3 * * *',
+    timeZone: 'Asia/Seoul',
+  },
+  async () => {
+    const configSnap = await db.doc('site_settings/config').get();
+    const config = configSnap.data() || {};
+    const year = String(config.year || '').trim();
+    const semester = String(config.semester || '').trim();
+    if (!year || !semester) {
+      console.warn('Skipped notification cleanup because site_settings/config is missing year/semester.');
+      return;
+    }
+
+    const cutoff = Timestamp.fromMillis(
+      Date.now() - NOTIFICATION_RETENTION_DAYS * 24 * 60 * 60 * 1000,
+    );
+    const deletedCount = await cleanupSemesterNotifications(year, semester, cutoff);
+    console.info(`Cleaned up ${deletedCount} old notification documents.`);
+  },
+);
 
 exports.createManagedNotifications = onCall({ region: REGION }, async (request) => {
   const manager = await assertNotificationManager(request);
@@ -2635,9 +2741,26 @@ exports.createManagedNotifications = onCall({ region: REGION }, async (request) 
     throw new HttpsError('invalid-argument', 'Unsupported notification type.');
   }
 
-  const recipientUids = recipientMode === 'all_students'
-    ? await resolveStudentRecipientUids()
-    : uniqueNonEmptyStrings(request.data?.recipientUids, 300);
+  if (recipientMode === 'all_students') {
+    const result = await createBroadcastNotification(year, semester, {
+      type,
+      title: request.data?.title,
+      body: request.data?.body,
+      targetUrl: request.data?.targetUrl,
+      entityType: request.data?.entityType,
+      entityId: request.data?.entityId,
+      priority: request.data?.priority,
+      dedupeKey: request.data?.dedupeKey,
+      actorUid: manager.uid,
+    });
+    return {
+      createdCount: result.created ? 1 : 0,
+      recipientCount: 1,
+      broadcast: true,
+    };
+  }
+
+  const recipientUids = uniqueNonEmptyStrings(request.data?.recipientUids, 300);
   if (!recipientUids.length) {
     return { createdCount: 0, recipientCount: 0 };
   }

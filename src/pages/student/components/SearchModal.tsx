@@ -1,10 +1,17 @@
 import React, { useEffect, useState } from "react";
-import { collection, getDocs } from "firebase/firestore";
 import { db } from "../../../lib/firebase";
 import { getScheduleCategoryMeta } from "../../../lib/scheduleCategories";
 import type { ScheduleCategory } from "../../../lib/scheduleCategories";
 import { useAuth } from "../../../contexts/AuthContext";
 import { CalendarEvent } from "../../../types";
+import {
+  getKoreanPublicHolidays,
+  mergeEventsWithKoreanPublicHolidays,
+} from "../../../lib/koreanPublicHolidays";
+import {
+  getStudentClassKey,
+  loadVisibleCalendarEvents,
+} from "../../../lib/visibleSchedule";
 
 const LABELS = {
   close: "\uAC80\uC0C9 \uB2EB\uAE30",
@@ -59,30 +66,24 @@ const SearchModal: React.FC<SearchModalProps> = ({
     setResults([]);
 
     try {
-      const userClassStr =
-        userData.grade && userData.class
-          ? `${userData.grade}-${userData.class}`
-          : null;
       const path = `years/${config.year}/semesters/${config.semester}/calendar`;
-      const snapshot = await getDocs(collection(db, path));
-      const matched: CalendarEvent[] = [];
+      const userClassStr = getStudentClassKey(userData.grade, userData.class);
+      const visibleEvents = await loadVisibleCalendarEvents(
+        db,
+        path,
+        userClassStr,
+      );
       const qLower = q.toLowerCase();
 
-      snapshot.forEach((item) => {
-        const data = item.data() as Omit<CalendarEvent, "id">;
-        const isCommon = data.targetType === "common";
-        const isHoliday = data.eventType === "holiday";
-        const isMyClass =
-          data.targetType === "class" && data.targetClass === userClassStr;
+      const holidays = await getKoreanPublicHolidays(config.year);
+      const matched = mergeEventsWithKoreanPublicHolidays(
+        visibleEvents,
+        holidays,
+      ).filter((event) => {
+        const titleMatch = event.title?.toLowerCase().includes(qLower);
+        const descMatch = event.description?.toLowerCase().includes(qLower);
 
-        if (!isCommon && !isHoliday && !isMyClass) return;
-
-        const titleMatch = data.title?.toLowerCase().includes(qLower);
-        const descMatch = data.description?.toLowerCase().includes(qLower);
-
-        if (titleMatch || descMatch) {
-          matched.push({ id: item.id, ...data });
-        }
+        return titleMatch || descMatch;
       });
 
       setResults(matched);

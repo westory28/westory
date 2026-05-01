@@ -218,8 +218,10 @@ export interface WestoryNotification {
   recipientUid: string;
   priority: WestoryNotificationPriority;
   dedupeKey: string;
+  broadcast?: boolean;
   readAt?: any;
   createdAt?: any;
+  expiresAt?: any;
 }
 
 export interface WestoryNotificationInbox {
@@ -227,6 +229,8 @@ export interface WestoryNotificationInbox {
   unreadCount: number;
   updatedAt?: any;
   lastReadAt?: any;
+  lastBroadcastReadAt?: any;
+  broadcastClearedAt?: any;
 }
 
 export type PointRankTierCode = `tier_${number}`;

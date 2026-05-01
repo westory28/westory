@@ -21,6 +21,7 @@
     "@fullcalendar/react": "^6.1.20",
     "chart.js": "^4.5.1",
     "firebase": "^12.9.0",
+    "korean-lunar-calendar": "^0.3.6",
     "react": "^18.2.0",
     "react-chartjs-2": "^5.3.1",
     "react-dom": "^18.2.0",

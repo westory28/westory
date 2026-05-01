@@ -641,6 +641,11 @@ service cloud.firestore {
         }
       }
 
+      match /broadcast_notifications/{notificationId} {
+        allow read: if canUseWestory();
+        allow create, update, delete: if false;
+      }
+
       match /calendar/{docId} {
         allow read: if canUseWestory();
         allow write: if isAdmin();

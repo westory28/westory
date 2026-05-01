@@ -637,7 +637,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             if (selectedDate === dateStr) classes.push("fc-day-selected");
             return classes;
           }}
-          fixedWeekCount={false}
+          fixedWeekCount
         />
 
         {currentViewType === "listMonth" && (

@@ -4,6 +4,9 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
+  orderBy,
+  query,
   serverTimestamp,
   setDoc,
 } from "firebase/firestore";
@@ -38,6 +41,8 @@ interface Question {
   hintEnabled?: boolean;
   hint?: string;
 }
+
+const QUESTION_ANALYTICS_RESULT_LIMIT = 500;
 
 interface QuestionStat {
   attempts: number;
@@ -509,7 +514,11 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const loadQuestionAnalytics = async (): Promise<BankAnalyticsResult> => {
     try {
       const snap = await getDocs(
-        collection(db, getSemesterCollectionPath(config, "quiz_results")),
+        query(
+          collection(db, getSemesterCollectionPath(config, "quiz_results")),
+          orderBy("timestamp", "desc"),
+          limit(QUESTION_ANALYTICS_RESULT_LIMIT),
+        ),
       );
 
       const mutableStats: Record<string, MutableQuestionAggregate> = {};

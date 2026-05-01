@@ -42,6 +42,21 @@ const getNotificationInboxPath = (config: ConfigLike, uid: string) =>
 const getNotificationItemCollectionPath = (config: ConfigLike, uid: string) =>
   `${getNotificationInboxPath(config, uid)}/items`;
 
+const getBroadcastNotificationCollectionPath = (config: ConfigLike) =>
+  getSemesterCollectionPath(config, "broadcast_notifications");
+
+const timestampMs = (value: unknown) => {
+  if (!value) return 0;
+  if (typeof (value as { toMillis?: () => number }).toMillis === "function") {
+    return (value as { toMillis: () => number }).toMillis();
+  }
+  if (typeof (value as { toDate?: () => Date }).toDate === "function") {
+    return (value as { toDate: () => Date }).toDate().getTime();
+  }
+  const seconds = Number((value as { seconds?: number }).seconds || 0);
+  return seconds > 0 ? seconds * 1000 : 0;
+};
+
 const normalizeNotification = (
   id: string,
   raw: Partial<WestoryNotification>,
@@ -57,8 +72,10 @@ const normalizeNotification = (
   recipientUid: String(raw.recipientUid || "").trim(),
   priority: raw.priority === "high" ? "high" : "normal",
   dedupeKey: String(raw.dedupeKey || "").trim(),
+  broadcast: raw.broadcast === true,
   readAt: raw.readAt || null,
   createdAt: raw.createdAt || null,
+  expiresAt: raw.expiresAt || null,
 });
 
 export const subscribeNotificationInbox = (
@@ -76,6 +93,8 @@ export const subscribeNotificationInbox = (
       unreadCount: Math.max(0, Number(data?.unreadCount || 0)),
       updatedAt: data?.updatedAt || null,
       lastReadAt: data?.lastReadAt || null,
+      lastBroadcastReadAt: data?.lastBroadcastReadAt || null,
+      broadcastClearedAt: data?.broadcastClearedAt || null,
     });
   });
 };
@@ -83,20 +102,59 @@ export const subscribeNotificationInbox = (
 export const loadNotifications = async (
   config: ConfigLike,
   uid: string,
+  options?: {
+    includeBroadcasts?: boolean;
+    lastBroadcastReadAt?: unknown;
+    broadcastClearedAt?: unknown;
+  },
 ): Promise<WestoryNotification[]> => {
   const itemsQuery = query(
     collection(db, getNotificationItemCollectionPath(config, uid)),
     orderBy("createdAt", "desc"),
     limit(NOTIFICATION_LIMIT),
   );
-  const snapshot = await getDocs(itemsQuery);
+  const broadcastQuery = query(
+    collection(db, getBroadcastNotificationCollectionPath(config)),
+    orderBy("createdAt", "desc"),
+    limit(NOTIFICATION_LIMIT),
+  );
+  const [snapshot, broadcastSnapshot] = await Promise.all([
+    getDocs(itemsQuery),
+    options?.includeBroadcasts ? getDocs(broadcastQuery) : null,
+  ]);
 
-  return snapshot.docs.map((item) =>
+  const personalItems = snapshot.docs.map((item) =>
     normalizeNotification(
       item.id,
       item.data() as Partial<WestoryNotification>,
     ),
   );
+  const lastBroadcastReadMs = timestampMs(options?.lastBroadcastReadAt);
+  const broadcastClearedMs = timestampMs(options?.broadcastClearedAt);
+  const broadcastItems = (broadcastSnapshot?.docs || [])
+    .map((item) => {
+      const notification = normalizeNotification(item.id, {
+        ...(item.data() as Partial<WestoryNotification>),
+        broadcast: true,
+      });
+      const createdMs = timestampMs(notification.createdAt);
+      return {
+        ...notification,
+        recipientUid: uid,
+        readAt:
+          createdMs > 0 && createdMs <= lastBroadcastReadMs
+            ? options?.lastBroadcastReadAt
+            : null,
+      };
+    })
+    .filter((item) => {
+      const createdMs = timestampMs(item.createdAt);
+      return !broadcastClearedMs || !createdMs || createdMs > broadcastClearedMs;
+    });
+
+  return [...personalItems, ...broadcastItems]
+    .sort((a, b) => timestampMs(b.createdAt) - timestampMs(a.createdAt))
+    .slice(0, NOTIFICATION_LIMIT);
 };
 
 export const markNotificationsRead = async (config: ConfigLike) => {

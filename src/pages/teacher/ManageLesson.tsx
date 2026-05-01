@@ -3502,9 +3502,7 @@ const ManageLesson: React.FC = () => {
         persistedMetaVisibleToStudents &&
         savedLessonState.isVisibleToStudents === false;
       const shouldNotifyStudents =
-        source === "header" &&
-        persistedMetaVisibleToStudents &&
-        (shouldSavePdf || isNewlyVisibleToStudents);
+        source === "header" && isNewlyVisibleToStudents;
       if (shouldNotifyStudents) {
         void createManagedNotifications(config, {
           recipientMode: "all_students",
@@ -3514,7 +3512,7 @@ const ManageLesson: React.FC = () => {
           targetUrl: `/student/lesson/note?id=${encodeURIComponent(selectedNodeId)}&title=${encodeURIComponent(persistedMetaTitle || selectedNodeTitle || "")}`,
           entityType: "lesson",
           entityId: selectedNodeId,
-          dedupeKey: `lesson_worksheet_published:${selectedNodeId}:${shouldSavePdf ? Date.now() : "published"}`,
+          dedupeKey: `lesson_worksheet_published:${selectedNodeId}`,
         }).catch((notificationError) => {
           console.error(
             "Failed to create lesson worksheet notifications:",

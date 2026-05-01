@@ -1,446 +1,710 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import FullCalendar from '@fullcalendar/react';
-import dayGridPlugin from '@fullcalendar/daygrid';
-import interactionPlugin from '@fullcalendar/interaction';
-import listPlugin from '@fullcalendar/list';
-import { collection, doc, getDoc, getDocs, query, where, writeBatch } from 'firebase/firestore';
-import { useAuth } from '../../../contexts/AuthContext';
-import { db } from '../../../lib/firebase';
-import { getScheduleCategoryMeta, useScheduleCategories } from '../../../lib/scheduleCategories';
-import { getYearSemester } from '../../../lib/semesterScope';
-import { CalendarEvent } from '../../../types';
+import React, { useEffect, useMemo, useState } from "react";
+import FullCalendar from "@fullcalendar/react";
+import dayGridPlugin from "@fullcalendar/daygrid";
+import interactionPlugin from "@fullcalendar/interaction";
+import listPlugin from "@fullcalendar/list";
+import { doc, getDoc } from "firebase/firestore";
+import { useAuth } from "../../../contexts/AuthContext";
+import { db } from "../../../lib/firebase";
+import { syncKoreanPublicHolidaysToFirestore } from "../../../lib/koreanPublicHolidays";
+import {
+  getScheduleCategoryMeta,
+  useScheduleCategories,
+} from "../../../lib/scheduleCategories";
+import { getYearSemester } from "../../../lib/semesterScope";
+import { CalendarEvent } from "../../../types";
 
 interface TeacherCalendarSectionProps {
-    events: CalendarEvent[];
-    onDateClick: (dateStr: string) => void;
-    onDateDoubleClick: (dateStr: string) => void;
-    onEventClick: (event: CalendarEvent) => void;
-    onAddEvent: () => void;
-    onSearchClick: () => void;
-    calendarRef: React.RefObject<FullCalendar>;
-    filterClass: string;
-    availableClassTargets: string[];
-    onFilterChange: (cls: string) => void;
-    selectedDate?: string | null;
+  events: CalendarEvent[];
+  onDateClick: (dateStr: string) => void;
+  onDateDoubleClick: (dateStr: string) => void;
+  onEventClick: (event: CalendarEvent) => void;
+  onAddEvent: () => void;
+  onSearchClick: () => void;
+  calendarRef: React.RefObject<FullCalendar>;
+  filterClass: string;
+  availableClassTargets: string[];
+  onFilterChange: (cls: string) => void;
+  selectedDate?: string | null;
 }
 
-type HolidayItem = { title: string; start: string; eventType?: 'holiday' };
 type SchoolOption = { value: string; label: string };
-
-const DEFAULT_2026_HOLIDAYS: HolidayItem[] = [
-    { title: '신정', start: '2026-01-01', eventType: 'holiday' },
-    { title: '설날 연휴', start: '2026-02-16', eventType: 'holiday' },
-    { title: '설날', start: '2026-02-17', eventType: 'holiday' },
-    { title: '설날 연휴', start: '2026-02-18', eventType: 'holiday' },
-    { title: '삼일절', start: '2026-03-01', eventType: 'holiday' },
-    { title: '삼일절 대체공휴일', start: '2026-03-02', eventType: 'holiday' },
-    { title: '어린이날', start: '2026-05-05', eventType: 'holiday' },
-    { title: '부처님오신날', start: '2026-05-24', eventType: 'holiday' },
-    { title: '부처님오신날 대체공휴일', start: '2026-05-25', eventType: 'holiday' },
-    { title: '현충일', start: '2026-06-06', eventType: 'holiday' },
-    { title: '현충일 대체공휴일', start: '2026-06-08', eventType: 'holiday' },
-    { title: '광복절', start: '2026-08-15', eventType: 'holiday' },
-    { title: '광복절 대체공휴일', start: '2026-08-17', eventType: 'holiday' },
-    { title: '추석 연휴', start: '2026-09-24', eventType: 'holiday' },
-    { title: '추석', start: '2026-09-25', eventType: 'holiday' },
-    { title: '추석 연휴', start: '2026-09-26', eventType: 'holiday' },
-    { title: '추석 대체공휴일', start: '2026-09-28', eventType: 'holiday' },
-    { title: '개천절', start: '2026-10-03', eventType: 'holiday' },
-    { title: '개천절 대체공휴일', start: '2026-10-05', eventType: 'holiday' },
-    { title: '한글날', start: '2026-10-09', eventType: 'holiday' },
-    { title: '성탄절', start: '2026-12-25', eventType: 'holiday' },
-];
+type CalendarViewType = "dayGridMonth" | "listMonth";
 
 const toExclusiveEnd = (start?: string, end?: string) => {
-    if (!start || !end || end <= start) return undefined;
-    const endDate = new Date(`${end}T00:00:00`);
-    endDate.setDate(endDate.getDate() + 1);
-    const offset = endDate.getTimezoneOffset() * 60000;
-    return new Date(endDate.getTime() - offset).toISOString().split('T')[0];
+  if (!start || !end || end <= start) return undefined;
+  const endDate = new Date(`${end}T00:00:00`);
+  endDate.setDate(endDate.getDate() + 1);
+  const offset = endDate.getTimezoneOffset() * 60000;
+  return new Date(endDate.getTime() - offset).toISOString().split("T")[0];
 };
 
-const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
-    events,
-    onDateClick,
-    onDateDoubleClick,
-    onEventClick,
-    onAddEvent,
-    onSearchClick,
-    calendarRef,
-    filterClass,
-    availableClassTargets,
-    onFilterChange,
-    selectedDate,
-}) => {
-    const { config } = useAuth();
-    const { year, semester } = getYearSemester(config);
-    const { categories } = useScheduleCategories();
-    const [gradeOptions, setGradeOptions] = useState<SchoolOption[]>([
-        { value: '1', label: '1학년' },
-        { value: '2', label: '2학년' },
-        { value: '3', label: '3학년' },
-    ]);
-    const [classOptions, setClassOptions] = useState<SchoolOption[]>(
-        Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}반` })),
-    );
-    const [currentViewType, setCurrentViewType] = useState('dayGridMonth');
-    const [visibleRange, setVisibleRange] = useState<{ start: string; end: string }>({ start: '', end: '' });
-    const [listTopOffset, setListTopOffset] = useState(88);
-    const calendarWrapperRef = useRef<HTMLDivElement | null>(null);
+const getInclusiveSpanDays = (start?: string, end?: string) => {
+  const startDateKey = String(start || "").split("T")[0];
+  if (!startDateKey) return 1;
+  const endDateKey = String(end || "").split("T")[0];
+  const resolvedEndDateKey =
+    endDateKey && endDateKey > startDateKey ? endDateKey : startDateKey;
+  const startDate = new Date(`${startDateKey}T00:00:00`);
+  const endDate = new Date(`${resolvedEndDateKey}T00:00:00`);
+  const diffDays = Math.round(
+    (endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000),
+  );
+  return diffDays + 1;
+};
 
-    const fcEvents = events.map((event) => {
-        const meta = getScheduleCategoryMeta(event.eventType, categories);
-        const isHoliday = event.eventType === 'holiday';
-        return {
-            id: event.id,
-            title: event.title,
-            start: event.start,
-            end: toExclusiveEnd(event.start, event.end),
-            backgroundColor: isHoliday ? '#ef4444' : meta.color,
-            borderColor: isHoliday ? '#ef4444' : meta.color,
-            textColor: isHoliday ? '#ffffff' : undefined,
-            classNames: isHoliday ? ['holiday-text-event'] : [],
-            extendedProps: { ...event },
+const ChevronLeftIcon = () => (
+  <svg
+    viewBox="0 0 20 20"
+    fill="none"
+    aria-hidden="true"
+    width="16"
+    height="16"
+  >
+    <path
+      d="M12.5 4.5 7 10l5.5 5.5"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const ChevronRightIcon = () => (
+  <svg
+    viewBox="0 0 20 20"
+    fill="none"
+    aria-hidden="true"
+    width="16"
+    height="16"
+  >
+    <path
+      d="m7.5 4.5 5.5 5.5-5.5 5.5"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const SearchIcon = () => (
+  <svg
+    viewBox="0 0 20 20"
+    fill="none"
+    aria-hidden="true"
+    width="16"
+    height="16"
+  >
+    <circle
+      cx="8.5"
+      cy="8.5"
+      r="4.75"
+      stroke="currentColor"
+      strokeWidth="1.8"
+    />
+    <path
+      d="m12 12 4 4"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
+const CalendarBadgeIcon = () => (
+  <svg
+    viewBox="0 0 20 20"
+    fill="none"
+    aria-hidden="true"
+    width="16"
+    height="16"
+  >
+    <rect
+      x="3"
+      y="4.5"
+      width="14"
+      height="12.5"
+      rx="2.5"
+      stroke="currentColor"
+      strokeWidth="1.7"
+    />
+    <path
+      d="M6.5 3v3M13.5 3v3M3 8.25h14"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
+const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
+  events,
+  onDateClick,
+  onDateDoubleClick,
+  onEventClick,
+  onAddEvent,
+  onSearchClick,
+  calendarRef,
+  filterClass,
+  availableClassTargets,
+  onFilterChange,
+  selectedDate,
+}) => {
+  const { config } = useAuth();
+  const { year, semester } = getYearSemester(config);
+  const { categories } = useScheduleCategories();
+  const [gradeOptions, setGradeOptions] = useState<SchoolOption[]>([
+    { value: "1", label: "1학년" },
+    { value: "2", label: "2학년" },
+    { value: "3", label: "3학년" },
+  ]);
+  const [classOptions, setClassOptions] = useState<SchoolOption[]>(
+    Array.from({ length: 12 }, (_, i) => ({
+      value: String(i + 1),
+      label: `${i + 1}반`,
+    })),
+  );
+  const [currentViewType, setCurrentViewType] =
+    useState<CalendarViewType>("dayGridMonth");
+  const [currentTitle, setCurrentTitle] = useState("");
+  const [visibleRange, setVisibleRange] = useState<{
+    start: string;
+    end: string;
+  }>({ start: "", end: "" });
+  const isMonthView = currentViewType === "dayGridMonth";
+
+  const fcEvents = events.map((event) => {
+    const meta = getScheduleCategoryMeta(event.eventType, categories);
+    const isHoliday = event.eventType === "holiday";
+    const inclusiveSpanDays = getInclusiveSpanDays(event.start, event.end);
+    const isMultiDayRange = inclusiveSpanDays > 1;
+    return {
+      id: event.id,
+      title: event.title,
+      start: event.start,
+      end: toExclusiveEnd(event.start, event.end),
+      backgroundColor: isHoliday ? "#ef4444" : meta.color,
+      borderColor: isHoliday ? "#ef4444" : meta.color,
+      textColor: isHoliday ? "#ffffff" : undefined,
+      classNames: [
+        ...(isHoliday ? ["holiday-text-event"] : []),
+        ...(isMultiDayRange
+          ? ["student-calendar-range-event"]
+          : ["student-calendar-single-event"]),
+      ],
+      extendedProps: { ...event, inclusiveSpanDays, isMultiDayRange },
+    };
+  });
+
+  const holidayDateSet = useMemo(() => {
+    const set = new Set<string>();
+    events.forEach((event) => {
+      if (event.eventType === "holiday") set.add(event.start);
+    });
+    return set;
+  }, [events]);
+
+  useEffect(() => {
+    const loadSchoolConfig = async () => {
+      try {
+        const snap = await getDoc(doc(db, "site_settings", "school_config"));
+        if (!snap.exists()) return;
+        const data = snap.data() as {
+          grades?: Array<{ value?: string; label?: string }>;
+          classes?: Array<{ value?: string; label?: string }>;
         };
+        const nextGrades = (data.grades || [])
+          .map((g) => ({
+            value: String(g?.value ?? "").trim(),
+            label: String(g?.label ?? "").trim(),
+          }))
+          .filter((g) => g.value && g.label);
+        const nextClasses = (data.classes || [])
+          .map((c) => ({
+            value: String(c?.value ?? "").trim(),
+            label: String(c?.label ?? "").trim(),
+          }))
+          .filter((c) => c.value && c.label);
+        if (nextGrades.length > 0) setGradeOptions(nextGrades);
+        if (nextClasses.length > 0) setClassOptions(nextClasses);
+      } catch (error) {
+        console.error("Failed to load school config:", error);
+      }
+    };
+    void loadSchoolConfig();
+  }, []);
+
+  const classTargets = useMemo(() => {
+    return availableClassTargets.map((value) => {
+      const [gradeValue, classValue] = value.split("-");
+      const gradeLabel =
+        gradeOptions.find((item) => item.value === gradeValue)?.label ||
+        (gradeValue ? `${gradeValue}학년` : "");
+      const classLabel =
+        classOptions.find((item) => item.value === classValue)?.label ||
+        (classValue ? `${classValue}반` : "");
+      return {
+        value,
+        label: `${gradeLabel} ${classLabel}`.trim() || value,
+      };
+    });
+  }, [availableClassTargets, classOptions, gradeOptions]);
+
+  const formatEventTargetLabel = (event?: CalendarEvent) => {
+    if (
+      !event ||
+      event.eventType === "holiday" ||
+      event.targetType === "all" ||
+      event.targetType === "common"
+    ) {
+      return "전체";
+    }
+
+    const [gradeValue, classValue] = String(event.targetClass || "").split("-");
+    const gradeLabel =
+      gradeOptions.find((item) => item.value === gradeValue)?.label ||
+      (gradeValue ? `${gradeValue}학년` : "");
+    const classLabel =
+      classOptions.find((item) => item.value === classValue)?.label ||
+      (classValue ? `${classValue}반` : "");
+    return `${gradeLabel} ${classLabel}`.trim() || "전체";
+  };
+
+  const toLocalYmd = (date: Date) => {
+    const offset = date.getTimezoneOffset() * 60000;
+    return new Date(date.getTime() - offset).toISOString().split("T")[0];
+  };
+
+  const formatDayHeading = (dateText: string) => {
+    const parsed = new Date(`${dateText}T00:00:00`);
+    return new Intl.DateTimeFormat("ko-KR", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      weekday: "long",
+    }).format(parsed);
+  };
+
+  const formatEventTitle = (event: CalendarEvent) => {
+    const rawTitle = String(event.title || "").trim();
+    if (rawTitle) return rawTitle;
+    if (event.eventType === "holiday") return "공휴일";
+    return getScheduleCategoryMeta(event.eventType, categories).label || "일정";
+  };
+
+  const listRows = useMemo(() => {
+    if (
+      currentViewType !== "listMonth" ||
+      !visibleRange.start ||
+      !visibleRange.end
+    )
+      return [];
+
+    const filtered = events
+      .filter(
+        (event) =>
+          event.start >= visibleRange.start && event.start < visibleRange.end,
+      )
+      .sort((a, b) => {
+        if (a.start !== b.start) return a.start.localeCompare(b.start);
+        return a.title.localeCompare(b.title);
+      });
+
+    const grouped = new Map<string, CalendarEvent[]>();
+    filtered.forEach((event) => {
+      const key = event.start;
+      const current = grouped.get(key) || [];
+      current.push(event);
+      grouped.set(key, current);
     });
 
-    const holidayDateSet = useMemo(() => {
-        const set = new Set<string>();
-        events.forEach((event) => {
-            if (event.eventType === 'holiday') set.add(event.start);
-        });
-        return set;
-    }, [events]);
+    return Array.from(grouped.entries()).map(([date, dateEvents]) => ({
+      date,
+      events: dateEvents,
+    }));
+  }, [currentViewType, events, visibleRange.end, visibleRange.start]);
 
-    useEffect(() => {
-        const loadSchoolConfig = async () => {
-            try {
-                const snap = await getDoc(doc(db, 'site_settings', 'school_config'));
-                if (!snap.exists()) return;
-                const data = snap.data() as {
-                    grades?: Array<{ value?: string; label?: string }>;
-                    classes?: Array<{ value?: string; label?: string }>;
-                };
-                const nextGrades = (data.grades || [])
-                    .map((g) => ({ value: String(g?.value ?? '').trim(), label: String(g?.label ?? '').trim() }))
-                    .filter((g) => g.value && g.label);
-                const nextClasses = (data.classes || [])
-                    .map((c) => ({ value: String(c?.value ?? '').trim(), label: String(c?.label ?? '').trim() }))
-                    .filter((c) => c.value && c.label);
-                if (nextGrades.length > 0) setGradeOptions(nextGrades);
-                if (nextClasses.length > 0) setClassOptions(nextClasses);
-            } catch (error) {
-                console.error('Failed to load school config:', error);
-            }
-        };
-        void loadSchoolConfig();
-    }, []);
+  const populateHolidays = async () => {
+    if (!config) return;
+    if (!confirm("공식 공휴일을 최신 기준으로 다시 적용하시겠습니까?")) return;
 
-    useEffect(() => {
-        const updateListTopOffset = () => {
-            const wrapper = calendarWrapperRef.current;
-            if (!wrapper) return;
-            const toolbar = wrapper.querySelector('.fc-header-toolbar') as HTMLElement | null;
-            if (!toolbar) return;
-            const wrapperRect = wrapper.getBoundingClientRect();
-            const toolbarRect = toolbar.getBoundingClientRect();
-            const nextOffset = Math.max(72, Math.round(toolbarRect.bottom - wrapperRect.top + 8));
-            setListTopOffset(nextOffset);
-        };
+    try {
+      const result = await syncKoreanPublicHolidaysToFirestore({
+        db,
+        year,
+        semester,
+      });
+      alert(`공휴일 ${result.count}건을 최신 기준으로 적용했습니다.`);
+    } catch (error: any) {
+      console.error(error);
+      alert(`공휴일 적용 실패: ${error.message}`);
+    }
+  };
 
-        const frameId = window.requestAnimationFrame(updateListTopOffset);
-        window.addEventListener('resize', updateListTopOffset);
-        return () => {
-            window.cancelAnimationFrame(frameId);
-            window.removeEventListener('resize', updateListTopOffset);
-        };
-    }, [currentViewType, visibleRange.end, visibleRange.start]);
+  const handleNavigate = (action: "prev" | "next" | "today") => {
+    const api = calendarRef.current?.getApi();
+    if (!api) return;
+    if (action === "prev") api.prev();
+    if (action === "next") api.next();
+    if (action === "today") api.today();
+  };
 
-    const classTargets = useMemo(() => {
-        return availableClassTargets.map((value) => {
-            const [gradeValue, classValue] = value.split('-');
-            const gradeLabel = gradeOptions.find((item) => item.value === gradeValue)?.label || (gradeValue ? `${gradeValue}학년` : '');
-            const classLabel = classOptions.find((item) => item.value === classValue)?.label || (classValue ? `${classValue}반` : '');
-            return {
-                value,
-                label: `${gradeLabel} ${classLabel}`.trim() || value,
-            };
-        });
-    }, [availableClassTargets, classOptions, gradeOptions]);
+  const handleViewChange = (viewType: CalendarViewType) => {
+    const api = calendarRef.current?.getApi();
+    if (!api || api.view.type === viewType) return;
+    api.changeView(viewType);
+  };
 
-    const formatEventTargetLabel = (event?: CalendarEvent) => {
-        if (!event || event.eventType === 'holiday' || event.targetType === 'all' || event.targetType === 'common') {
-            return '전체';
-        }
-
-        const [gradeValue, classValue] = String(event.targetClass || '').split('-');
-        const gradeLabel = gradeOptions.find((item) => item.value === gradeValue)?.label || (gradeValue ? `${gradeValue}학년` : '');
-        const classLabel = classOptions.find((item) => item.value === classValue)?.label || (classValue ? `${classValue}반` : '');
-        return `${gradeLabel} ${classLabel}`.trim() || '전체';
-    };
-
-    const toLocalYmd = (date: Date) => {
-        const offset = date.getTimezoneOffset() * 60000;
-        return new Date(date.getTime() - offset).toISOString().split('T')[0];
-    };
-
-    const formatDayHeading = (dateText: string) => {
-        const parsed = new Date(`${dateText}T00:00:00`);
-        return new Intl.DateTimeFormat('ko-KR', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            weekday: 'long',
-        }).format(parsed);
-    };
-
-    const formatEventTitle = (event: CalendarEvent) => {
-        const rawTitle = String(event.title || '').trim();
-        if (rawTitle) return rawTitle;
-        if (event.eventType === 'holiday') return '공휴일';
-        return getScheduleCategoryMeta(event.eventType, categories).label || '일정';
-    };
-
-    const listRows = useMemo(() => {
-        if (currentViewType !== 'listMonth' || !visibleRange.start || !visibleRange.end) return [];
-
-        const filtered = events
-            .filter((event) => event.start >= visibleRange.start && event.start < visibleRange.end)
-            .sort((a, b) => {
-                if (a.start !== b.start) return a.start.localeCompare(b.start);
-                return a.title.localeCompare(b.title);
-            });
-
-        const grouped = new Map<string, CalendarEvent[]>();
-        filtered.forEach((event) => {
-            const key = event.start;
-            const current = grouped.get(key) || [];
-            current.push(event);
-            grouped.set(key, current);
-        });
-
-        return Array.from(grouped.entries()).map(([date, dateEvents]) => ({
-            date,
-            events: dateEvents,
-        }));
-    }, [currentViewType, events, visibleRange.end, visibleRange.start]);
-
-    const loadHolidaySource = async (targetYear: string): Promise<HolidayItem[]> => {
-        const byConfig = await getDoc(doc(db, 'site_settings', `holidays_${targetYear}`));
-        if (byConfig.exists()) {
-            const data = byConfig.data() as { items?: HolidayItem[] };
-            if (Array.isArray(data.items) && data.items.length > 0) {
-                return data.items.map((it) => ({ ...it, eventType: 'holiday' }));
-            }
-        }
-        if (targetYear === '2026') {
-            return DEFAULT_2026_HOLIDAYS;
-        }
-        throw new Error(`${targetYear} 공휴일 데이터가 준비되지 않았습니다.`);
-    };
-
-    const populateHolidays = async () => {
-        if (!config) return;
-        if (!confirm('기존 공휴일을 초기화하고 다시 불러오시겠습니까?')) return;
-
-        try {
-            const path = `years/${year}/semesters/${semester}/calendar`;
-            const holidayQuery = query(collection(db, path), where('eventType', '==', 'holiday'));
-            const holidaySnap = await getDocs(holidayQuery);
-
-            const holidays = await loadHolidaySource(year);
-            const batch = writeBatch(db);
-
-            holidaySnap.forEach((item) => batch.delete(item.ref));
-            holidays.forEach((holiday) => {
-                const docId = `holiday_${holiday.start}_${holiday.title.replace(/\s+/g, '')}`;
-                const ref = doc(db, path, docId);
-                batch.set(ref, {
-                    title: holiday.title,
-                    start: holiday.start,
-                    end: holiday.start,
-                    eventType: 'holiday',
-                    targetType: 'common',
-                    targetClass: null,
-                    description: '대한민국 공휴일',
-                    updatedAt: new Date(),
-                    createdAt: new Date(),
-                });
-            });
-
-            await batch.commit();
-            alert(`공휴일 ${holidays.length}건을 적용했습니다.`);
-        } catch (error: any) {
-            console.error(error);
-            alert(`공휴일 적용 실패: ${error.message}`);
-        }
-    };
-
+  const renderDayCellHeader = (_date: Date, dayNumberText: string) => {
+    const dayLabel = dayNumberText.replace(/[^\d]/g, "");
     return (
-        <div className="flex h-full min-h-[500px] flex-col overflow-hidden rounded-xl bg-white p-4 shadow-sm md:min-h-0">
-            <div className="mb-2 flex flex-col items-start justify-between gap-2 md:flex-row md:items-center">
-                <h2 className="whitespace-nowrap text-lg font-bold text-gray-800">
-                    <i className="far fa-calendar-alt mr-2 text-blue-600"></i>학사 일정
-                </h2>
+      <span className="student-calendar-day-head">
+        <span className="student-calendar-day-label">{dayLabel}</span>
+      </span>
+    );
+  };
 
-                <div className="flex w-full flex-wrap items-center gap-2 md:w-auto">
-                    <button
-                        onClick={onSearchClick}
-                        className="shrink-0 rounded-lg border border-gray-200 bg-gray-50 p-1.5 text-gray-600 transition hover:text-blue-600"
-                        title="검색"
-                    >
-                        <i className="fas fa-search"></i>
-                    </button>
+  return (
+    <div
+      className={`student-calendar-section student-calendar-shell teacher-calendar-shell ${isMonthView ? "student-calendar-shell--month" : ""}`}
+    >
+      <div className="student-calendar-shell__header">
+        <div className="student-calendar-shell__header-main">
+          <div className="student-calendar-shell__heading-group">
+            <span className="student-calendar-shell__eyebrow">
+              <span className="student-calendar-shell__eyebrow-icon">
+                <CalendarBadgeIcon />
+              </span>
+              학사 일정
+            </span>
 
-                    <select
-                        value={filterClass}
-                        onChange={(e) => onFilterChange(e.target.value)}
-                        className="max-w-[120px] shrink-0 rounded-lg border border-gray-200 bg-gray-50 p-1.5 text-sm text-gray-700 outline-none"
-                    >
-                        <option value="all">전체</option>
-                        <option value="common">공통</option>
-                        {classTargets.map((target) => (
-                            <option key={target.value} value={target.value}>{target.label}</option>
-                        ))}
-                    </select>
+            <div className="student-calendar-shell__month-row">
+              <div className="student-calendar-shell__month-badge">
+                <button
+                  type="button"
+                  onClick={() => handleNavigate("prev")}
+                  className="student-calendar-shell__nav-button student-calendar-shell__nav-button--month"
+                  aria-label="이전 달"
+                  title="이전 달"
+                >
+                  <ChevronLeftIcon />
+                </button>
 
-                    <div className="ml-auto flex items-center gap-1 md:ml-2">
-                        <button onClick={onAddEvent} className="whitespace-nowrap rounded-md bg-blue-600 px-2 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-blue-700">
-                            <i className="fas fa-plus"></i> 추가
-                        </button>
-                        <button onClick={populateHolidays} className="whitespace-nowrap rounded-md bg-green-600 px-2 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-green-700" title="공휴일 불러오기">
-                            <i className="fas fa-calendar-check"></i> 공휴일
-                        </button>
-                    </div>
+                <div className="student-calendar-shell__month-label">
+                  <h2 className="student-calendar-shell__month-title">
+                    {currentTitle || "학사 일정"}
+                  </h2>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleNavigate("next")}
+                  className="student-calendar-shell__nav-button student-calendar-shell__nav-button--month"
+                  aria-label="다음 달"
+                  title="다음 달"
+                >
+                  <ChevronRightIcon />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="student-calendar-shell__toolbar">
+            <div className="student-calendar-shell__calendar-tools">
+              <div className="student-calendar-shell__control-cluster">
+                <button
+                  type="button"
+                  onClick={() => handleNavigate("today")}
+                  className="student-calendar-shell__control-button"
+                >
+                  오늘
+                </button>
+              </div>
+
+              <div className="student-calendar-shell__control-cluster student-calendar-shell__control-cluster--view">
+                <div className="student-calendar-shell__view-toggle">
+                  <button
+                    type="button"
+                    onClick={() => handleViewChange("dayGridMonth")}
+                    aria-pressed={isMonthView}
+                    className={`student-calendar-shell__view-button ${isMonthView ? "is-active" : ""}`}
+                  >
+                    달력
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleViewChange("listMonth")}
+                    aria-pressed={currentViewType === "listMonth"}
+                    className={`student-calendar-shell__view-button ${currentViewType === "listMonth" ? "is-active" : ""}`}
+                  >
+                    목록
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={onSearchClick}
+                  className="student-calendar-shell__search-button"
+                  title="일정 검색"
+                  aria-label="일정 검색"
+                >
+                  <SearchIcon />
+                  <span>검색</span>
+                </button>
+              </div>
+
+              <select
+                value={filterClass}
+                onChange={(e) => onFilterChange(e.target.value)}
+                className="student-calendar-shell__filter-select"
+                aria-label="일정 대상 필터"
+              >
+                <option value="all">전체</option>
+                <option value="common">공통</option>
+                {classTargets.map((target) => (
+                  <option key={target.value} value={target.value}>
+                    {target.label}
+                  </option>
+                ))}
+              </select>
             </div>
 
-            <div
-                ref={calendarWrapperRef}
-                className={`calendar-wrapper relative flex-1 min-h-0 overflow-hidden ${currentViewType === 'listMonth' ? 'custom-list-active' : ''}`}
-            >
-                <FullCalendar
-                    ref={calendarRef}
-                    plugins={[dayGridPlugin, interactionPlugin, listPlugin]}
-                    initialView="dayGridMonth"
-                    locale="ko"
-                    allDayText=""
-                    displayEventTime={false}
-                    headerToolbar={{ left: 'prev,next today', center: 'title', right: 'dayGridMonth,listMonth' }}
-                    buttonText={{ dayGridMonth: '달력', listMonth: '목록' }}
-                    events={fcEvents}
-                    datesSet={(arg) => {
-                        setCurrentViewType(arg.view.type);
-                        setVisibleRange({
-                            start: toLocalYmd(arg.start),
-                            end: toLocalYmd(arg.end),
-                        });
-                    }}
-                    dateClick={(arg) => onDateClick(arg.dateStr)}
-                    dayCellDidMount={(arg) => {
-                        arg.el.ondblclick = () => {
-                            const dateStr = toLocalYmd(arg.date);
-                            onDateClick(dateStr);
-                            onDateDoubleClick(dateStr);
-                        };
-                    }}
-                    eventClick={(arg) => onEventClick(arg.event.extendedProps as CalendarEvent)}
-                    eventContent={(arg) => {
-                        const event = arg.event.extendedProps as CalendarEvent;
-                        const isHoliday = event?.eventType === 'holiday';
-                        const meta = getScheduleCategoryMeta(event?.eventType, categories);
-                        const safeTitle = String(arg.event.title || '').trim() || (isHoliday ? '공휴일' : '일정');
-                        const categoryLabel = isHoliday ? '공휴일' : meta.label;
-                        const categoryColor = isHoliday ? '#ef4444' : meta.color;
-                        const targetLabel = formatEventTargetLabel(event);
+            <div className="student-calendar-shell__calendar-tools">
+              <button
+                type="button"
+                onClick={onAddEvent}
+                className="student-calendar-shell__control-button student-calendar-shell__action-button"
+              >
+                <i className="fas fa-plus mr-1"></i>
+                추가
+              </button>
+              <button
+                type="button"
+                onClick={populateHolidays}
+                className="student-calendar-shell__control-button student-calendar-shell__action-button student-calendar-shell__action-button--success"
+                title="공휴일 불러오기"
+              >
+                <i className="fas fa-calendar-check mr-1"></i>
+                공휴일
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
 
-                        if (arg.view.type === 'listMonth') {
-                            return (
-                                <div className="fc-list-row-grid" title={`${categoryLabel} | ${safeTitle} | ${targetLabel}`}>
-                                    <div className="fc-list-category-cell">
-                                        <span className="fc-list-category-dot" style={{ backgroundColor: categoryColor }}></span>
-                                        <span className="fc-list-category-label">{categoryLabel}</span>
-                                    </div>
-                                    <div className={`fc-list-title-cell ${isHoliday ? 'holiday-segment-title' : ''}`}>
-                                        {safeTitle}
-                                    </div>
-                                    <div className="fc-list-target-cell">
-                                        {targetLabel}
-                                    </div>
-                                </div>
-                            );
-                        }
+      <div
+        className={`calendar-wrapper student-calendar-shell__body ${currentViewType === "listMonth" ? "custom-list-active" : ""}`}
+        data-calendar-view={currentViewType}
+      >
+        <FullCalendar
+          ref={calendarRef}
+          plugins={[dayGridPlugin, interactionPlugin, listPlugin]}
+          initialView="dayGridMonth"
+          locale="ko"
+          allDayText=""
+          displayEventTime={false}
+          headerToolbar={false}
+          events={fcEvents}
+          datesSet={(arg) => {
+            setCurrentViewType(arg.view.type as CalendarViewType);
+            setCurrentTitle(arg.view.title);
+            setVisibleRange({
+              start: toLocalYmd(arg.start),
+              end: toLocalYmd(arg.end),
+            });
+          }}
+          dateClick={(arg) => onDateClick(arg.dateStr)}
+          dayCellDidMount={(arg) => {
+            arg.el.ondblclick = () => {
+              const dateStr = toLocalYmd(arg.date);
+              onDateClick(dateStr);
+              onDateDoubleClick(dateStr);
+            };
+          }}
+          eventClick={(arg) =>
+            onEventClick(arg.event.extendedProps as CalendarEvent)
+          }
+          eventDidMount={(arg) => {
+            const event = arg.event.extendedProps as CalendarEvent & {
+              inclusiveSpanDays?: number;
+              isMultiDayRange?: boolean;
+            };
+            const isRangeEvent =
+              typeof event.inclusiveSpanDays === "number"
+                ? event.inclusiveSpanDays > 1
+                : Boolean(event.isMultiDayRange);
+            const harness = arg.el.closest(
+              ".fc-daygrid-event-harness, .fc-daygrid-event-harness-abs",
+            );
+            if (!harness) return;
+            harness.classList.toggle(
+              "student-calendar-event-harness--range",
+              isRangeEvent,
+            );
+            harness.classList.toggle(
+              "student-calendar-event-harness--single",
+              !isRangeEvent,
+            );
 
-                        if (arg.view.type !== 'dayGridMonth') return undefined;
-                        return (
-                            <div className={`fc-segment-title ${isHoliday ? 'holiday-segment-title' : ''}`} title={safeTitle}>
-                                {safeTitle}
-                            </div>
-                        );
-                    }}
-                    height="100%"
-                    contentHeight="100%"
-                    dayMaxEvents
-                    fixedWeekCount={false}
-                    showNonCurrentDates={false}
-                    dayCellClassNames={(arg) => {
-                        const dateStr = toLocalYmd(arg.date);
-                        const classes: string[] = [];
-                        if (holidayDateSet.has(dateStr)) classes.push('fc-day-holiday');
-                        if (selectedDate === dateStr) classes.push('fc-day-selected');
-                        return classes;
-                    }}
-                />
-                {currentViewType === 'listMonth' && (
-                    <div
-                        className="custom-schedule-list absolute inset-x-0 overflow-y-auto rounded-b-xl border border-t-0 border-gray-200 bg-white"
-                        style={{ top: `${listTopOffset}px`, height: `calc(100% - ${listTopOffset}px)` }}
+            if (isRangeEvent) return;
+
+            const harnessElement = harness as HTMLElement;
+            const eventElement = arg.el as HTMLElement;
+            harnessElement.style.setProperty("left", "0px");
+            harnessElement.style.setProperty("right", "0px");
+            harnessElement.style.setProperty("inset-inline", "0px");
+            harnessElement.style.setProperty("width", "100%");
+            harnessElement.style.setProperty("max-width", "100%");
+            harnessElement.style.setProperty("min-width", "0px");
+            harnessElement.style.setProperty("overflow", "hidden");
+            eventElement.style.setProperty("width", "100%");
+            eventElement.style.setProperty("max-width", "100%");
+            eventElement.style.setProperty("min-width", "0px");
+            eventElement.style.setProperty("overflow", "hidden");
+          }}
+          dayCellContent={(arg) =>
+            renderDayCellHeader(arg.date, arg.dayNumberText)
+          }
+          eventContent={(arg) => {
+            const event = arg.event.extendedProps as CalendarEvent & {
+              inclusiveSpanDays?: number;
+              isMultiDayRange?: boolean;
+            };
+            const isHoliday = event?.eventType === "holiday";
+            const meta = getScheduleCategoryMeta(event?.eventType, categories);
+            const safeTitle =
+              String(arg.event.title || "").trim() ||
+              (isHoliday ? "공휴일" : "일정");
+            const categoryLabel = isHoliday ? "공휴일" : meta.label;
+            const categoryColor = isHoliday ? "#ef4444" : meta.color;
+            const targetLabel = formatEventTargetLabel(event);
+
+            if (arg.view.type === "listMonth") {
+              return (
+                <div
+                  className="fc-list-row-grid"
+                  title={`${categoryLabel} | ${safeTitle} | ${targetLabel}`}
+                >
+                  <div className="fc-list-category-cell">
+                    <span
+                      className="fc-list-category-dot"
+                      style={{ backgroundColor: categoryColor }}
+                    ></span>
+                    <span className="fc-list-category-label">
+                      {categoryLabel}
+                    </span>
+                  </div>
+                  <div
+                    className={`fc-list-title-cell ${isHoliday ? "holiday-segment-title" : ""}`}
+                  >
+                    {safeTitle}
+                  </div>
+                  <div className="fc-list-target-cell">{targetLabel}</div>
+                </div>
+              );
+            }
+
+            if (arg.view.type !== "dayGridMonth") return undefined;
+            const isRangeEvent =
+              typeof event.inclusiveSpanDays === "number"
+                ? event.inclusiveSpanDays > 1
+                : Boolean(event.isMultiDayRange);
+            const eventLabelClassName = [
+              "student-calendar-event-label",
+              isRangeEvent
+                ? "student-calendar-event-label--range"
+                : "student-calendar-event-label--single",
+              "fc-segment-title",
+              isHoliday ? "is-holiday" : "",
+              isRangeEvent ? "is-range" : "",
+              !isRangeEvent ? "is-single" : "",
+              arg.isStart ? "is-start" : "",
+              arg.isEnd ? "is-end" : "",
+              !arg.isStart && !arg.isEnd ? "is-middle" : "",
+            ]
+              .filter(Boolean)
+              .join(" ");
+            return (
+              <div className={eventLabelClassName} title={safeTitle}>
+                <span className="student-calendar-event-label__text">
+                  {safeTitle}
+                </span>
+              </div>
+            );
+          }}
+          height="100%"
+          contentHeight="100%"
+          expandRows
+          eventDisplay="block"
+          dayMaxEvents={2}
+          fixedWeekCount
+          showNonCurrentDates={false}
+          dayCellClassNames={(arg) => {
+            const dateStr = toLocalYmd(arg.date);
+            const classes: string[] = [];
+            if (holidayDateSet.has(dateStr)) classes.push("fc-day-holiday");
+            if (selectedDate === dateStr) classes.push("fc-day-selected");
+            return classes;
+          }}
+        />
+        {currentViewType === "listMonth" && (
+          <div className="custom-schedule-list absolute inset-0 overflow-y-auto rounded-xl border border-gray-200 bg-white">
+            {listRows.map((group) => (
+              <div key={group.date}>
+                <div className="border-t border-gray-200 bg-gray-50 px-4 py-3 text-lg font-extrabold text-gray-900 first:border-t-0">
+                  {formatDayHeading(group.date)}
+                </div>
+                {group.events.map((event) => {
+                  const isHoliday = event.eventType === "holiday";
+                  const meta = getScheduleCategoryMeta(
+                    event.eventType,
+                    categories,
+                  );
+                  const categoryLabel = isHoliday ? "공휴일" : meta.label;
+                  const categoryColor = isHoliday ? "#ef4444" : meta.color;
+                  const eventTitle = formatEventTitle(event);
+                  const targetLabel = formatEventTargetLabel(event);
+
+                  return (
+                    <button
+                      key={event.id}
+                      type="button"
+                      onClick={() => onEventClick(event)}
+                      className="grid w-full cursor-pointer grid-cols-[170px_minmax(0,1fr)_116px] items-center gap-5 px-4 py-3 text-left transition hover:bg-slate-50"
                     >
-                        {listRows.map((group) => (
-                            <div key={group.date}>
-                                <div className="border-t border-gray-200 bg-gray-50 px-4 py-3 text-lg font-extrabold text-gray-900 first:border-t-0">
-                                    {formatDayHeading(group.date)}
-                                </div>
-                                {group.events.map((event) => {
-                                    const isHoliday = event.eventType === 'holiday';
-                                    const meta = getScheduleCategoryMeta(event.eventType, categories);
-                                    const categoryLabel = isHoliday ? '공휴일' : meta.label;
-                                    const categoryColor = isHoliday ? '#ef4444' : meta.color;
-                                    const eventTitle = formatEventTitle(event);
-                                    const targetLabel = formatEventTargetLabel(event);
+                      <div className="flex min-w-0 items-center gap-2 font-bold text-gray-700">
+                        <span
+                          className="h-3.5 w-3.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: categoryColor }}
+                        ></span>
+                        <span className="truncate">{categoryLabel}</span>
+                      </div>
+                      <div
+                        className={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-bold ${
+                          isHoliday ? "text-red-500" : "text-gray-900"
+                        }`}
+                        title={eventTitle}
+                      >
+                        {eventTitle}
+                      </div>
+                      <div
+                        className="truncate text-sm font-semibold text-gray-600"
+                        title={targetLabel}
+                      >
+                        {targetLabel}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
-                                    return (
-                                        <button
-                                            key={event.id}
-                                            type="button"
-                                            onClick={() => onEventClick(event)}
-                                            className="grid w-full cursor-pointer grid-cols-[170px_minmax(0,1fr)_116px] items-center gap-5 px-4 py-3 text-left transition hover:bg-slate-50"
-                                        >
-                                            <div className="flex min-w-0 items-center gap-2 font-bold text-gray-700">
-                                                <span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ backgroundColor: categoryColor }}></span>
-                                                <span className="truncate">{categoryLabel}</span>
-                                            </div>
-                                            <div
-                                                className={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-bold ${
-                                                    isHoliday ? 'text-red-500' : 'text-gray-900'
-                                                }`}
-                                                title={eventTitle}
-                                            >
-                                                {eventTitle}
-                                            </div>
-                                            <div className="truncate text-sm font-semibold text-gray-600" title={targetLabel}>
-                                                {targetLabel}
-                                            </div>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
-
-            <style>{`
+      <style>{`
                 .fc-day-sun a { color: #ef4444 !important; text-decoration: none; font-weight: 700 !important; }
                 .fc-day-sat a { color: #3b82f6 !important; text-decoration: none; font-weight: 700 !important; }
                 .fc-day-holiday a { color: #ef4444 !important; text-decoration: none; font-weight: 700 !important; }
@@ -538,8 +802,8 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                     height: calc(100% - 1px);
                 }
             `}</style>
-        </div>
-    );
+    </div>
+  );
 };
 
 export default TeacherCalendarSection;

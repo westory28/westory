@@ -1,18 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { collection, limit, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../contexts/AuthContext';
 import { getYearSemester } from '../../../lib/semesterScope';
+import {
+    getStudentClassKey,
+    subscribeVisibleNotices,
+    type VisibleNotice,
+} from '../../../lib/visibleSchedule';
 
-interface Notice {
-    id: string;
-    targetType: string;
-    targetClass?: string;
-    category: string;
-    content: string;
-    createdAt: any;
-    targetDate?: string;
-}
+type Notice = VisibleNotice;
 
 const NoticeBoard: React.FC = () => {
     const { config, userData } = useAuth();
@@ -25,18 +21,8 @@ const NoticeBoard: React.FC = () => {
         const { year, semester } = getYearSemester(config);
 
         const path = `years/${year}/semesters/${semester}/notices`;
-        const q = query(collection(db, path), orderBy('createdAt', 'desc'), limit(200));
-
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const userClassStr = (userData?.grade && userData?.class) ? `${userData.grade}-${userData.class}` : null;
-
-            const loadedNotices: Notice[] = [];
-            snapshot.forEach((doc) => {
-                const d = doc.data() as Notice;
-                if (d.targetType === 'common' || (userClassStr && d.targetType === 'class' && d.targetClass === userClassStr)) {
-                    loadedNotices.push({ ...d, id: doc.id });
-                }
-            });
+        const userClassStr = getStudentClassKey(userData?.grade, userData?.class);
+        const unsubscribe = subscribeVisibleNotices(db, path, userClassStr, (loadedNotices) => {
             setNotices(loadedNotices);
             setLoading(false);
         }, (error) => {
@@ -45,7 +31,7 @@ const NoticeBoard: React.FC = () => {
         });
 
         return () => unsubscribe();
-    }, [config, userData]);
+    }, [config?.year, config?.semester, userData?.class, userData?.grade]);
 
     useEffect(() => {
         setActiveIndex(0);

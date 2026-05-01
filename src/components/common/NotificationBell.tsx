@@ -7,7 +7,7 @@ import {
   markNotificationsRead,
   subscribeNotificationInbox,
 } from "../../lib/notifications";
-import type { WestoryNotification } from "../../types";
+import type { WestoryNotification, WestoryNotificationInbox } from "../../types";
 import { useAppToast } from "./AppToastProvider";
 
 const formatNotificationTime = (value: unknown) => {
@@ -38,28 +38,32 @@ const getNotificationIconClassName = (type: WestoryNotification["type"]) => {
 };
 
 const NotificationBell: React.FC = () => {
-  const { currentUser, config } = useAuth();
+  const { currentUser, config, userData } = useAuth();
   const { showToast } = useAppToast();
   const [open, setOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState<WestoryNotification[]>([]);
+  const [inbox, setInbox] = useState<WestoryNotificationInbox | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [clearing, setClearing] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   const displayUnreadCount = unreadCount > 99 ? "99+" : String(unreadCount);
   const hasNotifications = notifications.length > 0;
+  const includeBroadcasts = String(userData?.role || "").trim() === "student";
 
   useEffect(() => {
     if (!currentUser?.uid || !config) {
       setUnreadCount(0);
       setNotifications([]);
+      setInbox(null);
       return undefined;
     }
 
-    return subscribeNotificationInbox(config, currentUser.uid, (inbox) =>
-      setUnreadCount(inbox.unreadCount),
-    );
+    return subscribeNotificationInbox(config, currentUser.uid, (nextInbox) => {
+      setInbox(nextInbox);
+      setUnreadCount(nextInbox.unreadCount);
+    });
   }, [config?.semester, config?.year, currentUser?.uid]);
 
   useEffect(() => {
@@ -71,6 +75,11 @@ const NotificationBell: React.FC = () => {
         const nextNotifications = await loadNotifications(
           config,
           currentUser.uid,
+          {
+            includeBroadcasts,
+            lastBroadcastReadAt: inbox?.lastBroadcastReadAt,
+            broadcastClearedAt: inbox?.broadcastClearedAt,
+          },
         );
         if (!cancelled) setNotifications(nextNotifications);
       } catch (error) {
@@ -82,7 +91,15 @@ const NotificationBell: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [config?.semester, config?.year, currentUser?.uid, open]);
+  }, [
+    config?.semester,
+    config?.year,
+    currentUser?.uid,
+    includeBroadcasts,
+    inbox?.broadcastClearedAt,
+    inbox?.lastBroadcastReadAt,
+    open,
+  ]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -100,13 +117,17 @@ const NotificationBell: React.FC = () => {
   }, [open]);
 
   useEffect(() => {
-    if (!open || !config || unreadCount <= 0) return;
+    if (!open || !config) return;
+    const hasUnreadBroadcast = notifications.some(
+      (notification) => notification.broadcast && !notification.readAt,
+    );
+    if (unreadCount <= 0 && !hasUnreadBroadcast) return;
     void markNotificationsRead(config)
       .then(() => setUnreadCount(0))
       .catch((error) => {
         console.error("Failed to mark notifications as read:", error);
       });
-  }, [config?.semester, config?.year, open, unreadCount]);
+  }, [config?.semester, config?.year, notifications, open, unreadCount]);
 
   const panelTitle = useMemo(
     () => (unreadCount > 0 ? `새 알림 ${displayUnreadCount}개` : "알림"),

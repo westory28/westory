@@ -4,6 +4,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
   orderBy,
   query,
   serverTimestamp,
@@ -44,6 +45,8 @@ import {
 import { normalizeMapResource, type MapResource } from "../../lib/mapResources";
 import { createManagedNotifications } from "../../lib/notifications";
 import { getSemesterCollectionPath } from "../../lib/semesterScope";
+
+const HISTORY_CLASSROOM_RESULT_LIMIT = 500;
 
 interface StudentOption {
   uid: string;
@@ -664,13 +667,18 @@ const ManageHistoryClassroom: React.FC = () => {
         "history_classroom_results",
       );
       let resultSnap = await getDocs(
-        query(collection(db, resultPath), orderBy("createdAt", "desc")),
+        query(
+          collection(db, resultPath),
+          orderBy("createdAt", "desc"),
+          limit(HISTORY_CLASSROOM_RESULT_LIMIT),
+        ),
       );
       if (resultSnap.empty) {
         resultSnap = await getDocs(
           query(
             collection(db, "history_classroom_results"),
             orderBy("createdAt", "desc"),
+            limit(HISTORY_CLASSROOM_RESULT_LIMIT),
           ),
         );
       }
