@@ -133,30 +133,11 @@ const TeacherNoticeBoard: React.FC = () => {
 
   return (
     <div className="flex h-full min-h-[260px] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:min-h-0">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex items-center">
         <h3 className="flex items-center text-lg font-extrabold text-gray-900">
           <i className="fas fa-bullhorn mr-2 text-blue-600"></i>
           알림장
         </h3>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setIsOrderModalOpen(true)}
-            disabled={notices.length <= 1}
-            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-extrabold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-45"
-          >
-            <i className="fas fa-list-ol mr-1"></i>
-            순서
-          </button>
-          <button
-            type="button"
-            onClick={handleCreate}
-            className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-extrabold text-blue-700 transition hover:bg-blue-100"
-          >
-            <i className="fas fa-plus mr-1"></i>
-            쓰기
-          </button>
-        </div>
       </div>
 
       <div className="min-h-0 flex-1">
@@ -241,7 +222,7 @@ const TeacherNoticeBoard: React.FC = () => {
               </span>
             </div>
 
-            <div className="mt-3 flex items-center justify-between gap-3">
+            <div className="mt-3 flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => handleEdit(activeNotice)}
@@ -268,6 +249,26 @@ const TeacherNoticeBoard: React.FC = () => {
                   ))}
                 </div>
               )}
+
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsOrderModalOpen(true)}
+                  disabled={notices.length <= 1}
+                  className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-extrabold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  <i className="fas fa-list-ol mr-1"></i>
+                  순서
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCreate}
+                  className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-extrabold text-blue-700 transition hover:bg-blue-100"
+                >
+                  <i className="fas fa-plus mr-1"></i>
+                  쓰기
+                </button>
+              </div>
             </div>
           </div>
         )}
