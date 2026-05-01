@@ -835,33 +835,6 @@ const SettingsNotifications: React.FC = () => {
     );
   };
 
-  const renderEventGroup = (
-    title: string,
-    description: string,
-    icon: string,
-    events: NotificationEventDefinition[],
-    action?: React.ReactNode,
-  ) => (
-    <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-      <div className="mb-4 flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-          <i className={icon} aria-hidden="true"></i>
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h4 className="text-base font-extrabold text-gray-900">{title}</h4>
-            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-extrabold text-emerald-700">
-              {events.filter((event) => event.status === "connected").length}개
-            </span>
-          </div>
-          <p className="mt-1 text-sm text-gray-500">{description}</p>
-        </div>
-      </div>
-      <div className="space-y-2">{events.map(renderEventRow)}</div>
-      {action && <div className="mt-3">{action}</div>}
-    </section>
-  );
-
   const renderAllEvents = (events: NotificationEventDefinition[]) => (
     <div className="space-y-2">{events.map(renderEventRow)}</div>
   );
@@ -978,39 +951,6 @@ const SettingsNotifications: React.FC = () => {
           ))}
         </div>
       </div>
-
-      {activeTab === "overview" && (
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-          {renderEventGroup(
-            AUDIENCE_META.students.title,
-            "학생 화면에 표시되는 주요 알림입니다.",
-            AUDIENCE_META.students.icon,
-            studentEvents.slice(0, 4),
-            <button
-              type="button"
-              onClick={() => setActiveTab("students")}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm font-extrabold text-blue-600 transition hover:border-blue-200 hover:bg-blue-50"
-            >
-              전체 학생 알림 보기
-              <i className="fas fa-chevron-right text-xs" aria-hidden="true" />
-            </button>,
-          )}
-          {renderEventGroup(
-            AUDIENCE_META.teachers.title,
-            "교사 화면에 표시되는 주요 알림입니다.",
-            AUDIENCE_META.teachers.icon,
-            teacherEvents.slice(0, 4),
-            <button
-              type="button"
-              onClick={() => setActiveTab("teachers")}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm font-extrabold text-blue-600 transition hover:border-blue-200 hover:bg-blue-50"
-            >
-              전체 교사 알림 보기
-              <i className="fas fa-chevron-right text-xs" aria-hidden="true" />
-            </button>,
-          )}
-        </div>
-      )}
 
       {activeTab !== "overview" && (
         <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
