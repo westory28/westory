@@ -329,20 +329,21 @@ const ManageHistoryDictionary: React.FC = () => {
     <div className="min-h-screen bg-slate-50 px-4 py-6 lg:px-6 xl:px-8">
       <div className="mx-auto max-w-7xl">
         <div className="grid gap-4 xl:grid-cols-[13rem_minmax(24rem,0.78fr)_minmax(0,1.2fr)]">
-          <aside className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-            <nav className="space-y-2" aria-label="역사 사전 관리 메뉴">
+          <aside className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <nav
+              className="divide-y divide-slate-200"
+              aria-label="역사 사전 관리 메뉴"
+            >
               {[
                 {
                   id: "terms" as const,
                   label: "등록된 단어",
-                  count: terms.length,
-                  icon: "fa-book",
+                  description: "등록 풀이 수정",
                 },
                 {
                   id: "requests" as const,
                   label: "학생 요청 단어",
-                  count: openRequests.length,
-                  icon: "fa-inbox",
+                  description: "요청 풀이 작성",
                 },
               ].map((item) => {
                 const active = activePanel === item.id;
@@ -358,27 +359,27 @@ const ManageHistoryDictionary: React.FC = () => {
                         setSelectedTermId("");
                       }
                     }}
-                    className={`flex min-h-12 w-full items-center justify-between gap-3 rounded-lg border px-3 text-left text-sm font-extrabold transition ${
+                    className={`relative block min-h-[4.75rem] w-full px-5 py-4 text-left transition ${
                       active
-                        ? "border-blue-600 bg-blue-600 text-white shadow-sm"
-                        : "border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:bg-blue-50"
+                        ? "bg-blue-50 text-blue-700"
+                        : "bg-white text-slate-800 hover:bg-slate-50"
                     }`}
                   >
-                    <span className="flex min-w-0 items-center gap-2">
-                      <i
-                        className={`fas ${item.icon} shrink-0 text-xs`}
+                    {active && (
+                      <span
+                        className="absolute inset-y-0 left-0 w-1 bg-blue-600"
                         aria-hidden="true"
-                      ></i>
-                      <span className="truncate">{item.label}</span>
+                      />
+                    )}
+                    <span className="block text-sm font-extrabold">
+                      {item.label}
                     </span>
                     <span
-                      className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${
-                        active
-                          ? "bg-white/20 text-white"
-                          : "bg-slate-100 text-slate-500"
+                      className={`mt-2 block text-xs font-bold ${
+                        active ? "text-blue-600" : "text-slate-500"
                       }`}
                     >
-                      {item.count}
+                      {item.description}
                     </span>
                   </button>
                 );
