@@ -23,6 +23,7 @@ type ConfigLike = Pick<SystemConfig, "year" | "semester"> | null | undefined;
 
 const TERMS_COLLECTION = "history_dictionary_terms";
 const REQUESTS_COLLECTION = "history_dictionary_requests";
+const TEACHER_TERMS_LIMIT = 500;
 
 export const normalizeHistoryDictionaryWord = (value: string) =>
   String(value || "")
@@ -194,19 +195,36 @@ export const subscribeTeacherHistoryDictionaryRequests = (
 
 export const subscribeTeacherHistoryDictionaryTerms = (
   onChange: (terms: HistoryDictionaryTerm[]) => void,
+  onError?: (error: Error) => void,
 ): Unsubscribe =>
   onSnapshot(
     query(
       collection(db, TERMS_COLLECTION),
       orderBy("updatedAt", "desc"),
-      limit(100),
+      limit(TEACHER_TERMS_LIMIT),
     ),
     (snapshot) => {
       onChange(
         snapshot.docs.map((item) => mapDoc<HistoryDictionaryTerm>(item)),
       );
     },
+    (error) => {
+      console.error("Failed to subscribe history dictionary terms:", error);
+      onError?.(error);
+      onChange([]);
+    },
   );
+
+export const loadTeacherHistoryDictionaryTerms = async () => {
+  const snapshot = await getDocs(
+    query(
+      collection(db, TERMS_COLLECTION),
+      orderBy("updatedAt", "desc"),
+      limit(TEACHER_TERMS_LIMIT),
+    ),
+  );
+  return snapshot.docs.map((item) => mapDoc<HistoryDictionaryTerm>(item));
+};
 
 export const requestHistoryDictionaryTerm = async (
   config: ConfigLike,

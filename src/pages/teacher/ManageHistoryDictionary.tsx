@@ -6,6 +6,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import {
   approveHistoryDictionaryTermForRequests,
   deleteStudentHistoryDictionaryWordByTeacher,
+  loadTeacherHistoryDictionaryTerms,
   normalizeHistoryDictionaryWord,
   saveHistoryDictionaryTerm,
   saveHistoryDictionaryTermsBulk,
@@ -197,12 +198,22 @@ const ManageHistoryDictionary: React.FC = () => {
   useEffect(() => {
     const unsubscribeRequests =
       subscribeTeacherHistoryDictionaryRequests(setRequests);
-    const unsubscribeTerms = subscribeTeacherHistoryDictionaryTerms(setTerms);
+    const unsubscribeTerms = subscribeTeacherHistoryDictionaryTerms(
+      setTerms,
+      () => {
+        showToast({
+          tone: "error",
+          title: "등록된 단어 목록을 불러오지 못했습니다.",
+          message:
+            "새로고침 후에도 계속 비어 있으면 Firestore 읽기 권한을 확인해야 합니다.",
+        });
+      },
+    );
     return () => {
       unsubscribeRequests();
       unsubscribeTerms();
     };
-  }, []);
+  }, [showToast]);
 
   useEffect(() => {
     if (!config || !currentUser?.uid) {
@@ -661,6 +672,22 @@ const ManageHistoryDictionary: React.FC = () => {
         title: "역사 사전 용어를 등록했습니다.",
         message: `${result.savedCount}개 항목을 학생용 풀이로 저장했습니다.`,
       });
+      try {
+        const latestTerms = await loadTeacherHistoryDictionaryTerms();
+        setTerms(latestTerms);
+        setTermSearch("");
+        setActiveInitial("전체");
+      } catch (refreshError) {
+        console.error(
+          "Failed to refresh history dictionary terms after Excel upload:",
+          refreshError,
+        );
+        showToast({
+          tone: "warning",
+          title: "등록은 완료됐지만 목록 새로고침에 실패했습니다.",
+          message: "페이지를 새로고침해 등록된 단어 목록을 다시 불러와 주세요.",
+        });
+      }
       handleClearUploadPreview();
       setActivePanel("terms");
       setSearchParams({});
