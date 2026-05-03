@@ -1,4 +1,10 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useAuth } from "../../../contexts/AuthContext";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import {
@@ -15,8 +21,39 @@ import type {
   StudentHistoryDictionaryWord,
 } from "../../../types";
 
+const ALL_INITIAL = "전체";
+const NUMBER_INITIAL = "숫자";
+const HANGUL_INITIALS = [
+  "ㄱ",
+  "ㄲ",
+  "ㄴ",
+  "ㄷ",
+  "ㄸ",
+  "ㄹ",
+  "ㅁ",
+  "ㅂ",
+  "ㅃ",
+  "ㅅ",
+  "ㅆ",
+  "ㅇ",
+  "ㅈ",
+  "ㅉ",
+  "ㅊ",
+  "ㅋ",
+  "ㅌ",
+  "ㅍ",
+  "ㅎ",
+];
+const BASE_INITIAL_BY_TENSE: Record<string, string> = {
+  ㄲ: "ㄱ",
+  ㄸ: "ㄷ",
+  ㅃ: "ㅂ",
+  ㅆ: "ㅅ",
+  ㅉ: "ㅈ",
+};
 const INITIAL_FILTERS = [
-  "전체",
+  ALL_INITIAL,
+  NUMBER_INITIAL,
   "ㄱ",
   "ㄴ",
   "ㄷ",
@@ -33,8 +70,6 @@ const INITIAL_FILTERS = [
   "ㅎ",
 ];
 
-const HANGUL_INITIALS = INITIAL_FILTERS.slice(1);
-
 const formatStatusLabel = (status: StudentHistoryDictionaryWord["status"]) =>
   status === "saved" ? "저장됨" : "요청 중";
 
@@ -43,9 +78,11 @@ const getWordInitial = (value: string) => {
     .trim()
     .charAt(0);
   if (!first) return "";
+  if (/^\d$/.test(first)) return NUMBER_INITIAL;
   const code = first.charCodeAt(0);
   if (code >= 0xac00 && code <= 0xd7a3) {
-    return HANGUL_INITIALS[Math.floor((code - 0xac00) / 588)] || "";
+    const initial = HANGUL_INITIALS[Math.floor((code - 0xac00) / 588)] || "";
+    return BASE_INITIAL_BY_TENSE[initial] || initial;
   }
   return first.toUpperCase();
 };
@@ -73,6 +110,8 @@ const getTimestampMs = (value: unknown) => {
 const HistoryDictionary: React.FC = () => {
   const { currentUser, config } = useAuth();
   const { showToast } = useAppToast();
+  const wordListRef = useRef<HTMLDivElement>(null);
+  const wordSectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const [words, setWords] = useState<StudentHistoryDictionaryWord[]>([]);
   const [word, setWord] = useState("");
   const [definition, setDefinition] = useState("");
@@ -85,7 +124,8 @@ const HistoryDictionary: React.FC = () => {
   const [teacherChecked, setTeacherChecked] = useState(false);
   const [busy, setBusy] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [activeInitial, setActiveInitial] = useState("전체");
+  const [activeInitial, setActiveInitial] = useState(ALL_INITIAL);
+  const [scrollActiveInitial, setScrollActiveInitial] = useState(ALL_INITIAL);
   const [sortMode, setSortMode] = useState<"alpha" | "recent">("alpha");
   const [selectedWordId, setSelectedWordId] = useState("");
 
@@ -116,7 +156,8 @@ const HistoryDictionary: React.FC = () => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
     const filtered = words.filter((item) => {
       const matchesInitial =
-        activeInitial === "전체" || getWordInitial(item.word) === activeInitial;
+        activeInitial === ALL_INITIAL ||
+        getWordInitial(item.word) === activeInitial;
       const matchesSearch =
         !normalizedSearch ||
         item.word.toLowerCase().includes(normalizedSearch) ||
@@ -142,6 +183,54 @@ const HistoryDictionary: React.FC = () => {
     });
     return Array.from(groups.entries());
   }, [visibleWords]);
+  const highlightedInitial =
+    activeInitial === ALL_INITIAL && scrollActiveInitial !== ALL_INITIAL
+      ? scrollActiveInitial
+      : activeInitial;
+
+  useEffect(() => {
+    if (activeInitial !== ALL_INITIAL) return;
+    setScrollActiveInitial(groupedVisibleWords[0]?.[0] || ALL_INITIAL);
+  }, [activeInitial, groupedVisibleWords]);
+
+  const handleInitialFilterClick = (initial: string) => {
+    setActiveInitial(initial);
+    setScrollActiveInitial(initial);
+    wordListRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleWordListScroll = useCallback(() => {
+    if (activeInitial !== ALL_INITIAL) return;
+    const container = wordListRef.current;
+    if (!container) return;
+
+    const containerTop = container.getBoundingClientRect().top;
+    const sections = groupedVisibleWords
+      .map(([initial]) => ({
+        initial,
+        element: wordSectionRefs.current[initial],
+      }))
+      .filter((item): item is { initial: string; element: HTMLElement } =>
+        Boolean(item.element),
+      );
+    if (!sections.length) {
+      setScrollActiveInitial(ALL_INITIAL);
+      return;
+    }
+
+    let nextInitial = sections[0].initial;
+    for (const section of sections) {
+      const offset = section.element.getBoundingClientRect().top - containerTop;
+      if (offset <= 16) {
+        nextInitial = section.initial;
+      } else {
+        break;
+      }
+    }
+    setScrollActiveInitial((prev) =>
+      prev === nextInitial ? prev : nextInitial,
+    );
+  }, [activeInitial, groupedVisibleWords]);
 
   useEffect(() => {
     if (!currentUser?.uid) {
@@ -328,20 +417,20 @@ const HistoryDictionary: React.FC = () => {
   return (
     <div className="min-h-[calc(100vh-64px)] bg-slate-50 px-4 py-6 lg:px-6 xl:px-8">
       <div className="mx-auto max-w-7xl">
-        <div className="grid gap-4 lg:grid-cols-[6.25rem_minmax(22rem,0.72fr)_minmax(0,1.15fr)]">
+        <div className="grid gap-4 lg:grid-cols-[6.25rem_minmax(28rem,1.18fr)_minmax(22rem,0.95fr)]">
           <aside className="order-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm lg:order-1">
             <div className="grid grid-cols-5 gap-2 lg:grid-cols-1">
               {INITIAL_FILTERS.map((initial) => {
-                const active = activeInitial === initial;
+                const active = highlightedInitial === initial;
                 const count =
-                  initial === "전체"
+                  initial === ALL_INITIAL
                     ? words.length
                     : initialCounts.get(initial) || 0;
                 return (
                   <button
                     key={initial}
                     type="button"
-                    onClick={() => setActiveInitial(initial)}
+                    onClick={() => handleInitialFilterClick(initial)}
                     className={`flex h-11 items-center justify-center rounded-lg border text-sm font-extrabold transition ${
                       active
                         ? "border-blue-600 bg-blue-600 text-white shadow-sm"
@@ -405,7 +494,11 @@ const HistoryDictionary: React.FC = () => {
               저장된 단어 {words.length}개
             </div>
 
-            <div className="mt-4 max-h-[calc(100vh-22rem)] min-h-[26rem] overflow-y-auto pr-1">
+            <div
+              ref={wordListRef}
+              onScroll={handleWordListScroll}
+              className="mt-4 max-h-[calc(100vh-22rem)] min-h-[26rem] overflow-y-auto pr-1"
+            >
               {!visibleWords.length && (
                 <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm font-semibold text-slate-500">
                   표시할 단어가 없습니다.
@@ -414,7 +507,16 @@ const HistoryDictionary: React.FC = () => {
 
               <div className="space-y-3">
                 {groupedVisibleWords.map(([initial, items]) => (
-                  <section key={initial}>
+                  <section
+                    key={initial}
+                    ref={(node) => {
+                      if (node) {
+                        wordSectionRefs.current[initial] = node;
+                      } else {
+                        delete wordSectionRefs.current[initial];
+                      }
+                    }}
+                  >
                     <div className="mb-2 px-2 text-sm font-extrabold text-slate-900">
                       {initial}
                     </div>
