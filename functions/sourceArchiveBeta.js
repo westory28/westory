@@ -24,6 +24,8 @@ const db = getFirestore();
 const storage = getStorage();
 
 const REGION = "asia-northeast3";
+const STORAGE_BUCKET =
+  process.env.FIREBASE_STORAGE_BUCKET || "history-quiz-yongsin.firebasestorage.app";
 const ADMIN_EMAIL = "westoria28@gmail.com";
 const SCHOOL_EMAIL_PATTERN = /@yongshin-ms\.ms\.kr$/i;
 const SOURCE_ARCHIVE_COLLECTION = "source_archive";
@@ -538,6 +540,7 @@ const cleanupPreviousRevision = async ({
 exports.processSourceArchiveIncomingUpload = onObjectFinalized(
   {
     region: REGION,
+    bucket: STORAGE_BUCKET,
     timeoutSeconds: 120,
     memory: "512MiB",
   },

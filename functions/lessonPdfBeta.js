@@ -14,6 +14,8 @@ const db = getFirestore();
 const storage = getStorage();
 
 const REGION = "asia-northeast3";
+const STORAGE_BUCKET =
+  process.env.FIREBASE_STORAGE_BUCKET || "history-quiz-yongsin.firebasestorage.app";
 
 const EMPTY_LESSON_PDF_FILE = {
   storagePath: "",
@@ -205,6 +207,7 @@ const resolveLessonDocRef = async (parsed, customMetadata) => {
 exports.processLessonPdfIncomingUpload = onObjectFinalized(
   {
     region: REGION,
+    bucket: STORAGE_BUCKET,
     timeoutSeconds: 300,
     memory: "1GiB",
   },
