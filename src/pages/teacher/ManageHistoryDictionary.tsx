@@ -8,6 +8,7 @@ import {
   deleteStudentHistoryDictionaryWordByTeacher,
   normalizeHistoryDictionaryWord,
   saveHistoryDictionaryTerm,
+  saveHistoryDictionaryTermsBulk,
   subscribeTeacherHistoryDictionaryRequests,
   subscribeTeacherHistoryDictionaryTerms,
 } from "../../lib/historyDictionary";
@@ -645,22 +646,20 @@ const ManageHistoryDictionary: React.FC = () => {
     setBusyMessage(
       `역사 사전 용어 ${uploadReadyRows.length}개를 등록하는 중입니다.`,
     );
-    let savedCount = 0;
     try {
-      for (const row of uploadReadyRows) {
-        await saveHistoryDictionaryTerm(config, {
+      const result = await saveHistoryDictionaryTermsBulk(config, {
+        terms: uploadReadyRows.map((row) => ({
           word: row.word,
           definition: row.definition,
           studentLevel: DEFAULT_STUDENT_LEVEL,
           relatedUnitId: row.relatedUnitId,
           tags: row.tags,
-        });
-        savedCount += 1;
-      }
+        })),
+      });
       showToast({
         tone: "success",
         title: "역사 사전 용어를 등록했습니다.",
-        message: `${savedCount}개 항목을 학생용 풀이로 저장했습니다.`,
+        message: `${result.savedCount}개 항목을 학생용 풀이로 저장했습니다.`,
       });
       handleClearUploadPreview();
       setActivePanel("terms");
@@ -670,7 +669,7 @@ const ManageHistoryDictionary: React.FC = () => {
       showToast({
         tone: "error",
         title: "일괄 등록 중 일부 항목을 저장하지 못했습니다.",
-        message: `${savedCount}개 저장 후 중단했습니다. 목록을 새로 확인한 뒤 다시 시도해 주세요.`,
+        message: "목록을 새로 확인한 뒤 다시 시도해 주세요.",
       });
     } finally {
       setBusyMessage("");

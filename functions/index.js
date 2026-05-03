@@ -906,6 +906,8 @@ const getHistoryDictionaryRequestPath = (requestId) =>
 const getStudentHistoryDictionaryWordPath = (uid, termId) =>
   `users/${uid}/history_dictionary_words/${termId}`;
 
+const MAX_HISTORY_DICTIONARY_BULK_TERMS = 200;
+
 const getNotificationExpiryTimestamp = () => Timestamp.fromMillis(
   Date.now() + NOTIFICATION_RETENTION_DAYS * 24 * 60 * 60 * 1000,
 );
@@ -5121,6 +5123,88 @@ const resolveHistoryDictionaryRequestsWithTerm = async ({
 
   return result;
 };
+
+exports.saveHistoryDictionaryTermsBulk = onCall({
+  region: REGION,
+  timeoutSeconds: 60,
+  memory: '512MiB',
+}, async (request) => {
+  const manager = await assertHistoryDictionaryManager(request);
+  assertYearSemester(request.data);
+  const rawTerms = Array.isArray(request.data?.terms) ? request.data.terms : [];
+  if (!rawTerms.length) {
+    throw new HttpsError('invalid-argument', 'Terms are required.');
+  }
+  if (rawTerms.length > MAX_HISTORY_DICTIONARY_BULK_TERMS) {
+    throw new HttpsError(
+      'invalid-argument',
+      `Terms must be ${MAX_HISTORY_DICTIONARY_BULK_TERMS} or fewer.`,
+    );
+  }
+
+  const seenWords = new Set();
+  const terms = rawTerms.map((item, index) => {
+    const word = sanitizeHistoryDictionaryWord(item?.word);
+    const normalizedWord = normalizeHistoryDictionaryWord(word);
+    const definition = sanitizeHistoryDictionaryText(item?.definition, 1200);
+    const studentLevel = sanitizeHistoryDictionaryText(item?.studentLevel || '중학생 수준', 80);
+    const relatedUnitId = sanitizeHistoryDictionaryText(item?.relatedUnitId, 120);
+    const tags = sanitizeHistoryDictionaryTags(item?.tags);
+
+    if (!word || !normalizedWord) {
+      throw new HttpsError('invalid-argument', `A word is required at row ${index + 1}.`);
+    }
+    if (!definition || definition.length < 5) {
+      throw new HttpsError('invalid-argument', `Definition is too short at row ${index + 1}.`);
+    }
+    if (seenWords.has(normalizedWord)) {
+      throw new HttpsError('invalid-argument', `Duplicate word: ${word}`);
+    }
+    seenWords.add(normalizedWord);
+
+    return {
+      termId: buildHistoryDictionaryTermId(normalizedWord),
+      word,
+      normalizedWord,
+      definition,
+      studentLevel,
+      relatedUnitId,
+      tags,
+    };
+  });
+
+  const termRefs = terms.map((term) =>
+    db.doc(getHistoryDictionaryTermPath(term.termId)));
+  const existingSnaps = await db.getAll(...termRefs);
+  const batch = db.batch();
+
+  terms.forEach((term, index) => {
+    const existing = existingSnaps[index]?.exists
+      ? (existingSnaps[index].data() || {})
+      : {};
+    batch.set(termRefs[index], {
+      word: term.word,
+      normalizedWord: term.normalizedWord,
+      definition: term.definition,
+      studentLevel: term.studentLevel,
+      relatedUnitId: term.relatedUnitId,
+      tags: term.tags,
+      status: 'published',
+      createdBy: existing.createdBy || manager.uid,
+      updatedBy: manager.uid,
+      createdAt: existing.createdAt || FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+      publishedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  });
+
+  await batch.commit();
+
+  return {
+    savedCount: terms.length,
+    termIds: terms.map((term) => term.termId),
+  };
+});
 
 exports.saveHistoryDictionaryTerm = onCall({ region: REGION }, async (request) => {
   const manager = await assertHistoryDictionaryManager(request);

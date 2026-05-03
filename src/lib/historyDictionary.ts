@@ -349,6 +349,37 @@ export const saveHistoryDictionaryTerm = async (
   });
 };
 
+export const saveHistoryDictionaryTermsBulk = async (
+  config: ConfigLike,
+  input: {
+    terms: Array<{
+      word: string;
+      definition: string;
+      studentLevel: string;
+      relatedUnitId?: string;
+      tags?: string[];
+    }>;
+  },
+) => {
+  const { year, semester } = getYearSemester(config);
+  const callable = httpsCallable(functions, "saveHistoryDictionaryTermsBulk");
+  const result = await callable({
+    year,
+    semester,
+    terms: input.terms.map((term) => ({
+      word: term.word,
+      definition: term.definition,
+      studentLevel: term.studentLevel,
+      relatedUnitId: term.relatedUnitId || "",
+      tags: term.tags || [],
+    })),
+  });
+  return result.data as {
+    savedCount: number;
+    termIds: string[];
+  };
+};
+
 export const approveHistoryDictionaryTermForRequests = async (
   config: ConfigLike,
   input: {
