@@ -20,14 +20,15 @@
     "@fullcalendar/list": "^6.1.20",
     "@fullcalendar/react": "^6.1.20",
     "chart.js": "^4.5.1",
-    "exceljs": "^4.4.0",
     "firebase": "^12.9.0",
     "korean-lunar-calendar": "^0.3.6",
     "react": "^18.2.0",
     "react-chartjs-2": "^5.3.1",
     "react-dom": "^18.2.0",
     "react-pdf": "^10.4.1",
-    "react-router-dom": "^6.22.0"
+    "react-router-dom": "^6.22.0",
+    "read-excel-file": "^9.0.9",
+    "write-excel-file": "^4.0.5"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.0",

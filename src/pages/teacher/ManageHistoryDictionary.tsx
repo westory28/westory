@@ -17,7 +17,6 @@ import type {
   HistoryDictionaryTerm,
   WestoryNotification,
 } from "../../types";
-import type { Row as ExcelRow } from "exceljs";
 
 const OPEN_REQUEST_STATUSES = new Set(["requested", "needs_approval"]);
 const DEFAULT_STUDENT_LEVEL = "중학생 수준";
@@ -432,41 +431,32 @@ const ManageHistoryDictionary: React.FC = () => {
   };
 
   const handleDownloadExcelTemplate = async () => {
-    const { default: ExcelJS } = await import("exceljs");
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet("역사 사전 업로드");
-    worksheet.addRow(EXCEL_TEMPLATE_HEADERS);
-    worksheet.addRows([
+    const { default: writeXlsxFile } = await import("write-excel-file/browser");
+    await writeXlsxFile(
       [
-        "임진왜란",
-        "조선 선조 때 일본이 조선을 침략하며 시작된 전쟁입니다.",
-        "조선 전기 / 임진왜란",
-        "전쟁, 조선, 일본",
+        EXCEL_TEMPLATE_HEADERS.map((value) => ({
+          value,
+          fontWeight: "bold",
+        })),
+        [
+          "임진왜란",
+          "조선 선조 때 일본이 조선을 침략하며 시작된 전쟁입니다.",
+          "조선 전기 / 임진왜란",
+          "전쟁, 조선, 일본",
+        ].map((value) => ({ value })),
+        [
+          "실학",
+          "조선 후기 현실 문제를 해결하기 위해 등장한 학문 경향입니다.",
+          "조선 후기 사회 변화",
+          "조선 후기, 개혁",
+        ].map((value) => ({ value })),
       ],
-      [
-        "실학",
-        "조선 후기 현실 문제를 해결하기 위해 등장한 학문 경향입니다.",
-        "조선 후기 사회 변화",
-        "조선 후기, 개혁",
-      ],
-    ]);
-    worksheet.columns = [
-      { width: 18 },
-      { width: 54 },
-      { width: 26 },
-      { width: 32 },
-    ];
-    worksheet.getRow(1).font = { bold: true };
-    const buffer = await workbook.xlsx.writeBuffer();
-    const blob = new Blob([buffer as BlobPart], {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    });
-    const url = window.URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = "westory_history_dictionary_template.xlsx";
-    anchor.click();
-    window.URL.revokeObjectURL(url);
+      {
+        columns: [{ width: 18 }, { width: 54 }, { width: 26 }, { width: 32 }],
+        fileName: "westory_history_dictionary_template.xlsx",
+        sheet: "역사 사전 업로드",
+      },
+    );
   };
 
   const parseUploadTags = (value: unknown) =>
@@ -493,17 +483,23 @@ const ManageHistoryDictionary: React.FC = () => {
     setSearchParams({ panel: "upload" });
 
     try {
-      const { default: ExcelJS } = await import("exceljs");
-      const workbook = new ExcelJS.Workbook();
-      await workbook.xlsx.load(await file.arrayBuffer());
-      const worksheet = workbook.worksheets[0];
-      if (!worksheet) {
+      const { default: readXlsxFile } = await import("read-excel-file/browser");
+      const workbookRows = (await readXlsxFile(file)) as unknown;
+      const rows =
+        Array.isArray(workbookRows) &&
+        workbookRows.length === 1 &&
+        typeof workbookRows[0] === "object" &&
+        workbookRows[0] !== null &&
+        Array.isArray((workbookRows[0] as { data?: unknown }).data)
+          ? ((workbookRows[0] as { data: unknown[][] }).data as unknown[][])
+          : (workbookRows as unknown[][]);
+      if (!rows.length) {
         throw new Error("첫 번째 시트를 찾을 수 없습니다.");
       }
 
       const headerIndex = new Map<string, number>();
-      worksheet.getRow(1).eachCell({ includeEmpty: true }, (cell, index) => {
-        const header = String(cell.text || cell.value || "").trim();
+      (rows[0] || []).forEach((cell, index) => {
+        const header = String(cell || "").trim();
         if (header) headerIndex.set(header, index);
       });
       const missingHeaders = EXCEL_TEMPLATE_HEADERS.filter(
@@ -513,37 +509,36 @@ const ManageHistoryDictionary: React.FC = () => {
         throw new Error(`필수 컬럼이 없습니다: ${missingHeaders.join(", ")}`);
       }
 
-      const getCell = (row: ExcelRow, header: string, maxLength: number) =>
-        String(row.getCell(headerIndex.get(header) || 0).text || "")
+      const getCell = (row: unknown[], header: string, maxLength: number) =>
+        String(row[headerIndex.get(header) ?? -1] || "")
           .replace(/\s+/g, " ")
           .trim()
           .slice(0, maxLength);
 
-      const parsedRows: HistoryDictionaryUploadRow[] = [];
-      worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-        if (rowNumber === 1 || parsedRows.length >= MAX_EXCEL_UPLOAD_ROWS) {
-          return;
-        }
-        const word = getCell(row, "단어", 40);
-        const definition = getCell(row, "학생용 풀이", 1200);
-        const relatedUnitId = getCell(row, "관련 단원", 120);
-        const tags = parseUploadTags(
-          row.getCell(headerIndex.get("태그") || 0).text,
+      const parsedRows = rows
+        .slice(1, MAX_EXCEL_UPLOAD_ROWS + 1)
+        .map((row, index) => {
+          const word = getCell(row, "단어", 40);
+          const definition = getCell(row, "학생용 풀이", 1200);
+          const relatedUnitId = getCell(row, "관련 단원", 120);
+          const tags = parseUploadTags(row[headerIndex.get("태그") ?? -1]);
+          const normalizedWord = normalizeHistoryDictionaryWord(word);
+          return {
+            id: `upload-${index + 2}-${normalizedWord || index}`,
+            rowNumber: index + 2,
+            word,
+            definition,
+            relatedUnitId,
+            tags,
+            normalizedWord,
+            errors: [],
+            notices: [],
+          } satisfies HistoryDictionaryUploadRow;
+        })
+        .filter(
+          (row) =>
+            row.word || row.definition || row.relatedUnitId || row.tags.length,
         );
-        const normalizedWord = normalizeHistoryDictionaryWord(word);
-        if (!word && !definition && !relatedUnitId && !tags.length) return;
-        parsedRows.push({
-          id: `upload-${rowNumber}-${normalizedWord || parsedRows.length}`,
-          rowNumber,
-          word,
-          definition,
-          relatedUnitId,
-          tags,
-          normalizedWord,
-          errors: [],
-          notices: [],
-        });
-      });
 
       if (!parsedRows.length) {
         throw new Error("등록할 행이 없습니다.");
