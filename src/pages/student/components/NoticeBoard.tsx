@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { InlineLoading } from "../../../components/common/LoadingState";
 import { db } from "../../../lib/firebase";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -56,11 +56,6 @@ const NoticeBoard: React.FC = () => {
 
   const activeNotice = notices[activeIndex] || notices[0] || null;
   const showCarousel = notices.length > 1;
-  const activeImageRatio = useMemo(() => {
-    if (!activeNotice?.imageWidth || !activeNotice?.imageHeight)
-      return "16 / 9";
-    return `${activeNotice.imageWidth} / ${activeNotice.imageHeight}`;
-  }, [activeNotice]);
 
   const move = (direction: -1 | 1) => {
     setActiveIndex((prev) => {
@@ -138,11 +133,10 @@ const NoticeBoard: React.FC = () => {
 
         {!loading && activeNotice && (
           <div className="flex h-full flex-col">
-            <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl">
+            <div className="relative aspect-[16/9] w-full flex-none overflow-hidden rounded-xl bg-gray-100">
               <div
-                className="flex h-full min-h-[180px] w-full transition-transform duration-500 ease-out will-change-transform motion-reduce:transition-none"
+                className="flex h-full w-full transition-transform duration-500 ease-out will-change-transform motion-reduce:transition-none"
                 style={{
-                  aspectRatio: activeImageRatio,
                   transform: `translateX(-${activeIndex * 100}%)`,
                 }}
               >
@@ -153,7 +147,7 @@ const NoticeBoard: React.FC = () => {
                     alt="알림장"
                     loading="lazy"
                     decoding="async"
-                    className="h-full min-h-[180px] w-full shrink-0 object-contain"
+                    className="h-full w-full shrink-0 object-cover"
                   />
                 ))}
               </div>
