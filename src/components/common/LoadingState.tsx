@@ -79,7 +79,7 @@ export const InlineLoading: React.FC<LoadingStateProps> = ({
   showWarning = false,
   ...props
 }) => (
-  <div className={`py-10 ${className}`}>
+  <div className={`flex justify-center px-4 py-10 ${className}`}>
     <LoadingCard
       {...props}
       showWarning={showWarning}
