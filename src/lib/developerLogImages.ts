@@ -60,7 +60,7 @@ const getStoragePath = (postId: string) => {
   const safePostId = String(postId || "developer-log")
     .replace(/[^a-zA-Z0-9_-]+/g, "_")
     .slice(0, 80);
-  return `developer_log_images/${safePostId}/card-${Date.now()}.webp`;
+  return `site-settings/interface/developer-log/${safePostId}/card-${Date.now()}.webp`;
 };
 
 const drawCanvas = (

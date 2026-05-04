@@ -1,4 +1,5 @@
-export const DEVELOPER_LOG_COLLECTION = "developer_logs";
+export const DEVELOPER_LOG_SETTINGS_DOC = "developer_logs";
+export const DEVELOPER_LOG_ITEMS_COLLECTION = "items";
 
 export const DEVELOPER_LOG_CATEGORIES = [
   {

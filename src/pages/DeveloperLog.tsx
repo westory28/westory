@@ -21,7 +21,8 @@ import { InlineLoading, PageLoading } from "../components/common/LoadingState";
 import QuillEditor from "../components/common/QuillEditor";
 import {
   DEVELOPER_LOG_CATEGORIES,
-  DEVELOPER_LOG_COLLECTION,
+  DEVELOPER_LOG_ITEMS_COLLECTION,
+  DEVELOPER_LOG_SETTINGS_DOC,
   type DeveloperLogCategory,
   type DeveloperLogImage,
   type DeveloperLogPost,
@@ -58,6 +59,23 @@ const EMPTY_FORM: FormState = {
 
 const MAX_CARD_IMAGE_COUNT = 6;
 const VIEWED_STORAGE_PREFIX = "developerLogViewed:";
+
+const getDeveloperLogItemsCollection = () =>
+  collection(
+    db,
+    "site_settings",
+    DEVELOPER_LOG_SETTINGS_DOC,
+    DEVELOPER_LOG_ITEMS_COLLECTION,
+  );
+
+const getDeveloperLogPostRef = (id: string) =>
+  doc(
+    db,
+    "site_settings",
+    DEVELOPER_LOG_SETTINGS_DOC,
+    DEVELOPER_LOG_ITEMS_COLLECTION,
+    id,
+  );
 
 const toDate = (value: any) => {
   if (!value) return null;
@@ -142,7 +160,7 @@ const DeveloperLog: React.FC = () => {
 
   useEffect(() => {
     const q = query(
-      collection(db, DEVELOPER_LOG_COLLECTION),
+      getDeveloperLogItemsCollection(),
       orderBy("publishedAt", "desc"),
       limit(60),
     );
@@ -179,7 +197,7 @@ const DeveloperLog: React.FC = () => {
 
     setMode((prev) => (prev === "edit" ? "edit" : "detail"));
     setDetailLoading(true);
-    const postRef = doc(db, DEVELOPER_LOG_COLLECTION, postId);
+    const postRef = getDeveloperLogPostRef(postId);
 
     void getDoc(postRef)
       .then(async (snapshot) => {
@@ -207,13 +225,7 @@ const DeveloperLog: React.FC = () => {
 
         if (currentUser) {
           const likeSnap = await getDoc(
-            doc(
-              db,
-              DEVELOPER_LOG_COLLECTION,
-              post.id,
-              "likes",
-              currentUser.uid,
-            ),
+            doc(getDeveloperLogPostRef(post.id), "likes", currentUser.uid),
           );
           setLiked(likeSnap.exists());
         }
@@ -368,8 +380,8 @@ const DeveloperLog: React.FC = () => {
     try {
       const postRef =
         mode === "edit" && selectedPost
-          ? doc(db, DEVELOPER_LOG_COLLECTION, selectedPost.id)
-          : await addDoc(collection(db, DEVELOPER_LOG_COLLECTION), {
+          ? getDeveloperLogPostRef(selectedPost.id)
+          : await addDoc(getDeveloperLogItemsCollection(), {
               title,
               version: form.version.trim(),
               category: form.category,
@@ -467,7 +479,7 @@ const DeveloperLog: React.FC = () => {
       return;
 
     try {
-      await deleteDoc(doc(db, DEVELOPER_LOG_COLLECTION, selectedPost.id));
+      await deleteDoc(getDeveloperLogPostRef(selectedPost.id));
       await Promise.all(
         selectedPost.images.map((image) =>
           tryDeleteDeveloperLogImage(image.imageStoragePath),
@@ -495,7 +507,7 @@ const DeveloperLog: React.FC = () => {
       return;
     }
 
-    const postRef = doc(db, DEVELOPER_LOG_COLLECTION, selectedPost.id);
+    const postRef = getDeveloperLogPostRef(selectedPost.id);
     const likeRef = doc(postRef, "likes", currentUser.uid);
 
     try {
@@ -992,13 +1004,13 @@ const DeveloperLog: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <header className="mb-7 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div className="flex items-start gap-4">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-blue-200 bg-blue-50 text-blue-600 shadow-sm">
+      <header className="border-b border-gray-200 bg-white">
+        <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-4 px-5 py-6 sm:px-8 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-center gap-4">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 text-blue-600 shadow-sm">
               <i className="fas fa-book text-2xl" aria-hidden="true"></i>
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-3">
                 <h1 className="text-3xl font-black tracking-normal text-slate-950">
                   개발자 일지
@@ -1033,14 +1045,16 @@ const DeveloperLog: React.FC = () => {
             <button
               type="button"
               onClick={startWrite}
-              className="inline-flex h-14 items-center justify-center gap-3 rounded-2xl bg-blue-600 px-7 text-base font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
+              className="inline-flex h-12 w-full items-center justify-center gap-3 rounded-xl bg-blue-600 px-7 text-base font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700 sm:w-auto"
             >
               <i className="fas fa-pen" aria-hidden="true"></i>
               글쓰기
             </button>
           )}
-        </header>
+        </div>
+      </header>
 
+      <div className="mx-auto w-full max-w-[1500px] px-5 py-7 sm:px-8">
         {mode === "write" || mode === "edit" ? (
           renderEditor()
         ) : postId && selectedPost ? (

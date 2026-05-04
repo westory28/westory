@@ -75,6 +75,10 @@ service cloud.firestore {
       return /databases/$(database)/documents/developer_logs/$(logId)/likes/$(request.auth.uid);
     }
 
+    function settingsDeveloperLogLikePath(logId) {
+      return /databases/$(database)/documents/site_settings/developer_logs/items/$(logId)/likes/$(request.auth.uid);
+    }
+
     function isDeveloperLogViewUpdate() {
       return canUseWestory()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount'])
@@ -95,6 +99,24 @@ service cloud.firestore {
             request.resource.data.likeCount == resource.data.likeCount - 1
             && exists(developerLogLikePath(logId))
             && !existsAfter(developerLogLikePath(logId))
+          )
+        );
+    }
+
+    function isSettingsDeveloperLogLikeCountUpdate(logId) {
+      return canUseWestory()
+        && isStudentRole()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likeCount'])
+        && (
+          (
+            request.resource.data.likeCount == resource.data.likeCount + 1
+            && !exists(settingsDeveloperLogLikePath(logId))
+            && existsAfter(settingsDeveloperLogLikePath(logId))
+          )
+          || (
+            request.resource.data.likeCount == resource.data.likeCount - 1
+            && exists(settingsDeveloperLogLikePath(logId))
+            && !existsAfter(settingsDeveloperLogLikePath(logId))
           )
         );
     }
@@ -563,7 +585,30 @@ service cloud.firestore {
 
       match /items/{itemId} {
         allow read: if canUseWestory();
-        allow write: if isAdmin();
+        allow create, delete: if isAdmin();
+        allow update: if isAdmin()
+          || (
+            docId == 'developer_logs'
+            && (
+              isDeveloperLogViewUpdate()
+              || isSettingsDeveloperLogLikeCountUpdate(itemId)
+            )
+          );
+
+        match /likes/{likeId} {
+          allow read: if canUseWestory();
+          allow create: if docId == 'developer_logs'
+            && canUseWestory()
+            && isStudentRole()
+            && likeId == request.auth.uid
+            && request.resource.data.keys().hasOnly(['uid', 'createdAt'])
+            && request.resource.data.uid == request.auth.uid;
+          allow delete: if docId == 'developer_logs'
+            && canUseWestory()
+            && isStudentRole()
+            && likeId == request.auth.uid;
+          allow update: if false;
+        }
       }
     }
 
