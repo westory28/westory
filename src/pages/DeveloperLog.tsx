@@ -1003,39 +1003,39 @@ const DeveloperLog: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="border-b border-gray-200 bg-white">
-        <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-4 px-5 py-6 sm:px-8 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 items-center gap-4">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 text-blue-600 shadow-sm">
-              <i className="fas fa-book text-2xl" aria-hidden="true"></i>
+    <div className="mx-auto w-full max-w-[96rem] px-4 py-5 sm:py-8">
+      <section className="mb-5 px-1 py-2">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-blue-100 bg-blue-50 text-blue-600">
+              <i className="fas fa-book text-xl" aria-hidden="true"></i>
             </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-3">
-                <h1 className="text-3xl font-black tracking-normal text-slate-950">
+                <h1 className="text-2xl font-black text-gray-900">
                   개발자 일지
                 </h1>
                 {postId && selectedPost && (
                   <>
                     <i
-                      className="fas fa-chevron-right text-xs text-slate-300"
+                      className="fas fa-chevron-right text-xs text-gray-300"
                       aria-hidden="true"
                     ></i>
-                    <span className="max-w-xl truncate text-sm font-black text-slate-700">
+                    <span className="max-w-xl truncate text-sm font-black text-gray-700">
                       {getDisplayTitle(selectedPost)}
                     </span>
                   </>
                 )}
               </div>
-              <p className="mt-2 break-keep text-sm font-semibold leading-6 text-slate-500">
+              <p className="mt-2 break-keep text-sm leading-6 text-gray-600">
                 최근 업데이트와 패치 내역을 기록합니다.
               </p>
-              <div className="mt-4 flex flex-wrap gap-2">
+              <div className="mt-3 flex flex-wrap gap-2">
                 <span className="inline-flex items-center rounded-full border border-blue-200 bg-white px-3 py-1 text-xs font-black text-blue-700">
                   <i className="fas fa-lock mr-1.5" aria-hidden="true"></i>
                   작성 권한: 개발자 전용
                 </span>
-                <span className="inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-black text-slate-600">
+                <span className="inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-black text-gray-600">
                   학생은 좋아요만 가능
                 </span>
               </div>
@@ -1045,16 +1045,16 @@ const DeveloperLog: React.FC = () => {
             <button
               type="button"
               onClick={startWrite}
-              className="inline-flex h-12 w-full items-center justify-center gap-3 rounded-xl bg-blue-600 px-7 text-base font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700 sm:w-auto"
+              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 sm:w-auto"
             >
               <i className="fas fa-pen" aria-hidden="true"></i>
               글쓰기
             </button>
           )}
         </div>
-      </header>
+      </section>
 
-      <div className="mx-auto w-full max-w-[1500px] px-5 py-7 sm:px-8">
+      <div className="w-full">
         {mode === "write" || mode === "edit" ? (
           renderEditor()
         ) : postId && selectedPost ? (
