@@ -52,11 +52,22 @@ service firebase.storage {
       return isAdmin() || isTeacherRole();
     }
 
+    function canManageDeveloperLogImages() {
+      return isAdmin();
+    }
+
     function isNoticeImageUpload() {
       return request.resource != null
         && request.resource.contentType is string
         && request.resource.contentType.matches('image/.*')
         && request.resource.size < 700 * 1024;
+    }
+
+    function isDeveloperLogImageUpload() {
+      return request.resource != null
+        && request.resource.contentType is string
+        && request.resource.contentType.matches('image/.*')
+        && request.resource.size < 720 * 1024;
     }
 
     function isLessonPdfAssetUpload() {
@@ -102,6 +113,12 @@ service firebase.storage {
       allow read: if canUseWestory();
       allow create, update: if canManageNoticeImages() && isNoticeImageUpload();
       allow delete: if canManageNoticeImages();
+    }
+
+    match /developer_log_images/{postId}/{fileName} {
+      allow read: if canUseWestory();
+      allow create, update: if canManageDeveloperLogImages() && isDeveloperLogImageUpload();
+      allow delete: if canManageDeveloperLogImages();
     }
 
     match /years/{year}/semesters/{semester}/point_products/{productId}/{allPaths=**} {

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { InlineLoading } from './LoadingState';
 import { useAuth } from '../../contexts/AuthContext';
@@ -53,6 +54,10 @@ const Footer: React.FC = () => {
                         <button onClick={() => openPolicyModal('privacy')} className="text-stone-400 hover:text-stone-600 text-xs font-medium transition">
                             개인정보 처리 방침
                         </button>
+                        <span className="text-stone-300 text-xs">|</span>
+                        <Link to="/developer-log" className="text-stone-400 hover:text-stone-600 text-xs font-medium transition">
+                            개발자 일지
+                        </Link>
                     </div>
                     <p className="text-stone-400 text-xs font-bold">
                         {footerText}

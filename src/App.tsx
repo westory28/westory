@@ -35,6 +35,7 @@ const StudentHistory = lazyWithRetry(() => import('./pages/student/History'), 's
 const Calendar = lazyWithRetry(() => import('./pages/student/Calendar'), 'student-calendar');
 const ManagePoints = lazyWithRetry(() => import('./pages/teacher/ManagePoints'), 'manage-points');
 const StudentPoints = lazyWithRetry(() => import('./pages/student/Points'), 'student-points');
+const DeveloperLog = lazyWithRetry(() => import('./pages/DeveloperLog'), 'developer-log');
 
 const getBootRedirectHash = () => {
     if (typeof window === 'undefined') return '';
@@ -237,6 +238,16 @@ const App: React.FC = () => {
                             <Route path="/student/calendar" element={
                                 <MainLayout>
                                     <Calendar />
+                                </MainLayout>
+                            } />
+                            <Route path="/developer-log" element={
+                                <MainLayout>
+                                    <DeveloperLog />
+                                </MainLayout>
+                            } />
+                            <Route path="/developer-log/:postId" element={
+                                <MainLayout>
+                                    <DeveloperLog />
                                 </MainLayout>
                             } />
                                 <Route path="*" element={<Navigate to="/" replace />} />

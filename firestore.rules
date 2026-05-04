@@ -67,6 +67,38 @@ service cloud.firestore {
       return hasUserProfile() && userProfile().role == 'teacher';
     }
 
+    function isStudentRole() {
+      return hasUserProfile() && userProfile().role == 'student';
+    }
+
+    function developerLogLikePath(logId) {
+      return /databases/$(database)/documents/developer_logs/$(logId)/likes/$(request.auth.uid);
+    }
+
+    function isDeveloperLogViewUpdate() {
+      return canUseWestory()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount'])
+        && request.resource.data.viewCount == resource.data.viewCount + 1;
+    }
+
+    function isDeveloperLogLikeCountUpdate(logId) {
+      return canUseWestory()
+        && isStudentRole()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likeCount'])
+        && (
+          (
+            request.resource.data.likeCount == resource.data.likeCount + 1
+            && !exists(developerLogLikePath(logId))
+            && existsAfter(developerLogLikePath(logId))
+          )
+          || (
+            request.resource.data.likeCount == resource.data.likeCount - 1
+            && exists(developerLogLikePath(logId))
+            && !existsAfter(developerLogLikePath(logId))
+          )
+        );
+    }
+
     function canReadQuizResult(data) {
       return canUseWestory()
         && (
@@ -532,6 +564,27 @@ service cloud.firestore {
       match /items/{itemId} {
         allow read: if canUseWestory();
         allow write: if isAdmin();
+      }
+    }
+
+    match /developer_logs/{logId} {
+      allow read: if canUseWestory();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+        || isDeveloperLogViewUpdate()
+        || isDeveloperLogLikeCountUpdate(logId);
+
+      match /likes/{likeId} {
+        allow read: if canUseWestory();
+        allow create: if canUseWestory()
+          && isStudentRole()
+          && likeId == request.auth.uid
+          && request.resource.data.keys().hasOnly(['uid', 'createdAt'])
+          && request.resource.data.uid == request.auth.uid;
+        allow delete: if canUseWestory()
+          && isStudentRole()
+          && likeId == request.auth.uid;
+        allow update: if false;
       }
     }
 

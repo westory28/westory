@@ -1052,6 +1052,97 @@
   }
 }
 
+.policy-rich-text,
+.developer-log-rich-text {
+  color: #374151;
+  line-height: 1.8;
+}
+
+.policy-rich-text p,
+.developer-log-rich-text p {
+  margin: 0.4rem 0;
+  white-space: pre-wrap;
+}
+
+.policy-rich-text h1,
+.policy-rich-text h2,
+.policy-rich-text h3,
+.developer-log-rich-text h1,
+.developer-log-rich-text h2,
+.developer-log-rich-text h3 {
+  margin: 1.25rem 0 0.55rem;
+  color: #0f172a;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.policy-rich-text h1,
+.developer-log-rich-text h1 {
+  font-size: 1.5rem;
+}
+
+.policy-rich-text h2,
+.developer-log-rich-text h2 {
+  font-size: 1.2rem;
+}
+
+.policy-rich-text h3,
+.developer-log-rich-text h3 {
+  font-size: 1.05rem;
+}
+
+.policy-rich-text ul,
+.developer-log-rich-text ul {
+  list-style: disc;
+  padding-left: 1.4rem;
+  margin: 0.5rem 0;
+}
+
+.policy-rich-text ol,
+.developer-log-rich-text ol {
+  list-style: decimal;
+  padding-left: 1.4rem;
+  margin: 0.5rem 0;
+}
+
+.policy-rich-text li,
+.developer-log-rich-text li {
+  margin: 0.25rem 0;
+  white-space: pre-wrap;
+}
+
+.policy-rich-text li[data-list="bullet"],
+.developer-log-rich-text li[data-list="bullet"] {
+  list-style-type: disc;
+}
+
+.policy-rich-text li[data-list="ordered"],
+.developer-log-rich-text li[data-list="ordered"] {
+  list-style-type: decimal;
+}
+
+.policy-rich-text a,
+.developer-log-rich-text a {
+  color: #2563eb;
+  font-weight: 800;
+  text-decoration: underline;
+}
+
+.policy-rich-text .ql-indent-1,
+.developer-log-rich-text .ql-indent-1 {
+  padding-left: 2em;
+}
+
+.policy-rich-text .ql-indent-2,
+.developer-log-rich-text .ql-indent-2 {
+  padding-left: 4em;
+}
+
+.policy-rich-text .ql-indent-3,
+.developer-log-rich-text .ql-indent-3 {
+  padding-left: 6em;
+}
+
 @media (max-width: 1023px) {
   .dashboard-container {
     height: auto !important;

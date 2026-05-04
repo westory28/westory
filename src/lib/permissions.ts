@@ -27,6 +27,9 @@ export const isAdminUser = (userData?: Partial<UserData> | null, email?: string 
     return userData?.role === 'teacher' || normalizedEmail === ADMIN_EMAIL;
 };
 
+export const isDeveloperUser = (email?: string | null) =>
+    String(email || '').trim().toLowerCase() === ADMIN_EMAIL;
+
 export const hasStaffPermission = (
     userData: Partial<UserData> | null | undefined,
     permission: StaffPermission,
