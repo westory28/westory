@@ -135,42 +135,77 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({ config }) => {
             return (
               <div
                 key={entry.uid}
-                className={`grid grid-cols-[2.35rem_minmax(4.25rem,1fr)_auto_auto_auto] items-center gap-1.5 rounded-lg border px-2 py-2 sm:grid-cols-[2.75rem_minmax(5rem,1fr)_auto_auto_auto] sm:px-2.5 sm:py-2.5 ${rankTone(rank)}`}
+                className={`rounded-lg border px-2 py-2 sm:grid sm:grid-cols-[72px_minmax(0,1fr)_92px_minmax(80px,auto)] sm:items-center sm:gap-3 sm:px-3 sm:py-2.5 max-[1120px]:sm:grid-cols-[52px_minmax(0,1fr)_70px_minmax(64px,auto)] max-[1120px]:sm:gap-1.5 max-[1120px]:sm:px-2 max-[1120px]:sm:py-2 ${rankTone(rank)}`}
               >
-                <div className="flex min-w-0 items-center gap-1">
+                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 sm:hidden">
                   <span
-                    className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-black sm:h-7 sm:w-7 sm:text-sm ${
+                    className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-black ${
                       rank <= 3 ? "bg-white/70" : "bg-slate-900 text-white"
                     }`}
                   >
                     {rank}
                   </span>
-                  {iconClassName ? (
-                    <i
-                      className={`${iconClassName} shrink-0 text-[11px] sm:text-xs`}
-                      aria-hidden="true"
-                    ></i>
-                  ) : null}
-                </div>
-                <div className="flex min-w-0 items-center gap-1">
-                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/80 text-[11px] shadow-sm sm:h-5 sm:w-5 sm:text-xs">
+                  <span
+                    className="inline-flex h-4 w-4 shrink-0 items-center justify-center"
+                    aria-hidden="true"
+                  >
+                    {iconClassName && (
+                      <i className={`${iconClassName} text-xs`}></i>
+                    )}
+                  </span>
+                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/80 text-[11px] shadow-sm">
                     {entry.profileIcon || defaultProfileIcon}
                   </span>
-                  <span className="min-w-0 truncate text-[clamp(0.75rem,0.95vw,0.9375rem)] font-extrabold leading-tight text-gray-900">
+                  <span className="text-sm font-extrabold leading-snug text-gray-900">
                     {entry.displayName || entry.studentName}
                   </span>
+                  {entryRank && (
+                    <span
+                      className={`inline-flex min-h-[1.25rem] shrink-0 items-center justify-center rounded-full border px-1.5 text-[10px] font-bold leading-none ${entryRank.badgeClass}`}
+                    >
+                      {entryRank.shortLabel || entryRank.label}
+                    </span>
+                  )}
+                  <span className="text-[11px] font-bold leading-snug text-gray-500">
+                    {entry.grade}학년 {entry.class}반
+                  </span>
+                  <span className="ml-auto shrink-0 text-xs font-black leading-snug text-blue-600">
+                    {formatWis(entry.currentBalance)}
+                  </span>
                 </div>
-                <div className="shrink-0">
+
+                <div className="hidden grid-cols-[2rem_1.25rem] items-center gap-1.5 sm:grid max-[1120px]:sm:grid-cols-[1.75rem_0.875rem] max-[1120px]:sm:gap-1">
+                  <span
+                    className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-sm font-black max-[1120px]:h-7 max-[1120px]:w-7 max-[1120px]:text-xs ${
+                      rank <= 3 ? "bg-white/70" : "bg-slate-900 text-white"
+                    }`}
+                  >
+                    {rank}
+                  </span>
+                  {iconClassName && (
+                    <i
+                      className={`${iconClassName} justify-self-center text-base max-[1120px]:text-xs`}
+                      aria-hidden="true"
+                    ></i>
+                  )}
+                </div>
+                <div className="hidden min-w-0 items-center gap-1.5 sm:flex max-[1120px]:sm:gap-1">
+                  <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/80 text-sm shadow-sm max-[1120px]:h-5 max-[1120px]:w-5 max-[1120px]:text-xs">
+                    {entry.profileIcon || defaultProfileIcon}
+                  </span>
+                  <span className="min-w-0 truncate text-base font-extrabold text-gray-900 max-[1120px]:text-[13px]">
+                    {entry.displayName || entry.studentName}
+                  </span>
                   <PointRankBadge
                     rank={entryRank}
                     size="sm"
-                    className="!min-h-[1.45rem] !min-w-[2.75rem] !px-1.5 !py-0 !text-[10px]"
+                    className="max-[1120px]:!min-h-[1.45rem] max-[1120px]:!min-w-[2.75rem] max-[1120px]:!px-1.5 max-[1120px]:!py-0 max-[1120px]:!text-[10px]"
                   />
                 </div>
-                <div className="whitespace-nowrap text-[clamp(0.625rem,0.82vw,0.8125rem)] font-bold text-gray-500">
+                <div className="hidden truncate text-sm font-bold text-gray-500 sm:block max-[1120px]:text-[11px]">
                   {entry.grade}학년 {entry.class}반
                 </div>
-                <div className="whitespace-nowrap text-right text-[clamp(0.6875rem,0.92vw,0.9375rem)] font-black text-blue-600">
+                <div className="hidden text-right text-base font-black text-blue-600 sm:block max-[1120px]:text-[13px]">
                   {formatWis(entry.currentBalance)}
                 </div>
               </div>
