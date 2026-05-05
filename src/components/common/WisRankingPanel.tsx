@@ -135,11 +135,11 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({ config }) => {
             return (
               <div
                 key={entry.uid}
-                className={`grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-lg border px-2 py-2 sm:gap-2.5 sm:px-3 sm:py-2.5 ${rankTone(rank)}`}
+                className={`grid grid-cols-[2.35rem_minmax(4.25rem,1fr)_auto_auto_auto] items-center gap-1.5 rounded-lg border px-2 py-2 sm:grid-cols-[2.75rem_minmax(5rem,1fr)_auto_auto_auto] sm:px-2.5 sm:py-2.5 ${rankTone(rank)}`}
               >
                 <div className="flex min-w-0 items-center gap-1">
                   <span
-                    className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-black sm:h-8 sm:w-8 sm:text-sm ${
+                    className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-black sm:h-7 sm:w-7 sm:text-sm ${
                       rank <= 3 ? "bg-white/70" : "bg-slate-900 text-white"
                     }`}
                   >
@@ -147,32 +147,30 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({ config }) => {
                   </span>
                   {iconClassName ? (
                     <i
-                      className={`${iconClassName} shrink-0 text-xs sm:text-sm`}
+                      className={`${iconClassName} shrink-0 text-[11px] sm:text-xs`}
                       aria-hidden="true"
                     ></i>
                   ) : null}
                 </div>
-                <div className="min-w-0">
-                  <div className="flex min-w-0 items-center gap-1.5">
-                    <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/80 text-[11px] shadow-sm sm:h-6 sm:w-6 sm:text-sm">
-                      {entry.profileIcon || defaultProfileIcon}
-                    </span>
-                    <span className="min-w-0 truncate text-[clamp(0.8125rem,1.1vw,0.9375rem)] font-extrabold leading-tight text-gray-900">
-                      {entry.displayName || entry.studentName}
-                    </span>
-                  </div>
-                  <div className="mt-1 flex min-w-0 items-center gap-1.5">
-                    {entryRank && (
-                      <span className="shrink-0">
-                        <PointRankBadge rank={entryRank} size="sm" />
-                      </span>
-                    )}
-                    <span className="min-w-0 truncate text-[clamp(0.6875rem,0.95vw,0.8125rem)] font-bold leading-tight text-gray-500">
-                      {entry.grade}학년 {entry.class}반
-                    </span>
-                  </div>
+                <div className="flex min-w-0 items-center gap-1">
+                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/80 text-[11px] shadow-sm sm:h-5 sm:w-5 sm:text-xs">
+                    {entry.profileIcon || defaultProfileIcon}
+                  </span>
+                  <span className="min-w-0 truncate text-[clamp(0.75rem,0.95vw,0.9375rem)] font-extrabold leading-tight text-gray-900">
+                    {entry.displayName || entry.studentName}
+                  </span>
                 </div>
-                <div className="whitespace-nowrap text-right text-[clamp(0.75rem,1vw,0.9375rem)] font-black text-blue-600">
+                <div className="shrink-0">
+                  <PointRankBadge
+                    rank={entryRank}
+                    size="sm"
+                    className="!min-h-[1.45rem] !min-w-[2.75rem] !px-1.5 !py-0 !text-[10px]"
+                  />
+                </div>
+                <div className="whitespace-nowrap text-[clamp(0.625rem,0.82vw,0.8125rem)] font-bold text-gray-500">
+                  {entry.grade}학년 {entry.class}반
+                </div>
+                <div className="whitespace-nowrap text-right text-[clamp(0.6875rem,0.92vw,0.9375rem)] font-black text-blue-600">
                   {formatWis(entry.currentBalance)}
                 </div>
               </div>
