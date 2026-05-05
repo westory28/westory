@@ -135,7 +135,7 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({ config }) => {
             return (
               <div
                 key={entry.uid}
-                className={`grid grid-cols-[2.75rem_minmax(0,1fr)_4.25rem_4.75rem] items-center gap-1.5 rounded-lg border px-2 py-2 sm:grid-cols-[3.25rem_minmax(0,1fr)_5rem_5.25rem] sm:gap-2 sm:px-3 sm:py-2.5 ${rankTone(rank)}`}
+                className={`grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-lg border px-2 py-2 sm:gap-2.5 sm:px-3 sm:py-2.5 ${rankTone(rank)}`}
               >
                 <div className="flex min-w-0 items-center gap-1">
                   <span
@@ -152,21 +152,25 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({ config }) => {
                     ></i>
                   ) : null}
                 </div>
-                <div className="flex min-w-0 items-center gap-1.5">
-                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/80 text-[11px] shadow-sm sm:h-6 sm:w-6 sm:text-sm">
-                    {entry.profileIcon || defaultProfileIcon}
-                  </span>
-                  <span className="min-w-0 truncate text-[clamp(0.75rem,1.05vw,0.9375rem)] font-extrabold leading-tight text-gray-900">
-                    {entry.displayName || entry.studentName}
-                  </span>
-                  {entryRank && (
-                    <span className="shrink-0">
-                      <PointRankBadge rank={entryRank} size="sm" />
+                <div className="min-w-0">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/80 text-[11px] shadow-sm sm:h-6 sm:w-6 sm:text-sm">
+                      {entry.profileIcon || defaultProfileIcon}
                     </span>
-                  )}
-                </div>
-                <div className="truncate text-[clamp(0.6875rem,0.95vw,0.8125rem)] font-bold text-gray-500">
-                  {entry.grade}학년 {entry.class}반
+                    <span className="min-w-0 truncate text-[clamp(0.8125rem,1.1vw,0.9375rem)] font-extrabold leading-tight text-gray-900">
+                      {entry.displayName || entry.studentName}
+                    </span>
+                  </div>
+                  <div className="mt-1 flex min-w-0 items-center gap-1.5">
+                    {entryRank && (
+                      <span className="shrink-0">
+                        <PointRankBadge rank={entryRank} size="sm" />
+                      </span>
+                    )}
+                    <span className="min-w-0 truncate text-[clamp(0.6875rem,0.95vw,0.8125rem)] font-bold leading-tight text-gray-500">
+                      {entry.grade}학년 {entry.class}반
+                    </span>
+                  </div>
                 </div>
                 <div className="whitespace-nowrap text-right text-[clamp(0.75rem,1vw,0.9375rem)] font-black text-blue-600">
                   {formatWis(entry.currentBalance)}
