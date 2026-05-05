@@ -138,39 +138,6 @@ const TeacherNoticeBoard: React.FC = () => {
           <i className="fas fa-bullhorn mr-2 text-blue-600"></i>
           알림장
         </h3>
-        {showCarousel && (
-          <div className="ml-auto inline-flex shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-            <button
-              type="button"
-              onClick={() => move(-1)}
-              className="inline-flex h-9 w-9 items-center justify-center text-blue-700 transition hover:bg-blue-50"
-              aria-label="이전 알림"
-            >
-              <i className="fas fa-chevron-left text-xs"></i>
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsPaused((prev) => !prev)}
-              className="inline-flex h-9 w-9 items-center justify-center border-x border-gray-200 text-blue-700 transition hover:bg-blue-50"
-              aria-label={
-                isPaused ? "알림 자동 넘김 재생" : "알림 자동 넘김 일시정지"
-              }
-              title={isPaused ? "재생" : "일시정지"}
-            >
-              <i
-                className={`fas ${isPaused ? "fa-play" : "fa-pause"} text-xs`}
-              ></i>
-            </button>
-            <button
-              type="button"
-              onClick={() => move(1)}
-              className="inline-flex h-9 w-9 items-center justify-center text-blue-700 transition hover:bg-blue-50"
-              aria-label="다음 알림"
-            >
-              <i className="fas fa-chevron-right text-xs"></i>
-            </button>
-          </div>
-        )}
       </div>
 
       <div className="min-h-0 flex-1">
@@ -226,18 +193,45 @@ const TeacherNoticeBoard: React.FC = () => {
               </span>
             </div>
 
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => handleEdit(activeNotice)}
-                className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-extrabold text-gray-600 transition hover:bg-gray-50 hover:text-blue-700"
-              >
-                <i className="fas fa-hand-pointer text-gray-400"></i>
-                이미지 수정
-              </button>
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              {showCarousel && (
+                <div className="inline-flex shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => move(-1)}
+                    className="inline-flex h-9 w-9 items-center justify-center text-blue-700 transition hover:bg-blue-50"
+                    aria-label="이전 알림"
+                  >
+                    <i className="fas fa-chevron-left text-xs"></i>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsPaused((prev) => !prev)}
+                    className="inline-flex h-9 w-9 items-center justify-center border-x border-gray-200 text-blue-700 transition hover:bg-blue-50"
+                    aria-label={
+                      isPaused
+                        ? "알림 자동 넘김 재생"
+                        : "알림 자동 넘김 일시정지"
+                    }
+                    title={isPaused ? "재생" : "일시정지"}
+                  >
+                    <i
+                      className={`fas ${isPaused ? "fa-play" : "fa-pause"} text-xs`}
+                    ></i>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => move(1)}
+                    className="inline-flex h-9 w-9 items-center justify-center text-blue-700 transition hover:bg-blue-50"
+                    aria-label="다음 알림"
+                  >
+                    <i className="fas fa-chevron-right text-xs"></i>
+                  </button>
+                </div>
+              )}
 
               {showCarousel && (
-                <div className="flex items-center gap-1.5">
+                <div className="ml-2 flex items-center gap-1.5 sm:ml-4">
                   {notices.map((notice, index) => (
                     <button
                       key={`${notice.id}-dot`}
@@ -253,6 +247,15 @@ const TeacherNoticeBoard: React.FC = () => {
                   ))}
                 </div>
               )}
+
+              <button
+                type="button"
+                onClick={() => handleEdit(activeNotice)}
+                className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-extrabold text-gray-600 transition hover:bg-gray-50 hover:text-blue-700"
+              >
+                <i className="fas fa-hand-pointer text-gray-400"></i>
+                이미지 수정
+              </button>
 
               <div className="ml-auto flex items-center gap-2">
                 <button
