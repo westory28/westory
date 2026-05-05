@@ -231,7 +231,7 @@ const TeacherNoticeBoard: React.FC = () => {
               )}
 
               {showCarousel && (
-                <div className="ml-2 flex items-center gap-1.5 sm:ml-4">
+                <div className="ml-5 flex items-center gap-1.5">
                   {notices.map((notice, index) => (
                     <button
                       key={`${notice.id}-dot`}

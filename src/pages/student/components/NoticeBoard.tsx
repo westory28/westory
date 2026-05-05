@@ -81,39 +81,6 @@ const NoticeBoard: React.FC = () => {
           <i className="fas fa-bullhorn mr-2 text-blue-600"></i>
           알림장
         </h3>
-        {showCarousel && (
-          <div className="ml-auto inline-flex shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-            <button
-              type="button"
-              onClick={() => move(-1)}
-              className="inline-flex h-9 w-9 items-center justify-center text-blue-700 transition hover:bg-blue-50"
-              aria-label="이전 알림"
-            >
-              <i className="fas fa-chevron-left text-xs"></i>
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsPaused((prev) => !prev)}
-              className="inline-flex h-9 w-9 items-center justify-center border-x border-gray-200 text-blue-700 transition hover:bg-blue-50"
-              aria-label={
-                isPaused ? "알림 자동 넘김 재생" : "알림 자동 넘김 일시정지"
-              }
-              title={isPaused ? "재생" : "일시정지"}
-            >
-              <i
-                className={`fas ${isPaused ? "fa-play" : "fa-pause"} text-xs`}
-              ></i>
-            </button>
-            <button
-              type="button"
-              onClick={() => move(1)}
-              className="inline-flex h-9 w-9 items-center justify-center text-blue-700 transition hover:bg-blue-50"
-              aria-label="다음 알림"
-            >
-              <i className="fas fa-chevron-right text-xs"></i>
-            </button>
-          </div>
-        )}
       </div>
 
       <div className="min-h-0 flex-1">
@@ -157,20 +124,56 @@ const NoticeBoard: React.FC = () => {
             </div>
 
             {showCarousel && (
-              <div className="mt-3 flex items-center justify-center gap-1.5">
-                {notices.map((notice, index) => (
+              <div className="mt-4 flex items-center gap-3">
+                <div className="inline-flex shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
                   <button
-                    key={`${notice.id}-dot`}
                     type="button"
-                    onClick={() => setActiveIndex(index)}
-                    className={`h-2.5 rounded-full transition ${
-                      activeIndex === index
-                        ? "w-6 bg-blue-600"
-                        : "w-2.5 bg-gray-200"
-                    }`}
-                    aria-label={`${index + 1}번째 알림 보기`}
-                  />
-                ))}
+                    onClick={() => move(-1)}
+                    className="inline-flex h-9 w-9 items-center justify-center text-blue-700 transition hover:bg-blue-50"
+                    aria-label="이전 알림"
+                  >
+                    <i className="fas fa-chevron-left text-xs"></i>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsPaused((prev) => !prev)}
+                    className="inline-flex h-9 w-9 items-center justify-center border-x border-gray-200 text-blue-700 transition hover:bg-blue-50"
+                    aria-label={
+                      isPaused
+                        ? "알림 자동 넘김 재생"
+                        : "알림 자동 넘김 일시정지"
+                    }
+                    title={isPaused ? "재생" : "일시정지"}
+                  >
+                    <i
+                      className={`fas ${isPaused ? "fa-play" : "fa-pause"} text-xs`}
+                    ></i>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => move(1)}
+                    className="inline-flex h-9 w-9 items-center justify-center text-blue-700 transition hover:bg-blue-50"
+                    aria-label="다음 알림"
+                  >
+                    <i className="fas fa-chevron-right text-xs"></i>
+                  </button>
+                </div>
+
+                <div className="ml-5 flex items-center gap-1.5">
+                  {notices.map((notice, index) => (
+                    <button
+                      key={`${notice.id}-dot`}
+                      type="button"
+                      onClick={() => setActiveIndex(index)}
+                      className={`h-2.5 rounded-full transition ${
+                        activeIndex === index
+                          ? "w-6 bg-blue-600"
+                          : "w-2.5 bg-gray-200"
+                      }`}
+                      aria-label={`${index + 1}번째 알림 보기`}
+                    />
+                  ))}
+                </div>
               </div>
             )}
           </div>
