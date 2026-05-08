@@ -56,6 +56,7 @@ import {
 const HISTORY_CLASSROOM_LOCK_PREFIX = "westoryHistoryClassroomLock";
 const HISTORY_CLASSROOM_ATTEMPT_PREFIX = "westoryHistoryClassroomAttempt";
 const HISTORY_CLASSROOM_ROTATION_PREFIX = "westoryHistoryClassroomRotation";
+const HISTORY_CLASSROOM_EXIT_COOLDOWN_MINUTES = 5;
 const SCREEN_ROTATION_GRACE_MS = 8000;
 const VISIBILITY_CANCEL_DELAY_MS = 3000;
 
@@ -137,8 +138,8 @@ const writeCooldownLock = (
   );
 };
 
-const getExitCooldownUntil = (assignment: HistoryClassroomAssignment) =>
-  Date.now() + Math.max(1, assignment.cooldownMinutes || 0) * 60 * 1000;
+const getExitCooldownUntil = () =>
+  Date.now() + HISTORY_CLASSROOM_EXIT_COOLDOWN_MINUTES * 60 * 1000;
 
 const clearCooldownLock = (assignmentId: string, uid: string) => {
   removeStorage(getCooldownLockKey(assignmentId, uid));
@@ -185,6 +186,17 @@ type HistoryClassroomResultModalSummary = {
   answerChecks: HistoryClassroomAnswerCheck[];
   wrongItems: HistoryClassroomResultWrongItem[];
 };
+
+type HistoryClassroomExitAction = {
+  reason: string;
+  redirectTo?: string | null;
+  replace?: boolean;
+  mode?: "route" | "back" | "reload";
+};
+type HistoryClassroomExitRequestOptions = Omit<
+  HistoryClassroomExitAction,
+  "reason"
+>;
 
 const buildHistoryClassroomResultSummary = (
   assignment: HistoryClassroomAssignment,
@@ -233,22 +245,28 @@ const HistoryClassroomRunner: React.FC = () => {
   const [resultSummary, setResultSummary] =
     useState<HistoryClassroomResultModalSummary | null>(null);
   const [resultDialogOpen, setResultDialogOpen] = useState(false);
+  const [pendingExitAction, setPendingExitAction] =
+    useState<HistoryClassroomExitAction | null>(null);
+  const [exitConfirmSubmitting, setExitConfirmSubmitting] = useState(false);
+  const [isNetworkOffline, setIsNetworkOffline] = useState(() =>
+    typeof navigator === "undefined" ? false : !navigator.onLine,
+  );
+  const [pendingSubmitAfterOnline, setPendingSubmitAfterOnline] =
+    useState(false);
   const [pointNotice, setPointNotice] = useState("");
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [remainingDueMs, setRemainingDueMs] = useState<number | null>(null);
   const cancellationInFlightRef = useRef(false);
   const exitNavigationAllowedRef = useRef(false);
-  const forcedCancelRef =
-    useRef<
-      (
-        reason: string,
-        options?: { redirectTo?: string | null; replace?: boolean },
-      ) => Promise<void>
-    >();
+  const backGuardRearmRef = useRef<(() => void) | null>(null);
   const autoSubmitHandledRef = useRef(false);
   const resultSummaryShownRef = useRef(false);
   const attemptDeadlineMsRef = useRef(0);
   const visibilityCancelTimerRef = useRef<number | null>(null);
+  const networkOfflineRef = useRef(isNetworkOffline);
+  const networkOfflineStartedAtRef = useRef<number | null>(
+    isNetworkOffline ? Date.now() : null,
+  );
   const screenRotationGraceUntilRef = useRef(0);
   const viewportOrientationRef = useRef<{
     width: number;
@@ -360,15 +378,18 @@ const HistoryClassroomRunner: React.FC = () => {
           userData.uid,
         );
         const lastAttemptMs = getHistoryClassroomTimestampMs(latest?.createdAt);
+        const retryCooldownMinutes =
+          latest?.status === "cancelled"
+            ? HISTORY_CLASSROOM_EXIT_COOLDOWN_MINUTES
+            : loaded.cooldownMinutes;
         const shouldSkipServerCooldown =
           !!resetAtMs && !!lastAttemptMs && lastAttemptMs <= resetAtMs;
         if (
           lastAttemptMs &&
-          loaded.cooldownMinutes > 0 &&
+          retryCooldownMinutes > 0 &&
           !shouldSkipServerCooldown
         ) {
-          const availableAt =
-            lastAttemptMs + loaded.cooldownMinutes * 60 * 1000;
+          const availableAt = lastAttemptMs + retryCooldownMinutes * 60 * 1000;
           if (availableAt > Date.now()) {
             const remain = Math.ceil((availableAt - Date.now()) / 60000);
             throw new Error(`${remain}분 후 다시 응시할 수 있습니다.`);
@@ -428,7 +449,7 @@ const HistoryClassroomRunner: React.FC = () => {
         writeCooldownLock(
           loaded.id,
           userData.uid,
-          getExitCooldownUntil(loaded),
+          getExitCooldownUntil(),
           "attempt-started",
         );
         if (loaded.timeLimitMinutes > 0) {
@@ -449,6 +470,9 @@ const HistoryClassroomRunner: React.FC = () => {
         setResultText("");
         setResultSummary(null);
         setResultDialogOpen(false);
+        setPendingExitAction(null);
+        setExitConfirmSubmitting(false);
+        setPendingSubmitAfterOnline(false);
         resultSummaryShownRef.current = false;
         setPointNotice("");
         setRemainingSeconds(initialRemainingSeconds);
@@ -479,10 +503,7 @@ const HistoryClassroomRunner: React.FC = () => {
   }) => {
     if (!assignment || !userData) return null;
 
-    const answerSummary = summarizeHistoryClassroomAnswers(
-      assignment,
-      answers,
-    );
+    const answerSummary = summarizeHistoryClassroomAnswers(assignment, answers);
     const { checks: answerChecks, score, total, percent } = answerSummary;
     const passed =
       options.status === "cancelled"
@@ -637,9 +658,9 @@ const HistoryClassroomRunner: React.FC = () => {
   };
 
   const getExitCooldownDurationLabel = useCallback(() => {
-    const cooldownMs = Math.max(1, assignment?.cooldownMinutes || 0) * 60000;
+    const cooldownMs = HISTORY_CLASSROOM_EXIT_COOLDOWN_MINUTES * 60000;
     return formatRemainingDuration(cooldownMs);
-  }, [assignment?.cooldownMinutes]);
+  }, []);
 
   const getExitWarningMessage = useCallback(
     () =>
@@ -666,7 +687,14 @@ const HistoryClassroomRunner: React.FC = () => {
   const handleForcedCancel = async (
     reason: string,
     options: { redirectTo?: string | null; replace?: boolean } = {},
-  ) => {
+  ): Promise<boolean> => {
+    if (networkOfflineRef.current) {
+      setResultText(
+        "인터넷 연결이 끊겨 응시를 잠시 멈췄습니다. 연결이 돌아오면 계속 진행할 수 있습니다.",
+      );
+      return false;
+    }
+
     if (
       !assignment ||
       !userData ||
@@ -674,14 +702,14 @@ const HistoryClassroomRunner: React.FC = () => {
       submitting ||
       cancellationInFlightRef.current
     ) {
-      return;
+      return false;
     }
 
     cancellationInFlightRef.current = true;
     writeCooldownLock(
       assignment.id,
       userData.uid,
-      getExitCooldownUntil(assignment),
+      getExitCooldownUntil(),
       reason,
     );
 
@@ -700,25 +728,157 @@ const HistoryClassroomRunner: React.FC = () => {
         exitNavigationAllowedRef.current = true;
         navigate(redirectTo, { replace: options.replace ?? true });
       }
+      return true;
     } catch (cancelError) {
       console.error("Failed to save cancelled attempt:", cancelError);
+      cancellationInFlightRef.current = false;
+      return false;
     }
   };
 
-  const requestExit = async (
-    reason: string,
-    redirectTo = "/student/history-classroom",
-  ) => {
-    if (!assignment || completed || submitting) {
-      navigate(redirectTo);
+  const requestExit = useCallback(
+    (reason: string, options: HistoryClassroomExitRequestOptions = {}) => {
+      if (!assignment || completed || submitting) {
+        if (options.mode === "reload") {
+          window.location.reload();
+          return;
+        }
+        if (options.mode === "back") {
+          window.history.back();
+          return;
+        }
+        navigate(options.redirectTo ?? "/student/history-classroom", {
+          replace: options.replace,
+        });
+        return;
+      }
+
+      setPendingExitAction({
+        ...options,
+        reason,
+        redirectTo:
+          "redirectTo" in options
+            ? options.redirectTo
+            : "/student/history-classroom",
+        mode: options.mode || "route",
+      });
+    },
+    [assignment, completed, navigate, submitting],
+  );
+
+  const cancelPendingExit = useCallback(() => {
+    if (exitConfirmSubmitting) return;
+    if (pendingExitAction?.mode === "back") {
+      backGuardRearmRef.current?.();
+    }
+    setPendingExitAction(null);
+  }, [exitConfirmSubmitting, pendingExitAction?.mode]);
+
+  const confirmPendingExit = useCallback(async () => {
+    if (!pendingExitAction || exitConfirmSubmitting) return;
+    if (networkOfflineRef.current) {
+      setResultText(
+        "인터넷 연결이 끊겨 응시를 잠시 멈췄습니다. 연결이 돌아오면 나갈 수 있습니다.",
+      );
       return;
     }
 
-    if (!window.confirm(getExitWarningMessage())) return;
-    await handleForcedCancel(reason, { redirectTo });
-  };
+    setExitConfirmSubmitting(true);
+    const confirmedAction = pendingExitAction;
+    const cancelled = await handleForcedCancel(confirmedAction.reason, {
+      redirectTo:
+        confirmedAction.mode === "back" || confirmedAction.mode === "reload"
+          ? null
+          : confirmedAction.redirectTo,
+      replace: confirmedAction.replace,
+    });
 
-  forcedCancelRef.current = handleForcedCancel;
+    if (!cancelled) {
+      setExitConfirmSubmitting(false);
+      return;
+    }
+
+    exitNavigationAllowedRef.current = true;
+    if (confirmedAction.mode === "reload") {
+      window.location.reload();
+      return;
+    }
+    if (confirmedAction.mode === "back") {
+      window.history.back();
+      return;
+    }
+    setPendingExitAction(null);
+    setExitConfirmSubmitting(false);
+  }, [exitConfirmSubmitting, pendingExitAction]);
+
+  useEffect(() => {
+    const persistAttemptProgress = () => {
+      if (!assignment || !userData?.uid) return;
+      writeLocalOnly(
+        getAttemptProgressKey(assignment.id, userData.uid),
+        JSON.stringify({
+          deadlineMs: attemptDeadlineMsRef.current,
+          currentPage,
+          answers,
+          savedAt: Date.now(),
+        }),
+      );
+    };
+
+    const markOffline = () => {
+      networkOfflineRef.current = true;
+      setIsNetworkOffline(true);
+      if (networkOfflineStartedAtRef.current == null) {
+        networkOfflineStartedAtRef.current = Date.now();
+      }
+      if (assignment && userData?.uid) {
+        clearCooldownLock(assignment.id, userData.uid);
+      }
+      setResultText(
+        "인터넷 연결이 끊겨 응시를 잠시 멈췄습니다. 연결이 돌아오면 계속 진행할 수 있습니다.",
+      );
+      persistAttemptProgress();
+    };
+
+    const markOnline = () => {
+      const offlineStartedAt = networkOfflineStartedAtRef.current;
+      networkOfflineRef.current = false;
+      setIsNetworkOffline(false);
+      networkOfflineStartedAtRef.current = null;
+
+      if (offlineStartedAt && assignment?.timeLimitMinutes) {
+        const pausedMs = Math.max(0, Date.now() - offlineStartedAt);
+        attemptDeadlineMsRef.current += pausedMs;
+        setRemainingSeconds(
+          Math.max(
+            0,
+            Math.ceil((attemptDeadlineMsRef.current - Date.now()) / 1000),
+          ),
+        );
+      }
+
+      if (assignment && userData?.uid) {
+        persistAttemptProgress();
+      }
+
+      setResultText((prev) =>
+        prev.includes("인터넷 연결이 끊겨") ? "" : prev,
+      );
+    };
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      markOffline();
+    } else {
+      markOnline();
+    }
+
+    window.addEventListener("offline", markOffline);
+    window.addEventListener("online", markOnline);
+    return () => {
+      window.removeEventListener("offline", markOffline);
+      window.removeEventListener("online", markOnline);
+    };
+  }, [answers, assignment, currentPage, userData?.uid]);
 
   useEffect(() => {
     if (!assignment || !userData?.uid || completed) return undefined;
@@ -855,13 +1015,8 @@ const HistoryClassroomRunner: React.FC = () => {
 
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       if (exitNavigationAllowedRef.current) return undefined;
+      if (networkOfflineRef.current) return undefined;
       if (isScreenRotationGraceActive()) return undefined;
-      writeCooldownLock(
-        assignment.id,
-        userData.uid,
-        getExitCooldownUntil(assignment),
-        "beforeunload",
-      );
       event.preventDefault();
       event.returnValue = getExitWarningMessage();
       return event.returnValue;
@@ -892,29 +1047,21 @@ const HistoryClassroomRunner: React.FC = () => {
       window.history.pushState(guardState, "", window.location.href);
     };
 
+    backGuardRearmRef.current = armBackGuard;
     armBackGuard();
 
     const handlePopState = () => {
       if (exitNavigationAllowedRef.current) return;
-
-      if (!window.confirm(getExitWarningMessage())) {
-        armBackGuard();
-        return;
-      }
-
-      exitNavigationAllowedRef.current = true;
-      void (async () => {
-        await forcedCancelRef.current?.("browser-back", { redirectTo: null });
-        window.history.back();
-      })();
+      requestExit("browser-back", { mode: "back", redirectTo: null });
     };
 
     window.addEventListener("popstate", handlePopState);
     return () => {
       disposed = true;
+      backGuardRearmRef.current = null;
       window.removeEventListener("popstate", handlePopState);
     };
-  }, [assignment, completed, getExitWarningMessage, submitting]);
+  }, [assignment, completed, requestExit, submitting]);
 
   useEffect(() => {
     if (!assignment || completed || submitting) return undefined;
@@ -962,11 +1109,30 @@ const HistoryClassroomRunner: React.FC = () => {
 
       event.preventDefault();
       event.stopPropagation();
-      void requestExit("link-navigation", route);
+      requestExit("link-navigation", { redirectTo: route });
     };
 
     document.addEventListener("click", handleLinkClick, true);
     return () => document.removeEventListener("click", handleLinkClick, true);
+  }, [assignment, completed, requestExit, submitting]);
+
+  useEffect(() => {
+    if (!assignment || completed || submitting) return undefined;
+
+    const handleRefreshShortcut = (event: KeyboardEvent) => {
+      const key = event.key.toLowerCase();
+      const isRefreshShortcut =
+        key === "f5" || ((event.ctrlKey || event.metaKey) && key === "r");
+      if (!isRefreshShortcut) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      requestExit("refresh-shortcut", { mode: "reload", redirectTo: null });
+    };
+
+    window.addEventListener("keydown", handleRefreshShortcut, true);
+    return () =>
+      window.removeEventListener("keydown", handleRefreshShortcut, true);
   }, [assignment, completed, requestExit, submitting]);
 
   useEffect(() => {
@@ -985,18 +1151,21 @@ const HistoryClassroomRunner: React.FC = () => {
         return;
       }
       if (isScreenRotationGraceActive()) return;
+      if (networkOfflineRef.current) return;
 
       clearVisibilityCancelTimer();
       visibilityCancelTimerRef.current = window.setTimeout(() => {
         visibilityCancelTimerRef.current = null;
         if (document.visibilityState !== "hidden") return;
         if (isScreenRotationGraceActive()) return;
+        if (networkOfflineRef.current) return;
         void handleForcedCancel("visibility-hidden");
       }, VISIBILITY_CANCEL_DELAY_MS);
     };
     const handlePageHide = () => {
       clearVisibilityCancelTimer();
       if (isScreenRotationGraceActive()) return;
+      if (networkOfflineRef.current) return;
       void handleForcedCancel("pagehide");
     };
 
@@ -1023,10 +1192,11 @@ const HistoryClassroomRunner: React.FC = () => {
     }
 
     const refreshExitCooldown = (reason: string) => {
+      if (networkOfflineRef.current) return;
       writeCooldownLock(
         assignment.id,
         userData.uid,
-        getExitCooldownUntil(assignment),
+        getExitCooldownUntil(),
         reason,
       );
     };
@@ -1042,7 +1212,7 @@ const HistoryClassroomRunner: React.FC = () => {
     return () => {
       window.clearInterval(activityTimerId);
       window.clearInterval(cooldownTimerId);
-      if (!isScreenRotationGraceActive()) {
+      if (!isScreenRotationGraceActive() && !networkOfflineRef.current) {
         refreshExitCooldown("attempt-left");
       }
     };
@@ -1055,7 +1225,12 @@ const HistoryClassroomRunner: React.FC = () => {
   ]);
 
   useEffect(() => {
-    if (!assignment?.timeLimitMinutes || completed || submitting) {
+    if (
+      !assignment?.timeLimitMinutes ||
+      completed ||
+      submitting ||
+      isNetworkOffline
+    ) {
       return undefined;
     }
 
@@ -1079,10 +1254,12 @@ const HistoryClassroomRunner: React.FC = () => {
     const timerId = window.setInterval(updateRemainingTime, 1000);
 
     return () => window.clearInterval(timerId);
-  }, [assignment?.timeLimitMinutes, completed, submitting]);
+  }, [assignment?.timeLimitMinutes, completed, isNetworkOffline, submitting]);
 
   useEffect(() => {
-    if (!assignment || completed || submitting) return undefined;
+    if (!assignment || completed || submitting || isNetworkOffline) {
+      return undefined;
+    }
 
     const nextRemainingMs = getHistoryClassroomRemainingMs(assignment);
     if (nextRemainingMs == null) {
@@ -1101,7 +1278,7 @@ const HistoryClassroomRunner: React.FC = () => {
     updateDueWindow();
     const timerId = window.setInterval(updateDueWindow, 1000);
     return () => window.clearInterval(timerId);
-  }, [assignment, completed, submitting]);
+  }, [assignment, completed, isNetworkOffline, submitting]);
 
   const totalTimeSeconds = assignment?.timeLimitMinutes
     ? assignment.timeLimitMinutes * 60
@@ -1149,6 +1326,15 @@ const HistoryClassroomRunner: React.FC = () => {
 
   const submitAnswers = async () => {
     if (!assignment || !userData) return;
+    if (completed || submitting) return;
+    if (networkOfflineRef.current) {
+      setPendingSubmitAfterOnline(true);
+      setResultText(
+        "인터넷 연결이 끊겨 제출을 잠시 멈췄습니다. 연결이 돌아오면 자동으로 제출합니다.",
+      );
+      return;
+    }
+
     emitSessionActivity();
     setSubmitting(true);
 
@@ -1177,21 +1363,52 @@ const HistoryClassroomRunner: React.FC = () => {
             result.percent,
           ),
         );
+        setResultDialogOpen(true);
       }
+      setPendingSubmitAfterOnline(false);
       setResultText("");
       await applyHistoryClassroomPointReward(result.resultId, result.percent);
     } catch (submitError) {
       console.error(submitError);
-      setResultText("제출에 실패했습니다.");
+      if (networkOfflineRef.current) {
+        setPendingSubmitAfterOnline(true);
+        setResultText(
+          "인터넷 연결이 끊겨 제출을 잠시 멈췄습니다. 연결이 돌아오면 자동으로 제출합니다.",
+        );
+      } else {
+        setResultText(
+          "제출에 실패했습니다. 답안은 화면에 남아 있으니 다시 제출해 주세요.",
+        );
+      }
     } finally {
       setSubmitting(false);
     }
   };
 
+  useEffect(() => {
+    if (
+      isNetworkOffline ||
+      !pendingSubmitAfterOnline ||
+      !assignment ||
+      !userData ||
+      completed ||
+      submitting
+    ) {
+      return;
+    }
+
+    void submitAnswers();
+  }, [
+    assignment,
+    completed,
+    isNetworkOffline,
+    pendingSubmitAfterOnline,
+    submitting,
+    userData,
+  ]);
+
   if (loading) {
-    return (
-      <PageLoading message="역사교실을 준비하는 중입니다." />
-    );
+    return <PageLoading message="역사교실을 준비하는 중입니다." />;
   }
 
   if (error || !assignment) {
@@ -1226,7 +1443,7 @@ const HistoryClassroomRunner: React.FC = () => {
         headerAction={
           <button
             type="button"
-            onClick={() => void requestExit("student-navigation")}
+            onClick={() => requestExit("student-navigation")}
             className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50"
           >
             목록으로
@@ -1241,6 +1458,64 @@ const HistoryClassroomRunner: React.FC = () => {
         >
           남은 시간이 1분 이내입니다. 작성 중인 답을 확인하고 빨리 제출해
           주세요.
+        </div>
+      )}
+      {isNetworkOffline && (
+        <div
+          className="pointer-events-none fixed left-1/2 top-4 z-[135] w-[min(30rem,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl border border-amber-200 bg-white/95 px-4 py-3 text-center text-sm font-black text-amber-800 shadow-lg backdrop-blur"
+          role="status"
+          aria-live="polite"
+        >
+          인터넷 연결이 끊겨 응시 시간이 잠시 멈췄습니다. 연결이 돌아오면 이어서
+          진행합니다.
+        </div>
+      )}
+      {pendingExitAction && (
+        <div
+          className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-950/55 px-4 py-6 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="history-classroom-exit-title"
+          aria-describedby="history-classroom-exit-description"
+        >
+          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.32)]">
+            <div className="px-5 py-5 sm:px-6">
+              <div className="text-xs font-bold uppercase tracking-[0.18em] text-rose-500">
+                응시 중 이탈 확인
+              </div>
+              <h2
+                id="history-classroom-exit-title"
+                className="mt-2 text-xl font-black text-slate-900"
+              >
+                역사교실을 나가시겠습니까?
+              </h2>
+              <p
+                id="history-classroom-exit-description"
+                className="mt-3 text-sm leading-6 text-slate-600"
+              >
+                지금 나가면 현재 응시는 종료되고 재응시까지 5분을 기다려야
+                합니다. 계속 풀려면 취소를 눌러 주세요.
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:px-6">
+              <button
+                type="button"
+                onClick={cancelPendingExit}
+                disabled={exitConfirmSubmitting}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmPendingExit()}
+                disabled={exitConfirmSubmitting}
+                className="rounded-xl border border-rose-600 bg-rose-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {exitConfirmSubmitting ? "처리 중..." : "나가기"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
       {resultSummary && resultDialogOpen && (
