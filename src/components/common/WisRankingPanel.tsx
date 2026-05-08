@@ -135,7 +135,7 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({ config }) => {
             return (
               <div
                 key={entry.uid}
-                className={`rounded-lg border px-2 py-2 sm:grid sm:grid-cols-[72px_minmax(0,1fr)_92px_minmax(80px,auto)] sm:items-center sm:gap-3 sm:px-3 sm:py-2.5 max-[1120px]:sm:grid-cols-[52px_minmax(0,1fr)_70px_minmax(64px,auto)] max-[1120px]:sm:gap-1.5 max-[1120px]:sm:px-2 max-[1120px]:sm:py-2 ${rankTone(rank)}`}
+                className={`wis-ranking-row rounded-lg border px-2 py-2 sm:grid sm:grid-cols-[72px_minmax(0,1fr)_92px_minmax(80px,auto)] sm:items-center sm:gap-3 sm:px-3 sm:py-2.5 max-[1120px]:sm:grid-cols-[52px_minmax(0,1fr)_70px_minmax(64px,auto)] max-[1120px]:sm:gap-1.5 max-[1120px]:sm:px-2 max-[1120px]:sm:py-2 ${rankTone(rank)}`}
               >
                 <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 sm:hidden">
                   <span
@@ -174,7 +174,7 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({ config }) => {
                   </span>
                 </div>
 
-                <div className="hidden grid-cols-[2rem_1.25rem] items-center gap-1.5 sm:grid max-[1120px]:sm:grid-cols-[1.75rem_0.875rem] max-[1120px]:sm:gap-1">
+                <div className="wis-ranking-rank hidden grid-cols-[2rem_1.25rem] items-center gap-1.5 sm:grid max-[1120px]:sm:grid-cols-[1.75rem_0.875rem] max-[1120px]:sm:gap-1">
                   <span
                     className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-sm font-black max-[1120px]:h-7 max-[1120px]:w-7 max-[1120px]:text-xs ${
                       rank <= 3 ? "bg-white/70" : "bg-slate-900 text-white"
@@ -189,23 +189,23 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({ config }) => {
                     ></i>
                   )}
                 </div>
-                <div className="hidden min-w-0 items-center gap-1.5 sm:flex max-[1120px]:sm:gap-1">
-                  <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/80 text-sm shadow-sm max-[1120px]:h-5 max-[1120px]:w-5 max-[1120px]:text-xs">
+                <div className="wis-ranking-student hidden min-w-0 items-center gap-1.5 sm:flex max-[1120px]:sm:gap-1">
+                  <span className="wis-ranking-profile inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/80 text-sm shadow-sm max-[1120px]:h-5 max-[1120px]:w-5 max-[1120px]:text-xs">
                     {entry.profileIcon || defaultProfileIcon}
                   </span>
-                  <span className="min-w-0 truncate text-base font-extrabold text-gray-900 max-[1120px]:text-[13px]">
+                  <span className="wis-ranking-name min-w-0 truncate text-base font-extrabold text-gray-900 max-[1120px]:text-[13px]">
                     {entry.displayName || entry.studentName}
                   </span>
                   <PointRankBadge
                     rank={entryRank}
                     size="sm"
-                    className="max-[1120px]:!min-h-[1.45rem] max-[1120px]:!min-w-[2.75rem] max-[1120px]:!px-1.5 max-[1120px]:!py-0 max-[1120px]:!text-[10px]"
+                    className="wis-ranking-rank-badge max-[1120px]:!min-h-[1.45rem] max-[1120px]:!min-w-[2.75rem] max-[1120px]:!px-1.5 max-[1120px]:!py-0 max-[1120px]:!text-[10px]"
                   />
                 </div>
-                <div className="hidden truncate text-sm font-bold text-gray-500 sm:block max-[1120px]:text-[11px]">
+                <div className="wis-ranking-class hidden truncate text-sm font-bold text-gray-500 sm:block max-[1120px]:text-[11px]">
                   {entry.grade}학년 {entry.class}반
                 </div>
-                <div className="hidden text-right text-base font-black text-blue-600 sm:block max-[1120px]:text-[13px]">
+                <div className="wis-ranking-score hidden text-right text-base font-black text-blue-600 sm:block max-[1120px]:text-[13px]">
                   {formatWis(entry.currentBalance)}
                 </div>
               </div>

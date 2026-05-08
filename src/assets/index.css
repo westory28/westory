@@ -1046,6 +1046,87 @@
   background: rgba(219, 234, 254, 0.24) !important;
 }
 
+@media (min-width: 640px) and (max-width: 1120px) {
+  .wis-ranking-row {
+    grid-template-columns: 2.25rem minmax(0, 1fr) minmax(4.35rem, auto) !important;
+    grid-template-rows: auto auto;
+    column-gap: 0.5rem !important;
+    row-gap: 0.12rem;
+    align-items: center;
+    padding: 0.45rem 0.55rem !important;
+  }
+
+  .wis-ranking-rank {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    grid-template-columns: 1.55rem 0.65rem !important;
+    gap: 0.1rem !important;
+    align-self: center;
+  }
+
+  .wis-ranking-rank > span {
+    width: 1.55rem !important;
+    height: 1.55rem !important;
+    font-size: 0.68rem !important;
+  }
+
+  .wis-ranking-rank > i {
+    font-size: 0.62rem !important;
+  }
+
+  .wis-ranking-student {
+    grid-column: 2;
+    grid-row: 1;
+    gap: 0.28rem !important;
+    align-self: end;
+    overflow: visible;
+  }
+
+  .wis-ranking-profile {
+    width: 1.12rem !important;
+    height: 1.12rem !important;
+    font-size: 0.66rem !important;
+  }
+
+  .wis-ranking-name {
+    flex: 0 0 auto;
+    min-width: max-content;
+    max-width: none;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: nowrap;
+    font-size: 0.78rem !important;
+    line-height: 1.05;
+  }
+
+  .wis-ranking-rank-badge {
+    min-width: 2.45rem !important;
+    min-height: 1.18rem !important;
+    padding: 0 0.38rem !important;
+    font-size: 0.57rem !important;
+  }
+
+  .wis-ranking-class {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: start;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.66rem !important;
+    line-height: 1.1;
+  }
+
+  .wis-ranking-score {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+    align-self: center;
+    white-space: nowrap;
+    font-size: 0.76rem !important;
+    line-height: 1.05;
+  }
+}
+
 @media (min-width: 768px) {
   .dashboard-container {
     padding: 24px 40px;
