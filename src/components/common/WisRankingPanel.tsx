@@ -99,15 +99,15 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({ config }) => {
   }, [config]);
 
   return (
-    <div className="flex h-full min-h-[260px] flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:min-h-0">
+    <div className="wis-ranking-panel flex h-full min-h-[260px] flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:min-h-0">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="flex items-center text-lg font-extrabold text-gray-900">
+        <h3 className="wis-ranking-title flex items-center text-lg font-extrabold text-gray-900">
           <i className="fas fa-trophy mr-2 text-blue-600"></i>
           위스 순위
         </h3>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-2">
+      <div className="wis-ranking-list min-h-0 flex-1 space-y-2">
         {loading && (
           <InlineLoading
             className="flex h-full min-h-[160px] items-center"

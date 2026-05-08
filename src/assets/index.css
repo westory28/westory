@@ -1046,46 +1046,70 @@
   background: rgba(219, 234, 254, 0.24) !important;
 }
 
-@media (min-width: 640px) and (max-width: 1120px) {
+@media (min-width: 640px) and (max-width: 1280px) {
+  .wis-ranking-panel {
+    padding: clamp(0.65rem, 1.2vw, 0.9rem) !important;
+  }
+
+  .wis-ranking-panel .mb-3 {
+    margin-bottom: clamp(0.45rem, 0.85vw, 0.65rem) !important;
+  }
+
+  .wis-ranking-title {
+    font-size: clamp(0.98rem, 1.45vw, 1.15rem) !important;
+    line-height: 1.15;
+  }
+
+  .wis-ranking-title i {
+    margin-right: 0.42rem !important;
+    font-size: 0.92em;
+  }
+
+  .wis-ranking-list {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(0.42rem, 0.75vw, 0.55rem) !important;
+  }
+
   .wis-ranking-row {
-    grid-template-columns: 2.25rem minmax(0, 1fr) minmax(4.35rem, auto) !important;
+    grid-template-columns: clamp(1.95rem, 3.8vw, 2.25rem) minmax(0, 1fr) minmax(3.85rem, auto) !important;
     grid-template-rows: auto auto;
-    column-gap: 0.5rem !important;
-    row-gap: 0.12rem;
+    column-gap: clamp(0.32rem, 0.85vw, 0.5rem) !important;
+    row-gap: 0.1rem;
     align-items: center;
-    padding: 0.45rem 0.55rem !important;
+    padding: clamp(0.38rem, 0.75vw, 0.45rem) clamp(0.42rem, 0.9vw, 0.55rem) !important;
   }
 
   .wis-ranking-rank {
     grid-column: 1;
     grid-row: 1 / span 2;
-    grid-template-columns: 1.55rem 0.65rem !important;
-    gap: 0.1rem !important;
+    grid-template-columns: clamp(1.38rem, 2.8vw, 1.55rem) clamp(0.5rem, 1vw, 0.65rem) !important;
+    gap: 0.06rem !important;
     align-self: center;
   }
 
   .wis-ranking-rank > span {
-    width: 1.55rem !important;
-    height: 1.55rem !important;
-    font-size: 0.68rem !important;
+    width: clamp(1.38rem, 2.8vw, 1.55rem) !important;
+    height: clamp(1.38rem, 2.8vw, 1.55rem) !important;
+    font-size: clamp(0.6rem, 1.15vw, 0.68rem) !important;
   }
 
   .wis-ranking-rank > i {
-    font-size: 0.62rem !important;
+    font-size: clamp(0.52rem, 1vw, 0.62rem) !important;
   }
 
   .wis-ranking-student {
     grid-column: 2;
     grid-row: 1;
-    gap: 0.28rem !important;
+    gap: clamp(0.18rem, 0.55vw, 0.28rem) !important;
     align-self: end;
     overflow: visible;
   }
 
   .wis-ranking-profile {
-    width: 1.12rem !important;
-    height: 1.12rem !important;
-    font-size: 0.66rem !important;
+    width: clamp(0.95rem, 1.9vw, 1.12rem) !important;
+    height: clamp(0.95rem, 1.9vw, 1.12rem) !important;
+    font-size: clamp(0.55rem, 1.05vw, 0.66rem) !important;
   }
 
   .wis-ranking-name {
@@ -1095,15 +1119,15 @@
     overflow: visible;
     text-overflow: clip;
     white-space: nowrap;
-    font-size: 0.78rem !important;
+    font-size: clamp(0.68rem, 1.25vw, 0.78rem) !important;
     line-height: 1.05;
   }
 
   .wis-ranking-rank-badge {
-    min-width: 2.45rem !important;
-    min-height: 1.18rem !important;
-    padding: 0 0.38rem !important;
-    font-size: 0.57rem !important;
+    min-width: clamp(2.05rem, 4.2vw, 2.45rem) !important;
+    min-height: clamp(1rem, 1.9vw, 1.18rem) !important;
+    padding: 0 clamp(0.25rem, 0.65vw, 0.38rem) !important;
+    font-size: clamp(0.48rem, 0.95vw, 0.57rem) !important;
   }
 
   .wis-ranking-class {
@@ -1113,7 +1137,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 0.66rem !important;
+    font-size: clamp(0.58rem, 1.05vw, 0.66rem) !important;
     line-height: 1.1;
   }
 
@@ -1122,7 +1146,7 @@
     grid-row: 1 / span 2;
     align-self: center;
     white-space: nowrap;
-    font-size: 0.76rem !important;
+    font-size: clamp(0.66rem, 1.15vw, 0.76rem) !important;
     line-height: 1.05;
   }
 }
