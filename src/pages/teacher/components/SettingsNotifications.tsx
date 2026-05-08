@@ -95,7 +95,7 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     defaultPriority: "normal",
     titleTemplate: "상점 구매 처리",
     bodyTemplate: "{productName} 구매 요청이 {statusLabel} 처리되었습니다.",
-    targetUrl: "/student/points",
+    targetUrl: "/student/points?tab=orders",
     targetLabel: "학생 위스 상점 화면",
     tokens: [
       { key: "productName", label: "상품 이름" },
@@ -115,7 +115,7 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     defaultPriority: "normal",
     titleTemplate: "역사 사전 등록 완료",
     bodyTemplate: '요청한 "{word}" 뜻풀이가 등록되었습니다.',
-    targetUrl: "/student/dashboard",
+    targetUrl: "/student/lesson/history-dictionary",
     targetLabel: "학생 첫 화면",
     tokens: [{ key: "word", label: "요청한 단어" }],
   },
@@ -182,7 +182,7 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     defaultPriority: "normal",
     titleTemplate: "역사교실 제출 알림",
     bodyTemplate: "{studentName} 학생이 {assignmentTitle}을(를) 제출했습니다.",
-    targetUrl: "/teacher/quiz?menu=history2",
+    targetUrl: "/teacher/quiz/history-classroom",
     targetLabel: "교사 역사교실 관리 화면",
     tokens: [
       { key: "studentName", label: "학생 이름" },
@@ -203,7 +203,7 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     defaultPriority: "normal",
     titleTemplate: "상점 구매 요청",
     bodyTemplate: "{studentName} 학생이 {productName} 구매를 요청했습니다.",
-    targetUrl: "/teacher/points",
+    targetUrl: "/teacher/points?tab=requests",
     targetLabel: "교사 위스 관리 화면",
     tokens: [
       { key: "studentName", label: "학생 이름" },

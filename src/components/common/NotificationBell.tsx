@@ -54,6 +54,30 @@ const getNotificationBodyText = (notification: WestoryNotification) => {
 
 const getNotificationTargetUrl = (notification: WestoryNotification) => {
   const targetUrl = String(notification.targetUrl || "").trim();
+  if (notification.type === "history_classroom_submitted") {
+    if (!targetUrl || targetUrl === "/teacher/quiz?menu=history2") {
+      return "/teacher/quiz/history-classroom";
+    }
+    return targetUrl;
+  }
+  if (notification.type === "point_order_requested") {
+    if (!targetUrl || targetUrl === "/teacher/points") {
+      return "/teacher/points?tab=requests";
+    }
+    return targetUrl;
+  }
+  if (notification.type === "point_order_reviewed") {
+    if (!targetUrl || targetUrl === "/student/points") {
+      return "/student/points?tab=orders";
+    }
+    return targetUrl;
+  }
+  if (notification.type === "history_dictionary_resolved") {
+    if (!targetUrl || targetUrl === "/student/dashboard") {
+      return "/student/lesson/history-dictionary";
+    }
+    return targetUrl;
+  }
   if (notification.type === "history_dictionary_requested") {
     const requestId = String(notification.entityId || "").trim();
     const requestsUrl =
