@@ -415,49 +415,58 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                                   </div>
                                 </div>
                               </div>
-                              <div className="divide-y divide-gray-100">
-                                {section.units.map((unit) => {
-                                  const accuracy =
-                                    unit.blankCount > 0
-                                      ? Math.round(
-                                          (unit.correctCount /
-                                            unit.blankCount) *
-                                            100,
-                                        )
-                                      : 0;
-                                  return (
-                                    <div
-                                      key={unit.unitId}
-                                      className="flex flex-col gap-1 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
-                                    >
-                                      <div className="min-w-0">
-                                        <div className="truncate text-sm font-bold text-gray-800">
-                                          {unit.title}
-                                        </div>
-                                        <div className="mt-0.5 text-xs font-semibold text-gray-500">
-                                          정답 {unit.correctCount}/
-                                          {unit.blankCount} · {accuracy}%
-                                        </div>
-                                      </div>
-                                      <div className="flex items-center gap-3 sm:justify-end">
-                                        <span
-                                          className={`rounded-full px-2.5 py-1 text-xs font-extrabold ${
-                                            unit.submitted
-                                              ? "bg-emerald-50 text-emerald-700"
-                                              : "bg-slate-100 text-slate-600"
-                                          }`}
+                              <div className="overflow-x-auto">
+                                <div className="min-w-[46rem]">
+                                  <div className="sticky top-0 z-10 grid grid-cols-[minmax(13rem,1fr)_minmax(5.5rem,0.55fr)_minmax(8rem,0.8fr)_minmax(4.5rem,0.45fr)_minmax(4.5rem,0.45fr)] items-center gap-2 border-b border-gray-200 bg-white px-3 py-2 text-[11px] font-bold text-gray-400">
+                                    <div>수업 자료</div>
+                                    <div className="text-center">정답</div>
+                                    <div className="text-center">제출 일시</div>
+                                    <div className="text-center">정답률</div>
+                                    <div className="text-right">제출</div>
+                                  </div>
+                                  <div className="divide-y divide-gray-100">
+                                    {section.units.map((unit) => {
+                                      const accuracy =
+                                        unit.blankCount > 0
+                                          ? Math.round(
+                                              (unit.correctCount /
+                                                unit.blankCount) *
+                                                100,
+                                            )
+                                          : 0;
+                                      return (
+                                        <div
+                                          key={unit.unitId}
+                                          className="grid grid-cols-[minmax(13rem,1fr)_minmax(5.5rem,0.55fr)_minmax(8rem,0.8fr)_minmax(4.5rem,0.45fr)_minmax(4.5rem,0.45fr)] items-center gap-2 px-3 py-2.5"
                                         >
-                                          {unit.submissionLabel}
-                                        </span>
-                                        {unit.latestUpdatedAtText && (
-                                          <span className="hidden text-xs font-semibold text-gray-400 sm:inline">
-                                            {unit.latestUpdatedAtText}
+                                          <div className="min-w-0">
+                                            <div className="truncate text-sm font-bold text-gray-800">
+                                              {unit.title}
+                                            </div>
+                                          </div>
+                                          <div className="text-center text-xs font-semibold text-gray-500">
+                                            {unit.correctCount}/{unit.blankCount}
+                                          </div>
+                                          <div className="truncate text-center text-xs font-semibold text-gray-500">
+                                            {unit.latestUpdatedAtText || "-"}
+                                          </div>
+                                          <div className="text-center text-sm font-black text-gray-900">
+                                            {accuracy}%
+                                          </div>
+                                          <span
+                                            className={`justify-self-end rounded-full px-2.5 py-1 text-xs font-extrabold ${
+                                              unit.submitted
+                                                ? "bg-emerald-50 text-emerald-700"
+                                                : "bg-slate-100 text-slate-600"
+                                            }`}
+                                          >
+                                            {unit.submissionLabel}
                                           </span>
-                                        )}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
                               </div>
                             </section>
                           );
