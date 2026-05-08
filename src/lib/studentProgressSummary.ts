@@ -11,6 +11,7 @@ import {
   needsPointRankLegacyFallback,
   type PointRankDisplay,
 } from "./pointRanks";
+import { normalizeBlankText } from "./lessonWorksheet";
 import { getSemesterCollectionPath } from "./semesterScope";
 import type { PointWallet, SystemConfig } from "../types";
 
@@ -26,7 +27,7 @@ interface LessonDoc {
   title?: string;
   isVisibleToStudents?: boolean;
   contentHtml?: string;
-  worksheetBlanks?: Array<{ id?: string }>;
+  worksheetBlanks?: Array<{ id?: string; answer?: string }>;
 }
 
 interface LessonProgressDoc {
@@ -236,31 +237,34 @@ const hasSavedProgress = (progress?: LessonProgressDoc) =>
       Object.keys(progress.answers || {}).length > 0),
   );
 
-const countInlineLessonBlanks = (contentHtml?: string) => {
+const getInlineLessonBlankAnswers = (contentHtml?: string) => {
   const matches = String(contentHtml || "").matchAll(/\[(.*?)\]/g);
-  return Array.from(matches).filter((match) => {
+  const answers = new Map<string, string>();
+  Array.from(matches).forEach((match) => {
     const token = String(match[1] || "").trim();
-    return token && !token.startsWith("fn:");
-  }).length;
+    if (!token || token.startsWith("fn:")) return;
+    answers.set(String(answers.size), token);
+  });
+  return answers;
 };
 
-const getLessonBlankKeys = (lesson: LessonDoc) => {
-  const inlineKeys = Array.from(
-    { length: countInlineLessonBlanks(lesson.contentHtml) },
-    (_value, index) => String(index),
-  );
-  const worksheetKeys = Array.isArray(lesson.worksheetBlanks)
-    ? lesson.worksheetBlanks
-        .map((blank) => String(blank?.id || "").trim())
-        .filter(Boolean)
-    : [];
-  return Array.from(new Set([...inlineKeys, ...worksheetKeys]));
+const getLessonBlankAnswers = (lesson: LessonDoc) => {
+  const answers = getInlineLessonBlankAnswers(lesson.contentHtml);
+  if (Array.isArray(lesson.worksheetBlanks)) {
+    lesson.worksheetBlanks.forEach((blank) => {
+      const key = String(blank?.id || "").trim();
+      if (!key) return;
+      answers.set(key, String(blank?.answer || ""));
+    });
+  }
+  return answers;
 };
 
 const getLessonUnitStatus = (
-  blankKeys: string[],
+  blankAnswers: Map<string, string>,
   progress?: LessonProgressDoc,
 ) => {
+  const blankKeys = Array.from(blankAnswers.keys());
   const submitted = hasSavedProgress(progress);
   if (!blankKeys.length) {
     return {
@@ -280,6 +284,14 @@ const getLessonUnitStatus = (
   ).length;
   const correctCount = blankKeys.filter((key) => {
     const answer = answers[key];
+    const studentValue = String(answer?.value || "");
+    const correctAnswer = blankAnswers.get(key) || "";
+    if (correctAnswer) {
+      return (
+        Boolean(normalizeBlankText(studentValue)) &&
+        normalizeBlankText(studentValue) === normalizeBlankText(correctAnswer)
+      );
+    }
     return String(answer?.value || "").trim() && answer?.status === "correct";
   }).length;
   const status =
@@ -313,7 +325,7 @@ const readLessons = async (config: ConfigLike) => {
         unitId: String(item.unitId || item.id || "").trim(),
         title: String(item.title || "").trim(),
         visible: item.isVisibleToStudents !== false,
-        blankKeys: getLessonBlankKeys(item),
+        blankAnswers: getLessonBlankAnswers(item),
       }))
       .filter((item) => item.unitId && item.visible);
   };
@@ -357,7 +369,7 @@ const loadLessonSummary = async (
     );
     const units = lessons.map((lesson) => {
       const progress = progressByUnitId.get(lesson.unitId);
-      const status = getLessonUnitStatus(lesson.blankKeys, progress);
+      const status = getLessonUnitStatus(lesson.blankAnswers, progress);
       return {
         unitId: lesson.unitId,
         title: lesson.title || lesson.unitId,
