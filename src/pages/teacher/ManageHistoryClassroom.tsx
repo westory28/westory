@@ -3654,10 +3654,10 @@ const ManageHistoryClassroom: React.FC = () => {
       {editingAssignment && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/35 px-4 py-6">
           <div
-            className={`relative flex w-full flex-col overflow-hidden overscroll-contain rounded-3xl bg-white shadow-2xl transition-[max-width,max-height] ${
+            className={`relative flex h-[calc(100dvh-3rem)] max-h-[94vh] w-full flex-col overflow-hidden overscroll-contain rounded-3xl bg-white shadow-2xl transition-[max-width] ${
               previewOpen
-                ? "max-h-[94vh] max-w-[min(96vw,92rem)]"
-                : "max-h-[90vh] max-w-[min(96vw,72rem)]"
+                ? "max-w-[min(96vw,92rem)]"
+                : "max-w-[min(96vw,72rem)]"
             }`}
           >
             <div className="shrink-0 flex items-center justify-between border-b border-gray-200 px-6 py-4">
@@ -3679,8 +3679,8 @@ const ManageHistoryClassroom: React.FC = () => {
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain lg:overflow-hidden">
-              <div className="grid min-h-0 gap-0 lg:h-full lg:grid-cols-[minmax(0,0.82fr)_minmax(24rem,1.18fr)] xl:grid-cols-[minmax(0,0.78fr)_minmax(29rem,1.22fr)]">
-                <div className="min-h-0 overflow-y-auto px-6 py-5">
+              <div className="grid min-h-full gap-0 lg:h-full lg:min-h-0 lg:grid-cols-[minmax(0,0.82fr)_minmax(24rem,1.18fr)] xl:grid-cols-[minmax(0,0.78fr)_minmax(29rem,1.22fr)]">
+                <div className="min-h-0 overflow-y-auto overscroll-contain px-6 py-5 [-webkit-overflow-scrolling:touch]">
                   <div className="space-y-4">
                     <div className="grid gap-3 md:grid-cols-4">
                       <div>
@@ -3943,7 +3943,7 @@ const ManageHistoryClassroom: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex min-h-0 flex-col overflow-visible border-t border-gray-200 bg-gray-50 px-5 py-5 lg:overflow-hidden lg:border-l lg:border-t-0 lg:px-5">
+                <div className="flex min-h-0 flex-col overflow-visible border-t border-gray-200 bg-gray-50 px-5 py-5 lg:h-full lg:overflow-hidden lg:border-l lg:border-t-0 lg:px-5">
                   <div className="shrink-0 rounded-2xl border border-gray-200 bg-white p-3.5">
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-sm font-bold text-gray-700">
@@ -4064,7 +4064,7 @@ const ManageHistoryClassroom: React.FC = () => {
                           key={result.id}
                           className="rounded-xl border border-gray-200 bg-white px-3 py-2"
                         >
-                          <div className="grid grid-cols-[minmax(0,1fr)_4.75rem_auto] items-center gap-2">
+                          <div className="grid grid-cols-[minmax(0,1fr)_5.25rem_auto] items-center gap-2">
                             <div className="min-w-0">
                               <div className="grid min-w-0 grid-cols-[minmax(5.5rem,0.6fr)_minmax(7rem,0.9fr)] items-center gap-2">
                                 <div className="truncate text-sm font-bold text-gray-900">
@@ -4098,7 +4098,7 @@ const ManageHistoryClassroom: React.FC = () => {
                                 제출 {formatResultSubmittedAtLabel(result.createdAt)}
                               </div>
                             </div>
-                            <div className="w-[4.75rem] shrink-0 text-right">
+                            <div className="flex w-[5.25rem] shrink-0 flex-col items-center text-center">
                               <div className="text-sm font-black text-gray-900">
                                 {result.percent}%
                               </div>
