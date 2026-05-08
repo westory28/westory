@@ -4074,15 +4074,15 @@ const ManageHistoryClassroom: React.FC = () => {
                         ))}
                       </select>
                     </div>
-                    <div className="mt-3 grid grid-cols-[minmax(5.5rem,1fr)_minmax(7rem,1fr)_minmax(4.25rem,0.65fr)_minmax(3.25rem,0.55fr)_minmax(4rem,0.65fr)_2.25rem] items-center gap-2 border-b border-gray-200 px-3 pb-1.5 text-[11px] font-bold text-gray-400">
-                      <div>학생</div>
-                      <div className="text-center">제출 일시</div>
-                      <div className="text-center">제출</div>
-                      <div className="text-center">점수</div>
-                      <div className="text-center">판정</div>
-                      <div className="text-center">지도</div>
-                    </div>
-                    <div className="mt-1 max-h-[min(52vh,30rem)] min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch] lg:max-h-none">
+                    <div className="mt-3 max-h-[min(52vh,30rem)] min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch] lg:max-h-none">
+                      <div className="sticky top-0 z-10 grid grid-cols-[minmax(5.5rem,1fr)_minmax(7rem,1fr)_minmax(4.25rem,0.65fr)_minmax(3.25rem,0.55fr)_minmax(4rem,0.65fr)_2.25rem] items-center gap-2 border-b border-gray-200 bg-white px-[13px] pb-1.5 text-[11px] font-bold text-gray-400">
+                        <div>학생</div>
+                        <div className="text-center">제출 일시</div>
+                        <div className="text-center">제출</div>
+                        <div className="text-center">점수</div>
+                        <div className="text-center">판정</div>
+                        <div className="text-center">지도</div>
+                      </div>
                       {editingResultRows.map((result) => (
                         <div
                           key={result.id}
