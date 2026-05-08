@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import WisProductCard, {
   WIS_PRODUCT_CARD_GRID_CLASSNAME,
 } from "../../../../components/common/WisProductCard";
+import WisProductDetailModal from "../../../../components/common/WisProductDetailModal";
 import { getPointFeedbackToneClass } from "../../../../constants/pointLabels";
 import { formatWisAmount } from "../../../../lib/pointFormatters";
 import type { PointProduct } from "../../../../types";
@@ -73,6 +74,7 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewSelectedProductId, setPreviewSelectedProductId] = useState("");
   const [draggedProductId, setDraggedProductId] = useState<string | null>(null);
   const [dragOverProductId, setDragOverProductId] = useState<string | null>(
     null,
@@ -92,6 +94,12 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
   const previewProducts = useMemo(() => {
     return filteredProducts.filter((product) => product.isActive !== false);
   }, [filteredProducts]);
+  const previewSelectedProduct = useMemo(
+    () =>
+      previewProducts.find((product) => product.id === previewSelectedProductId) ||
+      null,
+    [previewProducts, previewSelectedProductId],
+  );
 
   const handleDragStart = (
     productId: string,
@@ -125,6 +133,10 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
+        if (previewSelectedProductId) {
+          setPreviewSelectedProductId("");
+          return;
+        }
         setPreviewOpen(false);
       }
     };
@@ -134,7 +146,7 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [previewOpen]);
+  }, [previewOpen, previewSelectedProductId]);
 
   return (
     <>
@@ -147,8 +159,7 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
                   상점 상품 목록
                 </h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  상품명을 검색하고, 학생 상점 4열 레이아웃을 화면 안에서 바로
-                  확인할 수 있습니다.
+                  노출, 재고, 가격, 정렬 순서를 한 화면에서 관리합니다.
                 </p>
               </div>
               <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -567,8 +578,7 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
                   학생 상점 미리보기
                 </h3>
                 <p className="mt-1 text-sm text-gray-500">
-                  현재 검색 조건에서 학생에게 실제로 보이는 상점 카드만 같은 4열
-                  구조로 보여 줍니다.
+                  학생이 보게 될 상점 목록과 상품 상세 화면을 함께 확인합니다.
                 </p>
               </div>
               <button
@@ -594,6 +604,8 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
                       product={product}
                       walletBalance={Math.max(0, Number(product.price || 0))}
                       previewOnly
+                      onCardClick={() => setPreviewSelectedProductId(product.id)}
+                      statusNote="클릭하면 학생 상세 화면을 확인합니다."
                     />
                   ))}
                 </div>
@@ -601,6 +613,18 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
             </div>
           </div>
         </div>
+      )}
+      {previewOpen && (
+        <WisProductDetailModal
+          open={Boolean(previewSelectedProduct)}
+          product={previewSelectedProduct}
+          walletBalance={
+            previewSelectedProduct
+              ? Math.max(0, Number(previewSelectedProduct.price || 0))
+              : 0
+          }
+          onClose={() => setPreviewSelectedProductId("")}
+        />
       )}
     </>
   );

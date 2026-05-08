@@ -1,6 +1,6 @@
 import React from 'react';
 import { POINT_ORDER_STATUS_LABELS, getPointFeedbackToneClass } from '../../../../constants/pointLabels';
-import { formatPointDateTime, formatWisAmount } from '../../../../lib/pointFormatters';
+import { formatPointDateTime, formatPointTimeOnly, formatWisAmount } from '../../../../lib/pointFormatters';
 import type { PointOrder, PointOrderStatus } from '../../../../types';
 
 interface PointRequestsTabProps {
@@ -17,6 +17,94 @@ interface PointRequestsTabProps {
     onSaveOrder: (status: PointOrderStatus) => void;
 }
 
+const PURCHASE_FLOW_STEPS = [
+    { key: 'requested', label: '요청' },
+    { key: 'approved', label: '승인' },
+    { key: 'fulfilled', label: '지급' },
+] as const;
+
+const getOrderStepIndex = (status?: PointOrderStatus | null) => {
+    if (status === 'fulfilled') return 2;
+    if (status === 'approved') return 1;
+    return 0;
+};
+
+const isTerminalOrderStatus = (status?: PointOrderStatus | null) => (
+    status === 'rejected' || status === 'cancelled'
+);
+
+const getOrderStatusToneClass = (status: PointOrderStatus) => {
+    if (status === 'fulfilled') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+    if (status === 'approved') return 'border-blue-200 bg-blue-50 text-blue-700';
+    if (status === 'rejected' || status === 'cancelled') return 'border-rose-200 bg-rose-50 text-rose-700';
+    return 'border-blue-200 bg-blue-50 text-blue-700';
+};
+
+const OrderProcessStepper: React.FC<{
+    status?: PointOrderStatus | null;
+    compact?: boolean;
+}> = ({ status = 'requested', compact = false }) => {
+    const activeIndex = getOrderStepIndex(status);
+    const terminal = isTerminalOrderStatus(status);
+
+    return (
+        <div className={compact ? 'w-full min-w-[9rem]' : 'rounded-lg border border-gray-200 bg-white px-5 py-4'}>
+            {!compact && <div className="mb-3 text-sm font-bold text-gray-900">처리 단계</div>}
+            <div className="grid grid-cols-[1fr_auto_1fr_auto_1fr] items-start gap-2">
+                {PURCHASE_FLOW_STEPS.map((step, index) => {
+                    const isCurrent = index === activeIndex && !terminal;
+                    const isComplete = !terminal && index < activeIndex;
+                    const isHighlighted = isCurrent || isComplete;
+                    return (
+                        <React.Fragment key={step.key}>
+                            <div className="grid justify-items-center gap-1">
+                                <span
+                                    className={[
+                                        'inline-flex items-center justify-center rounded-full border font-bold',
+                                        compact ? 'h-5 w-5 text-[10px]' : 'h-8 w-8 text-sm',
+                                        terminal && index === 0
+                                            ? 'border-rose-200 bg-rose-50 text-rose-700'
+                                            : isCurrent
+                                                ? 'border-blue-600 bg-blue-600 text-white'
+                                                : isComplete
+                                                    ? 'border-blue-200 bg-blue-50 text-blue-700'
+                                                    : 'border-gray-200 bg-gray-100 text-gray-500',
+                                    ].join(' ')}
+                                >
+                                    {index + 1}
+                                </span>
+                                <span
+                                    className={[
+                                        'font-bold',
+                                        compact ? 'text-[10px]' : 'text-sm',
+                                        terminal && index === 0
+                                            ? 'text-rose-700'
+                                            : isHighlighted
+                                                ? 'text-blue-700'
+                                                : 'text-gray-600',
+                                    ].join(' ')}
+                                >
+                                    {step.label}
+                                </span>
+                            </div>
+                            {index < PURCHASE_FLOW_STEPS.length - 1 && (
+                                <span
+                                    className={[
+                                        compact ? 'mt-2.5 w-6' : 'mt-4 w-full min-w-12',
+                                        'border-t border-dashed',
+                                        !terminal && index < activeIndex ? 'border-blue-300' : 'border-gray-300',
+                                    ].join(' ')}
+                                    aria-hidden="true"
+                                ></span>
+                            )}
+                        </React.Fragment>
+                    );
+                })}
+            </div>
+        </div>
+    );
+};
+
 const PointRequestsTab: React.FC<PointRequestsTabProps> = ({
     orders,
     orderFilter,
@@ -30,7 +118,7 @@ const PointRequestsTab: React.FC<PointRequestsTabProps> = ({
     onOrderMemoChange,
     onSaveOrder,
 }) => (
-    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.75fr)]">
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(340px,0.75fr)]">
         <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
             <div className="flex flex-col gap-3 border-b border-gray-100 bg-gray-50 p-5 md:flex-row md:items-center md:justify-between">
                 <h2 className="text-lg font-bold text-gray-800">구매 요청 목록</h2>
@@ -45,17 +133,18 @@ const PointRequestsTab: React.FC<PointRequestsTabProps> = ({
                 <table className="w-full table-fixed text-sm text-left">
                     <thead className="bg-gray-100 text-xs font-bold uppercase text-gray-600">
                         <tr>
-                            <th className="w-[20%] p-4">학생 이름</th>
-                            <th className="w-[28%] p-4">상품명</th>
-                            <th className="w-[16%] p-4 text-right">차감 위스</th>
-                            <th className="w-[24%] p-4 text-right">요청 시각</th>
+                            <th className="w-[17%] p-4">학생 이름</th>
+                            <th className="w-[23%] p-4">상품명</th>
+                            <th className="w-[15%] p-4 text-right">차감 위스</th>
+                            <th className="w-[11%] p-4 text-right">요청 시각</th>
+                            <th className="w-[22%] p-4 text-center">처리 단계</th>
                             <th className="w-[12%] p-4 text-center">상태</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 bg-white">
                         {orders.length === 0 && (
                             <tr>
-                                <td colSpan={5} className="p-10 text-center text-gray-400">선택한 조건에 맞는 요청이 없습니다.</td>
+                                <td colSpan={6} className="p-10 text-center text-gray-400">선택한 조건에 맞는 요청이 없습니다.</td>
                             </tr>
                         )}
                         {orders.map((order) => (
@@ -63,9 +152,12 @@ const PointRequestsTab: React.FC<PointRequestsTabProps> = ({
                                 <td className="truncate p-4 font-bold text-gray-800">{order.studentName || '(이름 없음)'}</td>
                                 <td className="truncate p-4 text-gray-700" title={order.productName}>{order.productName}</td>
                                 <td className="p-4 text-right font-bold text-gray-800 whitespace-nowrap">{formatWisAmount(order.priceSnapshot)}</td>
-                                <td className="p-4 text-right text-gray-500">{formatPointDateTime(order.requestedAt)}</td>
+                                <td className="p-4 text-right text-gray-500 whitespace-nowrap">{formatPointTimeOnly(order.requestedAt)}</td>
+                                <td className="p-4">
+                                    <OrderProcessStepper status={order.status} compact />
+                                </td>
                                 <td className="p-4 text-center">
-                                    <span className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-700">{POINT_ORDER_STATUS_LABELS[order.status] || order.status}</span>
+                                    <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${getOrderStatusToneClass(order.status)}`}>{POINT_ORDER_STATUS_LABELS[order.status] || order.status}</span>
                                 </td>
                             </tr>
                         ))}
@@ -75,13 +167,15 @@ const PointRequestsTab: React.FC<PointRequestsTabProps> = ({
         </div>
 
         <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm xl:p-6">
+            <h2 className="mb-4 text-lg font-bold text-gray-800">요청 상세</h2>
+            <OrderProcessStepper status={selectedOrder?.status || 'requested'} />
             {!selectedOrder ? (
                 <div className="py-16 text-center text-gray-400">왼쪽 목록에서 요청을 선택하면 상세 내용을 볼 수 있습니다.</div>
             ) : (
                 <>
-                    <h3 className="text-xl font-extrabold text-gray-900">{selectedOrder.productName}</h3>
+                    <h3 className="mt-5 text-xl font-extrabold text-gray-900">{selectedOrder.productName}</h3>
                     <div className="mt-1 text-sm text-gray-500">{selectedOrder.studentName} · {selectedOrder.uid}</div>
-                    <div className="mt-5 grid grid-cols-1 gap-3">
+                    <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1">
                         <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="text-sm text-gray-500">차감 위스</div><div className="mt-1 font-bold text-gray-900 whitespace-nowrap">{formatWisAmount(selectedOrder.priceSnapshot)}</div></div>
                         <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="text-sm text-gray-500">현재 상태</div><div className="mt-1 font-bold text-gray-900">{POINT_ORDER_STATUS_LABELS[selectedOrder.status]}</div></div>
                         <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="text-sm text-gray-500">요청 시각</div><div className="mt-1 font-bold text-gray-900">{formatPointDateTime(selectedOrder.requestedAt)}</div></div>

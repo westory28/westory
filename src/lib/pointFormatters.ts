@@ -21,6 +21,16 @@ export const formatPointDateShortTime = (value: any) => (
         : '-'
 );
 
+export const formatPointTimeOnly = (value: any) => (
+    value?.seconds
+        ? new Date(value.seconds * 1000).toLocaleTimeString('ko-KR', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+        })
+        : '-'
+);
+
 export const formatPointDateOnly = (value: any) => (
     value?.seconds ? new Date(value.seconds * 1000).toLocaleDateString('ko-KR') : '-'
 );

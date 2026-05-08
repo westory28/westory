@@ -246,29 +246,85 @@ const loadImageElement = (file: File) => new Promise<HTMLImageElement>((resolve,
     image.src = objectUrl;
 });
 
-const canvasToBlob = (canvas: HTMLCanvasElement, quality: number) => new Promise<Blob>((resolve, reject) => {
+const canvasToBlob = (canvas: HTMLCanvasElement, quality: number, contentType = 'image/jpeg') => new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((blob) => {
         if (!blob) {
             reject(new Error('상품 이미지를 압축하지 못했습니다.'));
             return;
         }
         resolve(blob);
-    }, 'image/jpeg', quality);
+    }, contentType, quality);
 });
 
-const buildResizedImageBlob = async (file: File, maxSize: number, quality: number) => {
-    const image = await loadImageElement(file);
+interface ProductImageOptimizationOptions {
+    maxSize: number;
+    baselineQuality: number;
+    targetSizeRatio: number;
+    minQuality: number;
+}
+
+const drawProductImageCanvas = (image: HTMLImageElement, maxSize: number) => {
     const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.round(image.width * scale));
     canvas.height = Math.max(1, Math.round(image.height * scale));
-    const context = canvas.getContext('2d');
+    const context = canvas.getContext('2d', { alpha: false });
     if (!context) {
         throw new Error('상품 이미지 캔버스를 준비하지 못했습니다.');
     }
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = 'high';
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
-    return canvasToBlob(canvas, quality);
+    return canvas;
 };
+
+const buildOptimizedImageBlob = async (
+    file: File,
+    {
+        maxSize,
+        baselineQuality,
+        targetSizeRatio,
+        minQuality,
+    }: ProductImageOptimizationOptions,
+) => {
+    const image = await loadImageElement(file);
+    const baselineCanvas = drawProductImageCanvas(image, maxSize);
+    const baselineBlob = await canvasToBlob(baselineCanvas, baselineQuality, 'image/jpeg');
+    const targetBytes = Math.ceil(baselineBlob.size * targetSizeRatio);
+    const candidates: Blob[] = [baselineBlob];
+
+    for (const sizeRatio of [1, 0.92, 0.84]) {
+        const candidateCanvas = sizeRatio === 1
+            ? baselineCanvas
+            : drawProductImageCanvas(image, Math.max(1, Math.round(maxSize * sizeRatio)));
+
+        for (
+            let quality = Math.min(0.92, baselineQuality + 0.08);
+            quality >= minQuality;
+            quality -= 0.06
+        ) {
+            const candidateBlob = await canvasToBlob(candidateCanvas, quality, 'image/webp');
+            if (candidateBlob.type === 'image/webp') {
+                candidates.push(candidateBlob);
+                if (candidateBlob.size <= targetBytes) {
+                    return candidateBlob;
+                }
+            }
+        }
+    }
+
+    return candidates.reduce((bestBlob, candidateBlob) => (
+        candidateBlob.size <= targetBytes && candidateBlob.size > bestBlob.size
+            ? candidateBlob
+            : bestBlob
+    ), candidates.find((candidateBlob) => candidateBlob.size <= targetBytes) || baselineBlob);
+};
+
+const getProductImageExtension = (blob: Blob) => (
+    blob.type === 'image/webp' ? 'webp' : 'jpg'
+);
 
 const ManagePoints: React.FC = () => {
     const { config, currentUser, userData, interfaceConfig, refreshInterfaceConfig } = useAuth();
@@ -1151,13 +1207,23 @@ const ManagePoints: React.FC = () => {
                 setProductImageUploading(true);
                 const { year, semester } = getYearSemester(config);
                 const basePath = `years/${year}/semesters/${semester}/point_products/${productId}`;
-                const compressedBlob = await buildResizedImageBlob(productImageFile, 960, 0.82);
-                const previewBlob = await buildResizedImageBlob(productImageFile, 320, 0.62);
-                const imageRef = ref(storage, `${basePath}/image.jpg`);
-                const previewRef = ref(storage, `${basePath}/preview.jpg`);
+                const compressedBlob = await buildOptimizedImageBlob(productImageFile, {
+                    maxSize: 960,
+                    baselineQuality: 0.82,
+                    targetSizeRatio: 1.03,
+                    minQuality: 0.64,
+                });
+                const previewBlob = await buildOptimizedImageBlob(productImageFile, {
+                    maxSize: 320,
+                    baselineQuality: 0.62,
+                    targetSizeRatio: 1.03,
+                    minQuality: 0.58,
+                });
+                const imageRef = ref(storage, `${basePath}/image.${getProductImageExtension(compressedBlob)}`);
+                const previewRef = ref(storage, `${basePath}/preview.${getProductImageExtension(previewBlob)}`);
 
-                await uploadBytes(imageRef, compressedBlob, { contentType: 'image/jpeg', cacheControl: 'public,max-age=86400' });
-                await uploadBytes(previewRef, previewBlob, { contentType: 'image/jpeg', cacheControl: 'public,max-age=86400' });
+                await uploadBytes(imageRef, compressedBlob, { contentType: compressedBlob.type || 'image/jpeg', cacheControl: 'public,max-age=86400' });
+                await uploadBytes(previewRef, previewBlob, { contentType: previewBlob.type || 'image/jpeg', cacheControl: 'public,max-age=86400' });
 
                 imagePayload = {
                     imageUrl: await getDownloadURL(imageRef),

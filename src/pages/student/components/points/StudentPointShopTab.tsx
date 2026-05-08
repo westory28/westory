@@ -41,15 +41,27 @@ const StudentPointShopTab: React.FC<StudentPointShopTabProps> = ({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+      <div className="flex flex-col gap-3 rounded-2xl border border-blue-100 bg-blue-50/70 px-5 py-4 md:flex-row md:items-center md:justify-between">
         <div className="min-w-0">
-          <h2 className="text-lg font-bold text-gray-800">위스 상점</h2>
+          <h2 className="text-lg font-bold text-gray-900">위스 상점</h2>
+          <p className="mt-1 text-sm text-gray-600">
+            상품을 선택해 상세를 확인한 뒤 구매를 요청하세요.
+          </p>
         </div>
-        <div className="text-sm font-bold text-gray-500 whitespace-nowrap">
-          사용 가능 위스{" "}
-          <span className="text-blue-700">
-            {formatWisAmount(wallet.balance || 0)}
-          </span>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <div className="rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-gray-600 whitespace-nowrap">
+            보유 위스{" "}
+            <span className="text-blue-700">
+              {formatWisAmount(wallet.balance || 0)}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onOpenOrders}
+            className="rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-700 transition hover:bg-blue-100 whitespace-nowrap"
+          >
+            구매 내역
+          </button>
         </div>
       </div>
 
@@ -74,6 +86,8 @@ const StudentPointShopTab: React.FC<StudentPointShopTabProps> = ({
               key={product.id}
               product={product}
               walletBalance={Number(wallet.balance || 0)}
+              actionLabel="상세 보기"
+              actionRequiresEligibility={false}
               onCardClick={() => onSelectProduct(product.id)}
               onAction={() => onSelectProduct(product.id)}
             />
@@ -89,14 +103,10 @@ const StudentPointShopTab: React.FC<StudentPointShopTabProps> = ({
         footer={
           selectedProduct ? (
             <div className="space-y-4">
-              <div className="rounded-[1.5rem] border border-blue-200 bg-blue-50 p-5">
+              <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
                 <div className="text-sm font-bold text-gray-800">
-                  {`${formatWisAmount(selectedProduct.price)}를 사용해 구매 요청을 보냅니다. 교사 확인 후 처리 상태가 변경됩니다.`}
+                  {`${formatWisAmount(selectedProduct.price)} 구매 요청을 보냅니다.`}
                 </div>
-                <p className="mt-1 text-sm leading-6 text-gray-600">
-                  메모는 선택 사항이며, 상품 설명은 이 화면에서만 전체 확인할 수
-                  있습니다.
-                </p>
                 <textarea
                   value={purchaseMemo}
                   onChange={(event) => onPurchaseMemoChange(event.target.value)}

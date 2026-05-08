@@ -46,6 +46,8 @@ interface WisProductCardProps {
   onCardClick?: () => void;
   statusNote?: string;
   previewOnly?: boolean;
+  showAction?: boolean;
+  actionRequiresEligibility?: boolean;
 }
 
 const WisProductCard: React.FC<WisProductCardProps> = ({
@@ -58,6 +60,8 @@ const WisProductCard: React.FC<WisProductCardProps> = ({
   onCardClick,
   statusNote = "",
   previewOnly = false,
+  showAction = true,
+  actionRequiresEligibility = true,
 }) => {
   const { price, stock, canRequest, statusText, statusClassName } =
     getWisProductCardStatus(product, walletBalance);
@@ -101,29 +105,31 @@ const WisProductCard: React.FC<WisProductCardProps> = ({
 
       <div className="flex flex-1 flex-col p-3 sm:p-4">
         <div className="flex flex-1 flex-col gap-3">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <h3 className="line-clamp-2 min-h-[2.5rem] text-[13px] font-bold leading-5 text-gray-900 sm:min-h-[3rem] sm:text-base sm:leading-6">
+              {product.name}
+            </h3>
+            <p className="mt-1 line-clamp-2 min-h-[2rem] text-xs leading-4 text-gray-500">
+              {product.description?.trim() || "상품 설명이 준비 중입니다."}
+            </p>
+          </div>
+
+          <div className="mt-auto flex flex-col gap-2">
             <div className="min-w-0 flex-1">
-              <h3 className="min-h-[2.75rem] line-clamp-2 text-[13px] font-bold leading-5 text-gray-800 sm:min-h-[3rem] sm:text-base sm:leading-6">
-                {product.name}
-              </h3>
-            </div>
-            <div className="min-w-0 shrink-0 text-left sm:text-right">
-              <div className="text-[11px] font-bold text-gray-400">가격</div>
-              <div className="mt-1 break-keep text-sm font-black text-blue-700 sm:text-lg">
+              <div className="break-keep text-lg font-black text-blue-700">
                 {formatWisAmount(price)}
               </div>
             </div>
-          </div>
-
-          <div className="mt-auto flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <span className="text-xs font-bold text-gray-500 sm:text-sm">
-              재고 {stock}개
-            </span>
-            <span
-              className={`inline-flex max-w-full rounded-full border px-3 py-1 text-[11px] font-bold sm:text-xs ${statusClassName}`}
-            >
-              {statusText}
-            </span>
+            <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-bold text-gray-500 sm:text-sm">
+                재고 {stock}개
+              </span>
+              <span
+                className={`inline-flex max-w-full rounded-full border px-3 py-1 text-[11px] font-bold sm:text-xs ${statusClassName}`}
+              >
+                {statusText}
+              </span>
+            </div>
           </div>
 
           {statusNote && (
@@ -133,14 +139,14 @@ const WisProductCard: React.FC<WisProductCardProps> = ({
           )}
         </div>
 
-        {!previewOnly && (
+        {!previewOnly && showAction && (
           <button
             type="button"
             onClick={(event) => {
               event.stopPropagation();
               onAction?.();
             }}
-            disabled={!canRequest || actionBusy}
+            disabled={(actionRequiresEligibility && !canRequest) || actionBusy || actionDisabled}
             className="mt-4 w-full rounded-xl bg-blue-600 px-3 py-2.5 text-[13px] font-bold text-white transition hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 sm:px-4 sm:text-sm"
           >
             {actionBusy ? "처리 중..." : actionLabel}
