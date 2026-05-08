@@ -157,7 +157,7 @@ const TeacherDashboard: React.FC = () => {
   };
 
   return (
-    <div className="dashboard-container w-full max-w-7xl mx-auto px-4 py-6 flex-1">
+    <div className="dashboard-container teacher-dashboard-container w-full max-w-7xl mx-auto px-4 py-6 flex-1">
       <div className="mb-6 flex flex-col md:flex-row justify-between items-center gap-3 shrink-0">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">
@@ -172,14 +172,14 @@ const TeacherDashboard: React.FC = () => {
       </div>
 
       {/* Main Content Grid */}
-      <div className="flex flex-col md:grid md:grid-cols-5 md:grid-rows-2 gap-4 h-auto md:h-[calc(100vh-140px)] min-h-[500px]">
+      <div className="teacher-dashboard-grid flex flex-col md:grid md:grid-cols-5 md:grid-rows-2 gap-4 h-auto md:h-[calc(100vh-140px)] min-h-[500px]">
         {/* 1. Notice Board (Mobile: Order 1 / Desktop: Order 2, Right Top) */}
-        <div className="order-1 md:order-2 md:col-span-2 md:row-span-1">
+        <div className="teacher-dashboard-notice order-1 md:order-2 md:col-span-2 md:row-span-1">
           <TeacherNoticeBoard />
         </div>
 
         {/* 2. Calendar (Mobile: Order 2 / Desktop: Order 1, Left Full Height) */}
-        <div className="order-2 md:order-1 md:col-span-3 md:row-span-2">
+        <div className="teacher-dashboard-calendar order-2 md:order-1 md:col-span-3 md:row-span-2">
           <TeacherCalendarSection
             events={visibleEvents}
             onDateClick={handleDateClick}
@@ -196,7 +196,7 @@ const TeacherDashboard: React.FC = () => {
         </div>
 
         {/* 3. Wis Ranking (Mobile: Order 3 / Desktop: Order 3, Right Bottom) */}
-        <div className="order-3 md:order-3 md:col-span-2 md:row-span-1">
+        <div className="teacher-dashboard-ranking order-3 md:order-3 md:col-span-2 md:row-span-1">
           <div className="min-h-[260px] h-full">
             <WisRankingPanel config={config} />
           </div>
