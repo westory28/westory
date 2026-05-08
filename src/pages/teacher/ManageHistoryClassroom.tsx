@@ -3964,19 +3964,25 @@ const ManageHistoryClassroom: React.FC = () => {
                         미응시 {editingAttemptStatusCounts.overdueAbsent}
                       </span>
                     </div>
-                    <div className="mt-3 max-h-60 space-y-1.5 overflow-y-auto pr-1">
+                    <div className="mt-3 grid grid-cols-[minmax(8rem,1fr)_6.5rem_5rem_7rem] items-center gap-2 border-b border-gray-200 px-3 pb-1.5 text-[11px] font-bold text-gray-400">
+                      <div>학생</div>
+                      <div className="text-center">점수·판정</div>
+                      <div className="text-center">상태</div>
+                      <div className="text-center">조치</div>
+                    </div>
+                    <div className="mt-1 max-h-60 space-y-1.5 overflow-y-auto pr-1">
                       {editingAttemptStatusRows.map((row) => (
                         <div
                           key={row.student.uid}
                           className={`rounded-xl border px-3 py-2 ${row.toneClassName}`}
                         >
-                          <div className="flex items-center gap-2">
-                            <div className="min-w-0 flex-1">
-                              <div className="grid min-w-0 grid-cols-[minmax(7rem,0.75fr)_minmax(0,1fr)] items-center gap-2">
+                          <div className="grid grid-cols-[minmax(8rem,1fr)_6.5rem_5rem_7rem] items-center gap-2">
+                            <div className="contents">
+                              <div className="contents">
                                 <div className="truncate text-sm font-bold">
                                   {formatStudentBadgeLabel(row.student)}
                                 </div>
-                                <div className="min-w-0 truncate text-[11px] font-semibold opacity-80">
+                                <div className="min-w-0 truncate text-center text-[11px] font-semibold opacity-80">
                                   {row.detailLabel}
                                 </div>
                               </div>
@@ -3984,7 +3990,7 @@ const ManageHistoryClassroom: React.FC = () => {
                                 {row.detailLabel}
                               </div>
                             </div>
-                            <span className="shrink-0 rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-bold">
+                            <span className="justify-self-center rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-bold">
                               {row.statusLabel}
                             </span>
                             {row.canResetAttempt && (
@@ -3996,7 +4002,7 @@ const ManageHistoryClassroom: React.FC = () => {
                                   )
                                 }
                                 disabled={resettingAttemptUid === row.student.uid}
-                                className="shrink-0 rounded-full border border-blue-200 bg-white px-2 py-0.5 text-[11px] font-bold text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                className="justify-self-end whitespace-nowrap rounded-full border border-blue-200 bg-white px-2 py-0.5 text-[11px] font-bold text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
                               >
                                 {resettingAttemptUid === row.student.uid
                                   ? "초기화 중"
@@ -4058,14 +4064,21 @@ const ManageHistoryClassroom: React.FC = () => {
                         ))}
                       </select>
                     </div>
-                    <div className="mt-3 max-h-[min(52vh,30rem)] min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch] lg:max-h-none">
+                    <div className="mt-3 grid grid-cols-[minmax(6rem,0.9fr)_minmax(8.5rem,1.1fr)_3.75rem_4.25rem_4.5rem] items-center gap-2 border-b border-gray-200 px-3 pb-1.5 text-[11px] font-bold text-gray-400">
+                      <div>학생</div>
+                      <div>제출 정보</div>
+                      <div className="text-center">점수</div>
+                      <div className="text-center">판정</div>
+                      <div className="text-center">확인</div>
+                    </div>
+                    <div className="mt-1 max-h-[min(52vh,30rem)] min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch] lg:max-h-none">
                       {editingResultRows.map((result) => (
                         <div
                           key={result.id}
                           className="rounded-xl border border-gray-200 bg-white px-3 py-2"
                         >
-                          <div className="grid grid-cols-[minmax(0,1fr)_5.25rem_auto] items-center gap-2">
-                            <div className="min-w-0">
+                          <div className="grid grid-cols-[minmax(6rem,0.9fr)_minmax(8.5rem,1.1fr)_3.75rem_4.25rem_4.5rem] items-center gap-2">
+                            <div className="col-span-2 min-w-0">
                               <div className="grid min-w-0 grid-cols-[minmax(5.5rem,0.6fr)_minmax(7rem,0.9fr)] items-center gap-2">
                                 <div className="truncate text-sm font-bold text-gray-900">
                                   {result.studentName}
@@ -4098,12 +4111,12 @@ const ManageHistoryClassroom: React.FC = () => {
                                 제출 {formatResultSubmittedAtLabel(result.createdAt)}
                               </div>
                             </div>
-                            <div className="flex w-[5.25rem] shrink-0 flex-col items-center text-center">
-                              <div className="text-sm font-black text-gray-900">
+                            <div className="contents">
+                              <div className="text-center text-sm font-black text-gray-900">
                                 {result.percent}%
                               </div>
                               <span
-                                className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                                className={`inline-flex justify-self-center rounded-full px-2 py-0.5 text-[11px] font-bold ${
                                   result.status === "passed"
                                     ? "bg-emerald-50 text-emerald-700"
                                     : result.status === "failed"
@@ -4135,7 +4148,7 @@ const ManageHistoryClassroom: React.FC = () => {
                                 setPreviewOpen(false);
                                 setReviewResultId(result.id);
                               }}
-                              className="shrink-0 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-blue-700 hover:bg-blue-100"
+                              className="justify-self-center whitespace-nowrap rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-blue-700 hover:bg-blue-100"
                             >
                               지도 확인
                             </button>
