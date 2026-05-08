@@ -4074,8 +4074,9 @@ const ManageHistoryClassroom: React.FC = () => {
                         ))}
                       </select>
                     </div>
-                    <div className="mt-3 grid grid-cols-[minmax(5.5rem,1fr)_4.75rem_3.5rem_4rem_2.25rem] items-center gap-2 border-b border-gray-200 px-3 pb-1.5 text-[11px] font-bold text-gray-400">
+                    <div className="mt-3 grid grid-cols-[minmax(5.5rem,1fr)_minmax(7rem,1fr)_minmax(4.25rem,0.65fr)_minmax(3.25rem,0.55fr)_minmax(4rem,0.65fr)_2.25rem] items-center gap-2 border-b border-gray-200 px-3 pb-1.5 text-[11px] font-bold text-gray-400">
                       <div>학생</div>
+                      <div className="text-center">제출 일시</div>
                       <div className="text-center">제출</div>
                       <div className="text-center">점수</div>
                       <div className="text-center">판정</div>
@@ -4087,7 +4088,7 @@ const ManageHistoryClassroom: React.FC = () => {
                           key={result.id}
                           className="rounded-xl border border-gray-200 bg-white px-3 py-2"
                         >
-                          <div className="grid grid-cols-[minmax(5.5rem,1fr)_4.75rem_3.5rem_4rem_2.25rem] items-center gap-2">
+                          <div className="grid grid-cols-[minmax(5.5rem,1fr)_minmax(7rem,1fr)_minmax(4.25rem,0.65fr)_minmax(3.25rem,0.55fr)_minmax(4rem,0.65fr)_2.25rem] items-center gap-2">
                             <div className="min-w-0">
                               <div className="space-y-0.5">
                                 <div className="truncate text-sm font-bold text-gray-900">
@@ -4103,6 +4104,9 @@ const ManageHistoryClassroom: React.FC = () => {
                                     .join("-")}
                                 </div>
                               </div>
+                            </div>
+                            <div className="truncate text-center text-[11px] font-semibold text-gray-500">
+                              {formatResultSubmittedAtLabel(result.createdAt)}
                             </div>
                             <div className="truncate text-center text-[11px] font-semibold text-gray-500">
                               {result.score}/{result.total}
