@@ -308,6 +308,32 @@ type DashboardStatusFilter =
   | "pending"
   | "passed";
 type DashboardSortOrder = "latest" | "oldest";
+type EditingResultStatusFilter = "all" | HistoryClassroomResult["status"];
+type EditingResultSortOrder =
+  | "latest"
+  | "oldest"
+  | "passedFirst"
+  | "scoreHigh";
+
+const EDITING_RESULT_STATUS_FILTERS: {
+  value: EditingResultStatusFilter;
+  label: string;
+}[] = [
+  { value: "all", label: "전체" },
+  { value: "passed", label: "통과" },
+  { value: "failed", label: "미통과" },
+  { value: "cancelled", label: "취소" },
+];
+
+const EDITING_RESULT_SORT_OPTIONS: {
+  value: EditingResultSortOrder;
+  label: string;
+}[] = [
+  { value: "latest", label: "최신 제출순" },
+  { value: "oldest", label: "오래된 제출순" },
+  { value: "passedFirst", label: "통과 먼저" },
+  { value: "scoreHigh", label: "점수 높은순" },
+];
 
 const ASSIGNMENTS_PER_PAGE = 10;
 
@@ -350,6 +376,17 @@ const getTimestampMs = (value: unknown): number | null => {
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
+};
+
+const formatResultSubmittedAtLabel = (value: unknown) => {
+  const timestampMs = getTimestampMs(value);
+  if (!timestampMs) return "제출 시간 없음";
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(timestampMs));
 };
 
 const getAssignmentSortMs = (assignment: HistoryClassroomAssignment) =>
@@ -551,6 +588,10 @@ const ManageHistoryClassroom: React.FC = () => {
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingAssignment, setDeletingAssignment] = useState(false);
   const [resettingAttemptUid, setResettingAttemptUid] = useState("");
+  const [editingResultStatusFilter, setEditingResultStatusFilter] =
+    useState<EditingResultStatusFilter>("all");
+  const [editingResultSortOrder, setEditingResultSortOrder] =
+    useState<EditingResultSortOrder>("latest");
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewCurrentPage, setPreviewCurrentPage] = useState(1);
   const [previewAnswers, setPreviewAnswers] = useState<Record<string, string>>(
@@ -992,6 +1033,55 @@ const ManageHistoryClassroom: React.FC = () => {
       (result) => result.uid && assignedUidSet.has(result.uid),
     );
   }, [editingResults, editingStudentUids]);
+
+  const editingResultStatusCounts = useMemo(() => {
+    const counts: Record<EditingResultStatusFilter, number> = {
+      all: editingVisibleResults.length,
+      passed: 0,
+      failed: 0,
+      cancelled: 0,
+    };
+    editingVisibleResults.forEach((result) => {
+      counts[result.status] += 1;
+    });
+    return counts;
+  }, [editingVisibleResults]);
+
+  const editingResultRows = useMemo(() => {
+    const statusRank: Record<HistoryClassroomResult["status"], number> = {
+      passed: 0,
+      failed: 1,
+      cancelled: 2,
+    };
+    const filtered =
+      editingResultStatusFilter === "all"
+        ? editingVisibleResults
+        : editingVisibleResults.filter(
+            (result) => result.status === editingResultStatusFilter,
+          );
+
+    return [...filtered].sort((a, b) => {
+      const aSubmittedAt = getTimestampMs(a.createdAt) || 0;
+      const bSubmittedAt = getTimestampMs(b.createdAt) || 0;
+      if (editingResultSortOrder === "oldest") {
+        return aSubmittedAt - bSubmittedAt;
+      }
+      if (editingResultSortOrder === "passedFirst") {
+        return (
+          statusRank[a.status] - statusRank[b.status] ||
+          bSubmittedAt - aSubmittedAt
+        );
+      }
+      if (editingResultSortOrder === "scoreHigh") {
+        return b.percent - a.percent || bSubmittedAt - aSubmittedAt;
+      }
+      return bSubmittedAt - aSubmittedAt;
+    });
+  }, [
+    editingResultSortOrder,
+    editingResultStatusFilter,
+    editingVisibleResults,
+  ]);
 
   const assignmentAttemptMetaById = useMemo(() => {
     const resolved = new Map<
@@ -1901,6 +1991,8 @@ const ManageHistoryClassroom: React.FC = () => {
     setSavingEdit(false);
     setDeletingAssignment(false);
     setResettingAttemptUid("");
+    setEditingResultStatusFilter("all");
+    setEditingResultSortOrder("latest");
     setPreviewOpen(false);
     setPreviewCurrentPage(1);
     setPreviewAnswers({});
@@ -3922,11 +4014,52 @@ const ManageHistoryClassroom: React.FC = () => {
                         결과
                       </div>
                       <div className="rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-bold text-gray-600">
-                        {editingVisibleResults.length}건
+                        {editingResultRows.length}/{editingVisibleResults.length}건
                       </div>
                     </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <div className="flex flex-wrap gap-1.5">
+                        {EDITING_RESULT_STATUS_FILTERS.map((option) => {
+                          const selected =
+                            editingResultStatusFilter === option.value;
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() =>
+                                setEditingResultStatusFilter(option.value)
+                              }
+                              className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition ${
+                                selected
+                                  ? "bg-blue-600 text-white"
+                                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                              }`}
+                            >
+                              {option.label}{" "}
+                              {editingResultStatusCounts[option.value]}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <select
+                        value={editingResultSortOrder}
+                        onChange={(event) =>
+                          setEditingResultSortOrder(
+                            event.target.value as EditingResultSortOrder,
+                          )
+                        }
+                        className="ml-auto h-7 min-w-[7.5rem] rounded-full border border-gray-200 bg-white px-2 text-[11px] font-bold text-gray-600 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                        aria-label="결과 정렬"
+                      >
+                        {EDITING_RESULT_SORT_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                     <div className="mt-3 min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
-                      {editingVisibleResults.map((result) => (
+                      {editingResultRows.map((result) => (
                         <div
                           key={result.id}
                           className="rounded-xl border border-gray-200 bg-white px-3 py-2"
@@ -3961,6 +4094,9 @@ const ManageHistoryClassroom: React.FC = () => {
                                 {result.percent}% · 기준{" "}
                                 {result.passThresholdPercent}%
                               </div>
+                              <div className="mt-0.5 truncate text-[11px] font-semibold text-gray-500">
+                                제출 {formatResultSubmittedAtLabel(result.createdAt)}
+                              </div>
                             </div>
                             <span
                               className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${
@@ -3990,9 +4126,9 @@ const ManageHistoryClassroom: React.FC = () => {
                           </div>
                         </div>
                       ))}
-                      {!editingVisibleResults.length && (
+                      {!editingResultRows.length && (
                         <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-4 py-6 text-center text-sm text-gray-400">
-                          아직 결과가 없습니다.
+                          조건에 맞는 결과가 없습니다.
                         </div>
                       )}
                     </div>
