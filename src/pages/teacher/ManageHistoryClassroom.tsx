@@ -31,6 +31,7 @@ import {
   normalizeHistoryClassroomAssignment,
   normalizeHistoryClassroomResult,
   sanitizeHistoryClassroomAssignmentForWrite,
+  summarizeHistoryClassroomAnswers,
   type HistoryClassroomAssignment,
   type HistoryClassroomBlank,
   type HistoryClassroomResult,
@@ -555,6 +556,8 @@ const ManageHistoryClassroom: React.FC = () => {
   const [previewAnswers, setPreviewAnswers] = useState<Record<string, string>>(
     {},
   );
+  const [reviewResultId, setReviewResultId] = useState("");
+  const [reviewCurrentPage, setReviewCurrentPage] = useState(1);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isMapManagerOpen, setIsMapManagerOpen] = useState(false);
   const [assignmentPage, setAssignmentPage] = useState(1);
@@ -1139,6 +1142,27 @@ const ManageHistoryClassroom: React.FC = () => {
     editingStudentUids,
     editingTimeLimitMinutes,
   ]);
+
+  const reviewResult = useMemo(
+    () =>
+      editingVisibleResults.find((result) => result.id === reviewResultId) ||
+      null,
+    [editingVisibleResults, reviewResultId],
+  );
+
+  const reviewAnswerChecks = useMemo(() => {
+    if (!editingPreviewAssignment || !reviewResult) return [];
+    if (reviewResult.answerChecks.length) return reviewResult.answerChecks;
+    return summarizeHistoryClassroomAnswers(
+      editingPreviewAssignment,
+      reviewResult.answers,
+    ).checks;
+  }, [editingPreviewAssignment, reviewResult]);
+
+  useEffect(() => {
+    if (!reviewResult || !editingPreviewAssignment) return;
+    setReviewCurrentPage(editingPreviewAssignment.pdfPageImages?.[0]?.page || 1);
+  }, [editingPreviewAssignment, reviewResult]);
 
   const editingAttemptStatusRows = useMemo(() => {
     if (!editingPreviewAssignment) return [];
@@ -1880,6 +1904,8 @@ const ManageHistoryClassroom: React.FC = () => {
     setPreviewOpen(false);
     setPreviewCurrentPage(1);
     setPreviewAnswers({});
+    setReviewResultId("");
+    setReviewCurrentPage(1);
   };
 
   const handleSaveAssignmentEdit = async () => {
@@ -3539,7 +3565,7 @@ const ManageHistoryClassroom: React.FC = () => {
             className={`relative flex w-full flex-col overflow-hidden rounded-3xl bg-white shadow-2xl transition-[max-width,max-height] ${
               previewOpen
                 ? "max-h-[94vh] max-w-[min(96vw,92rem)]"
-                : "max-h-[90vh] max-w-5xl"
+                : "max-h-[90vh] max-w-[min(96vw,72rem)]"
             }`}
           >
             <div className="shrink-0 flex items-center justify-between border-b border-gray-200 px-6 py-4">
@@ -3561,7 +3587,7 @@ const ManageHistoryClassroom: React.FC = () => {
             </div>
 
             <div className="min-h-0 flex-1 overflow-hidden">
-              <div className="grid h-full min-h-0 gap-0 lg:grid-cols-[minmax(0,1fr)_19.5rem] xl:grid-cols-[minmax(0,1fr)_21rem]">
+              <div className="grid h-full min-h-0 gap-0 lg:grid-cols-[minmax(0,0.82fr)_minmax(24rem,1.18fr)] xl:grid-cols-[minmax(0,0.78fr)_minmax(29rem,1.22fr)]">
                 <div className="min-h-0 overflow-y-auto px-6 py-5">
                   <div className="space-y-4">
                     <div className="grid gap-3 md:grid-cols-4">
@@ -3825,7 +3851,7 @@ const ManageHistoryClassroom: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex min-h-0 flex-col overflow-hidden border-t border-gray-200 bg-gray-50 px-5 py-5 lg:border-l lg:border-t-0 lg:px-6">
+                <div className="flex min-h-0 flex-col overflow-hidden border-t border-gray-200 bg-gray-50 px-5 py-5 lg:border-l lg:border-t-0 lg:px-5">
                   <div className="shrink-0 rounded-2xl border border-gray-200 bg-white p-3.5">
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-sm font-bold text-gray-700">
@@ -3846,23 +3872,23 @@ const ManageHistoryClassroom: React.FC = () => {
                         미응시 {editingAttemptStatusCounts.overdueAbsent}
                       </span>
                     </div>
-                    <div className="mt-3 max-h-56 space-y-1.5 overflow-y-auto pr-1">
+                    <div className="mt-3 max-h-60 space-y-1.5 overflow-y-auto pr-1">
                       {editingAttemptStatusRows.map((row) => (
                         <div
                           key={row.student.uid}
-                          className={`rounded-xl border px-3 py-1.5 ${row.toneClassName}`}
+                          className={`rounded-xl border px-3 py-2 ${row.toneClassName}`}
                         >
-                          <div className="flex flex-wrap items-center gap-1.5">
+                          <div className="flex items-center gap-2">
                             <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-1.5">
+                              <div className="grid min-w-0 grid-cols-[minmax(7rem,0.75fr)_minmax(0,1fr)] items-center gap-2">
                                 <div className="truncate text-sm font-bold">
                                   {formatStudentBadgeLabel(row.student)}
                                 </div>
-                                <div className="hidden min-w-0 flex-1 truncate text-[11px] opacity-80 sm:block">
+                                <div className="min-w-0 truncate text-[11px] font-semibold opacity-80">
                                   {row.detailLabel}
                                 </div>
                               </div>
-                              <div className="mt-1 truncate text-[11px] opacity-80 sm:hidden">
+                              <div className="sr-only">
                                 {row.detailLabel}
                               </div>
                             </div>
@@ -3903,15 +3929,15 @@ const ManageHistoryClassroom: React.FC = () => {
                       {editingVisibleResults.map((result) => (
                         <div
                           key={result.id}
-                          className="rounded-xl border border-gray-200 bg-white px-3 py-1.5"
+                          className="rounded-xl border border-gray-200 bg-white px-3 py-2"
                         >
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-2">
                             <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-1.5">
+                              <div className="grid min-w-0 grid-cols-[minmax(5.5rem,0.6fr)_minmax(8rem,0.9fr)] items-center gap-2">
                                 <div className="truncate text-sm font-bold text-gray-900">
                                   {result.studentName}
                                 </div>
-                                <div className="hidden min-w-0 flex-1 truncate text-[11px] text-gray-500 sm:block">
+                                <div className="min-w-0 truncate text-[11px] font-semibold text-gray-500">
                                   {[
                                     result.studentGrade,
                                     result.studentClass,
@@ -3923,7 +3949,7 @@ const ManageHistoryClassroom: React.FC = () => {
                                   {result.percent}%
                                 </div>
                               </div>
-                              <div className="mt-1 truncate text-[11px] text-gray-500 sm:hidden">
+                              <div className="mt-1 truncate text-[11px] font-semibold text-gray-400">
                                 {[
                                   result.studentGrade,
                                   result.studentClass,
@@ -3949,8 +3975,18 @@ const ManageHistoryClassroom: React.FC = () => {
                                 ? "통과"
                                 : result.status === "failed"
                                   ? "미통과"
-                                  : "취소"}
+                                : "취소"}
                             </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPreviewOpen(false);
+                                setReviewResultId(result.id);
+                              }}
+                              className="shrink-0 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-blue-700 hover:bg-blue-100"
+                            >
+                              지도 확인
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -4071,6 +4107,41 @@ const ManageHistoryClassroom: React.FC = () => {
                     readOnly
                     dueStatusLabel={previewDueStatusMeta?.label || null}
                     dueStatusTone={previewDueStatusMeta?.tone || "slate"}
+                    layoutVariant="modalPreview"
+                  />
+                </div>
+              </div>
+            )}
+
+            {reviewResult && editingPreviewAssignment && (
+              <div className="absolute inset-0 z-20 flex flex-col bg-white">
+                <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+                  <div>
+                    <div className="text-xs font-bold text-blue-500">
+                      제출 답안 확인
+                    </div>
+                    <div className="text-lg font-black text-gray-900">
+                      {reviewResult.studentName || "학생"} ·{" "}
+                      {reviewResult.score}/{reviewResult.total} ·{" "}
+                      {reviewResult.percent}%
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setReviewResultId("")}
+                    className="rounded-2xl border border-gray-200 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
+                  >
+                    닫기
+                  </button>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50">
+                  <HistoryClassroomAssignmentView
+                    assignment={editingPreviewAssignment}
+                    currentPage={reviewCurrentPage}
+                    onCurrentPageChange={setReviewCurrentPage}
+                    answers={reviewResult.answers}
+                    answerChecks={reviewAnswerChecks}
+                    readOnly
                     layoutVariant="modalPreview"
                   />
                 </div>

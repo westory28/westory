@@ -28,11 +28,12 @@ import {
   getHistoryClassroomStudentRetryResetMs,
   getHistoryClassroomTimestampMs,
   isHistoryClassroomDeleted,
-  isHistoryClassroomBlankCorrect,
   isHistoryClassroomPastDue,
   mergeHistoryClassroomMapSnapshot,
   normalizeHistoryClassroomAssignment,
   normalizeHistoryClassroomResult,
+  summarizeHistoryClassroomAnswers,
+  type HistoryClassroomAnswerCheck,
   type HistoryClassroomAssignment,
 } from "../../../lib/historyClassroom";
 import { normalizeMapResource } from "../../../lib/mapResources";
@@ -181,6 +182,7 @@ type HistoryClassroomResultModalSummary = {
   percent: number;
   passed: boolean;
   passThresholdPercent: number;
+  answerChecks: HistoryClassroomAnswerCheck[];
   wrongItems: HistoryClassroomResultWrongItem[];
 };
 
@@ -190,33 +192,24 @@ const buildHistoryClassroomResultSummary = (
   passed: boolean,
   percent: number,
 ): HistoryClassroomResultModalSummary => {
-  let correctCount = 0;
-  const wrongItems: HistoryClassroomResultWrongItem[] = [];
-
-  assignment.blanks.forEach((blank, index) => {
-    const studentAnswer = answers[blank.id] || "";
-    const correctAnswer = blank.answer || "";
-
-    if (isHistoryClassroomBlankCorrect(studentAnswer, correctAnswer)) {
-      correctCount += 1;
-      return;
-    }
-
-    wrongItems.push({
-      blankId: blank.id,
-      blankNumber: index + 1,
-      studentAnswer,
-      correctAnswer,
-    });
-  });
+  const summary = summarizeHistoryClassroomAnswers(assignment, answers);
+  const wrongItems: HistoryClassroomResultWrongItem[] = summary.checks
+    .filter((check) => !check.correct)
+    .map((check) => ({
+      blankId: check.blankId,
+      blankNumber: check.blankNumber,
+      studentAnswer: check.studentAnswer,
+      correctAnswer: check.correctAnswer,
+    }));
 
   return {
-    total: assignment.blanks.length,
-    correctCount,
-    wrongCount: assignment.blanks.length - correctCount,
+    total: summary.total,
+    correctCount: summary.score,
+    wrongCount: summary.total - summary.score,
     percent,
     passed,
     passThresholdPercent: assignment.passThresholdPercent,
+    answerChecks: summary.checks,
     wrongItems,
   };
 };
@@ -239,6 +232,7 @@ const HistoryClassroomRunner: React.FC = () => {
   const [resultText, setResultText] = useState("");
   const [resultSummary, setResultSummary] =
     useState<HistoryClassroomResultModalSummary | null>(null);
+  const [resultDialogOpen, setResultDialogOpen] = useState(false);
   const [pointNotice, setPointNotice] = useState("");
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [remainingDueMs, setRemainingDueMs] = useState<number | null>(null);
@@ -454,6 +448,7 @@ const HistoryClassroomRunner: React.FC = () => {
         setCompleted(false);
         setResultText("");
         setResultSummary(null);
+        setResultDialogOpen(false);
         resultSummaryShownRef.current = false;
         setPointNotice("");
         setRemainingSeconds(initialRemainingSeconds);
@@ -484,16 +479,11 @@ const HistoryClassroomRunner: React.FC = () => {
   }) => {
     if (!assignment || !userData) return null;
 
-    const total = assignment.blanks.length;
-    const score = assignment.blanks.reduce(
-      (sum, blank) =>
-        sum +
-        (isHistoryClassroomBlankCorrect(answers[blank.id] || "", blank.answer)
-          ? 1
-          : 0),
-      0,
+    const answerSummary = summarizeHistoryClassroomAnswers(
+      assignment,
+      answers,
     );
-    const percent = total > 0 ? Math.round((score / total) * 100) : 0;
+    const { checks: answerChecks, score, total, percent } = answerSummary;
     const passed =
       options.status === "cancelled"
         ? false
@@ -534,6 +524,7 @@ const HistoryClassroomRunner: React.FC = () => {
       passThresholdPercent: assignment.passThresholdPercent,
       passed,
       status,
+      answerChecks,
       cancellationReason: options.cancellationReason || "",
       createdAt: serverTimestamp(),
     });
@@ -553,7 +544,15 @@ const HistoryClassroomRunner: React.FC = () => {
     clearAttemptProgress(assignment.id, userData.uid);
     attemptDeadlineMsRef.current = 0;
 
-    return { score, total, percent, status, passed, resultId: resultRef.id };
+    return {
+      score,
+      total,
+      percent,
+      status,
+      passed,
+      answerChecks,
+      resultId: resultRef.id,
+    };
   };
 
   const applyHistoryClassroomPointReward = async (
@@ -833,6 +832,7 @@ const HistoryClassroomRunner: React.FC = () => {
             result.percent,
           ),
         );
+        setResultDialogOpen(true);
       }
       setResultText("");
       await applyHistoryClassroomPointReward(result.resultId, result.percent);
@@ -1212,6 +1212,7 @@ const HistoryClassroomRunner: React.FC = () => {
         onCurrentPageChange={handleCurrentPageChange}
         answers={answers}
         interactiveViewport
+        answerChecks={resultSummary?.answerChecks || []}
         onAnswerChange={handleAnswerChange}
         onSubmit={() => void submitAnswers()}
         submitting={submitting}
@@ -1242,14 +1243,14 @@ const HistoryClassroomRunner: React.FC = () => {
           주세요.
         </div>
       )}
-      {resultSummary && (
+      {resultSummary && resultDialogOpen && (
         <div
           className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/55 px-4 py-6 backdrop-blur-sm"
           role="dialog"
           aria-modal="true"
           aria-labelledby="history-classroom-result-title"
           onClick={() => {
-            setResultSummary(null);
+            setResultDialogOpen(false);
             setResultText("");
           }}
         >
@@ -1279,7 +1280,7 @@ const HistoryClassroomRunner: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    setResultSummary(null);
+                    setResultDialogOpen(false);
                     setResultText("");
                   }}
                   className="rounded-full border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50"
@@ -1400,7 +1401,7 @@ const HistoryClassroomRunner: React.FC = () => {
               <button
                 type="button"
                 onClick={() => {
-                  setResultSummary(null);
+                  setResultDialogOpen(false);
                   setResultText("");
                 }}
                 className="w-full rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-700"

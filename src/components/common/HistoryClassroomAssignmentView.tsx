@@ -7,7 +7,9 @@ import React, {
 } from "react";
 import {
   getHistoryClassroomBlankRenderRect,
+  isHistoryClassroomBlankCorrect,
   normalizeHistoryClassroomAnswer,
+  type HistoryClassroomAnswerCheck,
   type HistoryClassroomBlank,
   type HistoryClassroomAssignment,
 } from "../../lib/historyClassroom";
@@ -33,6 +35,7 @@ interface HistoryClassroomAssignmentViewProps {
   layoutVariant?: "default" | "modalPreview";
   interactiveViewport?: boolean;
   resolveBlankOverlap?: boolean;
+  answerChecks?: HistoryClassroomAnswerCheck[];
 }
 
 const DEFAULT_HELPER_ITEMS = [
@@ -51,11 +54,11 @@ const TONE_CLASS_NAME: Record<
 };
 
 const MIN_VIEWPORT_USER_SCALE = 1;
-const MAX_VIEWPORT_USER_SCALE = 2.8;
+const MAX_VIEWPORT_USER_SCALE = 4;
 const VIEWPORT_FIT_PADDING = 24;
 const BLANK_TEXT_HORIZONTAL_PADDING = 24;
 const BLANK_TEXT_VERTICAL_PADDING = 4;
-const BLANK_TEXT_MIN_FONT_SIZE = 4;
+const BLANK_TEXT_MIN_FONT_SIZE = 3;
 const BLANK_TEXT_MAX_FONT_SIZE = 22;
 const BLANK_TEXT_LINE_HEIGHT_RATIO = 1.18;
 const BLANK_TEXT_FONT_FAMILY = '"Noto Sans KR", sans-serif';
@@ -196,6 +199,8 @@ interface BlankRenderMetrics {
   textPaddingY: number;
   isFilled: boolean;
   isInputLocked: boolean;
+  reviewCorrect: boolean | null;
+  reviewText: string;
 }
 
 interface BlankRenderPlacement extends BlankRenderMetrics {
@@ -375,6 +380,7 @@ const HistoryClassroomAssignmentView: React.FC<
   layoutVariant = "default",
   interactiveViewport = false,
   resolveBlankOverlap = false,
+  answerChecks = [],
 }) => {
   const isModalPreview = layoutVariant === "modalPreview";
   const showFloatingActions = !isModalPreview;
@@ -399,6 +405,13 @@ const HistoryClassroomAssignmentView: React.FC<
 
     return answered;
   }, [answers]);
+  const answerCheckByBlankId = useMemo(
+    () =>
+      new Map(
+        answerChecks.map((check) => [String(check.blankId || ""), check]),
+      ),
+    [answerChecks],
+  );
   const isPointAwardedNotice = pointNotice.includes("+");
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const fitScaleRef = useRef(1);
@@ -442,16 +455,11 @@ const HistoryClassroomAssignmentView: React.FC<
   const displayHeight = isModalPreview
     ? pageImage?.height || 0
     : scaledPageHeight;
-  const textLayoutScale = isModalPreview ? 1 : fitScale;
-  const textLayoutWidth = pageImage ? pageImage.width * textLayoutScale : 0;
-  const textLayoutHeight = pageImage ? pageImage.height * textLayoutScale : 0;
   const blankPlacements = useMemo(() => {
     if (
       !pageImage ||
       !displayWidth ||
-      !displayHeight ||
-      !textLayoutWidth ||
-      !textLayoutHeight
+      !displayHeight
     ) {
       return [];
     }
@@ -464,12 +472,22 @@ const HistoryClassroomAssignmentView: React.FC<
       );
       const pixelWidth = renderRect.widthRatio * displayWidth;
       const pixelHeight = renderRect.heightRatio * displayHeight;
-      const textPixelWidth = renderRect.widthRatio * textLayoutWidth;
-      const textPixelHeight = renderRect.heightRatio * textLayoutHeight;
+      const textPixelWidth = pixelWidth;
+      const textPixelHeight = pixelHeight;
       const answerValue = String(answers[blank.id] || "");
       const trimmedAnswerValue = answerValue.trim();
       const placeholder = blank.prompt || "정답 입력";
-      const displayValue = trimmedAnswerValue || placeholder;
+      const answerCheck = answerCheckByBlankId.get(blank.id);
+      const reviewCorrect =
+        answerCheck?.correct ??
+        (answerChecks.length
+          ? isHistoryClassroomBlankCorrect(answerValue, blank.answer)
+          : null);
+      const reviewText =
+        answerCheck && !answerCheck.correct
+          ? String(answerCheck.correctAnswer || blank.answer || "")
+          : "";
+      const displayValue = reviewText || trimmedAnswerValue || placeholder;
       const fontSize = getBlankFontSize(
         textPixelWidth,
         textPixelHeight,
@@ -494,6 +512,8 @@ const HistoryClassroomAssignmentView: React.FC<
         textPaddingY,
         isFilled,
         isInputLocked,
+        reviewCorrect,
+        reviewText,
       };
     });
 
@@ -514,6 +534,8 @@ const HistoryClassroomAssignmentView: React.FC<
     });
   }, [
     answers,
+    answerCheckByBlankId,
+    answerChecks.length,
     completed,
     currentBlanks,
     currentTextRegions,
@@ -524,8 +546,6 @@ const HistoryClassroomAssignmentView: React.FC<
     readOnly,
     resolveBlankOverlap,
     submitting,
-    textLayoutHeight,
-    textLayoutWidth,
   ]);
   const orderedBlankPlacements = useMemo(
     () => sortPlacementsForFocus(blankPlacements),
@@ -1166,21 +1186,36 @@ const HistoryClassroomAssignmentView: React.FC<
                         textPaddingY,
                         isFilled,
                         isInputLocked,
+                        reviewCorrect,
+                        reviewText,
                         leftPx,
                         topPx,
                       } = placement;
                       const isFocused = focusedBlankId === blank.id;
+                      const hasReview = reviewCorrect !== null;
+                      const reviewToneClass = hasReview
+                        ? reviewCorrect
+                          ? "border-emerald-500 text-emerald-900 ring-2 ring-emerald-200"
+                          : "border-rose-500 text-rose-900 ring-2 ring-rose-200"
+                        : isFilled
+                          ? "border-orange-300 text-orange-800"
+                          : "border-slate-300 text-slate-700";
                       const placeholder = blank.prompt || "정답 입력";
+                      const lockedDisplayText =
+                        reviewText || trimmedAnswerValue || placeholder;
                       return (
                         <div
                           key={blank.id}
                           className={`absolute overflow-hidden rounded-xl border text-left font-bold shadow-[0_6px_18px_rgba(15,23,42,0.12)] transition-colors focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-200 ${
                             isFocused ? "z-20" : "z-10"
-                          } ${
-                            isFilled
-                              ? "border-orange-300 text-orange-800"
-                              : "border-slate-300 text-slate-700"
-                          }`}
+                          } ${reviewToneClass}`}
+                          title={
+                            hasReview
+                              ? reviewCorrect
+                                ? "Correct"
+                                : `Wrong. Correct answer: ${reviewText || blank.answer}`
+                              : undefined
+                          }
                           style={{
                             left: `${leftPx}px`,
                             top: `${topPx}px`,
@@ -1194,7 +1229,13 @@ const HistoryClassroomAssignmentView: React.FC<
                             <span
                               aria-hidden
                               className={`absolute inset-0 ${
-                                isFilled ? "bg-orange-50" : "bg-white"
+                                hasReview
+                                  ? reviewCorrect
+                                    ? "bg-emerald-50"
+                                    : "bg-rose-50"
+                                  : isFilled
+                                    ? "bg-orange-50"
+                                    : "bg-white"
                               }`}
                             />
                           ) : null}
@@ -1208,7 +1249,7 @@ const HistoryClassroomAssignmentView: React.FC<
                                 padding: `${textPaddingY}px ${textPaddingX}px`,
                               }}
                             >
-                              {trimmedAnswerValue || placeholder}
+                              {lockedDisplayText}
                             </span>
                           ) : (
                             <input

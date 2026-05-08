@@ -57,6 +57,22 @@ export interface HistoryClassroomAssignment {
 
 export type HistoryClassroomResultStatus = "passed" | "failed" | "cancelled";
 
+export interface HistoryClassroomAnswerCheck {
+  blankId: string;
+  blankNumber: number;
+  page: number;
+  studentAnswer: string;
+  correctAnswer: string;
+  correct: boolean;
+}
+
+export interface HistoryClassroomScoreSummary {
+  checks: HistoryClassroomAnswerCheck[];
+  score: number;
+  total: number;
+  percent: number;
+}
+
 export interface HistoryClassroomResult {
   id: string;
   assignmentId: string;
@@ -73,6 +89,7 @@ export interface HistoryClassroomResult {
   passThresholdPercent: number;
   passed: boolean;
   status: HistoryClassroomResultStatus;
+  answerChecks: HistoryClassroomAnswerCheck[];
   cancellationReason?: string;
   createdAt?: unknown;
 }
@@ -99,6 +116,24 @@ const collectHistoryClassroomTargetStudentUids = (
         : []) as string[]),
     ]),
   );
+
+const resolveUniqueHistoryClassroomBlankId = (
+  rawId: unknown,
+  index: number,
+  usedIds: Set<string>,
+) => {
+  const baseId = String(rawId || "").trim() || `blank-${index + 1}`;
+  let nextId = baseId;
+  let suffix = 2;
+
+  while (usedIds.has(nextId)) {
+    nextId = `${baseId}-${suffix}`;
+    suffix += 1;
+  }
+
+  usedIds.add(nextId);
+  return nextId;
+};
 
 export const normalizeHistoryClassroomAssignment = (
   id: string,
@@ -144,17 +179,22 @@ export const normalizeHistoryClassroomAssignment = (
           )
       : [],
     blanks: Array.isArray(raw.blanks)
-      ? raw.blanks.map((blank) => ({
-          id: String(blank?.id || "").trim() || `blank-${Date.now()}`,
-          page: Number(blank?.page) || 1,
-          left: Number(blank?.left) || 0,
-          top: Number(blank?.top) || 0,
-          width: Number(blank?.width) || 140,
-          height: Number(blank?.height) || 52,
-          answer: String(blank?.answer || "").trim(),
-          prompt: String(blank?.prompt || "").trim(),
-          source: blank?.source === "ocr" ? "ocr" : "manual",
-        }))
+      ? ((usedIds) =>
+          raw.blanks!.map((blank, index) => ({
+            id: resolveUniqueHistoryClassroomBlankId(
+              blank?.id,
+              index,
+              usedIds,
+            ),
+            page: Number(blank?.page) || 1,
+            left: Number(blank?.left) || 0,
+            top: Number(blank?.top) || 0,
+            width: Number(blank?.width) || 140,
+            height: Number(blank?.height) || 52,
+            answer: String(blank?.answer || "").trim(),
+            prompt: String(blank?.prompt || "").trim(),
+            source: blank?.source === "ocr" ? "ocr" : "manual",
+          })))(new Set<string>())
       : [],
     answerOptions: Array.isArray(raw.answerOptions)
       ? raw.answerOptions
@@ -254,6 +294,18 @@ export const normalizeHistoryClassroomResult = (
       : raw.passed
         ? "passed"
         : "failed",
+  answerChecks: Array.isArray(raw.answerChecks)
+    ? raw.answerChecks
+        .map((item, index) => ({
+          blankId: String(item?.blankId || "").trim(),
+          blankNumber: Math.max(1, Number(item?.blankNumber) || index + 1),
+          page: Math.max(1, Number(item?.page) || 1),
+          studentAnswer: String(item?.studentAnswer ?? ""),
+          correctAnswer: String(item?.correctAnswer ?? ""),
+          correct: item?.correct === true,
+        }))
+        .filter((item) => item.blankId)
+    : [],
   cancellationReason: String(raw.cancellationReason || "").trim(),
   createdAt: raw.createdAt,
 });
@@ -300,9 +352,14 @@ export const sanitizeHistoryClassroomAssignmentForWrite = (
           )
       : [],
     blanks: Array.isArray(raw.blanks)
-      ? raw.blanks.map((blank) => {
+      ? ((usedIds) =>
+          raw.blanks!.map((blank, index) => {
           const normalizedBlank: Record<string, unknown> = {
-            id: String(blank?.id || "").trim() || `blank-${Date.now()}`,
+            id: resolveUniqueHistoryClassroomBlankId(
+              blank?.id,
+              index,
+              usedIds,
+            ),
             page: Math.max(1, Number(blank?.page) || 1),
             left: Number(blank?.left) || 0,
             top: Number(blank?.top) || 0,
@@ -315,7 +372,7 @@ export const sanitizeHistoryClassroomAssignmentForWrite = (
             normalizedBlank.source = blank.source;
           }
           return normalizedBlank;
-        })
+        }))(new Set<string>())
       : [],
     answerOptions: Array.isArray(raw.answerOptions)
       ? raw.answerOptions
@@ -401,8 +458,11 @@ export const buildAnswerOptions = (blanks: HistoryClassroomBlank[]) =>
 export const normalizeHistoryClassroomAnswer = (value: unknown) => {
   const text = String(value ?? "");
   const normalized =
-    typeof text.normalize === "function" ? text.normalize("NFC") : text;
-  return normalizeBlankText(normalized).toLocaleLowerCase("ko-KR");
+    typeof text.normalize === "function" ? text.normalize("NFKC") : text;
+  return normalizeBlankText(normalized)
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/[^\p{L}\p{N}]/gu, "")
+    .toLocaleLowerCase("ko-KR");
 };
 
 export const isHistoryClassroomBlankCorrect = (
@@ -411,6 +471,40 @@ export const isHistoryClassroomBlankCorrect = (
 ) =>
   normalizeHistoryClassroomAnswer(input) ===
   normalizeHistoryClassroomAnswer(expected);
+
+export const buildHistoryClassroomAnswerChecks = (
+  assignment: Pick<HistoryClassroomAssignment, "blanks">,
+  answers: Record<string, string>,
+): HistoryClassroomAnswerCheck[] =>
+  assignment.blanks.map((blank, index) => {
+    const studentAnswer = String(answers[blank.id] ?? "");
+    const correctAnswer = String(blank.answer ?? "");
+
+    return {
+      blankId: blank.id,
+      blankNumber: index + 1,
+      page: blank.page,
+      studentAnswer,
+      correctAnswer,
+      correct: isHistoryClassroomBlankCorrect(studentAnswer, correctAnswer),
+    };
+  });
+
+export const summarizeHistoryClassroomAnswers = (
+  assignment: Pick<HistoryClassroomAssignment, "blanks">,
+  answers: Record<string, string>,
+): HistoryClassroomScoreSummary => {
+  const checks = buildHistoryClassroomAnswerChecks(assignment, answers);
+  const score = checks.filter((check) => check.correct).length;
+  const total = checks.length;
+
+  return {
+    checks,
+    score,
+    total,
+    percent: total > 0 ? Math.round((score / total) * 100) : 0,
+  };
+};
 
 export const mergeHistoryClassroomMapSnapshot = (
   assignment: HistoryClassroomAssignment,
