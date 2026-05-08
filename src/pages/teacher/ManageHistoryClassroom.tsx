@@ -64,6 +64,7 @@ type DashboardIconName =
   | "users"
   | "check"
   | "edit"
+  | "map"
   | "plus"
   | "chevronDown"
   | "chevronUp";
@@ -139,6 +140,15 @@ const DashboardIcon = ({
       <svg {...commonProps}>
         <path d="M12 20h9" />
         <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+      </svg>
+    );
+  }
+  if (name === "map") {
+    return (
+      <svg {...commonProps}>
+        <path d="M9 18 3 21V6l6-3 6 3 6-3v15l-6 3-6-3Z" />
+        <path d="M9 3v15" />
+        <path d="M15 6v15" />
       </svg>
     );
   }
@@ -4064,12 +4074,12 @@ const ManageHistoryClassroom: React.FC = () => {
                         ))}
                       </select>
                     </div>
-                    <div className="mt-3 grid grid-cols-[minmax(6rem,0.9fr)_minmax(8.5rem,1.1fr)_3.75rem_4.25rem_4.5rem] items-center gap-2 border-b border-gray-200 px-3 pb-1.5 text-[11px] font-bold text-gray-400">
+                    <div className="mt-3 grid grid-cols-[minmax(5.5rem,1fr)_4.75rem_3.5rem_4rem_2.25rem] items-center gap-2 border-b border-gray-200 px-3 pb-1.5 text-[11px] font-bold text-gray-400">
                       <div>학생</div>
-                      <div>제출 정보</div>
+                      <div className="text-center">제출</div>
                       <div className="text-center">점수</div>
                       <div className="text-center">판정</div>
-                      <div className="text-center">확인</div>
+                      <div className="text-center">지도</div>
                     </div>
                     <div className="mt-1 max-h-[min(52vh,30rem)] min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch] lg:max-h-none">
                       {editingResultRows.map((result) => (
@@ -4077,39 +4087,25 @@ const ManageHistoryClassroom: React.FC = () => {
                           key={result.id}
                           className="rounded-xl border border-gray-200 bg-white px-3 py-2"
                         >
-                          <div className="grid grid-cols-[minmax(6rem,0.9fr)_minmax(8.5rem,1.1fr)_3.75rem_4.25rem_4.5rem] items-center gap-2">
-                            <div className="col-span-2 min-w-0">
-                              <div className="grid min-w-0 grid-cols-[minmax(5.5rem,0.6fr)_minmax(7rem,0.9fr)] items-center gap-2">
+                          <div className="grid grid-cols-[minmax(5.5rem,1fr)_4.75rem_3.5rem_4rem_2.25rem] items-center gap-2">
+                            <div className="min-w-0">
+                              <div className="space-y-0.5">
                                 <div className="truncate text-sm font-bold text-gray-900">
                                   {result.studentName}
                                 </div>
-                                <div className="min-w-0 truncate text-[11px] font-semibold text-gray-500">
+                                <div className="mt-0.5 truncate text-[11px] font-semibold text-gray-500">
                                   {[
                                     result.studentGrade,
                                     result.studentClass,
                                     result.studentNumber,
                                   ]
                                     .filter(Boolean)
-                                    .join("-")}{" "}
-                                  · {result.score}/{result.total} ·{" "}
-                                  {result.percent}%
+                                    .join("-")}
                                 </div>
                               </div>
-                              <div className="mt-1 truncate text-[11px] font-semibold text-gray-400">
-                                {[
-                                  result.studentGrade,
-                                  result.studentClass,
-                                  result.studentNumber,
-                                ]
-                                  .filter(Boolean)
-                                  .join("-")}{" "}
-                                · {result.score}/{result.total} ·{" "}
-                                {result.percent}% · 기준{" "}
-                                {result.passThresholdPercent}%
-                              </div>
-                              <div className="mt-0.5 truncate text-[11px] font-semibold text-gray-500">
-                                제출 {formatResultSubmittedAtLabel(result.createdAt)}
-                              </div>
+                            </div>
+                            <div className="truncate text-center text-[11px] font-semibold text-gray-500">
+                              {result.score}/{result.total}
                             </div>
                             <div className="contents">
                               <div className="text-center text-sm font-black text-gray-900">
@@ -4127,30 +4123,17 @@ const ManageHistoryClassroom: React.FC = () => {
                                 {describeHistoryResultStatus(result.status)}
                               </span>
                             </div>
-                            <span
-                              className={`hidden shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${
-                                result.status === "passed"
-                                  ? "bg-emerald-50 text-emerald-700"
-                                  : result.status === "failed"
-                                    ? "bg-rose-50 text-rose-700"
-                                    : "bg-amber-50 text-amber-700"
-                              }`}
-                            >
-                              {result.status === "passed"
-                                ? "통과"
-                                : result.status === "failed"
-                                  ? "미통과"
-                                : "취소"}
-                            </span>
                             <button
                               type="button"
                               onClick={() => {
                                 setPreviewOpen(false);
                                 setReviewResultId(result.id);
                               }}
-                              className="justify-self-center whitespace-nowrap rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-blue-700 hover:bg-blue-100"
+                              className="flex h-8 w-8 items-center justify-center justify-self-center rounded-full border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                              aria-label="지도 확인"
+                              title="지도 확인"
                             >
-                              지도 확인
+                              <DashboardIcon name="map" className="h-4 w-4" />
                             </button>
                           </div>
                         </div>
