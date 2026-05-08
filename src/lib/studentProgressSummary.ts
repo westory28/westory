@@ -67,6 +67,8 @@ export interface StudentLessonUnitProgressSummary {
   blankCount: number;
   filledCount: number;
   correctCount: number;
+  submitted: boolean;
+  submissionLabel: "제출" | "미제출";
   status: "completed" | "in_progress" | "not_started" | "no_blanks";
   statusLabel: string;
   latestUpdatedAtText: string;
@@ -227,10 +229,12 @@ const getHistoryStatusLabel = (result: HistoryClassroomResultDoc) => {
   return "결과 없음";
 };
 
-const getProgressFilledCount = (progress: LessonProgressDoc) =>
-  Object.values(progress.answers || {}).filter((answer) =>
-    String(answer?.value || "").trim(),
-  ).length;
+const hasSavedProgress = (progress?: LessonProgressDoc) =>
+  Boolean(
+    progress &&
+    (timestampMs(progress.updatedAt) > 0 ||
+      Object.keys(progress.answers || {}).length > 0),
+  );
 
 const countInlineLessonBlanks = (contentHtml?: string) => {
   const matches = String(contentHtml || "").matchAll(/\[(.*?)\]/g);
@@ -257,11 +261,14 @@ const getLessonUnitStatus = (
   blankKeys: string[],
   progress?: LessonProgressDoc,
 ) => {
+  const submitted = hasSavedProgress(progress);
   if (!blankKeys.length) {
     return {
       blankCount: 0,
       filledCount: 0,
       correctCount: 0,
+      submitted,
+      submissionLabel: submitted ? "제출" : "미제출",
       status: "no_blanks" as const,
       statusLabel: "빈칸 없음",
     };
@@ -285,6 +292,8 @@ const getLessonUnitStatus = (
     blankCount: blankKeys.length,
     filledCount,
     correctCount,
+    submitted,
+    submissionLabel: submitted ? "제출" : "미제출",
     status,
     statusLabel:
       status === "completed"
@@ -357,10 +366,7 @@ const loadLessonSummary = async (
         updatedAtMs: progress ? timestampMs(progress.updatedAt) : 0,
       };
     });
-    const savedItems = progressItems.filter(
-      (item) =>
-        getProgressFilledCount(item) > 0 || timestampMs(item.updatedAt) > 0,
-    );
+    const savedItems = progressItems.filter((item) => hasSavedProgress(item));
     const latest =
       [...units].sort((a, b) => b.updatedAtMs - a.updatedAtMs)[0] || null;
     const displayUnits = units.map(

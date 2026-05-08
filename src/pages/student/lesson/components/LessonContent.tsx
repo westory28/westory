@@ -50,8 +50,12 @@ const normalizeAnswer = (value: string) =>
   String(value || "")
     .trim()
     .replace(/\s+/g, "");
-const getInputStatus = (value: string, answer: string): AnswerStatus =>
-  !normalizeAnswer(value)
+const getInputStatus = (
+  value: string,
+  answer: string,
+  options?: { treatEmptyAsWrong?: boolean },
+): AnswerStatus =>
+  !normalizeAnswer(value) && !options?.treatEmptyAsWrong
     ? ""
     : normalizeAnswer(value) === normalizeAnswer(answer)
       ? "correct"
@@ -222,48 +226,124 @@ const LessonContent: React.FC<LessonContentProps> = ({
     );
   };
 
-  const getAnswerSnapshot = () => {
+  const getAnswerSnapshot = (options?: { finalize?: boolean }) => {
+    const finalize = Boolean(options?.finalize);
     const container = contentRef.current;
-    const currentWorksheetBlankIds = lesson
+    const worksheetBlanks = lesson
       ? getLessonContentSections(
           normalizeLessonData(lesson, { title: fallbackTitle || "" }),
-        ).worksheet.blanks.map((blank) => blank.id)
+        ).worksheet.blanks
       : [];
+    const currentWorksheetBlankIds = worksheetBlanks.map((blank) => blank.id);
+    const worksheetAnswerById = new Map(
+      worksheetBlanks.map((blank) => [blank.id, blank.answer]),
+    );
     if (!container) {
-      return buildLessonAnswerSnapshot({
+      const snapshot = buildLessonAnswerSnapshot({
         existingAnswers: studentAnswers,
         worksheetBlankIds: currentWorksheetBlankIds,
       });
+      if (!finalize) return snapshot;
+      return {
+        ...snapshot,
+        answers: Object.fromEntries(
+          Object.entries(snapshot.answers).map(([key, answer]) => [
+            key,
+            {
+              value: answer.value,
+              status: worksheetAnswerById.has(key)
+                ? getInputStatus(
+                    answer.value,
+                    worksheetAnswerById.get(key) || "",
+                    {
+                      treatEmptyAsWrong: true,
+                    },
+                  )
+                : answer.status,
+            },
+          ]),
+        ),
+      };
     }
     const inputs = container.querySelectorAll(
       ".cloze-input, .worksheet-blank-input",
     ) as NodeListOf<HTMLInputElement>;
     const renderedAnswers = Array.from(inputs).map((input, index) => {
-      const status: AnswerStatus = input.classList.contains("correct")
-        ? "correct"
-        : input.classList.contains("wrong")
-          ? "wrong"
-          : "";
+      const status: AnswerStatus = finalize
+        ? getInputStatus(input.value, input.dataset.answer || "", {
+            treatEmptyAsWrong: true,
+          })
+        : input.classList.contains("correct")
+          ? "correct"
+          : input.classList.contains("wrong")
+            ? "wrong"
+            : "";
       return {
         key: input.dataset.blankId || input.dataset.blankIndex || String(index),
         value: input.value || "",
         status,
       };
     });
-    return buildLessonAnswerSnapshot({
+    const snapshot = buildLessonAnswerSnapshot({
       existingAnswers: studentAnswers,
       renderedAnswers,
       worksheetBlankIds: currentWorksheetBlankIds,
+    });
+    if (!finalize) return snapshot;
+    return {
+      ...snapshot,
+      answers: Object.fromEntries(
+        Object.entries(snapshot.answers).map(([key, answer]) => [
+          key,
+          {
+            value: answer.value,
+            status: worksheetAnswerById.has(key)
+              ? getInputStatus(
+                  answer.value,
+                  worksheetAnswerById.get(key) || "",
+                  {
+                    treatEmptyAsWrong: true,
+                  },
+                )
+              : answer.status,
+          },
+        ]),
+      ),
+    };
+  };
+
+  const applyAnswerStatusesToInputs = (
+    answers: Record<string, { value?: string; status?: AnswerStatus }>,
+  ) => {
+    const container = contentRef.current;
+    if (!container) return;
+    const inputs = container.querySelectorAll(
+      ".cloze-input, .worksheet-blank-input",
+    ) as NodeListOf<HTMLInputElement>;
+    inputs.forEach((input, index) => {
+      const key =
+        input.dataset.blankId || input.dataset.blankIndex || String(index);
+      const status = answers[key]?.status || "";
+      input.classList.toggle("correct", status === "correct");
+      input.classList.toggle("wrong", status === "wrong");
     });
   };
 
   const saveProgressToFirestore = async () => {
     const progressRef = getProgressRef();
     if (!progressRef || !currentUser?.uid || !unitId) return;
-    const answerSnapshot = getAnswerSnapshot();
-    const isWorksheetCompleted =
-      answerSnapshot.totalCount > 0 &&
-      answerSnapshot.filledCount === answerSnapshot.totalCount;
+    const answerSnapshot = getAnswerSnapshot({ finalize: true });
+    const correctCount = Object.values(answerSnapshot.answers).filter(
+      (answer) => answer.status === "correct",
+    ).length;
+    const accuracyPercent =
+      answerSnapshot.totalCount > 0
+        ? Math.round((correctCount / answerSnapshot.totalCount) * 100)
+        : 0;
+    const accuracyMessage =
+      answerSnapshot.totalCount > 0
+        ? `정답률 ${accuracyPercent}% · 정답 ${correctCount}/${answerSnapshot.totalCount}`
+        : "저장되었습니다.";
     try {
       emitSessionActivity();
       setIsSaving(true);
@@ -278,12 +358,12 @@ const LessonContent: React.FC<LessonContentProps> = ({
         },
         { merge: true },
       );
+      setStudentAnswers(answerSnapshot.answers);
+      applyAnswerStatusesToInputs(answerSnapshot.answers);
       setHasUnsavedChanges(false);
       setSaveMessage("저장됨");
       let toastTitle = "수업 자료 저장 완료";
-      let toastMessage = isWorksheetCompleted
-        ? "모든 빈칸 입력 내용이 저장되었습니다."
-        : "현재 입력 내용이 저장되었습니다.";
+      let toastMessage = accuracyMessage;
       let awardedPointAmount = 0;
       if (lesson && interactedRef.current && unitId) {
         const elapsedMs = Date.now() - viewStartedAtRef.current;
@@ -300,7 +380,10 @@ const LessonContent: React.FC<LessonContentProps> = ({
                 Number(pointResult.totalAwarded || pointResult.amount) || 0;
               notifyPointsUpdated();
               toastTitle = "수업 자료 저장 완료";
-              toastMessage = `입력 내용이 저장되고 +${awardedPointAmount}위스가 지급되었습니다.`;
+              toastMessage =
+                answerSnapshot.totalCount > 0
+                  ? `${accuracyMessage} · +${awardedPointAmount}위스`
+                  : `저장되었습니다. · +${awardedPointAmount}위스`;
             }
           } catch (pointError) {
             console.error("Failed to claim lesson point reward:", pointError);
@@ -406,9 +489,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
           !target.classList.contains("worksheet-blank-input"))
       )
         return;
-      const status = getInputStatus(target.value, target.dataset.answer || "");
-      target.classList.toggle("correct", status === "correct");
-      target.classList.toggle("wrong", status === "wrong");
+      target.classList.remove("correct", "wrong");
       interactedRef.current = true;
       setHasUnsavedChanges(true);
       setSaveMessage("저장 필요");
@@ -528,11 +609,11 @@ const LessonContent: React.FC<LessonContentProps> = ({
   const handleWorksheetAnswerChange = (
     blankId: string,
     value: string,
-    answer: string,
+    _answer: string,
   ) => {
     setStudentAnswers((prev) => ({
       ...prev,
-      [blankId]: { value, status: getInputStatus(value, answer) },
+      [blankId]: { value, status: "" },
     }));
     interactedRef.current = true;
     setHasUnsavedChanges(true);
@@ -817,11 +898,8 @@ const LessonContent: React.FC<LessonContentProps> = ({
           </div>
         )}
 
-        <div
-          ref={contentRef}
-          className="space-y-6"
-        >
-          {!!worksheet.pageImages.length &&
+        <div ref={contentRef} className="space-y-6">
+          {!!worksheet.pageImages.length && (
             <LessonWorksheetStage
               pageImages={worksheet.pageImages}
               blanks={worksheet.blanks}
@@ -843,7 +921,8 @@ const LessonContent: React.FC<LessonContentProps> = ({
               onStudentAnswerChange={handleWorksheetAnswerChange}
               annotationEnabled={false}
               showPageLabel={false}
-            />}
+            />
+          )}
 
           {!!bodyHtml && (
             <section

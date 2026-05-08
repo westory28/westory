@@ -3122,7 +3122,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                               whiteSpace: "nowrap",
                             }}
                           />
-                          {!!activeValue && (
+                          {(status === "correct" || status === "wrong") && (
                             <div
                               className={`pointer-events-none absolute -right-1.5 -top-3 z-20 rounded-full px-1.5 py-[1px] text-[9px] font-black shadow-sm ${
                                 status === "correct"
