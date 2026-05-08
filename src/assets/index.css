@@ -1073,12 +1073,13 @@
 
   .wis-ranking-row {
     grid-template-columns:
-      clamp(1.9rem, 3vw, 2.25rem)
-      minmax(max-content, 1fr)
+      max-content
+      max-content
       max-content
       max-content !important;
     grid-template-rows: auto !important;
-    column-gap: clamp(0.24rem, 0.55vw, 0.45rem) !important;
+    justify-content: start;
+    column-gap: clamp(0.38rem, 0.9vw, 0.7rem) !important;
     row-gap: 0 !important;
     align-items: center;
     min-width: 0;
@@ -1154,6 +1155,35 @@
     white-space: nowrap;
     font-size: clamp(0.55rem, 0.9vw, 0.76rem) !important;
     line-height: 1.05;
+  }
+}
+
+@media (max-width: 639px) {
+  .wis-ranking-mobile-row {
+    gap: clamp(0.2rem, 1.8vw, 0.38rem) !important;
+    overflow: visible;
+    white-space: nowrap;
+  }
+
+  .wis-ranking-mobile-row > span {
+    flex-shrink: 0;
+  }
+
+  .wis-ranking-mobile-row > span:nth-child(4) {
+    min-width: max-content;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: nowrap;
+    font-size: clamp(0.66rem, 3vw, 0.86rem) !important;
+  }
+
+  .wis-ranking-mobile-row > span:nth-last-child(2) {
+    font-size: clamp(0.58rem, 2.6vw, 0.7rem) !important;
+  }
+
+  .wis-ranking-mobile-row > span:last-child {
+    margin-left: 0 !important;
+    font-size: clamp(0.62rem, 2.8vw, 0.75rem) !important;
   }
 }
 

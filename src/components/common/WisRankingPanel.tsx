@@ -137,7 +137,7 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({ config }) => {
                 key={entry.uid}
                 className={`wis-ranking-row rounded-lg border px-2 py-2 sm:grid sm:grid-cols-[72px_minmax(0,1fr)_92px_minmax(80px,auto)] sm:items-center sm:gap-3 sm:px-3 sm:py-2.5 max-[1120px]:sm:grid-cols-[52px_minmax(0,1fr)_70px_minmax(64px,auto)] max-[1120px]:sm:gap-1.5 max-[1120px]:sm:px-2 max-[1120px]:sm:py-2 ${rankTone(rank)}`}
               >
-                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 sm:hidden">
+                <div className="wis-ranking-mobile-row flex flex-nowrap items-center gap-x-1.5 gap-y-1 sm:hidden">
                   <span
                     className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-black ${
                       rank <= 3 ? "bg-white/70" : "bg-slate-900 text-white"
