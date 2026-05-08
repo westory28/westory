@@ -417,10 +417,10 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                               </div>
                               <div className="overflow-x-auto">
                                 <div className="min-w-[46rem]">
-                                  <div className="sticky top-0 z-10 grid grid-cols-[minmax(13rem,1fr)_minmax(5.5rem,0.55fr)_minmax(8rem,0.8fr)_minmax(4.5rem,0.45fr)_minmax(4.5rem,0.45fr)] items-center gap-2 border-b border-gray-200 bg-white px-3 py-2 text-[11px] font-bold text-gray-400">
+                                  <div className="sticky top-0 z-10 grid grid-cols-[minmax(13rem,1fr)_minmax(8rem,0.8fr)_minmax(5.5rem,0.55fr)_minmax(4.5rem,0.45fr)_minmax(4.5rem,0.45fr)] items-center gap-2 border-b border-gray-200 bg-white px-3 py-2 text-[11px] font-bold text-gray-400">
                                     <div>수업 자료</div>
-                                    <div className="text-center">정답</div>
                                     <div className="text-center">제출 일시</div>
+                                    <div className="text-center">정답</div>
                                     <div className="text-center">정답률</div>
                                     <div className="text-right">제출</div>
                                   </div>
@@ -437,18 +437,18 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                                       return (
                                         <div
                                           key={unit.unitId}
-                                          className="grid grid-cols-[minmax(13rem,1fr)_minmax(5.5rem,0.55fr)_minmax(8rem,0.8fr)_minmax(4.5rem,0.45fr)_minmax(4.5rem,0.45fr)] items-center gap-2 px-3 py-2.5"
+                                          className="grid grid-cols-[minmax(13rem,1fr)_minmax(8rem,0.8fr)_minmax(5.5rem,0.55fr)_minmax(4.5rem,0.45fr)_minmax(4.5rem,0.45fr)] items-center gap-2 px-3 py-2.5"
                                         >
                                           <div className="min-w-0">
                                             <div className="truncate text-sm font-bold text-gray-800">
                                               {unit.title}
                                             </div>
                                           </div>
-                                          <div className="text-center text-xs font-semibold text-gray-500">
-                                            {unit.correctCount}/{unit.blankCount}
-                                          </div>
                                           <div className="truncate text-center text-xs font-semibold text-gray-500">
                                             {unit.latestUpdatedAtText || "-"}
+                                          </div>
+                                          <div className="text-center text-xs font-semibold text-gray-500">
+                                            {unit.correctCount}/{unit.blankCount}
                                           </div>
                                           <div className="text-center text-sm font-black text-gray-900">
                                             {accuracy}%
