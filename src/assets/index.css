@@ -1073,13 +1073,13 @@
 
   .wis-ranking-row {
     grid-template-columns:
-      max-content
-      max-content
-      max-content
-      max-content !important;
+      clamp(2.45rem, 4vw, 3.25rem)
+      minmax(0, 1fr)
+      clamp(3.8rem, 6.8vw, 4.8rem)
+      clamp(4.2rem, 7vw, 5.4rem) !important;
     grid-template-rows: auto !important;
-    justify-content: start;
-    column-gap: clamp(0.38rem, 0.9vw, 0.7rem) !important;
+    justify-content: stretch;
+    column-gap: clamp(0.32rem, 0.75vw, 0.62rem) !important;
     row-gap: 0 !important;
     align-items: center;
     min-width: 0;
@@ -1110,6 +1110,7 @@
     grid-row: 1;
     gap: clamp(0.14rem, 0.38vw, 0.28rem) !important;
     align-self: center;
+    min-width: 0;
     overflow: visible;
   }
 
@@ -1153,6 +1154,7 @@
     grid-row: 1;
     align-self: center;
     white-space: nowrap;
+    text-align: right;
     font-size: clamp(0.55rem, 0.9vw, 0.76rem) !important;
     line-height: 1.05;
   }
