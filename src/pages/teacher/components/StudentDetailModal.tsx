@@ -351,7 +351,7 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                           저장한 수업 자료 기준
                         </span>
                       </div>
-                      <div className="grid gap-2 md:grid-cols-2">
+                      <div className="grid gap-2">
                         {lessonUnits.map((unit) => {
                           const accuracy =
                             unit.blankCount > 0

@@ -12,7 +12,7 @@ import {
   type PointRankDisplay,
 } from "./pointRanks";
 import { normalizeBlankText } from "./lessonWorksheet";
-import { getSemesterCollectionPath } from "./semesterScope";
+import { getSemesterCollectionPath, getSemesterDocPath } from "./semesterScope";
 import type { PointWallet, SystemConfig } from "../types";
 
 type ConfigLike = Pick<SystemConfig, "year" | "semester"> | null | undefined;
@@ -28,6 +28,12 @@ interface LessonDoc {
   isVisibleToStudents?: boolean;
   contentHtml?: string;
   worksheetBlanks?: Array<{ id?: string; answer?: string }>;
+}
+
+interface LessonTreeNode {
+  id?: string;
+  title?: string;
+  children?: LessonTreeNode[];
 }
 
 interface LessonProgressDoc {
@@ -316,7 +322,42 @@ const getLessonUnitStatus = (
   };
 };
 
+const flattenLessonTreeOrder = (
+  nodes: LessonTreeNode[],
+  orderMap = new Map<string, number>(),
+) => {
+  nodes.forEach((node) => {
+    const id = String(node?.id || "").trim();
+    if (id && !orderMap.has(id)) {
+      orderMap.set(id, orderMap.size);
+    }
+    if (Array.isArray(node?.children) && node.children.length) {
+      flattenLessonTreeOrder(node.children, orderMap);
+    }
+  });
+  return orderMap;
+};
+
+const readLessonTreeOrder = async (config: ConfigLike) => {
+  const readTreeDoc = async (path: string) => {
+    const snap = await getDoc(doc(db, path));
+    const tree = snap.exists() ? snap.data().tree : null;
+    return Array.isArray(tree)
+      ? flattenLessonTreeOrder(tree as LessonTreeNode[])
+      : new Map<string, number>();
+  };
+
+  const semesterOrder = await readTreeDoc(
+    getSemesterDocPath(config, "curriculum", "tree"),
+  );
+  return semesterOrder.size ? semesterOrder : readTreeDoc("curriculum/tree");
+};
+
 const readLessons = async (config: ConfigLike) => {
+  const treeOrder = await readLessonTreeOrder(config).catch((error) => {
+    console.warn("Failed to load lesson tree order:", error);
+    return new Map<string, number>();
+  });
   const readCollection = async (path: string) => {
     const snap = await getDocs(collection(db, path));
     return snap.docs
@@ -326,8 +367,18 @@ const readLessons = async (config: ConfigLike) => {
         title: String(item.title || "").trim(),
         visible: item.isVisibleToStudents !== false,
         blankAnswers: getLessonBlankAnswers(item),
+        orderIndex: treeOrder.get(String(item.unitId || item.id || "").trim()),
       }))
-      .filter((item) => item.unitId && item.visible);
+      .filter((item) => item.unitId && item.visible)
+      .sort((left, right) => {
+        const leftOrder = left.orderIndex ?? Number.MAX_SAFE_INTEGER;
+        const rightOrder = right.orderIndex ?? Number.MAX_SAFE_INTEGER;
+        if (leftOrder !== rightOrder) return leftOrder - rightOrder;
+        return (
+          left.title.localeCompare(right.title, "ko") ||
+          left.unitId.localeCompare(right.unitId, "ko")
+        );
+      });
   };
 
   const semesterLessons = await readCollection(
