@@ -2676,8 +2676,8 @@ const ManageHistoryClassroom: React.FC = () => {
                   )
                 }
               >
-                <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                  <div className="min-w-0">
+                <div className="flex min-w-0 items-start gap-3">
+                  <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="text-lg font-black text-gray-900">
                         {row.assignment.mapTitle || row.assignment.title}
@@ -2704,7 +2704,7 @@ const ManageHistoryClassroom: React.FC = () => {
                       · 재도전 제한 {row.assignment.cooldownMinutes}분
                     </div>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="-mr-1 flex max-w-[min(100%,34rem)] shrink-0 flex-nowrap items-center justify-end gap-1.5 overflow-x-auto pb-1 pr-1 sm:max-w-none sm:gap-2 sm:overflow-visible sm:pb-0 sm:pr-0">
                     {[
                       [
                         "통과",
@@ -2729,7 +2729,7 @@ const ManageHistoryClassroom: React.FC = () => {
                     ].map(([label, count, className]) => (
                       <span
                         key={label}
-                        className={`inline-flex h-10 min-w-[5.75rem] items-center justify-center gap-2 rounded-xl border px-3 text-xs font-black ${className}`}
+                        className={`inline-flex h-9 min-w-[4.6rem] shrink-0 items-center justify-center gap-1.5 rounded-xl border px-2 text-[11px] font-black sm:h-10 sm:min-w-[5.75rem] sm:gap-2 sm:px-3 sm:text-xs ${className}`}
                       >
                         {label}
                         <span>{count}</span>
@@ -2741,7 +2741,7 @@ const ManageHistoryClassroom: React.FC = () => {
                         event.stopPropagation();
                         openAssignmentEditor(row.assignment);
                       }}
-                      className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-700 transition hover:bg-blue-100"
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 transition hover:bg-blue-100 sm:h-10 sm:w-10"
                       aria-label={`${row.assignment.title} 설정 수정`}
                     >
                       <DashboardIcon name="edit" className="h-4 w-4" />
@@ -2756,7 +2756,7 @@ const ManageHistoryClassroom: React.FC = () => {
                             : row.assignment.id,
                         );
                       }}
-                      className="flex h-10 w-10 items-center justify-center rounded-xl text-gray-500 transition hover:bg-gray-100 hover:text-gray-700"
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 sm:h-10 sm:w-10"
                       aria-label={expanded ? "상세 접기" : "상세 펼치기"}
                       aria-expanded={expanded}
                     >
@@ -3652,9 +3652,9 @@ const ManageHistoryClassroom: React.FC = () => {
       )}
 
       {editingAssignment && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4 py-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/35 px-4 py-6">
           <div
-            className={`relative flex w-full flex-col overflow-hidden rounded-3xl bg-white shadow-2xl transition-[max-width,max-height] ${
+            className={`relative flex w-full flex-col overflow-hidden overscroll-contain rounded-3xl bg-white shadow-2xl transition-[max-width,max-height] ${
               previewOpen
                 ? "max-h-[94vh] max-w-[min(96vw,92rem)]"
                 : "max-h-[90vh] max-w-[min(96vw,72rem)]"
@@ -3678,8 +3678,8 @@ const ManageHistoryClassroom: React.FC = () => {
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-hidden">
-              <div className="grid h-full min-h-0 gap-0 lg:grid-cols-[minmax(0,0.82fr)_minmax(24rem,1.18fr)] xl:grid-cols-[minmax(0,0.78fr)_minmax(29rem,1.22fr)]">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain lg:overflow-hidden">
+              <div className="grid min-h-0 gap-0 lg:h-full lg:grid-cols-[minmax(0,0.82fr)_minmax(24rem,1.18fr)] xl:grid-cols-[minmax(0,0.78fr)_minmax(29rem,1.22fr)]">
                 <div className="min-h-0 overflow-y-auto px-6 py-5">
                   <div className="space-y-4">
                     <div className="grid gap-3 md:grid-cols-4">
@@ -3943,7 +3943,7 @@ const ManageHistoryClassroom: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex min-h-0 flex-col overflow-hidden border-t border-gray-200 bg-gray-50 px-5 py-5 lg:border-l lg:border-t-0 lg:px-5">
+                <div className="flex min-h-0 flex-col overflow-visible border-t border-gray-200 bg-gray-50 px-5 py-5 lg:overflow-hidden lg:border-l lg:border-t-0 lg:px-5">
                   <div className="shrink-0 rounded-2xl border border-gray-200 bg-white p-3.5">
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-sm font-bold text-gray-700">
@@ -4008,7 +4008,7 @@ const ManageHistoryClassroom: React.FC = () => {
                       ))}
                     </div>
                   </div>
-                  <div className="mt-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white p-3.5">
+                  <div className="mt-3 flex min-h-[16rem] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white p-3.5 lg:min-h-0 lg:flex-1">
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-sm font-bold text-gray-700">
                         결과
@@ -4058,15 +4058,15 @@ const ManageHistoryClassroom: React.FC = () => {
                         ))}
                       </select>
                     </div>
-                    <div className="mt-3 min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
+                    <div className="mt-3 max-h-[min(52vh,30rem)] min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch] lg:max-h-none">
                       {editingResultRows.map((result) => (
                         <div
                           key={result.id}
                           className="rounded-xl border border-gray-200 bg-white px-3 py-2"
                         >
-                          <div className="flex items-center gap-2">
-                            <div className="min-w-0 flex-1">
-                              <div className="grid min-w-0 grid-cols-[minmax(5.5rem,0.6fr)_minmax(8rem,0.9fr)] items-center gap-2">
+                          <div className="grid grid-cols-[minmax(0,1fr)_4.75rem_auto] items-center gap-2">
+                            <div className="min-w-0">
+                              <div className="grid min-w-0 grid-cols-[minmax(5.5rem,0.6fr)_minmax(7rem,0.9fr)] items-center gap-2">
                                 <div className="truncate text-sm font-bold text-gray-900">
                                   {result.studentName}
                                 </div>
@@ -4098,8 +4098,24 @@ const ManageHistoryClassroom: React.FC = () => {
                                 제출 {formatResultSubmittedAtLabel(result.createdAt)}
                               </div>
                             </div>
+                            <div className="w-[4.75rem] shrink-0 text-right">
+                              <div className="text-sm font-black text-gray-900">
+                                {result.percent}%
+                              </div>
+                              <span
+                                className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                                  result.status === "passed"
+                                    ? "bg-emerald-50 text-emerald-700"
+                                    : result.status === "failed"
+                                      ? "bg-rose-50 text-rose-700"
+                                      : "bg-amber-50 text-amber-700"
+                                }`}
+                              >
+                                {describeHistoryResultStatus(result.status)}
+                              </span>
+                            </div>
                             <span
-                              className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                              className={`hidden shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${
                                 result.status === "passed"
                                   ? "bg-emerald-50 text-emerald-700"
                                   : result.status === "failed"
@@ -4277,6 +4293,7 @@ const ManageHistoryClassroom: React.FC = () => {
                     onCurrentPageChange={setReviewCurrentPage}
                     answers={reviewResult.answers}
                     answerChecks={reviewAnswerChecks}
+                    interactiveViewport
                     readOnly
                     layoutVariant="modalPreview"
                   />

@@ -437,8 +437,7 @@ const HistoryClassroomAssignmentView: React.FC<
     scale: 1,
   });
 
-  const enableInteractiveViewport =
-    interactiveViewport && !isModalPreview && Boolean(pageImage);
+  const enableInteractiveViewport = interactiveViewport && Boolean(pageImage);
   const viewportHeight = useMemo(() => {
     if (isModalPreview) return null;
     if (!pageImage) return "clamp(18rem, 56vh, 34rem)";
@@ -451,10 +450,14 @@ const HistoryClassroomAssignmentView: React.FC<
   const scaledPageHeight = pageImage ? pageImage.height * totalScale : 0;
   const canPanViewport = enableInteractiveViewport && userScale > 1.01;
   const displayZoomPercent = Math.max(100, Math.round(userScale * 100));
-  const displayWidth = isModalPreview ? pageImage?.width || 0 : scaledPageWidth;
-  const displayHeight = isModalPreview
-    ? pageImage?.height || 0
-    : scaledPageHeight;
+  const displayWidth =
+    enableInteractiveViewport || !isModalPreview
+      ? scaledPageWidth
+      : pageImage?.width || 0;
+  const displayHeight =
+    enableInteractiveViewport || !isModalPreview
+      ? scaledPageHeight
+      : pageImage?.height || 0;
   const blankPlacements = useMemo(() => {
     if (
       !pageImage ||
@@ -1031,7 +1034,7 @@ const HistoryClassroomAssignmentView: React.FC<
               페이지 {currentPage} / {pageCount}
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {!isModalPreview && (
+              {enableInteractiveViewport && (
                 <>
                   <div className="hidden rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-500 sm:block">
                     {displayZoomPercent}%
@@ -1105,10 +1108,10 @@ const HistoryClassroomAssignmentView: React.FC<
                 </div>
               )}
               <div
-                ref={!isModalPreview ? viewportRef : undefined}
+                ref={enableInteractiveViewport ? viewportRef : undefined}
                 className="h-full min-h-0 overflow-auto"
                 style={
-                  !isModalPreview
+                  enableInteractiveViewport
                     ? {
                         touchAction: enableInteractiveViewport
                           ? "none"
@@ -1117,52 +1120,74 @@ const HistoryClassroomAssignmentView: React.FC<
                       }
                     : undefined
                 }
-                onWheel={!isModalPreview ? handleViewportWheel : undefined}
+                onWheel={
+                  enableInteractiveViewport ? handleViewportWheel : undefined
+                }
                 onMouseDown={
-                  !isModalPreview ? handleViewportMouseDown : undefined
+                  enableInteractiveViewport
+                    ? handleViewportMouseDown
+                    : undefined
                 }
                 onMouseMove={
-                  !isModalPreview ? handleViewportMouseMove : undefined
+                  enableInteractiveViewport
+                    ? handleViewportMouseMove
+                    : undefined
                 }
                 onMouseUp={
-                  !isModalPreview ? clearViewportGestureState : undefined
+                  enableInteractiveViewport
+                    ? clearViewportGestureState
+                    : undefined
                 }
                 onMouseLeave={
-                  !isModalPreview ? clearViewportGestureState : undefined
+                  enableInteractiveViewport
+                    ? clearViewportGestureState
+                    : undefined
                 }
                 onTouchStart={
-                  !isModalPreview ? handleViewportTouchStart : undefined
+                  enableInteractiveViewport
+                    ? handleViewportTouchStart
+                    : undefined
                 }
                 onTouchMove={
-                  !isModalPreview ? handleViewportTouchMove : undefined
+                  enableInteractiveViewport
+                    ? handleViewportTouchMove
+                    : undefined
                 }
                 onTouchEnd={
-                  !isModalPreview ? clearViewportGestureState : undefined
+                  enableInteractiveViewport
+                    ? clearViewportGestureState
+                    : undefined
                 }
                 onTouchCancel={
-                  !isModalPreview ? clearViewportGestureState : undefined
+                  enableInteractiveViewport
+                    ? clearViewportGestureState
+                    : undefined
                 }
               >
                 <div
                   className={`flex min-h-full min-w-full ${
-                    !isModalPreview && !canPanViewport
+                    enableInteractiveViewport && !canPanViewport
                       ? "items-center justify-center"
                       : "items-start justify-start"
                   }`}
                 >
                   <div
                     className={`relative shrink-0 ${
-                      !isModalPreview && canPanViewport
+                      enableInteractiveViewport && canPanViewport
                         ? "cursor-grab active:cursor-grabbing"
                         : ""
                     } ${isModalPreview ? "mx-auto" : ""}`}
                     onPointerDownCapture={handleBlankStackPointerDownCapture}
                     style={{
                       width: `${
-                        isModalPreview ? pageImage.width : scaledPageWidth
+                        enableInteractiveViewport || !isModalPreview
+                          ? scaledPageWidth
+                          : pageImage.width
                       }px`,
                       height: `${
-                        isModalPreview ? pageImage.height : scaledPageHeight
+                        enableInteractiveViewport || !isModalPreview
+                          ? scaledPageHeight
+                          : pageImage.height
                       }px`,
                     }}
                   >
