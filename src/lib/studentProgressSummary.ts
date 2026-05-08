@@ -1,4 +1,11 @@
-import { collection, getDocs, query, where } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  where,
+} from "firebase/firestore";
 import { db } from "./firebase";
 import {
   getPointPolicy,
@@ -36,6 +43,13 @@ interface LessonTreeNode {
   children?: LessonTreeNode[];
 }
 
+interface LessonTreeMeta {
+  orderIndex: number;
+  sectionKey: string;
+  sectionTitle: string;
+  sectionOrder: number;
+}
+
 interface LessonProgressDoc {
   unitId?: string;
   answers?: Record<string, { value?: string; status?: string }>;
@@ -71,6 +85,9 @@ export interface SummarySectionState {
 export interface StudentLessonUnitProgressSummary {
   unitId: string;
   title: string;
+  sectionKey: string;
+  sectionTitle: string;
+  sectionOrder: number;
   blankCount: number;
   filledCount: number;
   correctCount: number;
@@ -80,6 +97,17 @@ export interface StudentLessonUnitProgressSummary {
   statusLabel: string;
   latestUpdatedAtText: string;
 }
+
+type LessonUnitProgressStatus = Pick<
+  StudentLessonUnitProgressSummary,
+  | "blankCount"
+  | "filledCount"
+  | "correctCount"
+  | "submitted"
+  | "submissionLabel"
+  | "status"
+  | "statusLabel"
+>;
 
 export interface StudentLessonProgressSummary extends SummarySectionState {
   totalLessons: number;
@@ -269,7 +297,7 @@ const getLessonBlankAnswers = (lesson: LessonDoc) => {
 const getLessonUnitStatus = (
   blankAnswers: Map<string, string>,
   progress?: LessonProgressDoc,
-) => {
+): LessonUnitProgressStatus => {
   const blankKeys = Array.from(blankAnswers.keys());
   const submitted = hasSavedProgress(progress);
   if (!blankKeys.length) {
@@ -322,53 +350,72 @@ const getLessonUnitStatus = (
   };
 };
 
-const flattenLessonTreeOrder = (
+const flattenLessonTreeMeta = (
   nodes: LessonTreeNode[],
-  orderMap = new Map<string, number>(),
+  metaMap = new Map<string, LessonTreeMeta>(),
+  section?: { key: string; title: string; order: number },
 ) => {
   nodes.forEach((node) => {
     const id = String(node?.id || "").trim();
-    if (id && !orderMap.has(id)) {
-      orderMap.set(id, orderMap.size);
+    const title = String(node?.title || "").trim();
+    const currentSection =
+      section ||
+      (id
+        ? { key: id, title: title || "수업 자료", order: metaMap.size }
+        : undefined);
+    if (id && !metaMap.has(id)) {
+      metaMap.set(id, {
+        orderIndex: metaMap.size,
+        sectionKey: currentSection?.key || id,
+        sectionTitle: currentSection?.title || title || "수업 자료",
+        sectionOrder: currentSection?.order ?? metaMap.size,
+      });
     }
     if (Array.isArray(node?.children) && node.children.length) {
-      flattenLessonTreeOrder(node.children, orderMap);
+      flattenLessonTreeMeta(node.children, metaMap, currentSection);
     }
   });
-  return orderMap;
+  return metaMap;
 };
 
-const readLessonTreeOrder = async (config: ConfigLike) => {
+const readLessonTreeMeta = async (config: ConfigLike) => {
   const readTreeDoc = async (path: string) => {
     const snap = await getDoc(doc(db, path));
     const tree = snap.exists() ? snap.data().tree : null;
     return Array.isArray(tree)
-      ? flattenLessonTreeOrder(tree as LessonTreeNode[])
-      : new Map<string, number>();
+      ? flattenLessonTreeMeta(tree as LessonTreeNode[])
+      : new Map<string, LessonTreeMeta>();
   };
 
-  const semesterOrder = await readTreeDoc(
+  const semesterMeta = await readTreeDoc(
     getSemesterDocPath(config, "curriculum", "tree"),
   );
-  return semesterOrder.size ? semesterOrder : readTreeDoc("curriculum/tree");
+  return semesterMeta.size ? semesterMeta : readTreeDoc("curriculum/tree");
 };
 
 const readLessons = async (config: ConfigLike) => {
-  const treeOrder = await readLessonTreeOrder(config).catch((error) => {
+  const treeMeta = await readLessonTreeMeta(config).catch((error) => {
     console.warn("Failed to load lesson tree order:", error);
-    return new Map<string, number>();
+    return new Map<string, LessonTreeMeta>();
   });
   const readCollection = async (path: string) => {
     const snap = await getDocs(collection(db, path));
     return snap.docs
       .map((item) => ({ id: item.id, ...(item.data() as LessonDoc) }))
-      .map((item) => ({
-        unitId: String(item.unitId || item.id || "").trim(),
-        title: String(item.title || "").trim(),
-        visible: item.isVisibleToStudents !== false,
-        blankAnswers: getLessonBlankAnswers(item),
-        orderIndex: treeOrder.get(String(item.unitId || item.id || "").trim()),
-      }))
+      .map((item) => {
+        const unitId = String(item.unitId || item.id || "").trim();
+        const meta = treeMeta.get(unitId);
+        return {
+          unitId,
+          title: String(item.title || "").trim(),
+          visible: item.isVisibleToStudents !== false,
+          blankAnswers: getLessonBlankAnswers(item),
+          orderIndex: meta?.orderIndex,
+          sectionKey: meta?.sectionKey || "uncategorized",
+          sectionTitle: meta?.sectionTitle || "기타 수업 자료",
+          sectionOrder: meta?.sectionOrder ?? Number.MAX_SAFE_INTEGER,
+        };
+      })
       .filter((item) => item.unitId && item.visible)
       .sort((left, right) => {
         const leftOrder = left.orderIndex ?? Number.MAX_SAFE_INTEGER;
@@ -424,6 +471,9 @@ const loadLessonSummary = async (
       return {
         unitId: lesson.unitId,
         title: lesson.title || lesson.unitId,
+        sectionKey: lesson.sectionKey,
+        sectionTitle: lesson.sectionTitle,
+        sectionOrder: lesson.sectionOrder,
         ...status,
         latestUpdatedAtText: progress ? formatDateTime(progress.updatedAt) : "",
         updatedAtMs: progress ? timestampMs(progress.updatedAt) : 0,

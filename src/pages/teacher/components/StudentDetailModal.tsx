@@ -139,6 +139,44 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   const lessonSubmittedTotal = lessonTrackedUnits.filter(
     (unit) => unit.submitted,
   ).length;
+  const lessonSections = (() => {
+    const sectionMap = new Map<
+      string,
+      {
+        key: string;
+        title: string;
+        order: number;
+        units: typeof lessonUnits;
+        blankCount: number;
+        correctCount: number;
+        submittedCount: number;
+      }
+    >();
+
+    lessonUnits.forEach((unit) => {
+      const key = unit.sectionKey || "uncategorized";
+      const existing = sectionMap.get(key);
+      const section = existing || {
+        key,
+        title: unit.sectionTitle || "기타 수업 자료",
+        order: unit.sectionOrder ?? Number.MAX_SAFE_INTEGER,
+        units: [],
+        blankCount: 0,
+        correctCount: 0,
+        submittedCount: 0,
+      };
+      section.units.push(unit);
+      section.blankCount += unit.blankCount;
+      section.correctCount += unit.correctCount;
+      if (unit.submitted) section.submittedCount += 1;
+      sectionMap.set(key, section);
+    });
+
+    return Array.from(sectionMap.values()).sort((left, right) => {
+      if (left.order !== right.order) return left.order - right.order;
+      return left.title.localeCompare(right.title, "ko");
+    });
+  })();
   const quizGroups = quiz?.groups || [];
   const quizUnitOptions = Array.from(
     new Set(quizGroups.map((item) => item.unitTitle).filter(Boolean)),
@@ -342,58 +380,90 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                   </div>
 
                   {summaryPanel === "lesson" && (
-                    <section className="rounded-xl border border-blue-100 bg-white p-4 shadow-sm">
-                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
                         <h4 className="text-sm font-extrabold text-gray-900">
-                          수업 자료 제출 상세
+                          수업 자료
                         </h4>
-                        <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
-                          저장한 수업 자료 기준
+                        <span className="text-xs font-bold text-gray-500">
+                          제출 {lessonSubmittedTotal}/{lessonWorksheetTotal}
                         </span>
                       </div>
-                      <div className="grid gap-2">
-                        {lessonUnits.map((unit) => {
-                          const accuracy =
-                            unit.blankCount > 0
+                      <div className="space-y-3">
+                        {lessonSections.map((section) => {
+                          const sectionAccuracy =
+                            section.blankCount > 0
                               ? Math.round(
-                                  (unit.correctCount / unit.blankCount) * 100,
+                                  (section.correctCount / section.blankCount) *
+                                    100,
                                 )
                               : 0;
                           return (
-                            <div
-                              key={unit.unitId}
-                              className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2"
+                            <section
+                              key={section.key}
+                              className="overflow-hidden rounded-lg border border-gray-200 bg-white"
                             >
-                              <div className="flex items-start justify-between gap-3">
+                              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 bg-gray-50 px-3 py-3">
                                 <div className="min-w-0">
-                                  <div className="truncate text-sm font-extrabold text-gray-800">
-                                    {unit.title}
+                                  <div className="truncate text-sm font-extrabold text-gray-900">
+                                    {section.title}
                                   </div>
-                                  <div className="mt-1 text-xs font-semibold text-gray-500">
-                                    정답률 {accuracy}% · 정답{" "}
-                                    {unit.correctCount}/{unit.blankCount}
+                                  <div className="mt-0.5 text-xs font-semibold text-gray-500">
+                                    제출 {section.submittedCount}/
+                                    {section.units.length} · 평균{" "}
+                                    {sectionAccuracy}%
                                   </div>
                                 </div>
-                                <span
-                                  className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-extrabold ${
-                                    unit.submitted
-                                      ? "bg-emerald-50 text-emerald-700"
-                                      : "bg-slate-100 text-slate-600"
-                                  }`}
-                                >
-                                  {unit.submissionLabel}
-                                </span>
                               </div>
-                              {unit.latestUpdatedAtText && (
-                                <div className="mt-2 text-xs font-semibold text-gray-400">
-                                  마지막 저장 {unit.latestUpdatedAtText}
-                                </div>
-                              )}
-                            </div>
+                              <div className="divide-y divide-gray-100">
+                                {section.units.map((unit) => {
+                                  const accuracy =
+                                    unit.blankCount > 0
+                                      ? Math.round(
+                                          (unit.correctCount /
+                                            unit.blankCount) *
+                                            100,
+                                        )
+                                      : 0;
+                                  return (
+                                    <div
+                                      key={unit.unitId}
+                                      className="flex flex-col gap-1 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
+                                    >
+                                      <div className="min-w-0">
+                                        <div className="truncate text-sm font-bold text-gray-800">
+                                          {unit.title}
+                                        </div>
+                                        <div className="mt-0.5 text-xs font-semibold text-gray-500">
+                                          정답 {unit.correctCount}/
+                                          {unit.blankCount} · {accuracy}%
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-3 sm:justify-end">
+                                        <span
+                                          className={`rounded-full px-2.5 py-1 text-xs font-extrabold ${
+                                            unit.submitted
+                                              ? "bg-emerald-50 text-emerald-700"
+                                              : "bg-slate-100 text-slate-600"
+                                          }`}
+                                        >
+                                          {unit.submissionLabel}
+                                        </span>
+                                        {unit.latestUpdatedAtText && (
+                                          <span className="hidden text-xs font-semibold text-gray-400 sm:inline">
+                                            {unit.latestUpdatedAtText}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </section>
                           );
                         })}
                         {!lesson?.units?.length && (
-                          <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-6 text-center text-sm font-bold text-gray-400 md:col-span-2">
+                          <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-6 text-center text-sm font-bold text-gray-400">
                             조회할 수업 자료 진행 기록이 없습니다.
                           </div>
                         )}
