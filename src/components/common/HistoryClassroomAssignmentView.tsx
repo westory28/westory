@@ -450,20 +450,10 @@ const HistoryClassroomAssignmentView: React.FC<
   const scaledPageHeight = pageImage ? pageImage.height * totalScale : 0;
   const canPanViewport = enableInteractiveViewport && userScale > 1.01;
   const displayZoomPercent = Math.max(100, Math.round(userScale * 100));
-  const displayWidth =
-    enableInteractiveViewport || !isModalPreview
-      ? scaledPageWidth
-      : pageImage?.width || 0;
-  const displayHeight =
-    enableInteractiveViewport || !isModalPreview
-      ? scaledPageHeight
-      : pageImage?.height || 0;
+  const displayWidth = pageImage?.width || 0;
+  const displayHeight = pageImage?.height || 0;
   const blankPlacements = useMemo(() => {
-    if (
-      !pageImage ||
-      !displayWidth ||
-      !displayHeight
-    ) {
+    if (!pageImage || !displayWidth || !displayHeight) {
       return [];
     }
 
@@ -900,8 +890,9 @@ const HistoryClassroomAssignmentView: React.FC<
     }
 
     const containerRect = event.currentTarget.getBoundingClientRect();
-    const localX = event.clientX - containerRect.left;
-    const localY = event.clientY - containerRect.top;
+    const pointerScale = Math.max(0.001, totalScaleRef.current);
+    const localX = (event.clientX - containerRect.left) / pointerScale;
+    const localY = (event.clientY - containerRect.top) / pointerScale;
     const hitPlacements = sortPlacementsForFocus(
       orderedBlankPlacements.filter(
         (placement) =>
@@ -1172,12 +1163,11 @@ const HistoryClassroomAssignmentView: React.FC<
                   }`}
                 >
                   <div
-                    className={`relative shrink-0 ${
+                    className={`relative shrink-0 overflow-hidden ${
                       enableInteractiveViewport && canPanViewport
                         ? "cursor-grab active:cursor-grabbing"
                         : ""
                     } ${isModalPreview ? "mx-auto" : ""}`}
-                    onPointerDownCapture={handleBlankStackPointerDownCapture}
                     style={{
                       width: `${
                         enableInteractiveViewport || !isModalPreview
@@ -1191,130 +1181,141 @@ const HistoryClassroomAssignmentView: React.FC<
                       }px`,
                     }}
                   >
-                    <img
-                      src={pageImage.imageUrl}
-                      alt={`${assignment.title} ${currentPage}`}
-                      className="block h-full w-full"
-                      loading="lazy"
-                      decoding="async"
-                      style={{ maxWidth: "none" }}
-                    />
-                    {orderedBlankPlacements.map((placement) => {
-                      const {
-                        blank,
-                        answerValue,
-                        trimmedAnswerValue,
-                        fontSize,
-                        chipWidth,
-                        chipHeight,
-                        textPaddingX,
-                        textPaddingY,
-                        isFilled,
-                        isInputLocked,
-                        reviewCorrect,
-                        reviewText,
-                        leftPx,
-                        topPx,
-                      } = placement;
-                      const isFocused = focusedBlankId === blank.id;
-                      const hasReview = reviewCorrect !== null;
-                      const reviewToneClass = hasReview
-                        ? reviewCorrect
-                          ? "border-emerald-500 text-emerald-900 ring-2 ring-emerald-200"
-                          : "border-rose-500 text-rose-900 ring-2 ring-rose-200"
-                        : isFilled
-                          ? "border-orange-300 text-orange-800"
-                          : "border-slate-300 text-slate-700";
-                      const placeholder = blank.prompt || "정답 입력";
-                      const lockedDisplayText =
-                        reviewText || trimmedAnswerValue || placeholder;
-                      return (
-                        <div
-                          key={blank.id}
-                          className={`absolute overflow-hidden rounded-xl border text-left font-bold shadow-[0_6px_18px_rgba(15,23,42,0.12)] transition-colors focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-200 ${
-                            isFocused ? "z-20" : "z-10"
-                          } ${reviewToneClass}`}
-                          title={
-                            hasReview
-                              ? reviewCorrect
-                                ? "Correct"
-                                : `Wrong. Correct answer: ${reviewText || blank.answer}`
-                              : undefined
-                          }
-                          style={{
-                            left: `${leftPx}px`,
-                            top: `${topPx}px`,
-                            width: `${chipWidth}px`,
-                            height: `${chipHeight}px`,
-                            backgroundColor: "#ffffff",
-                            opacity: 1,
-                          }}
-                        >
-                          {isInputLocked ? (
-                            <span
-                              aria-hidden
-                              className={`absolute inset-0 ${
-                                hasReview
-                                  ? reviewCorrect
-                                    ? "bg-emerald-50"
-                                    : "bg-rose-50"
-                                  : isFilled
-                                    ? "bg-orange-50"
-                                    : "bg-white"
-                              }`}
-                            />
-                          ) : null}
-                          {isInputLocked ? (
-                            <span
-                              className="relative z-[1] flex h-full w-full items-center justify-center overflow-hidden whitespace-nowrap text-center"
-                              style={{
-                                fontSize: `${fontSize}px`,
-                                letterSpacing: 0,
-                                lineHeight: BLANK_TEXT_LINE_HEIGHT_RATIO,
-                                padding: `${textPaddingY}px ${textPaddingX}px`,
-                              }}
-                            >
-                              {lockedDisplayText}
-                            </span>
-                          ) : (
-                            <input
-                              type="text"
-                              ref={(node) => {
-                                blankInputRefs.current[blank.id] = node;
-                              }}
-                              value={answerValue}
-                              onChange={(event) =>
-                                onAnswerChange?.(blank.id, event.target.value)
-                              }
-                              onFocus={() => setFocusedBlankId(blank.id)}
-                              readOnly={isInputLocked}
-                              autoComplete="off"
-                              autoCorrect="off"
-                              autoCapitalize="off"
-                              spellCheck={false}
-                              inputMode="text"
-                              lang="ko"
-                              aria-label={
-                                blank.prompt || `${blank.id} 답안 입력`
-                              }
-                              placeholder={placeholder}
-                              className={`relative z-[1] h-full w-full border-0 bg-transparent text-center font-bold outline-none ${
-                                isFilled
-                                  ? "text-orange-800 placeholder:text-orange-300"
-                                  : "text-slate-700 placeholder:text-slate-400"
-                              }`}
-                              style={{
-                                fontSize: `${fontSize}px`,
-                                letterSpacing: 0,
-                                lineHeight: "normal",
-                                padding: `${textPaddingY}px ${textPaddingX}px`,
-                                touchAction: "none",
-                              }}
-                            />
-                          )}
-                        </div>
-                      );
-                    })}
+                    <div
+                      className="relative"
+                      onPointerDownCapture={handleBlankStackPointerDownCapture}
+                      style={{
+                        width: `${pageImage.width}px`,
+                        height: `${pageImage.height}px`,
+                        transform: `scale(${totalScale})`,
+                        transformOrigin: "top left",
+                      }}
+                    >
+                      <img
+                        src={pageImage.imageUrl}
+                        alt={`${assignment.title} ${currentPage}`}
+                        className="block h-full w-full"
+                        loading="lazy"
+                        decoding="async"
+                        style={{ maxWidth: "none" }}
+                      />
+                      {orderedBlankPlacements.map((placement) => {
+                        const {
+                          blank,
+                          answerValue,
+                          trimmedAnswerValue,
+                          fontSize,
+                          chipWidth,
+                          chipHeight,
+                          textPaddingX,
+                          textPaddingY,
+                          isFilled,
+                          isInputLocked,
+                          reviewCorrect,
+                          reviewText,
+                          leftPx,
+                          topPx,
+                        } = placement;
+                        const isFocused = focusedBlankId === blank.id;
+                        const hasReview = reviewCorrect !== null;
+                        const reviewToneClass = hasReview
+                          ? reviewCorrect
+                            ? "border-emerald-500 text-emerald-900 ring-2 ring-emerald-200"
+                            : "border-rose-500 text-rose-900 ring-2 ring-rose-200"
+                          : isFilled
+                            ? "border-orange-300 text-orange-800"
+                            : "border-slate-300 text-slate-700";
+                        const placeholder = blank.prompt || "정답 입력";
+                        const lockedDisplayText =
+                          reviewText || trimmedAnswerValue || placeholder;
+                        return (
+                          <div
+                            key={blank.id}
+                            className={`absolute overflow-hidden rounded-xl border text-left font-bold shadow-[0_6px_18px_rgba(15,23,42,0.12)] transition-colors focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-200 ${
+                              isFocused ? "z-20" : "z-10"
+                            } ${reviewToneClass}`}
+                            title={
+                              hasReview
+                                ? reviewCorrect
+                                  ? "Correct"
+                                  : `Wrong. Correct answer: ${reviewText || blank.answer}`
+                                : undefined
+                            }
+                            style={{
+                              left: `${leftPx}px`,
+                              top: `${topPx}px`,
+                              width: `${chipWidth}px`,
+                              height: `${chipHeight}px`,
+                              backgroundColor: "#ffffff",
+                              opacity: 1,
+                            }}
+                          >
+                            {isInputLocked ? (
+                              <span
+                                aria-hidden
+                                className={`absolute inset-0 ${
+                                  hasReview
+                                    ? reviewCorrect
+                                      ? "bg-emerald-50"
+                                      : "bg-rose-50"
+                                    : isFilled
+                                      ? "bg-orange-50"
+                                      : "bg-white"
+                                }`}
+                              />
+                            ) : null}
+                            {isInputLocked ? (
+                              <span
+                                className="relative z-[1] flex h-full w-full items-center justify-center overflow-hidden whitespace-nowrap text-center"
+                                style={{
+                                  fontSize: `${fontSize}px`,
+                                  letterSpacing: 0,
+                                  lineHeight: BLANK_TEXT_LINE_HEIGHT_RATIO,
+                                  padding: `${textPaddingY}px ${textPaddingX}px`,
+                                }}
+                              >
+                                {lockedDisplayText}
+                              </span>
+                            ) : (
+                              <input
+                                type="text"
+                                ref={(node) => {
+                                  blankInputRefs.current[blank.id] = node;
+                                }}
+                                value={answerValue}
+                                onChange={(event) =>
+                                  onAnswerChange?.(blank.id, event.target.value)
+                                }
+                                onFocus={() => setFocusedBlankId(blank.id)}
+                                readOnly={isInputLocked}
+                                autoComplete="off"
+                                autoCorrect="off"
+                                autoCapitalize="off"
+                                spellCheck={false}
+                                inputMode="text"
+                                lang="ko"
+                                aria-label={
+                                  blank.prompt || `${blank.id} 답안 입력`
+                                }
+                                placeholder={placeholder}
+                                className={`relative z-[1] h-full w-full border-0 bg-transparent text-center font-bold outline-none ${
+                                  isFilled
+                                    ? "text-orange-800 placeholder:text-orange-300"
+                                    : "text-slate-700 placeholder:text-slate-400"
+                                }`}
+                                style={{
+                                  fontSize: `${fontSize}px`,
+                                  letterSpacing: 0,
+                                  lineHeight: "normal",
+                                  padding: `${textPaddingY}px ${textPaddingX}px`,
+                                  touchAction: "none",
+                                }}
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               </div>

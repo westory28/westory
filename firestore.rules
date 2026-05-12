@@ -458,6 +458,7 @@ service cloud.firestore {
           'passThresholdPercent',
           'passed',
           'status',
+          'answerChecks',
           'cancellationReason',
           'createdAt'
         ])
@@ -476,6 +477,8 @@ service cloud.firestore {
         && request.resource.data.passThresholdPercent is number
         && request.resource.data.passed is bool
         && request.resource.data.status is string
+        && request.resource.data.answerChecks is list
+        && request.resource.data.answerChecks.size() <= 200
         && request.resource.data.cancellationReason is string;
     }
 
