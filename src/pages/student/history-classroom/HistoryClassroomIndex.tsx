@@ -22,8 +22,6 @@ import { readLocalOnly, removeStorage } from "../../../lib/safeStorage";
 import { getSemesterCollectionPath } from "../../../lib/semesterScope";
 
 const HISTORY_CLASSROOM_LOCK_PREFIX = "westoryHistoryClassroomLock";
-const HISTORY_CLASSROOM_EXIT_COOLDOWN_MINUTES = 5;
-
 type StudentHistoryClassroomStatus =
   | "available"
   | "retry"
@@ -63,9 +61,14 @@ const readCooldownLockRemainMinutes = (
   assignmentId: string,
   uid: string,
   nowMs: number,
+  cooldownMinutes: number,
   resetAtMs: number | null = null,
 ) => {
   const key = getCooldownLockKey(assignmentId, uid);
+  if (cooldownMinutes <= 0) {
+    removeStorage(key);
+    return null;
+  }
   const raw = readLocalOnly(key);
   if (!raw) return null;
 
@@ -343,9 +346,7 @@ const HistoryClassroomIndex: React.FC = () => {
           : null;
         const serverRemainMinutes = formatCooldown(
           latest?.createdAt,
-          latest?.status === "cancelled"
-            ? HISTORY_CLASSROOM_EXIT_COOLDOWN_MINUTES
-            : assignment.cooldownMinutes,
+          assignment.cooldownMinutes,
           nowMs,
           resetAtMs,
         );
@@ -354,6 +355,7 @@ const HistoryClassroomIndex: React.FC = () => {
               assignment.id,
               userData.uid,
               nowMs,
+              assignment.cooldownMinutes,
               resetAtMs,
             )
           : null;

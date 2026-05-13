@@ -434,6 +434,8 @@ const HistoryClassroomAssignmentView: React.FC<
   const [floatingViewport, setFloatingViewport] = useState({
     offsetLeft: 0,
     offsetTop: 0,
+    width: typeof window === "undefined" ? 0 : window.innerWidth,
+    height: typeof window === "undefined" ? 0 : window.innerHeight,
     scale: 1,
   });
 
@@ -544,6 +546,10 @@ const HistoryClassroomAssignmentView: React.FC<
     () => sortPlacementsForFocus(blankPlacements),
     [blankPlacements],
   );
+  const floatingPanelWidth = Math.min(
+    320,
+    Math.max(248, floatingViewport.width - 24),
+  );
 
   useEffect(() => {
     fitScaleRef.current = fitScale;
@@ -574,6 +580,8 @@ const HistoryClassroomAssignmentView: React.FC<
       setFloatingViewport({
         offsetLeft: viewport?.offsetLeft || 0,
         offsetTop: viewport?.offsetTop || 0,
+        width: viewport?.width || window.innerWidth,
+        height: viewport?.height || window.innerHeight,
         scale: Math.max(1, viewport?.scale || 1),
       });
     };
@@ -1327,7 +1335,7 @@ const HistoryClassroomAssignmentView: React.FC<
           className={
             isModalPreview
               ? "self-start space-y-3 lg:sticky lg:top-5"
-              : "space-y-4"
+              : "space-y-4 lg:sticky lg:top-28 lg:self-start"
           }
         >
           <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -1409,15 +1417,24 @@ const HistoryClassroomAssignmentView: React.FC<
 
       {showFloatingActions && (
         <div
-          className="pointer-events-none fixed z-[140] flex max-w-[calc(100vw-2rem)] justify-start sm:max-w-[22rem]"
+          className="pointer-events-none fixed z-[140] flex max-w-[calc(100vw-1.5rem)] justify-end"
           style={{
-            top: `calc(env(safe-area-inset-top, 0px) + ${floatingViewport.offsetTop + 12}px)`,
-            left: `calc(env(safe-area-inset-left, 0px) + ${floatingViewport.offsetLeft + 12}px)`,
-            transform: `scale(${1 / floatingViewport.scale})`,
-            transformOrigin: "top left",
+            top: `calc(env(safe-area-inset-top, 0px) + ${
+              floatingViewport.offsetTop + floatingViewport.height - 12
+            }px)`,
+            left: `calc(env(safe-area-inset-left, 0px) + ${Math.max(
+              12,
+              floatingViewport.offsetLeft +
+                floatingViewport.width -
+                floatingPanelWidth -
+                12,
+            )}px)`,
+            width: `${floatingPanelWidth}px`,
+            transform: `translateY(-100%) scale(${1 / floatingViewport.scale})`,
+            transformOrigin: "bottom right",
           }}
         >
-          <div className="pointer-events-auto w-[min(18rem,calc(100vw-2rem))] rounded-2xl border border-gray-200 bg-white/95 p-3 shadow-[0_20px_45px_-24px_rgba(15,23,42,0.35)] backdrop-blur">
+          <div className="pointer-events-auto w-full rounded-2xl border border-gray-200 bg-white/95 p-3 shadow-[0_20px_45px_-24px_rgba(15,23,42,0.35)] backdrop-blur">
             {assignment.timeLimitMinutes > 0 && countdownLabel && (
               <div className="rounded-xl bg-gray-50 px-3 py-2.5">
                 <div className="flex items-center justify-between gap-3 text-[11px] font-bold tracking-[0.18em] text-gray-400">
@@ -1438,6 +1455,51 @@ const HistoryClassroomAssignmentView: React.FC<
                     style={{ width: `${timeProgressPercent}%` }}
                   />
                 </div>
+              </div>
+            )}
+            {assignment.answerOptions.length > 0 && (
+              <div className="mt-2 rounded-xl bg-gray-50 px-3 py-2 lg:hidden">
+                <div className="mb-1 text-[11px] font-bold text-gray-500">
+                  참고 보기
+                </div>
+                <div className="-mx-1 flex max-h-20 flex-wrap gap-1.5 overflow-y-auto px-1 pb-1">
+                  {assignment.answerOptions.map((option) => {
+                    const normalizedOption =
+                      normalizeHistoryClassroomAnswer(option);
+                    const isAnswered =
+                      Boolean(normalizedOption) &&
+                      normalizedAnsweredOptions.has(normalizedOption);
+
+                    return (
+                      <span
+                        key={option}
+                        className={`shrink-0 rounded-full border px-2.5 py-1.5 text-xs font-bold ${
+                          isAnswered
+                            ? "border-orange-300 bg-orange-50 text-orange-800"
+                            : "border-gray-200 bg-white text-gray-700"
+                        }`}
+                      >
+                        {option}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {resultText && (
+              <div className="mt-2 rounded-xl bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700">
+                {resultText}
+              </div>
+            )}
+            {pointNotice && (
+              <div
+                className={`mt-2 rounded-xl px-3 py-2 text-xs font-bold ${
+                  isPointAwardedNotice
+                    ? "bg-emerald-50 text-emerald-700"
+                    : "bg-amber-50 text-amber-700"
+                }`}
+              >
+                {pointNotice}
               </div>
             )}
             <button

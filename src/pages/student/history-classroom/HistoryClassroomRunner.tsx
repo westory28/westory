@@ -56,7 +56,6 @@ import {
 const HISTORY_CLASSROOM_LOCK_PREFIX = "westoryHistoryClassroomLock";
 const HISTORY_CLASSROOM_ATTEMPT_PREFIX = "westoryHistoryClassroomAttempt";
 const HISTORY_CLASSROOM_ROTATION_PREFIX = "westoryHistoryClassroomRotation";
-const HISTORY_CLASSROOM_EXIT_COOLDOWN_MINUTES = 5;
 const SCREEN_ROTATION_GRACE_MS = 8000;
 const VISIBILITY_CANCEL_DELAY_MS = 3000;
 
@@ -138,8 +137,30 @@ const writeCooldownLock = (
   );
 };
 
-const getExitCooldownUntil = () =>
-  Date.now() + HISTORY_CLASSROOM_EXIT_COOLDOWN_MINUTES * 60 * 1000;
+const getExitCooldownMinutes = (
+  assignment: Pick<HistoryClassroomAssignment, "cooldownMinutes"> | null,
+) => Math.max(0, Number(assignment?.cooldownMinutes || 0));
+
+const getExitCooldownUntil = (
+  assignment: Pick<HistoryClassroomAssignment, "cooldownMinutes">,
+) => Date.now() + getExitCooldownMinutes(assignment) * 60 * 1000;
+
+const writeExitCooldownLock = (
+  assignment: HistoryClassroomAssignment,
+  uid: string,
+  reason: string,
+) => {
+  if (getExitCooldownMinutes(assignment) <= 0) {
+    clearCooldownLock(assignment.id, uid);
+    return;
+  }
+  writeCooldownLock(
+    assignment.id,
+    uid,
+    getExitCooldownUntil(assignment),
+    reason,
+  );
+};
 
 const clearCooldownLock = (assignmentId: string, uid: string) => {
   removeStorage(getCooldownLockKey(assignmentId, uid));
@@ -421,10 +442,7 @@ const HistoryClassroomRunner: React.FC = () => {
           userData.uid,
         );
         const lastAttemptMs = getHistoryClassroomTimestampMs(latest?.createdAt);
-        const retryCooldownMinutes =
-          latest?.status === "cancelled"
-            ? HISTORY_CLASSROOM_EXIT_COOLDOWN_MINUTES
-            : loaded.cooldownMinutes;
+        const retryCooldownMinutes = loaded.cooldownMinutes;
         const shouldSkipServerCooldown =
           !!resetAtMs && !!lastAttemptMs && lastAttemptMs <= resetAtMs;
         if (
@@ -439,11 +457,13 @@ const HistoryClassroomRunner: React.FC = () => {
           }
         }
 
-        const localAvailableAt = readCooldownLockUntil(
-          loaded.id,
-          userData.uid,
-          resetAtMs,
-        );
+        const localAvailableAt =
+          loaded.cooldownMinutes > 0
+            ? readCooldownLockUntil(loaded.id, userData.uid, resetAtMs)
+            : 0;
+        if (loaded.cooldownMinutes <= 0) {
+          clearCooldownLock(loaded.id, userData.uid);
+        }
         const rotationGraceUntil = readRotationGraceUntil(
           loaded.id,
           userData.uid,
@@ -489,12 +509,7 @@ const HistoryClassroomRunner: React.FC = () => {
             ? Math.max(0, Math.ceil((nextDeadlineMs - Date.now()) / 1000))
             : null;
 
-        writeCooldownLock(
-          loaded.id,
-          userData.uid,
-          getExitCooldownUntil(),
-          "attempt-started",
-        );
+        writeExitCooldownLock(loaded, userData.uid, "attempt-started");
         if (loaded.timeLimitMinutes > 0) {
           writeLocalOnly(
             getAttemptProgressKey(loaded.id, userData.uid),
@@ -735,15 +750,17 @@ const HistoryClassroomRunner: React.FC = () => {
   };
 
   const getExitCooldownDurationLabel = useCallback(() => {
-    const cooldownMs = HISTORY_CLASSROOM_EXIT_COOLDOWN_MINUTES * 60000;
+    const cooldownMs = getExitCooldownMinutes(assignment) * 60000;
     return formatRemainingDuration(cooldownMs);
-  }, []);
+  }, [assignment]);
 
-  const getExitWarningMessage = useCallback(
-    () =>
-      `응시 화면을 나가면 현재 응시는 종료되고 ${getExitCooldownDurationLabel()} 후에 다시 응시할 수 있습니다.\n정말 나가시겠습니까?`,
-    [getExitCooldownDurationLabel],
-  );
+  const getExitWarningMessage = useCallback(() => {
+    const cooldownMinutes = getExitCooldownMinutes(assignment);
+    if (cooldownMinutes <= 0) {
+      return "응시 화면을 나가면 현재 응시는 종료됩니다. 바로 다시 응시할 수 있습니다.\n정말 나가시겠습니까?";
+    }
+    return `응시 화면을 나가면 현재 응시는 종료되고 ${getExitCooldownDurationLabel()} 후에 다시 응시할 수 있습니다.\n정말 나가시겠습니까?`;
+  }, [assignment, getExitCooldownDurationLabel]);
 
   const markScreenRotationGrace = useCallback(() => {
     if (!assignment || !userData?.uid) return;
@@ -767,12 +784,7 @@ const HistoryClassroomRunner: React.FC = () => {
   ): Promise<boolean> => {
     if (networkOfflineRef.current) {
       if (assignment && userData) {
-        writeCooldownLock(
-          assignment.id,
-          userData.uid,
-          getExitCooldownUntil(),
-          reason,
-        );
+        writeExitCooldownLock(assignment, userData.uid, reason);
       }
       setCompleted(true);
       completedRef.current = true;
@@ -798,12 +810,7 @@ const HistoryClassroomRunner: React.FC = () => {
     }
 
     cancellationInFlightRef.current = true;
-    writeCooldownLock(
-      assignment.id,
-      userData.uid,
-      getExitCooldownUntil(),
-      reason,
-    );
+    writeExitCooldownLock(assignment, userData.uid, reason);
 
     void saveResult({ status: "cancelled", cancellationReason: reason }).catch(
       (cancelError) => {
@@ -1294,12 +1301,7 @@ const HistoryClassroomRunner: React.FC = () => {
 
     const refreshExitCooldown = (reason: string) => {
       if (networkOfflineRef.current) return;
-      writeCooldownLock(
-        assignment.id,
-        userData.uid,
-        getExitCooldownUntil(),
-        reason,
-      );
+      writeExitCooldownLock(assignment, userData.uid, reason);
     };
 
     refreshExitCooldown("attempt-active");
@@ -1540,7 +1542,7 @@ const HistoryClassroomRunner: React.FC = () => {
         answerChecks={resultSummary?.answerChecks || []}
         onAnswerChange={handleAnswerChange}
         onSubmit={() => void submitAnswers()}
-        submitting={submitting}
+        submitting={submitting || pendingSubmitAfterOnline}
         completed={completed}
         resultText={resultSummary ? "" : resultText}
         pointNotice={pointNotice}
@@ -1548,18 +1550,6 @@ const HistoryClassroomRunner: React.FC = () => {
         timeProgressPercent={timeProgressPercent}
         dueStatusLabel={dueStatus.label}
         dueStatusTone={dueStatus.tone}
-        headerAction={
-          <button
-            type="button"
-            onClick={() => void submitAnswers()}
-            disabled={submitting || completed}
-            className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <span className="text-sm">
-              {submitting ? "제출 중..." : completed ? "제출 완료" : "제출하기"}
-            </span>
-          </button>
-        }
       />
       {showLowTimeWarning && (
         <div
@@ -1604,8 +1594,9 @@ const HistoryClassroomRunner: React.FC = () => {
                 id="history-classroom-exit-description"
                 className="mt-3 text-sm leading-6 text-slate-600"
               >
-                지금 나가면 현재 응시는 종료되고 재응시까지 5분을 기다려야
-                합니다. 계속 풀려면 취소를 눌러 주세요.
+                {getExitCooldownMinutes(assignment) > 0
+                  ? `지금 나가면 현재 응시는 종료되고 재응시까지 ${getExitCooldownDurationLabel()}을 기다려야 합니다. 계속 풀려면 취소를 눌러 주세요.`
+                  : "지금 나가면 현재 응시는 종료됩니다. 재응시 제한이 0분이라 바로 다시 응시할 수 있습니다. 계속 풀려면 취소를 눌러 주세요."}
               </p>
             </div>
             <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:px-6">
