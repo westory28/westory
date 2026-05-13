@@ -731,8 +731,8 @@ const ManageLesson: React.FC = () => {
     "draft" | "existing" | null
   >(null);
   const [worksheetTool, setWorksheetTool] = useState<
-    "ocr" | "box" | "footnote"
-  >("box");
+    "pan" | "ocr" | "box" | "footnote"
+  >("pan");
   const [pdfBusy, setPdfBusy] = useState(false);
   const [screenBusyMessage, setScreenBusyMessage] = useState<string | null>(
     null,

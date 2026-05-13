@@ -87,6 +87,8 @@ type LessonBodyEditorProps = {
   sourceArchivePickerOpen?: boolean;
 };
 
+type LessonPdfTeacherTool = "pan" | "ocr" | "box" | "footnote";
+
 type LessonPdfSectionProps = {
   pdfBusy: boolean;
   selectedPdfFile: File | null;
@@ -97,7 +99,7 @@ type LessonPdfSectionProps = {
   worksheetTextRegions: LessonWorksheetTextRegion[];
   worksheetBlanks: LessonWorksheetBlank[];
   worksheetFootnoteAnchors: LessonWorksheetFootnoteAnchor[];
-  worksheetTool: "ocr" | "box" | "footnote";
+  worksheetTool: LessonPdfTeacherTool;
   activeBlankId: string | null;
   activeFootnoteAnchorId?: string | null;
   draftBlank: LessonWorksheetBlank | null;
@@ -109,7 +111,7 @@ type LessonPdfSectionProps = {
   onPdfFileChange: (file: File | null) => void;
   onPreparePdf: () => void;
   onRemovePdf: () => void;
-  onWorksheetToolChange: (value: "ocr" | "box" | "footnote") => void;
+  onWorksheetToolChange: (value: LessonPdfTeacherTool) => void;
   onSelectBlank: (blankId: string) => void;
   onDeleteBlank: (blankId: string) => void;
   onSelectFootnoteAnchor?: (anchorId: string) => void;
@@ -1060,6 +1062,7 @@ export function LessonPdfSection({
     setActiveFloatingPanel("library");
   }, []);
   const activeToolLabel = React.useMemo(() => {
+    if (worksheetTool === "pan") return "페이지 이동";
     if (worksheetTool === "ocr") return "OCR 선택";
     if (worksheetTool === "box") return "직접 그리기";
     return "각주 배치";
@@ -1245,6 +1248,17 @@ export function LessonPdfSection({
                 >
                   {sortedBlanks.length + footnotes.length}
                 </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onWorksheetToolChange("pan")}
+                className={toolButtonClass(worksheetTool === "pan")}
+                aria-label="페이지 잡아 끌어 이동"
+                aria-pressed={worksheetTool === "pan"}
+                title="페이지 잡아 끌어 이동"
+              >
+                <i className="fas fa-up-down-left-right text-sm"></i>
+                이동
               </button>
               <button
                 type="button"

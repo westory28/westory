@@ -21,13 +21,14 @@ type StudentTool =
   | "rectangle"
   | "eraser"
   | "text";
+type TeacherWorksheetTool = "pan" | "ocr" | "box" | "footnote";
 type DrawingColor = "blue" | "red" | "green" | "yellow" | "black";
 
 interface LessonWorksheetStageProps {
   pageImages: LessonWorksheetPageImage[];
   blanks: LessonWorksheetBlank[];
   mode: LessonWorksheetStageMode;
-  teacherTool?: "ocr" | "box" | "footnote";
+  teacherTool?: TeacherWorksheetTool;
   textRegions?: LessonWorksheetTextRegion[];
   footnoteAnchors?: LessonWorksheetFootnoteAnchor[];
   selectedFootnoteAnchorId?: string | null;
@@ -643,7 +644,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   pageImages,
   blanks,
   mode,
-  teacherTool = "ocr",
+  teacherTool = "pan",
   textRegions = [],
   footnoteAnchors = [],
   selectedFootnoteAnchorId = null,
@@ -1262,6 +1263,22 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     };
   };
 
+  const updateMovePan = (
+    currentPan: PanState,
+    clientX: number,
+    clientY: number,
+  ) => {
+    currentPan.horizontalHost.scrollLeft =
+      currentPan.startScrollLeft - (clientX - currentPan.startClientX);
+    if (currentPan.verticalHost) {
+      currentPan.verticalHost.scrollTop =
+        currentPan.startScrollTop - (clientY - currentPan.startClientY);
+    } else {
+      currentPan.horizontalHost.scrollTop =
+        currentPan.startScrollTop - (clientY - currentPan.startClientY);
+    }
+  };
+
   const autoSizeTextNote = (
     noteId: string,
     page: number,
@@ -1412,6 +1429,12 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     if (event.button !== 0) return;
 
     if (isTeacherEditMode) {
+      if (teacherTool === "pan") {
+        event.preventDefault();
+        setStagePointerCapture(event.currentTarget, event.pointerId);
+        beginMovePan(page, event.clientX, event.clientY);
+        return;
+      }
       if (
         (event.target as HTMLElement).closest("[data-blank-box]") ||
         (event.target as HTMLElement).closest("[data-footnote-anchor]")
@@ -1531,6 +1554,16 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     clientY: number,
     pointerId?: number,
   ) => {
+    const currentPan = panRef.current;
+    if (
+      isTeacherEditMode &&
+      teacherTool === "pan" &&
+      currentPan?.page === page
+    ) {
+      updateMovePan(currentPan, clientX, clientY);
+      return;
+    }
+
     if (isTeacherEditMode) {
       if (!draftRect || draftRect.page !== page) return;
       const point = resolveRatioPoint(page, clientX, clientY);
@@ -1543,17 +1576,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
 
     if (touchGestureRef.current?.page === page) return;
 
-    const currentPan = panRef.current;
     if (activeStudentTool === "move" && currentPan?.page === page) {
-      currentPan.horizontalHost.scrollLeft =
-        currentPan.startScrollLeft - (clientX - currentPan.startClientX);
-      if (currentPan.verticalHost) {
-        currentPan.verticalHost.scrollTop =
-          currentPan.startScrollTop - (clientY - currentPan.startClientY);
-      } else {
-        currentPan.horizontalHost.scrollTop =
-          currentPan.startScrollTop - (clientY - currentPan.startClientY);
-      }
+      updateMovePan(currentPan, clientX, clientY);
       return;
     }
 
@@ -1620,6 +1644,10 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   };
 
   const handleTeacherPointerUp = (pageImage: LessonWorksheetPageImage) => {
+    if (teacherTool === "pan") {
+      panRef.current = null;
+      return;
+    }
     if (!draftRect || draftRect.page !== pageImage.page) return;
 
     const nextRect = {
@@ -2565,11 +2593,15 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                   className={`relative ${
                     isTeacherEditMode
                       ? `touch-none ${
-                          teacherTool === "box"
-                            ? "cursor-default"
-                            : teacherTool === "footnote"
-                              ? "cursor-crosshair"
-                              : "cursor-text"
+                          teacherTool === "pan"
+                            ? panRef.current?.page === pageImage.page
+                              ? "cursor-grabbing"
+                              : "cursor-grab"
+                            : teacherTool === "box"
+                              ? "cursor-default"
+                              : teacherTool === "footnote"
+                                ? "cursor-crosshair"
+                                : "cursor-text"
                         }`
                       : isViewportInteractive
                         ? `${activeStudentTool === "move" ? (panRef.current?.page === pageImage.page ? "cursor-grabbing" : "cursor-grab") : `touch-none ${activeStudentTool === "eraser" ? "cursor-not-allowed" : activeStudentTool === "text" ? "cursor-text" : "cursor-crosshair"}`}`
