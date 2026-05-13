@@ -822,8 +822,26 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
                                             <div className="flex flex-wrap gap-2">
                                                 {previewOrderPool.map((item) => <button key={`preview-order-pool-${item}`} type="button" onClick={() => !previewOrderAnswer.includes(item) && setPreviewOrderAnswer((prev) => [...prev, item])} className={`px-3 py-2 rounded border-2 text-sm transition ${previewOrderAnswer.includes(item) ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 hover:border-blue-300'}`}>{item}</button>)}
                                             </div>
-                                            <div className="rounded border border-dashed border-blue-300 bg-white p-3 min-h-[60px]">
-                                                {previewOrderAnswer.map((item, index) => <button key={`preview-order-selected-${index}-${item}`} type="button" onClick={() => setPreviewOrderAnswer((prev) => prev.filter((_, i) => i !== index))} className="px-2 py-1 rounded bg-blue-100 text-blue-700 text-xs font-bold mr-2 mb-2">{index + 1}. {item}</button>)}
+                                            <div className="min-h-[96px] rounded border border-dashed border-blue-300 bg-white p-3">
+                                                <div className="flex flex-col items-start gap-1">
+                                                    {previewOrderAnswer.map((item, index, list) => (
+                                                        <React.Fragment key={`preview-order-selected-${index}-${item}`}>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setPreviewOrderAnswer((prev) => prev.filter((_, i) => i !== index))}
+                                                                className="inline-flex max-w-full items-start gap-2 rounded bg-blue-100 px-3 py-2 text-left text-xs font-bold text-blue-700"
+                                                            >
+                                                                <span className="shrink-0">{index + 1}.</span>
+                                                                <span className="min-w-0 break-words">{item}</span>
+                                                            </button>
+                                                            {index < list.length - 1 && (
+                                                                <span aria-hidden="true" className="ml-5 text-sm font-bold leading-none text-blue-500">
+                                                                    ↓
+                                                                </span>
+                                                            )}
+                                                        </React.Fragment>
+                                                    ))}
+                                                </div>
                                             </div>
                                         </div>
                                     )}

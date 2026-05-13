@@ -1428,18 +1428,24 @@ const QuizRunner: React.FC = () => {
                   <div className="mb-2 text-xs text-gray-500">
                     선택한 순서 (클릭하면 제거)
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-col items-start gap-1">
                     {parseOrderAnswer(currentAnswer).map((item, index, list) => (
                       <React.Fragment key={`${item}-${index}`}>
                         <button
                           type="button"
                           onClick={() => removeOrderSelection(index)}
-                          className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-bold text-white shadow-sm"
+                          className="inline-flex max-w-full items-start gap-2 rounded-lg bg-blue-600 px-3 py-2 text-left text-sm font-bold text-white shadow-sm"
                         >
-                          {item}
+                          <span className="shrink-0">{index + 1}.</span>
+                          <span className="min-w-0 break-words">{item}</span>
                         </button>
                         {index < list.length - 1 && (
-                          <i className="fas fa-arrow-right text-blue-500"></i>
+                          <span
+                            aria-hidden="true"
+                            className="ml-5 text-base font-bold leading-none text-blue-500"
+                          >
+                            ↓
+                          </span>
                         )}
                       </React.Fragment>
                     ))}
