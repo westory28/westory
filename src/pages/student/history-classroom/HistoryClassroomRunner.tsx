@@ -851,14 +851,6 @@ const HistoryClassroomRunner: React.FC = () => {
     return formatRemainingDuration(cooldownMs);
   }, [assignment]);
 
-  const getExitWarningMessage = useCallback(() => {
-    const cooldownMinutes = getExitCooldownMinutes(assignment);
-    if (cooldownMinutes <= 0) {
-      return "응시 화면을 나가면 현재 응시는 종료됩니다. 바로 다시 응시할 수 있습니다.\n정말 나가시겠습니까?";
-    }
-    return `응시 화면을 나가면 현재 응시는 종료되고 ${getExitCooldownDurationLabel()} 후에 다시 응시할 수 있습니다.\n정말 나가시겠습니까?`;
-  }, [assignment, getExitCooldownDurationLabel]);
-
   const markScreenRotationGrace = useCallback(() => {
     if (!assignment || !userData?.uid) return;
     const until = Date.now() + SCREEN_ROTATION_GRACE_MS;
@@ -1207,32 +1199,6 @@ const HistoryClassroomRunner: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!assignment || !userData || completed || submitting) {
-      return undefined;
-    }
-
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      if (exitNavigationAllowedRef.current) return undefined;
-      if (networkOfflineRef.current) return undefined;
-      if (submittingRef.current || completedRef.current) return undefined;
-      if (isScreenRotationGraceActive()) return undefined;
-      event.preventDefault();
-      event.returnValue = getExitWarningMessage();
-      return event.returnValue;
-    };
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [
-    assignment,
-    completed,
-    getExitWarningMessage,
-    isScreenRotationGraceActive,
-    submitting,
-    userData,
-  ]);
-
-  useEffect(() => {
     if (!assignment || completed || submitting) return undefined;
 
     const guardState =
@@ -1329,12 +1295,16 @@ const HistoryClassroomRunner: React.FC = () => {
 
       event.preventDefault();
       event.stopPropagation();
+      event.stopImmediatePropagation();
       requestExit("refresh-shortcut", { mode: "reload", redirectTo: null });
     };
 
     window.addEventListener("keydown", handleRefreshShortcut, true);
-    return () =>
+    document.addEventListener("keydown", handleRefreshShortcut, true);
+    return () => {
       window.removeEventListener("keydown", handleRefreshShortcut, true);
+      document.removeEventListener("keydown", handleRefreshShortcut, true);
+    };
   }, [assignment, completed, requestExit, submitting]);
 
   useEffect(() => {
