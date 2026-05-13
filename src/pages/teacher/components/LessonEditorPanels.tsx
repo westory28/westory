@@ -310,22 +310,22 @@ export function LessonEditorHeader({
   onOpenTeacherPreview,
 }: LessonEditorHeaderProps) {
   return (
-    <div className="border-b border-gray-200 bg-white px-4 py-4 lg:px-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+    <div className="border-b border-gray-200 bg-white px-4 py-3 lg:px-5">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
         <label className="block min-w-0 flex-1">
-          <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+          <span className="mb-1 block text-xs font-semibold text-slate-500">
             자료 제목
           </span>
           <input
             value={lessonTitle}
             onChange={(event) => onLessonTitleChange(event.target.value)}
             placeholder="수업 자료 제목을 입력하세요"
-            className="w-full rounded-xl border border-gray-200 px-4 py-3 text-lg font-bold text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
+            className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-base font-bold text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
           />
         </label>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <div className={saveBadgeClass(saveStateTone)}>{saveStateLabel}</div>
-          <label className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700">
+          <label className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
             <input
               type="checkbox"
               checked={lessonVisibleToStudents}
@@ -337,14 +337,14 @@ export function LessonEditorHeader({
             type="button"
             onClick={onSave}
             disabled={disableSave}
-            className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+            className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
             {saveButtonLabel}
           </button>
           <button
             type="button"
             onClick={onOpenTeacherPreview}
-            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
           >
             <i className="fas fa-chalkboard-teacher text-sm"></i>
             수업 화면
@@ -1087,11 +1087,6 @@ export function LessonPdfSection({
     if (worksheetTool === "box") return "fa-vector-square";
     return "fa-location-crosshairs";
   }, [worksheetTool]);
-  const collapsedToolLabel = React.useMemo(() => {
-    if (worksheetTool === "ocr") return "OCR";
-    if (worksheetTool === "box") return "빈칸";
-    return "각주";
-  }, [worksheetTool]);
   const saveSummaryLabel =
     pdfSaveState === "saving"
       ? "저장 중"
@@ -1158,22 +1153,21 @@ export function LessonPdfSection({
   );
 
   return (
-    <section className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
-            PDF 편집
-          </div>
-          <h3 className="mt-2 text-xl font-bold text-slate-900">
-            PDF 위에서 빈칸과 각주를 함께 편집합니다
+    <section className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-lg font-bold text-slate-900">
+            PDF OCR 등록 및 편집
           </h3>
-          <p className="mt-2 text-sm text-slate-500">
-            PDF를 준비한 뒤 오른쪽 플로팅 UI에서 목록 패널과 제작 도구를 오가며
-            빈칸 생성, 각주 배치, 저장까지 한 흐름으로 진행할 수 있습니다.
-          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">
+            <span>OCR로 빈칸을 만들고 각주 위치를 지정합니다.</span>
+            <span className={saveSummaryClassName + " rounded-full px-2 py-1"}>
+              {saveSummaryLabel}
+            </span>
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
             <i className="fas fa-file-pdf text-sm"></i>
             PDF 선택
             <input
@@ -1190,7 +1184,7 @@ export function LessonPdfSection({
             type="button"
             onClick={onPreparePdf}
             disabled={!selectedPdfFile || pdfBusy}
-            className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
           >
             {pdfBusy ? "준비 중..." : "PDF 준비"}
           </button>
@@ -1200,17 +1194,17 @@ export function LessonPdfSection({
             <button
               type="button"
               onClick={onRemovePdf}
-              className="rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-sm font-semibold text-rose-600 hover:bg-rose-50"
+              className="rounded-lg border border-rose-200 bg-white px-3 py-2 text-sm font-semibold text-rose-600 hover:bg-rose-50"
             >
               PDF 삭제
             </button>
           )}
         </div>
       </div>
-      <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-600">
+      <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-600">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <span className="inline-flex min-w-0 max-w-full items-center rounded-full bg-white px-3 py-1 font-semibold text-slate-700">
+            <span className="inline-flex min-w-0 max-w-full items-center rounded-lg bg-white px-3 py-1 font-semibold text-slate-700">
               <span className="truncate">
                 현재 파일: {selectedPdfFile?.name || lessonPdfName || "없음"}
               </span>
@@ -1220,32 +1214,28 @@ export function LessonPdfSection({
                 {pdfStatusLabel}
               </span>
             )}
-            <span
-              className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold ${saveSummaryClassName}`}
-            >
-              {saveSummaryLabel}
-            </span>
+            {!!worksheetPageImages.length && (
+              <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-600">
+                {worksheetPageImages.length}쪽
+              </span>
+            )}
           </div>
           {canRetryPdfExtraction && (
             <button
               type="button"
               onClick={onRetryPdfExtraction}
               disabled={pdfBusy || pdfSaveState === "saving"}
-              className="inline-flex shrink-0 items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <i className="fas fa-rotate-right text-[10px]"></i>
               구조 추출 다시 요청
             </button>
           )}
         </div>
-        <p className="mt-3 text-sm text-slate-600">
-          목록에서 항목을 고르면 해당 페이지로 바로 이동하고, 오른쪽 도구에서
-          빈칸 생성과 각주 배치를 이어서 진행할 수 있습니다.
-        </p>
       </div>
       {!!pdfSaveStatusTone && !!pdfSaveStatusMessage && (
         <div
-          className={`rounded-2xl border px-4 py-3 text-sm ${
+          className={`rounded-xl border px-3 py-2.5 text-sm ${
             pdfSaveStatusTone === "dirty"
               ? "border-amber-200 bg-amber-50 text-amber-900"
               : pdfSaveStatusTone === "error"
@@ -1257,18 +1247,18 @@ export function LessonPdfSection({
         </div>
       )}
       {!!pdfStatusHelpText && (
-        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
           {pdfStatusHelpText}
         </div>
       )}
       {worksheetTool === "footnote" && !!worksheetPageImages.length && (
-        <div className="rounded-2xl border border-blue-100 bg-blue-50/80 px-4 py-3 text-sm text-blue-900">
+        <div className="rounded-xl border border-blue-100 bg-blue-50/80 px-3 py-2 text-sm text-blue-900">
           원하는 위치를 한 번 눌러 각주 버튼을 찍어 주세요. 바로 작은 편집창이
           열립니다. 각주를 추가한 뒤 저장 버튼을 눌러 보관하세요.
         </div>
       )}
       {!!worksheetPageImages.length ? (
-        <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-slate-50">
+        <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
           {isLibraryPanelOpen && (
             <div className="fixed inset-0 z-40 flex items-end justify-center bg-slate-950/20 p-3 backdrop-blur-[1px] sm:items-center sm:justify-end sm:p-6">
               <button
@@ -1458,8 +1448,8 @@ export function LessonPdfSection({
                 isFloatingToolbarExpanded
                   ? "w-[17rem] border-slate-200 p-2"
                   : hasUnsavedPdfChanges
-                    ? "w-[8.8rem] border-amber-200 p-2"
-                    : "w-[8.8rem] border-slate-200 p-2"
+                    ? "w-[4.75rem] border-amber-200 p-1.5"
+                    : "w-[4.75rem] border-slate-200 p-1.5"
               }`}
             >
               <div className="flex items-start justify-between gap-2">
@@ -1487,29 +1477,15 @@ export function LessonPdfSection({
                     </div>
                   </div>
                 ) : (
-                  <div className="flex min-w-0 flex-1 flex-col gap-2 rounded-2xl bg-slate-50 px-2 py-2 text-center">
-                    <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
-                      PDF 도구
-                    </div>
-                    <div className="mx-auto inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700">
+                  <div className="flex min-w-0 flex-1 flex-col items-center gap-1.5 rounded-2xl bg-slate-50 px-1 py-1.5 text-center">
+                    <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700">
                       <i className={`fas ${activeToolIcon} text-sm`}></i>
                     </div>
-                    <div className="text-[11px] font-semibold text-slate-700">
-                      {collapsedToolLabel}
-                    </div>
                     <span
-                      className={`inline-flex w-full items-center justify-center rounded-2xl px-2 py-1.5 text-[11px] font-semibold ${saveSummaryClassName}`}
+                      className={`inline-flex w-full items-center justify-center rounded-xl px-1.5 py-1 text-[10px] font-semibold ${saveSummaryClassName}`}
                     >
                       {saveSummaryLabel}
                     </span>
-                    <div className="text-[10px] font-semibold text-slate-500">
-                      목록 {sortedBlanks.length + footnotes.length}
-                    </div>
-                    {teacherCurrentPage != null && (
-                      <div className="text-[10px] font-semibold text-slate-400">
-                        p.{teacherCurrentPage + 1}
-                      </div>
-                    )}
                   </div>
                 )}
                 <button
@@ -1660,7 +1636,7 @@ export function LessonPdfSection({
               </div>
             </div>
           </div>
-          <div className="p-3 md:p-4">
+          <div className="p-2 md:p-3">
             <LessonWorksheetStage
               mode="teacher-edit"
               pageImages={worksheetPageImages}
@@ -1687,7 +1663,7 @@ export function LessonPdfSection({
           </div>
         </div>
       ) : (
-        <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-6 py-16 text-center text-sm text-slate-500">
+        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 py-12 text-center text-sm text-slate-500">
           PDF를 준비하면 여기에서 OCR 결과와 빈칸, 각주를 편집할 수 있습니다.
         </div>
       )}
