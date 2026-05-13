@@ -35,6 +35,7 @@ interface Question {
   question: string;
   answer: string | number;
   image?: string | null;
+  matchingPairs?: MatchingPair[];
   refBig?: string;
   refMid?: string;
   refSmall?: string;
@@ -42,6 +43,12 @@ interface Question {
   explanation?: string;
   hintEnabled?: boolean;
   hint?: string;
+}
+
+interface MatchingPair {
+  left: string;
+  right: string;
+  rightImage?: string | null;
 }
 
 const QUESTION_ANALYTICS_RESULT_LIMIT = 500;
@@ -114,7 +121,7 @@ interface QuestionCorrectionResult {
   bonusAwardedCount?: number;
 }
 
-type QuestionType = "choice" | "ox" | "word" | "order";
+type QuestionType = "choice" | "ox" | "word" | "order" | "matching";
 type SortKey = "none" | "code" | "rate" | "category" | "type";
 type SortDirection = "asc" | "desc";
 type AnalyticsScope = "all" | "class";
@@ -131,11 +138,14 @@ interface BankDefaultFocus {
   category: string;
 }
 const ORDER_DELIMITER = "||";
+const MATCHING_PAIR_DELIMITER = "=>";
 const DEFAULT_OPTION_COUNT = 4;
 const QUESTION_PAGE_SIZE = 50;
 const RECENT_CLASS_FOCUS_MIN_STUDENTS = 10;
 const createDefaultOptionItems = () =>
   Array.from({ length: DEFAULT_OPTION_COUNT }, () => "");
+const createDefaultMatchingPairs = () =>
+  Array.from({ length: 3 }, () => ({ left: "", right: "", rightImage: null }));
 
 const QUESTION_TYPE_LABEL: Record<string, string> = {
   choice: "객관식",
@@ -143,6 +153,7 @@ const QUESTION_TYPE_LABEL: Record<string, string> = {
   word: "단답형",
   short: "단답형",
   order: "순서 나열형",
+  matching: "단어 연결하기",
 };
 
 const normalizeQuestionType = (type: string): QuestionType =>
@@ -323,6 +334,9 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const [editOrderItems, setEditOrderItems] = useState<string[]>(
     createDefaultOptionItems(),
   );
+  const [editMatchingPairs, setEditMatchingPairs] = useState<MatchingPair[]>(
+    createDefaultMatchingPairs(),
+  );
   const [editHintEnabled, setEditHintEnabled] = useState(false);
   const [editHintText, setEditHintText] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -331,6 +345,14 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const [previewWordAnswer, setPreviewWordAnswer] = useState("");
   const [previewOrderPool, setPreviewOrderPool] = useState<string[]>([]);
   const [previewOrderAnswer, setPreviewOrderAnswer] = useState<string[]>([]);
+  const [previewMatchingOptions, setPreviewMatchingOptions] = useState<
+    MatchingPair[]
+  >([]);
+  const [previewMatchingAnswer, setPreviewMatchingAnswer] = useState<
+    Record<string, string>
+  >({});
+  const [previewMatchingActiveLeft, setPreviewMatchingActiveLeft] =
+    useState("");
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const toggleSort = (key: Exclude<SortKey, "none">) => {
@@ -356,6 +378,34 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
 
   const trimList = (values: string[]) =>
     values.map((v) => v.trim()).filter(Boolean);
+  const trimMatchingPairs = (values: MatchingPair[]) =>
+    values
+      .map((pair) => ({
+        left: pair.left.trim(),
+        right: pair.right.trim(),
+        rightImage: pair.rightImage || null,
+      }))
+      .filter((pair) => pair.left && pair.right);
+  const encodeMatchingAnswer = (values: MatchingPair[]) =>
+    trimMatchingPairs(values)
+      .map((pair) => `${pair.left}${MATCHING_PAIR_DELIMITER}${pair.right}`)
+      .join(ORDER_DELIMITER);
+  const parseMatchingAnswer = (question: Question): MatchingPair[] => {
+    if (Array.isArray(question.matchingPairs) && question.matchingPairs.length) {
+      return question.matchingPairs.map((pair) => ({
+        left: String(pair.left || ""),
+        right: String(pair.right || ""),
+        rightImage: pair.rightImage || null,
+      }));
+    }
+    return String(question.answer || "")
+      .split(ORDER_DELIMITER)
+      .map((item) => {
+        const [left = "", right = ""] = item.split(MATCHING_PAIR_DELIMITER);
+        return { left, right, rightImage: null };
+      })
+      .filter((pair) => pair.left || pair.right);
+  };
   const shuffle = <T,>(input: T[]): T[] => {
     const list = [...input];
     for (let i = list.length - 1; i > 0; i -= 1) {
@@ -1553,6 +1603,19 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     });
   };
 
+  const addMatchingPair = () =>
+    setEditMatchingPairs((prev) => [
+      ...prev,
+      { left: "", right: "", rightImage: null },
+    ]);
+
+  const removeMatchingPair = (index: number) => {
+    if (editMatchingPairs.length <= 2) return;
+    setEditMatchingPairs((prev) =>
+      prev.filter((_, pairIndex) => pairIndex !== index),
+    );
+  };
+
   const openPreview = () => {
     const opening = !previewOpen;
     setPreviewOpen(opening);
@@ -1560,8 +1623,13 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     setPreviewOxAnswer("");
     setPreviewWordAnswer("");
     setPreviewOrderAnswer([]);
+    setPreviewMatchingAnswer({});
+    setPreviewMatchingActiveLeft("");
     if (opening && editType === "order") {
       setPreviewOrderPool(shuffle(trimList(editOrderItems)));
+    }
+    if (opening && editType === "matching") {
+      setPreviewMatchingOptions(shuffle(trimMatchingPairs(editMatchingPairs)));
     }
   };
 
@@ -1572,11 +1640,19 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     setPreviewOxAnswer("");
     setPreviewWordAnswer("");
     setPreviewOrderAnswer([]);
+    setPreviewMatchingAnswer({});
+    setPreviewMatchingActiveLeft("");
     if (nextType === "choice" && trimList(editChoiceOptions).length === 0) {
       setEditChoiceOptions(createDefaultOptionItems());
     }
     if (nextType === "order" && trimList(editOrderItems).length === 0) {
       setEditOrderItems(createDefaultOptionItems());
+    }
+    if (
+      nextType === "matching" &&
+      trimMatchingPairs(editMatchingPairs).length === 0
+    ) {
+      setEditMatchingPairs(createDefaultMatchingPairs());
     }
   };
 
@@ -1586,6 +1662,26 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     const reader = new FileReader();
     reader.onload = (ev) => {
       if (ev.target?.result) setEditImage(ev.target.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleMatchingImageSelect = (
+    index: number,
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      if (!ev.target?.result) return;
+      setEditMatchingPairs((prev) =>
+        prev.map((pair, pairIndex) =>
+          pairIndex === index
+            ? { ...pair, rightImage: ev.target?.result as string }
+            : pair,
+        ),
+      );
     };
     reader.readAsDataURL(file);
   };
@@ -1624,6 +1720,9 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     setPreviewWordAnswer("");
     setPreviewOrderPool([]);
     setPreviewOrderAnswer([]);
+    setPreviewMatchingOptions([]);
+    setPreviewMatchingAnswer({});
+    setPreviewMatchingActiveLeft("");
 
     if (normalizedType === "choice") {
       const options = (question.options || []).filter(Boolean);
@@ -1637,6 +1736,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       setEditOxAnswer("");
       setEditWordAnswer("");
       setEditOrderItems(createDefaultOptionItems());
+      setEditMatchingPairs(createDefaultMatchingPairs());
       return;
     }
 
@@ -1650,6 +1750,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       );
       setEditWordAnswer("");
       setEditOrderItems(createDefaultOptionItems());
+      setEditMatchingPairs(createDefaultMatchingPairs());
       return;
     }
 
@@ -1659,6 +1760,20 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       setEditOxAnswer("");
       setEditWordAnswer(String(question.answer || ""));
       setEditOrderItems(createDefaultOptionItems());
+      setEditMatchingPairs(createDefaultMatchingPairs());
+      return;
+    }
+
+    if (normalizedType === "matching") {
+      const pairs = parseMatchingAnswer(question);
+      setEditChoiceOptions(createDefaultOptionItems());
+      setEditChoiceAnswerIndex(null);
+      setEditOxAnswer("");
+      setEditWordAnswer("");
+      setEditOrderItems(createDefaultOptionItems());
+      setEditMatchingPairs(
+        pairs.length >= 2 ? pairs : createDefaultMatchingPairs(),
+      );
       return;
     }
 
@@ -1675,11 +1790,13 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     setEditOrderItems(
       orderOptions.length >= 2 ? orderOptions : createDefaultOptionItems(),
     );
+    setEditMatchingPairs(createDefaultMatchingPairs());
   };
 
   const buildCurrentEditSnapshot = () => {
     const choiceOptions = trimList(editChoiceOptions);
     const orderOptions = trimList(editOrderItems);
+    const matchingOptions = trimMatchingPairs(editMatchingPairs);
     let answer = "";
     let options: string[] = [];
 
@@ -1695,6 +1812,9 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     } else if (editType === "word") {
       answer = editWordAnswer.trim();
       options = [];
+    } else if (editType === "matching") {
+      answer = encodeMatchingAnswer(matchingOptions);
+      options = matchingOptions.map((pair) => pair.right);
     } else {
       answer = orderOptions.join(ORDER_DELIMITER);
       options = orderOptions;
@@ -1708,6 +1828,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       image: editImage || "",
       options,
       answer,
+      matchingPairs: editType === "matching" ? matchingOptions : [],
       hintEnabled: editHintEnabled,
       hint: editHintEnabled ? editHintText.trim() : "",
     };
@@ -1730,6 +1851,10 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     } else if (normalizedType === "word") {
       options = [];
       answer = String(question.answer || "").trim();
+    } else if (normalizedType === "matching") {
+      const matchingOptions = trimMatchingPairs(parseMatchingAnswer(question));
+      options = matchingOptions.map((pair) => pair.right);
+      answer = encodeMatchingAnswer(matchingOptions);
     } else {
       options = trimList(
         question.options && question.options.length > 0
@@ -1747,6 +1872,10 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       image: question.image || "",
       options,
       answer,
+      matchingPairs:
+        normalizedType === "matching"
+          ? trimMatchingPairs(parseMatchingAnswer(question))
+          : [],
       hintEnabled: !!(question.hintEnabled && question.hint),
       hint:
         question.hintEnabled && question.hint
@@ -1772,6 +1901,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     editOxAnswer,
     editWordAnswer,
     editOrderItems,
+    editMatchingPairs,
     editHintEnabled,
     editHintText,
   ]);
@@ -1795,6 +1925,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     setEditOxAnswer("");
     setEditWordAnswer("");
     setEditOrderItems(createDefaultOptionItems());
+    setEditMatchingPairs(createDefaultMatchingPairs());
     setEditHintEnabled(false);
     setEditHintText("");
     setPreviewOpen(false);
@@ -1803,6 +1934,9 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     setPreviewWordAnswer("");
     setPreviewOrderPool([]);
     setPreviewOrderAnswer([]);
+    setPreviewMatchingOptions([]);
+    setPreviewMatchingAnswer({});
+    setPreviewMatchingActiveLeft("");
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -1816,6 +1950,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
 
     const choiceOptions = trimList(editChoiceOptions);
     const orderOptions = trimList(editOrderItems);
+    const matchingOptions = trimMatchingPairs(editMatchingPairs);
     let answer = "";
     let options: string[] = [];
 
@@ -1848,6 +1983,13 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       }
       answer = editWordAnswer.trim();
       options = [];
+    } else if (editType === "matching") {
+      if (matchingOptions.length < 2) {
+        alert("단어 연결하기 항목은 최소 2쌍 이상 필요합니다.");
+        return;
+      }
+      answer = encodeMatchingAnswer(matchingOptions);
+      options = matchingOptions.map((pair) => pair.right);
     } else {
       if (orderOptions.length < 2) {
         alert("순서 나열형 항목은 최소 2개 이상 필요합니다.");
@@ -1873,6 +2015,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       // so we store null when the editor has no image.
       image: editImage || null,
       options,
+      matchingPairs: editType === "matching" ? matchingOptions : [],
       hintEnabled: editHintEnabled,
       hint: editHintEnabled ? editHintText.trim() : "",
     };
@@ -2826,6 +2969,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                     <option value="ox">O/X</option>
                     <option value="word">단답형</option>
                     <option value="order">순서 나열형</option>
+                    <option value="matching">단어 연결하기</option>
                   </select>
                   <select
                     value={editCategory}
@@ -3007,6 +3151,107 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                   </div>
                 )}
 
+                {editType === "matching" && (
+                  <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-bold text-gray-600">
+                        단어 연결 쌍 (왼쪽 단서와 오른쪽 정답)
+                      </p>
+                      <button
+                        type="button"
+                        onClick={addMatchingPair}
+                        className="text-xs font-bold text-blue-600 hover:text-blue-700"
+                      >
+                        <i className="fas fa-plus mr-1"></i>쌍 추가
+                      </button>
+                    </div>
+                    {editMatchingPairs.map((pair, index) => (
+                      <div
+                        key={`matching-pair-${index}`}
+                        className="grid grid-cols-[28px_minmax(0,1fr)_minmax(0,1fr)_28px] gap-2 rounded-lg border border-gray-200 bg-white p-2"
+                      >
+                        <span className="mt-1 flex h-7 w-7 items-center justify-center rounded-full bg-gray-200 text-xs font-bold text-gray-700">
+                          {index + 1}
+                        </span>
+                        <input
+                          type="text"
+                          value={pair.left}
+                          onChange={(e) =>
+                            setEditMatchingPairs((prev) =>
+                              prev.map((item, pairIndex) =>
+                                pairIndex === index
+                                  ? { ...item, left: e.target.value }
+                                  : item,
+                              ),
+                            )
+                          }
+                          placeholder="왼쪽 단서"
+                          className="min-w-0 rounded border p-2 text-sm"
+                        />
+                        <div className="min-w-0 space-y-2">
+                          <input
+                            type="text"
+                            value={pair.right}
+                            onChange={(e) =>
+                              setEditMatchingPairs((prev) =>
+                                prev.map((item, pairIndex) =>
+                                  pairIndex === index
+                                    ? { ...item, right: e.target.value }
+                                    : item,
+                                ),
+                              )
+                            }
+                            placeholder="오른쪽 단어"
+                            className="w-full rounded border p-2 text-sm"
+                          />
+                          <label className="inline-flex cursor-pointer items-center gap-1 rounded border border-blue-100 bg-blue-50 px-2 py-1 text-[11px] font-bold text-blue-700 hover:bg-blue-100">
+                            <i className="fas fa-image"></i> 우측 그림
+                            <input
+                              type="file"
+                              className="hidden"
+                              accept="image/*"
+                              onChange={(e) =>
+                                handleMatchingImageSelect(index, e)
+                              }
+                            />
+                          </label>
+                          {pair.rightImage && (
+                            <div className="relative w-fit">
+                              <img
+                                src={pair.rightImage}
+                                alt="오른쪽 보기 이미지"
+                                className="h-16 max-w-[120px] rounded border border-gray-200 object-contain"
+                              />
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setEditMatchingPairs((prev) =>
+                                    prev.map((item, pairIndex) =>
+                                      pairIndex === index
+                                        ? { ...item, rightImage: null }
+                                        : item,
+                                    ),
+                                  )
+                                }
+                                className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full border bg-white text-[10px] text-gray-500 hover:text-red-500"
+                              >
+                                <i className="fas fa-times"></i>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeMatchingPair(index)}
+                          className="mt-1 text-gray-400 hover:text-red-500"
+                        >
+                          <i className="fas fa-times"></i>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <textarea
                   value={editExplanationText}
                   onChange={(e) => setEditExplanationText(e.target.value)}
@@ -3117,6 +3362,61 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                                 {index + 1}. {item}
                               </button>
                             ))}
+                          </div>
+                        </div>
+                      )}
+                      {editType === "matching" && (
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <div className="space-y-2">
+                            {trimMatchingPairs(editMatchingPairs).map(
+                              (pair, index) => (
+                                <button
+                                  key={`preview-matching-left-${pair.left}-${index}`}
+                                  type="button"
+                                  onClick={() =>
+                                    setPreviewMatchingActiveLeft(pair.left)
+                                  }
+                                  className={`w-full rounded-lg border-2 p-3 text-left text-sm font-bold transition ${previewMatchingActiveLeft === pair.left ? "border-blue-500 bg-blue-50 text-blue-800" : "border-gray-200 hover:border-blue-300"}`}
+                                >
+                                  {pair.left}
+                                  {previewMatchingAnswer[pair.left] && (
+                                    <span className="ml-2 text-xs text-blue-600">
+                                      → {previewMatchingAnswer[pair.left]}
+                                    </span>
+                                  )}
+                                </button>
+                              ),
+                            )}
+                          </div>
+                          <div className="space-y-2">
+                            {previewMatchingOptions.map((pair, index) => {
+                              const used = Object.values(
+                                previewMatchingAnswer,
+                              ).includes(pair.right);
+                              return (
+                                <button
+                                  key={`preview-matching-right-${pair.right}-${index}`}
+                                  type="button"
+                                  onClick={() =>
+                                    previewMatchingActiveLeft &&
+                                    setPreviewMatchingAnswer((prev) => ({
+                                      ...prev,
+                                      [previewMatchingActiveLeft]: pair.right,
+                                    }))
+                                  }
+                                  className={`flex w-full items-center gap-3 rounded-lg border-2 p-3 text-left text-sm font-bold transition ${used ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 hover:border-blue-300"}`}
+                                >
+                                  {pair.rightImage && (
+                                    <img
+                                      src={pair.rightImage}
+                                      alt=""
+                                      className="h-12 w-12 rounded border border-gray-100 object-contain"
+                                    />
+                                  )}
+                                  <span>{pair.right}</span>
+                                </button>
+                              );
+                            })}
                           </div>
                         </div>
                       )}

@@ -40,10 +40,11 @@ const QUIZ_PROGRESS_SAVE_DELAY_MS = 1500;
 
 interface Question {
   id: number;
-  type: "choice" | "ox" | "short" | "word" | "order";
+  type: "choice" | "ox" | "short" | "word" | "order" | "matching";
   question: string;
   options?: string[];
   answer: string | number;
+  matchingPairs?: MatchingPair[];
   explanation?: string;
   image?: string;
   hintEnabled?: boolean;
@@ -51,6 +52,12 @@ interface Question {
   refBig?: string;
   refMid?: string;
   category?: string;
+}
+
+interface MatchingPair {
+  left: string;
+  right: string;
+  rightImage?: string | null;
 }
 
 interface QuizConfig {
@@ -69,6 +76,8 @@ interface ResultDetail {
   a: string | number;
   correct: boolean;
   exp?: string;
+  type?: Question["type"];
+  matchingPairs?: MatchingPair[];
 }
 
 interface QuizLogDetail {
@@ -78,6 +87,7 @@ interface QuizLogDetail {
 }
 
 const ORDER_DELIMITER = "||";
+const MATCHING_PAIR_DELIMITER = "=>";
 
 const wait = (ms: number) =>
   new Promise<void>((resolve) => {
@@ -157,6 +167,7 @@ const QuizRunner: React.FC = () => {
   const [orderOptionMap, setOrderOptionMap] = useState<
     Record<number, string[]>
   >({});
+  const [matchingActiveLeft, setMatchingActiveLeft] = useState("");
   const [startingQuiz, setStartingQuiz] = useState(false);
   const [serverTimeOffsetMs, setServerTimeOffsetMs] = useState(0);
   const [quizDeadlineMs, setQuizDeadlineMs] = useState<number | null>(null);
@@ -189,6 +200,67 @@ const QuizRunner: React.FC = () => {
 
   const parseOrderAnswer = (value: string) =>
     value.split(ORDER_DELIMITER).filter(Boolean);
+
+  const parseMatchingPairs = (question: Question): MatchingPair[] => {
+    if (Array.isArray(question.matchingPairs) && question.matchingPairs.length) {
+      return question.matchingPairs
+        .map((pair) => ({
+          left: String(pair.left || "").trim(),
+          right: String(pair.right || "").trim(),
+          rightImage: pair.rightImage || null,
+        }))
+        .filter((pair) => pair.left && pair.right);
+    }
+
+    return String(question.answer || "")
+      .split(ORDER_DELIMITER)
+      .map((item) => {
+        const [left = "", right = ""] = item.split(MATCHING_PAIR_DELIMITER);
+        return { left: left.trim(), right: right.trim(), rightImage: null };
+      })
+      .filter((pair) => pair.left && pair.right);
+  };
+
+  const parseMatchingAnswer = (value: string) =>
+    Object.fromEntries(
+      value
+        .split(ORDER_DELIMITER)
+        .map((item) => {
+          const [left = "", right = ""] = item.split(MATCHING_PAIR_DELIMITER);
+          return [left.trim(), right.trim()];
+        })
+        .filter(([left, right]) => left && right),
+    );
+
+  const encodeMatchingAnswer = (
+    question: Question,
+    valueMap: Record<string, string>,
+  ) =>
+    parseMatchingPairs(question)
+      .map((pair) => {
+        const selectedRight = valueMap[pair.left] || "";
+        return selectedRight
+          ? `${pair.left}${MATCHING_PAIR_DELIMITER}${selectedRight}`
+          : "";
+      })
+      .filter(Boolean)
+      .join(ORDER_DELIMITER);
+
+  const formatAnswerForDisplay = (
+    value: string | number | undefined,
+    type?: Question["type"],
+  ) => {
+    const text = String(value ?? "");
+    if (!text) return "(미입력)";
+    if (type === "order") return parseOrderAnswer(text).join(" → ");
+    if (type === "matching") {
+      return text
+        .split(ORDER_DELIMITER)
+        .map((item) => item.split(MATCHING_PAIR_DELIMITER).join(" → "))
+        .join(", ");
+    }
+    return text;
+  };
 
   const getResolvedStudentUid = () =>
     authIdentityRef.current.uid || fallbackStudentUid;
@@ -282,13 +354,15 @@ const QuizRunner: React.FC = () => {
 
     const nextOrderMap: Record<number, string[]> = {};
     selected.forEach((question) => {
-      if (question.type !== "order") return;
+      if (question.type !== "order" && question.type !== "matching") return;
       const base =
-        question.options && question.options.length > 0
-          ? [...question.options]
-          : String(question.answer || "")
-              .split(ORDER_DELIMITER)
-              .filter(Boolean);
+        question.type === "matching"
+          ? parseMatchingPairs(question).map((pair) => pair.right)
+          : question.options && question.options.length > 0
+            ? [...question.options]
+            : String(question.answer || "")
+                .split(ORDER_DELIMITER)
+                .filter(Boolean);
       nextOrderMap[question.id] = [...base].sort(() => 0.5 - Math.random());
     });
 
@@ -382,6 +456,9 @@ const QuizRunner: React.FC = () => {
         a: question.answer,
         correct: isCorrect,
         exp: question.explanation,
+        type: question.type,
+        matchingPairs:
+          question.type === "matching" ? parseMatchingPairs(question) : [],
       });
 
       logDetails.push({
@@ -939,6 +1016,18 @@ const QuizRunner: React.FC = () => {
     );
   };
 
+  const handleMatchingRightSelect = (right: string) => {
+    const question = selectedQuestions[currentIndex];
+    if (!question || question.type !== "matching" || !matchingActiveLeft) {
+      return;
+    }
+
+    const current = parseMatchingAnswer(answers[String(question.id)] || "");
+    const next = { ...current, [matchingActiveLeft]: right };
+    handleAnswer(encodeMatchingAnswer(question, next));
+    setMatchingActiveLeft("");
+  };
+
   const revealHint = (question: Question) => {
     const questionId = question.id;
     if (revealedHints[questionId]) return;
@@ -960,6 +1049,7 @@ const QuizRunner: React.FC = () => {
   const nextQuestion = () => {
     emitSessionActivity();
     if (currentIndex < selectedQuestions.length - 1) {
+      setMatchingActiveLeft("");
       setCurrentIndex((prev) => prev + 1);
       schedulePersistQuizProgress();
       return;
@@ -971,6 +1061,7 @@ const QuizRunner: React.FC = () => {
   const prevQuestion = () => {
     if (currentIndex <= 0) return;
     emitSessionActivity();
+    setMatchingActiveLeft("");
     setCurrentIndex((prev) => prev - 1);
     schedulePersistQuizProgress();
   };
@@ -1337,18 +1428,88 @@ const QuizRunner: React.FC = () => {
                   <div className="mb-2 text-xs text-gray-500">
                     선택한 순서 (클릭하면 제거)
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {parseOrderAnswer(currentAnswer).map((item, index) => (
-                      <button
-                        key={`${item}-${index}`}
-                        type="button"
-                        onClick={() => removeOrderSelection(index)}
-                        className="rounded bg-blue-600 px-2 py-1 text-xs font-bold text-white"
-                      >
-                        {index + 1}. {item}
-                      </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {parseOrderAnswer(currentAnswer).map((item, index, list) => (
+                      <React.Fragment key={`${item}-${index}`}>
+                        <button
+                          type="button"
+                          onClick={() => removeOrderSelection(index)}
+                          className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-bold text-white shadow-sm"
+                        >
+                          {item}
+                        </button>
+                        {index < list.length - 1 && (
+                          <i className="fas fa-arrow-right text-blue-500"></i>
+                        )}
+                      </React.Fragment>
                     ))}
                   </div>
+                </div>
+              </div>
+            )}
+
+            {question.type === "matching" && (
+              <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                <div className="space-y-2">
+                  {parseMatchingPairs(question).map((pair, index) => {
+                    const selectedRight =
+                      parseMatchingAnswer(currentAnswer)[pair.left] || "";
+                    return (
+                      <button
+                        key={`${pair.left}-${index}`}
+                        type="button"
+                        onClick={() => setMatchingActiveLeft(pair.left)}
+                        className={`w-full rounded-xl border-2 p-4 text-left transition ${
+                          matchingActiveLeft === pair.left
+                            ? "border-blue-500 bg-blue-50 text-blue-800"
+                            : "border-gray-200 hover:border-blue-300 hover:bg-blue-50"
+                        }`}
+                      >
+                        <div className="font-bold">{pair.left}</div>
+                        {selectedRight && (
+                          <div className="mt-2 flex items-center gap-2 text-sm font-bold text-blue-600">
+                            <i className="fas fa-arrow-right"></i>
+                            <span>{selectedRight}</span>
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="space-y-2">
+                  {(
+                    orderOptionMap[question.id] ||
+                    parseMatchingPairs(question).map((pair) => pair.right)
+                  ).map((right, index) => {
+                    const sourcePair = parseMatchingPairs(question).find(
+                      (pair) => pair.right === right,
+                    );
+                    const used = Object.values(
+                      parseMatchingAnswer(currentAnswer),
+                    ).includes(right);
+                    return (
+                      <button
+                        key={`${right}-${index}`}
+                        type="button"
+                        onClick={() => handleMatchingRightSelect(right)}
+                        className={`flex w-full items-center gap-3 rounded-xl border-2 p-3 text-left transition ${
+                          used
+                            ? "border-blue-500 bg-blue-50 font-bold text-blue-700"
+                            : "border-gray-200 hover:border-blue-300 hover:bg-blue-50"
+                        }`}
+                      >
+                        {sourcePair?.rightImage && (
+                          <img
+                            src={sourcePair.rightImage}
+                            alt=""
+                            className="h-16 w-16 shrink-0 rounded-lg border border-gray-100 object-contain"
+                          />
+                        )}
+                        <span className="font-bold">{right}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -1476,12 +1637,12 @@ const QuizRunner: React.FC = () => {
                         : "text-red-500 line-through"
                     }`}
                   >
-                    {result.u || "(미입력)"}
+                    {formatAnswerForDisplay(result.u, result.type)}
                   </span>
                   {!result.correct && (
                     <span className="font-bold text-blue-600">
                       <i className="fas fa-arrow-right mr-1"></i>
-                      {result.a}
+                      {formatAnswerForDisplay(result.a, result.type)}
                     </span>
                   )}
                 </div>

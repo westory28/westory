@@ -10,7 +10,13 @@ interface TreeUnit {
     children?: TreeUnit[];
 }
 
-type QuestionType = 'choice' | 'ox' | 'word' | 'order';
+type QuestionType = 'choice' | 'ox' | 'word' | 'order' | 'matching';
+
+interface MatchingPair {
+    left: string;
+    right: string;
+    rightImage?: string | null;
+}
 
 interface Question {
     id: number;
@@ -21,6 +27,7 @@ interface Question {
     question: string;
     options?: string[];
     answer: string;
+    matchingPairs?: MatchingPair[];
     explanation?: string;
     image?: string | null;
     hintEnabled?: boolean;
@@ -46,13 +53,16 @@ interface CascadingFilter {
 }
 
 const ORDER_DELIMITER = '||';
+const MATCHING_PAIR_DELIMITER = '=>';
 const DEFAULT_OPTION_COUNT = 4;
 const createDefaultOptionItems = () => Array.from({ length: DEFAULT_OPTION_COUNT }, () => '');
+const createDefaultMatchingPairs = () => Array.from({ length: 3 }, () => ({ left: '', right: '', rightImage: null }));
 const TYPE_LABEL: Record<QuestionType, string> = {
     choice: '객관식',
     ox: 'O/X',
     word: '단답형',
     order: '순서 나열형',
+    matching: '단어 연결하기',
 };
 
 const shuffle = <T,>(input: T[]): T[] => {
@@ -82,6 +92,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
     const [oxAnswer, setOxAnswer] = useState<'O' | 'X' | ''>('');
     const [wordAnswer, setWordAnswer] = useState('');
     const [orderItems, setOrderItems] = useState<string[]>(createDefaultOptionItems());
+    const [matchingPairs, setMatchingPairs] = useState<MatchingPair[]>(createDefaultMatchingPairs());
     const [hintEnabled, setHintEnabled] = useState(false);
     const [hintText, setHintText] = useState('');
 
@@ -91,6 +102,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
     const [previewWordAnswer, setPreviewWordAnswer] = useState('');
     const [previewOrderPool, setPreviewOrderPool] = useState<string[]>([]);
     const [previewOrderAnswer, setPreviewOrderAnswer] = useState<string[]>([]);
+    const [previewMatchingOptions, setPreviewMatchingOptions] = useState<MatchingPair[]>([]);
+    const [previewMatchingAnswer, setPreviewMatchingAnswer] = useState<Record<string, string>>({});
+    const [previewMatchingActiveLeft, setPreviewMatchingActiveLeft] = useState('');
     const [editingQuestionId, setEditingQuestionId] = useState<number | null>(null);
     const [isComposerOpen, setIsComposerOpen] = useState(false);
 
@@ -167,11 +181,39 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
     }, [category, epFilter.big, epFilter.mid, epFilter.small, questions, type]);
 
     const trimList = (values: string[]) => values.map((v) => v.trim()).filter(Boolean);
+    const trimMatchingPairs = (values: MatchingPair[]) =>
+        values
+            .map((pair) => ({
+                left: pair.left.trim(),
+                right: pair.right.trim(),
+                rightImage: pair.rightImage || null,
+            }))
+            .filter((pair) => pair.left && pair.right);
+    const encodeMatchingAnswer = (values: MatchingPair[]) =>
+        trimMatchingPairs(values).map((pair) => `${pair.left}${MATCHING_PAIR_DELIMITER}${pair.right}`).join(ORDER_DELIMITER);
+    const parseMatchingAnswer = (question: Question): MatchingPair[] => {
+        if (Array.isArray(question.matchingPairs) && question.matchingPairs.length > 0) {
+            return question.matchingPairs.map((pair) => ({
+                left: String(pair.left || ''),
+                right: String(pair.right || ''),
+                rightImage: pair.rightImage || null,
+            }));
+        }
+        return String(question.answer || '')
+            .split(ORDER_DELIMITER)
+            .map((item) => {
+                const [left = '', right = ''] = item.split(MATCHING_PAIR_DELIMITER);
+                return { left, right, rightImage: null };
+            })
+            .filter((pair) => pair.left || pair.right);
+    };
     const resetPreview = () => {
         setPreviewChoiceAnswer('');
         setPreviewOxAnswer('');
         setPreviewWordAnswer('');
         setPreviewOrderAnswer([]);
+        setPreviewMatchingAnswer({});
+        setPreviewMatchingActiveLeft('');
     };
 
     const resetForm = () => {
@@ -184,6 +226,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
         setOxAnswer('');
         setWordAnswer('');
         setOrderItems(createDefaultOptionItems());
+        setMatchingPairs(createDefaultMatchingPairs());
         setHintEnabled(false);
         setHintText('');
         setPreviewOpen(false);
@@ -203,6 +246,19 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
         reader.readAsDataURL(file);
     };
 
+    const handleMatchingImageSelect = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            if (!ev.target?.result) return;
+            setMatchingPairs((prev) => prev.map((pair, pairIndex) => (
+                pairIndex === index ? { ...pair, rightImage: ev.target?.result as string } : pair
+            )));
+        };
+        reader.readAsDataURL(file);
+    };
+
     const handleTypeChange = (nextType: QuestionType) => {
         setFormType(nextType);
         setPreviewOpen(false);
@@ -212,6 +268,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
         }
         if (nextType === 'order' && trimList(orderItems).length === 0) {
             setOrderItems(createDefaultOptionItems());
+        }
+        if (nextType === 'matching' && trimMatchingPairs(matchingPairs).length === 0) {
+            setMatchingPairs(createDefaultMatchingPairs());
         }
     };
 
@@ -269,6 +328,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
             setOxAnswer('');
             setWordAnswer('');
             setOrderItems(createDefaultOptionItems());
+            setMatchingPairs(createDefaultMatchingPairs());
             return;
         }
 
@@ -278,6 +338,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
             setOxAnswer(question.answer === 'O' || question.answer === 'X' ? question.answer : '');
             setWordAnswer('');
             setOrderItems(createDefaultOptionItems());
+            setMatchingPairs(createDefaultMatchingPairs());
             return;
         }
 
@@ -287,6 +348,18 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
             setOxAnswer('');
             setWordAnswer(String(question.answer || ''));
             setOrderItems(createDefaultOptionItems());
+            setMatchingPairs(createDefaultMatchingPairs());
+            return;
+        }
+
+        if (question.type === 'matching') {
+            const pairs = parseMatchingAnswer(question);
+            setChoiceOptions(createDefaultOptionItems());
+            setChoiceAnswerIndex(null);
+            setOxAnswer('');
+            setWordAnswer('');
+            setOrderItems(createDefaultOptionItems());
+            setMatchingPairs(pairs.length >= 2 ? pairs : createDefaultMatchingPairs());
             return;
         }
 
@@ -300,6 +373,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
         setOxAnswer('');
         setWordAnswer('');
         setOrderItems(orderOptions.length >= 2 ? orderOptions : createDefaultOptionItems());
+        setMatchingPairs(createDefaultMatchingPairs());
     };
 
     const addChoiceOption = () => setChoiceOptions((prev) => [...prev, '']);
@@ -318,15 +392,21 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
             return next;
         });
     };
+    const addMatchingPair = () => setMatchingPairs((prev) => [...prev, { left: '', right: '', rightImage: null }]);
+    const removeMatchingPair = (index: number) => {
+        if (matchingPairs.length <= 2) return;
+        setMatchingPairs((prev) => prev.filter((_, pairIndex) => pairIndex !== index));
+    };
 
     const openPreview = () => {
         const opening = !previewOpen;
         setPreviewOpen(opening);
         resetPreview();
         if (opening && formType === 'order') setPreviewOrderPool(shuffle(trimList(orderItems)));
+        if (opening && formType === 'matching') setPreviewMatchingOptions(shuffle(trimMatchingPairs(matchingPairs)));
     };
 
-    const buildQuestionPayload = (): { answer: string; options: string[] } | null => {
+    const buildQuestionPayload = (): { answer: string; options: string[]; matchingPairs?: MatchingPair[] } | null => {
         if (!formText.trim()) {
             alert('문제 내용을 입력하세요.');
             return null;
@@ -351,6 +431,11 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
             if (!wordAnswer.trim()) return alert('단답형 정답을 입력하세요.'), null;
             return { answer: wordAnswer.trim(), options: [] };
         }
+        if (formType === 'matching') {
+            const pairs = trimMatchingPairs(matchingPairs);
+            if (pairs.length < 2) return alert('단어 연결하기 항목은 최소 2쌍 이상 필요합니다.'), null;
+            return { answer: encodeMatchingAnswer(pairs), options: pairs.map((pair) => pair.right), matchingPairs: pairs };
+        }
         const options = trimList(orderItems);
         if (options.length < 2) return alert('순서 나열형 항목은 최소 2개 이상 필요합니다.'), null;
         return { answer: options.join(ORDER_DELIMITER), options };
@@ -370,6 +455,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
             question: formText.trim(),
             answer: payload.answer,
             options: payload.options,
+            matchingPairs: payload.matchingPairs || [],
             explanation: formExp.trim(),
             image: formImage,
             hintEnabled,
@@ -416,6 +502,10 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
 
     const formatAnswer = (question: Question) => {
         if (question.type === 'order') return question.answer.split(ORDER_DELIMITER).join(' -> ');
+        if (question.type === 'matching') {
+            const pairs = parseMatchingAnswer(question);
+            return pairs.map((pair) => `${pair.left} - ${pair.right}`).join(', ');
+        }
         return question.answer;
     };
 
@@ -566,6 +656,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
                                 <option value="ox">O/X</option>
                                 <option value="word">단답형</option>
                                 <option value="order">순서 나열형</option>
+                                <option value="matching">단어 연결하기</option>
                             </select>
                             {type === 'normal' && (
                                 <select value={formSubUnit} onChange={(e) => setFormSubUnit(e.target.value)} onKeyDown={handleVerticalFocus} className="quiz-compose-field border p-2 rounded text-sm bg-gray-50">
@@ -651,6 +742,37 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
                             </div>
                         )}
 
+                        {formType === 'matching' && (
+                            <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <p className="text-xs font-bold text-gray-600">단어 연결 쌍 (왼쪽 단서와 오른쪽 정답)</p>
+                                    <button type="button" onClick={addMatchingPair} className="text-xs font-bold text-blue-600 hover:text-blue-700"><i className="fas fa-plus mr-1"></i>쌍 추가</button>
+                                </div>
+                                {matchingPairs.map((pair, index) => (
+                                    <div key={`matching-pair-${index}`} className="grid grid-cols-[28px_minmax(0,1fr)_minmax(0,1fr)_28px] gap-2 rounded-lg border border-gray-200 bg-white p-2">
+                                        <span className="mt-1 flex h-7 w-7 items-center justify-center rounded-full bg-gray-200 text-xs font-bold text-gray-700">{index + 1}</span>
+                                        <input type="text" value={pair.left} onChange={(e) => setMatchingPairs((prev) => prev.map((item, pairIndex) => (pairIndex === index ? { ...item, left: e.target.value } : item)))} onKeyDown={handleVerticalFocus} placeholder="왼쪽 단서" className="quiz-compose-field min-w-0 rounded border p-2 text-sm" />
+                                        <div className="min-w-0 space-y-2">
+                                            <input type="text" value={pair.right} onChange={(e) => setMatchingPairs((prev) => prev.map((item, pairIndex) => (pairIndex === index ? { ...item, right: e.target.value } : item)))} onKeyDown={handleVerticalFocus} placeholder="오른쪽 단어" className="quiz-compose-field w-full rounded border p-2 text-sm" />
+                                            <label className="inline-flex cursor-pointer items-center gap-1 rounded border border-blue-100 bg-blue-50 px-2 py-1 text-[11px] font-bold text-blue-700 hover:bg-blue-100">
+                                                <i className="fas fa-image"></i> 우측 그림
+                                                <input type="file" className="hidden" accept="image/*" onChange={(e) => handleMatchingImageSelect(index, e)} />
+                                            </label>
+                                            {pair.rightImage && (
+                                                <div className="relative w-fit">
+                                                    <img src={pair.rightImage} alt="오른쪽 보기 이미지" className="h-16 max-w-[120px] rounded border border-gray-200 object-contain" />
+                                                    <button type="button" onClick={() => setMatchingPairs((prev) => prev.map((item, pairIndex) => (pairIndex === index ? { ...item, rightImage: null } : item)))} className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full border bg-white text-[10px] text-gray-500 hover:text-red-500">
+                                                        <i className="fas fa-times"></i>
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <button type="button" onClick={() => removeMatchingPair(index)} className="mt-1 text-gray-400 hover:text-red-500"><i className="fas fa-times"></i></button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
                         <textarea placeholder="해설 (선택)" value={formExp} onChange={(e) => setFormExp(e.target.value)} onKeyDown={handleVerticalFocus} className="quiz-compose-field w-full border p-2 rounded text-sm h-16 resize-none" />
 
                         <div className="border border-gray-200 rounded-lg p-3 bg-amber-50">
@@ -702,6 +824,29 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
                                             </div>
                                             <div className="rounded border border-dashed border-blue-300 bg-white p-3 min-h-[60px]">
                                                 {previewOrderAnswer.map((item, index) => <button key={`preview-order-selected-${index}-${item}`} type="button" onClick={() => setPreviewOrderAnswer((prev) => prev.filter((_, i) => i !== index))} className="px-2 py-1 rounded bg-blue-100 text-blue-700 text-xs font-bold mr-2 mb-2">{index + 1}. {item}</button>)}
+                                            </div>
+                                        </div>
+                                    )}
+                                    {formType === 'matching' && (
+                                        <div className="grid gap-3 md:grid-cols-2">
+                                            <div className="space-y-2">
+                                                {trimMatchingPairs(matchingPairs).map((pair, index) => (
+                                                    <button key={`preview-matching-left-${pair.left}-${index}`} type="button" onClick={() => setPreviewMatchingActiveLeft(pair.left)} className={`w-full rounded-lg border-2 p-3 text-left text-sm font-bold transition ${previewMatchingActiveLeft === pair.left ? 'border-blue-500 bg-blue-50 text-blue-800' : 'border-gray-200 hover:border-blue-300'}`}>
+                                                        {pair.left}
+                                                        {previewMatchingAnswer[pair.left] && <span className="ml-2 text-xs text-blue-600">→ {previewMatchingAnswer[pair.left]}</span>}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            <div className="space-y-2">
+                                                {previewMatchingOptions.map((pair, index) => {
+                                                    const used = Object.values(previewMatchingAnswer).includes(pair.right);
+                                                    return (
+                                                        <button key={`preview-matching-right-${pair.right}-${index}`} type="button" onClick={() => previewMatchingActiveLeft && setPreviewMatchingAnswer((prev) => ({ ...prev, [previewMatchingActiveLeft]: pair.right }))} className={`flex w-full items-center gap-3 rounded-lg border-2 p-3 text-left text-sm font-bold transition ${used ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 hover:border-blue-300'}`}>
+                                                            {pair.rightImage && <img src={pair.rightImage} alt="" className="h-12 w-12 rounded border border-gray-100 object-contain" />}
+                                                            <span>{pair.right}</span>
+                                                        </button>
+                                                    );
+                                                })}
                                             </div>
                                         </div>
                                     )}
