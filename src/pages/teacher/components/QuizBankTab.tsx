@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   collection,
   doc,
@@ -13,6 +13,7 @@ import {
 import { httpsCallable } from "firebase/functions";
 import { db, functions } from "../../../lib/firebase";
 import { useAuth } from "../../../contexts/AuthContext";
+import MatchingConnectionLines from "../../../components/common/MatchingConnectionLines";
 import {
   getSemesterCollectionPath,
   getSemesterDocPath,
@@ -361,6 +362,13 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   >({});
   const [previewMatchingActiveLeft, setPreviewMatchingActiveLeft] =
     useState("");
+  const previewMatchingContainerRef = useRef<HTMLDivElement | null>(null);
+  const previewMatchingLeftRefs = useRef<
+    Record<string, HTMLButtonElement | null>
+  >({});
+  const previewMatchingRightRefs = useRef<
+    Record<string, HTMLButtonElement | null>
+  >({});
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const toggleSort = (key: Exclude<SortKey, "none">) => {
@@ -3418,61 +3426,97 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                           </div>
                         </div>
                       )}
-                      {editType === "matching" && (
-                        <div className="grid gap-3 md:grid-cols-2">
-                          <div className="space-y-2">
-                            {trimMatchingPairs(editMatchingPairs).map(
-                              (pair, index) => (
-                                <button
-                                  key={`preview-matching-left-${pair.left}-${index}`}
-                                  type="button"
-                                  onClick={() =>
-                                    setPreviewMatchingActiveLeft(pair.left)
-                                  }
-                                  className={`w-full rounded-lg border-2 p-3 text-left text-sm font-bold transition ${previewMatchingActiveLeft === pair.left ? "border-blue-500 bg-blue-50 text-blue-800" : "border-gray-200 hover:border-blue-300"}`}
-                                >
-                                  {pair.left}
-                                  {previewMatchingAnswer[pair.left] && (
-                                    <span className="ml-2 text-xs text-blue-600">
-                                      → {previewMatchingAnswer[pair.left]}
-                                    </span>
-                                  )}
-                                </button>
-                              ),
-                            )}
-                          </div>
-                          <div className="space-y-2">
-                            {previewMatchingOptions.map((pair, index) => {
-                              const used = Object.values(
-                                previewMatchingAnswer,
-                              ).includes(pair.right);
-                              return (
-                                <button
-                                  key={`preview-matching-right-${pair.right}-${index}`}
-                                  type="button"
-                                  onClick={() =>
-                                    previewMatchingActiveLeft &&
-                                    setPreviewMatchingAnswer((prev) => ({
-                                      ...prev,
-                                      [previewMatchingActiveLeft]: pair.right,
-                                    }))
-                                  }
-                                  className={`flex w-full items-center gap-3 rounded-lg border-2 p-3 text-left text-sm font-bold transition ${used ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 hover:border-blue-300"}`}
-                                >
-                                  {pair.rightImage && (
-                                    <img
-                                      src={pair.rightImage}
-                                      alt=""
-                                      className="h-12 w-12 rounded border border-gray-100 object-contain"
-                                    />
-                                  )}
-                                  <span>{pair.right}</span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
+                      {editType === "matching" &&
+                        (() => {
+                          const previewPairs =
+                            trimMatchingPairs(editMatchingPairs);
+                          const previewConnections = Object.entries(
+                            previewMatchingAnswer,
+                          )
+                            .filter(([, right]) => right)
+                            .map(([left, right]) => ({
+                              id: `preview-${left}-${right}`,
+                              leftKey: left,
+                              rightKey: right,
+                              active: previewMatchingActiveLeft === left,
+                            }));
+
+                          return (
+                            <div
+                              ref={previewMatchingContainerRef}
+                              className="relative grid gap-3 md:grid-cols-2"
+                            >
+                              <div className="space-y-2">
+                                {previewPairs.map((pair, index) => (
+                                  <button
+                                    key={`preview-matching-left-${pair.left}-${index}`}
+                                    data-matching-left-key={pair.left}
+                                    ref={(element) => {
+                                      previewMatchingLeftRefs.current[
+                                        pair.left
+                                      ] = element;
+                                    }}
+                                    type="button"
+                                    onClick={() =>
+                                      setPreviewMatchingActiveLeft(pair.left)
+                                    }
+                                    className={`relative z-20 w-full rounded-lg border-2 p-3 text-left text-sm font-bold transition ${previewMatchingActiveLeft === pair.left ? "border-blue-500 bg-blue-50 text-blue-800" : "border-gray-200 bg-white hover:border-blue-300"}`}
+                                  >
+                                    {pair.left}
+                                    {previewMatchingAnswer[pair.left] && (
+                                      <span className="ml-2 text-xs text-blue-600">
+                                        {previewMatchingAnswer[pair.left]}
+                                      </span>
+                                    )}
+                                  </button>
+                                ))}
+                              </div>
+                              <div className="space-y-2">
+                                {previewMatchingOptions.map((pair, index) => {
+                                  const used = Object.values(
+                                    previewMatchingAnswer,
+                                  ).includes(pair.right);
+                                  return (
+                                    <button
+                                      key={`preview-matching-right-${pair.right}-${index}`}
+                                      data-matching-right-key={pair.right}
+                                      ref={(element) => {
+                                        previewMatchingRightRefs.current[
+                                          pair.right
+                                        ] = element;
+                                      }}
+                                      type="button"
+                                      onClick={() =>
+                                        previewMatchingActiveLeft &&
+                                        setPreviewMatchingAnswer((prev) => ({
+                                          ...prev,
+                                          [previewMatchingActiveLeft]:
+                                            pair.right,
+                                        }))
+                                      }
+                                      className={`relative z-20 flex w-full items-center gap-3 rounded-lg border-2 p-3 text-left text-sm font-bold transition ${used ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 bg-white hover:border-blue-300"}`}
+                                    >
+                                      {pair.rightImage && (
+                                        <img
+                                          src={pair.rightImage}
+                                          alt=""
+                                          className="h-12 w-12 rounded border border-gray-100 object-contain"
+                                        />
+                                      )}
+                                      <span>{pair.right}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              <MatchingConnectionLines
+                                containerRef={previewMatchingContainerRef}
+                                leftRefs={previewMatchingLeftRefs}
+                                rightRefs={previewMatchingRightRefs}
+                                connections={previewConnections}
+                              />
+                            </div>
+                          );
+                        })()}
                     </div>
                   </div>
                 )}

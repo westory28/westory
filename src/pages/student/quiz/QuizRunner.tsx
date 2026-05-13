@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import MatchingConnectionLines from "../../../components/common/MatchingConnectionLines";
 import { PageLoading } from "../../../components/common/LoadingState";
 import {
   addDoc,
@@ -168,6 +169,11 @@ const QuizRunner: React.FC = () => {
     Record<number, string[]>
   >({});
   const [matchingActiveLeft, setMatchingActiveLeft] = useState("");
+  const matchingConnectionContainerRef = useRef<HTMLDivElement | null>(null);
+  const matchingLeftRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const matchingRightRefs = useRef<Record<string, HTMLButtonElement | null>>(
+    {},
+  );
   const [startingQuiz, setStartingQuiz] = useState(false);
   const [serverTimeOffsetMs, setServerTimeOffsetMs] = useState(0);
   const [quizDeadlineMs, setQuizDeadlineMs] = useState<number | null>(null);
@@ -1454,71 +1460,100 @@ const QuizRunner: React.FC = () => {
               </div>
             )}
 
-            {question.type === "matching" && (
-              <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                <div className="space-y-2">
-                  {parseMatchingPairs(question).map((pair, index) => {
-                    const selectedRight =
-                      parseMatchingAnswer(currentAnswer)[pair.left] || "";
-                    return (
-                      <button
-                        key={`${pair.left}-${index}`}
-                        type="button"
-                        onClick={() => setMatchingActiveLeft(pair.left)}
-                        className={`w-full rounded-xl border-2 p-4 text-left transition ${
-                          matchingActiveLeft === pair.left
-                            ? "border-blue-500 bg-blue-50 text-blue-800"
-                            : "border-gray-200 hover:border-blue-300 hover:bg-blue-50"
-                        }`}
-                      >
-                        <div className="font-bold">{pair.left}</div>
-                        {selectedRight && (
-                          <div className="mt-2 flex items-center gap-2 text-sm font-bold text-blue-600">
-                            <i className="fas fa-arrow-right"></i>
-                            <span>{selectedRight}</span>
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
+            {question.type === "matching" &&
+              (() => {
+                const matchingPairs = parseMatchingPairs(question);
+                const matchingAnswerMap = parseMatchingAnswer(currentAnswer);
+                const rightOptions =
+                  orderOptionMap[question.id] ||
+                  matchingPairs.map((pair) => pair.right);
+                const matchingConnections = Object.entries(matchingAnswerMap)
+                  .filter(([, right]) => right)
+                  .map(([left, right]) => ({
+                    id: `${left}-${right}`,
+                    leftKey: left,
+                    rightKey: right,
+                    active: matchingActiveLeft === left,
+                  }));
 
-                <div className="space-y-2">
-                  {(
-                    orderOptionMap[question.id] ||
-                    parseMatchingPairs(question).map((pair) => pair.right)
-                  ).map((right, index) => {
-                    const sourcePair = parseMatchingPairs(question).find(
-                      (pair) => pair.right === right,
-                    );
-                    const used = Object.values(
-                      parseMatchingAnswer(currentAnswer),
-                    ).includes(right);
-                    return (
-                      <button
-                        key={`${right}-${index}`}
-                        type="button"
-                        onClick={() => handleMatchingRightSelect(right)}
-                        className={`flex w-full items-center gap-3 rounded-xl border-2 p-3 text-left transition ${
-                          used
-                            ? "border-blue-500 bg-blue-50 font-bold text-blue-700"
-                            : "border-gray-200 hover:border-blue-300 hover:bg-blue-50"
-                        }`}
-                      >
-                        {sourcePair?.rightImage && (
-                          <img
-                            src={sourcePair.rightImage}
-                            alt=""
-                            className="h-16 w-16 shrink-0 rounded-lg border border-gray-100 object-contain"
-                          />
-                        )}
-                        <span className="font-bold">{right}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+                return (
+                  <div
+                    ref={matchingConnectionContainerRef}
+                    className="relative grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
+                  >
+                    <div className="space-y-2">
+                      {matchingPairs.map((pair, index) => {
+                        const selectedRight =
+                          matchingAnswerMap[pair.left] || "";
+                        return (
+                          <button
+                            key={`${pair.left}-${index}`}
+                            data-matching-left-key={pair.left}
+                            ref={(element) => {
+                              matchingLeftRefs.current[pair.left] = element;
+                            }}
+                            type="button"
+                            onClick={() => setMatchingActiveLeft(pair.left)}
+                            className={`relative z-20 w-full rounded-xl border-2 p-4 text-left transition ${
+                              matchingActiveLeft === pair.left
+                                ? "border-blue-500 bg-blue-50 text-blue-800"
+                                : "border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50"
+                            }`}
+                          >
+                            <div className="font-bold">{pair.left}</div>
+                            {selectedRight && (
+                              <div className="mt-2 flex items-center gap-2 text-sm font-bold text-blue-600">
+                                <span>{selectedRight}</span>
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="space-y-2">
+                      {rightOptions.map((right, index) => {
+                        const sourcePair = matchingPairs.find(
+                          (pair) => pair.right === right,
+                        );
+                        const used =
+                          Object.values(matchingAnswerMap).includes(right);
+                        return (
+                          <button
+                            key={`${right}-${index}`}
+                            data-matching-right-key={right}
+                            ref={(element) => {
+                              matchingRightRefs.current[right] = element;
+                            }}
+                            type="button"
+                            onClick={() => handleMatchingRightSelect(right)}
+                            className={`relative z-20 flex w-full items-center gap-3 rounded-xl border-2 p-3 text-left transition ${
+                              used
+                                ? "border-blue-500 bg-blue-50 font-bold text-blue-700"
+                                : "border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50"
+                            }`}
+                          >
+                            {sourcePair?.rightImage && (
+                              <img
+                                src={sourcePair.rightImage}
+                                alt=""
+                                className="h-16 w-16 shrink-0 rounded-lg border border-gray-100 object-contain"
+                              />
+                            )}
+                            <span className="font-bold">{right}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <MatchingConnectionLines
+                      containerRef={matchingConnectionContainerRef}
+                      leftRefs={matchingLeftRefs}
+                      rightRefs={matchingRightRefs}
+                      connections={matchingConnections}
+                    />
+                  </div>
+                );
+              })()}
           </div>
 
           <div className="mt-8 flex items-center justify-between border-t border-gray-100 pt-4">
