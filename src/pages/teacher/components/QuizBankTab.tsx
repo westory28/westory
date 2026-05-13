@@ -18,6 +18,12 @@ import {
   getSemesterDocPath,
   getYearSemester,
 } from "../../../lib/semesterScope";
+import {
+  QUIZ_MATCHING_IMAGE_OPTIONS,
+  QUIZ_QUESTION_IMAGE_OPTIONS,
+  optimizeQuizImageDataUrl,
+  optimizeQuizImageFile,
+} from "../../../lib/quizImageCompression";
 
 interface TreeUnit {
   id: string;
@@ -297,6 +303,8 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [optimizingImageCount, setOptimizingImageCount] = useState(0);
+  const optimizingImage = optimizingImageCount > 0;
   const userTouchedClassScopeRef = React.useRef(false);
 
   const toRoman = (value: number) => {
@@ -1656,14 +1664,25 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     }
   };
 
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      if (ev.target?.result) setEditImage(ev.target.result as string);
-    };
-    reader.readAsDataURL(file);
+    setOptimizingImageCount((prev) => prev + 1);
+    try {
+      setEditImage(
+        await optimizeQuizImageFile(file, QUIZ_QUESTION_IMAGE_OPTIONS),
+      );
+    } catch (error) {
+      console.error("Quiz image optimization failed", error);
+      alert(
+        error instanceof Error
+          ? error.message
+          : "이미지 용량을 줄이지 못했습니다.",
+      );
+    } finally {
+      setOptimizingImageCount((prev) => Math.max(0, prev - 1));
+      e.currentTarget.value = "";
+    }
   };
 
   const handleMatchingImageSelect = (
@@ -1672,19 +1691,39 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      if (!ev.target?.result) return;
-      setEditMatchingPairs((prev) =>
-        prev.map((pair, pairIndex) =>
-          pairIndex === index
-            ? { ...pair, rightImage: ev.target?.result as string }
-            : pair,
-        ),
-      );
-    };
-    reader.readAsDataURL(file);
+    setOptimizingImageCount((prev) => prev + 1);
+    optimizeQuizImageFile(file, QUIZ_MATCHING_IMAGE_OPTIONS)
+      .then((rightImage) => {
+        setEditMatchingPairs((prev) =>
+          prev.map((pair, pairIndex) =>
+            pairIndex === index ? { ...pair, rightImage } : pair,
+          ),
+        );
+      })
+      .catch((error) => {
+        console.error("Quiz matching image optimization failed", error);
+        alert(
+          error instanceof Error
+            ? error.message
+            : "이미지 용량을 줄이지 못했습니다.",
+        );
+      })
+      .finally(() => {
+        setOptimizingImageCount((prev) => Math.max(0, prev - 1));
+        e.currentTarget.value = "";
+      });
   };
+
+  const optimizeMatchingPairImages = async (pairs: MatchingPair[]) =>
+    Promise.all(
+      pairs.map(async (pair) => ({
+        ...pair,
+        rightImage: await optimizeQuizImageDataUrl(
+          pair.rightImage,
+          QUIZ_MATCHING_IMAGE_OPTIONS,
+        ),
+      })),
+    );
 
   const handleBigChange = (value: string) => {
     setFilters((prev) => ({
@@ -1907,7 +1946,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   ]);
 
   const closeEditModal = (force = false) => {
-    if (savingEdit) return;
+    if (savingEdit || optimizingImage) return;
     if (!force && hasUnsavedEditChanges) {
       const confirmed = window.confirm(
         "수정 중인 내용이 있습니다. 정말로 닫으시겠습니까?",
@@ -1943,6 +1982,10 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const saveEditedQuestion = async () => {
     if (!canEdit) return;
     if (!editingQuestion) return;
+    if (optimizingImage) {
+      alert("이미지 용량을 줄이는 중입니다. 잠시 후 다시 저장해 주세요.");
+      return;
+    }
     if (!editQuestionText.trim()) {
       alert("문제 내용을 입력하세요.");
       return;
@@ -2004,28 +2047,33 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       return;
     }
 
-    const payload: Question = {
-      ...editingQuestion,
-      category: editCategory || editingQuestion.category,
-      type: editType || (editingQuestion.type as QuestionType),
-      question: editQuestionText.trim(),
-      answer,
-      explanation: editExplanationText.trim(),
-      // Firestore rejects undefined values (invalid-argument),
-      // so we store null when the editor has no image.
-      image: editImage || null,
-      options,
-      matchingPairs: editType === "matching" ? matchingOptions : [],
-      hintEnabled: editHintEnabled,
-      hint: editHintEnabled ? editHintText.trim() : "",
-    };
-    const originalSnapshot = buildOriginalEditSnapshot(editingQuestion);
-    const shouldRecalculateCorrections =
-      originalSnapshot.type !== payload.type ||
-      String(originalSnapshot.answer || "") !== String(payload.answer || "");
-
     setSavingEdit(true);
     try {
+      const optimizedImage = await optimizeQuizImageDataUrl(
+        editImage,
+        QUIZ_QUESTION_IMAGE_OPTIONS,
+      );
+      const optimizedMatchingOptions =
+        editType === "matching"
+          ? await optimizeMatchingPairImages(matchingOptions)
+          : [];
+      const payload: Question = {
+        ...editingQuestion,
+        category: editCategory || editingQuestion.category,
+        type: editType || (editingQuestion.type as QuestionType),
+        question: editQuestionText.trim(),
+        answer,
+        explanation: editExplanationText.trim(),
+        image: optimizedImage,
+        options,
+        matchingPairs: optimizedMatchingOptions,
+        hintEnabled: editHintEnabled,
+        hint: editHintEnabled ? editHintText.trim() : "",
+      };
+      const originalSnapshot = buildOriginalEditSnapshot(editingQuestion);
+      const shouldRecalculateCorrections =
+        originalSnapshot.type !== payload.type ||
+        String(originalSnapshot.answer || "") !== String(payload.answer || "");
       const { docId: _docId, id: _localId, ...persistedPayload } = payload;
       await setDoc(
         doc(
@@ -3000,6 +3048,11 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                     onChange={handleImageSelect}
                   />
                 </label>
+                {optimizingImage && (
+                  <p className="text-xs font-bold text-blue-600">
+                    이미지 용량을 줄이는 중...
+                  </p>
+                )}
                 {editImage && (
                   <div className="relative border rounded p-2 bg-gray-50">
                     <img
@@ -3435,10 +3488,14 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                   <button
                     type="button"
                     onClick={() => void saveEditedQuestion()}
-                    disabled={savingEdit}
+                    disabled={savingEdit || optimizingImage}
                     className="bg-blue-600 text-white font-bold py-2 rounded hover:bg-blue-700 transition disabled:bg-blue-300"
                   >
-                    {savingEdit ? "저장 중..." : "수정 저장"}
+                    {optimizingImage
+                      ? "이미지 줄이는 중..."
+                      : savingEdit
+                        ? "저장 중..."
+                        : "수정 저장"}
                   </button>
                   <button
                     type="button"

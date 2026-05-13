@@ -3,6 +3,7 @@ import { db } from '../../../lib/firebase';
 import { collection, deleteDoc, doc, getDocs, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import { useAuth } from '../../../contexts/AuthContext';
 import { getSemesterCollectionPath, getSemesterDocPath } from '../../../lib/semesterScope';
+import { QUIZ_MATCHING_IMAGE_OPTIONS, QUIZ_QUESTION_IMAGE_OPTIONS, optimizeQuizImageDataUrl, optimizeQuizImageFile } from '../../../lib/quizImageCompression';
 
 interface TreeUnit {
     id: string;
@@ -107,6 +108,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
     const [previewMatchingActiveLeft, setPreviewMatchingActiveLeft] = useState('');
     const [editingQuestionId, setEditingQuestionId] = useState<number | null>(null);
     const [isComposerOpen, setIsComposerOpen] = useState(false);
+    const [optimizingImageCount, setOptimizingImageCount] = useState(0);
+    const optimizingImage = optimizingImageCount > 0;
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -236,28 +239,47 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
-    const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-            if (ev.target?.result) setFormImage(ev.target.result as string);
-        };
-        reader.readAsDataURL(file);
+        setOptimizingImageCount((prev) => prev + 1);
+        try {
+            setFormImage(await optimizeQuizImageFile(file, QUIZ_QUESTION_IMAGE_OPTIONS));
+        } catch (error) {
+            console.error('Quiz image optimization failed', error);
+            alert(error instanceof Error ? error.message : '이미지 용량을 줄이지 못했습니다.');
+        } finally {
+            setOptimizingImageCount((prev) => Math.max(0, prev - 1));
+            e.currentTarget.value = '';
+        }
     };
 
     const handleMatchingImageSelect = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-            if (!ev.target?.result) return;
-            setMatchingPairs((prev) => prev.map((pair, pairIndex) => (
-                pairIndex === index ? { ...pair, rightImage: ev.target?.result as string } : pair
-            )));
-        };
-        reader.readAsDataURL(file);
+        setOptimizingImageCount((prev) => prev + 1);
+        optimizeQuizImageFile(file, QUIZ_MATCHING_IMAGE_OPTIONS)
+            .then((rightImage) => {
+                setMatchingPairs((prev) => prev.map((pair, pairIndex) => (
+                    pairIndex === index ? { ...pair, rightImage } : pair
+                )));
+            })
+            .catch((error) => {
+                console.error('Quiz matching image optimization failed', error);
+                alert(error instanceof Error ? error.message : '이미지 용량을 줄이지 못했습니다.');
+            })
+            .finally(() => {
+                setOptimizingImageCount((prev) => Math.max(0, prev - 1));
+                e.currentTarget.value = '';
+            });
     };
+
+    const optimizeMatchingPairImages = async (pairs: MatchingPair[]) => Promise.all(
+        pairs.map(async (pair) => ({
+            ...pair,
+            rightImage: await optimizeQuizImageDataUrl(pair.rightImage, QUIZ_MATCHING_IMAGE_OPTIONS),
+        })),
+    );
 
     const handleTypeChange = (nextType: QuestionType) => {
         setFormType(nextType);
@@ -293,6 +315,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
     };
 
     const closeComposer = () => {
+        if (optimizingImage) return;
         setIsComposerOpen(false);
         resetForm();
     };
@@ -443,28 +466,36 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
 
     const handleAdd = async () => {
         if (!canEdit) return;
+        if (optimizingImage) {
+            alert('이미지 용량을 줄이는 중입니다. 잠시 후 다시 저장해 주세요.');
+            return;
+        }
         const payload = buildQuestionPayload();
         if (!payload) return;
         const targetId = editingQuestionId ?? Date.now();
-        const newQuestion: Question = {
-            id: targetId,
-            unitId: node.id,
-            subUnitId: type === 'special' ? (epSource.small || epSource.mid || epSource.big || null) : (formSubUnit || null),
-            category,
-            type: formType,
-            question: formText.trim(),
-            answer: payload.answer,
-            options: payload.options,
-            matchingPairs: payload.matchingPairs || [],
-            explanation: formExp.trim(),
-            image: formImage,
-            hintEnabled,
-            hint: hintEnabled ? hintText.trim() : '',
-            ...(type === 'special' && epSource.big ? { refBig: epSource.big } : {}),
-            ...(type === 'special' && epSource.mid ? { refMid: epSource.mid } : {}),
-            ...(type === 'special' && epSource.small ? { refSmall: epSource.small } : {}),
-        };
         try {
+            const optimizedImage = await optimizeQuizImageDataUrl(formImage, QUIZ_QUESTION_IMAGE_OPTIONS);
+            const optimizedMatchingPairs = formType === 'matching'
+                ? await optimizeMatchingPairImages(payload.matchingPairs || [])
+                : [];
+            const newQuestion: Question = {
+                id: targetId,
+                unitId: node.id,
+                subUnitId: type === 'special' ? (epSource.small || epSource.mid || epSource.big || null) : (formSubUnit || null),
+                category,
+                type: formType,
+                question: formText.trim(),
+                answer: payload.answer,
+                options: payload.options,
+                matchingPairs: optimizedMatchingPairs,
+                explanation: formExp.trim(),
+                image: optimizedImage,
+                hintEnabled,
+                hint: hintEnabled ? hintText.trim() : '',
+                ...(type === 'special' && epSource.big ? { refBig: epSource.big } : {}),
+                ...(type === 'special' && epSource.mid ? { refMid: epSource.mid } : {}),
+                ...(type === 'special' && epSource.small ? { refSmall: epSource.small } : {}),
+            };
             await setDoc(
                 doc(db, getSemesterDocPath(config, 'quiz_questions', String(targetId))),
                 {
@@ -689,6 +720,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
                             <i className="fas fa-image"></i> 이미지 첨부
                             <input type="file" className="hidden" accept="image/*" ref={fileInputRef} onChange={handleImageSelect} />
                         </label>
+                        {optimizingImage && (
+                            <p className="text-xs font-bold text-blue-600">이미지 용량을 줄이는 중...</p>
+                        )}
                         {formImage && (
                             <div className="relative border rounded p-2 bg-gray-50">
                                 <img src={formImage} alt="문항 첨부 이미지" className="max-h-44 mx-auto rounded" />
@@ -874,7 +908,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
 
                         <div className={`grid gap-2 ${editingQuestionId ? 'grid-cols-3' : 'grid-cols-2'}`}>
                             <button type="button" onClick={openPreview} className={`font-bold py-2 rounded transition border ${previewOpen ? 'bg-white text-blue-700 border-blue-500' : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400 hover:text-blue-700'}`}>{previewOpen ? '미리보기 닫기' : '미리보기'}</button>
-                            <button onClick={() => void handleAdd()} className="bg-blue-600 text-white font-bold py-2 rounded hover:bg-blue-700 transition">{editingQuestionId ? '수정 저장' : '등록'}</button>
+                            <button onClick={() => void handleAdd()} disabled={optimizingImage} className="bg-blue-600 text-white font-bold py-2 rounded hover:bg-blue-700 transition disabled:bg-blue-300">{optimizingImage ? '이미지 줄이는 중...' : editingQuestionId ? '수정 저장' : '등록'}</button>
                             {editingQuestionId && (
                                 <button
                                     type="button"
