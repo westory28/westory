@@ -198,6 +198,21 @@ type HistoryClassroomExitRequestOptions = Omit<
   "reason"
 >;
 
+const LEGACY_HISTORY_CLASSROOM_RESULTS_COLLECTION = "history_classroom_results";
+
+const isFirestorePermissionError = (error: unknown) => {
+  const code =
+    error && typeof error === "object" && "code" in error
+      ? String((error as { code?: unknown }).code || "")
+      : "";
+  const message = error instanceof Error ? error.message : String(error || "");
+
+  return (
+    code === "permission-denied" ||
+    message.includes("Missing or insufficient permissions")
+  );
+};
+
 const buildHistoryClassroomResultSummary = (
   assignment: HistoryClassroomAssignment,
   answers: Record<string, string>,
@@ -530,7 +545,7 @@ const HistoryClassroomRunner: React.FC = () => {
       status,
     });
 
-    const resultRef = await addDoc(collection(db, resultCollectionPath), {
+    const resultPayload = {
       assignmentId: assignment.id,
       assignmentTitle: assignment.title,
       uid: userData.uid,
@@ -548,7 +563,32 @@ const HistoryClassroomRunner: React.FC = () => {
       answerChecks,
       cancellationReason: options.cancellationReason || "",
       createdAt: serverTimestamp(),
-    });
+    };
+    let savedResultCollectionPath = resultCollectionPath;
+    let usedLegacyResultFallback = false;
+    let resultRef;
+
+    try {
+      resultRef = await addDoc(
+        collection(db, resultCollectionPath),
+        resultPayload,
+      );
+    } catch (saveError) {
+      if (!isFirestorePermissionError(saveError)) {
+        throw saveError;
+      }
+
+      console.warn(
+        "[HistoryClassroomRunner] Semester result write was denied; falling back to legacy result collection.",
+        saveError,
+      );
+      savedResultCollectionPath = LEGACY_HISTORY_CLASSROOM_RESULTS_COLLECTION;
+      usedLegacyResultFallback = true;
+      resultRef = await addDoc(
+        collection(db, LEGACY_HISTORY_CLASSROOM_RESULTS_COLLECTION),
+        resultPayload,
+      );
+    }
 
     void notifyHistoryClassroomSubmitted(config, {
       assignmentId: assignment.id,
@@ -573,6 +613,8 @@ const HistoryClassroomRunner: React.FC = () => {
       passed,
       answerChecks,
       resultId: resultRef.id,
+      resultCollectionPath: savedResultCollectionPath,
+      usedLegacyResultFallback,
     };
   };
 
@@ -995,7 +1037,8 @@ const HistoryClassroomRunner: React.FC = () => {
         setResultDialogOpen(true);
       }
       setResultText("");
-      await applyHistoryClassroomPointReward(result.resultId, result.percent);
+      setSubmitting(false);
+      void applyHistoryClassroomPointReward(result.resultId, result.percent);
     } catch (submitError) {
       console.error(submitError);
       setResultText(
@@ -1367,7 +1410,8 @@ const HistoryClassroomRunner: React.FC = () => {
       }
       setPendingSubmitAfterOnline(false);
       setResultText("");
-      await applyHistoryClassroomPointReward(result.resultId, result.percent);
+      setSubmitting(false);
+      void applyHistoryClassroomPointReward(result.resultId, result.percent);
     } catch (submitError) {
       console.error(submitError);
       if (networkOfflineRef.current) {

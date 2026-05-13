@@ -2683,7 +2683,11 @@ const loadQuizActivityScore = async (transaction, year, semester, uid, sourceId)
   const historyResultId = extractActivityDocumentId(sourceId, 'history-classroom');
   if (historyResultId) {
     const historyResultRef = db.doc(`${getSemesterRoot(year, semester)}/history_classroom_results/${historyResultId}`);
-    const historyResultSnap = await transaction.get(historyResultRef);
+    let historyResultSnap = await transaction.get(historyResultRef);
+    if (!historyResultSnap.exists) {
+      const legacyHistoryResultRef = db.doc(`history_classroom_results/${historyResultId}`);
+      historyResultSnap = await transaction.get(legacyHistoryResultRef);
+    }
     if (!historyResultSnap.exists) {
       return null;
     }
