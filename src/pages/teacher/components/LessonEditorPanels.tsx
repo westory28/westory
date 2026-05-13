@@ -1125,218 +1125,195 @@ export function LessonPdfSection({
   );
 
   return (
-    <section className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="text-lg font-bold text-slate-900">
-            PDF OCR 등록 및 편집
-          </h3>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">
-            <span>OCR로 빈칸을 만들고 각주 위치를 지정합니다.</span>
-            <span className={saveSummaryClassName + " rounded-full px-2 py-1"}>
-              {saveSummaryLabel}
-            </span>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-            <i className="fas fa-file-pdf text-sm"></i>
-            PDF 선택
-            <input
-              ref={pdfInputRef}
-              type="file"
-              accept="application/pdf"
-              className="hidden"
-              onChange={(event) =>
-                onPdfFileChange(event.target.files?.[0] ?? null)
-              }
-            />
-          </label>
-          <button
-            type="button"
-            onClick={onPreparePdf}
-            disabled={!selectedPdfFile || pdfBusy}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+    <section className="space-y-3">
+      {!!pdfSaveStatusTone &&
+        pdfSaveStatusTone !== "success" &&
+        !!pdfSaveStatusMessage && (
+          <div
+            className={`rounded-xl border px-3 py-2.5 text-sm ${
+              pdfSaveStatusTone === "dirty"
+                ? "border-amber-200 bg-amber-50 text-amber-900"
+                : "border-rose-200 bg-rose-50 text-rose-700"
+            }`}
           >
-            {pdfBusy ? "준비 중..." : "PDF 준비"}
-          </button>
-          {(lessonPdfUrl ||
-            pdfProcessing.file.storagePath ||
-            worksheetPageImages.length > 0) && (
-            <button
-              type="button"
-              onClick={onRemovePdf}
-              className="rounded-lg border border-rose-200 bg-white px-3 py-2 text-sm font-semibold text-rose-600 hover:bg-rose-50"
-            >
-              PDF 삭제
-            </button>
-          )}
-        </div>
-      </div>
-      <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-600">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <span className="inline-flex min-w-0 max-w-full items-center rounded-lg bg-white px-3 py-1 font-semibold text-slate-700">
-              <span className="truncate">
-                현재 파일: {selectedPdfFile?.name || lessonPdfName || "없음"}
-              </span>
-            </span>
-            {!!pdfStatusLabel && (
-              <span className={pdfStatusBadgeClass(pdfStatusTone)}>
-                {pdfStatusLabel}
-              </span>
-            )}
-            {!!worksheetPageImages.length && (
-              <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-600">
-                {worksheetPageImages.length}쪽
-              </span>
-            )}
+            {pdfSaveStatusMessage}
           </div>
-          {canRetryPdfExtraction && (
-            <button
-              type="button"
-              onClick={onRetryPdfExtraction}
-              disabled={pdfBusy || pdfSaveState === "saving"}
-              className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <i className="fas fa-rotate-right text-[10px]"></i>
-              구조 추출 다시 요청
-            </button>
-          )}
-        </div>
-      </div>
-      {!!pdfSaveStatusTone && !!pdfSaveStatusMessage && (
-        <div
-          className={`rounded-xl border px-3 py-2.5 text-sm ${
-            pdfSaveStatusTone === "dirty"
-              ? "border-amber-200 bg-amber-50 text-amber-900"
-              : pdfSaveStatusTone === "error"
-                ? "border-rose-200 bg-rose-50 text-rose-700"
-                : "border-emerald-200 bg-emerald-50 text-emerald-700"
-          }`}
-        >
-          {pdfSaveStatusMessage}
-        </div>
-      )}
-      {!!pdfStatusHelpText && (
+        )}
+      {!!pdfStatusHelpText && pdfStatusTone !== "emerald" && (
         <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
           {pdfStatusHelpText}
         </div>
       )}
-      {worksheetTool === "footnote" && !!worksheetPageImages.length && (
-        <div className="rounded-xl border border-blue-100 bg-blue-50/80 px-3 py-2 text-sm text-blue-900">
-          원하는 위치를 한 번 눌러 각주 버튼을 찍어 주세요. 바로 작은 편집창이
-          열립니다. 각주를 추가한 뒤 저장 버튼을 눌러 보관하세요.
-        </div>
-      )}
-      {!!worksheetPageImages.length ? (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
-          <div className="border-b border-slate-200 bg-white px-3 py-3">
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-              <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">
-                <span className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-slate-800">
-                  <i className="fas fa-screwdriver-wrench text-[11px] text-slate-500"></i>
-                  현재 도구: {activeToolLabel}
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+        <div className="border-b border-slate-200 bg-white px-3 py-3">
+          <div className="grid gap-3 xl:grid-cols-[minmax(20rem,1fr)_auto_auto] xl:items-center">
+            <div className="min-w-0">
+              <div className="text-sm font-bold text-slate-900">PDF OCR</div>
+              <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">
+                <span className="inline-flex min-w-0 max-w-full items-center rounded-lg bg-slate-100 px-2.5 py-1 text-slate-700">
+                  <span className="truncate">
+                    {selectedPdfFile?.name || lessonPdfName || "PDF 없음"}
+                  </span>
                 </span>
+                {!!pdfStatusLabel && (
+                  <span className={pdfStatusBadgeClass(pdfStatusTone)}>
+                    {pdfStatusLabel}
+                  </span>
+                )}
+                {!!worksheetPageImages.length && (
+                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">
+                    {worksheetPageImages.length}쪽
+                  </span>
+                )}
                 {teacherCurrentPage != null && (
-                  <span className="rounded-lg bg-white px-3 py-2 text-slate-600 ring-1 ring-slate-200">
+                  <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">
                     p.{teacherCurrentPage + 1}
                   </span>
                 )}
                 <span
-                  className={`${saveSummaryClassName} rounded-lg px-3 py-2`}
+                  className={`${saveSummaryClassName} rounded-full px-2.5 py-1`}
                 >
                   {saveSummaryLabel}
                 </span>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => toggleFloatingPanel("library")}
-                  className={toolButtonClass(isLibraryPanelOpen, "blue")}
-                  aria-label="빈칸과 각주 목록"
-                  aria-pressed={isLibraryPanelOpen}
-                  title="빈칸과 각주 목록"
-                >
-                  <i className="fas fa-layer-group text-sm"></i>
-                  목록
-                  <span
-                    className={`inline-flex min-w-6 justify-center rounded-full px-2 py-0.5 text-[11px] ${
-                      isLibraryPanelOpen
-                        ? "bg-white/20 text-white"
-                        : "bg-slate-100 text-slate-600"
-                    }`}
-                  >
-                    {sortedBlanks.length + footnotes.length}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onWorksheetToolChange("ocr")}
-                  className={toolButtonClass(worksheetTool === "ocr")}
-                  aria-label="OCR 기반 선택"
-                  aria-pressed={worksheetTool === "ocr"}
-                  title="OCR 기반 선택"
-                >
-                  <i className="fas fa-wand-magic-sparkles text-sm"></i>
-                  OCR 선택
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onWorksheetToolChange("box");
-                    openLibraryTab("blanks");
-                  }}
-                  className={toolButtonClass(worksheetTool === "box")}
-                  aria-label="직접 그리기"
-                  aria-pressed={worksheetTool === "box"}
-                  title="직접 그리기"
-                >
-                  <i className="fas fa-vector-square text-sm"></i>
-                  직접 그리기
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onWorksheetToolChange("footnote");
-                    openLibraryTab("footnotes");
-                  }}
-                  className={toolButtonClass(worksheetTool === "footnote")}
-                  aria-label="각주 위치 추가"
-                  aria-pressed={worksheetTool === "footnote"}
-                  title="각주 위치 추가"
-                >
-                  <i className="fas fa-location-crosshairs text-sm"></i>
-                  각주 배치
-                </button>
-                <button
-                  type="button"
-                  onClick={onSavePdf}
-                  disabled={disablePdfSave}
-                  className={`inline-flex h-10 items-center gap-2 rounded-lg px-4 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-4 ${
-                    disablePdfSave
-                      ? "cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400"
-                      : hasUnsavedPdfChanges
-                        ? "bg-blue-600 text-white shadow-sm hover:bg-blue-700 focus-visible:ring-blue-100"
-                        : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 focus-visible:ring-slate-100"
-                  }`}
-                  aria-label={
-                    pdfSaveState === "saving" ? "PDF 저장 중" : "PDF 저장"
-                  }
-                  title={pdfSaveState === "saving" ? "PDF 저장 중" : "PDF 저장"}
-                >
-                  <i
-                    className={`fas ${
-                      pdfSaveState === "saving"
-                        ? "fa-spinner fa-spin"
-                        : "fa-floppy-disk"
-                    } text-sm`}
-                  ></i>
-                  {pdfSaveState === "saving" ? "저장 중" : "저장"}
-                </button>
+                <span className="text-slate-400">
+                  현재 도구: {activeToolLabel}
+                </span>
               </div>
             </div>
+            <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+              <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                <i className="fas fa-file-pdf text-sm"></i>
+                PDF 선택
+                <input
+                  ref={pdfInputRef}
+                  type="file"
+                  accept="application/pdf"
+                  className="hidden"
+                  onChange={(event) =>
+                    onPdfFileChange(event.target.files?.[0] ?? null)
+                  }
+                />
+              </label>
+              <button
+                type="button"
+                onClick={onPreparePdf}
+                disabled={!selectedPdfFile || pdfBusy}
+                className="h-10 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                {pdfBusy ? "준비 중..." : "PDF 준비"}
+              </button>
+              {canRetryPdfExtraction && (
+                <button
+                  type="button"
+                  onClick={onRetryPdfExtraction}
+                  disabled={pdfBusy || pdfSaveState === "saving"}
+                  className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <i className="fas fa-rotate-right text-[10px]"></i>
+                  재추출
+                </button>
+              )}
+              {(lessonPdfUrl ||
+                pdfProcessing.file.storagePath ||
+                worksheetPageImages.length > 0) && (
+                <button
+                  type="button"
+                  onClick={onRemovePdf}
+                  className="h-10 rounded-lg border border-rose-200 bg-white px-3 text-sm font-semibold text-rose-600 hover:bg-rose-50"
+                >
+                  PDF 삭제
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+              <button
+                type="button"
+                onClick={() => toggleFloatingPanel("library")}
+                className={toolButtonClass(isLibraryPanelOpen, "blue")}
+                aria-label="빈칸과 각주 목록"
+                aria-pressed={isLibraryPanelOpen}
+                title="빈칸과 각주 목록"
+              >
+                <i className="fas fa-layer-group text-sm"></i>
+                목록
+                <span
+                  className={`inline-flex min-w-6 justify-center rounded-full px-2 py-0.5 text-[11px] ${
+                    isLibraryPanelOpen
+                      ? "bg-white/20 text-white"
+                      : "bg-slate-100 text-slate-600"
+                  }`}
+                >
+                  {sortedBlanks.length + footnotes.length}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onWorksheetToolChange("ocr")}
+                className={toolButtonClass(worksheetTool === "ocr")}
+                aria-label="OCR 기반 선택"
+                aria-pressed={worksheetTool === "ocr"}
+                title="OCR 기반 선택"
+              >
+                <i className="fas fa-wand-magic-sparkles text-sm"></i>
+                OCR
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onWorksheetToolChange("box");
+                  openLibraryTab("blanks");
+                }}
+                className={toolButtonClass(worksheetTool === "box")}
+                aria-label="직접 그리기"
+                aria-pressed={worksheetTool === "box"}
+                title="직접 그리기"
+              >
+                <i className="fas fa-vector-square text-sm"></i>
+                직접
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onWorksheetToolChange("footnote");
+                  openLibraryTab("footnotes");
+                }}
+                className={toolButtonClass(worksheetTool === "footnote")}
+                aria-label="각주 위치 추가"
+                aria-pressed={worksheetTool === "footnote"}
+                title="각주 위치 추가"
+              >
+                <i className="fas fa-location-crosshairs text-sm"></i>
+                각주
+              </button>
+              <button
+                type="button"
+                onClick={onSavePdf}
+                disabled={disablePdfSave}
+                className={`inline-flex h-10 items-center gap-2 rounded-lg px-4 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-4 ${
+                  disablePdfSave
+                    ? "cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400"
+                    : hasUnsavedPdfChanges
+                      ? "bg-blue-600 text-white shadow-sm hover:bg-blue-700 focus-visible:ring-blue-100"
+                      : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 focus-visible:ring-slate-100"
+                }`}
+                aria-label={
+                  pdfSaveState === "saving" ? "PDF 저장 중" : "PDF 저장"
+                }
+                title={pdfSaveState === "saving" ? "PDF 저장 중" : "PDF 저장"}
+              >
+                <i
+                  className={`fas ${
+                    pdfSaveState === "saving"
+                      ? "fa-spinner fa-spin"
+                      : "fa-floppy-disk"
+                  } text-sm`}
+                ></i>
+                저장
+              </button>
+            </div>
           </div>
+        </div>
+        {!!worksheetPageImages.length ? (
           <div
             className={`flex flex-col ${isLibraryPanelOpen ? "xl:flex-row" : ""}`}
           >
@@ -1536,12 +1513,12 @@ export function LessonPdfSection({
               </aside>
             )}
           </div>
-        </div>
-      ) : (
-        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 py-12 text-center text-sm text-slate-500">
-          PDF를 준비하면 여기에서 OCR 결과와 빈칸, 각주를 편집할 수 있습니다.
-        </div>
-      )}
+        ) : (
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 py-12 text-center text-sm text-slate-500">
+            PDF를 준비하면 여기에서 OCR 결과와 빈칸, 각주를 편집할 수 있습니다.
+          </div>
+        )}
+      </div>
       {isBlankEditorOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <button
