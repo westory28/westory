@@ -6,13 +6,13 @@ import React, {
   useState,
 } from "react";
 import {
-  addDoc,
   collection,
   doc,
   getDoc,
   getDocs,
   query,
   serverTimestamp,
+  setDoc,
   where,
 } from "firebase/firestore";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -199,8 +199,30 @@ type HistoryClassroomExitRequestOptions = Omit<
 >;
 
 const LEGACY_HISTORY_CLASSROOM_RESULTS_COLLECTION = "history_classroom_results";
+const HISTORY_CLASSROOM_RESULT_SAVE_TIMEOUT_MS = 6000;
 
-const isFirestorePermissionError = (error: unknown) => {
+const withTimeout = async <T,>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  label: string,
+) => {
+  let timeoutId: number | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = window.setTimeout(() => {
+      reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId !== undefined) {
+      window.clearTimeout(timeoutId);
+    }
+  }
+};
+
+const isRecoverableResultSaveError = (error: unknown) => {
   const code =
     error && typeof error === "object" && "code" in error
       ? String((error as { code?: unknown }).code || "")
@@ -209,7 +231,11 @@ const isFirestorePermissionError = (error: unknown) => {
 
   return (
     code === "permission-denied" ||
-    message.includes("Missing or insufficient permissions")
+    code === "unavailable" ||
+    code === "deadline-exceeded" ||
+    message.includes("Missing or insufficient permissions") ||
+    message.includes("timed out") ||
+    message.includes("network")
   );
 };
 
@@ -276,6 +302,8 @@ const HistoryClassroomRunner: React.FC = () => {
   const backGuardRearmRef = useRef<(() => void) | null>(null);
   const autoSubmitHandledRef = useRef(false);
   const resultSummaryShownRef = useRef(false);
+  const completedRef = useRef(false);
+  const submittingRef = useRef(false);
   const attemptDeadlineMsRef = useRef(0);
   const visibilityCancelTimerRef = useRef<number | null>(null);
   const networkOfflineRef = useRef(isNetworkOffline);
@@ -482,6 +510,8 @@ const HistoryClassroomRunner: React.FC = () => {
         setCurrentPage(savedPage || loaded.pdfPageImages?.[0]?.page || 1);
         setAnswers(savedAnswers);
         setCompleted(false);
+        completedRef.current = false;
+        submittingRef.current = false;
         setResultText("");
         setResultSummary(null);
         setResultDialogOpen(false);
@@ -566,27 +596,32 @@ const HistoryClassroomRunner: React.FC = () => {
     };
     let savedResultCollectionPath = resultCollectionPath;
     let usedLegacyResultFallback = false;
-    let resultRef;
+    const resultRef = doc(collection(db, resultCollectionPath));
 
     try {
-      resultRef = await addDoc(
-        collection(db, resultCollectionPath),
-        resultPayload,
+      await withTimeout(
+        setDoc(resultRef, resultPayload),
+        HISTORY_CLASSROOM_RESULT_SAVE_TIMEOUT_MS,
+        "history classroom semester result save",
       );
     } catch (saveError) {
-      if (!isFirestorePermissionError(saveError)) {
+      if (!isRecoverableResultSaveError(saveError)) {
         throw saveError;
       }
 
       console.warn(
-        "[HistoryClassroomRunner] Semester result write was denied; falling back to legacy result collection.",
+        "[HistoryClassroomRunner] Semester result write did not complete; falling back to legacy result collection.",
         saveError,
       );
       savedResultCollectionPath = LEGACY_HISTORY_CLASSROOM_RESULTS_COLLECTION;
       usedLegacyResultFallback = true;
-      resultRef = await addDoc(
-        collection(db, LEGACY_HISTORY_CLASSROOM_RESULTS_COLLECTION),
-        resultPayload,
+      await withTimeout(
+        setDoc(
+          doc(db, LEGACY_HISTORY_CLASSROOM_RESULTS_COLLECTION, resultRef.id),
+          resultPayload,
+        ),
+        HISTORY_CLASSROOM_RESULT_SAVE_TIMEOUT_MS,
+        "history classroom legacy result save",
       );
     }
 
@@ -731,17 +766,32 @@ const HistoryClassroomRunner: React.FC = () => {
     options: { redirectTo?: string | null; replace?: boolean } = {},
   ): Promise<boolean> => {
     if (networkOfflineRef.current) {
-      setResultText(
-        "인터넷 연결이 끊겨 응시를 잠시 멈췄습니다. 연결이 돌아오면 계속 진행할 수 있습니다.",
-      );
-      return false;
+      if (assignment && userData) {
+        writeCooldownLock(
+          assignment.id,
+          userData.uid,
+          getExitCooldownUntil(),
+          reason,
+        );
+      }
+      setCompleted(true);
+      completedRef.current = true;
+      const redirectTo =
+        "redirectTo" in options
+          ? options.redirectTo
+          : "/student/history-classroom";
+      if (redirectTo) {
+        exitNavigationAllowedRef.current = true;
+        navigate(redirectTo, { replace: options.replace ?? true });
+      }
+      return true;
     }
 
     if (
       !assignment ||
       !userData ||
-      completed ||
-      submitting ||
+      completedRef.current ||
+      submittingRef.current ||
       cancellationInFlightRef.current
     ) {
       return false;
@@ -755,32 +805,35 @@ const HistoryClassroomRunner: React.FC = () => {
       reason,
     );
 
-    try {
-      await saveResult({ status: "cancelled", cancellationReason: reason });
-      setCompleted(true);
-      setResultSummary(null);
-      setResultText(
-        "화면 이탈로 응시가 자동 취소되었습니다. 재응시 제한이 시작됩니다.",
-      );
-      const redirectTo =
-        "redirectTo" in options
-          ? options.redirectTo
-          : "/student/history-classroom";
-      if (redirectTo) {
-        exitNavigationAllowedRef.current = true;
-        navigate(redirectTo, { replace: options.replace ?? true });
-      }
-      return true;
-    } catch (cancelError) {
-      console.error("Failed to save cancelled attempt:", cancelError);
-      cancellationInFlightRef.current = false;
-      return false;
+    void saveResult({ status: "cancelled", cancellationReason: reason }).catch(
+      (cancelError) => {
+        console.error("Failed to save cancelled attempt:", cancelError);
+      },
+    );
+    setCompleted(true);
+    completedRef.current = true;
+    setResultSummary(null);
+    setResultText(
+      "화면 이탈로 응시가 자동 취소되었습니다. 재응시 제한이 시작됩니다.",
+    );
+    const redirectTo =
+      "redirectTo" in options
+        ? options.redirectTo
+        : "/student/history-classroom";
+    if (redirectTo) {
+      exitNavigationAllowedRef.current = true;
+      navigate(redirectTo, { replace: options.replace ?? true });
     }
+    return true;
   };
 
   const requestExit = useCallback(
     (reason: string, options: HistoryClassroomExitRequestOptions = {}) => {
-      if (!assignment || completed || submitting) {
+      if (assignment && submittingRef.current) {
+        return;
+      }
+
+      if (!assignment || completedRef.current) {
         if (options.mode === "reload") {
           window.location.reload();
           return;
@@ -805,7 +858,7 @@ const HistoryClassroomRunner: React.FC = () => {
         mode: options.mode || "route",
       });
     },
-    [assignment, completed, navigate, submitting],
+    [assignment, navigate],
   );
 
   const cancelPendingExit = useCallback(() => {
@@ -818,12 +871,6 @@ const HistoryClassroomRunner: React.FC = () => {
 
   const confirmPendingExit = useCallback(async () => {
     if (!pendingExitAction || exitConfirmSubmitting) return;
-    if (networkOfflineRef.current) {
-      setResultText(
-        "인터넷 연결이 끊겨 응시를 잠시 멈췄습니다. 연결이 돌아오면 나갈 수 있습니다.",
-      );
-      return;
-    }
 
     setExitConfirmSubmitting(true);
     const confirmedAction = pendingExitAction;
@@ -1007,11 +1054,13 @@ const HistoryClassroomRunner: React.FC = () => {
     }
 
     autoSubmitHandledRef.current = true;
+    submittingRef.current = true;
     setSubmitting(true);
 
     try {
       const result = await saveResult({ status: "failed" });
       setCompleted(true);
+      completedRef.current = true;
       if (!result) return;
       if (!assignment.cooldownMinutes || result.passed) {
         clearCooldownLock(assignment.id, userData.uid);
@@ -1037,6 +1086,7 @@ const HistoryClassroomRunner: React.FC = () => {
         setResultDialogOpen(true);
       }
       setResultText("");
+      submittingRef.current = false;
       setSubmitting(false);
       void applyHistoryClassroomPointReward(result.resultId, result.percent);
     } catch (submitError) {
@@ -1047,6 +1097,7 @@ const HistoryClassroomRunner: React.FC = () => {
           : "시간 초과 제출 처리에 실패했습니다.",
       );
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -1059,6 +1110,7 @@ const HistoryClassroomRunner: React.FC = () => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       if (exitNavigationAllowedRef.current) return undefined;
       if (networkOfflineRef.current) return undefined;
+      if (submittingRef.current || completedRef.current) return undefined;
       if (isScreenRotationGraceActive()) return undefined;
       event.preventDefault();
       event.returnValue = getExitWarningMessage();
@@ -1095,6 +1147,7 @@ const HistoryClassroomRunner: React.FC = () => {
 
     const handlePopState = () => {
       if (exitNavigationAllowedRef.current) return;
+      if (submittingRef.current || completedRef.current) return;
       requestExit("browser-back", { mode: "back", redirectTo: null });
     };
 
@@ -1149,6 +1202,7 @@ const HistoryClassroomRunner: React.FC = () => {
 
       const route = getNavigationRoute(anchor);
       if (!route) return;
+      if (submittingRef.current || completedRef.current) return;
 
       event.preventDefault();
       event.stopPropagation();
@@ -1167,6 +1221,7 @@ const HistoryClassroomRunner: React.FC = () => {
       const isRefreshShortcut =
         key === "f5" || ((event.ctrlKey || event.metaKey) && key === "r");
       if (!isRefreshShortcut) return;
+      if (submittingRef.current || completedRef.current) return;
 
       event.preventDefault();
       event.stopPropagation();
@@ -1193,6 +1248,7 @@ const HistoryClassroomRunner: React.FC = () => {
         clearVisibilityCancelTimer();
         return;
       }
+      if (submittingRef.current || completedRef.current) return;
       if (isScreenRotationGraceActive()) return;
       if (networkOfflineRef.current) return;
 
@@ -1200,6 +1256,7 @@ const HistoryClassroomRunner: React.FC = () => {
       visibilityCancelTimerRef.current = window.setTimeout(() => {
         visibilityCancelTimerRef.current = null;
         if (document.visibilityState !== "hidden") return;
+        if (submittingRef.current || completedRef.current) return;
         if (isScreenRotationGraceActive()) return;
         if (networkOfflineRef.current) return;
         void handleForcedCancel("visibility-hidden");
@@ -1207,6 +1264,7 @@ const HistoryClassroomRunner: React.FC = () => {
     };
     const handlePageHide = () => {
       clearVisibilityCancelTimer();
+      if (submittingRef.current || completedRef.current) return;
       if (isScreenRotationGraceActive()) return;
       if (networkOfflineRef.current) return;
       void handleForcedCancel("pagehide");
@@ -1369,7 +1427,7 @@ const HistoryClassroomRunner: React.FC = () => {
 
   const submitAnswers = async () => {
     if (!assignment || !userData) return;
-    if (completed || submitting) return;
+    if (completedRef.current || submittingRef.current) return;
     if (networkOfflineRef.current) {
       setPendingSubmitAfterOnline(true);
       setResultText(
@@ -1379,11 +1437,15 @@ const HistoryClassroomRunner: React.FC = () => {
     }
 
     emitSessionActivity();
+    setPendingExitAction(null);
+    setExitConfirmSubmitting(false);
+    submittingRef.current = true;
     setSubmitting(true);
 
     try {
       const result = await saveResult({ status: "failed" });
       setCompleted(true);
+      completedRef.current = true;
       if (!result) return;
       if (!assignment.cooldownMinutes || result.passed) {
         clearCooldownLock(assignment.id, userData.uid);
@@ -1410,6 +1472,7 @@ const HistoryClassroomRunner: React.FC = () => {
       }
       setPendingSubmitAfterOnline(false);
       setResultText("");
+      submittingRef.current = false;
       setSubmitting(false);
       void applyHistoryClassroomPointReward(result.resultId, result.percent);
     } catch (submitError) {
@@ -1425,6 +1488,7 @@ const HistoryClassroomRunner: React.FC = () => {
         );
       }
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -1487,10 +1551,13 @@ const HistoryClassroomRunner: React.FC = () => {
         headerAction={
           <button
             type="button"
-            onClick={() => requestExit("student-navigation")}
-            className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50"
+            onClick={() => void submitAnswers()}
+            disabled={submitting || completed}
+            className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            목록으로
+            <span className="text-sm">
+              {submitting ? "제출 중..." : completed ? "제출 완료" : "제출하기"}
+            </span>
           </button>
         }
       />
