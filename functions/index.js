@@ -3403,6 +3403,175 @@ exports.createManagedNotifications = onCall({ region: REGION }, async (request) 
   };
 });
 
+const normalizeHistoryClassroomAnswerText = (value) => String(value ?? '')
+  .normalize('NFKC')
+  .replace(/\s+/g, '')
+  .replace(/[\u200B-\u200D\uFEFF]/g, '')
+  .replace(/[^\p{L}\p{N}]/gu, '')
+  .toLocaleLowerCase('ko-KR');
+
+const normalizeHistoryClassroomAnswersForWrite = (answers) => {
+  if (!answers || typeof answers !== 'object' || Array.isArray(answers)) {
+    return {};
+  }
+  return Object.fromEntries(
+    Object.entries(answers)
+      .map(([key, value]) => [String(key || '').trim(), String(value ?? '')])
+      .filter(([key]) => key)
+      .slice(0, 200),
+  );
+};
+
+const normalizeHistoryClassroomBlanksForScoring = (blanks) => (
+  Array.isArray(blanks)
+    ? blanks.map((blank, index) => ({
+      id: String(blank?.id || `blank-${index + 1}`).trim(),
+      page: Math.max(1, Number(blank?.page) || 1),
+      answer: String(blank?.answer ?? '').trim(),
+    })).filter((blank) => blank.id)
+    : []
+);
+
+const collectHistoryClassroomAssignedUidsForFunction = (assignment) => Array.from(new Set([
+  ...(Array.isArray(assignment?.targetStudentUids)
+    ? assignment.targetStudentUids.map((uid) => String(uid || '').trim()).filter(Boolean)
+    : []),
+  ...(String(assignment?.targetStudentUid || '').trim()
+    ? [String(assignment.targetStudentUid || '').trim()]
+    : []),
+  ...(
+    assignment?.targetStudentAccessMap && typeof assignment.targetStudentAccessMap === 'object'
+      ? Object.entries(assignment.targetStudentAccessMap)
+        .filter(([, allowed]) => allowed === true)
+        .map(([uid]) => String(uid || '').trim())
+        .filter(Boolean)
+      : []
+  ),
+]));
+
+const buildHistoryClassroomServerScore = (assignment, answers) => {
+  const blanks = normalizeHistoryClassroomBlanksForScoring(assignment?.blanks);
+  const checks = blanks.map((blank, index) => {
+    const studentAnswer = String(answers[blank.id] ?? '');
+    const correctAnswer = String(blank.answer ?? '');
+    return {
+      blankId: blank.id,
+      blankNumber: index + 1,
+      page: blank.page,
+      studentAnswer,
+      correctAnswer,
+      correct: normalizeHistoryClassroomAnswerText(studentAnswer)
+        === normalizeHistoryClassroomAnswerText(correctAnswer),
+    };
+  });
+  const score = checks.filter((check) => check.correct).length;
+  const total = checks.length;
+  return {
+    checks,
+    score,
+    total,
+    percent: total > 0 ? Math.round((score / total) * 100) : 0,
+  };
+};
+
+const loadHistoryClassroomAssignmentForSubmit = async (year, semester, assignmentId) => {
+  const semesterRef = db.doc(`${getSemesterRoot(year, semester)}/history_classrooms/${assignmentId}`);
+  let snap = await semesterRef.get();
+  if (!snap.exists) {
+    snap = await db.doc(`history_classrooms/${assignmentId}`).get();
+  }
+  if (!snap.exists) {
+    throw new HttpsError('not-found', 'History classroom assignment does not exist.');
+  }
+  return {
+    id: snap.id,
+    data: snap.data() || {},
+  };
+};
+
+exports.submitHistoryClassroomResult = onCall({ region: REGION }, async (request) => {
+  const { uid } = assertAllowedWestoryUser(request);
+  const { year, semester } = assertYearSemester(request.data);
+  const assignmentId = String(request.data?.assignmentId || '').trim();
+  const requestedResultId = String(request.data?.resultId || '').trim();
+  const requestedStatus = String(request.data?.status || '').trim();
+  const cancellationReason = String(request.data?.cancellationReason || '').trim().slice(0, 120);
+
+  if (!assignmentId) {
+    throw new HttpsError('invalid-argument', 'Assignment id is required.');
+  }
+  if (requestedStatus && !['passed', 'failed', 'cancelled'].includes(requestedStatus)) {
+    throw new HttpsError('invalid-argument', 'Invalid result status.');
+  }
+
+  const assignment = await loadHistoryClassroomAssignmentForSubmit(year, semester, assignmentId);
+  const assignmentData = assignment.data;
+  if (assignmentData.deletedAt) {
+    throw new HttpsError('failed-precondition', 'History classroom assignment was deleted.');
+  }
+  if (assignmentData.isPublished !== true) {
+    throw new HttpsError('failed-precondition', 'History classroom assignment is not published.');
+  }
+  if (!collectHistoryClassroomAssignedUidsForFunction(assignmentData).includes(uid)) {
+    throw new HttpsError('permission-denied', 'History classroom assignment is not assigned to the caller.');
+  }
+
+  const answers = normalizeHistoryClassroomAnswersForWrite(request.data?.answers);
+  const scoreSummary = buildHistoryClassroomServerScore(assignmentData, answers);
+  const { profile } = await getUserProfile(uid);
+  const passThresholdPercent = Math.min(100, Math.max(0, Number(assignmentData.passThresholdPercent) || 80));
+  const passed = requestedStatus === 'cancelled'
+    ? false
+    : scoreSummary.percent >= passThresholdPercent;
+  const status = requestedStatus === 'cancelled'
+    ? 'cancelled'
+    : passed
+      ? 'passed'
+      : 'failed';
+
+  const resultCollectionPath = `${getSemesterRoot(year, semester)}/history_classroom_results`;
+  const resultRef = requestedResultId
+    ? db.doc(`${resultCollectionPath}/${requestedResultId}`)
+    : db.collection(resultCollectionPath).doc();
+  const resultSnap = await resultRef.get();
+  if (resultSnap.exists && String(resultSnap.data()?.uid || '').trim() !== uid) {
+    throw new HttpsError('permission-denied', 'History classroom result id belongs to another user.');
+  }
+
+  const resultPayload = {
+    assignmentId: assignment.id,
+    assignmentTitle: String(assignmentData.title || '').trim(),
+    uid,
+    studentName: String(profile.name || '').trim(),
+    studentGrade: String(profile.grade || '').trim(),
+    studentClass: String(profile.class || '').trim(),
+    studentNumber: String(profile.number || '').trim(),
+    answers,
+    score: scoreSummary.score,
+    total: scoreSummary.total,
+    percent: scoreSummary.percent,
+    passThresholdPercent,
+    passed,
+    status,
+    answerChecks: scoreSummary.checks,
+    cancellationReason,
+    createdAt: FieldValue.serverTimestamp(),
+  };
+
+  await resultRef.set(resultPayload, { merge: false });
+
+  return {
+    resultId: resultRef.id,
+    resultCollectionPath,
+    score: scoreSummary.score,
+    total: scoreSummary.total,
+    percent: scoreSummary.percent,
+    passed,
+    status,
+    answerChecks: scoreSummary.checks,
+  };
+});
+
 exports.notifyHistoryClassroomSubmitted = onCall({ region: REGION }, async (request) => {
   const { uid } = assertAllowedWestoryUser(request);
   const { year, semester } = assertYearSemester(request.data);

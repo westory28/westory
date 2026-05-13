@@ -15,13 +15,14 @@ import {
   setDoc,
   where,
 } from "firebase/firestore";
+import { httpsCallable } from "firebase/functions";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import HistoryClassroomAssignmentView from "../../../components/common/HistoryClassroomAssignmentView";
 import { PageLoading } from "../../../components/common/LoadingState";
 import { useAuth } from "../../../contexts/AuthContext";
 import { notifyPointsUpdated } from "../../../lib/appEvents";
-import { db } from "../../../lib/firebase";
+import { db, functions } from "../../../lib/firebase";
 import {
   getHistoryClassroomAssignedStudentUids,
   getHistoryClassroomRemainingMs,
@@ -49,6 +50,7 @@ import {
 } from "../../../lib/safeStorage";
 import { emitSessionActivity } from "../../../lib/sessionActivity";
 import {
+  getYearSemester,
   getSemesterCollectionPath,
   getSemesterDocPath,
 } from "../../../lib/semesterScope";
@@ -220,7 +222,7 @@ type HistoryClassroomExitRequestOptions = Omit<
 >;
 
 const LEGACY_HISTORY_CLASSROOM_RESULTS_COLLECTION = "history_classroom_results";
-const HISTORY_CLASSROOM_RESULT_SAVE_TIMEOUT_MS = 6000;
+const HISTORY_CLASSROOM_RESULT_SAVE_TIMEOUT_MS = 20000;
 
 const withTimeout = async <T,>(
   promise: Promise<T>,
@@ -258,6 +260,52 @@ const isRecoverableResultSaveError = (error: unknown) => {
     message.includes("timed out") ||
     message.includes("network")
   );
+};
+
+const sanitizeHistoryClassroomAnswersForWrite = (
+  rawAnswers: Record<string, string>,
+) =>
+  Object.fromEntries(
+    Object.entries(rawAnswers)
+      .map(([key, value]) => [String(key || "").trim(), String(value ?? "")])
+      .filter(([key]) => key),
+  );
+
+const sanitizeHistoryClassroomAnswerChecksForWrite = (
+  checks: HistoryClassroomAnswerCheck[],
+) =>
+  checks
+    .map((check, index) => ({
+      blankId: String(check.blankId || "").trim(),
+      blankNumber: Math.max(1, Number(check.blankNumber) || index + 1),
+      page: Math.max(1, Number(check.page) || 1),
+      studentAnswer: String(check.studentAnswer ?? ""),
+      correctAnswer: String(check.correctAnswer ?? ""),
+      correct: check.correct === true,
+    }))
+    .filter((check) => check.blankId);
+
+const submitHistoryClassroomResultViaFunction = async (input: {
+  year: string;
+  semester: string;
+  resultId: string;
+  assignmentId: string;
+  answers: Record<string, string>;
+  status: "passed" | "failed" | "cancelled";
+  cancellationReason: string;
+}) => {
+  const callable = httpsCallable(functions, "submitHistoryClassroomResult");
+  const response = await callable(input);
+  return response.data as {
+    resultId: string;
+    score: number;
+    total: number;
+    percent: number;
+    status: "passed" | "failed" | "cancelled";
+    passed: boolean;
+    answerChecks: HistoryClassroomAnswerCheck[];
+    resultCollectionPath?: string;
+  };
 };
 
 const buildHistoryClassroomResultSummary = (
@@ -563,8 +611,14 @@ const HistoryClassroomRunner: React.FC = () => {
   }) => {
     if (!assignment || !userData) return null;
 
-    const answerSummary = summarizeHistoryClassroomAnswers(assignment, answers);
+    const sanitizedAnswers = sanitizeHistoryClassroomAnswersForWrite(answers);
+    const answerSummary = summarizeHistoryClassroomAnswers(
+      assignment,
+      sanitizedAnswers,
+    );
     const { checks: answerChecks, score, total, percent } = answerSummary;
+    const sanitizedAnswerChecks =
+      sanitizeHistoryClassroomAnswerChecksForWrite(answerChecks);
     const passed =
       options.status === "cancelled"
         ? false
@@ -579,9 +633,11 @@ const HistoryClassroomRunner: React.FC = () => {
       config,
       "history_classroom_results",
     );
+    const resultRef = doc(collection(db, resultCollectionPath));
 
     console.info("[HistoryClassroomRunner] Saving result", {
       resultCollectionPath,
+      resultId: resultRef.id,
       assignmentId: assignment.id,
       uid: userData.uid,
       score,
@@ -589,6 +645,48 @@ const HistoryClassroomRunner: React.FC = () => {
       percent,
       status,
     });
+
+    try {
+      const { year, semester } = getYearSemester(config);
+      const serverResult = await withTimeout(
+        submitHistoryClassroomResultViaFunction({
+          year,
+          semester,
+          resultId: resultRef.id,
+          assignmentId: assignment.id,
+          answers: sanitizedAnswers,
+          status,
+          cancellationReason: options.cancellationReason || "",
+        }),
+        HISTORY_CLASSROOM_RESULT_SAVE_TIMEOUT_MS,
+        "history classroom callable result save",
+      );
+
+      clearAttemptProgress(assignment.id, userData.uid);
+      attemptDeadlineMsRef.current = 0;
+
+      return {
+        score: Number(serverResult.score) || score,
+        total: Number(serverResult.total) || total,
+        percent: Number(serverResult.percent) || percent,
+        status: serverResult.status || status,
+        passed: serverResult.passed === true,
+        answerChecks: Array.isArray(serverResult.answerChecks)
+          ? sanitizeHistoryClassroomAnswerChecksForWrite(
+              serverResult.answerChecks,
+            )
+          : sanitizedAnswerChecks,
+        resultId: String(serverResult.resultId || resultRef.id),
+        resultCollectionPath:
+          serverResult.resultCollectionPath || resultCollectionPath,
+        usedLegacyResultFallback: false,
+      };
+    } catch (callableError) {
+      console.warn(
+        "[HistoryClassroomRunner] Callable result save failed; falling back to direct Firestore result save.",
+        callableError,
+      );
+    }
 
     const resultPayload = {
       assignmentId: assignment.id,
@@ -598,20 +696,19 @@ const HistoryClassroomRunner: React.FC = () => {
       studentGrade: String(userData.grade || ""),
       studentClass: String(userData.class || ""),
       studentNumber: String(userData.number || ""),
-      answers,
+      answers: sanitizedAnswers,
       score,
       total,
       percent,
       passThresholdPercent: assignment.passThresholdPercent,
       passed,
       status,
-      answerChecks,
+      answerChecks: sanitizedAnswerChecks,
       cancellationReason: options.cancellationReason || "",
       createdAt: serverTimestamp(),
     };
     let savedResultCollectionPath = resultCollectionPath;
     let usedLegacyResultFallback = false;
-    const resultRef = doc(collection(db, resultCollectionPath));
 
     try {
       await withTimeout(
@@ -661,7 +758,7 @@ const HistoryClassroomRunner: React.FC = () => {
       percent,
       status,
       passed,
-      answerChecks,
+      answerChecks: sanitizedAnswerChecks,
       resultId: resultRef.id,
       resultCollectionPath: savedResultCollectionPath,
       usedLegacyResultFallback,

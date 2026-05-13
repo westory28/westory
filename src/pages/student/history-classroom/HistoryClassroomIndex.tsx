@@ -576,17 +576,17 @@ const HistoryClassroomIndex: React.FC = () => {
 
                         <div className="flex shrink-0 flex-col gap-3 lg:w-48">
                           {item.passedAttempt ? (
-                            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
+                            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm font-bold text-emerald-700">
                               {item.passedAttemptNumber}번째 시도 ·{" "}
                               {item.passedAttempt.percent}% 통과
                             </div>
                           ) : item.latest ? (
-                            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700">
+                            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-sm font-bold text-slate-700">
                               최근 {item.latest.percent}% ·{" "}
                               {getResultLabel(item.latest.status)}
                             </div>
                           ) : (
-                            <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-700">
+                            <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-center text-sm font-bold text-blue-700">
                               아직 시작 전
                             </div>
                           )}
