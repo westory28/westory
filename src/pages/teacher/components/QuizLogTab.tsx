@@ -273,6 +273,54 @@ const findRecentClassFocus = (logs: Log[]): RecentClassFocus | null => {
   );
 };
 
+const findRecentCategoryFocus = (logs: Log[], classOnly?: string): string => {
+  const byCategory = new Map<
+    string,
+    {
+      studentKeys: Set<string>;
+      attemptCount: number;
+      latestMs: number;
+    }
+  >();
+
+  logs.forEach((log) => {
+    if (classOnly && log.classOnly !== classOnly) return;
+
+    const category = toText(log.category);
+    if (!category) return;
+
+    const studentKey = buildStudentKey({
+      uid: log.uid,
+      email: log.email,
+      classOnly: log.classOnly,
+      number: log.studentNumber,
+      name: log.studentName,
+    });
+    const current =
+      byCategory.get(category) ||
+      {
+        studentKeys: new Set<string>(),
+        attemptCount: 0,
+        latestMs: 0,
+      };
+    current.studentKeys.add(studentKey);
+    current.attemptCount += 1;
+    current.latestMs = Math.max(current.latestMs, getTimestampMs(log.timestamp));
+    byCategory.set(category, current);
+  });
+
+  return (
+    Array.from(byCategory.entries())
+      .sort(([, a], [, b]) => {
+        if (a.attemptCount !== b.attemptCount)
+          return b.attemptCount - a.attemptCount;
+        if (a.studentKeys.size !== b.studentKeys.size)
+          return b.studentKeys.size - a.studentKeys.size;
+        return b.latestMs - a.latestMs;
+      })[0]?.[0] || ""
+  );
+};
+
 const buildUnitMetaMap = (treeData: TreeUnit[]) => {
   const map = new Map<string, UnitMeta>();
 
@@ -446,6 +494,7 @@ const QuizLogTab: React.FC = () => {
   const autoUnitFilterAppliedRef = useRef(false);
   const userTouchedUnitFilterRef = useRef(false);
   const userTouchedClassFilterRef = useRef(false);
+  const userTouchedCategoryFilterRef = useRef(false);
 
   const unitMetaById = useMemo(() => buildUnitMetaMap(treeData), [treeData]);
 
@@ -873,6 +922,17 @@ const QuizLogTab: React.FC = () => {
     if (classFilter === recentClassFocus.classOnly) return;
     setClassFilter(recentClassFocus.classOnly);
   }, [classFilter, recentClassFocus]);
+
+  const recentDefaultCategory = useMemo(
+    () => findRecentCategoryFocus(canonicalLogs, recentClassFocus?.classOnly),
+    [canonicalLogs, recentClassFocus],
+  );
+
+  useEffect(() => {
+    if (userTouchedCategoryFilterRef.current || !recentDefaultCategory) return;
+    if (categoryFilter === recentDefaultCategory) return;
+    setCategoryFilter(recentDefaultCategory);
+  }, [categoryFilter, recentDefaultCategory]);
 
   const analysisLogs = useMemo(() => {
     return canonicalLogs.filter((log) => {
@@ -1521,7 +1581,10 @@ const QuizLogTab: React.FC = () => {
             </select>
             <select
               value={categoryFilter}
-              onChange={(event) => setCategoryFilter(event.target.value)}
+              onChange={(event) => {
+                userTouchedCategoryFilterRef.current = true;
+                setCategoryFilter(event.target.value);
+              }}
               className="min-w-0 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-700"
               aria-label="평가유형 필터"
             >

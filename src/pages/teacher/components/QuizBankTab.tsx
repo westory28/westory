@@ -458,6 +458,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
           questionsResult,
           treeResult,
           statsResult.questionStats,
+          statsResult.recentClassFocus?.classOnly,
         );
         setDefaultFocus(nextDefaultFocus);
         if (nextDefaultFocus) {
@@ -497,6 +498,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     questionList: Question[],
     treeList: TreeUnit[],
     statsMap: Record<string, QuestionAggregate>,
+    preferredClassOnly?: string,
   ): BankDefaultFocus | null => {
     if (!questionList.length) return null;
     const midToBig: Record<string, string> = {};
@@ -515,10 +517,22 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         questions: number;
       }
     >();
+    const categoryGroups = new Map<
+      string,
+      {
+        category: string;
+        attempts: number;
+        latest: number;
+        questions: number;
+      }
+    >();
 
     questionList.forEach((question) => {
       const stat =
         statsMap[String(question.docId)] || statsMap[String(question.id)];
+      const scopedAttempts = preferredClassOnly
+        ? stat?.classStats[preferredClassOnly]?.attempts || 0
+        : stat?.attempts || 0;
       const filtersForQuestion =
         question.category === "exam_prep"
           ? {
@@ -532,6 +546,20 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
               small: "",
             };
       const category = question.category || "";
+      const categoryGroup = categoryGroups.get(category) || {
+        category,
+        attempts: 0,
+        latest: 0,
+        questions: 0,
+      };
+      categoryGroup.attempts += scopedAttempts;
+      categoryGroup.latest = Math.max(
+        categoryGroup.latest,
+        stat?.lastAttemptAt || 0,
+      );
+      categoryGroup.questions += 1;
+      categoryGroups.set(category, categoryGroup);
+
       const key = [
         category,
         filtersForQuestion.big,
@@ -545,24 +573,43 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         latest: 0,
         questions: 0,
       };
-      current.attempts += stat?.attempts || 0;
+      current.attempts += scopedAttempts;
       current.latest = Math.max(current.latest, stat?.lastAttemptAt || 0);
       current.questions += 1;
       groups.set(key, current);
     });
 
+    const targetCategory =
+      Array.from(categoryGroups.values())
+        .filter((group) => group.category && group.attempts > 0)
+        .sort((a, b) => {
+          if (a.attempts !== b.attempts) return b.attempts - a.attempts;
+          if (a.latest !== b.latest) return b.latest - a.latest;
+          return b.questions - a.questions;
+        })[0] ||
+      Array.from(categoryGroups.values()).find((group) => group.category) ||
+      null;
+
     const target =
       Array.from(groups.values())
-        .filter((group) => group.attempts > 0)
+        .filter(
+          (group) =>
+            (!targetCategory || group.category === targetCategory.category) &&
+            group.attempts > 0,
+        )
         .sort((a, b) => {
-          if (a.latest !== b.latest) return b.latest - a.latest;
           if (a.attempts !== b.attempts) return b.attempts - a.attempts;
+          if (a.latest !== b.latest) return b.latest - a.latest;
           return b.questions - a.questions;
-        })[0] || Array.from(groups.values())[0];
+        })[0] ||
+      Array.from(groups.values()).find(
+        (group) => !targetCategory || group.category === targetCategory.category,
+      ) ||
+      Array.from(groups.values())[0];
 
     if (!target) return null;
     return {
-      category: target.category,
+      category: targetCategory?.category || target.category,
       filters: target.filters,
     };
   };
