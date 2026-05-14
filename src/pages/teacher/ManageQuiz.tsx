@@ -111,7 +111,7 @@ const ManageQuiz: React.FC = () => {
                 )}
 
                 {canWrite && activeTab === 'manage' && (
-                    <div className="flex-1 flex flex-col lg:flex-row gap-6 overflow-hidden pb-2 relative min-h-0">
+                    <div className="flex-1 flex flex-col lg:flex-row lg:items-stretch gap-6 overflow-hidden pb-2 relative min-h-0 lg:min-h-[calc(100vh-170px)]">
                         {mobileTreeOpen && (
                             <button
                                 type="button"
@@ -122,7 +122,7 @@ const ManageQuiz: React.FC = () => {
                         )}
 
                         <div
-                            className={`fixed lg:static top-16 lg:top-auto right-0 bottom-0 lg:bottom-auto w-[82%] max-w-[320px] lg:w-1/3 bg-white lg:rounded-xl shadow-2xl lg:shadow-sm border border-gray-200 flex flex-col overflow-hidden h-[calc(100vh-64px)] lg:h-full z-50 lg:z-auto transition-transform duration-300 ${mobileTreeOpen ? 'translate-x-0' : 'translate-x-full'} lg:translate-x-0`}
+                            className={`fixed lg:static top-16 lg:top-auto right-0 bottom-0 lg:bottom-auto w-[82%] max-w-[320px] lg:w-1/3 bg-white lg:rounded-xl shadow-2xl lg:shadow-sm border border-gray-200 flex flex-col overflow-hidden h-[calc(100vh-64px)] lg:h-auto lg:min-h-[calc(100vh-170px)] lg:self-stretch z-50 lg:z-auto transition-transform duration-300 ${mobileTreeOpen ? 'translate-x-0' : 'translate-x-full'} lg:translate-x-0`}
                         >
                             <div className="p-4 border-b bg-gray-50 font-bold text-gray-700 flex items-center justify-between">
                                 <span>단원 및 평가 선택</span>
@@ -138,7 +138,7 @@ const ManageQuiz: React.FC = () => {
                             <QuizUnitTree onSelect={handleNodeSelect} />
                         </div>
 
-                        <div className="w-full lg:w-2/3 flex flex-col h-full min-h-0 overflow-hidden lg:h-[calc(100vh-170px)]">
+                        <div className="w-full lg:w-2/3 flex flex-col h-full min-h-0 overflow-hidden lg:h-auto lg:min-h-[calc(100vh-170px)] lg:self-stretch">
                             {selectedNode ? (
                                 <QuizEditor
                                     node={selectedNode}
