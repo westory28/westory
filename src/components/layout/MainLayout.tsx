@@ -18,6 +18,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { showToast } = useAppToast();
     const navigate = useNavigate();
     const location = useLocation();
+    const isTeacherQuizRoute = location.pathname === '/teacher/quiz';
 
     useEffect(() => {
         if (!loading && !currentUser) {
@@ -75,11 +76,11 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     if (loading) return <PageLoading message="로그인 상태를 확인하는 중입니다." />;
 
     return (
-        <div className="flex flex-col min-h-screen bg-gray-50">
+        <div className={`flex flex-col bg-gray-50 ${isTeacherQuizRoute ? 'h-screen overflow-hidden' : 'min-h-screen'}`}>
             <Header />
             <StudentRankPromotionController />
             <StudentHistoryDictionaryController />
-            <main className="flex-1 w-full min-h-0">
+            <main className={`flex-1 w-full min-h-0 ${isTeacherQuizRoute ? 'overflow-hidden' : ''}`}>
                 {children}
             </main>
             <Footer />
