@@ -16,13 +16,16 @@ import {
   normalizeHistoryDictionaryWord,
   saveHistoryDictionaryTerm,
   saveHistoryDictionaryTermsBulk,
+  subscribeTeacherStudentHistoryDictionaryWords,
   subscribeTeacherHistoryDictionaryRequests,
   subscribeTeacherHistoryDictionaryTerms,
+  updateStudentHistoryDictionaryWordByTeacher,
 } from "../../lib/historyDictionary";
 import { loadNotifications } from "../../lib/notifications";
 import type {
   HistoryDictionaryRequest,
   HistoryDictionaryTerm,
+  StudentHistoryDictionaryWord,
   WestoryNotification,
 } from "../../types";
 
@@ -79,7 +82,7 @@ const INITIAL_FILTERS = [
   "ㅎ",
 ];
 
-type ActiveDictionaryPanel = "terms" | "requests" | "upload";
+type ActiveDictionaryPanel = "terms" | "studentWords" | "requests" | "upload";
 
 interface HistoryDictionaryUploadRow {
   id: string;
@@ -217,8 +220,12 @@ const ManageHistoryDictionary: React.FC = () => {
     HistoryDictionaryRequest[]
   >([]);
   const [terms, setTerms] = useState<HistoryDictionaryTerm[]>([]);
+  const [studentWords, setStudentWords] = useState<
+    StudentHistoryDictionaryWord[]
+  >([]);
   const [selectedRequestId, setSelectedRequestId] = useState("");
   const [selectedTermId, setSelectedTermId] = useState("");
+  const [selectedStudentWordId, setSelectedStudentWordId] = useState("");
   const [word, setWord] = useState("");
   const [definition, setDefinition] = useState("");
   const [relatedUnitId, setRelatedUnitId] = useState("");
@@ -231,6 +238,7 @@ const ManageHistoryDictionary: React.FC = () => {
   const [busyMessage, setBusyMessage] = useState("");
   const [requestSearch, setRequestSearch] = useState("");
   const [termSearch, setTermSearch] = useState("");
+  const [studentWordSearch, setStudentWordSearch] = useState("");
   const [activePanel, setActivePanel] =
     useState<ActiveDictionaryPanel>("terms");
   const [activeInitial, setActiveInitial] = useState(ALL_INITIAL);
@@ -239,6 +247,15 @@ const ManageHistoryDictionary: React.FC = () => {
   useEffect(() => {
     const unsubscribeRequests =
       subscribeTeacherHistoryDictionaryRequests(setRequests);
+    const unsubscribeStudentWords =
+      subscribeTeacherStudentHistoryDictionaryWords(setStudentWords, () => {
+        showToast({
+          tone: "error",
+          title: "학생 등록 단어를 불러오지 못했습니다.",
+          message:
+            "새로고침 후에도 계속 비어 있으면 Firestore 읽기 권한을 확인해야 합니다.",
+        });
+      });
     const unsubscribeTerms = subscribeTeacherHistoryDictionaryTerms(
       setTerms,
       () => {
@@ -252,6 +269,7 @@ const ManageHistoryDictionary: React.FC = () => {
     );
     return () => {
       unsubscribeRequests();
+      unsubscribeStudentWords();
       unsubscribeTerms();
     };
   }, [showToast]);
@@ -294,14 +312,22 @@ const ManageHistoryDictionary: React.FC = () => {
       setActivePanel("upload");
       setSelectedRequestId("");
       setSelectedTermId("");
+      setSelectedStudentWordId("");
+    }
+    if (panel === "studentWords") {
+      setActivePanel("studentWords");
+      setSelectedRequestId("");
+      setSelectedTermId("");
     }
     if (panel === "requests") {
       setActivePanel("requests");
       setSelectedTermId("");
+      setSelectedStudentWordId("");
     }
     if (requestId) {
       setActivePanel("requests");
       setSelectedTermId("");
+      setSelectedStudentWordId("");
       setSelectedRequestId(requestId);
     }
   }, [searchParams]);
@@ -353,6 +379,21 @@ const ManageHistoryDictionary: React.FC = () => {
       })
       .sort((a, b) => a.word.localeCompare(b.word, "ko-KR"));
   }, [activeInitial, termSearch, terms]);
+
+  const visibleStudentWords = useMemo(() => {
+    const keyword = studentWordSearch.trim().toLowerCase();
+    return studentWords.filter((item) => {
+      if (!keyword) return true;
+      return (
+        item.word.toLowerCase().includes(keyword) ||
+        (item.definition || "").toLowerCase().includes(keyword) ||
+        (item.studentName || "").toLowerCase().includes(keyword) ||
+        (item.grade || "").toLowerCase().includes(keyword) ||
+        (item.class || "").toLowerCase().includes(keyword) ||
+        (item.number || "").toLowerCase().includes(keyword)
+      );
+    });
+  }, [studentWordSearch, studentWords]);
 
   const initialCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -429,6 +470,11 @@ const ManageHistoryDictionary: React.FC = () => {
     null;
 
   const selectedTerm = terms.find((item) => item.id === selectedTermId) || null;
+  const selectedStudentWord = selectedStudentWordId
+    ? studentWords.find((item) => item.id === selectedStudentWordId) || null
+    : activePanel === "studentWords" && !selectedRequestId && !selectedTermId
+      ? visibleStudentWords[0] || null
+      : null;
   const normalizedEditorWord = normalizeHistoryDictionaryWord(word);
   const matchingTerm = useMemo(() => {
     const target = selectedRequest?.normalizedWord || normalizedEditorWord;
@@ -489,10 +535,21 @@ const ManageHistoryDictionary: React.FC = () => {
     setTagInput("");
   }, [selectedTerm]);
 
+  useEffect(() => {
+    if (!selectedStudentWord) return;
+    setSelectedStudentWordId(selectedStudentWord.id);
+    setWord(selectedStudentWord.word);
+    setDefinition(selectedStudentWord.definition || "");
+    setRelatedUnitId("");
+    setTags(selectedStudentWord.tags || []);
+    setTagInput("");
+  }, [selectedStudentWord]);
+
   const handleSelectRequest = (requestId: string) => {
     setActivePanel("requests");
     setSelectedRequestId(requestId);
     setSelectedTermId("");
+    setSelectedStudentWordId("");
     setSearchParams({ panel: "requests", requestId });
   };
 
@@ -500,13 +557,23 @@ const ManageHistoryDictionary: React.FC = () => {
     setActivePanel("terms");
     setSelectedTermId(term.id);
     setSelectedRequestId("");
+    setSelectedStudentWordId("");
     setSearchParams({});
+  };
+
+  const handleSelectStudentWord = (item: StudentHistoryDictionaryWord) => {
+    setActivePanel("studentWords");
+    setSelectedStudentWordId(item.id);
+    setSelectedRequestId("");
+    setSelectedTermId("");
+    setSearchParams({ panel: "studentWords" });
   };
 
   const handleNewTerm = () => {
     setActivePanel("terms");
     setSelectedRequestId("");
     setSelectedTermId("__new__");
+    setSelectedStudentWordId("");
     setSearchParams({});
     setWord("");
     setDefinition("");
@@ -832,6 +899,42 @@ const ManageHistoryDictionary: React.FC = () => {
     }
   };
 
+  const handleSaveStudentWord = async () => {
+    if (
+      !selectedStudentWord?.uid ||
+      !selectedStudentWord.termId ||
+      !word.trim() ||
+      definition.trim().length < 2 ||
+      busyMessage
+    ) {
+      return;
+    }
+    setBusyMessage("학생 등록 단어를 수정해 학생 단어장에 반영하는 중입니다.");
+    try {
+      const result = await updateStudentHistoryDictionaryWordByTeacher(config, {
+        uid: selectedStudentWord.uid,
+        termId: selectedStudentWord.termId,
+        word,
+        definition,
+      });
+      setSelectedStudentWordId(`${selectedStudentWord.uid}:${result.termId}`);
+      showToast({
+        tone: "success",
+        title: "학생 등록 단어를 수정했습니다.",
+        message: "학생 단어장에 교사 확인 내용이 반영되었습니다.",
+      });
+    } catch (error) {
+      console.error("Failed to update student history dictionary word:", error);
+      showToast({
+        tone: "error",
+        title: "학생 등록 단어 수정에 실패했습니다.",
+        message: "단어 중복 여부와 입력 내용을 확인한 뒤 다시 시도해 주세요.",
+      });
+    } finally {
+      setBusyMessage("");
+    }
+  };
+
   const handleApproveExisting = async (requestId?: string) => {
     if (!matchingTerm || busyMessage) return;
     setBusyMessage("기존 뜻풀이를 승인하고 학생 단어장에 반영하는 중입니다.");
@@ -916,6 +1019,11 @@ const ManageHistoryDictionary: React.FC = () => {
                   description: "등록 풀이 수정",
                 },
                 {
+                  id: "studentWords" as const,
+                  label: "학생 등록 단어",
+                  description: "직접 저장 확인",
+                },
+                {
                   id: "requests" as const,
                   label: "학생 요청 단어",
                   description: "요청 풀이 작성",
@@ -935,13 +1043,20 @@ const ManageHistoryDictionary: React.FC = () => {
                       setActivePanel(item.id);
                       if (item.id === "terms") {
                         setSelectedRequestId("");
+                        setSelectedStudentWordId("");
                         setSearchParams({});
+                      } else if (item.id === "studentWords") {
+                        setSelectedRequestId("");
+                        setSelectedTermId("");
+                        setSearchParams({ panel: "studentWords" });
                       } else if (item.id === "requests") {
                         setSelectedTermId("");
+                        setSelectedStudentWordId("");
                         setSearchParams({ panel: "requests" });
                       } else {
                         setSelectedRequestId("");
                         setSelectedTermId("");
+                        setSelectedStudentWordId("");
                         setSearchParams({ panel: "upload" });
                       }
                     }}
@@ -1123,6 +1238,89 @@ const ManageHistoryDictionary: React.FC = () => {
                       ))}
                     </div>
                   </div>
+                </div>
+              </div>
+            </aside>
+          ) : activePanel === "studentWords" ? (
+            <aside className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div>
+                <h2 className="text-lg font-extrabold text-slate-950">
+                  학생 등록 단어
+                </h2>
+                <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
+                  학생이 직접 저장한 단어와 뜻풀이를 확인하고 필요한 항목만
+                  수정합니다.
+                </p>
+              </div>
+
+              <label className="relative mt-5 block">
+                <span className="sr-only">학생 등록 단어 검색</span>
+                <i
+                  className="fas fa-magnifying-glass pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-slate-400"
+                  aria-hidden="true"
+                ></i>
+                <input
+                  type="search"
+                  value={studentWordSearch}
+                  onChange={(event) => setStudentWordSearch(event.target.value)}
+                  className="h-11 w-full rounded-lg border border-slate-200 bg-white pl-10 pr-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                  placeholder="단어, 뜻풀이, 학생 검색"
+                />
+              </label>
+
+              <div className="mt-4 text-xs font-bold text-slate-500">
+                학생 등록 단어 {studentWords.length}개
+              </div>
+
+              <div className="mt-4 max-h-[calc(100vh-19rem)] min-h-[26rem] overflow-y-auto pr-1">
+                {!visibleStudentWords.length && (
+                  <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm font-semibold text-slate-500">
+                    표시할 학생 등록 단어가 없습니다.
+                  </div>
+                )}
+                <div className="space-y-2">
+                  {visibleStudentWords.map((item) => {
+                    const active = selectedStudentWord?.id === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => handleSelectStudentWord(item)}
+                        className={`block w-full rounded-lg border px-3 py-3 text-left transition ${
+                          active
+                            ? "border-blue-500 bg-blue-50 shadow-[0_0_0_3px_rgba(37,99,235,0.08)]"
+                            : "border-slate-200 bg-white hover:border-blue-200 hover:bg-blue-50/60"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <span
+                            className={`min-w-0 truncate text-sm font-extrabold ${
+                              active ? "text-blue-700" : "text-slate-900"
+                            }`}
+                          >
+                            {item.word}
+                          </span>
+                          <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-700">
+                            직접 등록
+                          </span>
+                        </div>
+                        <div className="mt-2 text-xs font-semibold text-slate-500">
+                          {item.grade ? `${item.grade}학년 ` : ""}
+                          {item.class ? `${item.class}반 ` : ""}
+                          {item.number ? `${item.number}번 · ` : ""}
+                          {item.studentName || "학생"}
+                        </div>
+                        {item.definition && (
+                          <div className="mt-2 line-clamp-2 text-xs leading-5 text-slate-600">
+                            {item.definition}
+                          </div>
+                        )}
+                        <div className="mt-2 text-[11px] font-bold text-slate-400">
+                          {timestampLabel(item.updatedAt || item.createdAt)}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </aside>
@@ -1535,19 +1733,61 @@ const ManageHistoryDictionary: React.FC = () => {
                           등록됨
                         </span>
                       )}
+                      {selectedStudentWord && (
+                        <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-extrabold text-emerald-700">
+                          학생 등록
+                        </span>
+                      )}
                     </div>
                   </div>
-                  {selectedTerm && (
+                  {(selectedTerm || selectedStudentWord) && (
                     <div className="text-xs font-semibold text-slate-400">
                       마지막 수정{" "}
                       {timestampLabel(
-                        selectedTerm.updatedAt ||
-                          selectedTerm.publishedAt ||
-                          selectedTerm.createdAt,
+                        selectedStudentWord
+                          ? selectedStudentWord.updatedAt ||
+                              selectedStudentWord.createdAt
+                          : selectedTerm?.updatedAt ||
+                              selectedTerm?.publishedAt ||
+                              selectedTerm?.createdAt,
                       )}
                     </div>
                   )}
                 </div>
+
+                {selectedStudentWord && (
+                  <section className="mt-5 rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <div className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-700">
+                          학생 직접 등록
+                        </div>
+                        <div className="mt-1 text-sm font-extrabold text-slate-900">
+                          {selectedStudentWord.grade
+                            ? `${selectedStudentWord.grade}학년 `
+                            : ""}
+                          {selectedStudentWord.class
+                            ? `${selectedStudentWord.class}반 `
+                            : ""}
+                          {selectedStudentWord.number
+                            ? `${selectedStudentWord.number}번 · `
+                            : ""}
+                          {selectedStudentWord.studentName || "학생"}
+                        </div>
+                      </div>
+                      <span className="rounded-full bg-white px-3 py-1.5 text-xs font-extrabold text-emerald-700 shadow-sm">
+                        {selectedStudentWord.definitionSource ===
+                        "teacher_reviewed"
+                          ? "교사 확인 완료"
+                          : "확인 전"}
+                      </span>
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-emerald-900">
+                      학생 단어장에만 반영됩니다. 공식 역사 사전 등록 단어는
+                      바뀌지 않습니다.
+                    </p>
+                  </section>
+                )}
 
                 {selectedRequest && (
                   <section className="mt-5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
@@ -1750,6 +1990,11 @@ const ManageHistoryDictionary: React.FC = () => {
                           요청 {sameWordOpenCount}건 연결
                         </span>
                       )}
+                      {selectedStudentWord && (
+                        <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
+                          학생 단어장만 수정
+                        </span>
+                      )}
                       {selectedTerm?.status && (
                         <span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">
                           {selectedTerm.status === "published"
@@ -1793,11 +2038,15 @@ const ManageHistoryDictionary: React.FC = () => {
                   )}
                   <button
                     type="button"
-                    onClick={() => void handleSaveTerm()}
+                    onClick={() =>
+                      selectedStudentWord
+                        ? void handleSaveStudentWord()
+                        : void handleSaveTerm()
+                    }
                     disabled={
                       Boolean(busyMessage) ||
                       !word.trim() ||
-                      definition.trim().length < 5
+                      definition.trim().length < (selectedStudentWord ? 2 : 5)
                     }
                     className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-6 text-sm font-extrabold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
                   >
@@ -1805,7 +2054,9 @@ const ManageHistoryDictionary: React.FC = () => {
                       className="fas fa-floppy-disk text-xs"
                       aria-hidden="true"
                     ></i>
-                    풀이 저장 및 배포
+                    {selectedStudentWord
+                      ? "학생 단어 수정 저장"
+                      : "풀이 저장 및 배포"}
                   </button>
                 </div>
               </>

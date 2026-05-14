@@ -289,6 +289,11 @@ export type StudentHistoryDictionaryWordStatus = "requested" | "saved";
 
 export interface StudentHistoryDictionaryWord {
   id: string;
+  uid?: string;
+  studentName?: string;
+  grade?: string;
+  class?: string;
+  number?: string;
   termId: string;
   word: string;
   normalizedWord: string;
@@ -297,6 +302,16 @@ export interface StudentHistoryDictionaryWord {
   tags?: string[];
   status: StudentHistoryDictionaryWordStatus;
   requestId: string;
+  definitionSource?: string;
+  memo?: string;
+  year?: string;
+  semester?: string;
+  reviewedBy?: string;
+  reviewedAt?: any;
+  rewardTermId?: string;
+  rewardTransactionId?: string;
+  rewardAmount?: number;
+  rewardAwardedAt?: any;
   createdAt?: any;
   updatedAt?: any;
 }

@@ -77,6 +77,45 @@ const mapStudentWordRequestDoc = (docSnap: {
   };
 };
 
+const mapTeacherStudentWordDoc = (docSnap: {
+  id: string;
+  ref: { parent: { parent: { id: string } | null } };
+  data: () => Record<string, unknown>;
+}): StudentHistoryDictionaryWord => {
+  const data = docSnap.data();
+  const uid = String(data.uid || docSnap.ref.parent.parent?.id || "");
+  return {
+    id: `${uid}:${docSnap.id}`,
+    uid,
+    termId: String(data.termId || docSnap.id),
+    word: String(data.word || ""),
+    normalizedWord: normalizeHistoryDictionaryWord(
+      String(data.normalizedWord || data.word || ""),
+    ),
+    definition: String(data.definition || ""),
+    studentLevel: String(data.studentLevel || ""),
+    tags: Array.isArray(data.tags) ? (data.tags as string[]) : [],
+    status: data.status === "requested" ? "requested" : "saved",
+    requestId: String(data.requestId || ""),
+    studentName: String(data.studentName || data.name || "학생"),
+    grade: String(data.grade || ""),
+    class: String(data.class || ""),
+    number: String(data.number || ""),
+    definitionSource: String(data.definitionSource || ""),
+    memo: String(data.memo || ""),
+    year: String(data.year || ""),
+    semester: String(data.semester || ""),
+    reviewedBy: String(data.reviewedBy || ""),
+    reviewedAt: data.reviewedAt || null,
+    rewardTermId: String(data.rewardTermId || ""),
+    rewardTransactionId: String(data.rewardTransactionId || ""),
+    rewardAmount: Number(data.rewardAmount || 0),
+    rewardAwardedAt: data.rewardAwardedAt || null,
+    createdAt: data.createdAt || null,
+    updatedAt: data.updatedAt || null,
+  };
+};
+
 const mergeHistoryDictionaryRequests = (
   rootRequests: HistoryDictionaryRequest[],
   studentWordRequests: HistoryDictionaryRequest[],
@@ -192,6 +231,42 @@ export const subscribeTeacherHistoryDictionaryRequests = (
     unsubscribeStudentWordRequests();
   };
 };
+
+export const subscribeTeacherStudentHistoryDictionaryWords = (
+  onChange: (words: StudentHistoryDictionaryWord[]) => void,
+  onError?: (error: Error) => void,
+): Unsubscribe =>
+  onSnapshot(
+    query(
+      collectionGroup(db, "history_dictionary_words"),
+      where("status", "==", "saved"),
+      limit(500),
+    ),
+    (snapshot) => {
+      onChange(
+        snapshot.docs
+          .map((item) => mapTeacherStudentWordDoc(item))
+          .filter((item) =>
+            ["student", "teacher_reviewed"].includes(
+              item.definitionSource || "",
+            ),
+          )
+          .sort(
+            (a, b) =>
+              getTimestampMs(b.updatedAt || b.createdAt) -
+              getTimestampMs(a.updatedAt || a.createdAt),
+          ),
+      );
+    },
+    (error) => {
+      console.error(
+        "Failed to subscribe student history dictionary words:",
+        error,
+      );
+      onError?.(error);
+      onChange([]);
+    },
+  );
 
 export const subscribeTeacherHistoryDictionaryTerms = (
   onChange: (terms: HistoryDictionaryTerm[]) => void,
@@ -337,6 +412,35 @@ export const deleteStudentHistoryDictionaryWordByTeacher = async (
       amount?: number;
       blockedReason?: string;
     };
+  };
+};
+
+export const updateStudentHistoryDictionaryWordByTeacher = async (
+  config: ConfigLike,
+  input: {
+    uid: string;
+    termId: string;
+    word: string;
+    definition: string;
+  },
+) => {
+  const { year, semester } = getYearSemester(config);
+  const callable = httpsCallable(
+    functions,
+    "updateStudentHistoryDictionaryWordByTeacher",
+  );
+  const result = await callable({
+    year,
+    semester,
+    uid: input.uid,
+    termId: input.termId,
+    word: input.word,
+    definition: input.definition,
+  });
+  return result.data as {
+    termId: string;
+    previousTermId: string;
+    updated: boolean;
   };
 };
 

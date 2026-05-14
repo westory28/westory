@@ -5089,7 +5089,15 @@ exports.saveStudentHistoryDictionaryEntry = onCall({ region: REGION }, async (re
       studentLevel: '내가 정리한 뜻풀이',
       status: 'saved',
       requestId: '',
+      uid,
+      studentName: sanitizeHistoryDictionaryText(profile.name, 40) || '학생',
+      grade: sanitizeHistoryDictionaryText(profile.grade, 8),
+      class: sanitizeHistoryDictionaryText(profile.class, 8),
+      number: sanitizeHistoryDictionaryText(profile.number, 8),
+      year: scoped?.year || '',
+      semester: scoped?.semester || '',
       definitionSource: 'student',
+      rewardTermId: reward.awarded ? termId : (existingWord.rewardTermId || termId),
       rewardTransactionId: reward.transactionId || existingWord.rewardTransactionId || '',
       rewardAmount: reward.awarded ? reward.amount : Number(existingWord.rewardAmount || 0),
       rewardAwardedAt: reward.awarded ? FieldValue.serverTimestamp() : (existingWord.rewardAwardedAt || null),
@@ -5140,7 +5148,7 @@ exports.deleteStudentHistoryDictionaryWord = onCall({ region: REGION }, async (r
         semester: scoped.semester,
         uid,
         profile,
-        termId,
+        termId: String(wordData.rewardTermId || termId),
         word: wordData.word || termId,
         actorUid: uid,
         reason: 'student_deleted_history_dictionary_word',
@@ -5195,7 +5203,7 @@ exports.deleteStudentHistoryDictionaryWordByTeacher = onCall({ region: REGION },
       semester,
       uid: targetUid,
       profile,
-      termId,
+      termId: String(wordData.rewardTermId || termId),
       word: wordData.word || word || termId,
       actorUid: manager.uid,
       reason,
@@ -5265,6 +5273,81 @@ exports.deleteStudentHistoryDictionaryWordByTeacher = onCall({ region: REGION },
   });
 
   return result;
+});
+
+exports.updateStudentHistoryDictionaryWordByTeacher = onCall({ region: REGION }, async (request) => {
+  const manager = await assertHistoryDictionaryManager(request);
+  const { year, semester } = assertYearSemester(request.data);
+  const targetUid = String(request.data?.uid || '').trim();
+  const previousTermId = sanitizeHistoryDictionaryText(request.data?.termId, 80);
+  const word = sanitizeHistoryDictionaryWord(request.data?.word);
+  const normalizedWord = normalizeHistoryDictionaryWord(word);
+  const definition = sanitizeHistoryDictionaryText(request.data?.definition, 1200);
+
+  if (!targetUid || !previousTermId) {
+    throw new HttpsError('invalid-argument', 'uid and termId are required.');
+  }
+  if (!word || !normalizedWord) {
+    throw new HttpsError('invalid-argument', 'A word is required.');
+  }
+  if (!definition || definition.length < 2) {
+    throw new HttpsError('invalid-argument', 'Definition is required.');
+  }
+
+  const nextTermId = buildHistoryDictionaryTermId(normalizedWord);
+  const previousRef = db.doc(getStudentHistoryDictionaryWordPath(targetUid, previousTermId));
+  const nextRef = db.doc(getStudentHistoryDictionaryWordPath(targetUid, nextTermId));
+  const { profile } = await ensureStudentProfile(targetUid);
+
+  await db.runTransaction(async (transaction) => {
+    const [previousSnap, nextSnap] = await Promise.all([
+      transaction.get(previousRef),
+      nextTermId === previousTermId ? Promise.resolve(null) : transaction.get(nextRef),
+    ]);
+
+    if (!previousSnap.exists) {
+      throw new HttpsError('not-found', 'Student dictionary word does not exist.');
+    }
+    if (nextSnap?.exists) {
+      throw new HttpsError('already-exists', 'The student already has this word.');
+    }
+
+    const existing = previousSnap.data() || {};
+    const payload = {
+      ...existing,
+      termId: nextTermId,
+      word,
+      normalizedWord,
+      definition,
+      studentLevel: sanitizeHistoryDictionaryText(existing.studentLevel || '내가 정리한 뜻풀이', 80),
+      tags: sanitizeHistoryDictionaryTags(existing.tags),
+      status: 'saved',
+      uid: targetUid,
+      studentName: sanitizeHistoryDictionaryText(existing.studentName || profile.name, 40) || '학생',
+      grade: sanitizeHistoryDictionaryText(existing.grade || profile.grade, 8),
+      class: sanitizeHistoryDictionaryText(existing.class || profile.class, 8),
+      number: sanitizeHistoryDictionaryText(existing.number || profile.number, 8),
+      year: sanitizeHistoryDictionaryText(existing.year || year, 8),
+      semester: sanitizeHistoryDictionaryText(existing.semester || semester, 8),
+      definitionSource: 'teacher_reviewed',
+      reviewedBy: manager.uid,
+      reviewedAt: FieldValue.serverTimestamp(),
+      rewardTermId: sanitizeHistoryDictionaryText(existing.rewardTermId || previousTermId, 80),
+      updatedAt: FieldValue.serverTimestamp(),
+      createdAt: existing.createdAt || FieldValue.serverTimestamp(),
+    };
+
+    transaction.set(nextRef, payload, { merge: true });
+    if (nextTermId !== previousTermId) {
+      transaction.delete(previousRef);
+    }
+  });
+
+  return {
+    termId: nextTermId,
+    previousTermId,
+    updated: true,
+  };
 });
 
 const resolveHistoryDictionaryRequestsWithTerm = async ({
