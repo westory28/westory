@@ -60,20 +60,21 @@ const QuizUnitTree: React.FC<QuizUnitTreeProps> = ({ onSelect }) => {
             <div className="space-y-1">
                 {treeData.map(big => (
                     <div key={big.id} className="mb-2">
-                        <div className="font-bold text-gray-800 py-1 select-none px-2">{big.title}</div>
+                        <div className="font-bold text-gray-800 py-1 select-none px-2 truncate" title={big.title}>{big.title}</div>
                         {big.children && (
                             <div className="ml-2 border-l border-dashed border-gray-300 pl-2 space-y-1">
                                 {big.children.map(mid => (
                                     <div
                                         key={mid.id}
-                                        className={`flex items-center px-3 py-2 rounded-lg cursor-pointer text-sm transition ${activeId === mid.id
+                                        className={`flex min-w-0 items-center px-3 py-2 rounded-lg cursor-pointer text-sm transition ${activeId === mid.id
                                             ? 'bg-blue-50 text-blue-600 font-bold'
                                             : 'hover:bg-gray-100 text-gray-600'
                                             }`}
                                         onClick={() => handleSelect(mid, 'normal', big.title)}
+                                        title={mid.title}
                                     >
-                                        <i className="fas fa-folder text-yellow-400 mr-2"></i>
-                                        {mid.title}
+                                        <i className="fas fa-folder text-yellow-400 mr-2 shrink-0"></i>
+                                        <span className="min-w-0 truncate">{mid.title}</span>
                                     </div>
                                 ))}
                             </div>
