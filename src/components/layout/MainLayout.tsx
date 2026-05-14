@@ -79,7 +79,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             <Header />
             <StudentRankPromotionController />
             <StudentHistoryDictionaryController />
-            <main className="flex-1 w-full">
+            <main className="flex-1 w-full min-h-0">
                 {children}
             </main>
             <Footer />

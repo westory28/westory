@@ -70,8 +70,8 @@ const ManageQuiz: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 flex flex-col">
-            <main className={`flex-1 w-full mx-auto px-4 lg:px-6 py-6 flex flex-col min-h-0 ${activeTab === 'bank' ? 'max-w-[1680px]' : 'max-w-7xl'}`}>
+        <div className="h-full min-h-0 bg-gray-50 flex flex-col overflow-hidden">
+            <main className={`flex-1 w-full mx-auto px-4 lg:px-6 py-6 flex flex-col min-h-0 overflow-hidden ${activeTab === 'bank' ? 'max-w-[1680px]' : 'max-w-7xl'}`}>
                 <div className="flex border-b border-gray-200 mb-4 bg-white rounded-t-lg px-2 shrink-0 overflow-x-auto">
                     {canWrite && (
                         <button
@@ -111,7 +111,7 @@ const ManageQuiz: React.FC = () => {
                 )}
 
                 {canWrite && activeTab === 'manage' && (
-                    <div className="flex-1 flex flex-col lg:flex-row lg:items-stretch gap-6 overflow-hidden pb-2 relative min-h-0 lg:h-[calc(100dvh-150px)] xl:h-[calc(100dvh-170px)]">
+                    <div className="flex-1 flex flex-col lg:flex-row lg:items-stretch gap-6 overflow-hidden pb-2 relative min-h-0">
                         {mobileTreeOpen && (
                             <button
                                 type="button"
