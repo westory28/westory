@@ -2,6 +2,7 @@
 import { db } from '../../../lib/firebase';
 import { collection, deleteDoc, doc, getDocs, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import { useAuth } from '../../../contexts/AuthContext';
+import { LoadingOverlay } from '../../../components/common/LoadingState';
 import { getSemesterCollectionPath, getSemesterDocPath } from '../../../lib/semesterScope';
 import { QUIZ_MATCHING_IMAGE_OPTIONS, QUIZ_QUESTION_IMAGE_OPTIONS, optimizeQuizImageDataUrl, optimizeQuizImageFile } from '../../../lib/quizImageCompression';
 
@@ -108,10 +109,12 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
     const [previewMatchingActiveLeft, setPreviewMatchingActiveLeft] = useState('');
     const [editingQuestionId, setEditingQuestionId] = useState<number | null>(null);
     const [isComposerOpen, setIsComposerOpen] = useState(false);
+    const [savingQuestion, setSavingQuestion] = useState(false);
     const [optimizingImageCount, setOptimizingImageCount] = useState(0);
     const optimizingImage = optimizingImageCount > 0;
 
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const savingQuestionRef = useRef(false);
 
     useEffect(() => {
         if (type === 'special') {
@@ -315,7 +318,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
     };
 
     const closeComposer = () => {
-        if (optimizingImage) return;
+        if (optimizingImage || savingQuestion) return;
         setIsComposerOpen(false);
         resetForm();
     };
@@ -466,6 +469,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
 
     const handleAdd = async () => {
         if (!canEdit) return;
+        if (savingQuestionRef.current) return;
         if (optimizingImage) {
             alert('이미지 용량을 줄이는 중입니다. 잠시 후 다시 저장해 주세요.');
             return;
@@ -473,6 +477,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
         const payload = buildQuestionPayload();
         if (!payload) return;
         const targetId = editingQuestionId ?? Date.now();
+        savingQuestionRef.current = true;
+        setSavingQuestion(true);
         try {
             const optimizedImage = await optimizeQuizImageDataUrl(formImage, QUIZ_QUESTION_IMAGE_OPTIONS);
             const optimizedMatchingPairs = formType === 'matching'
@@ -516,6 +522,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
             console.error('Add question failed', error);
             const code = error?.code ? ` (${error.code})` : '';
             alert(`문제 등록에 실패했습니다${code}.`);
+        } finally {
+            savingQuestionRef.current = false;
+            setSavingQuestion(false);
         }
     };
 
@@ -908,7 +917,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
 
                         <div className={`grid gap-2 ${editingQuestionId ? 'grid-cols-3' : 'grid-cols-2'}`}>
                             <button type="button" onClick={openPreview} className={`font-bold py-2 rounded transition border ${previewOpen ? 'bg-white text-blue-700 border-blue-500' : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400 hover:text-blue-700'}`}>{previewOpen ? '미리보기 닫기' : '미리보기'}</button>
-                            <button onClick={() => void handleAdd()} disabled={optimizingImage} className="bg-blue-600 text-white font-bold py-2 rounded hover:bg-blue-700 transition disabled:bg-blue-300">{optimizingImage ? '이미지 줄이는 중...' : editingQuestionId ? '수정 저장' : '등록'}</button>
+                            <button type="button" onClick={() => void handleAdd()} disabled={savingQuestion || optimizingImage} className="bg-blue-600 text-white font-bold py-2 rounded hover:bg-blue-700 transition disabled:bg-blue-300">{optimizingImage ? '이미지 줄이는 중...' : savingQuestion ? '저장 중...' : editingQuestionId ? '수정 저장' : '등록'}</button>
                             {editingQuestionId && (
                                 <button
                                     type="button"
@@ -923,6 +932,12 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeDa
                             </div>
                         </div>
                     </div>
+                )}
+                {savingQuestion && (
+                    <LoadingOverlay
+                        message={editingQuestionId ? '문제를 저장하는 중입니다.' : '문제를 등록하는 중입니다.'}
+                        detail="서버 저장이 끝날 때까지 잠시만 기다려 주세요."
+                    />
                 )}
             </div>
         </div>

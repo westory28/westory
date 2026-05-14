@@ -14,6 +14,7 @@ import { httpsCallable } from "firebase/functions";
 import { db, functions } from "../../../lib/firebase";
 import { useAuth } from "../../../contexts/AuthContext";
 import MatchingConnectionLines from "../../../components/common/MatchingConnectionLines";
+import { LoadingOverlay } from "../../../components/common/LoadingState";
 import {
   getSemesterCollectionPath,
   getSemesterDocPath,
@@ -307,6 +308,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const [optimizingImageCount, setOptimizingImageCount] = useState(0);
   const optimizingImage = optimizingImageCount > 0;
   const userTouchedClassScopeRef = React.useRef(false);
+  const savingEditRef = useRef(false);
 
   const toRoman = (value: number) => {
     const romans = [
@@ -1990,6 +1992,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const saveEditedQuestion = async () => {
     if (!canEdit) return;
     if (!editingQuestion) return;
+    if (savingEditRef.current) return;
     if (optimizingImage) {
       alert("이미지 용량을 줄이는 중입니다. 잠시 후 다시 저장해 주세요.");
       return;
@@ -2055,6 +2058,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       return;
     }
 
+    savingEditRef.current = true;
     setSavingEdit(true);
     try {
       const optimizedImage = await optimizeQuizImageDataUrl(
@@ -2142,6 +2146,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         `문제 수정에 실패했습니다${error?.code ? ` (${error.code})` : ""}.`,
       );
     } finally {
+      savingEditRef.current = false;
       setSavingEdit(false);
     }
   };
@@ -3553,6 +3558,12 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
             </div>
           </div>
         </div>
+      )}
+      {savingEdit && (
+        <LoadingOverlay
+          message="문제를 저장하는 중입니다."
+          detail="서버 저장이 끝날 때까지 잠시만 기다려 주세요."
+        />
       )}
     </div>
   );

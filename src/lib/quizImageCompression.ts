@@ -5,20 +5,22 @@ export interface QuizImageCompressionOptions {
 }
 
 export const QUIZ_QUESTION_IMAGE_OPTIONS: QuizImageCompressionOptions = {
-  maxSide: 900,
-  targetDataUrlBytes: 150 * 1024,
-  maxDataUrlBytes: 240 * 1024,
+  maxSide: 840,
+  targetDataUrlBytes: 110 * 1024,
+  maxDataUrlBytes: 180 * 1024,
 };
 
 export const QUIZ_MATCHING_IMAGE_OPTIONS: QuizImageCompressionOptions = {
-  maxSide: 360,
-  targetDataUrlBytes: 40 * 1024,
-  maxDataUrlBytes: 80 * 1024,
+  maxSide: 320,
+  targetDataUrlBytes: 30 * 1024,
+  maxDataUrlBytes: 56 * 1024,
 };
 
-const IMAGE_QUALITY_STEPS = [0.82, 0.76, 0.7, 0.64, 0.58, 0.52, 0.46];
-const IMAGE_SIZE_STEPS = [1, 0.875, 0.75, 0.625, 0.5];
+const IMAGE_QUALITY_STEPS = [0.82, 0.76, 0.7, 0.64, 0.58, 0.52, 0.46, 0.4];
+const IMAGE_SIZE_STEPS = [1, 0.875, 0.75, 0.625, 0.5, 0.425, 0.35];
 const IMAGE_MIME_TYPES = ["image/webp", "image/jpeg"] as const;
+const MIN_PERCEIVED_QUALITY = 0.64;
+const MIN_SIZE_STEP_FOR_QUALITY = 0.625;
 
 const getDataUrlBytes = (value: string) => new Blob([value]).size;
 
@@ -81,10 +83,14 @@ const makeCandidate = (
   };
 };
 
-const getCandidateScore = (candidate: {
-  quality: number;
-  pixelCount: number;
-}) => candidate.pixelCount * 100 + candidate.quality;
+const isGoodDisplayCandidate = (
+  candidate: {
+    quality: number;
+  },
+  sizeStep: number,
+) =>
+  candidate.quality >= MIN_PERCEIVED_QUALITY &&
+  sizeStep >= MIN_SIZE_STEP_FOR_QUALITY;
 
 const compressDataUrl = async (
   dataUrl: string,
@@ -101,7 +107,7 @@ const compressDataUrl = async (
     1,
     Math.round((source.naturalHeight || 1) * scale),
   );
-  let targetCandidate: ReturnType<typeof makeCandidate> | null = null;
+  let displayCandidate: ReturnType<typeof makeCandidate> | null = null;
   let fallbackCandidate: ReturnType<typeof makeCandidate> | null = null;
 
   for (const sizeStep of IMAGE_SIZE_STEPS) {
@@ -115,15 +121,15 @@ const compressDataUrl = async (
         if (!candidate) continue;
         if (
           candidate.byteSize <= options.targetDataUrlBytes &&
-          (!targetCandidate ||
-            getCandidateScore(candidate) > getCandidateScore(targetCandidate))
+          isGoodDisplayCandidate(candidate, sizeStep) &&
+          (!displayCandidate || candidate.byteSize < displayCandidate.byteSize)
         ) {
-          targetCandidate = candidate;
+          displayCandidate = candidate;
         }
         if (
           candidate.byteSize <= options.maxDataUrlBytes &&
           (!fallbackCandidate ||
-            getCandidateScore(candidate) > getCandidateScore(fallbackCandidate))
+            candidate.byteSize < fallbackCandidate.byteSize)
         ) {
           fallbackCandidate = candidate;
         }
@@ -131,7 +137,7 @@ const compressDataUrl = async (
     }
   }
 
-  const selected = targetCandidate || fallbackCandidate;
+  const selected = displayCandidate || fallbackCandidate;
   if (!selected) {
     throw new Error(
       "이미지를 충분히 줄이지 못했습니다. 더 단순하거나 작은 이미지를 사용해 주세요.",
@@ -149,13 +155,6 @@ export const optimizeQuizImageFile = async (
   }
 
   const originalDataUrl = await readFileAsDataUrl(file);
-  const image = await loadImage(originalDataUrl);
-  const originalFits =
-    getDataUrlBytes(originalDataUrl) <= options.targetDataUrlBytes &&
-    Math.max(image.naturalWidth || 0, image.naturalHeight || 0) <=
-      options.maxSide;
-  if (originalFits) return originalDataUrl;
-
   return compressDataUrl(originalDataUrl, options);
 };
 
