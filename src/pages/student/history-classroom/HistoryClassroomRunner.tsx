@@ -737,17 +737,19 @@ const HistoryClassroomRunner: React.FC = () => {
       );
     }
 
-    void notifyHistoryClassroomSubmitted(config, {
-      assignmentId: assignment.id,
-      assignmentTitle: assignment.title,
-      resultId: resultRef.id,
-      percent,
-    }).catch((notificationError) => {
-      console.error(
-        "Failed to create history classroom submission notification:",
-        notificationError,
-      );
-    });
+    if (passed) {
+      void notifyHistoryClassroomSubmitted(config, {
+        assignmentId: assignment.id,
+        assignmentTitle: assignment.title,
+        resultId: resultRef.id,
+        percent,
+      }).catch((notificationError) => {
+        console.error(
+          "Failed to create history classroom passed notification:",
+          notificationError,
+        );
+      });
+    }
 
     clearAttemptProgress(assignment.id, userData.uid);
     attemptDeadlineMsRef.current = 0;

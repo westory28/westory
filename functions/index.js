@@ -712,6 +712,7 @@ const getBroadcastNotificationsPath = (year, semester) => `${getSemesterRoot(yea
 const NOTIFICATION_CONFIG_PATH = 'site_settings/notification_config';
 const NOTIFICATION_EVENT_AUDIENCE = {
   history_classroom_assigned: 'students',
+  history_classroom_passed: 'teachers',
   history_classroom_submitted: 'teachers',
   history_dictionary_requested: 'teachers',
   history_dictionary_resolved: 'students',
@@ -1943,6 +1944,64 @@ const resolveTeacherNotificationRecipientUids = async () => {
     ...teacherSnap.docs.map((docSnap) => docSnap.id),
     ...quizStaffSnap.docs.map((docSnap) => docSnap.id),
   ]);
+};
+
+const createHistoryClassroomPassedNotifications = async (year, semester, input) => {
+  const resultId = sanitizeNotificationText(input.resultId, 160);
+  if (!resultId) return [];
+
+  const studentName = sanitizeNotificationText(input.studentName, 40, '학생');
+  const assignmentTitle = sanitizeNotificationText(
+    input.assignmentTitle,
+    80,
+    '역사교실',
+  );
+  const percent = Math.max(0, Math.min(100, Number(input.percent || 0)));
+  const recipients = await resolveTeacherNotificationRecipientUids();
+
+  return createUserNotifications(year, semester, recipients, {
+    type: 'history_classroom_passed',
+    title: '역사교실 통과 알림',
+    body: `${studentName} 학생이 ${assignmentTitle}을(를) ${percent}%로 통과했습니다.`,
+    targetUrl: '/teacher/quiz/history-classroom',
+    entityType: 'history_classroom_result',
+    entityId: resultId,
+    actorUid: input.actorUid,
+    priority: 'normal',
+    dedupeKey: `history_classroom_passed:${year}:${semester}:${resultId}`,
+    templateValues: {
+      studentName,
+      assignmentTitle,
+      percent,
+    },
+  });
+};
+
+const loadHistoryClassroomResultForNotification = async (year, semester, resultId) => {
+  const safeResultId = sanitizeNotificationText(resultId, 160);
+  if (!safeResultId) return null;
+
+  const semesterSnap = await db
+    .doc(`${getSemesterRoot(year, semester)}/history_classroom_results/${safeResultId}`)
+    .get();
+  if (semesterSnap.exists) {
+    return {
+      id: semesterSnap.id,
+      data: semesterSnap.data() || {},
+      collectionPath: `${getSemesterRoot(year, semester)}/history_classroom_results`,
+    };
+  }
+
+  const legacySnap = await db.doc(`history_classroom_results/${safeResultId}`).get();
+  if (legacySnap.exists) {
+    return {
+      id: legacySnap.id,
+      data: legacySnap.data() || {},
+      collectionPath: 'history_classroom_results',
+    };
+  }
+
+  return null;
 };
 
 const resolveHistoryDictionaryManagerRecipientUids = async () => {
@@ -3560,6 +3619,24 @@ exports.submitHistoryClassroomResult = onCall({ region: REGION }, async (request
 
   await resultRef.set(resultPayload, { merge: false });
 
+  let notificationCreatedCount = 0;
+  let notificationRecipientCount = 0;
+  if (passed) {
+    try {
+      const notificationResults = await createHistoryClassroomPassedNotifications(year, semester, {
+        resultId: resultRef.id,
+        assignmentTitle: resultPayload.assignmentTitle,
+        studentName: resultPayload.studentName,
+        percent: scoreSummary.percent,
+        actorUid: uid,
+      });
+      notificationCreatedCount = notificationResults.filter((result) => result.created).length;
+      notificationRecipientCount = notificationResults.length;
+    } catch (notificationError) {
+      console.error('Failed to create history classroom passed notifications:', notificationError);
+    }
+  }
+
   return {
     resultId: resultRef.id,
     resultCollectionPath,
@@ -3569,6 +3646,8 @@ exports.submitHistoryClassroomResult = onCall({ region: REGION }, async (request
     passed,
     status,
     answerChecks: scoreSummary.checks,
+    notificationCreatedCount,
+    notificationRecipientCount,
   };
 });
 
@@ -3587,30 +3666,42 @@ exports.notifyHistoryClassroomSubmitted = onCall({ region: REGION }, async (requ
     throw new HttpsError('invalid-argument', 'assignmentId and resultId are required.');
   }
 
-  const { profile } = await getUserProfile(uid);
-  const studentName = sanitizeNotificationText(profile.name, 40, '학생');
-  const recipients = await resolveTeacherNotificationRecipientUids();
-  const results = await createUserNotifications(year, semester, recipients, {
-    type: 'history_classroom_submitted',
-    title: '역사교실 제출 알림',
-    body: `${studentName} 학생이 ${assignmentTitle}을(를) 제출했습니다. 정답률 ${percent}%`,
-    targetUrl: '/teacher/quiz/history-classroom',
-    entityType: 'history_classroom_result',
-    entityId: resultId,
+  const { profile: profileForNotification } = await getUserProfile(uid);
+  const savedResult = await loadHistoryClassroomResultForNotification(year, semester, resultId);
+  if (!savedResult) {
+    throw new HttpsError('not-found', 'History classroom result does not exist.');
+  }
+
+  const savedResultData = savedResult.data;
+  const resultUid = String(savedResultData.uid || '').trim();
+  if (resultUid !== uid) {
+    throw new HttpsError('permission-denied', 'History classroom result belongs to another user.');
+  }
+  if (String(savedResultData.assignmentId || '').trim() !== assignmentId) {
+    throw new HttpsError('invalid-argument', 'History classroom result does not match assignment id.');
+  }
+  if (savedResultData.passed !== true && String(savedResultData.status || '').trim() !== 'passed') {
+    return {
+      createdCount: 0,
+      recipientCount: 0,
+      skipped: true,
+      reason: 'result_not_passed',
+    };
+  }
+
+  const notificationResults = await createHistoryClassroomPassedNotifications(year, semester, {
+    resultId,
+    assignmentTitle: savedResultData.assignmentTitle || assignmentTitle,
+    studentName: savedResultData.studentName || profileForNotification.name,
+    percent: Number(savedResultData.percent || percent),
     actorUid: uid,
-    priority: 'normal',
-    dedupeKey: `history_classroom_submitted:${year}:${semester}:${resultId}`,
-    templateValues: {
-      studentName,
-      assignmentTitle,
-      percent,
-    },
   });
 
   return {
-    createdCount: results.filter((result) => result.created).length,
-    recipientCount: recipients.length,
+    createdCount: notificationResults.filter((result) => result.created).length,
+    recipientCount: notificationResults.length,
   };
+
 });
 
 exports.saveWisHallOfFameConfig = onCall({ region: REGION }, async (request) => {

@@ -170,6 +170,28 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     targetLabel: "학생 첫 화면",
   },
   {
+    key: "history_classroom_passed",
+    label: "역사교실 통과",
+    audience: "teachers",
+    description:
+      "학생이 역사교실 과제를 제출한 뒤 통과했을 때 교사에게 통과 사실과 정답률을 안내합니다.",
+    triggerLabel: "학생이 역사교실 과제를 통과했을 때",
+    recipientLabel: "교사·평가 권한자",
+    status: "connected",
+    defaultEnabled: true,
+    defaultPriority: "normal",
+    titleTemplate: "역사교실 통과 알림",
+    bodyTemplate:
+      "{studentName} 학생이 {assignmentTitle}을(를) {percent}%로 통과했습니다.",
+    targetUrl: "/teacher/quiz/history-classroom",
+    targetLabel: "교사 역사교실 관리 화면",
+    tokens: [
+      { key: "studentName", label: "학생 이름" },
+      { key: "assignmentTitle", label: "과제 이름" },
+      { key: "percent", label: "정답률" },
+    ],
+  },
+  {
     key: "history_classroom_submitted",
     label: "역사교실 제출 완료",
     audience: "teachers",

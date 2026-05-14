@@ -54,7 +54,10 @@ const getNotificationBodyText = (notification: WestoryNotification) => {
 
 const getNotificationTargetUrl = (notification: WestoryNotification) => {
   const targetUrl = String(notification.targetUrl || "").trim();
-  if (notification.type === "history_classroom_submitted") {
+  if (
+    notification.type === "history_classroom_submitted" ||
+    notification.type === "history_classroom_passed"
+  ) {
     if (!targetUrl || targetUrl === "/teacher/quiz?menu=history2") {
       return "/teacher/quiz/history-classroom";
     }
