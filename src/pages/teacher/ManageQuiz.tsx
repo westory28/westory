@@ -71,8 +71,8 @@ const ManageQuiz: React.FC = () => {
 
     return (
         <div className="h-full min-h-0 bg-gray-50 flex flex-col overflow-hidden">
-            <main className={`flex-1 w-full mx-auto px-4 lg:px-6 py-6 flex flex-col min-h-0 overflow-hidden ${activeTab === 'bank' ? 'max-w-[1680px]' : 'max-w-7xl'}`}>
-                <div className="flex border-b border-gray-200 mb-4 bg-white rounded-t-lg px-2 shrink-0 overflow-x-auto">
+            <main className={`flex-1 w-full mx-auto px-4 lg:px-6 py-4 lg:py-3 flex flex-col min-h-0 overflow-hidden ${activeTab === 'bank' ? 'max-w-[1680px]' : 'max-w-7xl'}`}>
+                <div className="flex border-b border-gray-200 mb-3 bg-white rounded-t-lg px-2 shrink-0 overflow-x-auto">
                     {canWrite && (
                         <button
                             onClick={() => setActiveTab('manage')}
@@ -111,7 +111,7 @@ const ManageQuiz: React.FC = () => {
                 )}
 
                 {canWrite && activeTab === 'manage' && (
-                    <div className="flex-1 flex flex-col lg:flex-row lg:items-stretch gap-6 overflow-hidden pb-2 relative min-h-0">
+                    <div className="flex-1 flex flex-col lg:flex-row lg:items-stretch gap-6 overflow-hidden relative min-h-0">
                         {mobileTreeOpen && (
                             <button
                                 type="button"
@@ -174,8 +174,16 @@ const ManageQuiz: React.FC = () => {
                     </div>
                 )}
 
-                {activeTab === 'log' && <QuizLogTab />}
-                {activeTab === 'bank' && <QuizBankTab canEdit={canWrite} />}
+                {activeTab === 'log' && (
+                    <div className="flex-1 min-h-0 overflow-hidden">
+                        <QuizLogTab />
+                    </div>
+                )}
+                {activeTab === 'bank' && (
+                    <div className="flex-1 min-h-0 overflow-hidden">
+                        <QuizBankTab canEdit={canWrite} />
+                    </div>
+                )}
 
                 <QuizSettingsModal
                     isOpen={canWrite && settingsModalOpen}
