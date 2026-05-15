@@ -5283,23 +5283,38 @@ exports.listStudentHistoryDictionaryWordsForTeacher = onCall({ region: REGION },
     if (typeof value.toDate === 'function') return value.toDate().getTime();
     return Number(value.seconds || 0) * 1000;
   };
-  const snapshot = await db.collectionGroup('history_dictionary_words')
-    .where('status', '==', 'saved')
-    .limit(500)
-    .get();
+  const usersSnapshot = await db.collection('users').get();
+  const wordGroups = await Promise.all(
+    usersSnapshot.docs.map(async (userDoc) => {
+      const profile = userDoc.data() || {};
+      const wordsSnapshot = await userDoc.ref
+        .collection('history_dictionary_words')
+        .limit(100)
+        .get();
+      return wordsSnapshot.docs.map((docSnap) => ({
+        docSnap,
+        profile,
+        uid: userDoc.id,
+      }));
+    })
+  );
 
-  const words = snapshot.docs
-    .map((docSnap) => {
+  const words = wordGroups
+    .flat()
+    .map(({ docSnap, profile, uid }) => {
       const data = docSnap.data() || {};
+      if (String(data.status || '') !== 'saved') {
+        return null;
+      }
       const definitionSource = sanitizeHistoryDictionaryText(data.definitionSource, 40);
       if (!['student', 'teacher_reviewed'].includes(definitionSource)) {
         return null;
       }
-      const uid = String(data.uid || docSnap.ref.parent.parent?.id || '').trim();
-      if (!uid) return null;
+      const targetUid = String(data.uid || uid || '').trim();
+      if (!targetUid) return null;
       return {
-        id: `${uid}:${docSnap.id}`,
-        uid,
+        id: `${targetUid}:${docSnap.id}`,
+        uid: targetUid,
         termId: sanitizeHistoryDictionaryText(data.termId || docSnap.id, 80),
         word: sanitizeHistoryDictionaryWord(data.word),
         normalizedWord: normalizeHistoryDictionaryWord(data.normalizedWord || data.word),
@@ -5308,10 +5323,17 @@ exports.listStudentHistoryDictionaryWordsForTeacher = onCall({ region: REGION },
         tags: sanitizeHistoryDictionaryTags(data.tags),
         status: 'saved',
         requestId: sanitizeHistoryDictionaryText(data.requestId, 100),
-        studentName: sanitizeHistoryDictionaryText(data.studentName || data.name, 40) || '학생',
-        grade: sanitizeHistoryDictionaryText(data.grade, 8),
-        class: sanitizeHistoryDictionaryText(data.class, 8),
-        number: sanitizeHistoryDictionaryText(data.number, 8),
+        studentName:
+          sanitizeHistoryDictionaryText(data.studentName || data.name, 40) || '학생',
+        grade: sanitizeHistoryDictionaryText(data.grade || profile.grade, 8),
+        class: sanitizeHistoryDictionaryText(
+          data.class || profile.class || profile.classNumber,
+          8
+        ),
+        number: sanitizeHistoryDictionaryText(
+          data.number || profile.number || profile.studentNumber,
+          8
+        ),
         definitionSource,
         memo: sanitizeHistoryDictionaryText(data.memo, 240),
         year: sanitizeHistoryDictionaryText(data.year, 8),
@@ -5325,7 +5347,12 @@ exports.listStudentHistoryDictionaryWordsForTeacher = onCall({ region: REGION },
       };
     })
     .filter(Boolean)
-    .sort((a, b) => Number(b.updatedAtMs || b.createdAtMs || 0) - Number(a.updatedAtMs || a.createdAtMs || 0));
+    .sort(
+      (a, b) =>
+        Number(b.updatedAtMs || b.createdAtMs || 0) -
+        Number(a.updatedAtMs || a.createdAtMs || 0)
+    )
+    .slice(0, 500);
 
   return { words };
 });
