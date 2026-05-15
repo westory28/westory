@@ -12,11 +12,11 @@ import { useAuth } from "../../contexts/AuthContext";
 import {
   approveHistoryDictionaryTermForRequests,
   deleteStudentHistoryDictionaryWordByTeacher,
+  loadTeacherStudentHistoryDictionaryWords,
   loadTeacherHistoryDictionaryTerms,
   normalizeHistoryDictionaryWord,
   saveHistoryDictionaryTerm,
   saveHistoryDictionaryTermsBulk,
-  subscribeTeacherStudentHistoryDictionaryWords,
   subscribeTeacherHistoryDictionaryRequests,
   subscribeTeacherHistoryDictionaryTerms,
   updateStudentHistoryDictionaryWordByTeacher,
@@ -247,15 +247,6 @@ const ManageHistoryDictionary: React.FC = () => {
   useEffect(() => {
     const unsubscribeRequests =
       subscribeTeacherHistoryDictionaryRequests(setRequests);
-    const unsubscribeStudentWords =
-      subscribeTeacherStudentHistoryDictionaryWords(setStudentWords, () => {
-        showToast({
-          tone: "error",
-          title: "학생 등록 단어를 불러오지 못했습니다.",
-          message:
-            "새로고침 후에도 계속 비어 있으면 Firestore 읽기 권한을 확인해야 합니다.",
-        });
-      });
     const unsubscribeTerms = subscribeTeacherHistoryDictionaryTerms(
       setTerms,
       () => {
@@ -269,8 +260,37 @@ const ManageHistoryDictionary: React.FC = () => {
     );
     return () => {
       unsubscribeRequests();
-      unsubscribeStudentWords();
       unsubscribeTerms();
+    };
+  }, [showToast]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadStudentWords = async () => {
+      try {
+        const words = await loadTeacherStudentHistoryDictionaryWords();
+        if (!cancelled) setStudentWords(words);
+      } catch (error) {
+        console.error(
+          "Failed to load student history dictionary words:",
+          error,
+        );
+        if (!cancelled) {
+          setStudentWords([]);
+          showToast({
+            tone: "error",
+            title: "학생 등록 단어를 불러오지 못했습니다.",
+            message:
+              "교사 권한 확인 후에도 계속 비어 있으면 Functions 배포 상태를 확인해야 합니다.",
+          });
+        }
+      }
+    };
+
+    void loadStudentWords();
+    return () => {
+      cancelled = true;
     };
   }, [showToast]);
 
@@ -917,7 +937,31 @@ const ManageHistoryDictionary: React.FC = () => {
         word,
         definition,
       });
-      setSelectedStudentWordId(`${selectedStudentWord.uid}:${result.termId}`);
+      const nextId = `${selectedStudentWord.uid}:${result.termId}`;
+      const now = {
+        toDate: () => new Date(),
+        toMillis: () => Date.now(),
+      };
+      setStudentWords((prev) =>
+        prev
+          .filter((item) => item.id !== selectedStudentWord.id)
+          .concat({
+            ...selectedStudentWord,
+            id: nextId,
+            termId: result.termId,
+            word: word.trim(),
+            normalizedWord: normalizeHistoryDictionaryWord(word),
+            definition: definition.trim(),
+            definitionSource: "teacher_reviewed",
+            updatedAt: now,
+          })
+          .sort(
+            (a, b) =>
+              getTimestampMs(b.updatedAt || b.createdAt) -
+              getTimestampMs(a.updatedAt || a.createdAt),
+          ),
+      );
+      setSelectedStudentWordId(nextId);
       showToast({
         tone: "success",
         title: "학생 등록 단어를 수정했습니다.",

@@ -5275,6 +5275,61 @@ exports.deleteStudentHistoryDictionaryWordByTeacher = onCall({ region: REGION },
   return result;
 });
 
+exports.listStudentHistoryDictionaryWordsForTeacher = onCall({ region: REGION }, async (request) => {
+  await assertHistoryDictionaryManager(request);
+  const timestampMs = (value) => {
+    if (!value) return 0;
+    if (typeof value.toMillis === 'function') return value.toMillis();
+    if (typeof value.toDate === 'function') return value.toDate().getTime();
+    return Number(value.seconds || 0) * 1000;
+  };
+  const snapshot = await db.collectionGroup('history_dictionary_words')
+    .where('status', '==', 'saved')
+    .limit(500)
+    .get();
+
+  const words = snapshot.docs
+    .map((docSnap) => {
+      const data = docSnap.data() || {};
+      const definitionSource = sanitizeHistoryDictionaryText(data.definitionSource, 40);
+      if (!['student', 'teacher_reviewed'].includes(definitionSource)) {
+        return null;
+      }
+      const uid = String(data.uid || docSnap.ref.parent.parent?.id || '').trim();
+      if (!uid) return null;
+      return {
+        id: `${uid}:${docSnap.id}`,
+        uid,
+        termId: sanitizeHistoryDictionaryText(data.termId || docSnap.id, 80),
+        word: sanitizeHistoryDictionaryWord(data.word),
+        normalizedWord: normalizeHistoryDictionaryWord(data.normalizedWord || data.word),
+        definition: sanitizeHistoryDictionaryText(data.definition, 1200),
+        studentLevel: sanitizeHistoryDictionaryText(data.studentLevel, 80),
+        tags: sanitizeHistoryDictionaryTags(data.tags),
+        status: 'saved',
+        requestId: sanitizeHistoryDictionaryText(data.requestId, 100),
+        studentName: sanitizeHistoryDictionaryText(data.studentName || data.name, 40) || '학생',
+        grade: sanitizeHistoryDictionaryText(data.grade, 8),
+        class: sanitizeHistoryDictionaryText(data.class, 8),
+        number: sanitizeHistoryDictionaryText(data.number, 8),
+        definitionSource,
+        memo: sanitizeHistoryDictionaryText(data.memo, 240),
+        year: sanitizeHistoryDictionaryText(data.year, 8),
+        semester: sanitizeHistoryDictionaryText(data.semester, 8),
+        reviewedBy: sanitizeHistoryDictionaryText(data.reviewedBy, 80),
+        rewardTermId: sanitizeHistoryDictionaryText(data.rewardTermId, 80),
+        rewardTransactionId: sanitizeHistoryDictionaryText(data.rewardTransactionId, 120),
+        rewardAmount: Number(data.rewardAmount || 0),
+        createdAtMs: timestampMs(data.createdAt),
+        updatedAtMs: timestampMs(data.updatedAt),
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => Number(b.updatedAtMs || b.createdAtMs || 0) - Number(a.updatedAtMs || a.createdAtMs || 0));
+
+  return { words };
+});
+
 exports.updateStudentHistoryDictionaryWordByTeacher = onCall({ region: REGION }, async (request) => {
   const manager = await assertHistoryDictionaryManager(request);
   const { year, semester } = assertYearSemester(request.data);

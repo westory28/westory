@@ -116,6 +116,47 @@ const mapTeacherStudentWordDoc = (docSnap: {
   };
 };
 
+const timestampFromMs = (value: unknown) => {
+  const millis = Number(value || 0);
+  return millis > 0
+    ? {
+        toDate: () => new Date(millis),
+        toMillis: () => millis,
+      }
+    : null;
+};
+
+const mapTeacherStudentWordData = (
+  data: Record<string, unknown>,
+): StudentHistoryDictionaryWord => ({
+  id: String(data.id || ""),
+  uid: String(data.uid || ""),
+  termId: String(data.termId || ""),
+  word: String(data.word || ""),
+  normalizedWord: normalizeHistoryDictionaryWord(
+    String(data.normalizedWord || data.word || ""),
+  ),
+  definition: String(data.definition || ""),
+  studentLevel: String(data.studentLevel || ""),
+  tags: Array.isArray(data.tags) ? (data.tags as string[]) : [],
+  status: "saved",
+  requestId: String(data.requestId || ""),
+  studentName: String(data.studentName || "학생"),
+  grade: String(data.grade || ""),
+  class: String(data.class || ""),
+  number: String(data.number || ""),
+  definitionSource: String(data.definitionSource || ""),
+  memo: String(data.memo || ""),
+  year: String(data.year || ""),
+  semester: String(data.semester || ""),
+  reviewedBy: String(data.reviewedBy || ""),
+  rewardTermId: String(data.rewardTermId || ""),
+  rewardTransactionId: String(data.rewardTransactionId || ""),
+  rewardAmount: Number(data.rewardAmount || 0),
+  createdAt: timestampFromMs(data.createdAtMs),
+  updatedAt: timestampFromMs(data.updatedAtMs),
+});
+
 const mergeHistoryDictionaryRequests = (
   rootRequests: HistoryDictionaryRequest[],
   studentWordRequests: HistoryDictionaryRequest[],
@@ -267,6 +308,18 @@ export const subscribeTeacherStudentHistoryDictionaryWords = (
       onChange([]);
     },
   );
+
+export const loadTeacherStudentHistoryDictionaryWords = async () => {
+  const callable = httpsCallable(
+    functions,
+    "listStudentHistoryDictionaryWordsForTeacher",
+  );
+  const result = await callable({});
+  const data = result.data as { words?: Record<string, unknown>[] };
+  return Array.isArray(data.words)
+    ? data.words.map(mapTeacherStudentWordData)
+    : [];
+};
 
 export const subscribeTeacherHistoryDictionaryTerms = (
   onChange: (terms: HistoryDictionaryTerm[]) => void,
