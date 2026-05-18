@@ -215,6 +215,10 @@ const ManageHistoryDictionary: React.FC = () => {
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const termListRef = useRef<HTMLDivElement>(null);
   const termSectionRefs = useRef<Record<string, HTMLElement | null>>({});
+  const studentWordListRef = useRef<HTMLDivElement>(null);
+  const studentWordSectionRefs = useRef<Record<string, HTMLElement | null>>(
+    {},
+  );
   const [requests, setRequests] = useState<HistoryDictionaryRequest[]>([]);
   const [notificationRequests, setNotificationRequests] = useState<
     HistoryDictionaryRequest[]
@@ -243,6 +247,10 @@ const ManageHistoryDictionary: React.FC = () => {
     useState<ActiveDictionaryPanel>("terms");
   const [activeInitial, setActiveInitial] = useState(ALL_INITIAL);
   const [scrollActiveInitial, setScrollActiveInitial] = useState(ALL_INITIAL);
+  const [activeStudentWordInitial, setActiveStudentWordInitial] =
+    useState(ALL_INITIAL);
+  const [scrollStudentWordInitial, setScrollStudentWordInitial] =
+    useState(ALL_INITIAL);
 
   useEffect(() => {
     const unsubscribeRequests =
@@ -402,18 +410,23 @@ const ManageHistoryDictionary: React.FC = () => {
 
   const visibleStudentWords = useMemo(() => {
     const keyword = studentWordSearch.trim().toLowerCase();
-    return studentWords.filter((item) => {
-      if (!keyword) return true;
-      return (
-        item.word.toLowerCase().includes(keyword) ||
-        (item.definition || "").toLowerCase().includes(keyword) ||
-        (item.studentName || "").toLowerCase().includes(keyword) ||
-        (item.grade || "").toLowerCase().includes(keyword) ||
-        (item.class || "").toLowerCase().includes(keyword) ||
-        (item.number || "").toLowerCase().includes(keyword)
-      );
-    });
-  }, [studentWordSearch, studentWords]);
+    return studentWords
+      .filter((item) => {
+        const matchesInitial =
+          activeStudentWordInitial === ALL_INITIAL ||
+          getWordInitial(item.word) === activeStudentWordInitial;
+        const matchesSearch =
+          !keyword ||
+          item.word.toLowerCase().includes(keyword) ||
+          (item.definition || "").toLowerCase().includes(keyword) ||
+          (item.studentName || "").toLowerCase().includes(keyword) ||
+          (item.grade || "").toLowerCase().includes(keyword) ||
+          (item.class || "").toLowerCase().includes(keyword) ||
+          (item.number || "").toLowerCase().includes(keyword);
+        return matchesInitial && matchesSearch;
+      })
+      .sort((a, b) => a.word.localeCompare(b.word, "ko-KR"));
+  }, [activeStudentWordInitial, studentWordSearch, studentWords]);
 
   const initialCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -432,20 +445,54 @@ const ManageHistoryDictionary: React.FC = () => {
     });
     return Array.from(groups.entries());
   }, [visibleTerms]);
+  const studentWordInitialCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    studentWords.forEach((item) => {
+      const initial = getWordInitial(item.word);
+      counts.set(initial, (counts.get(initial) || 0) + 1);
+    });
+    return counts;
+  }, [studentWords]);
+  const groupedVisibleStudentWords = useMemo(() => {
+    const groups = new Map<string, StudentHistoryDictionaryWord[]>();
+    visibleStudentWords.forEach((item) => {
+      const initial = getWordInitial(item.word) || "기타";
+      groups.set(initial, [...(groups.get(initial) || []), item]);
+    });
+    return Array.from(groups.entries());
+  }, [visibleStudentWords]);
   const highlightedInitial =
     activeInitial === ALL_INITIAL && scrollActiveInitial !== ALL_INITIAL
       ? scrollActiveInitial
       : activeInitial;
+  const highlightedStudentWordInitial =
+    activeStudentWordInitial === ALL_INITIAL &&
+    scrollStudentWordInitial !== ALL_INITIAL
+      ? scrollStudentWordInitial
+      : activeStudentWordInitial;
 
   useEffect(() => {
     if (activeInitial !== ALL_INITIAL) return;
     setScrollActiveInitial(groupedVisibleTerms[0]?.[0] || ALL_INITIAL);
   }, [activeInitial, groupedVisibleTerms]);
 
+  useEffect(() => {
+    if (activeStudentWordInitial !== ALL_INITIAL) return;
+    setScrollStudentWordInitial(
+      groupedVisibleStudentWords[0]?.[0] || ALL_INITIAL,
+    );
+  }, [activeStudentWordInitial, groupedVisibleStudentWords]);
+
   const handleInitialFilterClick = (initial: string) => {
     setActiveInitial(initial);
     setScrollActiveInitial(initial);
     termListRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleStudentWordInitialFilterClick = (initial: string) => {
+    setActiveStudentWordInitial(initial);
+    setScrollStudentWordInitial(initial);
+    studentWordListRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleTermListScroll = useCallback(() => {
@@ -480,6 +527,39 @@ const ManageHistoryDictionary: React.FC = () => {
       prev === nextInitial ? prev : nextInitial,
     );
   }, [activeInitial, groupedVisibleTerms]);
+
+  const handleStudentWordListScroll = useCallback(() => {
+    if (activeStudentWordInitial !== ALL_INITIAL) return;
+    const container = studentWordListRef.current;
+    if (!container) return;
+
+    const containerTop = container.getBoundingClientRect().top;
+    const sections = groupedVisibleStudentWords
+      .map(([initial]) => ({
+        initial,
+        element: studentWordSectionRefs.current[initial],
+      }))
+      .filter((item): item is { initial: string; element: HTMLElement } =>
+        Boolean(item.element),
+      );
+    if (!sections.length) {
+      setScrollStudentWordInitial(ALL_INITIAL);
+      return;
+    }
+
+    let nextInitial = sections[0].initial;
+    for (const section of sections) {
+      const offset = section.element.getBoundingClientRect().top - containerTop;
+      if (offset <= 16) {
+        nextInitial = section.initial;
+      } else {
+        break;
+      }
+    }
+    setScrollStudentWordInitial((prev) =>
+      prev === nextInitial ? prev : nextInitial,
+    );
+  }, [activeStudentWordInitial, groupedVisibleStudentWords]);
 
   const selectedRequest =
     (selectedRequestId
@@ -1351,74 +1431,134 @@ const ManageHistoryDictionary: React.FC = () => {
                 </p>
               </div>
 
-              <label className="relative mt-5 block">
-                <span className="sr-only">학생 등록 단어 검색</span>
-                <i
-                  className="fas fa-magnifying-glass pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-slate-400"
-                  aria-hidden="true"
-                ></i>
-                <input
-                  type="search"
-                  value={studentWordSearch}
-                  onChange={(event) => setStudentWordSearch(event.target.value)}
-                  className="h-11 w-full rounded-lg border border-slate-200 bg-white pl-10 pr-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-                  placeholder="단어, 뜻풀이, 학생 검색"
-                />
-              </label>
-
-              <div className="mt-4 text-xs font-bold text-slate-500">
-                학생 등록 단어 {studentWords.length}개
-              </div>
-
-              <div className="mt-4 max-h-[calc(100vh-19rem)] min-h-[26rem] overflow-y-auto pr-1">
-                {!visibleStudentWords.length && (
-                  <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm font-semibold text-slate-500">
-                    표시할 학생 등록 단어가 없습니다.
-                  </div>
-                )}
-                <div className="space-y-2">
-                  {visibleStudentWords.map((item) => {
-                    const active = selectedStudentWord?.id === item.id;
+              <div className="mt-5 grid gap-3 lg:grid-cols-[4.75rem_minmax(0,1fr)]">
+                <div className="grid grid-cols-5 gap-2 lg:grid-cols-1">
+                  {INITIAL_FILTERS.map((initial) => {
+                    const active = highlightedStudentWordInitial === initial;
+                    const count =
+                      initial === ALL_INITIAL
+                        ? studentWords.length
+                        : studentWordInitialCounts.get(initial) || 0;
                     return (
                       <button
-                        key={item.id}
+                        key={`student-word-${initial}`}
                         type="button"
-                        onClick={() => handleSelectStudentWord(item)}
-                        className={`block w-full rounded-lg border px-3 py-3 text-left transition ${
+                        onClick={() =>
+                          handleStudentWordInitialFilterClick(initial)
+                        }
+                        className={`flex h-11 items-center justify-center rounded-lg border text-sm font-extrabold transition ${
                           active
-                            ? "border-blue-500 bg-blue-50 shadow-[0_0_0_3px_rgba(37,99,235,0.08)]"
-                            : "border-slate-200 bg-white hover:border-blue-200 hover:bg-blue-50/60"
+                            ? "border-blue-600 bg-blue-600 text-white shadow-sm"
+                            : "border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:bg-blue-50"
                         }`}
+                        title={`${initial} ${count}개`}
                       >
-                        <div className="flex items-center justify-between gap-3">
-                          <span
-                            className={`min-w-0 truncate text-sm font-extrabold ${
-                              active ? "text-blue-700" : "text-slate-900"
-                            }`}
-                          >
-                            {item.word}
-                          </span>
-                          <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-700">
-                            직접 등록
-                          </span>
-                        </div>
-                        <div className="mt-2 text-xs font-semibold text-slate-500">
-                          {item.grade ? `${item.grade}학년 ` : ""}
-                          {item.class ? `${item.class}반 ` : ""}
-                          {item.number ? `${item.number}번 · ` : ""}
-                          {item.studentName || "학생"}
-                        </div>
-                        {item.definition && (
-                          <div className="mt-2 line-clamp-2 text-xs leading-5 text-slate-600">
-                            {item.definition}
-                          </div>
-                        )}
-                        <div className="mt-2 text-[11px] font-bold text-slate-400">
-                          {timestampLabel(item.updatedAt || item.createdAt)}
-                        </div>
+                        {initial}
                       </button>
                     );
                   })}
+                </div>
+
+                <div className="min-w-0">
+                  <label className="relative block">
+                    <span className="sr-only">학생 등록 단어 검색</span>
+                    <i
+                      className="fas fa-magnifying-glass pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-slate-400"
+                      aria-hidden="true"
+                    ></i>
+                    <input
+                      type="search"
+                      value={studentWordSearch}
+                      onChange={(event) =>
+                        setStudentWordSearch(event.target.value)
+                      }
+                      className="h-11 w-full rounded-lg border border-slate-200 bg-white pl-10 pr-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                      placeholder="단어, 뜻풀이, 학생 검색"
+                    />
+                  </label>
+
+                  <div className="mt-4 text-xs font-bold text-slate-500">
+                    학생 등록 단어 {studentWords.length}개
+                  </div>
+
+                  <div
+                    ref={studentWordListRef}
+                    onScroll={handleStudentWordListScroll}
+                    className="mt-4 max-h-[calc(100vh-22rem)] min-h-[26rem] overflow-y-auto pr-1"
+                  >
+                    {!visibleStudentWords.length && (
+                      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm font-semibold text-slate-500">
+                        표시할 학생 등록 단어가 없습니다.
+                      </div>
+                    )}
+                    <div className="space-y-3">
+                      {groupedVisibleStudentWords.map(([initial, items]) => (
+                        <section
+                          key={`student-word-section-${initial}`}
+                          ref={(node) => {
+                            if (node) {
+                              studentWordSectionRefs.current[initial] = node;
+                            } else {
+                              delete studentWordSectionRefs.current[initial];
+                            }
+                          }}
+                        >
+                          <div className="mb-2 px-2 text-sm font-extrabold text-slate-900">
+                            {initial}
+                          </div>
+                          <div className="space-y-2">
+                            {items.map((item) => {
+                              const active =
+                                selectedStudentWord?.id === item.id;
+                              return (
+                                <button
+                                  key={item.id}
+                                  type="button"
+                                  onClick={() => handleSelectStudentWord(item)}
+                                  className={`block w-full rounded-lg border px-3 py-3 text-left transition ${
+                                    active
+                                      ? "border-blue-500 bg-blue-50 shadow-[0_0_0_3px_rgba(37,99,235,0.08)]"
+                                      : "border-slate-200 bg-white hover:border-blue-200 hover:bg-blue-50/60"
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between gap-3">
+                                    <span
+                                      className={`min-w-0 truncate text-sm font-extrabold ${
+                                        active
+                                          ? "text-blue-700"
+                                          : "text-slate-900"
+                                      }`}
+                                    >
+                                      {item.word}
+                                    </span>
+                                    <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-700">
+                                      직접 등록
+                                    </span>
+                                  </div>
+                                  <div className="mt-2 text-xs font-semibold text-slate-500">
+                                    {item.grade ? `${item.grade}학년 ` : ""}
+                                    {item.class ? `${item.class}반 ` : ""}
+                                    {item.number ? `${item.number}번 · ` : ""}
+                                    {item.studentName || "학생"}
+                                  </div>
+                                  {item.definition && (
+                                    <div className="mt-2 line-clamp-2 text-xs leading-5 text-slate-600">
+                                      {item.definition}
+                                    </div>
+                                  )}
+                                  <div className="mt-2 text-[11px] font-bold text-slate-400">
+                                    {timestampLabel(
+                                      item.updatedAt || item.createdAt,
+                                    )}
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </section>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
             </aside>
