@@ -309,12 +309,15 @@ export const subscribeTeacherStudentHistoryDictionaryWords = (
     },
   );
 
-export const loadTeacherStudentHistoryDictionaryWords = async () => {
+export const loadTeacherStudentHistoryDictionaryWords = async (
+  config?: ConfigLike,
+) => {
+  const { year, semester } = getYearSemester(config);
   const callable = httpsCallable(
     functions,
     "listStudentHistoryDictionaryWordsForTeacher",
   );
-  const result = await callable({});
+  const result = await callable({ year, semester });
   const data = result.data as { words?: Record<string, unknown>[] };
   return Array.isArray(data.words)
     ? data.words.map(mapTeacherStudentWordData)
@@ -439,6 +442,8 @@ export const deleteStudentHistoryDictionaryWordByTeacher = async (
     word?: string;
     normalizedWord?: string;
     reason?: string;
+    year?: string;
+    semester?: string;
   },
 ) => {
   const { year, semester } = getYearSemester(config);
@@ -447,8 +452,8 @@ export const deleteStudentHistoryDictionaryWordByTeacher = async (
     "deleteStudentHistoryDictionaryWordByTeacher",
   );
   const result = await callable({
-    year,
-    semester,
+    year: input.year || year,
+    semester: input.semester || semester,
     uid: input.uid,
     termId: input.termId || "",
     requestId: input.requestId || "",
@@ -475,6 +480,8 @@ export const updateStudentHistoryDictionaryWordByTeacher = async (
     termId: string;
     word: string;
     definition: string;
+    year?: string;
+    semester?: string;
   },
 ) => {
   const { year, semester } = getYearSemester(config);
@@ -483,8 +490,8 @@ export const updateStudentHistoryDictionaryWordByTeacher = async (
     "updateStudentHistoryDictionaryWordByTeacher",
   );
   const result = await callable({
-    year,
-    semester,
+    year: input.year || year,
+    semester: input.semester || semester,
     uid: input.uid,
     termId: input.termId,
     word: input.word,

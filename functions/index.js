@@ -2033,6 +2033,22 @@ const assertHistoryDictionaryManager = async (request) => {
   return { uid, email, profile };
 };
 
+const assertHistoryDictionaryWriteManager = async (request) => {
+  const { uid, email } = assertAllowedWestoryUser(request);
+  if (email === ADMIN_EMAIL) {
+    return { uid, email, profile: null };
+  }
+
+  const { profile } = await getUserProfile(uid);
+  if (String(profile?.role || '').trim() !== 'teacher') {
+    throw new HttpsError(
+      'permission-denied',
+      'teacher permission is required.',
+    );
+  }
+  return { uid, email, profile };
+};
+
 const ensureStudentProfile = async (uid) => {
   const { ref, profile } = await getUserProfile(uid);
   return { ref, profile };
@@ -5171,7 +5187,7 @@ exports.deleteStudentHistoryDictionaryWord = onCall({ region: REGION }, async (r
 });
 
 exports.deleteStudentHistoryDictionaryWordByTeacher = onCall({ region: REGION }, async (request) => {
-  const manager = await assertHistoryDictionaryManager(request);
+  const manager = await assertHistoryDictionaryWriteManager(request);
   const { year, semester } = assertYearSemester(request.data);
   const targetUid = String(request.data?.uid || '').trim();
   const requestId = sanitizeHistoryDictionaryText(request.data?.requestId, 100);
@@ -5277,6 +5293,7 @@ exports.deleteStudentHistoryDictionaryWordByTeacher = onCall({ region: REGION },
 
 exports.listStudentHistoryDictionaryWordsForTeacher = onCall({ region: REGION }, async (request) => {
   await assertHistoryDictionaryManager(request);
+  const scoped = getOptionalYearSemester(request.data);
   const timestampMs = (value) => {
     if (!value) return 0;
     if (typeof value.toMillis === 'function') return value.toMillis();
@@ -5308,6 +5325,16 @@ exports.listStudentHistoryDictionaryWordsForTeacher = onCall({ region: REGION },
       }
       const definitionSource = sanitizeHistoryDictionaryText(data.definitionSource, 40);
       if (!['student', 'teacher_reviewed'].includes(definitionSource)) {
+        return null;
+      }
+      const dataYear = sanitizeHistoryDictionaryText(data.year, 8);
+      const dataSemester = sanitizeHistoryDictionaryText(data.semester, 8);
+      if (
+        scoped
+        && dataYear
+        && dataSemester
+        && (dataYear !== scoped.year || dataSemester !== scoped.semester)
+      ) {
         return null;
       }
       const targetUid = String(data.uid || uid || '').trim();
@@ -5344,8 +5371,8 @@ exports.listStudentHistoryDictionaryWordsForTeacher = onCall({ region: REGION },
         ),
         definitionSource,
         memo: sanitizeHistoryDictionaryText(data.memo, 240),
-        year: sanitizeHistoryDictionaryText(data.year, 8),
-        semester: sanitizeHistoryDictionaryText(data.semester, 8),
+        year: dataYear,
+        semester: dataSemester,
         reviewedBy: sanitizeHistoryDictionaryText(data.reviewedBy, 80),
         rewardTermId: sanitizeHistoryDictionaryText(data.rewardTermId, 80),
         rewardTransactionId: sanitizeHistoryDictionaryText(data.rewardTransactionId, 120),
@@ -5366,7 +5393,7 @@ exports.listStudentHistoryDictionaryWordsForTeacher = onCall({ region: REGION },
 });
 
 exports.updateStudentHistoryDictionaryWordByTeacher = onCall({ region: REGION }, async (request) => {
-  const manager = await assertHistoryDictionaryManager(request);
+  const manager = await assertHistoryDictionaryWriteManager(request);
   const { year, semester } = assertYearSemester(request.data);
   const targetUid = String(request.data?.uid || '').trim();
   const previousTermId = sanitizeHistoryDictionaryText(request.data?.termId, 80);
@@ -5566,7 +5593,7 @@ exports.saveHistoryDictionaryTermsBulk = onCall({
   timeoutSeconds: 60,
   memory: '512MiB',
 }, async (request) => {
-  const manager = await assertHistoryDictionaryManager(request);
+  const manager = await assertHistoryDictionaryWriteManager(request);
   assertYearSemester(request.data);
   const rawTerms = Array.isArray(request.data?.terms) ? request.data.terms : [];
   if (!rawTerms.length) {
@@ -5644,7 +5671,7 @@ exports.saveHistoryDictionaryTermsBulk = onCall({
 });
 
 exports.saveHistoryDictionaryTerm = onCall({ region: REGION }, async (request) => {
-  const manager = await assertHistoryDictionaryManager(request);
+  const manager = await assertHistoryDictionaryWriteManager(request);
   const word = sanitizeHistoryDictionaryWord(request.data?.word);
   const normalizedWord = normalizeHistoryDictionaryWord(word);
   const definition = sanitizeHistoryDictionaryText(request.data?.definition, 1200);
@@ -5714,7 +5741,7 @@ exports.saveHistoryDictionaryTerm = onCall({ region: REGION }, async (request) =
 });
 
 exports.approveHistoryDictionaryTermForRequests = onCall({ region: REGION }, async (request) => {
-  const manager = await assertHistoryDictionaryManager(request);
+  const manager = await assertHistoryDictionaryWriteManager(request);
   const { year, semester } = assertYearSemester(request.data);
   const termId = sanitizeHistoryDictionaryText(request.data?.termId, 80);
   const requestId = sanitizeHistoryDictionaryText(request.data?.requestId, 100);

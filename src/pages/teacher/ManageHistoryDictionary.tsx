@@ -269,7 +269,7 @@ const ManageHistoryDictionary: React.FC = () => {
 
     const loadStudentWords = async () => {
       try {
-        const words = await loadTeacherStudentHistoryDictionaryWords();
+        const words = await loadTeacherStudentHistoryDictionaryWords(config);
         if (!cancelled) setStudentWords(words);
       } catch (error) {
         console.error(
@@ -292,7 +292,7 @@ const ManageHistoryDictionary: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [showToast]);
+  }, [config?.semester, config?.year, showToast]);
 
   useEffect(() => {
     if (!config || !currentUser?.uid) {
@@ -936,6 +936,8 @@ const ManageHistoryDictionary: React.FC = () => {
         termId: selectedStudentWord.termId,
         word,
         definition,
+        year: selectedStudentWord.year,
+        semester: selectedStudentWord.semester,
       });
       const nextId = `${selectedStudentWord.uid}:${result.termId}`;
       const now = {
@@ -1068,6 +1070,8 @@ const ManageHistoryDictionary: React.FC = () => {
         word: selectedStudentWord.word,
         normalizedWord: selectedStudentWord.normalizedWord,
         reason: "teacher_deleted_insufficient_history_dictionary_word",
+        year: selectedStudentWord.year,
+        semester: selectedStudentWord.semester,
       });
       setStudentWords((prev) =>
         prev.filter((item) => item.id !== selectedStudentWord.id),
