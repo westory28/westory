@@ -5324,7 +5324,15 @@ exports.listStudentHistoryDictionaryWordsForTeacher = onCall({ region: REGION },
         status: 'saved',
         requestId: sanitizeHistoryDictionaryText(data.requestId, 100),
         studentName:
-          sanitizeHistoryDictionaryText(data.studentName || data.name, 40) || '학생',
+          sanitizeHistoryDictionaryText(
+            data.studentName
+            || data.name
+            || profile.studentName
+            || profile.name
+            || profile.displayName
+            || profile.nickname,
+            40,
+          ) || '학생',
         grade: sanitizeHistoryDictionaryText(data.grade || profile.grade, 8),
         class: sanitizeHistoryDictionaryText(
           data.class || profile.class || profile.classNumber,

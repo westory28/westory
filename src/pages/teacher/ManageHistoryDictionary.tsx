@@ -1047,6 +1047,56 @@ const ManageHistoryDictionary: React.FC = () => {
     }
   };
 
+  const handleDeleteStudentWord = async () => {
+    if (
+      !selectedStudentWord?.uid ||
+      !selectedStudentWord.termId ||
+      busyMessage
+    ) {
+      return;
+    }
+    const confirmed = window.confirm(
+      `"${selectedStudentWord.word}" 학생 등록 단어를 삭제할까요?\n내용이 부족하거나 부적절한 단어라면 학생 단어장에서 삭제되고, 지급된 역사 사전 위스가 있으면 함께 회수됩니다.`,
+    );
+    if (!confirmed) return;
+    setBusyMessage("학생 등록 단어를 삭제하고 지급된 위스를 확인하는 중입니다.");
+    try {
+      const result = await deleteStudentHistoryDictionaryWordByTeacher(config, {
+        uid: selectedStudentWord.uid,
+        requestId: selectedStudentWord.requestId,
+        termId: selectedStudentWord.termId,
+        word: selectedStudentWord.word,
+        normalizedWord: selectedStudentWord.normalizedWord,
+        reason: "teacher_deleted_insufficient_history_dictionary_word",
+      });
+      setStudentWords((prev) =>
+        prev.filter((item) => item.id !== selectedStudentWord.id),
+      );
+      setSelectedStudentWordId("");
+      setWord("");
+      setDefinition("");
+      setRelatedUnitId("");
+      setTags([]);
+      setTagInput("");
+      showToast({
+        tone: "success",
+        title: "학생 등록 단어를 삭제했습니다.",
+        message: result.reward?.reclaimed
+          ? `지급된 ${Number(result.reward.amount || 0)}위스를 회수했습니다.`
+          : "학생 단어장에서 항목을 삭제했습니다.",
+      });
+    } catch (error) {
+      console.error("Failed to delete student history dictionary word:", error);
+      showToast({
+        tone: "error",
+        title: "학생 등록 단어 삭제에 실패했습니다.",
+        message: "권한 또는 위스 회수 상태를 확인한 뒤 다시 시도해 주세요.",
+      });
+    } finally {
+      setBusyMessage("");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-6 lg:px-6 xl:px-8">
       <div className="mx-auto max-w-7xl">
@@ -1819,12 +1869,26 @@ const ManageHistoryDictionary: React.FC = () => {
                           {selectedStudentWord.studentName || "학생"}
                         </div>
                       </div>
-                      <span className="rounded-full bg-white px-3 py-1.5 text-xs font-extrabold text-emerald-700 shadow-sm">
-                        {selectedStudentWord.definitionSource ===
-                        "teacher_reviewed"
-                          ? "교사 확인 완료"
-                          : "확인 전"}
-                      </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full bg-white px-3 py-1.5 text-xs font-extrabold text-emerald-700 shadow-sm">
+                          {selectedStudentWord.definitionSource ===
+                          "teacher_reviewed"
+                            ? "교사 확인 완료"
+                            : "확인 전"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => void handleDeleteStudentWord()}
+                          disabled={Boolean(busyMessage)}
+                          className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-rose-100 bg-white px-3 text-xs font-extrabold text-rose-600 shadow-sm transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <i
+                            className="fas fa-trash-can text-[11px]"
+                            aria-hidden="true"
+                          ></i>
+                          단어 삭제
+                        </button>
+                      </div>
                     </div>
                     <p className="mt-3 text-sm leading-6 text-emerald-900">
                       학생 단어장에만 반영됩니다. 공식 역사 사전 등록 단어는
