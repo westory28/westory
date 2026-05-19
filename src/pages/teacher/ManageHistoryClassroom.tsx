@@ -1251,8 +1251,8 @@ const ManageHistoryClassroom: React.FC = () => {
 
   const exemptionClassStudents = useMemo(
     () => {
-      const grade = String(userData?.grade || exemptionTargetGrade || "").trim();
-      const className = String(userData?.class || exemptionTargetClass || "").trim();
+      const grade = String(exemptionTargetGrade || "").trim();
+      const className = String(exemptionTargetClass || "").trim();
       if (!grade || !className) return [];
       return students.filter(
         (student) =>
@@ -1260,7 +1260,7 @@ const ManageHistoryClassroom: React.FC = () => {
           student.className === className,
       );
     },
-    [exemptionTargetClass, exemptionTargetGrade, students, userData?.class, userData?.grade],
+    [exemptionTargetClass, exemptionTargetGrade, students],
   );
 
   const activeExemptionClassStudents = useMemo(
@@ -1272,10 +1272,10 @@ const ManageHistoryClassroom: React.FC = () => {
   );
 
   const exemptionClassLabel = useMemo(() => {
-    const grade = String(userData?.grade || exemptionTargetGrade || "").trim();
-    const className = String(userData?.class || exemptionTargetClass || "").trim();
+    const grade = String(exemptionTargetGrade || "").trim();
+    const className = String(exemptionTargetClass || "").trim();
     return grade && className ? `${grade}학년 ${className}반` : "담임 학급";
-  }, [exemptionTargetClass, exemptionTargetGrade, userData?.class, userData?.grade]);
+  }, [exemptionTargetClass, exemptionTargetGrade]);
 
   useEffect(
     () => {
@@ -3999,7 +3999,7 @@ const ManageHistoryClassroom: React.FC = () => {
                           )}
                         </div>
                       </div>
-                      <div className="hidden">
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
                         <label className="block">
                           <span className="mb-1 block text-xs font-bold text-slate-500">
                             학년
