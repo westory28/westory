@@ -70,8 +70,8 @@ const ManageQuiz: React.FC = () => {
     };
 
     return (
-        <div className="min-h-[calc(100dvh-64px)] bg-gray-50 flex flex-col">
-            <main className={`flex-1 w-full mx-auto px-4 lg:px-6 py-4 lg:py-3 flex flex-col ${activeTab === 'bank' ? 'max-w-[1680px]' : 'max-w-7xl'}`}>
+        <div className="flex h-[calc(100dvh-64px)] min-h-[760px] flex-col overflow-hidden bg-gray-50">
+            <main className={`flex-1 w-full mx-auto px-4 lg:px-6 py-4 lg:py-3 flex flex-col min-h-0 overflow-hidden ${activeTab === 'bank' ? 'max-w-[1680px]' : 'max-w-7xl'}`}>
                 <div className="flex border-b border-gray-200 mb-3 bg-white rounded-t-lg px-2 shrink-0 overflow-x-auto">
                     {canWrite && (
                         <button
@@ -111,7 +111,7 @@ const ManageQuiz: React.FC = () => {
                 )}
 
                 {canWrite && activeTab === 'manage' && (
-                    <div className="flex flex-col lg:flex-row lg:items-stretch gap-6 relative min-h-[760px]">
+                    <div className="flex-1 flex flex-col lg:flex-row lg:items-stretch gap-6 overflow-hidden relative min-h-0">
                         {mobileTreeOpen && (
                             <button
                                 type="button"
@@ -122,7 +122,7 @@ const ManageQuiz: React.FC = () => {
                         )}
 
                         <div
-                            className={`fixed lg:static top-16 lg:top-auto right-0 bottom-0 lg:bottom-auto w-[82%] max-w-[320px] lg:w-1/3 bg-white lg:rounded-xl shadow-2xl lg:shadow-sm border border-gray-200 flex flex-col overflow-hidden h-[calc(100vh-64px)] lg:h-auto lg:min-h-[760px] lg:self-stretch z-50 lg:z-auto transition-transform duration-300 ${mobileTreeOpen ? 'translate-x-0' : 'translate-x-full'} lg:translate-x-0`}
+                            className={`fixed lg:static top-16 lg:top-auto right-0 bottom-0 lg:bottom-auto w-[82%] max-w-[320px] lg:w-1/3 bg-white lg:rounded-xl shadow-2xl lg:shadow-sm border border-gray-200 flex flex-col overflow-hidden h-[calc(100vh-64px)] lg:h-full lg:min-h-0 z-50 lg:z-auto transition-transform duration-300 ${mobileTreeOpen ? 'translate-x-0' : 'translate-x-full'} lg:translate-x-0`}
                         >
                             <div className="p-4 border-b bg-gray-50 font-bold text-gray-700 flex items-center justify-between">
                                 <span>단원 및 평가 선택</span>
@@ -138,7 +138,7 @@ const ManageQuiz: React.FC = () => {
                             <QuizUnitTree onSelect={handleNodeSelect} />
                         </div>
 
-                        <div className="w-full lg:w-2/3 flex flex-col min-h-[760px] lg:self-stretch">
+                        <div className="w-full lg:w-2/3 flex flex-col h-full min-h-0 overflow-hidden">
                             {selectedNode ? (
                                 <QuizEditor
                                     node={selectedNode}
@@ -152,7 +152,7 @@ const ManageQuiz: React.FC = () => {
                                     }}
                                 />
                             ) : (
-                                <div className="min-h-[760px] py-16 flex flex-col items-center justify-center text-gray-400">
+                                <div className="h-full min-h-[520px] py-16 flex flex-col items-center justify-center text-gray-400">
                                     <i className="fas fa-mouse-pointer text-4xl mb-4"></i>
                                     <p className="text-lg text-center">
                                         목록에서 <strong>학기 시험 대비</strong> 또는<br />
@@ -175,12 +175,12 @@ const ManageQuiz: React.FC = () => {
                 )}
 
                 {activeTab === 'log' && (
-                    <div className="min-h-[760px]">
+                    <div className="flex-1 min-h-0 overflow-hidden">
                         <QuizLogTab />
                     </div>
                 )}
                 {activeTab === 'bank' && (
-                    <div className="min-h-[760px]">
+                    <div className="flex-1 min-h-0 overflow-hidden">
                         <QuizBankTab canEdit={canWrite} />
                     </div>
                 )}
