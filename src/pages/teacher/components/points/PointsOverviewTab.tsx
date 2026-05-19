@@ -404,7 +404,7 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
                   </div>
                 )}
               </div>
-              <div className="max-h-[320px] overflow-y-auto rounded-xl border border-gray-200">
+              <div className="max-h-[480px] overflow-y-auto rounded-xl border border-gray-200">
                 {transactions.length === 0 && (
                   <div className="p-6 text-center text-sm text-gray-400">
                     거래 내역이 없습니다.
