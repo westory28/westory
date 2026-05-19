@@ -749,6 +749,8 @@ const ManageHistoryClassroom: React.FC = () => {
   const [grantingExemption, setGrantingExemption] = useState(false);
   const [revokingExemptionStudentKey, setRevokingExemptionStudentKey] =
     useState("");
+  const [resettingGrantedExemptions, setResettingGrantedExemptions] =
+    useState(false);
   const [reviewingExemptionRequestId, setReviewingExemptionRequestId] =
     useState("");
   const exemptionSectionRef = React.useRef<HTMLElement | null>(null);
@@ -1445,6 +1447,29 @@ const ManageHistoryClassroom: React.FC = () => {
             : "unassigned",
         ),
       ).size,
+    [grantedExemptionStudentRows],
+  );
+
+  const grantedExemptionGradeCount = useMemo(
+    () =>
+      new Set(
+        grantedExemptionStudentRows
+          .map((row) => row.grade || "unassigned")
+          .filter(Boolean),
+      ).size,
+    [grantedExemptionStudentRows],
+  );
+
+  const resettableGrantedExemptionIds = useMemo(
+    () =>
+      grantedExemptionStudentRows.flatMap((row) =>
+        row.items
+          .filter((item) => {
+            const status = String(item.status || "").trim() || "available";
+            return status === "available" || status === "active";
+          })
+          .map((item) => item.id),
+      ),
     [grantedExemptionStudentRows],
   );
 
@@ -2511,6 +2536,45 @@ const ManageHistoryClassroom: React.FC = () => {
       alert("면제권 회수에 실패했습니다.");
     } finally {
       setRevokingExemptionStudentKey("");
+    }
+  };
+
+  const handleResetGrantedExemptions = async () => {
+    if (!resettableGrantedExemptionIds.length) {
+      alert("초기화할 수 있는 보유 면제권이 없습니다.");
+      return;
+    }
+
+    const studentCount = grantedExemptionStudentRows.filter(
+      (row) => row.availableCount > 0,
+    ).length;
+    const confirmed = window.confirm(
+      `현재 부여되어 보유 중인 면제권 ${resettableGrantedExemptionIds.length}개를 모두 회수할까요?\n대상 학생 ${studentCount}명의 보유 면제권이 초기화됩니다.`,
+    );
+    if (!confirmed) return;
+
+    const { year, semester } = getYearSemester(config);
+    setResettingGrantedExemptions(true);
+    try {
+      const callable = httpsCallable(functions, "revokeHistoryClassroomExemptions");
+      for (
+        let index = 0;
+        index < resettableGrantedExemptionIds.length;
+        index += 50
+      ) {
+        await callable({
+          year,
+          semester,
+          exemptionIds: resettableGrantedExemptionIds.slice(index, index + 50),
+        });
+      }
+      setExpandedExemptionStudentKey("");
+      await loadExemptionData();
+    } catch (error) {
+      console.error("Failed to reset history classroom exemptions:", error);
+      alert("면제권 부여 초기화에 실패했습니다.");
+    } finally {
+      setResettingGrantedExemptions(false);
     }
   };
 
@@ -4449,7 +4513,8 @@ const ManageHistoryClassroom: React.FC = () => {
                             학생별 면제권 보유 현황
                           </div>
                           <div className="mt-1 text-xs font-semibold text-slate-500">
-                            {grantedExemptionClassCount}개 학급 ·{" "}
+                            {grantedExemptionGradeCount}개 학년 ·{" "}
+                            {grantedExemptionClassCount}개 반 ·{" "}
                             {grantedExemptionStudentRows.length}명
                           </div>
                         </div>
@@ -4493,6 +4558,18 @@ const ManageHistoryClassroom: React.FC = () => {
                           placeholder="학생 이름 검색"
                           className="h-9 w-36 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 outline-none placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
                         />
+                        <button
+                          type="button"
+                          onClick={() => void handleResetGrantedExemptions()}
+                          disabled={
+                            resettingGrantedExemptions ||
+                            resettableGrantedExemptionIds.length <= 0
+                          }
+                          className="h-8 rounded-full border border-rose-100 bg-rose-50 px-3 text-xs font-black text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:border-slate-100 disabled:bg-slate-100 disabled:text-slate-400"
+                          title={`보유 면제권 ${resettableGrantedExemptionIds.length}개 회수`}
+                        >
+                          초기화
+                        </button>
                       </div>
                       <div className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600">
                         총 {activeExemptionCount}개 · 표시{" "}
@@ -4515,8 +4592,9 @@ const ManageHistoryClassroom: React.FC = () => {
                         }
                       }}
                     >
-                      <div className="sticky top-0 z-10 grid min-w-[38rem] grid-cols-[3.5rem_3rem_minmax(6rem,1fr)_4rem_4.75rem_4rem_3rem] items-center gap-2 border-b border-slate-200 bg-white px-3 pb-1.5 text-[11px] font-bold text-slate-400">
-                        <div>학급</div>
+                      <div className="sticky top-0 z-10 grid min-w-[34rem] grid-cols-[2.5rem_2.5rem_2.75rem_minmax(5.5rem,1fr)_3.25rem_4rem_3.25rem_3rem] items-center gap-1.5 border-b border-slate-200 bg-white px-3 pb-1.5 text-[11px] font-bold text-slate-400">
+                        <div>학년</div>
+                        <div>반</div>
                         <div className="text-center">번호</div>
                         <div>학생</div>
                         <div className="text-center">보유</div>
@@ -4531,13 +4609,13 @@ const ManageHistoryClassroom: React.FC = () => {
                         return (
                           <div
                             key={row.key}
-                            className={`min-w-[38rem] rounded-xl border bg-white px-3 py-2 transition ${
+                            className={`min-w-[34rem] rounded-xl border bg-white px-3 py-2 transition ${
                               expanded
                                 ? "border-blue-200 ring-2 ring-blue-50"
                                 : "border-slate-200 hover:border-blue-100 hover:bg-blue-50/30"
                             }`}
                           >
-                            <div className="grid grid-cols-[3.5rem_3rem_minmax(6rem,1fr)_4rem_4.75rem_4rem_3rem] items-center gap-2">
+                            <div className="grid grid-cols-[2.5rem_2.5rem_2.75rem_minmax(5.5rem,1fr)_3.25rem_4rem_3.25rem_3rem] items-center gap-1.5">
                               <button
                                 type="button"
                                 onClick={() =>
@@ -4549,9 +4627,10 @@ const ManageHistoryClassroom: React.FC = () => {
                                 aria-expanded={expanded}
                               >
                                 <div className="truncate text-xs font-bold text-slate-500">
-                                  {row.grade && row.className
-                                    ? `${row.grade}-${row.className}`
-                                    : "-"}
+                                  {row.grade || "-"}
+                                </div>
+                                <div className="truncate text-xs font-bold text-slate-500">
+                                  {row.className || "-"}
                                 </div>
                                 <div className="truncate text-center text-xs font-bold text-slate-500">
                                   {row.number || "-"}
