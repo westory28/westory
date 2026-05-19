@@ -50,6 +50,22 @@ const sanitizeDocId = (value: string) =>
     .replace(/[^\p{L}\p{N}-]+/gu, "")
     .slice(0, 60);
 
+const normalizeHolidayTitle = (title: string, start: string) => {
+  const normalizedTitle = String(title || "")
+    .normalize("NFKC")
+    .trim();
+  if (normalizedTitle.startsWith("기독탄신일")) {
+    return normalizedTitle.replace("기독탄신일", "크리스마스");
+  }
+  if (normalizedTitle.startsWith("성탄절")) {
+    return normalizedTitle.replace("성탄절", "크리스마스");
+  }
+  if (String(start || "").endsWith("-12-25")) {
+    return "크리스마스";
+  }
+  return normalizedTitle;
+};
+
 const lunarToSolar = (year: number, month: number, day: number) => {
   const calendar = new KoreanLunarCalendar();
   const valid = calendar.setLunarDate(year, month, day, false);
@@ -241,7 +257,7 @@ const generateKoreanPublicHolidays = (
 
   return Array.from(holidays.values())
     .map((holiday) => ({
-      title: holiday.title,
+      title: normalizeHolidayTitle(holiday.title, holiday.start),
       start: holiday.start,
       source: "generated" as const,
     }))
@@ -259,7 +275,11 @@ const fetchKasiPublicHolidays = async (targetYear: number) => {
   const data = (await response.json()) as { holidays?: KoreanPublicHoliday[] };
   return (data.holidays || [])
     .filter((holiday) => holiday?.title && holiday?.start)
-    .map((holiday) => ({ ...holiday, source: "kasi" as const }))
+    .map((holiday) => ({
+      ...holiday,
+      title: normalizeHolidayTitle(holiday.title, holiday.start),
+      source: "kasi" as const,
+    }))
     .sort((left, right) => left.start.localeCompare(right.start));
 };
 

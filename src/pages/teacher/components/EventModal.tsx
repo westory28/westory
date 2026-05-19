@@ -141,9 +141,14 @@ const EventModal: React.FC<EventModalProps> = ({
       const nextStartPeriod = persistedAllDay
         ? DEFAULT_SCHEDULE_PERIOD
         : normalizeSchedulePeriod(eventData.startPeriod ?? eventData.period);
+      const nextStart = eventData.start || "";
+      const nextEnd =
+        eventData.end && (!nextStart || eventData.end >= nextStart)
+          ? eventData.end
+          : nextStart;
       setTitle(eventData.title || "");
-      setStart(eventData.start || "");
-      setEnd(eventData.end || eventData.start || "");
+      setStart(nextStart);
+      setEnd(nextEnd);
       setIsAllDay(persistedAllDay);
       setStartPeriod(nextStartPeriod);
       setEndPeriod(
@@ -324,7 +329,7 @@ const EventModal: React.FC<EventModalProps> = ({
       const docRef = eventData
         ? doc(db, path, eventData.id)
         : doc(collection(db, path));
-      const finalEnd = end || start;
+      const finalEnd = end && end >= start ? end : start;
       const finalStartPeriod = isAllDay
         ? SCHEDULE_ALL_DAY_PERIOD_VALUE
         : normalizeSchedulePeriod(startPeriod);
@@ -400,6 +405,16 @@ const EventModal: React.FC<EventModalProps> = ({
     if (!end || end < nextStart) setEnd(nextStart);
   };
 
+  const updateEndDate = (nextEnd: string) => {
+    setEnd(!nextEnd || !start || nextEnd >= start ? nextEnd : start);
+  };
+
+  const updateStartPeriod = (nextValue: string) => {
+    const nextPeriod = normalizeSchedulePeriod(nextValue);
+    setStartPeriod(nextPeriod);
+    setEndPeriod(nextPeriod);
+  };
+
   return (
     <div
       className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-slate-950/45 p-4 backdrop-blur-[1px] md:items-center"
@@ -464,11 +479,7 @@ const EventModal: React.FC<EventModalProps> = ({
                   />
                   <select
                     value={startPeriod}
-                    onChange={(event) =>
-                      setStartPeriod(
-                        normalizeSchedulePeriod(event.target.value),
-                      )
-                    }
+                    onChange={(event) => updateStartPeriod(event.target.value)}
                     disabled={isAllDay}
                     className="h-12 rounded-lg border border-slate-300 bg-white px-3 text-base font-bold text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-gray-400"
                     aria-label="시작 교시"
@@ -491,7 +502,7 @@ const EventModal: React.FC<EventModalProps> = ({
                     type="date"
                     value={end}
                     min={start || undefined}
-                    onChange={(event) => setEnd(event.target.value)}
+                    onChange={(event) => updateEndDate(event.target.value)}
                     className="h-12 min-w-0 rounded-lg border border-slate-300 px-4 text-base font-semibold text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                   />
                   <select
