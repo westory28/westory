@@ -2109,7 +2109,11 @@ const ManageHistoryClassroom: React.FC = () => {
   };
 
   const openExemptionPanel = (tab: ExemptionModalTab = "grant") => {
-    setExemptionModalTab(tab);
+    const nextTab =
+      tab === "requests" || tab === "granted" || tab === "grant"
+        ? tab
+        : "grant";
+    setExemptionModalTab(nextTab);
     setExemptionPanelOpen(true);
     void loadExemptionData();
   };
@@ -2958,7 +2962,7 @@ const ManageHistoryClassroom: React.FC = () => {
         </button>
         <button
           type="button"
-          onClick={openExemptionPanel}
+          onClick={() => openExemptionPanel("grant")}
           className="border-b-2 border-transparent px-6 py-3 text-sm font-bold text-blue-700 transition whitespace-nowrap hover:bg-blue-50"
         >
           면제권 관리
@@ -2988,7 +2992,7 @@ const ManageHistoryClassroom: React.FC = () => {
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={openExemptionPanel}
+              onClick={() => openExemptionPanel("grant")}
               className="inline-flex h-11 items-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-4 text-sm font-bold text-blue-700 shadow-sm hover:bg-blue-100"
             >
               면제권 관리
