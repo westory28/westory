@@ -691,6 +691,8 @@ const ManageHistoryClassroom: React.FC = () => {
     useState<string[]>([]);
   const [exemptionTargetGrade, setExemptionTargetGrade] = useState("");
   const [exemptionTargetClass, setExemptionTargetClass] = useState("");
+  const [excludedClassExemptionStudentUids, setExcludedClassExemptionStudentUids] =
+    useState<string[]>([]);
   const [exemptionReason, setExemptionReason] = useState("");
   const [grantingExemption, setGrantingExemption] = useState(false);
   const [reviewingExemptionRequestId, setReviewingExemptionRequestId] =
@@ -1240,14 +1242,55 @@ const ManageHistoryClassroom: React.FC = () => {
 
   const exemptionClassStudents = useMemo(
     () => {
-      if (!exemptionTargetGrade || !exemptionTargetClass) return [];
+      const grade = String(userData?.grade || exemptionTargetGrade || "").trim();
+      const className = String(userData?.class || exemptionTargetClass || "").trim();
+      if (!grade || !className) return [];
       return students.filter(
         (student) =>
-          student.grade === exemptionTargetGrade &&
-          student.className === exemptionTargetClass,
+          student.grade === grade &&
+          student.className === className,
       );
     },
-    [exemptionTargetClass, exemptionTargetGrade, students],
+    [exemptionTargetClass, exemptionTargetGrade, students, userData?.class, userData?.grade],
+  );
+
+  const activeExemptionClassStudents = useMemo(
+    () =>
+      exemptionClassStudents.filter(
+        (student) => !excludedClassExemptionStudentUids.includes(student.uid),
+      ),
+    [excludedClassExemptionStudentUids, exemptionClassStudents],
+  );
+
+  const exemptionClassLabel = useMemo(() => {
+    const grade = String(userData?.grade || exemptionTargetGrade || "").trim();
+    const className = String(userData?.class || exemptionTargetClass || "").trim();
+    return grade && className ? `${grade}학년 ${className}반` : "담임 학급";
+  }, [exemptionTargetClass, exemptionTargetGrade, userData?.class, userData?.grade]);
+
+  useEffect(
+    () => {
+      setExcludedClassExemptionStudentUids((previous) =>
+        previous.filter((uid) =>
+          exemptionClassStudents.some((student) => student.uid === uid),
+        ),
+      );
+    },
+    [exemptionClassStudents],
+  );
+
+  useEffect(
+    () => {
+      const teacherGrade = String(userData?.grade || "").trim();
+      const teacherClass = String(userData?.class || "").trim();
+      if (teacherGrade) {
+        setExemptionTargetGrade(teacherGrade);
+      }
+      if (teacherClass) {
+        setExemptionTargetClass(teacherClass);
+      }
+    },
+    [userData?.class, userData?.grade],
   );
 
   const sortedExemptionRequests = useMemo(
@@ -2123,7 +2166,7 @@ const ManageHistoryClassroom: React.FC = () => {
     const { year, semester } = getYearSemester(config);
     const targetStudents =
       exemptionGrantMode === "class"
-        ? exemptionClassStudents
+        ? activeExemptionClassStudents
         : exemptionSelectedStudents;
 
     if (
@@ -3879,7 +3922,70 @@ const ManageHistoryClassroom: React.FC = () => {
                         </div>
                       </div>
                     ) : (
-                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <>
+                      <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-3">
+                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                          <div className="text-xs font-black text-slate-600">
+                            {exemptionClassLabel}
+                          </div>
+                          <div className="text-xs font-bold text-blue-700">
+                            부여 대상 {activeExemptionClassStudents.length}명
+                            {excludedClassExemptionStudentUids.length > 0
+                              ? ` · 제외 ${excludedClassExemptionStudentUids.length}명`
+                              : ""}
+                          </div>
+                        </div>
+                        <div className="flex max-h-40 flex-wrap gap-2 overflow-y-auto rounded-xl border border-slate-100 bg-slate-50 p-2">
+                          {exemptionClassStudents.map((student) => {
+                            const excluded =
+                              excludedClassExemptionStudentUids.includes(
+                                student.uid,
+                              );
+                            return (
+                              <span
+                                key={student.uid}
+                                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold ${
+                                  excluded
+                                    ? "border-slate-200 bg-white text-slate-400 line-through"
+                                    : "border-blue-100 bg-blue-50 text-blue-700"
+                                }`}
+                              >
+                                {student.number ? `${student.number}번 ` : ""}
+                                {student.name || "학생"}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setExcludedClassExemptionStudentUids(
+                                      (prev) =>
+                                        excluded
+                                          ? prev.filter(
+                                              (uid) => uid !== student.uid,
+                                            )
+                                          : [...prev, student.uid],
+                                    )
+                                  }
+                                  className={`font-black ${
+                                    excluded
+                                      ? "text-slate-400 hover:text-blue-600"
+                                      : "text-blue-400 hover:text-blue-700"
+                                  }`}
+                                  aria-label={`${student.name || "학생"} ${
+                                    excluded ? "제외 해제" : "제외"
+                                  }`}
+                                >
+                                  x
+                                </button>
+                              </span>
+                            );
+                          })}
+                          {!exemptionClassStudents.length && (
+                            <span className="px-2 py-1 text-xs font-semibold text-slate-400">
+                              담임 학급 학생 명단을 찾지 못했습니다.
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="hidden">
                         <label className="block">
                           <span className="mb-1 block text-xs font-bold text-slate-500">
                             학년
@@ -3923,6 +4029,7 @@ const ManageHistoryClassroom: React.FC = () => {
                           선택 대상 {exemptionClassStudents.length}명
                         </div>
                       </div>
+                      </>
                     )}
 
                     <label className="mt-4 block">

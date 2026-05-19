@@ -3655,6 +3655,10 @@ const resolveClassScopeFromHistoryClassroomInput = (data = {}) => {
 };
 
 const resolveHistoryClassroomExemptionRecipientProfiles = async (data = {}) => {
+  const isGrantableStudentProfile = (profile = {}) => {
+    const role = String(profile?.role || '').trim();
+    return role !== 'teacher' && role !== 'staff';
+  };
   const explicitUids = uniqueNonEmptyStrings(
     data.recipientUids || data.studentUids || data.targetUids,
     300,
@@ -3670,7 +3674,7 @@ const resolveHistoryClassroomExemptionRecipientProfiles = async (data = {}) => {
       );
       entries.push(...batch);
     }
-    return entries.filter(({ profile }) => String(profile?.role || '').trim() === 'student');
+    return entries.filter(({ profile }) => isGrantableStudentProfile(profile));
   }
 
   const classScope = resolveClassScopeFromHistoryClassroomInput(data);
@@ -3698,7 +3702,7 @@ const resolveHistoryClassroomExemptionRecipientProfiles = async (data = {}) => {
   snapshots.forEach((snapshot) => {
     snapshot?.forEach((docSnap) => {
       const profile = docSnap.data() || {};
-      if (String(profile.role || '').trim() !== 'student') return;
+      if (!isGrantableStudentProfile(profile)) return;
       const profileClassId = buildQuizClassId(
         profile.studentGrade || profile.grade,
         profile.studentClass || profile.class,
