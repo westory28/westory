@@ -714,6 +714,8 @@ const NOTIFICATION_EVENT_AUDIENCE = {
   history_classroom_assigned: 'students',
   history_classroom_passed: 'teachers',
   history_classroom_submitted: 'teachers',
+  history_classroom_exemption_requested: 'teachers',
+  history_classroom_exemption_reviewed: 'students',
   history_dictionary_requested: 'teachers',
   history_dictionary_resolved: 'students',
   history_dictionary_rejected: 'students',
@@ -1570,6 +1572,18 @@ const buildPurchaseRequestId = (uid, requestKey) => {
   const digest = crypto.createHash('sha256').update(`${uid}:${requestKey}`).digest('hex').slice(0, 24);
   return `order_${sanitizeKeyPart(uid)}_${digest}`;
 };
+
+const buildHistoryClassroomExemptionRequestId = (year, semester, uid, assignmentId, exemptionId) => {
+  const digest = crypto
+    .createHash('sha256')
+    .update(`${year}:${semester}:${uid}:${assignmentId}:${exemptionId}`)
+    .digest('hex')
+    .slice(0, 24);
+  return `hce_req_${sanitizeKeyPart(uid)}_${digest}`;
+};
+
+const buildHistoryClassroomExemptionResultId = (requestId) =>
+  `hce_result_${sanitizeKeyPart(requestId)}`;
 
 const buildOrderReviewTransactionId = (orderId, nextStatus) => {
   if (nextStatus === 'rejected' || nextStatus === 'cancelled') {
@@ -3563,6 +3577,511 @@ const loadHistoryClassroomAssignmentForSubmit = async (year, semester, assignmen
     data: snap.data() || {},
   };
 };
+
+const getHistoryClassroomExemptionCollectionPath = (year, semester) =>
+  `${getSemesterRoot(year, semester)}/history_classroom_exemptions`;
+
+const getHistoryClassroomExemptionRequestCollectionPath = (year, semester) =>
+  `${getSemesterRoot(year, semester)}/history_classroom_exemption_requests`;
+
+const sanitizeHistoryClassroomText = (value, maxLength, fallback = '') =>
+  sanitizeNotificationText(value, maxLength, fallback);
+
+const getHistoryClassroomProfileSnapshot = (uid, profile = {}) => ({
+  uid,
+  studentName: sanitizeHistoryClassroomText(profile.name, 40, '학생'),
+  studentGrade: sanitizeHistoryClassroomText(profile.studentGrade || profile.grade, 8),
+  studentClass: sanitizeHistoryClassroomText(profile.studentClass || profile.class, 8),
+  studentNumber: sanitizeHistoryClassroomText(profile.studentNumber || profile.number, 8),
+});
+
+const assertHistoryClassroomStudent = async (request) => {
+  const { uid, email } = assertAllowedWestoryUser(request);
+  const { profile } = await getUserProfile(uid);
+  if (String(profile?.role || '').trim() !== 'student') {
+    throw new HttpsError('permission-denied', 'student permission is required.');
+  }
+  return { uid, email, profile };
+};
+
+const assertHistoryClassroomAssignmentForStudent = (assignmentData, uid) => {
+  if (assignmentData.deletedAt) {
+    throw new HttpsError('failed-precondition', 'History classroom assignment was deleted.');
+  }
+  if (assignmentData.isPublished !== true) {
+    throw new HttpsError('failed-precondition', 'History classroom assignment is not published.');
+  }
+  if (!collectHistoryClassroomAssignedUidsForFunction(assignmentData).includes(uid)) {
+    throw new HttpsError('permission-denied', 'History classroom assignment is not assigned to the caller.');
+  }
+};
+
+const resolveClassScopeFromHistoryClassroomInput = (data = {}) => {
+  const scope = data.classScope && typeof data.classScope === 'object' ? data.classScope : {};
+  const requestedClassId = String(data.classId || scope.classId || '').trim();
+  let grade = String(
+    data.targetGrade
+    || data.grade
+    || scope.targetGrade
+    || scope.grade
+    || '',
+  ).trim();
+  let className = String(
+    data.targetClass
+    || data.className
+    || data.class
+    || scope.targetClass
+    || scope.className
+    || scope.class
+    || '',
+  ).trim();
+
+  if (requestedClassId && (!grade || !className)) {
+    const [classIdGrade, classIdClass] = requestedClassId
+      .split('-')
+      .map((value) => normalizeSchoolToken(value));
+    grade = grade || classIdGrade || '';
+    className = className || classIdClass || '';
+  }
+
+  const normalizedClassId = buildQuizClassId(grade, className);
+  if (!normalizedClassId) return null;
+  const [normalizedGrade, normalizedClassName] = normalizedClassId.split('-');
+  return {
+    grade: normalizedGrade,
+    className: normalizedClassName,
+    classId: normalizedClassId,
+  };
+};
+
+const resolveHistoryClassroomExemptionRecipientProfiles = async (data = {}) => {
+  const explicitUids = uniqueNonEmptyStrings(
+    data.recipientUids || data.studentUids || data.targetUids,
+    300,
+  );
+  if (explicitUids.length) {
+    const entries = [];
+    for (let index = 0; index < explicitUids.length; index += 50) {
+      const batch = await Promise.all(
+        explicitUids.slice(index, index + 50).map(async (uid) => {
+          const { profile } = await getUserProfile(uid);
+          return { uid, profile };
+        }),
+      );
+      entries.push(...batch);
+    }
+    return entries.filter(({ profile }) => String(profile?.role || '').trim() === 'student');
+  }
+
+  const classScope = resolveClassScopeFromHistoryClassroomInput(data);
+  if (!classScope) {
+    throw new HttpsError('invalid-argument', 'recipientUids or class scope is required.');
+  }
+
+  const userQueryCombos = [
+    ['studentGrade', 'studentClass'],
+    ['studentGrade', 'class'],
+    ['grade', 'studentClass'],
+    ['grade', 'class'],
+  ];
+  const snapshots = await Promise.all(
+    userQueryCombos.map(([gradeField, classField]) =>
+      db
+        .collection('users')
+        .where(gradeField, '==', classScope.grade)
+        .where(classField, '==', classScope.className)
+        .get()
+        .catch(() => null),
+    ),
+  );
+  const profilesByUid = new Map();
+  snapshots.forEach((snapshot) => {
+    snapshot?.forEach((docSnap) => {
+      const profile = docSnap.data() || {};
+      if (String(profile.role || '').trim() !== 'student') return;
+      const profileClassId = buildQuizClassId(
+        profile.studentGrade || profile.grade,
+        profile.studentClass || profile.class,
+      );
+      if (profileClassId === classScope.classId) {
+        profilesByUid.set(docSnap.id, { uid: docSnap.id, profile });
+      }
+    });
+  });
+  return Array.from(profilesByUid.values()).slice(0, 300);
+};
+
+const createHistoryClassroomExemptionRequestedNotifications = async (year, semester, input) => {
+  const requestId = sanitizeHistoryClassroomText(input.requestId, 160);
+  if (!requestId) return [];
+
+  const recipients = await resolveTeacherNotificationRecipientUids();
+  const studentName = sanitizeHistoryClassroomText(input.studentName, 40, '학생');
+  const assignmentTitle = sanitizeHistoryClassroomText(input.assignmentTitle, 80, '역사교실');
+
+  return createUserNotifications(year, semester, recipients, {
+    type: 'history_classroom_exemption_requested',
+    title: '역사교실 면제권 요청',
+    body: `${studentName} 학생이 ${assignmentTitle} 면제를 요청했습니다.`,
+    targetUrl: `/teacher/quiz/history-classroom?panel=exemption-requests&requestId=${encodeURIComponent(requestId)}`,
+    entityType: 'history_classroom_exemption_request',
+    entityId: requestId,
+    actorUid: input.actorUid,
+    priority: 'high',
+    dedupeKey: `history_classroom_exemption_requested:${year}:${semester}:${requestId}`,
+    templateValues: {
+      studentName,
+      assignmentTitle,
+    },
+  });
+};
+
+const createHistoryClassroomExemptionReviewedNotification = async (year, semester, input) => {
+  const requestId = sanitizeHistoryClassroomText(input.requestId, 160);
+  const recipientUid = sanitizeHistoryClassroomText(input.recipientUid, 160);
+  if (!requestId || !recipientUid) return { created: false, recipientUid };
+
+  const approved = input.approved === true;
+  const assignmentTitle = sanitizeHistoryClassroomText(input.assignmentTitle, 80, '역사교실');
+  const statusLabel = approved ? '승인' : '반려';
+
+  return createUserNotification(year, semester, recipientUid, {
+    type: 'history_classroom_exemption_reviewed',
+    title: '역사교실 면제권 처리',
+    body: `${assignmentTitle} 면제 요청이 ${statusLabel} 처리되었습니다.`,
+    targetUrl: '/student/history-classroom',
+    entityType: 'history_classroom_exemption_request',
+    entityId: requestId,
+    actorUid: input.actorUid,
+    priority: approved ? 'normal' : 'high',
+    dedupeKey: `history_classroom_exemption_reviewed:${year}:${semester}:${requestId}:${approved ? 'approved' : 'rejected'}`,
+    templateValues: {
+      assignmentTitle,
+      statusLabel,
+    },
+  });
+};
+
+exports.grantHistoryClassroomExemptions = onCall({ region: REGION }, async (request) => {
+  const manager = await assertQuizManager(request);
+  const { year, semester } = assertYearSemester(request.data);
+  const reason = sanitizeHistoryClassroomText(request.data?.reason, 240);
+  if (!reason) {
+    throw new HttpsError('invalid-argument', 'reason is required.');
+  }
+
+  const recipients = await resolveHistoryClassroomExemptionRecipientProfiles(request.data || {});
+  if (!recipients.length) {
+    throw new HttpsError('not-found', 'No student recipients were found.');
+  }
+
+  const grantScope = String(request.data?.mode || '').trim() === 'class' ? 'class' : 'student';
+  const classScope = grantScope === 'class'
+    ? resolveClassScopeFromHistoryClassroomInput(request.data || {})
+    : null;
+  const grantScopeLabel = classScope ? `${classScope.grade}-${classScope.className}` : '';
+  const collectionPath = getHistoryClassroomExemptionCollectionPath(year, semester);
+  const batch = db.batch();
+  const exemptionIds = [];
+  recipients.forEach(({ uid, profile }) => {
+    const exemptionRef = db.collection(collectionPath).doc();
+    const snapshot = getHistoryClassroomProfileSnapshot(uid, profile);
+    exemptionIds.push(exemptionRef.id);
+    batch.set(exemptionRef, {
+      ...snapshot,
+      reason,
+      grantScope,
+      grantScopeLabel,
+      status: 'available',
+      grantedByUid: manager.uid,
+      grantedAt: FieldValue.serverTimestamp(),
+      assignmentId: '',
+      exemptionRequestId: '',
+      pendingRequestId: '',
+      requestedAssignmentId: '',
+      usedAt: null,
+      usedByUid: '',
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  });
+  await batch.commit();
+
+  return {
+    createdCount: exemptionIds.length,
+    recipientCount: recipients.length,
+    exemptionIds,
+    collectionPath,
+  };
+});
+
+exports.createHistoryClassroomExemptionRequest = onCall({ region: REGION }, async (request) => {
+  const { uid, profile } = await assertHistoryClassroomStudent(request);
+  const { year, semester } = assertYearSemester(request.data);
+  const assignmentId = sanitizeHistoryClassroomText(request.data?.assignmentId, 160);
+  const exemptionId = sanitizeHistoryClassroomText(request.data?.exemptionId, 160);
+  const memo = sanitizeHistoryClassroomText(request.data?.memo, 240);
+
+  if (!assignmentId || !exemptionId) {
+    throw new HttpsError('invalid-argument', 'assignmentId and exemptionId are required.');
+  }
+
+  const assignment = await loadHistoryClassroomAssignmentForSubmit(year, semester, assignmentId);
+  const assignmentData = assignment.data;
+  assertHistoryClassroomAssignmentForStudent(assignmentData, uid);
+
+  const exemptionRef = db.doc(`${getHistoryClassroomExemptionCollectionPath(year, semester)}/${exemptionId}`);
+  const requestId = buildHistoryClassroomExemptionRequestId(year, semester, uid, assignment.id, exemptionId);
+  const requestRef = db.doc(`${getHistoryClassroomExemptionRequestCollectionPath(year, semester)}/${requestId}`);
+  const studentSnapshot = getHistoryClassroomProfileSnapshot(uid, profile);
+  const assignmentTitle = sanitizeHistoryClassroomText(assignmentData.title, 80, '역사교실');
+
+  const result = await db.runTransaction(async (transaction) => {
+    const [exemptionSnap, requestSnap] = await Promise.all([
+      transaction.get(exemptionRef),
+      transaction.get(requestRef),
+    ]);
+    if (!exemptionSnap.exists) {
+      throw new HttpsError('not-found', 'History classroom exemption does not exist.');
+    }
+    const exemption = exemptionSnap.data() || {};
+    if (String(exemption.uid || '').trim() !== uid) {
+      throw new HttpsError('permission-denied', 'History classroom exemption belongs to another user.');
+    }
+    const exemptionStatus = String(exemption.status || '').trim() || 'available';
+    if (requestSnap.exists) {
+      const existing = requestSnap.data() || {};
+      const existingStatus = String(existing.status || '').trim() || 'requested';
+      if (existingStatus === 'requested') {
+        return {
+          requestId,
+          exemptionId,
+          assignmentId: assignment.id,
+          created: false,
+          duplicate: true,
+          status: existingStatus,
+          studentName: studentSnapshot.studentName,
+          assignmentTitle,
+        };
+      }
+      if (existingStatus === 'approved') {
+        throw new HttpsError('failed-precondition', 'History classroom exemption request was already approved.');
+      }
+    }
+    if (exemptionStatus !== 'available') {
+      throw new HttpsError('failed-precondition', 'History classroom exemption is not available.');
+    }
+
+    transaction.set(requestRef, {
+      uid,
+      ...studentSnapshot,
+      assignmentId: assignment.id,
+      assignmentTitle,
+      exemptionId,
+      exemptionReason: sanitizeHistoryClassroomText(exemption.reason, 240),
+      memo,
+      status: 'requested',
+      year,
+      semester,
+      resultId: '',
+      reviewedByUid: '',
+      reviewReason: '',
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+      reviewedAt: null,
+    });
+    transaction.set(exemptionRef, {
+      status: 'requested',
+      pendingRequestId: requestId,
+      requestedAssignmentId: assignment.id,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    return {
+      requestId,
+      exemptionId,
+      assignmentId: assignment.id,
+      created: true,
+      duplicate: false,
+      status: 'requested',
+      studentName: studentSnapshot.studentName,
+      assignmentTitle,
+    };
+  });
+
+  if (result.created) {
+    await createHistoryClassroomExemptionRequestedNotifications(year, semester, {
+      requestId: result.requestId,
+      studentName: result.studentName,
+      assignmentTitle: result.assignmentTitle,
+      actorUid: uid,
+    });
+  }
+
+  return result;
+});
+
+exports.reviewHistoryClassroomExemptionRequest = onCall({ region: REGION }, async (request) => {
+  const manager = await assertQuizManager(request);
+  const { year, semester } = assertYearSemester(request.data);
+  const requestId = sanitizeHistoryClassroomText(request.data?.requestId, 160);
+  const approved = request.data?.approved === true
+    || String(request.data?.decision || request.data?.status || '').trim() === 'approved';
+  const rejected = request.data?.approved === false
+    || String(request.data?.decision || request.data?.status || '').trim() === 'rejected';
+  const reviewReason = sanitizeHistoryClassroomText(request.data?.reviewReason || request.data?.reason, 240);
+
+  if (!requestId) {
+    throw new HttpsError('invalid-argument', 'requestId is required.');
+  }
+  if (!approved && !rejected) {
+    throw new HttpsError('invalid-argument', 'approved true or false is required.');
+  }
+
+  const requestRef = db.doc(`${getHistoryClassroomExemptionRequestCollectionPath(year, semester)}/${requestId}`);
+  const result = await db.runTransaction(async (transaction) => {
+    const requestSnap = await transaction.get(requestRef);
+    if (!requestSnap.exists) {
+      throw new HttpsError('not-found', 'History classroom exemption request does not exist.');
+    }
+
+    const exemptionRequest = { id: requestSnap.id, ...(requestSnap.data() || {}) };
+    const currentStatus = String(exemptionRequest.status || '').trim();
+    const nextStatus = approved ? 'approved' : 'rejected';
+    if (currentStatus === nextStatus) {
+      return {
+        requestId,
+        status: currentStatus,
+        approved,
+        duplicate: true,
+        uid: String(exemptionRequest.uid || '').trim(),
+        assignmentTitle: sanitizeHistoryClassroomText(exemptionRequest.assignmentTitle, 80, '역사교실'),
+        resultId: String(exemptionRequest.resultId || '').trim(),
+      };
+    }
+    if (currentStatus !== 'requested') {
+      throw new HttpsError('failed-precondition', 'History classroom exemption request is not reviewable.');
+    }
+
+    const targetUid = String(exemptionRequest.uid || '').trim();
+    const assignmentId = String(exemptionRequest.assignmentId || '').trim();
+    const exemptionId = String(exemptionRequest.exemptionId || '').trim();
+    if (!targetUid || !assignmentId || !exemptionId) {
+      throw new HttpsError('failed-precondition', 'History classroom exemption request is incomplete.');
+    }
+
+    const exemptionRef = db.doc(`${getHistoryClassroomExemptionCollectionPath(year, semester)}/${exemptionId}`);
+    const assignmentRef = db.doc(`${getSemesterRoot(year, semester)}/history_classrooms/${assignmentId}`);
+    const [exemptionSnap, semesterAssignmentSnap] = await Promise.all([
+      transaction.get(exemptionRef),
+      transaction.get(assignmentRef),
+    ]);
+    let assignmentSnap = semesterAssignmentSnap;
+    if (!assignmentSnap.exists) {
+      assignmentSnap = await transaction.get(db.doc(`history_classrooms/${assignmentId}`));
+    }
+    if (!exemptionSnap.exists) {
+      throw new HttpsError('not-found', 'History classroom exemption does not exist.');
+    }
+    const exemption = exemptionSnap.data() || {};
+    if (String(exemption.uid || '').trim() !== targetUid) {
+      throw new HttpsError('failed-precondition', 'History classroom exemption owner does not match request.');
+    }
+    if (!assignmentSnap.exists) {
+      throw new HttpsError('not-found', 'History classroom assignment does not exist.');
+    }
+
+    const assignmentData = assignmentSnap.data() || {};
+    const assignmentTitle = sanitizeHistoryClassroomText(
+      assignmentData.title || exemptionRequest.assignmentTitle,
+      80,
+      '역사교실',
+    );
+    const resultId = approved
+      ? buildHistoryClassroomExemptionResultId(requestId)
+      : String(exemptionRequest.resultId || '').trim();
+
+    transaction.set(requestRef, {
+      status: nextStatus,
+      reviewedAt: FieldValue.serverTimestamp(),
+      reviewedByUid: manager.uid,
+      reviewReason,
+      resultId: approved ? resultId : '',
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    if (approved) {
+      const exemptionStatus = String(exemption.status || '').trim() || 'available';
+      if (exemptionStatus === 'used') {
+        throw new HttpsError('failed-precondition', 'History classroom exemption was already used.');
+      }
+      const resultRef = db.doc(`${getSemesterRoot(year, semester)}/history_classroom_results/${resultId}`);
+      transaction.set(exemptionRef, {
+        status: 'used',
+        assignmentId,
+        exemptionRequestId: requestId,
+        usedAt: FieldValue.serverTimestamp(),
+        usedByUid: targetUid,
+        pendingRequestId: '',
+        requestedAssignmentId: '',
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+      transaction.set(resultRef, {
+        assignmentId,
+        assignmentTitle,
+        uid: targetUid,
+        studentName: sanitizeHistoryClassroomText(exemptionRequest.studentName, 40, '학생'),
+        studentGrade: sanitizeHistoryClassroomText(exemptionRequest.studentGrade, 8),
+        studentClass: sanitizeHistoryClassroomText(exemptionRequest.studentClass, 8),
+        studentNumber: sanitizeHistoryClassroomText(exemptionRequest.studentNumber, 8),
+        answers: {},
+        score: 0,
+        total: 0,
+        percent: 100,
+        passThresholdPercent: Math.min(100, Math.max(0, Number(assignmentData.passThresholdPercent) || 80)),
+        passed: true,
+        status: 'passed',
+        answerChecks: [],
+        cancellationReason: '',
+        completionSource: 'exemption',
+        exemptionId,
+        exemptionRequestId: requestId,
+        approvedByUid: manager.uid,
+        approvedAt: FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
+      }, { merge: false });
+    } else {
+      transaction.set(exemptionRef, {
+        status: 'available',
+        pendingRequestId: '',
+        requestedAssignmentId: '',
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+
+    return {
+      requestId,
+      status: nextStatus,
+      approved,
+      duplicate: false,
+      uid: targetUid,
+      assignmentTitle,
+      resultId,
+    };
+  });
+
+  if (!result.duplicate) {
+    await createHistoryClassroomExemptionReviewedNotification(year, semester, {
+      requestId: result.requestId,
+      recipientUid: result.uid,
+      assignmentTitle: result.assignmentTitle,
+      approved: result.approved,
+      actorUid: manager.uid,
+    });
+  }
+
+  return result;
+});
 
 exports.submitHistoryClassroomResult = onCall({ region: REGION }, async (request) => {
   const { uid } = assertAllowedWestoryUser(request);

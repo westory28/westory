@@ -10,12 +10,13 @@ import {
   serverTimestamp,
   setDoc,
 } from "firebase/firestore";
-import { useNavigate } from "react-router-dom";
+import { httpsCallable } from "firebase/functions";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import HistoryClassroomAssignmentView from "../../components/common/HistoryClassroomAssignmentView";
 import LessonWorksheetStage from "../../components/common/LessonWorksheetStage";
 import { useAuth } from "../../contexts/AuthContext";
 import { cloneDefaultMenus, sanitizeMenuConfig } from "../../constants/menus";
-import { db } from "../../lib/firebase";
+import { db, functions } from "../../lib/firebase";
 import {
   buildAnswerOptions,
   buildHistoryClassroomPublishWindow,
@@ -45,7 +46,10 @@ import {
 } from "../../lib/lessonWorksheet";
 import { normalizeMapResource, type MapResource } from "../../lib/mapResources";
 import { createManagedNotifications } from "../../lib/notifications";
-import { getSemesterCollectionPath } from "../../lib/semesterScope";
+import {
+  getSemesterCollectionPath,
+  getYearSemester,
+} from "../../lib/semesterScope";
 
 const HISTORY_CLASSROOM_RESULT_LIMIT = 500;
 
@@ -55,6 +59,37 @@ interface StudentOption {
   grade: string;
   className: string;
   number: string;
+}
+
+type ExemptionRequestStatus = "pending" | "approved" | "rejected";
+type ExemptionGrantMode = "students" | "class";
+
+interface HistoryClassroomExemption {
+  id: string;
+  uid: string;
+  studentName: string;
+  grade: string;
+  className: string;
+  number: string;
+  reason: string;
+  status: string;
+  createdAt: unknown;
+  expiresAt: unknown;
+  requestId: string;
+}
+
+interface HistoryClassroomExemptionRequest {
+  id: string;
+  uid: string;
+  studentName: string;
+  grade: string;
+  className: string;
+  number: string;
+  assignmentTitle: string;
+  reason: string;
+  status: ExemptionRequestStatus;
+  createdAt: unknown;
+  reviewedAt: unknown;
 }
 
 type DashboardIconName =
@@ -388,6 +423,102 @@ const getTimestampMs = (value: unknown): number | null => {
   return null;
 };
 
+const formatDateTimeLabel = (value: unknown, fallback = "일시 없음") => {
+  const timestampMs = getTimestampMs(value);
+  if (!timestampMs) return fallback;
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(timestampMs));
+};
+
+const normalizeExemptionRequestStatus = (
+  value: unknown,
+): ExemptionRequestStatus => {
+  const normalized = String(value || "").trim();
+  if (normalized === "approved") return "approved";
+  if (normalized === "rejected" || normalized === "denied") return "rejected";
+  return "pending";
+};
+
+const normalizeHistoryClassroomExemption = (
+  id: string,
+  data: Record<string, unknown>,
+): HistoryClassroomExemption => ({
+  id,
+  uid: String(data.uid || data.studentUid || "").trim(),
+  studentName: String(data.studentName || data.name || "").trim(),
+  grade: String(data.grade || data.studentGrade || "").trim(),
+  className: String(data.className || data.class || data.studentClass || "")
+    .trim(),
+  number: String(data.number || data.studentNumber || "").trim(),
+  reason: String(data.reason || data.memo || "").trim(),
+  status: String(data.status || "active").trim() || "active",
+  createdAt: data.createdAt || data.grantedAt || null,
+  expiresAt: data.expiresAt || null,
+  requestId: String(data.requestId || "").trim(),
+});
+
+const normalizeHistoryClassroomExemptionRequest = (
+  id: string,
+  data: Record<string, unknown>,
+): HistoryClassroomExemptionRequest => ({
+  id,
+  uid: String(data.uid || data.studentUid || "").trim(),
+  studentName: String(data.studentName || data.name || "").trim(),
+  grade: String(data.grade || data.studentGrade || "").trim(),
+  className: String(data.className || data.class || data.studentClass || "")
+    .trim(),
+  number: String(data.number || data.studentNumber || "").trim(),
+  assignmentTitle: String(data.assignmentTitle || "").trim(),
+  reason: String(data.reason || data.exemptionReason || data.memo || "").trim(),
+  status: normalizeExemptionRequestStatus(data.status || data.reviewStatus),
+  createdAt: data.createdAt || data.requestedAt || null,
+  reviewedAt: data.reviewedAt || null,
+});
+
+const formatExemptionStudentLabel = (
+  item: {
+    studentName: string;
+    grade: string;
+    className: string;
+    number: string;
+    uid: string;
+  },
+) => {
+  const classLabel =
+    item.grade && item.className ? `${item.grade}-${item.className}` : "";
+  return [
+    item.studentName || item.uid || "학생",
+    classLabel,
+    item.number ? `${item.number}번` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+};
+
+const formatExemptionRequestStatusLabel = (
+  status: ExemptionRequestStatus,
+) => {
+  if (status === "approved") return "승인";
+  if (status === "rejected") return "반려";
+  return "대기";
+};
+
+const getExemptionRequestStatusClassName = (
+  status: ExemptionRequestStatus,
+) => {
+  if (status === "approved") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+  if (status === "rejected") {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  return "border-amber-200 bg-amber-50 text-amber-700";
+};
+
 const formatResultSubmittedAtLabel = (value: unknown) => {
   const timestampMs = getTimestampMs(value);
   if (!timestampMs) return "제출 시간 없음";
@@ -530,6 +661,7 @@ const cloneMapResourceBlanks = (
 const ManageHistoryClassroom: React.FC = () => {
   const { config, userData } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [maps, setMaps] = useState<MapResource[]>([]);
   const [assignments, setAssignments] = useState<HistoryClassroomAssignment[]>(
@@ -539,6 +671,27 @@ const ManageHistoryClassroom: React.FC = () => {
     Record<string, HistoryClassroomResult[]>
   >({});
   const [students, setStudents] = useState<StudentOption[]>([]);
+  const [exemptions, setExemptions] = useState<HistoryClassroomExemption[]>(
+    [],
+  );
+  const [exemptionRequests, setExemptionRequests] = useState<
+    HistoryClassroomExemptionRequest[]
+  >([]);
+  const [loadingExemptions, setLoadingExemptions] = useState(false);
+  const [exemptionPanelOpen, setExemptionPanelOpen] = useState(false);
+  const [highlightedExemptionRequestId, setHighlightedExemptionRequestId] =
+    useState("");
+  const [exemptionGrantMode, setExemptionGrantMode] =
+    useState<ExemptionGrantMode>("students");
+  const [exemptionStudentSearch, setExemptionStudentSearch] = useState("");
+  const [exemptionSelectedStudentUids, setExemptionSelectedStudentUids] =
+    useState<string[]>([]);
+  const [exemptionTargetGrade, setExemptionTargetGrade] = useState("");
+  const [exemptionTargetClass, setExemptionTargetClass] = useState("");
+  const [exemptionReason, setExemptionReason] = useState("");
+  const [grantingExemption, setGrantingExemption] = useState(false);
+  const [reviewingExemptionRequestId, setReviewingExemptionRequestId] =
+    useState("");
   const [selectedMapId, setSelectedMapId] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -628,6 +781,53 @@ const ManageHistoryClassroom: React.FC = () => {
     bank: "문제 은행",
     historyClassroom: "역사교실",
   });
+
+  const loadExemptionData = React.useCallback(async () => {
+    setLoadingExemptions(true);
+    try {
+      const exemptionPath = getSemesterCollectionPath(
+        config,
+        "history_classroom_exemptions",
+      );
+      const requestPath = getSemesterCollectionPath(
+        config,
+        "history_classroom_exemption_requests",
+      );
+      const [exemptionSnap, requestSnap] = await Promise.all([
+        getDocs(collection(db, exemptionPath)),
+        getDocs(collection(db, requestPath)),
+      ]);
+      setExemptions(
+        exemptionSnap.docs
+          .map((docSnap) =>
+            normalizeHistoryClassroomExemption(docSnap.id, docSnap.data()),
+          )
+          .sort(
+            (a, b) =>
+              (getTimestampMs(b.createdAt) || 0) -
+              (getTimestampMs(a.createdAt) || 0),
+          ),
+      );
+      setExemptionRequests(
+        requestSnap.docs
+          .map((docSnap) =>
+            normalizeHistoryClassroomExemptionRequest(
+              docSnap.id,
+              docSnap.data(),
+            ),
+          )
+          .sort(
+            (a, b) =>
+              (getTimestampMs(b.createdAt) || 0) -
+              (getTimestampMs(a.createdAt) || 0),
+          ),
+      );
+    } catch (error) {
+      console.error("Failed to load history classroom exemption data:", error);
+    } finally {
+      setLoadingExemptions(false);
+    }
+  }, [config]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -748,10 +948,17 @@ const ManageHistoryClassroom: React.FC = () => {
         ];
       });
       setResultsByAssignment(groupedResults);
+      void loadExemptionData();
     };
 
     void loadData();
-  }, [config]);
+  }, [config, loadExemptionData]);
+
+  useEffect(() => {
+    if (searchParams.get("panel") !== "exemption-requests") return;
+    setExemptionPanelOpen(true);
+    setHighlightedExemptionRequestId(searchParams.get("requestId") || "");
+  }, [searchParams]);
 
   useEffect(() => {
     const resolveMenuLabels = async () => {
@@ -975,6 +1182,80 @@ const ManageHistoryClassroom: React.FC = () => {
         ),
       ).sort(compareSchoolValues),
     [classFilteredStudents],
+  );
+
+  const exemptionSelectedStudents = useMemo(
+    () =>
+      exemptionSelectedStudentUids
+        .map((uid) => students.find((student) => student.uid === uid))
+        .filter((student): student is StudentOption => !!student),
+    [exemptionSelectedStudentUids, students],
+  );
+
+  const searchedExemptionStudents = useMemo(() => {
+    const keyword = exemptionStudentSearch.trim().toLocaleLowerCase("ko-KR");
+    if (!keyword) return [];
+    return students
+      .filter(
+        (student) =>
+          !exemptionSelectedStudentUids.includes(student.uid) &&
+          buildStudentSearchText(student).includes(keyword),
+      )
+      .slice(0, 8);
+  }, [exemptionSelectedStudentUids, exemptionStudentSearch, students]);
+
+  const exemptionClassOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          students
+            .filter(
+              (student) =>
+                !exemptionTargetGrade ||
+                student.grade === exemptionTargetGrade,
+            )
+            .map((student) => student.className)
+            .filter(Boolean),
+        ),
+      ).sort(compareSchoolValues),
+    [exemptionTargetGrade, students],
+  );
+
+  const exemptionClassStudents = useMemo(
+    () => {
+      if (!exemptionTargetGrade || !exemptionTargetClass) return [];
+      return students.filter(
+        (student) =>
+          student.grade === exemptionTargetGrade &&
+          student.className === exemptionTargetClass,
+      );
+    },
+    [exemptionTargetClass, exemptionTargetGrade, students],
+  );
+
+  const sortedExemptionRequests = useMemo(
+    () =>
+      [...exemptionRequests].sort((a, b) => {
+        if (a.status !== b.status) {
+          if (a.status === "pending") return -1;
+          if (b.status === "pending") return 1;
+        }
+        return (getTimestampMs(b.createdAt) || 0) - (getTimestampMs(a.createdAt) || 0);
+      }),
+    [exemptionRequests],
+  );
+
+  const pendingExemptionRequestCount = useMemo(
+    () =>
+      exemptionRequests.filter((request) => request.status === "pending")
+        .length,
+    [exemptionRequests],
+  );
+
+  const activeExemptionCount = useMemo(
+    () =>
+      exemptions.filter((exemption) => exemption.status !== "revoked").length,
+    [exemptions],
   );
 
   const targetStudentPreview = useMemo(
@@ -1797,6 +2078,105 @@ const ManageHistoryClassroom: React.FC = () => {
     setDraftBlank(null);
     setDraftBlankAnswer("");
     closeBlankEditor();
+  };
+
+  const closeExemptionPanel = () => {
+    setExemptionPanelOpen(false);
+    setHighlightedExemptionRequestId("");
+    if (searchParams.get("panel") === "exemption-requests") {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete("panel");
+      nextParams.delete("requestId");
+      setSearchParams(nextParams, { replace: true });
+    }
+  };
+
+  const handleGrantExemptions = async () => {
+    const reason = exemptionReason.trim();
+    const { year, semester } = getYearSemester(config);
+    const targetStudents =
+      exemptionGrantMode === "class"
+        ? exemptionClassStudents
+        : exemptionSelectedStudents;
+
+    if (
+      exemptionGrantMode === "class" &&
+      (!exemptionTargetGrade || !exemptionTargetClass)
+    ) {
+      alert("학급 단위 부여는 학년과 반을 모두 선택해 주세요.");
+      return;
+    }
+
+    if (!targetStudents.length) {
+      alert(
+        exemptionGrantMode === "class"
+          ? "면제권을 부여할 학급을 선택해 주세요."
+          : "면제권을 부여할 학생을 선택해 주세요.",
+      );
+      return;
+    }
+    if (!reason) {
+      alert("면제권 부여 사유를 입력해 주세요.");
+      return;
+    }
+
+    setGrantingExemption(true);
+    try {
+      const callable = httpsCallable(functions, "grantHistoryClassroomExemptions");
+      await callable({
+        year,
+        semester,
+        mode: exemptionGrantMode,
+        reason,
+        studentUids: targetStudents.map((student) => student.uid),
+        targetGrade:
+          exemptionGrantMode === "class" ? exemptionTargetGrade : "",
+        targetClass:
+          exemptionGrantMode === "class" ? exemptionTargetClass : "",
+      });
+      setExemptionStudentSearch("");
+      setExemptionSelectedStudentUids([]);
+      setExemptionReason("");
+      await loadExemptionData();
+      alert("면제권을 부여했습니다.");
+    } catch (error) {
+      console.error("Failed to grant history classroom exemptions:", error);
+      alert("면제권 부여에 실패했습니다.");
+    } finally {
+      setGrantingExemption(false);
+    }
+  };
+
+  const handleReviewExemptionRequest = async (
+    requestId: string,
+    status: "approved" | "rejected",
+  ) => {
+    const { year, semester } = getYearSemester(config);
+    setReviewingExemptionRequestId(requestId);
+    try {
+      const callable = httpsCallable(
+        functions,
+        "reviewHistoryClassroomExemptionRequest",
+      );
+      await callable({
+        year,
+        semester,
+        requestId,
+        status,
+        decision: status,
+        approved: status === "approved",
+      });
+      await loadExemptionData();
+    } catch (error) {
+      console.error("Failed to review history classroom exemption request:", {
+        requestId,
+        status,
+        error,
+      });
+      alert("면제권 요청 처리에 실패했습니다.");
+    } finally {
+      setReviewingExemptionRequestId("");
+    }
   };
 
   const handleConfirmDraftBlank = () => {
@@ -2646,6 +3026,359 @@ const ManageHistoryClassroom: React.FC = () => {
             </select>
           </label>
         </div>
+      </section>
+
+      <section className="mb-5 rounded-3xl border border-blue-100 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="text-xs font-black uppercase tracking-[0.18em] text-blue-500">
+              Exemption
+            </div>
+            <h2 className="mt-1 text-lg font-black text-gray-900">
+              면제권 관리
+            </h2>
+            <p className="mt-1 text-sm leading-6 text-gray-500">
+              역사교실 면제권을 학생별 또는 학급별로 부여하고 학생 요청을
+              승인/반려합니다.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-black text-amber-700">
+              요청 대기 {pendingExemptionRequestCount}건
+            </span>
+            <span className="rounded-2xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-black text-blue-700">
+              부여 기록 {activeExemptionCount}건
+            </span>
+            <button
+              type="button"
+              onClick={() => void loadExemptionData()}
+              disabled={loadingExemptions}
+              className="h-10 rounded-2xl border border-gray-200 bg-white px-4 text-xs font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              {loadingExemptions ? "새로고침 중" : "새로고침"}
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                exemptionPanelOpen
+                  ? closeExemptionPanel()
+                  : setExemptionPanelOpen(true)
+              }
+              className="h-10 rounded-2xl bg-blue-600 px-4 text-xs font-bold text-white hover:bg-blue-700"
+            >
+              {exemptionPanelOpen ? "패널 닫기" : "면제권 관리 열기"}
+            </button>
+          </div>
+        </div>
+
+        {exemptionPanelOpen && (
+          <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+            <div className="rounded-2xl border border-gray-200 bg-slate-50 p-4">
+              <div className="flex flex-wrap gap-2">
+                {[
+                  ["students", "학생별 부여"],
+                  ["class", "학급 단위 부여"],
+                ].map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() =>
+                      setExemptionGrantMode(value as ExemptionGrantMode)
+                    }
+                    className={`rounded-2xl border px-4 py-2 text-sm font-bold ${
+                      exemptionGrantMode === value
+                        ? "border-blue-600 bg-blue-600 text-white"
+                        : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {exemptionGrantMode === "students" ? (
+                <div className="mt-4 space-y-3">
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-bold text-gray-500">
+                      학생 검색
+                    </span>
+                    <input
+                      type="text"
+                      value={exemptionStudentSearch}
+                      onChange={(event) =>
+                        setExemptionStudentSearch(event.target.value)
+                      }
+                      placeholder="이름, 학년, 반, 번호로 검색"
+                      className="w-full rounded-2xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
+                    />
+                  </label>
+                  {searchedExemptionStudents.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {searchedExemptionStudents.map((student) => (
+                        <button
+                          key={student.uid}
+                          type="button"
+                          onClick={() => {
+                            setExemptionSelectedStudentUids((prev) => [
+                              ...prev,
+                              student.uid,
+                            ]);
+                            setExemptionStudentSearch("");
+                          }}
+                          className="rounded-full border border-blue-100 bg-white px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-50"
+                        >
+                          {formatStudentBadgeLabel(student)}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex min-h-10 flex-wrap gap-2 rounded-2xl border border-gray-200 bg-white p-2">
+                    {exemptionSelectedStudents.map((student) => (
+                      <span
+                        key={student.uid}
+                        className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700"
+                      >
+                        {formatStudentBadgeLabel(student)}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setExemptionSelectedStudentUids((prev) =>
+                              prev.filter((uid) => uid !== student.uid),
+                            )
+                          }
+                          className="text-blue-400 hover:text-blue-700"
+                          aria-label={`${student.name} 선택 해제`}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                    {!exemptionSelectedStudents.length && (
+                      <span className="px-2 py-1 text-xs font-semibold text-gray-400">
+                        선택된 학생이 없습니다.
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-bold text-gray-500">
+                      학년
+                    </span>
+                    <select
+                      value={exemptionTargetGrade}
+                      onChange={(event) => {
+                        setExemptionTargetGrade(event.target.value);
+                        setExemptionTargetClass("");
+                      }}
+                      className="w-full rounded-2xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
+                    >
+                      <option value="">학년 선택</option>
+                      {gradeOptions.map((grade) => (
+                        <option key={grade} value={grade}>
+                          {grade}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-bold text-gray-500">
+                      반
+                    </span>
+                    <select
+                      value={exemptionTargetClass}
+                      onChange={(event) =>
+                        setExemptionTargetClass(event.target.value)
+                      }
+                      className="w-full rounded-2xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
+                    >
+                      <option value="">반 선택</option>
+                      {exemptionClassOptions.map((className) => (
+                        <option key={className} value={className}>
+                          {className}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="sm:col-span-2 rounded-2xl border border-blue-100 bg-white px-3 py-2 text-xs font-bold text-blue-700">
+                    선택 대상 {exemptionClassStudents.length}명
+                  </div>
+                </div>
+              )}
+
+              <label className="mt-4 block">
+                <span className="mb-1 block text-xs font-bold text-gray-500">
+                  부여 사유
+                </span>
+                <textarea
+                  value={exemptionReason}
+                  onChange={(event) => setExemptionReason(event.target.value)}
+                  rows={3}
+                  placeholder="예: 학교 행사, 공결, 상담 등"
+                  className="w-full resize-none rounded-2xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => void handleGrantExemptions()}
+                disabled={grantingExemption}
+                className="mt-3 h-11 w-full rounded-2xl bg-blue-600 px-4 text-sm font-black text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {grantingExemption ? "부여 중" : "면제권 부여"}
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-gray-200 bg-white">
+                <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+                  <h3 className="text-sm font-black text-gray-900">
+                    면제권 요청
+                  </h3>
+                  <span className="text-xs font-bold text-gray-400">
+                    {exemptionRequests.length}건
+                  </span>
+                </div>
+                <div className="max-h-80 overflow-y-auto p-3">
+                  {sortedExemptionRequests.map((request) => {
+                    const isPending = request.status === "pending";
+                    const isHighlighted =
+                      highlightedExemptionRequestId === request.id;
+                    return (
+                      <div
+                        key={request.id}
+                        className={`mb-2 rounded-2xl border p-3 last:mb-0 ${
+                          isHighlighted
+                            ? "border-blue-300 bg-blue-50"
+                            : "border-gray-200 bg-white"
+                        }`}
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <div className="text-sm font-black text-gray-900">
+                              {formatExemptionStudentLabel(request)}
+                            </div>
+                            <div className="mt-1 text-xs font-semibold text-gray-500">
+                              요청 {formatDateTimeLabel(request.createdAt)}
+                            </div>
+                            {request.assignmentTitle && (
+                              <div className="mt-1 text-xs font-bold text-blue-700">
+                                {request.assignmentTitle}
+                              </div>
+                            )}
+                          </div>
+                          <span
+                            className={`rounded-full border px-3 py-1 text-xs font-black ${getExemptionRequestStatusClassName(
+                              request.status,
+                            )}`}
+                          >
+                            {formatExemptionRequestStatusLabel(request.status)}
+                          </span>
+                        </div>
+                        {request.reason && (
+                          <p className="mt-2 rounded-xl bg-gray-50 px-3 py-2 text-xs leading-5 text-gray-600">
+                            {request.reason}
+                          </p>
+                        )}
+                        {isPending ? (
+                          <div className="mt-3 flex flex-wrap justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void handleReviewExemptionRequest(
+                                  request.id,
+                                  "rejected",
+                                )
+                              }
+                              disabled={
+                                reviewingExemptionRequestId === request.id
+                              }
+                              className="rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+                            >
+                              반려
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void handleReviewExemptionRequest(
+                                  request.id,
+                                  "approved",
+                                )
+                              }
+                              disabled={
+                                reviewingExemptionRequestId === request.id
+                              }
+                              className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                            >
+                              승인
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="mt-2 text-xs font-semibold text-gray-400">
+                            처리 {formatDateTimeLabel(request.reviewedAt)}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {!sortedExemptionRequests.length && (
+                    <div className="rounded-2xl border border-dashed border-gray-200 px-4 py-8 text-center text-sm font-semibold text-gray-400">
+                      접수된 면제권 요청이 없습니다.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-gray-200 bg-white">
+                <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+                  <h3 className="text-sm font-black text-gray-900">
+                    부여된 면제권
+                  </h3>
+                  <span className="text-xs font-bold text-gray-400">
+                    {exemptions.length}건
+                  </span>
+                </div>
+                <div className="max-h-64 overflow-y-auto p-3">
+                  {exemptions.map((exemption) => (
+                    <div
+                      key={exemption.id}
+                      className="mb-2 rounded-2xl border border-gray-200 bg-white p-3 last:mb-0"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <div className="text-sm font-black text-gray-900">
+                            {formatExemptionStudentLabel(exemption)}
+                          </div>
+                          <div className="mt-1 text-xs font-semibold text-gray-500">
+                            부여 {formatDateTimeLabel(exemption.createdAt)}
+                            {exemption.expiresAt
+                              ? ` · 만료 ${formatDateTimeLabel(
+                                  exemption.expiresAt,
+                                )}`
+                              : ""}
+                          </div>
+                        </div>
+                        <span className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
+                          {exemption.status}
+                        </span>
+                      </div>
+                      {exemption.reason && (
+                        <p className="mt-2 text-xs leading-5 text-gray-600">
+                          {exemption.reason}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                  {!exemptions.length && (
+                    <div className="rounded-2xl border border-dashed border-gray-200 px-4 py-8 text-center text-sm font-semibold text-gray-400">
+                      아직 부여된 면제권이 없습니다.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </section>
 
       <section

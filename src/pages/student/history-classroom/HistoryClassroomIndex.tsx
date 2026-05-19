@@ -5,17 +5,23 @@ import { InlineLoading } from "../../../components/common/LoadingState";
 import { useAuth } from "../../../contexts/AuthContext";
 import { db } from "../../../lib/firebase";
 import {
+  createHistoryClassroomExemptionRequest,
   getHistoryClassroomAssignedStudentUids,
   getHistoryClassroomPublishedAtMs,
   getHistoryClassroomRemainingMs,
   getHistoryClassroomStudentRetryResetMs,
   getHistoryClassroomTimestampMs,
+  isHistoryClassroomExemptionRequestPending,
   isHistoryClassroomAssignedToStudent,
   isHistoryClassroomDeleted,
   isHistoryClassroomPastDue,
+  normalizeHistoryClassroomExemption,
+  normalizeHistoryClassroomExemptionRequest,
   normalizeHistoryClassroomAssignment,
   normalizeHistoryClassroomResult,
   type HistoryClassroomAssignment,
+  type HistoryClassroomExemption,
+  type HistoryClassroomExemptionRequest,
   type HistoryClassroomResult,
 } from "../../../lib/historyClassroom";
 import { readLocalOnly, removeStorage } from "../../../lib/safeStorage";
@@ -141,6 +147,21 @@ const getResultLabel = (status: HistoryClassroomResult["status"]) => {
   return "자동 종료";
 };
 
+const isExemptionAvailableForAssignment = (
+  exemption: HistoryClassroomExemption,
+  assignmentId: string,
+) =>
+  exemption.status === "available" &&
+  (!exemption.assignmentId || exemption.assignmentId === assignmentId);
+
+const isExemptionUsedForAssignment = (
+  exemption: HistoryClassroomExemption,
+  assignmentId: string,
+) =>
+  exemption.status === "used" &&
+  (exemption.assignmentId === assignmentId ||
+    exemption.usedAssignmentId === assignmentId);
+
 const getStatusMeta = (status: StudentHistoryClassroomStatus) => {
   if (status === "passed") {
     return {
@@ -186,6 +207,15 @@ const HistoryClassroomIndex: React.FC = () => {
   const [resultsByAssignment, setResultsByAssignment] = useState<
     Record<string, HistoryClassroomResult[]>
   >({});
+  const [exemptions, setExemptions] = useState<HistoryClassroomExemption[]>(
+    [],
+  );
+  const [exemptionRequests, setExemptionRequests] = useState<
+    HistoryClassroomExemptionRequest[]
+  >([]);
+  const [requestingAssignmentId, setRequestingAssignmentId] = useState<
+    string | null
+  >(null);
   const [loading, setLoading] = useState(true);
   const [nowMs, setNowMs] = useState(Date.now());
 
@@ -287,6 +317,30 @@ const HistoryClassroomIndex: React.FC = () => {
           }
         };
 
+        const loadOwnSemesterDocs = async (
+          collectionName: string,
+          ownerFields: string[],
+        ) => {
+          const path = getSemesterCollectionPath(config, collectionName);
+          const snapshots = await Promise.all(
+            ownerFields.map((fieldName) =>
+              getDocs(
+                query(
+                  collection(db, path),
+                  where(fieldName, "==", userData.uid),
+                ),
+              ).catch(() => null),
+            ),
+          );
+          return Array.from(
+            new Map(
+              snapshots
+                .flatMap((snapshot) => snapshot?.docs || [])
+                .map((docSnap) => [docSnap.id, docSnap]),
+            ).values(),
+          );
+        };
+
         let resultDocs = await readResultDocs(
           getSemesterCollectionPath(config, "history_classroom_results"),
         );
@@ -309,6 +363,37 @@ const HistoryClassroomIndex: React.FC = () => {
           grouped[key].sort(compareResultCreatedAt);
         });
         setResultsByAssignment(grouped);
+
+        const [exemptionDocs, requestDocs] = await Promise.all([
+          loadOwnSemesterDocs("history_classroom_exemptions", [
+            "uid",
+            "studentUid",
+            "ownerUid",
+            "recipientUid",
+          ]),
+          loadOwnSemesterDocs("history_classroom_exemption_requests", [
+            "uid",
+            "studentUid",
+            "requesterUid",
+          ]),
+        ]);
+        setExemptions(
+          exemptionDocs
+            .map((docSnap) =>
+              normalizeHistoryClassroomExemption(docSnap.id, docSnap.data()),
+            )
+            .filter((item) => item.uid === userData.uid),
+        );
+        setExemptionRequests(
+          requestDocs
+            .map((docSnap) =>
+              normalizeHistoryClassroomExemptionRequest(
+                docSnap.id,
+                docSnap.data(),
+              ),
+            )
+            .filter((item) => item.uid === userData.uid),
+        );
       } catch (error) {
         console.error("Failed to load history classroom assignments:", error);
       } finally {
@@ -319,6 +404,58 @@ const HistoryClassroomIndex: React.FC = () => {
     void loadData();
   }, [config, userData?.uid]);
 
+  const handleRequestExemption = async (
+    assignmentId: string,
+    exemptionId: string,
+  ) => {
+    if (!userData?.uid || requestingAssignmentId) return;
+
+    setRequestingAssignmentId(assignmentId);
+    try {
+      await createHistoryClassroomExemptionRequest(config, {
+        assignmentId,
+        exemptionId,
+      });
+
+      const requestedAt = new Date();
+      setExemptions((previous) =>
+        previous.map((exemption) =>
+          exemption.id === exemptionId
+            ? {
+                ...exemption,
+                assignmentId: exemption.assignmentId || assignmentId,
+                requestedAssignmentId: assignmentId,
+                status: "requested",
+                requestedAt: exemption.requestedAt || requestedAt,
+              }
+            : exemption,
+        ),
+      );
+      setExemptionRequests((previous) => [
+        {
+          id: `local-${assignmentId}-${exemptionId}`,
+          uid: userData.uid,
+          studentName: "",
+          assignmentId,
+          assignmentTitle: "",
+          exemptionId,
+          status: "pending",
+          createdAt: requestedAt,
+        },
+        ...previous.filter(
+          (request) =>
+            request.assignmentId !== assignmentId ||
+            request.exemptionId !== exemptionId,
+        ),
+      ]);
+    } catch (error) {
+      console.error("Failed to request history classroom exemption:", error);
+      window.alert("면제권 요청을 보내지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      setRequestingAssignmentId(null);
+    }
+  };
+
   const classroomItems = useMemo(
     () =>
       assignments.map((assignment) => {
@@ -327,6 +464,27 @@ const HistoryClassroomIndex: React.FC = () => {
         const passedAttempt =
           attempts.find(
             (attempt) => attempt.status === "passed" || attempt.passed,
+          ) || null;
+        const pendingExemptionRequest =
+          exemptionRequests.find(
+            (request) =>
+              request.assignmentId === assignment.id &&
+              isHistoryClassroomExemptionRequestPending(request),
+          ) || null;
+        const requestedExemption =
+          exemptions.find(
+            (exemption) =>
+              exemption.status === "requested" &&
+              (exemption.assignmentId === assignment.id ||
+                exemption.requestedAssignmentId === assignment.id),
+          ) || null;
+        const usedExemption =
+          exemptions.find((exemption) =>
+            isExemptionUsedForAssignment(exemption, assignment.id),
+          ) || null;
+        const availableExemption =
+          exemptions.find((exemption) =>
+            isExemptionAvailableForAssignment(exemption, assignment.id),
           ) || null;
         const attemptsAsc = [...attempts].sort(
           (left, right) =>
@@ -402,11 +560,28 @@ const HistoryClassroomIndex: React.FC = () => {
           latest,
           passedAttempt,
           passedAttemptNumber,
+          exemptionState: pendingExemptionRequest
+            ? "requested"
+            : requestedExemption
+              ? "requested"
+              : usedExemption
+                ? "used"
+                : availableExemption
+                  ? "available"
+                  : null,
+          availableExemption,
           remainMinutes,
           status,
         };
       }),
-    [assignments, nowMs, resultsByAssignment, userData?.uid],
+    [
+      assignments,
+      exemptionRequests,
+      exemptions,
+      nowMs,
+      resultsByAssignment,
+      userData?.uid,
+    ],
   );
 
   const groupedItems = useMemo(() => {
@@ -433,8 +608,11 @@ const HistoryClassroomIndex: React.FC = () => {
       total: classroomItems.length,
       active: active.length,
       passed: passed.length,
+      availableExemptions: exemptions.filter(
+        (exemption) => exemption.status === "available",
+      ).length,
     };
-  }, [classroomItems]);
+  }, [classroomItems, exemptions]);
 
   if (loading) {
     return (
@@ -456,6 +634,9 @@ const HistoryClassroomIndex: React.FC = () => {
             <p className="mt-2 text-sm text-slate-600">
               지도의 빈칸을 채우고 기준 점수 이상이면 통과합니다.
             </p>
+            <div className="mt-3 inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
+              면제권 {summary.availableExemptions}장 보유
+            </div>
           </div>
           <div className="grid grid-cols-3 gap-2 rounded-2xl bg-slate-50 p-2 text-center">
             <div className="min-w-20 rounded-xl bg-white px-3 py-2 shadow-sm">
@@ -507,6 +688,12 @@ const HistoryClassroomIndex: React.FC = () => {
                   const statusMeta = getStatusMeta(item.status);
                   const canStart =
                     item.status === "available" || item.status === "retry";
+                  const canRequestExemption =
+                    !item.passedAttempt &&
+                    item.exemptionState === "available" &&
+                    Boolean(item.availableExemption);
+                  const isRequestingExemption =
+                    requestingAssignmentId === item.assignment.id;
 
                   return (
                     <article
@@ -600,7 +787,7 @@ const HistoryClassroomIndex: React.FC = () => {
                                 `/student/history-classroom/run?id=${item.assignment.id}`,
                               );
                             }}
-                            className={`rounded-2xl px-4 py-3 text-sm font-black transition disabled:cursor-not-allowed ${statusMeta.buttonClassName}`}
+                            className={`min-h-12 rounded-2xl px-4 py-3 text-sm font-black transition disabled:cursor-not-allowed ${statusMeta.buttonClassName}`}
                           >
                             {item.status === "retry"
                               ? "다시 도전하기"
@@ -610,6 +797,39 @@ const HistoryClassroomIndex: React.FC = () => {
                                   ? "다시 도전하기"
                                   : statusMeta.label}
                           </button>
+
+                          {canRequestExemption && item.availableExemption && (
+                            <button
+                              type="button"
+                              disabled={Boolean(requestingAssignmentId)}
+                              onClick={() => {
+                                if (!item.availableExemption) return;
+                                void handleRequestExemption(
+                                  item.assignment.id,
+                                  item.availableExemption.id,
+                                );
+                              }}
+                              className="min-h-11 whitespace-nowrap rounded-2xl border border-blue-200 bg-white px-3 py-2.5 text-xs font-black leading-5 text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400"
+                            >
+                              {isRequestingExemption
+                                ? "요청 보내는 중"
+                                : "면제권 사용 요청"}
+                            </button>
+                          )}
+
+                          {!item.passedAttempt &&
+                            item.exemptionState === "requested" && (
+                              <div className="rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-center text-sm font-bold text-indigo-700">
+                                면제권 요청 중
+                              </div>
+                            )}
+
+                          {!item.passedAttempt &&
+                            item.exemptionState === "used" && (
+                              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm font-bold text-emerald-700">
+                                면제권 사용됨
+                              </div>
+                            )}
                         </div>
                       </div>
                     </article>

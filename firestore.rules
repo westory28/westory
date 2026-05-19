@@ -175,6 +175,15 @@ service cloud.firestore {
         || (canUseWestory() && data.uid == request.auth.uid);
     }
 
+    function canReadHistoryClassroomExemption(data) {
+      return canUseWestory()
+        && (
+          data.uid == request.auth.uid
+          || isAdmin()
+          || isTeacherRole()
+        );
+    }
+
     function canReadSourceArchive() {
       return isAdmin() || isTeacherRole() || hasPermission('lesson_read');
     }
@@ -687,6 +696,16 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    match /history_classroom_exemptions/{docId} {
+      allow read: if canReadHistoryClassroomExemption(resource.data);
+      allow create, update, delete: if false;
+    }
+
+    match /history_classroom_exemption_requests/{docId} {
+      allow read: if canReadHistoryClassroomExemption(resource.data);
+      allow create, update, delete: if false;
+    }
+
     match /assessment_config/{docId} {
       allow read: if canUseWestory();
       allow write: if isAdmin() || isTeacherRole();
@@ -828,6 +847,16 @@ service cloud.firestore {
         allow read: if canReadHistoryClassroomResult(resource.data);
         allow create: if isValidHistoryClassroomResultCreate();
         allow update, delete: if isAdmin();
+      }
+
+      match /history_classroom_exemptions/{docId} {
+        allow read: if canReadHistoryClassroomExemption(resource.data);
+        allow create, update, delete: if false;
+      }
+
+      match /history_classroom_exemption_requests/{docId} {
+        allow read: if canReadHistoryClassroomExemption(resource.data);
+        allow create, update, delete: if false;
       }
 
       match /assessment_config/{docId} {

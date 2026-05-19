@@ -1,4 +1,8 @@
+import { httpsCallable } from "firebase/functions";
+import type { SystemConfig } from "../types";
+import { functions } from "./firebase";
 import type { MapResource } from "./mapResources";
+import { getYearSemester } from "./semesterScope";
 import {
   clampRatio,
   getTightTextRegionBounds,
@@ -56,6 +60,10 @@ export interface HistoryClassroomAssignment {
 }
 
 export type HistoryClassroomResultStatus = "passed" | "failed" | "cancelled";
+export type HistoryClassroomCompletionSource =
+  | "direct"
+  | "attempt"
+  | "exemption";
 
 export interface HistoryClassroomAnswerCheck {
   blankId: string;
@@ -91,7 +99,83 @@ export interface HistoryClassroomResult {
   status: HistoryClassroomResultStatus;
   answerChecks: HistoryClassroomAnswerCheck[];
   cancellationReason?: string;
+  completionSource?: HistoryClassroomCompletionSource;
+  exemptionId?: string;
+  exemptionRequestId?: string;
+  approvedByUid?: string;
+  approvedAt?: unknown;
   createdAt?: unknown;
+}
+
+export type HistoryClassroomExemptionStatus =
+  | "available"
+  | "requested"
+  | "used"
+  | "revoked";
+
+export interface HistoryClassroomExemption {
+  id: string;
+  uid: string;
+  studentName: string;
+  studentGrade?: string;
+  studentClass?: string;
+  studentNumber?: string;
+  reason: string;
+  status: HistoryClassroomExemptionStatus;
+  grantedByUid: string;
+  grantScope?: "student" | "class";
+  grantScopeLabel?: string;
+  grantReason?: string;
+  assignmentId?: string;
+  exemptionRequestId?: string;
+  pendingRequestId?: string;
+  requestedAssignmentId?: string;
+  requestId?: string;
+  usedAssignmentId?: string;
+  usedRequestId?: string;
+  usedByUid?: string;
+  grantedAt?: unknown;
+  requestedAt?: unknown;
+  usedAt?: unknown;
+  revokedAt?: unknown;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
+export type HistoryClassroomExemptionRequestStatus =
+  | "pending"
+  | "requested"
+  | "approved"
+  | "rejected"
+  | "cancelled"
+  | "used";
+
+export interface HistoryClassroomExemptionRequest {
+  id: string;
+  uid: string;
+  studentName: string;
+  studentGrade?: string;
+  studentClass?: string;
+  studentNumber?: string;
+  assignmentId: string;
+  assignmentTitle: string;
+  exemptionId: string;
+  exemptionReason?: string;
+  memo?: string;
+  status: HistoryClassroomExemptionRequestStatus;
+  resultId?: string;
+  reviewedByUid?: string;
+  reviewReason?: string;
+  reviewMemo?: string;
+  year?: string;
+  semester?: string;
+  requestedAt?: unknown;
+  approvedAt?: unknown;
+  rejectedAt?: unknown;
+  usedAt?: unknown;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+  reviewedAt?: unknown;
 }
 
 const collectHistoryClassroomTargetStudentUids = (
@@ -181,11 +265,7 @@ export const normalizeHistoryClassroomAssignment = (
     blanks: Array.isArray(raw.blanks)
       ? ((usedIds) =>
           raw.blanks!.map((blank, index) => ({
-            id: resolveUniqueHistoryClassroomBlankId(
-              blank?.id,
-              index,
-              usedIds,
-            ),
+            id: resolveUniqueHistoryClassroomBlankId(blank?.id, index, usedIds),
             page: Number(blank?.page) || 1,
             left: Number(blank?.left) || 0,
             top: Number(blank?.top) || 0,
@@ -245,7 +325,8 @@ export const normalizeHistoryClassroomAssignment = (
     deletedAt: raw.deletedAt,
     deletedByUid: String(raw.deletedByUid || "").trim(),
     retryResetByStudentUid:
-      raw.retryResetByStudentUid && typeof raw.retryResetByStudentUid === "object"
+      raw.retryResetByStudentUid &&
+      typeof raw.retryResetByStudentUid === "object"
         ? Object.fromEntries(
             Object.entries(raw.retryResetByStudentUid)
               .map(([uid, resetAt]) => [String(uid || "").trim(), resetAt])
@@ -307,15 +388,195 @@ export const normalizeHistoryClassroomResult = (
         .filter((item) => item.blankId)
     : [],
   cancellationReason: String(raw.cancellationReason || "").trim(),
+  completionSource:
+    raw.completionSource === "exemption"
+      ? "exemption"
+      : raw.completionSource === "direct"
+        ? "direct"
+        : "attempt",
+  exemptionId: String(raw.exemptionId || "").trim(),
+  exemptionRequestId: String(raw.exemptionRequestId || "").trim(),
+  approvedByUid: String(raw.approvedByUid || "").trim(),
+  approvedAt: raw.approvedAt,
   createdAt: raw.createdAt,
 });
+
+export const normalizeHistoryClassroomExemption = (
+  id: string,
+  raw: Partial<
+    HistoryClassroomExemption & {
+      ownerUid?: string;
+      recipientUid?: string;
+      studentUid?: string;
+      state?: string;
+    }
+  >,
+): HistoryClassroomExemption => ({
+  id,
+  uid: String(
+    raw.uid || raw.studentUid || raw.ownerUid || raw.recipientUid || "",
+  ).trim(),
+  studentName: String(raw.studentName || "").trim(),
+  studentGrade: String(raw.studentGrade || "").trim(),
+  studentClass: String(raw.studentClass || "").trim(),
+  studentNumber: String(raw.studentNumber || "").trim(),
+  reason: String(raw.reason || raw.grantReason || "").trim(),
+  status:
+    raw.status === "used" || raw.state === "used" || raw.state === "consumed"
+      ? "used"
+      : raw.status === "requested" ||
+          raw.state === "requested" ||
+          raw.state === "pending"
+        ? "requested"
+        : raw.status === "revoked" || raw.state === "revoked"
+          ? "revoked"
+          : "available",
+  assignmentId: String(raw.assignmentId || "").trim(),
+  exemptionRequestId: String(raw.exemptionRequestId || "").trim(),
+  pendingRequestId: String(raw.pendingRequestId || "").trim(),
+  requestedAssignmentId: String(raw.requestedAssignmentId || "").trim(),
+  usedByUid: String(raw.usedByUid || "").trim(),
+  usedAssignmentId: String(raw.usedAssignmentId || "").trim(),
+  usedRequestId: String(raw.usedRequestId || "").trim(),
+  grantScope: raw.grantScope === "class" ? "class" : "student",
+  grantScopeLabel: String(raw.grantScopeLabel || "").trim(),
+  grantReason: String(raw.grantReason || "").trim(),
+  grantedByUid: String(raw.grantedByUid || "").trim(),
+  grantedAt: raw.grantedAt,
+  requestedAt: raw.requestedAt,
+  requestId: String(raw.requestId || "").trim(),
+  usedAt: raw.usedAt,
+  revokedAt: raw.revokedAt,
+  createdAt: raw.createdAt,
+  updatedAt: raw.updatedAt,
+});
+
+export const normalizeHistoryClassroomExemptionRequest = (
+  id: string,
+  raw: Partial<
+    HistoryClassroomExemptionRequest & {
+      requesterUid?: string;
+      studentUid?: string;
+      state?: string;
+    }
+  >,
+): HistoryClassroomExemptionRequest => ({
+  id,
+  uid: String(raw.uid || raw.studentUid || raw.requesterUid || "").trim(),
+  studentName: String(raw.studentName || "").trim(),
+  studentGrade: String(raw.studentGrade || "").trim(),
+  studentClass: String(raw.studentClass || "").trim(),
+  studentNumber: String(raw.studentNumber || "").trim(),
+  assignmentId: String(raw.assignmentId || "").trim(),
+  assignmentTitle: String(raw.assignmentTitle || "").trim() || "역사교실",
+  exemptionId: String(raw.exemptionId || "").trim(),
+  exemptionReason: String(raw.exemptionReason || "").trim(),
+  memo: String(raw.memo || "").trim(),
+  status:
+    raw.status === "approved" || raw.state === "approved"
+      ? "approved"
+      : raw.status === "rejected" || raw.state === "rejected"
+        ? "rejected"
+        : raw.status === "cancelled" ||
+            raw.state === "cancelled" ||
+            raw.state === "canceled"
+          ? "cancelled"
+          : raw.status === "used" || raw.state === "used"
+            ? "used"
+            : raw.status === "pending" || raw.state === "pending"
+              ? "pending"
+              : "requested",
+  requestedAt: raw.requestedAt,
+  reviewedAt: raw.reviewedAt,
+  reviewedByUid: String(raw.reviewedByUid || "").trim(),
+  reviewReason: String(raw.reviewReason || raw.reviewMemo || "").trim(),
+  reviewMemo: String(raw.reviewMemo || raw.reviewReason || "").trim(),
+  resultId: String(raw.resultId || "").trim(),
+  year: String(raw.year || "").trim(),
+  semester: String(raw.semester || "").trim(),
+  approvedAt: raw.approvedAt,
+  rejectedAt: raw.rejectedAt,
+  usedAt: raw.usedAt,
+  createdAt: raw.createdAt,
+  updatedAt: raw.updatedAt,
+});
+
+export const isHistoryClassroomExemptionRequestPending = (
+  request: Pick<HistoryClassroomExemptionRequest, "status"> | null | undefined,
+) => request?.status === "pending" || request?.status === "requested";
+
+export const createHistoryClassroomExemptionRequest = async (
+  config: Pick<SystemConfig, "year" | "semester"> | null | undefined,
+  input: {
+    assignmentId: string;
+    exemptionId: string;
+    memo?: string;
+  },
+) => {
+  const { year, semester } = getYearSemester(config);
+  const callable = httpsCallable(
+    functions,
+    "createHistoryClassroomExemptionRequest",
+  );
+  await callable({
+    year,
+    semester,
+    assignmentId: input.assignmentId,
+    exemptionId: input.exemptionId,
+    memo: input.memo || "",
+  });
+};
+
+export const grantHistoryClassroomExemptions = async (
+  config: Pick<SystemConfig, "year" | "semester"> | null | undefined,
+  input: {
+    recipientUids?: string[];
+    classId?: string;
+    targetGrade?: string;
+    targetClass?: string;
+    reason: string;
+  },
+) => {
+  const { year, semester } = getYearSemester(config);
+  const callable = httpsCallable(functions, "grantHistoryClassroomExemptions");
+  await callable({
+    year,
+    semester,
+    recipientUids: Array.from(new Set(input.recipientUids || [])),
+    classId: input.classId || "",
+    targetGrade: input.targetGrade || "",
+    targetClass: input.targetClass || "",
+    reason: input.reason,
+  });
+};
+
+export const reviewHistoryClassroomExemptionRequest = async (
+  config: Pick<SystemConfig, "year" | "semester"> | null | undefined,
+  input: {
+    requestId: string;
+    approved: boolean;
+    reviewReason?: string;
+  },
+) => {
+  const { year, semester } = getYearSemester(config);
+  const callable = httpsCallable(
+    functions,
+    "reviewHistoryClassroomExemptionRequest",
+  );
+  await callable({
+    year,
+    semester,
+    requestId: input.requestId,
+    approved: input.approved,
+    reviewReason: input.reviewReason || "",
+  });
+};
 
 export const sanitizeHistoryClassroomAssignmentForWrite = (
   raw: Partial<HistoryClassroomAssignment>,
 ) => {
-  const normalizedTargetStudentUids = collectHistoryClassroomTargetStudentUids(
-    raw,
-  );
+  const normalizedTargetStudentUids =
+    collectHistoryClassroomTargetStudentUids(raw);
   const payload: Record<string, unknown> = {
     title: String(raw.title || "").trim() || "역사교실",
     description: String(raw.description || "").trim(),
@@ -354,25 +615,25 @@ export const sanitizeHistoryClassroomAssignmentForWrite = (
     blanks: Array.isArray(raw.blanks)
       ? ((usedIds) =>
           raw.blanks!.map((blank, index) => {
-          const normalizedBlank: Record<string, unknown> = {
-            id: resolveUniqueHistoryClassroomBlankId(
-              blank?.id,
-              index,
-              usedIds,
-            ),
-            page: Math.max(1, Number(blank?.page) || 1),
-            left: Number(blank?.left) || 0,
-            top: Number(blank?.top) || 0,
-            width: Math.max(1, Number(blank?.width) || 1),
-            height: Math.max(1, Number(blank?.height) || 1),
-            answer: String(blank?.answer || "").trim(),
-            prompt: String(blank?.prompt || "").trim(),
-          };
-          if (blank?.source === "ocr" || blank?.source === "manual") {
-            normalizedBlank.source = blank.source;
-          }
-          return normalizedBlank;
-        }))(new Set<string>())
+            const normalizedBlank: Record<string, unknown> = {
+              id: resolveUniqueHistoryClassroomBlankId(
+                blank?.id,
+                index,
+                usedIds,
+              ),
+              page: Math.max(1, Number(blank?.page) || 1),
+              left: Number(blank?.left) || 0,
+              top: Number(blank?.top) || 0,
+              width: Math.max(1, Number(blank?.width) || 1),
+              height: Math.max(1, Number(blank?.height) || 1),
+              answer: String(blank?.answer || "").trim(),
+              prompt: String(blank?.prompt || "").trim(),
+            };
+            if (blank?.source === "ocr" || blank?.source === "manual") {
+              normalizedBlank.source = blank.source;
+            }
+            return normalizedBlank;
+          }))(new Set<string>())
       : [],
     answerOptions: Array.isArray(raw.answerOptions)
       ? raw.answerOptions
