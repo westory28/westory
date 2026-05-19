@@ -402,7 +402,7 @@ const EventModal: React.FC<EventModalProps> = ({
 
   const updateStartDate = (nextStart: string) => {
     setStart(nextStart);
-    if (!end || end < nextStart) setEnd(nextStart);
+    setEnd(nextStart);
   };
 
   const updateEndDate = (nextEnd: string) => {
