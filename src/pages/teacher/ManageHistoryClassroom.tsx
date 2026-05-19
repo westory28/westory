@@ -4592,11 +4592,11 @@ const ManageHistoryClassroom: React.FC = () => {
                         }
                       }}
                     >
-                      <div className="sticky top-0 z-10 grid min-w-[34rem] grid-cols-[2.5rem_2.5rem_2.75rem_minmax(5.5rem,1fr)_3.25rem_4rem_3.25rem_3rem] items-center gap-1.5 border-b border-slate-200 bg-white px-3 pb-1.5 text-[11px] font-bold text-slate-400">
-                        <div>학년</div>
-                        <div>반</div>
+                      <div className="sticky top-0 z-10 grid min-w-[38rem] grid-cols-[2.25rem_2.25rem_2.75rem_minmax(7rem,0.65fr)_3.25rem_4rem_3.25rem_3rem_minmax(0,0.35fr)] items-center gap-2 border-b border-slate-200 bg-white px-3 pb-1.5 text-[11px] font-bold text-slate-400">
+                        <div className="text-center">학년</div>
+                        <div className="text-center">반</div>
                         <div className="text-center">번호</div>
-                        <div>학생</div>
+                        <div>이름</div>
                         <div className="text-center">보유</div>
                         <div className="text-center">사용 요청</div>
                         <div className="text-center">사용됨</div>
@@ -4609,13 +4609,13 @@ const ManageHistoryClassroom: React.FC = () => {
                         return (
                           <div
                             key={row.key}
-                            className={`min-w-[34rem] rounded-xl border bg-white px-3 py-2 transition ${
+                            className={`min-w-[38rem] rounded-xl border bg-white px-3 py-2 transition ${
                               expanded
                                 ? "border-blue-200 ring-2 ring-blue-50"
                                 : "border-slate-200 hover:border-blue-100 hover:bg-blue-50/30"
                             }`}
                           >
-                            <div className="grid grid-cols-[2.5rem_2.5rem_2.75rem_minmax(5.5rem,1fr)_3.25rem_4rem_3.25rem_3rem] items-center gap-1.5">
+                            <div className="grid grid-cols-[2.25rem_2.25rem_2.75rem_minmax(7rem,0.65fr)_3.25rem_4rem_3.25rem_3rem_minmax(0,0.35fr)] items-center gap-2">
                               <button
                                 type="button"
                                 onClick={() =>
@@ -4626,10 +4626,10 @@ const ManageHistoryClassroom: React.FC = () => {
                                 className="contents text-left"
                                 aria-expanded={expanded}
                               >
-                                <div className="truncate text-xs font-bold text-slate-500">
+                                <div className="truncate text-center text-xs font-bold text-slate-500">
                                   {row.grade || "-"}
                                 </div>
-                                <div className="truncate text-xs font-bold text-slate-500">
+                                <div className="truncate text-center text-xs font-bold text-slate-500">
                                   {row.className || "-"}
                                 </div>
                                 <div className="truncate text-center text-xs font-bold text-slate-500">
