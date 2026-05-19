@@ -417,7 +417,7 @@ const StudentDashboard: React.FC = () => {
   };
 
   return (
-    <div className="dashboard-container mx-auto w-full max-w-7xl px-4 py-6">
+    <div className="dashboard-container student-dashboard-container mx-auto w-full max-w-7xl px-4 py-6">
       <div className="mb-6 flex shrink-0 flex-col items-center justify-between gap-3 md:flex-row">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-extrabold tracking-tight text-gray-900 md:text-3xl">
@@ -431,8 +431,8 @@ const StudentDashboard: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex h-auto min-h-[500px] flex-col gap-4 md:grid md:h-[calc(100vh-140px)] md:grid-cols-5 md:grid-rows-2">
-        <div className="order-1 md:order-2 md:col-span-2 md:row-span-1">
+      <div className="student-dashboard-grid flex h-auto min-h-[500px] flex-col gap-4 md:grid md:grid-cols-5 md:grid-rows-2">
+        <div className="student-dashboard-notice order-1 md:order-2 md:col-span-2 md:row-span-1">
           {secondaryPanelsReady ? (
             <Suspense
               fallback={
@@ -450,7 +450,7 @@ const StudentDashboard: React.FC = () => {
           )}
         </div>
 
-        <div className="order-2 md:order-1 md:col-span-3 md:row-span-2">
+        <div className="student-dashboard-calendar order-2 md:order-1 md:col-span-3 md:row-span-2">
           <Suspense fallback={<DashboardCalendarFallback />}>
             <CalendarSection
               categories={categories}
@@ -470,7 +470,7 @@ const StudentDashboard: React.FC = () => {
           </Suspense>
         </div>
 
-        <div className="order-3 md:order-3 md:col-span-2 md:row-span-1">
+        <div className="student-dashboard-ranking order-3 md:order-3 md:col-span-2 md:row-span-1">
           <WisRankingPanel config={config} />
         </div>
       </div>

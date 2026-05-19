@@ -11,6 +11,17 @@
   width: 100%;
 }
 
+.student-dashboard-container {
+  padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+.student-dashboard-grid,
+.student-dashboard-notice,
+.student-dashboard-calendar,
+.student-dashboard-ranking {
+  min-height: 0;
+}
+
 .fc .fc-toolbar-title {
   font-weight: 800 !important;
 }
@@ -1234,6 +1245,26 @@
 @media (min-width: 768px) {
   .dashboard-container {
     padding: 24px 40px;
+  }
+
+  .student-dashboard-container {
+    padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media (min-width: 1024px) {
+  .student-dashboard-grid {
+    height: calc(100vh - 15.75rem);
+    height: max(
+      31.25rem,
+      calc(100dvh - 15.75rem - env(safe-area-inset-bottom, 0px))
+    );
+    min-height: 0 !important;
+  }
+
+  .student-dashboard-calendar
+    .student-calendar-shell__body[data-calendar-view="dayGridMonth"] {
+    min-height: clamp(20rem, calc(100dvh - 18rem), 31rem);
   }
 }
 
