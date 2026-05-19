@@ -3381,7 +3381,7 @@ const ManageHistoryClassroom: React.FC = () => {
       </section>
 
       <section className="mb-5 rounded-3xl border border-gray-200 bg-white p-3.5 shadow-sm">
-        <div className="grid gap-2.5 xl:grid-cols-[15rem_minmax(13rem,24rem)_auto_auto] xl:items-center xl:justify-between">
+        <div className="grid gap-2.5 xl:grid-cols-[15rem_minmax(12rem,18rem)_auto_auto] xl:items-center xl:justify-between">
           <div className="flex h-12 items-center gap-3 rounded-2xl border border-gray-200 px-4 text-sm font-bold text-gray-700">
             <DashboardIcon name="calendar" className="h-4 w-4 text-blue-600" />
             {dashboardDateRangeLabel}
@@ -3395,7 +3395,7 @@ const ManageHistoryClassroom: React.FC = () => {
             />
             <DashboardIcon name="search" className="h-5 w-5 text-gray-400" />
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-nowrap gap-2">
             {[
               ["all", "전체"],
               ["published", "공개"],
@@ -3824,11 +3824,11 @@ const ManageHistoryClassroom: React.FC = () => {
             key={group.dateKey}
             className="relative flex w-full items-start gap-3"
           >
-            <div className="relative w-24 shrink-0 sm:w-24 lg:w-24">
+            <div className="relative w-28 shrink-0 sm:w-32 lg:w-32">
                 <div className="relative z-10">
                   <div className="absolute left-0 top-2 h-3 w-3 rounded-full border-4 border-white bg-blue-600 shadow ring-1 ring-blue-200" />
                   <div className="ml-6">
-                    <div className="text-base font-black leading-6 text-gray-900 sm:text-lg">
+                    <div className="whitespace-nowrap text-base font-black leading-6 text-gray-900 sm:text-lg">
                       {group.timelineDate.date}
                     </div>
                     <div className="mt-1 text-xs font-semibold text-gray-500 sm:text-sm">
