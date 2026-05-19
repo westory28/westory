@@ -1517,8 +1517,8 @@ const QuizLogTab: React.FC = () => {
   }, [bigFilter, bigOptions, midFilter, midOptions]);
 
   return (
-    <div className="h-full min-h-0 overflow-y-auto bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6">
-      <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+    <div className="h-full min-h-0 overflow-y-auto pb-4">
+      <div className="mb-6 flex flex-col gap-4">
         <div>
           <h2 className="text-2xl font-extrabold text-gray-900">응시 현황</h2>
           <p className="mt-1 text-sm text-gray-500">
@@ -1526,8 +1526,7 @@ const QuizLogTab: React.FC = () => {
           </p>
         </div>
 
-        <div className="w-full space-y-2 xl:max-w-[620px]">
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:justify-end xl:grid-cols-[minmax(0,250px)_minmax(0,250px)]">
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-[minmax(180px,1.25fr)_minmax(180px,1.25fr)_110px_minmax(128px,0.75fr)_108px]">
             <select
               value={bigFilter}
               onChange={(event) => {
@@ -1535,7 +1534,7 @@ const QuizLogTab: React.FC = () => {
                 setBigFilter(event.target.value);
                 setMidFilter("");
               }}
-              className="min-w-0 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-700"
+              className="min-w-0 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-bold text-gray-700"
               aria-label="대단원 필터"
             >
               <option value="">대단원 전체</option>
@@ -1551,7 +1550,7 @@ const QuizLogTab: React.FC = () => {
                 userTouchedUnitFilterRef.current = true;
                 setMidFilter(event.target.value);
               }}
-              className="min-w-0 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-700"
+              className="min-w-0 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-bold text-gray-700"
               aria-label="중단원 필터"
             >
               <option value="">중단원 전체</option>
@@ -1561,15 +1560,13 @@ const QuizLogTab: React.FC = () => {
                 </option>
               ))}
             </select>
-          </div>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[150px_190px_auto] sm:justify-end">
             <select
               value={classFilter}
               onChange={(event) => {
                 userTouchedClassFilterRef.current = true;
                 setClassFilter(event.target.value);
               }}
-              className="min-w-0 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-700"
+              className="min-w-0 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-bold text-gray-700"
               aria-label="반 필터"
             >
               <option value="">반 전체</option>
@@ -1585,7 +1582,7 @@ const QuizLogTab: React.FC = () => {
                 userTouchedCategoryFilterRef.current = true;
                 setCategoryFilter(event.target.value);
               }}
-              className="min-w-0 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-700"
+              className="min-w-0 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-bold text-gray-700"
               aria-label="평가유형 필터"
             >
               <option value="">평가유형 전체</option>
@@ -1596,12 +1593,11 @@ const QuizLogTab: React.FC = () => {
             <button
               type="button"
               onClick={reload}
-              className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
+              className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-blue-600 px-3 py-2 text-[13px] font-bold text-white shadow-sm transition hover:bg-blue-700"
             >
               <i className="fas fa-sync-alt text-xs" aria-hidden="true"></i>
               새로고침
             </button>
-          </div>
         </div>
       </div>
 

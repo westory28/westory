@@ -2199,13 +2199,13 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   };
 
   return (
-    <div className="h-full min-h-0 flex flex-col bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
+    <div className="h-full min-h-0 flex flex-col overflow-hidden">
       {!canEdit && (
         <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
           읽기 전용 권한입니다. 문제 수정은 관리자만 가능합니다.
         </div>
       )}
-      <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-3">
+      <div className="shrink-0 pb-3">
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
             <div>
@@ -2233,7 +2233,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-5 2xl:grid-cols-[128px_108px_minmax(170px,1.45fr)_minmax(170px,1.45fr)_minmax(136px,1fr)_minmax(112px,0.75fr)_minmax(112px,0.75fr)_minmax(104px,0.68fr)_minmax(210px,1.5fr)_96px]">
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-5">
             <div className="flex min-w-0 rounded-lg border border-slate-200 bg-slate-100 p-1">
               {(["all", "class"] as AnalyticsScope[]).map((scope) => (
                 <button
@@ -2340,7 +2340,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
               <option value="data_short">데이터 부족</option>
               <option value="stable">안정</option>
             </select>
-            <div className="relative min-w-0 md:col-span-2 xl:col-span-2 2xl:col-span-1">
+            <div className="relative min-w-0 md:col-span-2 xl:col-span-1">
               <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400"></i>
               <input
                 type="search"
@@ -2367,7 +2367,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-auto p-3">
+      <div className="flex-1 min-h-0 overflow-auto pb-4">
         <section className="rounded-lg border border-slate-200 bg-white">
           <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
@@ -2638,11 +2638,11 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
               <table className="w-full table-fixed text-left text-sm">
                 <colgroup>
                   <col className="w-[7%]" />
-                  <col className="w-[17%]" />
+                  <col className="w-[14%]" />
                   <col className="w-[8%]" />
                   <col className="w-[8%]" />
                   <col />
-                  <col className="w-[14%]" />
+                  <col className="w-[13%]" />
                   <col className="w-[12%]" />
                   <col className="w-[10%]" />
                 </colgroup>
@@ -2756,10 +2756,16 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                             {questionDisplayCodes[q.docId] || "-"}
                           </td>
                           <td className="overflow-hidden px-4 py-5 align-top">
-                            <div className="min-w-0 truncate text-sm font-black text-slate-800">
+                            <div
+                              className="min-w-0 truncate text-sm font-black text-slate-800"
+                              title={unitMeta.focusTitle}
+                            >
                               {unitMeta.focusTitle}
                             </div>
-                            <div className="mt-2 min-w-0 truncate text-[11px] font-bold text-slate-400">
+                            <div
+                              className="mt-2 min-w-0 truncate text-[11px] font-bold text-slate-400"
+                              title={`${unitMeta.bigTitle} > ${unitMeta.midTitle}`}
+                            >
                               {unitMeta.bigTitle} &gt; {unitMeta.midTitle}
                             </div>
                           </td>
