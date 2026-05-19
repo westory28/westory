@@ -31,6 +31,7 @@ const ManageQuiz: React.FC = () => {
     const [mobileTreeOpen, setMobileTreeOpen] = useState(false);
     const canRead = canReadQuizManagement(userData, currentUser?.email || '');
     const canWrite = canWriteQuizManagement(userData, currentUser?.email || '');
+    const isManageTab = activeTab === 'manage';
 
     useEffect(() => {
         const requestedTab = searchParams.get('tab');
@@ -70,8 +71,8 @@ const ManageQuiz: React.FC = () => {
     };
 
     return (
-        <div className="flex h-[calc(100dvh-64px)] min-h-[760px] flex-col overflow-hidden bg-gray-50">
-            <main className="flex-1 w-full max-w-7xl mx-auto px-4 lg:px-6 py-4 lg:py-3 flex flex-col min-h-0 overflow-hidden">
+        <div className={`flex flex-col bg-gray-50 ${isManageTab ? 'h-[calc(100dvh-64px)] min-h-[760px] overflow-hidden' : 'min-h-[calc(100dvh-64px)]'}`}>
+            <main className={`w-full max-w-7xl mx-auto px-4 lg:px-6 py-4 lg:py-3 ${isManageTab ? 'flex-1 flex flex-col min-h-0 overflow-hidden' : 'pb-8'}`}>
                 <div className="flex border-b border-gray-200 mb-3 bg-white rounded-t-lg px-2 shrink-0 overflow-x-auto">
                     {canWrite && (
                         <button
@@ -175,12 +176,12 @@ const ManageQuiz: React.FC = () => {
                 )}
 
                 {activeTab === 'log' && (
-                    <div className="flex-1 min-h-0 overflow-hidden">
+                    <div>
                         <QuizLogTab />
                     </div>
                 )}
                 {activeTab === 'bank' && (
-                    <div className="flex-1 min-h-0 overflow-hidden">
+                    <div>
                         <QuizBankTab canEdit={canWrite} />
                     </div>
                 )}

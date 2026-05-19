@@ -1517,7 +1517,7 @@ const QuizLogTab: React.FC = () => {
   }, [bigFilter, bigOptions, midFilter, midOptions]);
 
   return (
-    <div className="h-full min-h-0 overflow-y-auto pb-4">
+    <div className="pb-4">
       <div className="mb-6 flex flex-col gap-4">
         <div>
           <h2 className="text-2xl font-extrabold text-gray-900">응시 현황</h2>
