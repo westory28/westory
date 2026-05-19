@@ -134,6 +134,7 @@ type SortKey = "none" | "code" | "rate" | "category" | "type";
 type SortDirection = "asc" | "desc";
 type AnalyticsScope = "all" | "class";
 type StatusFilter = "" | "weak" | "no_attempt" | "data_short" | "stable";
+type ClassComparisonSort = "class" | "rateAsc" | "rateDesc";
 
 interface BankFilterState {
   big: string;
@@ -172,6 +173,15 @@ const normalizeClass = (value: unknown): string => {
   if (!raw) return "";
   const digits = raw.match(/\d+/)?.[0];
   return digits || raw.replace("반", "").trim();
+};
+const compareClassOnly = (a: string, b: string): number => {
+  const aNumber = Number(a);
+  const bNumber = Number(b);
+  const aIsNumber = Number.isFinite(aNumber);
+  const bIsNumber = Number.isFinite(bNumber);
+  if (aIsNumber && bIsNumber && aNumber !== bNumber) return aNumber - bNumber;
+  if (aIsNumber !== bIsNumber) return aIsNumber ? -1 : 1;
+  return a.localeCompare(b, "ko-KR", { numeric: true });
 };
 const normalizeNumber = (value: unknown): string => {
   const raw = toText(value);
@@ -303,6 +313,8 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const [questionPage, setQuestionPage] = useState(1);
   const [sortKey, setSortKey] = useState<SortKey>("none");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [classComparisonSort, setClassComparisonSort] =
+    useState<ClassComparisonSort>("class");
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [optimizingImageCount, setOptimizingImageCount] = useState(0);
@@ -977,14 +989,8 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     Object.values(questionStats).forEach((stat) => {
       stat.affectedClasses.forEach((classOnly) => values.add(classOnly));
     });
-    return Array.from(values).sort(
-      (a, b) => {
-        if (recentClassFocus?.classOnly === a) return -1;
-        if (recentClassFocus?.classOnly === b) return 1;
-        return Number(a) - Number(b) || a.localeCompare(b);
-      },
-    );
-  }, [participationByClass, questionStats, recentClassFocus, studentRoster]);
+    return Array.from(values).sort(compareClassOnly);
+  }, [participationByClass, questionStats, studentRoster]);
 
   const rosterCountByClass = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -1320,6 +1326,23 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       rate: classAverageByClass[classOnly]?.average ?? null,
     }));
   }, [classAverageByClass, classOptions]);
+
+  const sortedClassComparisons = useMemo(() => {
+    return classComparisons.slice().sort((a, b) => {
+      if (classComparisonSort === "class") {
+        return compareClassOnly(a.classOnly, b.classOnly);
+      }
+      if (a.rate === null && b.rate === null) {
+        return compareClassOnly(a.classOnly, b.classOnly);
+      }
+      if (a.rate === null) return 1;
+      if (b.rate === null) return -1;
+
+      const rateDiff =
+        classComparisonSort === "rateAsc" ? a.rate - b.rate : b.rate - a.rate;
+      return rateDiff || compareClassOnly(a.classOnly, b.classOnly);
+    });
+  }, [classComparisonSort, classComparisons]);
 
   const classGapSummary = useMemo(() => {
     const withRate = classComparisons.filter((item) => item.rate !== null);
@@ -2637,22 +2660,22 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
             <div className="overflow-hidden">
               <table className="w-full table-fixed text-left text-sm">
                 <colgroup>
-                  <col className="w-[7%]" />
+                  <col className="w-[8%]" />
                   <col className="w-[14%]" />
                   <col className="w-[8%]" />
                   <col className="w-[8%]" />
                   <col />
                   <col className="w-[13%]" />
                   <col className="w-[12%]" />
-                  <col className="w-[10%]" />
+                  <col className="w-[12%]" />
                 </colgroup>
                 <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-black text-slate-500 shadow-sm">
                   <tr>
-                    <th className="px-4 py-3.5 text-center">
+                    <th className="whitespace-nowrap px-4 py-3.5 text-center">
                       <button
                         type="button"
                         onClick={() => toggleSort("code")}
-                        className="inline-flex items-center gap-1 hover:text-blue-600"
+                        className="inline-flex items-center gap-1 whitespace-nowrap hover:text-blue-600"
                       >
                         번호{" "}
                         <i
@@ -2661,11 +2684,11 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                       </button>
                     </th>
                     <th className="px-4 py-3.5">단원</th>
-                    <th className="px-4 py-3.5">
+                    <th className="whitespace-nowrap px-4 py-3.5">
                       <button
                         type="button"
                         onClick={() => toggleSort("category")}
-                        className="inline-flex items-center gap-1 hover:text-blue-600"
+                        className="inline-flex items-center gap-1 whitespace-nowrap hover:text-blue-600"
                       >
                         평가{" "}
                         <i
@@ -2673,11 +2696,11 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                         ></i>
                       </button>
                     </th>
-                    <th className="px-4 py-3.5">
+                    <th className="whitespace-nowrap px-4 py-3.5">
                       <button
                         type="button"
                         onClick={() => toggleSort("type")}
-                        className="inline-flex items-center gap-1 hover:text-blue-600"
+                        className="inline-flex items-center gap-1 whitespace-nowrap hover:text-blue-600"
                       >
                         유형{" "}
                         <i
@@ -2686,11 +2709,11 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                       </button>
                     </th>
                     <th className="px-4 py-3.5">문제</th>
-                    <th className="px-4 py-3.5">
+                    <th className="whitespace-nowrap px-4 py-3.5">
                       <button
                         type="button"
                         onClick={() => toggleSort("rate")}
-                        className="inline-flex items-center gap-1 hover:text-blue-600"
+                        className="inline-flex items-center gap-1 whitespace-nowrap hover:text-blue-600"
                       >
                         정답률{" "}
                         <i
@@ -2698,8 +2721,8 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                         ></i>
                       </button>
                     </th>
-                    <th className="px-4 py-3.5">주요 오답</th>
-                    <th className="px-4 py-3.5">활용</th>
+                    <th className="whitespace-nowrap px-4 py-3.5">주요 오답</th>
+                    <th className="whitespace-nowrap px-4 py-3.5">활용</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
@@ -2750,7 +2773,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                           onClick={() => openEditModal(q)}
                         >
                           <td
-                            className="px-4 py-5 text-center text-xs font-black text-slate-500"
+                            className="whitespace-nowrap px-4 py-5 text-center text-xs font-black text-slate-500"
                             title={`문항 ID: ${q.docId}`}
                           >
                             {questionDisplayCodes[q.docId] || "-"}
@@ -2771,7 +2794,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                           </td>
                           <td className="overflow-hidden px-4 py-5 align-top">
                             <span
-                              className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-black ${
+                              className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-black ${
                                 q.category === "diagnostic"
                                   ? "bg-emerald-50 text-emerald-700"
                                   : q.category === "formative"
@@ -2782,7 +2805,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                               {getCategoryLabel(q.category)}
                             </span>
                           </td>
-                          <td className="overflow-hidden px-4 py-5 align-top text-xs font-black text-slate-600">
+                          <td className="whitespace-nowrap px-4 py-5 align-top text-xs font-black text-slate-600">
                             {QUESTION_TYPE_LABEL[q.type] || q.type}
                           </td>
                           <td className="overflow-hidden px-4 py-5 align-top">
@@ -2836,13 +2859,18 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                             </div>
                           </td>
                           <td className="overflow-hidden px-4 py-5 align-top">
-                            <span
-                              className={`mb-2 inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-black ${status.tone}`}
-                            >
-                              {status.label}
-                            </span>
-                            <div className="text-[11px] font-black text-slate-600">
-                              {getRecommendation(q, stat)}
+                            <div className="min-w-0 rounded-lg bg-slate-50 px-2.5 py-2">
+                              <div
+                                className={`inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-black ${status.tone}`}
+                              >
+                                {status.label}
+                              </div>
+                              <div
+                                className="mt-1 truncate text-[11px] font-black text-slate-700"
+                                title={getRecommendation(q, stat)}
+                              >
+                                {getRecommendation(q, stat)}
+                              </div>
                             </div>
                           </td>
                         </tr>
@@ -2929,11 +2957,27 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
 
           <aside className="space-y-4">
             <section className="rounded-lg border border-slate-200 bg-white p-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-3">
                 <h3 className="font-black text-slate-900">학급 간 비교</h3>
-                <span className="text-xs font-black text-slate-400">
+                <span className="shrink-0 text-xs font-black text-slate-400">
                   {classComparisons.length}개 반
                 </span>
+              </div>
+              <div className="mt-3">
+                <select
+                  value={classComparisonSort}
+                  onChange={(event) =>
+                    setClassComparisonSort(
+                      event.target.value as ClassComparisonSort,
+                    )
+                  }
+                  className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-black text-slate-700"
+                  aria-label="학급 간 비교 정렬"
+                >
+                  <option value="class">반 번호순</option>
+                  <option value="rateAsc">정답률 낮은 순</option>
+                  <option value="rateDesc">정답률 높은 순</option>
+                </select>
               </div>
               <div className="mt-4 space-y-3">
                 {classComparisons.length === 0 && (
@@ -2941,56 +2985,46 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                     비교할 학급 데이터가 없습니다.
                   </div>
                 )}
-                {classComparisons
-                  .slice()
-                  .sort((a, b) => {
-                    if (recentClassFocus?.classOnly === a.classOnly) return -1;
-                    if (recentClassFocus?.classOnly === b.classOnly) return 1;
-                    const ar = a.rate ?? 101;
-                    const br = b.rate ?? 101;
-                    if (ar !== br) return ar - br;
-                    return Number(a.classOnly) - Number(b.classOnly);
-                  })
-                  .map((item) => {
-                    const isSelected = activeClassFilter === item.classOnly;
-                    const rate = item.rate ?? 0;
-                    return (
-                      <button
-                        key={item.classOnly}
-                        type="button"
-                        onClick={() => {
-                          userTouchedClassScopeRef.current = true;
-                          setAnalyticsScope("class");
-                          setClassFilter(item.classOnly);
-                        }}
-                        className={`w-full rounded-lg border p-3 text-left transition ${
-                          isSelected
-                            ? "border-blue-300 bg-blue-50"
-                            : "border-slate-100 hover:border-blue-200 hover:bg-slate-50"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="font-black text-slate-800">
-                            {item.classOnly}반
-                          </div>
-                          <div
-                            className={`font-black ${item.rate !== null && item.rate < 60 ? "text-red-600" : "text-blue-700"}`}
-                          >
-                            {formatPercent(item.rate)}
-                          </div>
+                {sortedClassComparisons.map((item) => {
+                  const isSelected = activeClassFilter === item.classOnly;
+                  const rate = item.rate ?? 0;
+                  return (
+                    <button
+                      key={item.classOnly}
+                      type="button"
+                      onClick={() => {
+                        userTouchedClassScopeRef.current = true;
+                        setAnalyticsScope("class");
+                        setClassFilter(item.classOnly);
+                      }}
+                      className={`w-full rounded-lg border p-3 text-left transition ${
+                        isSelected
+                          ? "border-blue-300 bg-blue-50"
+                          : "border-slate-100 hover:border-blue-200 hover:bg-slate-50"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="font-black text-slate-800">
+                          {item.classOnly}반
                         </div>
-                        <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
-                          <div
-                            className={`h-full rounded-full ${item.rate !== null && item.rate < 60 ? "bg-red-500" : "bg-blue-500"}`}
-                            style={{ width: `${rate}%` }}
-                          ></div>
+                        <div
+                          className={`font-black ${item.rate !== null && item.rate < 60 ? "text-red-600" : "text-blue-700"}`}
+                        >
+                          {formatPercent(item.rate)}
                         </div>
-                        <div className="mt-2 flex items-center justify-end text-[11px] font-bold text-slate-500">
-                          <span>평균 정답률</span>
-                        </div>
-                      </button>
-                    );
-                  })}
+                      </div>
+                      <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
+                        <div
+                          className={`h-full rounded-full ${item.rate !== null && item.rate < 60 ? "bg-red-500" : "bg-blue-500"}`}
+                          style={{ width: `${rate}%` }}
+                        ></div>
+                      </div>
+                      <div className="mt-2 flex items-center justify-end text-[11px] font-bold text-slate-500">
+                        <span>평균 정답률</span>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
               {classGapSummary && (
                 <div className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold leading-5 text-emerald-700">
