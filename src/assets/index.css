@@ -557,12 +557,29 @@
 
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
   .fc
+  .fc-col-header,
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-scrollgrid
+  table,
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
   .fc-daygrid-body,
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
   .fc
   .fc-scrollgrid-sync-table {
   width: 100% !important;
   table-layout: fixed !important;
+}
+
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-col-header-cell,
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-daygrid-day {
+  box-sizing: border-box;
+  width: calc(100% / 7) !important;
 }
 
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"] .fc-scroller,
