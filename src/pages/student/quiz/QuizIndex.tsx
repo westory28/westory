@@ -31,7 +31,7 @@ const QuizIndex: React.FC = () => {
   useEffect(() => {
     let cancelled = false;
     const fetchData = async () => {
-      if (!config) return;
+      setLoading(true);
       try {
         const [nextTree, grade3ClassIds] = await Promise.all([
           readStudentCurriculumTree(config),

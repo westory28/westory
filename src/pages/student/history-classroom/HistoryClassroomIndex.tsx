@@ -199,8 +199,9 @@ const getStatusMeta = (status: StudentHistoryClassroomStatus) => {
 };
 
 const HistoryClassroomIndex: React.FC = () => {
-  const { userData, config } = useAuth();
+  const { currentUser, userData, config } = useAuth();
   const navigate = useNavigate();
+  const studentUid = userData?.uid || currentUser?.uid || "";
   const [assignments, setAssignments] = useState<HistoryClassroomAssignment[]>(
     [],
   );
@@ -225,16 +226,19 @@ const HistoryClassroomIndex: React.FC = () => {
   useEffect(() => {
     let cancelled = false;
     const loadData = async () => {
-      if (!userData?.uid || !config) return;
+      if (!studentUid) {
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       try {
         const loadAssignedSnapshots = async (collectionPath: string) => {
-          const accessFieldPath = `targetStudentAccessMap.${userData.uid}`;
+          const accessFieldPath = `targetStudentAccessMap.${studentUid}`;
           const [singleTargetSnap, multiTargetSnap] = await Promise.all([
             getDocs(
               query(
                 collection(db, collectionPath),
-                where("targetStudentUid", "==", userData.uid),
+                where("targetStudentUid", "==", studentUid),
               ),
             ).catch(() => null),
             getDocs(
@@ -266,7 +270,7 @@ const HistoryClassroomIndex: React.FC = () => {
               (assignment) =>
                 !isHistoryClassroomDeleted(assignment) &&
                 assignment.isPublished &&
-                isHistoryClassroomAssignedToStudent(assignment, userData.uid),
+                isHistoryClassroomAssignedToStudent(assignment, studentUid),
             )
             .sort(
               (left, right) =>
@@ -296,7 +300,7 @@ const HistoryClassroomIndex: React.FC = () => {
                 getDocs(
                   query(
                     collection(db, path),
-                    where("uid", "==", userData.uid),
+                    where("uid", "==", studentUid),
                     where("assignmentId", "in", ids),
                   ),
                 ),
@@ -309,7 +313,7 @@ const HistoryClassroomIndex: React.FC = () => {
               error,
             );
             const snapshot = await getDocs(
-              query(collection(db, path), where("uid", "==", userData.uid)),
+              query(collection(db, path), where("uid", "==", studentUid)),
             );
             return snapshot.docs.filter((docSnap) =>
               assignmentIds.includes(String(docSnap.data().assignmentId || "")),
@@ -325,10 +329,7 @@ const HistoryClassroomIndex: React.FC = () => {
           const snapshots = await Promise.all(
             ownerFields.map((fieldName) =>
               getDocs(
-                query(
-                  collection(db, path),
-                  where(fieldName, "==", userData.uid),
-                ),
+                query(collection(db, path), where(fieldName, "==", studentUid)),
               ).catch(() => null),
             ),
           );
@@ -385,7 +386,7 @@ const HistoryClassroomIndex: React.FC = () => {
             .map((docSnap) =>
               normalizeHistoryClassroomExemption(docSnap.id, docSnap.data()),
             )
-            .filter((item) => item.uid === userData.uid),
+            .filter((item) => item.uid === studentUid),
         );
         setExemptionRequests(
           requestDocs
@@ -395,7 +396,7 @@ const HistoryClassroomIndex: React.FC = () => {
                 docSnap.data(),
               ),
             )
-            .filter((item) => item.uid === userData.uid),
+            .filter((item) => item.uid === studentUid),
         );
       } catch (error) {
         console.error("Failed to load history classroom assignments:", error);
@@ -408,13 +409,13 @@ const HistoryClassroomIndex: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [config, userData?.uid]);
+  }, [config, studentUid]);
 
   const handleRequestExemption = async (
     assignmentId: string,
     exemptionId: string,
   ) => {
-    if (!userData?.uid || requestingAssignmentId) return;
+    if (!studentUid || requestingAssignmentId) return;
 
     setRequestingAssignmentId(assignmentId);
     try {
@@ -440,7 +441,7 @@ const HistoryClassroomIndex: React.FC = () => {
       setExemptionRequests((previous) => [
         {
           id: `local-${assignmentId}-${exemptionId}`,
-          uid: userData.uid,
+          uid: studentUid,
           studentName: "",
           assignmentId,
           assignmentTitle: "",
@@ -507,8 +508,8 @@ const HistoryClassroomIndex: React.FC = () => {
         const bestPercent = attempts.length
           ? Math.max(...attempts.map((attempt) => attempt.percent))
           : null;
-        const resetAtMs = userData?.uid
-          ? getHistoryClassroomStudentRetryResetMs(assignment, userData.uid)
+        const resetAtMs = studentUid
+          ? getHistoryClassroomStudentRetryResetMs(assignment, studentUid)
           : null;
         const serverRemainMinutes = formatCooldown(
           latest?.createdAt,
@@ -516,10 +517,10 @@ const HistoryClassroomIndex: React.FC = () => {
           nowMs,
           resetAtMs,
         );
-        const localRemainMinutes = userData?.uid
+        const localRemainMinutes = studentUid
           ? readCooldownLockRemainMinutes(
               assignment.id,
-              userData.uid,
+              studentUid,
               nowMs,
               assignment.cooldownMinutes,
               resetAtMs,
@@ -546,7 +547,7 @@ const HistoryClassroomIndex: React.FC = () => {
         const assignedCount =
           getHistoryClassroomAssignedStudentUids(assignment).length;
         const assignmentReason = String(
-          assignment.targetStudentReasons?.[userData?.uid || ""] || "",
+          assignment.targetStudentReasons?.[studentUid] || "",
         ).trim();
         const dateMs = getAssignmentDateMs(assignment);
         const date = dateMs ? new Date(dateMs) : new Date(0);
@@ -588,7 +589,7 @@ const HistoryClassroomIndex: React.FC = () => {
       exemptions,
       nowMs,
       resultsByAssignment,
-      userData?.uid,
+      studentUid,
     ],
   );
 

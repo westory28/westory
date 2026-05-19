@@ -33,12 +33,9 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
   const [revealedUnitId, setRevealedUnitId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!config) {
-      setLoading(true);
-      return;
-    }
     let cancelled = false;
     const fetchTree = async () => {
+      setLoading(true);
       try {
         const nextTree = await readStudentCurriculumTree(config);
         if (!cancelled) setTree(nextTree);

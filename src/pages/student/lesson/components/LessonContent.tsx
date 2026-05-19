@@ -177,10 +177,6 @@ const LessonContent: React.FC<LessonContentProps> = ({
       if (!lessonOverride) setLesson(null);
       return;
     }
-    if (!config) {
-      setLoading(true);
-      return;
-    }
 
     let cancelled = false;
     const fetchLesson = async () => {
