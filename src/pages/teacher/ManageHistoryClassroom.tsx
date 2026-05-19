@@ -3303,7 +3303,7 @@ const ManageHistoryClassroom: React.FC = () => {
   };
 
   return (
-    <div className="mx-auto max-w-[90rem] px-4 py-5 sm:py-8">
+    <div className="mx-auto max-w-7xl px-4 py-5 sm:py-8">
       <div className="mb-4 flex shrink-0 overflow-x-auto rounded-t-lg border-b border-gray-200 bg-white px-2">
         <button
           type="button"
@@ -3381,7 +3381,7 @@ const ManageHistoryClassroom: React.FC = () => {
       </section>
 
       <section className="mb-5 rounded-3xl border border-gray-200 bg-white p-3.5 shadow-sm">
-        <div className="grid gap-2.5 xl:grid-cols-[16rem_minmax(14rem,30rem)_auto_auto] xl:items-center xl:justify-between">
+        <div className="grid gap-2.5 xl:grid-cols-[15rem_minmax(13rem,24rem)_auto_auto] xl:items-center xl:justify-between">
           <div className="flex h-12 items-center gap-3 rounded-2xl border border-gray-200 px-4 text-sm font-bold text-gray-700">
             <DashboardIcon name="calendar" className="h-4 w-4 text-blue-600" />
             {dashboardDateRangeLabel}
@@ -3824,7 +3824,7 @@ const ManageHistoryClassroom: React.FC = () => {
             key={group.dateKey}
             className="relative flex w-full items-start gap-3"
           >
-            <div className="relative w-24 shrink-0 sm:w-28 lg:w-28">
+            <div className="relative w-24 shrink-0 sm:w-24 lg:w-24">
                 <div className="relative z-10">
                   <div className="absolute left-0 top-2 h-3 w-3 rounded-full border-4 border-white bg-blue-600 shadow ring-1 ring-blue-200" />
                   <div className="ml-6">
@@ -3843,7 +3843,7 @@ const ManageHistoryClassroom: React.FC = () => {
                 return (
               <article
                 key={row.assignment.id}
-                className="min-w-0 flex-1 cursor-pointer rounded-3xl border border-gray-200 bg-white p-4 shadow-sm transition hover:shadow-md"
+                className="min-w-0 flex-1 cursor-pointer rounded-3xl border border-gray-200 bg-white p-3.5 shadow-sm transition hover:shadow-md"
                 onClick={() =>
                   setExpandedAssignmentId((current) =>
                     current === row.assignment.id ? "" : row.assignment.id,
@@ -3878,7 +3878,7 @@ const ManageHistoryClassroom: React.FC = () => {
                       · 재도전 제한 {row.assignment.cooldownMinutes}분
                     </div>
                   </div>
-                  <div className="-mr-1 flex max-w-[min(100%,34rem)] shrink-0 flex-nowrap items-center justify-end gap-1.5 overflow-x-auto pb-1 pr-1 sm:max-w-none sm:gap-2 sm:overflow-visible sm:pb-0 sm:pr-0">
+                  <div className="-mr-1 flex max-w-[min(100%,31rem)] shrink-0 flex-nowrap items-center justify-end gap-1.5 overflow-x-auto pb-1 pr-1 sm:max-w-none sm:overflow-visible sm:pb-0 sm:pr-0">
                     {[
                       [
                         "통과",
@@ -3903,7 +3903,7 @@ const ManageHistoryClassroom: React.FC = () => {
                     ].map(([label, count, className]) => (
                       <span
                         key={label}
-                        className={`inline-flex h-9 min-w-[4.6rem] shrink-0 items-center justify-center gap-1.5 rounded-xl border px-2 text-[11px] font-black sm:h-10 sm:min-w-[5.75rem] sm:gap-2 sm:px-3 sm:text-xs ${className}`}
+                        className={`inline-flex h-9 min-w-[4.6rem] shrink-0 items-center justify-center gap-1.5 rounded-xl border px-2 text-[11px] font-black sm:h-10 sm:min-w-[5rem] sm:px-2.5 sm:text-xs ${className}`}
                       >
                         {label}
                         <span>{count}</span>
