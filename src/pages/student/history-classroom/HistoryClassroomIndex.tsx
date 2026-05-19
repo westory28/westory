@@ -450,7 +450,7 @@ const HistoryClassroomIndex: React.FC = () => {
       ]);
     } catch (error) {
       console.error("Failed to request history classroom exemption:", error);
-      window.alert("면제권 요청을 보내지 못했습니다. 잠시 후 다시 시도해 주세요.");
+      window.alert("면제권 사용 요청을 보내지 못했습니다. 잠시 후 다시 시도해 주세요.");
     } finally {
       setRequestingAssignmentId(null);
     }
@@ -820,7 +820,7 @@ const HistoryClassroomIndex: React.FC = () => {
                           {!item.passedAttempt &&
                             item.exemptionState === "requested" && (
                               <div className="rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-center text-sm font-bold text-indigo-700">
-                                면제권 요청 중
+                                면제권 사용 요청 중
                               </div>
                             )}
 

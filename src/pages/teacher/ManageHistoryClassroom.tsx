@@ -93,6 +93,21 @@ interface HistoryClassroomExemptionRequest {
   reviewedAt: unknown;
 }
 
+interface ExemptionStudentSummary {
+  key: string;
+  uid: string;
+  studentName: string;
+  grade: string;
+  className: string;
+  number: string;
+  availableCount: number;
+  requestedCount: number;
+  usedCount: number;
+  totalCount: number;
+  latestGrantedAt: unknown;
+  latestReason: string;
+}
+
 type DashboardIconName =
   | "calendar"
   | "search"
@@ -1327,6 +1342,85 @@ const ManageHistoryClassroom: React.FC = () => {
     [exemptions],
   );
 
+  const grantedExemptionStudentRows = useMemo(() => {
+    const rowsByStudent = new Map<string, ExemptionStudentSummary>();
+
+    exemptions.forEach((exemption) => {
+      if (exemption.status === "revoked") return;
+      const matchedStudent = exemption.uid
+        ? students.find((student) => student.uid === exemption.uid)
+        : null;
+      const key =
+        exemption.uid ||
+        [
+          exemption.grade,
+          exemption.className,
+          exemption.number,
+          exemption.studentName,
+        ]
+          .filter(Boolean)
+          .join(":") ||
+        exemption.id;
+      const existing =
+        rowsByStudent.get(key) ||
+        ({
+          key,
+          uid: exemption.uid,
+          studentName:
+            exemption.studentName || matchedStudent?.name || exemption.uid || "학생",
+          grade: exemption.grade || matchedStudent?.grade || "",
+          className: exemption.className || matchedStudent?.className || "",
+          number: exemption.number || matchedStudent?.number || "",
+          availableCount: 0,
+          requestedCount: 0,
+          usedCount: 0,
+          totalCount: 0,
+          latestGrantedAt: null,
+          latestReason: "",
+        } satisfies ExemptionStudentSummary);
+
+      const status = String(exemption.status || "").trim();
+      existing.totalCount += 1;
+      if (status === "requested") {
+        existing.requestedCount += 1;
+      } else if (status === "used") {
+        existing.usedCount += 1;
+      } else {
+        existing.availableCount += 1;
+      }
+
+      const currentMs = getTimestampMs(existing.latestGrantedAt) || 0;
+      const exemptionMs = getTimestampMs(exemption.createdAt) || 0;
+      if (exemptionMs >= currentMs) {
+        existing.latestGrantedAt = exemption.createdAt;
+        existing.latestReason = exemption.reason;
+      }
+      rowsByStudent.set(key, existing);
+    });
+
+    return Array.from(rowsByStudent.values()).sort((a, b) => {
+      const gradeCompare = compareSchoolValues(a.grade, b.grade);
+      if (gradeCompare) return gradeCompare;
+      const classCompare = compareSchoolValues(a.className, b.className);
+      if (classCompare) return classCompare;
+      const numberCompare = compareSchoolValues(a.number, b.number);
+      if (numberCompare) return numberCompare;
+      return a.studentName.localeCompare(b.studentName, "ko-KR");
+    });
+  }, [exemptions, students]);
+
+  const grantedExemptionClassCount = useMemo(
+    () =>
+      new Set(
+        grantedExemptionStudentRows.map((row) =>
+          row.grade && row.className
+            ? `${row.grade}-${row.className}`
+            : "unassigned",
+        ),
+      ).size,
+    [grantedExemptionStudentRows],
+  );
+
   const targetStudentPreview = useMemo(
     () =>
       students.find((student) => student.uid === targetStudentUid) ||
@@ -2252,7 +2346,7 @@ const ManageHistoryClassroom: React.FC = () => {
         status,
         error,
       });
-      alert("면제권 요청 처리에 실패했습니다.");
+      alert("면제권 사용 요청 처리에 실패했습니다.");
     } finally {
       setReviewingExemptionRequestId("");
     }
@@ -3149,13 +3243,13 @@ const ManageHistoryClassroom: React.FC = () => {
               면제권 관리
             </h2>
             <p className="mt-1 text-sm leading-6 text-gray-500">
-              역사교실 면제권을 학생별 또는 학급별로 부여하고 학생 요청을
+              역사교실 면제권을 학생별 또는 학급별로 부여하고 학생 사용 요청을
               승인/반려합니다.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-black text-amber-700">
-              요청 대기 {pendingExemptionRequestCount}건
+              사용 요청 대기 {pendingExemptionRequestCount}건
             </span>
             <span className="rounded-2xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-black text-blue-700">
               부여 기록 {activeExemptionCount}건
@@ -3344,7 +3438,7 @@ const ManageHistoryClassroom: React.FC = () => {
               <div className="rounded-2xl border border-gray-200 bg-white">
                 <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
                   <h3 className="text-sm font-black text-gray-900">
-                    면제권 요청
+                    면제권 사용 요청
                   </h3>
                   <span className="text-xs font-bold text-gray-400">
                     {exemptionRequests.length}건
@@ -3434,7 +3528,7 @@ const ManageHistoryClassroom: React.FC = () => {
                   })}
                   {!sortedExemptionRequests.length && (
                     <div className="rounded-2xl border border-dashed border-gray-200 px-4 py-8 text-center text-sm font-semibold text-gray-400">
-                      접수된 면제권 요청이 없습니다.
+                      접수된 면제권 사용 요청이 없습니다.
                     </div>
                   )}
                 </div>
@@ -3755,7 +3849,7 @@ const ManageHistoryClassroom: React.FC = () => {
               </div>
               {[
                 ["grant", "면제권 부여", ""],
-                ["requests", "면제권 요청", pendingExemptionRequestCount],
+                ["requests", "면제권 사용 요청", pendingExemptionRequestCount],
                 ["granted", "부여된 면제권", activeExemptionCount],
               ].map(([value, label, count]) => (
                 <button
@@ -3791,7 +3885,7 @@ const ManageHistoryClassroom: React.FC = () => {
                     면제권 관리
                   </h2>
                   <p className="mt-1 text-sm text-slate-500">
-                    학생별·학급별 부여와 학생 요청 처리를 한 곳에서 관리합니다.
+                    학생별·학급별 부여와 학생 사용 요청 처리를 한 곳에서 관리합니다.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -3816,7 +3910,7 @@ const ManageHistoryClassroom: React.FC = () => {
               <div className="flex gap-2 overflow-x-auto border-b border-slate-200 px-4 py-3 md:hidden">
                 {[
                   ["grant", "면제권 부여"],
-                  ["requests", `면제권 요청 ${pendingExemptionRequestCount}`],
+                  ["requests", `면제권 사용 요청 ${pendingExemptionRequestCount}`],
                   ["granted", `부여된 면제권 ${activeExemptionCount}`],
                 ].map(([value, label]) => (
                   <button
@@ -4146,45 +4240,78 @@ const ManageHistoryClassroom: React.FC = () => {
                     })}
                     {!sortedExemptionRequests.length && (
                       <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-12 text-center text-sm font-semibold text-slate-400">
-                        접수된 면제권 요청이 없습니다.
+                        접수된 면제권 사용 요청이 없습니다.
                       </div>
                     )}
                   </div>
                 )}
 
                 {exemptionModalTab === "granted" && (
-                  <div className="space-y-3">
-                    {exemptions.map((exemption) => (
-                      <div
-                        key={exemption.id}
-                        className="rounded-2xl border border-slate-200 bg-white p-4"
-                      >
-                        <div className="flex flex-wrap items-start justify-between gap-2">
-                          <div>
-                            <div className="text-sm font-black text-slate-900">
-                              {formatExemptionStudentLabel(exemption)}
+                  <div className="flex min-h-[24rem] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white p-3.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="text-sm font-black text-slate-800">
+                          학생별 면제권 보유 현황
+                        </div>
+                        <div className="mt-1 text-xs font-semibold text-slate-500">
+                          {grantedExemptionClassCount}개 학급 ·{" "}
+                          {grantedExemptionStudentRows.length}명
+                        </div>
+                      </div>
+                      <div className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600">
+                        총 {activeExemptionCount}개
+                      </div>
+                    </div>
+                    <div className="mt-3 min-h-0 flex-1 space-y-1.5 overflow-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch]">
+                      <div className="sticky top-0 z-10 grid min-w-[42rem] grid-cols-[minmax(4.5rem,0.7fr)_minmax(6rem,1fr)_minmax(3.25rem,0.45fr)_minmax(4.75rem,0.55fr)_minmax(3.75rem,0.5fr)_minmax(5.75rem,0.75fr)] items-center gap-2 border-b border-slate-200 bg-white px-3 pb-1.5 text-[11px] font-bold text-slate-400">
+                        <div>학급</div>
+                        <div>학생</div>
+                        <div className="text-center">보유</div>
+                        <div className="text-center">사용 요청</div>
+                        <div className="text-center">사용됨</div>
+                        <div className="text-center">최근 부여</div>
+                      </div>
+                      {grantedExemptionStudentRows.map((row) => (
+                        <div
+                          key={row.key}
+                          className="min-w-[42rem] rounded-xl border border-slate-200 bg-white px-3 py-2"
+                        >
+                          <div className="grid grid-cols-[minmax(4.5rem,0.7fr)_minmax(6rem,1fr)_minmax(3.25rem,0.45fr)_minmax(4.75rem,0.55fr)_minmax(3.75rem,0.5fr)_minmax(5.75rem,0.75fr)] items-center gap-2">
+                            <div className="truncate text-xs font-bold text-slate-500">
+                              {row.grade && row.className
+                                ? `${row.grade}-${row.className}`
+                                : "-"}
                             </div>
-                            <div className="mt-1 text-xs font-semibold text-slate-500">
-                              부여 {formatDateTimeLabel(exemption.createdAt)}
-                              {exemption.expiresAt
-                                ? ` · 만료 ${formatDateTimeLabel(
-                                    exemption.expiresAt,
-                                  )}`
-                                : ""}
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-black text-slate-900">
+                                {row.studentName}
+                              </div>
+                              <div className="mt-0.5 truncate text-[11px] font-semibold text-slate-500">
+                                {row.number ? `${row.number}번` : "번호 없음"}
+                              </div>
+                            </div>
+                            <div className="text-center text-sm font-black text-blue-700">
+                              {row.availableCount}
+                            </div>
+                            <div className="text-center text-sm font-black text-amber-700">
+                              {row.requestedCount}
+                            </div>
+                            <div className="text-center text-sm font-black text-slate-600">
+                              {row.usedCount}
+                            </div>
+                            <div className="truncate text-center text-[11px] font-semibold text-slate-500">
+                              {formatDateTimeLabel(row.latestGrantedAt)}
                             </div>
                           </div>
-                          <span className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
-                            {exemption.status}
-                          </span>
+                          {row.latestReason && (
+                            <div className="mt-1 truncate text-[11px] font-semibold text-slate-400">
+                              최근 사유: {row.latestReason}
+                            </div>
+                          )}
                         </div>
-                        {exemption.reason && (
-                          <p className="mt-2 text-xs leading-5 text-slate-600">
-                            {exemption.reason}
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                    {!exemptions.length && (
+                      ))}
+                    </div>
+                    {!grantedExemptionStudentRows.length && (
                       <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-12 text-center text-sm font-semibold text-slate-400">
                         아직 부여된 면제권이 없습니다.
                       </div>

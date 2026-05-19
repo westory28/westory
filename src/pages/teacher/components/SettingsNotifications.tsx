@@ -87,14 +87,14 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     label: "역사교실 면제권 처리 결과",
     audience: "students",
     description:
-      "교사가 역사교실 면제권 요청을 승인하거나 반려했을 때 학생에게 처리 결과를 안내합니다.",
-    triggerLabel: "역사교실 면제권 요청을 처리했을 때",
+      "교사가 역사교실 면제권 사용 요청을 승인하거나 반려했을 때 학생에게 처리 결과를 안내합니다.",
+    triggerLabel: "역사교실 면제권 사용 요청을 처리했을 때",
     recipientLabel: "요청 학생",
     status: "connected",
     defaultEnabled: true,
     defaultPriority: "normal",
     titleTemplate: "역사교실 면제권 처리",
-    bodyTemplate: "{assignmentTitle} 면제 요청이 {statusLabel} 처리되었습니다.",
+    bodyTemplate: "{assignmentTitle} 면제권 사용 요청이 {statusLabel} 처리되었습니다.",
     targetUrl: "/student/history-classroom",
     targetLabel: "학생 역사교실 화면",
     tokens: [
@@ -234,7 +234,7 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
   },
   {
     key: "history_classroom_exemption_requested",
-    label: "역사교실 면제권 요청",
+    label: "역사교실 면제권 사용 요청",
     audience: "teachers",
     description:
       "학생이 보유한 역사교실 면제권을 특정 과제에 사용해 달라고 요청하면 교사에게 안내합니다.",
@@ -243,8 +243,8 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     status: "connected",
     defaultEnabled: true,
     defaultPriority: "high",
-    titleTemplate: "역사교실 면제권 요청",
-    bodyTemplate: "{studentName} 학생이 {assignmentTitle} 면제를 요청했습니다.",
+    titleTemplate: "역사교실 면제권 사용 요청",
+    bodyTemplate: "{studentName} 학생이 {assignmentTitle} 면제권 사용을 요청했습니다.",
     targetUrl: "/teacher/quiz/history-classroom?panel=exemption-requests",
     targetLabel: "교사 역사교실 관리 화면",
     tokens: [

@@ -3725,8 +3725,8 @@ const createHistoryClassroomExemptionRequestedNotifications = async (year, semes
 
   return createUserNotifications(year, semester, recipients, {
     type: 'history_classroom_exemption_requested',
-    title: '역사교실 면제권 요청',
-    body: `${studentName} 학생이 ${assignmentTitle} 면제를 요청했습니다.`,
+    title: '역사교실 면제권 사용 요청',
+    body: `${studentName} 학생이 ${assignmentTitle} 면제권 사용을 요청했습니다.`,
     targetUrl: `/teacher/quiz/history-classroom?panel=exemption-requests&requestId=${encodeURIComponent(requestId)}`,
     entityType: 'history_classroom_exemption_request',
     entityId: requestId,
@@ -3752,7 +3752,7 @@ const createHistoryClassroomExemptionReviewedNotification = async (year, semeste
   return createUserNotification(year, semester, recipientUid, {
     type: 'history_classroom_exemption_reviewed',
     title: '역사교실 면제권 처리',
-    body: `${assignmentTitle} 면제 요청이 ${statusLabel} 처리되었습니다.`,
+    body: `${assignmentTitle} 면제권 사용 요청이 ${statusLabel} 처리되었습니다.`,
     targetUrl: '/student/history-classroom',
     entityType: 'history_classroom_exemption_request',
     entityId: requestId,
