@@ -117,6 +117,7 @@ type DashboardIconName =
   | "map"
   | "plus"
   | "refresh"
+  | "trash"
   | "chevronDown"
   | "chevronUp";
 
@@ -216,6 +217,17 @@ const DashboardIcon = ({
       <svg {...commonProps}>
         <path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 5v4h4" />
         <path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4" />
+      </svg>
+    );
+  }
+  if (name === "trash") {
+    return (
+      <svg {...commonProps}>
+        <path d="M3 6h18" />
+        <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+        <path d="M19 6 18 20a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+        <path d="M10 11v6" />
+        <path d="M14 11v6" />
       </svg>
     );
   }
@@ -735,6 +747,8 @@ const ManageHistoryClassroom: React.FC = () => {
     useState<string[]>([]);
   const [exemptionReason, setExemptionReason] = useState("");
   const [grantingExemption, setGrantingExemption] = useState(false);
+  const [revokingExemptionStudentKey, setRevokingExemptionStudentKey] =
+    useState("");
   const [reviewingExemptionRequestId, setReviewingExemptionRequestId] =
     useState("");
   const exemptionSectionRef = React.useRef<HTMLElement | null>(null);
@@ -2438,6 +2452,65 @@ const ManageHistoryClassroom: React.FC = () => {
       alert("면제권 사용 요청 처리에 실패했습니다.");
     } finally {
       setReviewingExemptionRequestId("");
+    }
+  };
+
+  const handleRevokeExemptions = async (row: ExemptionStudentSummary) => {
+    const revocableItems = row.items.filter((item) => {
+      const status = String(item.status || "").trim() || "available";
+      return status === "available" || status === "active";
+    });
+    if (!revocableItems.length) {
+      alert("회수할 수 있는 보유 면제권이 없습니다.");
+      return;
+    }
+
+    let revokeCount = 1;
+    if (revocableItems.length > 1) {
+      const input = window.prompt(
+        `${row.studentName} 학생의 면제권 ${revocableItems.length}개 중 몇 개를 회수할까요?`,
+        "1",
+      );
+      if (input === null) return;
+      const parsed = Math.floor(Number(input));
+      if (
+        !Number.isFinite(parsed) ||
+        parsed < 1 ||
+        parsed > revocableItems.length
+      ) {
+        alert(`1부터 ${revocableItems.length} 사이의 숫자를 입력해 주세요.`);
+        return;
+      }
+      revokeCount = parsed;
+    }
+
+    const message =
+      revokeCount === revocableItems.length
+        ? `${row.studentName} 학생의 보유 면제권 ${revokeCount}개를 모두 회수할까요?`
+        : `${row.studentName} 학생의 보유 면제권 ${revokeCount}개를 회수할까요?`;
+    if (!window.confirm(message)) return;
+
+    const { year, semester } = getYearSemester(config);
+    setRevokingExemptionStudentKey(row.key);
+    try {
+      const callable = httpsCallable(functions, "revokeHistoryClassroomExemptions");
+      await callable({
+        year,
+        semester,
+        exemptionIds: revocableItems
+          .slice(0, revokeCount)
+          .map((item) => item.id),
+      });
+      setExpandedExemptionStudentKey("");
+      await loadExemptionData();
+    } catch (error) {
+      console.error("Failed to revoke history classroom exemptions:", {
+        row,
+        error,
+      });
+      alert("면제권 회수에 실패했습니다.");
+    } finally {
+      setRevokingExemptionStudentKey("");
     }
   };
 
@@ -4410,58 +4483,80 @@ const ManageHistoryClassroom: React.FC = () => {
                         }
                       }}
                     >
-                      <div className="sticky top-0 z-10 grid min-w-[38rem] grid-cols-[minmax(4.25rem,0.6fr)_minmax(3.5rem,0.4fr)_minmax(7rem,1fr)_minmax(4rem,0.45fr)_minmax(4.75rem,0.55fr)_minmax(4rem,0.5fr)] items-center gap-2 border-b border-slate-200 bg-white px-3 pb-1.5 text-[11px] font-bold text-slate-400">
+                      <div className="sticky top-0 z-10 grid min-w-[42rem] grid-cols-[minmax(4.25rem,0.6fr)_minmax(3.5rem,0.4fr)_minmax(7rem,1fr)_minmax(4rem,0.45fr)_minmax(4.75rem,0.55fr)_minmax(4rem,0.5fr)_3rem] items-center gap-2 border-b border-slate-200 bg-white px-3 pb-1.5 text-[11px] font-bold text-slate-400">
                         <div>학급</div>
                         <div className="text-center">번호</div>
                         <div>학생</div>
                         <div className="text-center">보유</div>
                         <div className="text-center">사용 요청</div>
                         <div className="text-center">사용됨</div>
+                        <div className="text-center">회수</div>
                       </div>
                       {pagedGrantedExemptionRows.map((row) => {
                         const expanded = expandedExemptionStudentKey === row.key;
+                        const revoking =
+                          revokingExemptionStudentKey === row.key;
                         return (
                           <div
                             key={row.key}
-                            className={`min-w-[38rem] rounded-xl border bg-white px-3 py-2 transition ${
+                            className={`min-w-[42rem] rounded-xl border bg-white px-3 py-2 transition ${
                               expanded
                                 ? "border-blue-200 ring-2 ring-blue-50"
                                 : "border-slate-200 hover:border-blue-100 hover:bg-blue-50/30"
                             }`}
                           >
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setExpandedExemptionStudentKey((current) =>
-                                  current === row.key ? "" : row.key,
-                                )
-                              }
-                              className="grid w-full grid-cols-[minmax(4.25rem,0.6fr)_minmax(3.5rem,0.4fr)_minmax(7rem,1fr)_minmax(4rem,0.45fr)_minmax(4.75rem,0.55fr)_minmax(4rem,0.5fr)] items-center gap-2 text-left"
-                              aria-expanded={expanded}
-                            >
-                              <div className="truncate text-xs font-bold text-slate-500">
-                                {row.grade && row.className
-                                  ? `${row.grade}-${row.className}`
-                                  : "-"}
-                              </div>
-                              <div className="truncate text-center text-xs font-bold text-slate-500">
-                                {row.number || "-"}
-                              </div>
-                              <div className="min-w-0">
-                                <div className="truncate text-sm font-black text-slate-900">
-                                  {row.studentName}
+                            <div className="grid grid-cols-[minmax(4.25rem,0.6fr)_minmax(3.5rem,0.4fr)_minmax(7rem,1fr)_minmax(4rem,0.45fr)_minmax(4.75rem,0.55fr)_minmax(4rem,0.5fr)_3rem] items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setExpandedExemptionStudentKey((current) =>
+                                    current === row.key ? "" : row.key,
+                                  )
+                                }
+                                className="contents text-left"
+                                aria-expanded={expanded}
+                              >
+                                <div className="truncate text-xs font-bold text-slate-500">
+                                  {row.grade && row.className
+                                    ? `${row.grade}-${row.className}`
+                                    : "-"}
                                 </div>
-                              </div>
-                              <div className="text-center text-xl font-black leading-none text-blue-700">
-                                {row.availableCount}
-                              </div>
-                              <div className="text-center text-base font-black text-amber-700">
-                                {row.requestedCount}
-                              </div>
-                              <div className="text-center text-base font-black text-slate-600">
-                                {row.usedCount}
-                              </div>
-                            </button>
+                                <div className="truncate text-center text-xs font-bold text-slate-500">
+                                  {row.number || "-"}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="truncate text-sm font-black text-slate-900">
+                                    {row.studentName}
+                                  </div>
+                                </div>
+                                <div className="text-center text-xl font-black leading-none text-blue-700">
+                                  {row.availableCount}
+                                </div>
+                                <div className="text-center text-base font-black text-amber-700">
+                                  {row.requestedCount}
+                                </div>
+                                <div className="text-center text-base font-black text-slate-600">
+                                  {row.usedCount}
+                                </div>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void handleRevokeExemptions(row)}
+                                disabled={row.availableCount <= 0 || revoking}
+                                className="flex h-8 w-8 items-center justify-center justify-self-center rounded-full border border-rose-100 bg-rose-50 text-rose-600 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:border-slate-100 disabled:bg-slate-50 disabled:text-slate-300"
+                                aria-label={`${row.studentName} 면제권 회수`}
+                                title={
+                                  row.availableCount > 1
+                                    ? `면제권 회수 (${row.availableCount}개 중 선택)`
+                                    : "면제권 회수"
+                                }
+                              >
+                                <DashboardIcon
+                                  name="trash"
+                                  className={`h-4 w-4 ${revoking ? "animate-pulse" : ""}`}
+                                />
+                              </button>
+                            </div>
                             {expanded && (
                               <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
                                 <div className="mb-2 text-xs font-black text-slate-500">

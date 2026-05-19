@@ -3870,6 +3870,48 @@ exports.grantHistoryClassroomExemptions = onCall({ region: REGION }, async (requ
   };
 });
 
+exports.revokeHistoryClassroomExemptions = onCall({ region: REGION }, async (request) => {
+  const manager = await assertQuizManager(request);
+  const { year, semester } = assertYearSemester(request.data);
+  const exemptionIds = uniqueNonEmptyStrings(request.data?.exemptionIds, 50);
+  if (!exemptionIds.length) {
+    throw new HttpsError('invalid-argument', 'exemptionIds are required.');
+  }
+
+  const collectionPath = getHistoryClassroomExemptionCollectionPath(year, semester);
+  const refs = exemptionIds.map((id) => db.doc(`${collectionPath}/${id}`));
+  const snaps = await db.getAll(...refs);
+  snaps.forEach((snap) => {
+    if (!snap.exists) {
+      throw new HttpsError('not-found', 'History classroom exemption does not exist.');
+    }
+    const data = snap.data() || {};
+    const status = String(data.status || '').trim() || 'available';
+    if (status !== 'available' && status !== 'active') {
+      throw new HttpsError(
+        'failed-precondition',
+        'Only available history classroom exemptions can be revoked.',
+      );
+    }
+  });
+
+  const batch = db.batch();
+  refs.forEach((ref) => {
+    batch.update(ref, {
+      status: 'revoked',
+      revokedAt: FieldValue.serverTimestamp(),
+      revokedByUid: manager.uid,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  });
+  await batch.commit();
+
+  return {
+    revokedCount: refs.length,
+    exemptionIds,
+  };
+});
+
 exports.createHistoryClassroomExemptionRequest = onCall({ region: REGION }, async (request) => {
   const { uid, profile } = await assertHistoryClassroomStudent(request);
   const { year, semester } = assertYearSemester(request.data);
