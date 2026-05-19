@@ -8,6 +8,7 @@ import { InlineLoading } from '../../components/common/LoadingState';
 import { useAuth } from '../../contexts/AuthContext';
 import {
     adjustPoints,
+    deletePointProduct,
     getPointSchoolOptions,
     getPointPolicy,
     getPointRankManualAdjustEarnedPointsMap,
@@ -1294,6 +1295,34 @@ const ManagePoints: React.FC = () => {
         }
     };
 
+    const handleDeleteProduct = async (product: PointProduct) => {
+        if (!canManage) return;
+
+        const stock = Math.max(0, Math.floor(Number(product.stock || 0)));
+        if (stock > 0) {
+            setProductFeedback('재고가 0개인 상품만 삭제할 수 있습니다.');
+            return;
+        }
+
+        if (!window.confirm(`"${product.name}" 상품을 삭제할까요?\n삭제한 상품은 학생 상점과 상품 관리 목록에서 사라집니다.`)) {
+            return;
+        }
+
+        try {
+            await deletePointProduct(config, product.id);
+            setProducts((prev) => prev.filter((item) => item.id !== product.id));
+            if (productForm.id === product.id) {
+                setProductForm(createEmptyProductForm());
+                setProductImageFile(null);
+                setProductImagePreviewUrl('');
+            }
+            setProductFeedback('재고가 없는 상품을 삭제했습니다.');
+        } catch (error: any) {
+            console.error('Failed to delete point product:', error);
+            setProductFeedback(error?.message || '상품 삭제에 실패했습니다.');
+        }
+    };
+
     const handleSaveOrder = async (nextStatus: PointOrderStatus) => {
         if (!selectedOrder || !canManage) return;
 
@@ -1582,6 +1611,7 @@ const ManagePoints: React.FC = () => {
                                 setProductFeedback('');
                             }}
                             onToggleProduct={(product) => void handleToggleProduct(product)}
+                            onDeleteProduct={(product) => void handleDeleteProduct(product)}
                             productOrderDirty={productOrderDirty}
                             productOrderSaving={productOrderSaving}
                             productOrderFeedback={productOrderFeedback}

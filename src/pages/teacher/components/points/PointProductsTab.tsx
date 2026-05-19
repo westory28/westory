@@ -38,6 +38,7 @@ interface PointProductsTabProps {
   onEditProduct: (product: PointProduct) => void;
   onResetForm: () => void;
   onToggleProduct: (product: PointProduct) => void;
+  onDeleteProduct: (product: PointProduct) => void;
   onReorderProducts: (sourceId: string, targetId: string) => void;
   onSaveProductOrder: () => void;
   onSubmit: (event: React.FormEvent) => void;
@@ -68,6 +69,7 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
   onEditProduct,
   onResetForm,
   onToggleProduct,
+  onDeleteProduct,
   onReorderProducts,
   onSaveProductOrder,
   onSubmit,
@@ -130,6 +132,14 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [previewOpen]);
+
+  useEffect(() => {
+    if (!previewOpen) return undefined;
+
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -143,7 +153,6 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => {
-      document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [previewOpen, previewSelectedProductId]);
@@ -361,6 +370,16 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
                         >
                           {product.isActive ? "숨기기" : "다시 노출"}
                         </button>
+                        {Number(product.stock || 0) <= 0 && (
+                          <button
+                            type="button"
+                            disabled={!canManage}
+                            onClick={() => onDeleteProduct(product)}
+                            className="w-full rounded-lg bg-rose-50 px-2.5 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-100 disabled:opacity-60 whitespace-nowrap"
+                          >
+                            삭제
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

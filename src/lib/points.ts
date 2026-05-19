@@ -1,5 +1,6 @@
 import {
     collection,
+    deleteDoc,
     doc,
     getDoc,
     getDocs,
@@ -1030,6 +1031,18 @@ export const upsertPointProduct = async (
         id: productRef.id,
         ...payload,
     };
+};
+
+export const deletePointProduct = async (
+    config: ConfigLike,
+    productId: string,
+) => {
+    const normalizedProductId = String(productId || '').trim();
+    if (!normalizedProductId) {
+        throw new Error('삭제할 상품 정보가 올바르지 않습니다.');
+    }
+
+    await deleteDoc(doc(db, getPointCollectionPath(config, 'point_products'), normalizedProductId));
 };
 
 export const reviewPointOrder = async ({ config, orderId, nextStatus, actor, memo }: ReviewPointOrderInput) => {
