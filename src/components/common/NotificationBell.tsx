@@ -13,6 +13,12 @@ import type {
 } from "../../types";
 import { useAppToast } from "./AppToastProvider";
 
+interface NotificationBellProps {
+  className?: string;
+  buttonClassName?: string;
+  onUnreadCountChange?: (count: number) => void;
+}
+
 const formatNotificationTime = (value: unknown) => {
   const date =
     value && typeof (value as { toDate?: () => Date }).toDate === "function"
@@ -93,7 +99,11 @@ const getNotificationTargetUrl = (notification: WestoryNotification) => {
   return targetUrl;
 };
 
-const NotificationBell: React.FC = () => {
+const NotificationBell: React.FC<NotificationBellProps> = ({
+  className = "",
+  buttonClassName = "",
+  onUnreadCountChange,
+}) => {
   const navigate = useNavigate();
   const { currentUser, config, userData } = useAuth();
   const { showToast } = useAppToast();
@@ -121,6 +131,10 @@ const NotificationBell: React.FC = () => {
       setUnreadCount(nextInbox.unreadCount);
     });
   }, [config?.semester, config?.year, currentUser?.uid]);
+
+  useEffect(() => {
+    onUnreadCountChange?.(unreadCount);
+  }, [onUnreadCountChange, unreadCount]);
 
   useEffect(() => {
     if (!open || !currentUser?.uid || !config) return undefined;
@@ -214,12 +228,12 @@ const NotificationBell: React.FC = () => {
   if (!currentUser) return null;
 
   return (
-    <div ref={rootRef} className="relative">
+    <div ref={rootRef} className={`relative ${className}`}>
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
         data-session-action="true"
-        className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-500 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
+        className={`relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-500 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 ${buttonClassName}`}
         aria-label={panelTitle}
         aria-expanded={open}
       >
