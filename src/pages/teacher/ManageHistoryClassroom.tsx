@@ -3303,7 +3303,7 @@ const ManageHistoryClassroom: React.FC = () => {
   };
 
   return (
-    <div className="mx-auto max-w-[96rem] px-4 py-5 sm:py-8">
+    <div className="mx-auto max-w-[90rem] px-4 py-5 sm:py-8">
       <div className="mb-4 flex shrink-0 overflow-x-auto rounded-t-lg border-b border-gray-200 bg-white px-2">
         <button
           type="button"
@@ -3380,8 +3380,8 @@ const ManageHistoryClassroom: React.FC = () => {
         </div>
       </section>
 
-      <section className="mb-5 rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
-        <div className="grid gap-3 xl:grid-cols-[17rem_minmax(16rem,1fr)_auto_auto] xl:items-center">
+      <section className="mb-5 rounded-3xl border border-gray-200 bg-white p-3.5 shadow-sm">
+        <div className="grid gap-2.5 xl:grid-cols-[16rem_minmax(14rem,30rem)_auto_auto] xl:items-center xl:justify-between">
           <div className="flex h-12 items-center gap-3 rounded-2xl border border-gray-200 px-4 text-sm font-bold text-gray-700">
             <DashboardIcon name="calendar" className="h-4 w-4 text-blue-600" />
             {dashboardDateRangeLabel}
@@ -3822,9 +3822,9 @@ const ManageHistoryClassroom: React.FC = () => {
         {pagedAssignmentGroups.map((group) => (
           <div
             key={group.dateKey}
-            className="relative flex w-full items-start gap-4"
+            className="relative flex w-full items-start gap-3"
           >
-            <div className="relative w-28 shrink-0 sm:w-32 lg:w-36">
+            <div className="relative w-24 shrink-0 sm:w-28 lg:w-28">
                 <div className="relative z-10">
                   <div className="absolute left-0 top-2 h-3 w-3 rounded-full border-4 border-white bg-blue-600 shadow ring-1 ring-blue-200" />
                   <div className="ml-6">
