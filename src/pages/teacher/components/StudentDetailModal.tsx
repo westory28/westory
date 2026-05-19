@@ -422,7 +422,7 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                                     <div className="text-center">제출 일시</div>
                                     <div className="text-center">정답</div>
                                     <div className="text-center">정답률</div>
-                                    <div className="text-right">제출</div>
+                                    <div className="text-center">제출</div>
                                   </div>
                                   <div className="divide-y divide-gray-100">
                                     {section.units.map((unit) => {
@@ -454,7 +454,7 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                                             {accuracy}%
                                           </div>
                                           <span
-                                            className={`justify-self-end rounded-full px-2.5 py-1 text-xs font-extrabold ${
+                                            className={`justify-self-center rounded-full px-2.5 py-1 text-xs font-extrabold ${
                                               unit.submitted
                                                 ? "bg-emerald-50 text-emerald-700"
                                                 : "bg-slate-100 text-slate-600"
