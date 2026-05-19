@@ -405,6 +405,7 @@ const EDITING_RESULT_SORT_OPTIONS: {
 ];
 
 const ASSIGNMENTS_PER_PAGE = 10;
+const GRANTED_EXEMPTIONS_PER_PAGE = 30;
 
 const normalizeDueWindowDaysInput = (value: string): number | "" => {
   const trimmed = String(value || "").trim();
@@ -716,6 +717,13 @@ const ManageHistoryClassroom: React.FC = () => {
     useState("");
   const [expandedExemptionStudentKey, setExpandedExemptionStudentKey] =
     useState("");
+  const [grantedExemptionGradeFilter, setGrantedExemptionGradeFilter] =
+    useState("");
+  const [grantedExemptionClassFilter, setGrantedExemptionClassFilter] =
+    useState("");
+  const [grantedExemptionNameSearch, setGrantedExemptionNameSearch] =
+    useState("");
+  const [grantedExemptionPage, setGrantedExemptionPage] = useState(1);
   const [exemptionGrantMode, setExemptionGrantMode] =
     useState<ExemptionGrantMode>("students");
   const [exemptionStudentSearch, setExemptionStudentSearch] = useState("");
@@ -1425,6 +1433,82 @@ const ManageHistoryClassroom: React.FC = () => {
       ).size,
     [grantedExemptionStudentRows],
   );
+
+  const grantedExemptionGradeOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          grantedExemptionStudentRows.map((row) => row.grade).filter(Boolean),
+        ),
+      ).sort(compareSchoolValues),
+    [grantedExemptionStudentRows],
+  );
+
+  const grantedExemptionClassOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          grantedExemptionStudentRows
+            .filter(
+              (row) =>
+                !grantedExemptionGradeFilter ||
+                row.grade === grantedExemptionGradeFilter,
+            )
+            .map((row) => row.className)
+            .filter(Boolean),
+        ),
+      ).sort(compareSchoolValues),
+    [grantedExemptionGradeFilter, grantedExemptionStudentRows],
+  );
+
+  const filteredGrantedExemptionRows = useMemo(() => {
+    const keyword = grantedExemptionNameSearch.trim().toLocaleLowerCase("ko-KR");
+    return grantedExemptionStudentRows.filter((row) => {
+      if (grantedExemptionGradeFilter && row.grade !== grantedExemptionGradeFilter) {
+        return false;
+      }
+      if (grantedExemptionClassFilter && row.className !== grantedExemptionClassFilter) {
+        return false;
+      }
+      if (keyword && !row.studentName.toLocaleLowerCase("ko-KR").includes(keyword)) {
+        return false;
+      }
+      return true;
+    });
+  }, [
+    grantedExemptionClassFilter,
+    grantedExemptionGradeFilter,
+    grantedExemptionNameSearch,
+    grantedExemptionStudentRows,
+  ]);
+
+  const grantedExemptionPageCount = Math.max(
+    1,
+    Math.ceil(filteredGrantedExemptionRows.length / GRANTED_EXEMPTIONS_PER_PAGE),
+  );
+  const grantedExemptionCurrentPage = Math.min(
+    grantedExemptionPage,
+    grantedExemptionPageCount,
+  );
+
+  const pagedGrantedExemptionRows = useMemo(() => {
+    const startIndex =
+      (grantedExemptionCurrentPage - 1) * GRANTED_EXEMPTIONS_PER_PAGE;
+    return filteredGrantedExemptionRows.slice(
+      startIndex,
+      startIndex + GRANTED_EXEMPTIONS_PER_PAGE,
+    );
+  }, [filteredGrantedExemptionRows, grantedExemptionCurrentPage]);
+
+  useEffect(() => {
+    setGrantedExemptionPage(1);
+    setExpandedExemptionStudentKey("");
+  }, [
+    grantedExemptionClassFilter,
+    grantedExemptionGradeFilter,
+    grantedExemptionNameSearch,
+    grantedExemptionStudentRows.length,
+  ]);
 
   const targetStudentPreview = useMemo(
     () =>
@@ -4253,18 +4337,61 @@ const ManageHistoryClassroom: React.FC = () => {
 
                 {exemptionModalTab === "granted" && (
                   <div className="flex min-h-[24rem] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white p-3.5">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <div className="text-sm font-black text-slate-800">
-                          학생별 면제권 보유 현황
+                    <div className="flex flex-wrap items-end justify-between gap-3">
+                      <div className="flex flex-wrap items-end gap-2">
+                        <div className="mr-2">
+                          <div className="text-sm font-black text-slate-800">
+                            학생별 면제권 보유 현황
+                          </div>
+                          <div className="mt-1 text-xs font-semibold text-slate-500">
+                            {grantedExemptionClassCount}개 학급 ·{" "}
+                            {grantedExemptionStudentRows.length}명
+                          </div>
                         </div>
-                        <div className="mt-1 text-xs font-semibold text-slate-500">
-                          {grantedExemptionClassCount}개 학급 ·{" "}
-                          {grantedExemptionStudentRows.length}명
-                        </div>
+                        <select
+                          value={grantedExemptionGradeFilter}
+                          onChange={(event) => {
+                            setGrantedExemptionGradeFilter(event.target.value);
+                            setGrantedExemptionClassFilter("");
+                          }}
+                          className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                          aria-label="면제권 보유 현황 학년 필터"
+                        >
+                          <option value="">전체 학년</option>
+                          {grantedExemptionGradeOptions.map((grade) => (
+                            <option key={grade} value={grade}>
+                              {grade}학년
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          value={grantedExemptionClassFilter}
+                          onChange={(event) =>
+                            setGrantedExemptionClassFilter(event.target.value)
+                          }
+                          className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                          aria-label="면제권 보유 현황 반 필터"
+                        >
+                          <option value="">전체 반</option>
+                          {grantedExemptionClassOptions.map((className) => (
+                            <option key={className} value={className}>
+                              {className}반
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          type="text"
+                          value={grantedExemptionNameSearch}
+                          onChange={(event) =>
+                            setGrantedExemptionNameSearch(event.target.value)
+                          }
+                          placeholder="학생 이름 검색"
+                          className="h-9 w-36 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 outline-none placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                        />
                       </div>
                       <div className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600">
-                        총 {activeExemptionCount}개
+                        총 {activeExemptionCount}개 · 표시{" "}
+                        {filteredGrantedExemptionRows.length}명
                       </div>
                     </div>
                     <div
@@ -4283,19 +4410,20 @@ const ManageHistoryClassroom: React.FC = () => {
                         }
                       }}
                     >
-                      <div className="sticky top-0 z-10 grid min-w-[34rem] grid-cols-[minmax(4.5rem,0.7fr)_minmax(7rem,1fr)_minmax(4rem,0.45fr)_minmax(4.75rem,0.55fr)_minmax(4rem,0.5fr)] items-center gap-2 border-b border-slate-200 bg-white px-3 pb-1.5 text-[11px] font-bold text-slate-400">
+                      <div className="sticky top-0 z-10 grid min-w-[38rem] grid-cols-[minmax(4.25rem,0.6fr)_minmax(3.5rem,0.4fr)_minmax(7rem,1fr)_minmax(4rem,0.45fr)_minmax(4.75rem,0.55fr)_minmax(4rem,0.5fr)] items-center gap-2 border-b border-slate-200 bg-white px-3 pb-1.5 text-[11px] font-bold text-slate-400">
                         <div>학급</div>
+                        <div className="text-center">번호</div>
                         <div>학생</div>
                         <div className="text-center">보유</div>
                         <div className="text-center">사용 요청</div>
                         <div className="text-center">사용됨</div>
                       </div>
-                      {grantedExemptionStudentRows.map((row) => {
+                      {pagedGrantedExemptionRows.map((row) => {
                         const expanded = expandedExemptionStudentKey === row.key;
                         return (
                           <div
                             key={row.key}
-                            className={`min-w-[34rem] rounded-xl border bg-white px-3 py-2 transition ${
+                            className={`min-w-[38rem] rounded-xl border bg-white px-3 py-2 transition ${
                               expanded
                                 ? "border-blue-200 ring-2 ring-blue-50"
                                 : "border-slate-200 hover:border-blue-100 hover:bg-blue-50/30"
@@ -4308,7 +4436,7 @@ const ManageHistoryClassroom: React.FC = () => {
                                   current === row.key ? "" : row.key,
                                 )
                               }
-                              className="grid w-full grid-cols-[minmax(4.5rem,0.7fr)_minmax(7rem,1fr)_minmax(4rem,0.45fr)_minmax(4.75rem,0.55fr)_minmax(4rem,0.5fr)] items-center gap-2 text-left"
+                              className="grid w-full grid-cols-[minmax(4.25rem,0.6fr)_minmax(3.5rem,0.4fr)_minmax(7rem,1fr)_minmax(4rem,0.45fr)_minmax(4.75rem,0.55fr)_minmax(4rem,0.5fr)] items-center gap-2 text-left"
                               aria-expanded={expanded}
                             >
                               <div className="truncate text-xs font-bold text-slate-500">
@@ -4316,12 +4444,12 @@ const ManageHistoryClassroom: React.FC = () => {
                                   ? `${row.grade}-${row.className}`
                                   : "-"}
                               </div>
+                              <div className="truncate text-center text-xs font-bold text-slate-500">
+                                {row.number || "-"}
+                              </div>
                               <div className="min-w-0">
                                 <div className="truncate text-sm font-black text-slate-900">
                                   {row.studentName}
-                                </div>
-                                <div className="mt-0.5 truncate text-[11px] font-semibold text-slate-500">
-                                  {row.number ? `${row.number}번` : "번호 없음"}
                                 </div>
                               </div>
                               <div className="text-center text-xl font-black leading-none text-blue-700">
@@ -4363,9 +4491,38 @@ const ManageHistoryClassroom: React.FC = () => {
                         );
                       })}
                     </div>
-                    {!grantedExemptionStudentRows.length && (
+                    {filteredGrantedExemptionRows.length > 0 && (
+                      <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5 border-t border-slate-100 pt-3">
+                        {Array.from(
+                          { length: grantedExemptionPageCount },
+                          (_, index) => index + 1,
+                        ).map((pageNumber) => (
+                          <button
+                            key={pageNumber}
+                            type="button"
+                            onClick={() => {
+                              setGrantedExemptionPage(pageNumber);
+                              setExpandedExemptionStudentKey("");
+                            }}
+                            className={`h-8 min-w-8 rounded-lg px-2 text-xs font-black ${
+                              pageNumber === grantedExemptionCurrentPage
+                                ? "bg-blue-600 text-white"
+                                : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                            }`}
+                            aria-current={
+                              pageNumber === grantedExemptionCurrentPage
+                                ? "page"
+                                : undefined
+                            }
+                          >
+                            {pageNumber}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {!filteredGrantedExemptionRows.length && (
                       <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-12 text-center text-sm font-semibold text-slate-400">
-                        아직 부여된 면제권이 없습니다.
+                        조건에 맞는 면제권 보유 학생이 없습니다.
                       </div>
                     )}
                   </div>
