@@ -692,6 +692,7 @@ const ManageHistoryClassroom: React.FC = () => {
   const [grantingExemption, setGrantingExemption] = useState(false);
   const [reviewingExemptionRequestId, setReviewingExemptionRequestId] =
     useState("");
+  const exemptionSectionRef = React.useRef<HTMLElement | null>(null);
   const [selectedMapId, setSelectedMapId] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -958,6 +959,12 @@ const ManageHistoryClassroom: React.FC = () => {
     if (searchParams.get("panel") !== "exemption-requests") return;
     setExemptionPanelOpen(true);
     setHighlightedExemptionRequestId(searchParams.get("requestId") || "");
+    window.setTimeout(() => {
+      exemptionSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 0);
   }, [searchParams]);
 
   useEffect(() => {
@@ -2091,6 +2098,16 @@ const ManageHistoryClassroom: React.FC = () => {
     }
   };
 
+  const openExemptionPanel = () => {
+    setExemptionPanelOpen(true);
+    window.setTimeout(() => {
+      exemptionSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 0);
+  };
+
   const handleGrantExemptions = async () => {
     const reason = exemptionReason.trim();
     const { year, semester } = getYearSemester(config);
@@ -2953,6 +2970,18 @@ const ManageHistoryClassroom: React.FC = () => {
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
+              onClick={openExemptionPanel}
+              className="inline-flex h-11 items-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-4 text-sm font-bold text-blue-700 shadow-sm hover:bg-blue-100"
+            >
+              면제권 관리
+              {pendingExemptionRequestCount > 0 && (
+                <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[11px] font-black text-white">
+                  {pendingExemptionRequestCount}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
               onClick={() => openMapBlankManager()}
               className="inline-flex h-11 items-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 text-sm font-bold text-gray-700 shadow-sm hover:bg-gray-50"
             >
@@ -3028,7 +3057,11 @@ const ManageHistoryClassroom: React.FC = () => {
         </div>
       </section>
 
-      <section className="mb-5 rounded-3xl border border-blue-100 bg-white p-4 shadow-sm">
+      <section
+        ref={exemptionSectionRef}
+        id="history-classroom-exemption-management"
+        className="mb-5 rounded-3xl border border-blue-100 bg-white p-4 shadow-sm"
+      >
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="text-xs font-black uppercase tracking-[0.18em] text-blue-500">
