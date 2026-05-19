@@ -4483,7 +4483,7 @@ const ManageHistoryClassroom: React.FC = () => {
                         }
                       }}
                     >
-                      <div className="sticky top-0 z-10 grid min-w-[42rem] grid-cols-[minmax(4.25rem,0.6fr)_minmax(3.5rem,0.4fr)_minmax(7rem,1fr)_minmax(4rem,0.45fr)_minmax(4.75rem,0.55fr)_minmax(4rem,0.5fr)_3rem] items-center gap-2 border-b border-slate-200 bg-white px-3 pb-1.5 text-[11px] font-bold text-slate-400">
+                      <div className="sticky top-0 z-10 grid min-w-[38rem] grid-cols-[3.5rem_3rem_minmax(6rem,1fr)_4rem_4.75rem_4rem_3rem] items-center gap-2 border-b border-slate-200 bg-white px-3 pb-1.5 text-[11px] font-bold text-slate-400">
                         <div>학급</div>
                         <div className="text-center">번호</div>
                         <div>학생</div>
@@ -4499,13 +4499,13 @@ const ManageHistoryClassroom: React.FC = () => {
                         return (
                           <div
                             key={row.key}
-                            className={`min-w-[42rem] rounded-xl border bg-white px-3 py-2 transition ${
+                            className={`min-w-[38rem] rounded-xl border bg-white px-3 py-2 transition ${
                               expanded
                                 ? "border-blue-200 ring-2 ring-blue-50"
                                 : "border-slate-200 hover:border-blue-100 hover:bg-blue-50/30"
                             }`}
                           >
-                            <div className="grid grid-cols-[minmax(4.25rem,0.6fr)_minmax(3.5rem,0.4fr)_minmax(7rem,1fr)_minmax(4rem,0.45fr)_minmax(4.75rem,0.55fr)_minmax(4rem,0.5fr)_3rem] items-center gap-2">
+                            <div className="grid grid-cols-[3.5rem_3rem_minmax(6rem,1fr)_4rem_4.75rem_4rem_3rem] items-center gap-2">
                               <button
                                 type="button"
                                 onClick={() =>
