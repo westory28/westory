@@ -4592,7 +4592,7 @@ const ManageHistoryClassroom: React.FC = () => {
                         }
                       }}
                     >
-                      <div className="sticky top-0 z-10 grid min-w-[38rem] grid-cols-[2.25rem_2.25rem_2.75rem_minmax(7rem,0.65fr)_3.25rem_4rem_3.25rem_3rem_minmax(0,0.35fr)] items-center gap-2 border-b border-slate-200 bg-white px-3 pb-1.5 text-[11px] font-bold text-slate-400">
+                      <div className="sticky top-0 z-10 grid min-w-[42rem] grid-cols-[3rem_3rem_3.5rem_minmax(9rem,1fr)_4.5rem_5.5rem_4.5rem_3.5rem] items-center gap-2 border-b border-slate-200 bg-white px-3 pb-1.5 text-[11px] font-bold text-slate-400">
                         <div className="text-center">학년</div>
                         <div className="text-center">반</div>
                         <div className="text-center">번호</div>
@@ -4609,13 +4609,13 @@ const ManageHistoryClassroom: React.FC = () => {
                         return (
                           <div
                             key={row.key}
-                            className={`min-w-[38rem] rounded-xl border bg-white px-3 py-2 transition ${
+                            className={`min-w-[42rem] rounded-xl border bg-white px-3 py-2 transition ${
                               expanded
                                 ? "border-blue-200 ring-2 ring-blue-50"
                                 : "border-slate-200 hover:border-blue-100 hover:bg-blue-50/30"
                             }`}
                           >
-                            <div className="grid grid-cols-[2.25rem_2.25rem_2.75rem_minmax(7rem,0.65fr)_3.25rem_4rem_3.25rem_3rem_minmax(0,0.35fr)] items-center gap-2">
+                            <div className="grid grid-cols-[3rem_3rem_3.5rem_minmax(9rem,1fr)_4.5rem_5.5rem_4.5rem_3.5rem] items-center gap-2">
                               <button
                                 type="button"
                                 onClick={() =>
