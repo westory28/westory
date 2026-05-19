@@ -2950,6 +2950,18 @@ const ManageHistoryClassroom: React.FC = () => {
         >
           {tabLabels.historyClassroom}
         </button>
+        <button
+          type="button"
+          onClick={openExemptionPanel}
+          className="border-b-2 border-transparent px-6 py-3 text-sm font-bold text-blue-700 transition whitespace-nowrap hover:bg-blue-50"
+        >
+          면제권 관리
+          {pendingExemptionRequestCount > 0 && (
+            <span className="ml-2 rounded-full bg-blue-600 px-2 py-0.5 text-[11px] font-black text-white">
+              {pendingExemptionRequestCount}
+            </span>
+          )}
+        </button>
       </div>
 
       <section className="mb-5 px-1 py-2">
