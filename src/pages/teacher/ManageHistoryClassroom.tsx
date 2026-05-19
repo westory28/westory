@@ -63,6 +63,7 @@ interface StudentOption {
 
 type ExemptionRequestStatus = "pending" | "approved" | "rejected";
 type ExemptionGrantMode = "students" | "class";
+type ExemptionModalTab = "grant" | "requests" | "granted";
 
 interface HistoryClassroomExemption {
   id: string;
@@ -679,6 +680,8 @@ const ManageHistoryClassroom: React.FC = () => {
   >([]);
   const [loadingExemptions, setLoadingExemptions] = useState(false);
   const [exemptionPanelOpen, setExemptionPanelOpen] = useState(false);
+  const [exemptionModalTab, setExemptionModalTab] =
+    useState<ExemptionModalTab>("grant");
   const [highlightedExemptionRequestId, setHighlightedExemptionRequestId] =
     useState("");
   const [exemptionGrantMode, setExemptionGrantMode] =
@@ -771,6 +774,8 @@ const ManageHistoryClassroom: React.FC = () => {
     useState<DashboardStatusFilter>("all");
   const [dashboardSortOrder, setDashboardSortOrder] =
     useState<DashboardSortOrder>("latest");
+  const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
+  const [refreshingDashboard, setRefreshingDashboard] = useState(false);
   const [expandedAssignmentId, setExpandedAssignmentId] = useState("");
   const [savingMapBlanks, setSavingMapBlanks] = useState(false);
   const preserveBlankResetRef = React.useRef(false);
@@ -832,139 +837,144 @@ const ManageHistoryClassroom: React.FC = () => {
 
   useEffect(() => {
     const loadData = async () => {
-      const mapPath = getSemesterCollectionPath(config, "map_resources");
-      const semesterMapSnap = await getDocs(
-        query(collection(db, mapPath), orderBy("sortOrder", "asc")),
-      );
-      const legacyMapSnap = await getDocs(
-        query(collection(db, "map_resources"), orderBy("sortOrder", "asc")),
-      );
-      const mapById = new Map<string, MapResource>();
-      legacyMapSnap.docs.forEach((docSnap) => {
-        mapById.set(
-          docSnap.id,
-          normalizeMapResource(docSnap.id, docSnap.data()),
+      setRefreshingDashboard(true);
+      try {
+        const mapPath = getSemesterCollectionPath(config, "map_resources");
+        const semesterMapSnap = await getDocs(
+          query(collection(db, mapPath), orderBy("sortOrder", "asc")),
         );
-      });
-      semesterMapSnap.docs.forEach((docSnap) => {
-        mapById.set(
-          docSnap.id,
-          normalizeMapResource(docSnap.id, docSnap.data()),
+        const legacyMapSnap = await getDocs(
+          query(collection(db, "map_resources"), orderBy("sortOrder", "asc")),
         );
-      });
-      const loadedMaps = Array.from(mapById.values())
-        .filter(
-          (item) =>
-            item.type === "pdf" && (item.pdfPageImages?.length || 0) > 0,
-        )
-        .sort((a, b) => {
-          if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
-          return a.title.localeCompare(b.title, "ko");
+        const mapById = new Map<string, MapResource>();
+        legacyMapSnap.docs.forEach((docSnap) => {
+          mapById.set(
+            docSnap.id,
+            normalizeMapResource(docSnap.id, docSnap.data()),
+          );
         });
-      setMaps(loadedMaps);
-      if (loadedMaps[0]) {
-        setSelectedMapId((prev) => prev || loadedMaps[0].id);
-      }
-
-      const studentSnap = await getDocs(collection(db, "users"));
-      const loadedStudents = studentSnap.docs
-        .map((docSnap) => {
-          const data = docSnap.data() as Record<string, unknown>;
-          if (data.role === "teacher") return null;
-          return {
-            uid: docSnap.id,
-            name: String(data.name || "").trim(),
-            grade: String(data.grade || "").trim(),
-            className: String(data.class || "").trim(),
-            number: String(data.number || "").trim(),
-          } as StudentOption;
-        })
-        .filter((item): item is StudentOption => !!item && !!item.uid)
-        .sort(
-          (a, b) =>
-            compareSchoolValues(a.grade, b.grade) ||
-            compareSchoolValues(a.className, b.className) ||
-            compareSchoolValues(a.number, b.number) ||
-            a.name.localeCompare(b.name, "ko"),
-        );
-      setStudents(loadedStudents);
-
-      const assignmentPath = getSemesterCollectionPath(
-        config,
-        "history_classrooms",
-      );
-      let assignmentSnap = await getDocs(
-        query(collection(db, assignmentPath), orderBy("updatedAt", "desc")),
-      );
-      if (assignmentSnap.empty) {
-        assignmentSnap = await getDocs(
-          query(
-            collection(db, "history_classrooms"),
-            orderBy("updatedAt", "desc"),
-          ),
-        );
-      }
-      setAssignments(
-        assignmentSnap.docs
-          .map((docSnap) =>
-            mergeHistoryClassroomMapSnapshot(
-              normalizeHistoryClassroomAssignment(docSnap.id, docSnap.data()),
-              loadedMaps.find(
-                (map) => map.id === docSnap.data().mapResourceId,
-              ) || null,
-            ),
+        semesterMapSnap.docs.forEach((docSnap) => {
+          mapById.set(
+            docSnap.id,
+            normalizeMapResource(docSnap.id, docSnap.data()),
+          );
+        });
+        const loadedMaps = Array.from(mapById.values())
+          .filter(
+            (item) =>
+              item.type === "pdf" && (item.pdfPageImages?.length || 0) > 0,
           )
-          .filter((assignment) => !isHistoryClassroomDeleted(assignment)),
-      );
+          .sort((a, b) => {
+            if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+            return a.title.localeCompare(b.title, "ko");
+          });
+        setMaps(loadedMaps);
+        if (loadedMaps[0]) {
+          setSelectedMapId((prev) => prev || loadedMaps[0].id);
+        }
 
-      const resultPath = getSemesterCollectionPath(
-        config,
-        "history_classroom_results",
-      );
-      let resultSnap = await getDocs(
-        query(
-          collection(db, resultPath),
-          orderBy("createdAt", "desc"),
-          limit(HISTORY_CLASSROOM_RESULT_LIMIT),
-        ),
-      );
-      if (resultSnap.empty) {
-        resultSnap = await getDocs(
+        const studentSnap = await getDocs(collection(db, "users"));
+        const loadedStudents = studentSnap.docs
+          .map((docSnap) => {
+            const data = docSnap.data() as Record<string, unknown>;
+            if (data.role === "teacher") return null;
+            return {
+              uid: docSnap.id,
+              name: String(data.name || "").trim(),
+              grade: String(data.grade || "").trim(),
+              className: String(data.class || "").trim(),
+              number: String(data.number || "").trim(),
+            } as StudentOption;
+          })
+          .filter((item): item is StudentOption => !!item && !!item.uid)
+          .sort(
+            (a, b) =>
+              compareSchoolValues(a.grade, b.grade) ||
+              compareSchoolValues(a.className, b.className) ||
+              compareSchoolValues(a.number, b.number) ||
+              a.name.localeCompare(b.name, "ko"),
+          );
+        setStudents(loadedStudents);
+
+        const assignmentPath = getSemesterCollectionPath(
+          config,
+          "history_classrooms",
+        );
+        let assignmentSnap = await getDocs(
+          query(collection(db, assignmentPath), orderBy("updatedAt", "desc")),
+        );
+        if (assignmentSnap.empty) {
+          assignmentSnap = await getDocs(
+            query(
+              collection(db, "history_classrooms"),
+              orderBy("updatedAt", "desc"),
+            ),
+          );
+        }
+        setAssignments(
+          assignmentSnap.docs
+            .map((docSnap) =>
+              mergeHistoryClassroomMapSnapshot(
+                normalizeHistoryClassroomAssignment(docSnap.id, docSnap.data()),
+                loadedMaps.find(
+                  (map) => map.id === docSnap.data().mapResourceId,
+                ) || null,
+              ),
+            )
+            .filter((assignment) => !isHistoryClassroomDeleted(assignment)),
+        );
+
+        const resultPath = getSemesterCollectionPath(
+          config,
+          "history_classroom_results",
+        );
+        let resultSnap = await getDocs(
           query(
-            collection(db, "history_classroom_results"),
+            collection(db, resultPath),
             orderBy("createdAt", "desc"),
             limit(HISTORY_CLASSROOM_RESULT_LIMIT),
           ),
         );
-      }
-      const groupedResults: Record<string, HistoryClassroomResult[]> = {};
-      resultSnap.docs.forEach((docSnap) => {
-        const result = normalizeHistoryClassroomResult(
-          docSnap.id,
-          docSnap.data(),
+        if (resultSnap.empty) {
+          resultSnap = await getDocs(
+            query(
+              collection(db, "history_classroom_results"),
+              orderBy("createdAt", "desc"),
+              limit(HISTORY_CLASSROOM_RESULT_LIMIT),
+            ),
+          );
+        }
+        const groupedResults: Record<string, HistoryClassroomResult[]> = {};
+        resultSnap.docs.forEach((docSnap) => {
+          const result = normalizeHistoryClassroomResult(
+            docSnap.id,
+            docSnap.data(),
+          );
+          groupedResults[result.assignmentId] = [
+            ...(groupedResults[result.assignmentId] || []),
+            result,
+          ];
+        });
+        setResultsByAssignment(groupedResults);
+        void loadExemptionData();
+      } catch (error) {
+        console.error(
+          "Failed to load history classroom dashboard data:",
+          error,
         );
-        groupedResults[result.assignmentId] = [
-          ...(groupedResults[result.assignmentId] || []),
-          result,
-        ];
-      });
-      setResultsByAssignment(groupedResults);
-      void loadExemptionData();
+      } finally {
+        setRefreshingDashboard(false);
+      }
     };
 
     void loadData();
-  }, [config, loadExemptionData]);
+  }, [config, dashboardRefreshKey, loadExemptionData]);
 
   useEffect(() => {
     if (searchParams.get("panel") !== "exemption-requests") return;
     setExemptionPanelOpen(true);
+    setExemptionModalTab("requests");
     setHighlightedExemptionRequestId(searchParams.get("requestId") || "");
-    window.setTimeout(() => {
-      exemptionSectionRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    }, 0);
   }, [searchParams]);
 
   useEffect(() => {
@@ -2098,14 +2108,10 @@ const ManageHistoryClassroom: React.FC = () => {
     }
   };
 
-  const openExemptionPanel = () => {
+  const openExemptionPanel = (tab: ExemptionModalTab = "grant") => {
+    setExemptionModalTab(tab);
     setExemptionPanelOpen(true);
-    window.setTimeout(() => {
-      exemptionSectionRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    }, 0);
+    void loadExemptionData();
   };
 
   const handleGrantExemptions = async () => {
@@ -3033,24 +3039,35 @@ const ManageHistoryClassroom: React.FC = () => {
               ["pending", "미제출"],
               ["passed", "통과"],
             ].map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() =>
-                  setDashboardStatusFilter(value as DashboardStatusFilter)
-                }
-                className={`h-11 rounded-2xl border px-4 text-sm font-bold transition ${
-                  dashboardStatusFilter === value
-                    ? "border-blue-600 bg-blue-600 text-white shadow-sm"
-                    : value === "pending"
-                      ? "border-rose-200 bg-white text-rose-600 hover:bg-rose-50"
-                      : value === "passed"
-                        ? "border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50"
-                        : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
-                }`}
-              >
-                {label}
-              </button>
+              <React.Fragment key={value}>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDashboardStatusFilter(value as DashboardStatusFilter)
+                  }
+                  className={`h-10 rounded-xl border px-3 text-xs font-bold transition ${
+                    dashboardStatusFilter === value
+                      ? "border-blue-600 bg-blue-600 text-white shadow-sm"
+                      : value === "pending"
+                        ? "border-rose-200 bg-white text-rose-600 hover:bg-rose-50"
+                        : value === "passed"
+                          ? "border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50"
+                          : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  {label}
+                </button>
+                {value === "all" && (
+                  <button
+                    type="button"
+                    onClick={() => setDashboardRefreshKey((current) => current + 1)}
+                    disabled={refreshingDashboard}
+                    className="h-10 rounded-xl border border-blue-200 bg-blue-50 px-3 text-xs font-bold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {refreshingDashboard ? "새로고침 중" : "새로고침"}
+                  </button>
+                )}
+              </React.Fragment>
             ))}
           </div>
           <label className="flex h-12 items-center gap-3 rounded-2xl border border-gray-200 px-4 text-sm font-bold text-gray-600">
@@ -3072,7 +3089,7 @@ const ManageHistoryClassroom: React.FC = () => {
       <section
         ref={exemptionSectionRef}
         id="history-classroom-exemption-management"
-        className="mb-5 rounded-3xl border border-blue-100 bg-white p-4 shadow-sm"
+        className="hidden"
       >
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -3674,6 +3691,398 @@ const ManageHistoryClassroom: React.FC = () => {
           </div>
         )}
       </section>
+
+      {exemptionPanelOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-3 py-5 backdrop-blur-sm">
+          <div className="flex max-h-[92vh] w-full max-w-[min(96vw,72rem)] overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <aside className="hidden w-56 shrink-0 border-r border-slate-200 bg-slate-50 p-4 md:block">
+              <div className="mb-4 px-2">
+                <div className="text-xs font-black uppercase tracking-[0.18em] text-blue-500">
+                  Exemption
+                </div>
+                <h2 className="mt-1 text-lg font-black text-slate-900">
+                  면제권 관리
+                </h2>
+              </div>
+              {[
+                ["grant", "면제권 부여", ""],
+                ["requests", "면제권 요청", pendingExemptionRequestCount],
+                ["granted", "부여된 면제권", activeExemptionCount],
+              ].map(([value, label, count]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setExemptionModalTab(value as ExemptionModalTab)}
+                  className={`mb-2 flex w-full items-center justify-between rounded-2xl px-3 py-3 text-left text-sm font-black transition ${
+                    exemptionModalTab === value
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "text-slate-700 hover:bg-white"
+                  }`}
+                >
+                  <span>{label}</span>
+                  {count !== "" && (
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[11px] ${
+                        exemptionModalTab === value
+                          ? "bg-white/20 text-white"
+                          : "bg-slate-200 text-slate-600"
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </aside>
+
+            <div className="flex min-w-0 flex-1 flex-col">
+              <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+                <div>
+                  <h2 className="text-xl font-black text-slate-900">
+                    면제권 관리
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    학생별·학급별 부여와 학생 요청 처리를 한 곳에서 관리합니다.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void loadExemptionData()}
+                    disabled={loadingExemptions}
+                    className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    {loadingExemptions ? "새로고침 중" : "새로고침"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeExemptionPanel}
+                    className="h-10 rounded-xl bg-blue-600 px-4 text-xs font-black text-white hover:bg-blue-700"
+                  >
+                    닫기
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex gap-2 overflow-x-auto border-b border-slate-200 px-4 py-3 md:hidden">
+                {[
+                  ["grant", "면제권 부여"],
+                  ["requests", `면제권 요청 ${pendingExemptionRequestCount}`],
+                  ["granted", `부여된 면제권 ${activeExemptionCount}`],
+                ].map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setExemptionModalTab(value as ExemptionModalTab)}
+                    className={`h-10 shrink-0 rounded-xl px-3 text-xs font-black ${
+                      exemptionModalTab === value
+                        ? "bg-blue-600 text-white"
+                        : "border border-slate-200 bg-white text-slate-700"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="min-h-0 flex-1 overflow-y-auto bg-white p-5">
+                {exemptionModalTab === "grant" && (
+                  <div className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        ["students", "학생별 부여"],
+                        ["class", "학급 단위 부여"],
+                      ].map(([value, label]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() =>
+                            setExemptionGrantMode(value as ExemptionGrantMode)
+                          }
+                          className={`rounded-xl border px-4 py-2 text-sm font-black ${
+                            exemptionGrantMode === value
+                              ? "border-blue-600 bg-blue-600 text-white"
+                              : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {exemptionGrantMode === "students" ? (
+                      <div className="mt-4 space-y-3">
+                        <label className="block">
+                          <span className="mb-1 block text-xs font-bold text-slate-500">
+                            학생 검색
+                          </span>
+                          <input
+                            type="text"
+                            value={exemptionStudentSearch}
+                            onChange={(event) =>
+                              setExemptionStudentSearch(event.target.value)
+                            }
+                            placeholder="이름, 학년, 반, 번호로 검색"
+                            className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
+                          />
+                        </label>
+                        {searchedExemptionStudents.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {searchedExemptionStudents.map((student) => (
+                              <button
+                                key={student.uid}
+                                type="button"
+                                onClick={() => {
+                                  setExemptionSelectedStudentUids((prev) => [
+                                    ...prev,
+                                    student.uid,
+                                  ]);
+                                  setExemptionStudentSearch("");
+                                }}
+                                className="rounded-full border border-blue-100 bg-white px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-50"
+                              >
+                                {formatStudentBadgeLabel(student)}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        <div className="flex min-h-10 flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2">
+                          {exemptionSelectedStudents.map((student) => (
+                            <span
+                              key={student.uid}
+                              className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700"
+                            >
+                              {formatStudentBadgeLabel(student)}
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setExemptionSelectedStudentUids((prev) =>
+                                    prev.filter((uid) => uid !== student.uid),
+                                  )
+                                }
+                                className="text-blue-400 hover:text-blue-700"
+                                aria-label={`${student.name} 선택 해제`}
+                              >
+                                x
+                              </button>
+                            </span>
+                          ))}
+                          {!exemptionSelectedStudents.length && (
+                            <span className="px-2 py-1 text-xs font-semibold text-slate-400">
+                              선택된 학생이 없습니다.
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <label className="block">
+                          <span className="mb-1 block text-xs font-bold text-slate-500">
+                            학년
+                          </span>
+                          <select
+                            value={exemptionTargetGrade}
+                            onChange={(event) => {
+                              setExemptionTargetGrade(event.target.value);
+                              setExemptionTargetClass("");
+                            }}
+                            className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
+                          >
+                            <option value="">학년 선택</option>
+                            {gradeOptions.map((grade) => (
+                              <option key={grade} value={grade}>
+                                {grade}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="block">
+                          <span className="mb-1 block text-xs font-bold text-slate-500">
+                            반
+                          </span>
+                          <select
+                            value={exemptionTargetClass}
+                            onChange={(event) =>
+                              setExemptionTargetClass(event.target.value)
+                            }
+                            className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
+                          >
+                            <option value="">반 선택</option>
+                            {exemptionClassOptions.map((className) => (
+                              <option key={className} value={className}>
+                                {className}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <div className="rounded-2xl border border-blue-100 bg-white px-3 py-2 text-xs font-bold text-blue-700 sm:col-span-2">
+                          선택 대상 {exemptionClassStudents.length}명
+                        </div>
+                      </div>
+                    )}
+
+                    <label className="mt-4 block">
+                      <span className="mb-1 block text-xs font-bold text-slate-500">
+                        부여 사유
+                      </span>
+                      <textarea
+                        value={exemptionReason}
+                        onChange={(event) =>
+                          setExemptionReason(event.target.value)
+                        }
+                        rows={3}
+                        placeholder="예: 학교 행사, 공결, 상담 등"
+                        className="w-full resize-none rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => void handleGrantExemptions()}
+                      disabled={grantingExemption}
+                      className="mt-3 h-11 w-full rounded-2xl bg-blue-600 px-4 text-sm font-black text-white hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {grantingExemption ? "부여 중" : "면제권 부여"}
+                    </button>
+                  </div>
+                )}
+
+                {exemptionModalTab === "requests" && (
+                  <div className="space-y-3">
+                    {sortedExemptionRequests.map((request) => {
+                      const isPending = request.status === "pending";
+                      const isHighlighted =
+                        highlightedExemptionRequestId === request.id;
+                      return (
+                        <div
+                          key={request.id}
+                          className={`rounded-2xl border p-4 ${
+                            isHighlighted
+                              ? "border-blue-300 bg-blue-50"
+                              : "border-slate-200 bg-white"
+                          }`}
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <div className="text-sm font-black text-slate-900">
+                                {formatExemptionStudentLabel(request)}
+                              </div>
+                              <div className="mt-1 text-xs font-semibold text-slate-500">
+                                요청 {formatDateTimeLabel(request.createdAt)}
+                              </div>
+                              {request.assignmentTitle && (
+                                <div className="mt-1 text-xs font-bold text-blue-700">
+                                  {request.assignmentTitle}
+                                </div>
+                              )}
+                            </div>
+                            <span
+                              className={`rounded-full border px-3 py-1 text-xs font-black ${getExemptionRequestStatusClassName(
+                                request.status,
+                              )}`}
+                            >
+                              {formatExemptionRequestStatusLabel(
+                                request.status,
+                              )}
+                            </span>
+                          </div>
+                          {request.reason && (
+                            <p className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
+                              {request.reason}
+                            </p>
+                          )}
+                          {isPending ? (
+                            <div className="mt-3 flex flex-wrap justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void handleReviewExemptionRequest(
+                                    request.id,
+                                    "rejected",
+                                  )
+                                }
+                                disabled={
+                                  reviewingExemptionRequestId === request.id
+                                }
+                                className="rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+                              >
+                                반려
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void handleReviewExemptionRequest(
+                                    request.id,
+                                    "approved",
+                                  )
+                                }
+                                disabled={
+                                  reviewingExemptionRequestId === request.id
+                                }
+                                className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                              >
+                                승인
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="mt-2 text-xs font-semibold text-slate-400">
+                              처리 {formatDateTimeLabel(request.reviewedAt)}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {!sortedExemptionRequests.length && (
+                      <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-12 text-center text-sm font-semibold text-slate-400">
+                        접수된 면제권 요청이 없습니다.
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {exemptionModalTab === "granted" && (
+                  <div className="space-y-3">
+                    {exemptions.map((exemption) => (
+                      <div
+                        key={exemption.id}
+                        className="rounded-2xl border border-slate-200 bg-white p-4"
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <div className="text-sm font-black text-slate-900">
+                              {formatExemptionStudentLabel(exemption)}
+                            </div>
+                            <div className="mt-1 text-xs font-semibold text-slate-500">
+                              부여 {formatDateTimeLabel(exemption.createdAt)}
+                              {exemption.expiresAt
+                                ? ` · 만료 ${formatDateTimeLabel(
+                                    exemption.expiresAt,
+                                  )}`
+                                : ""}
+                            </div>
+                          </div>
+                          <span className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
+                            {exemption.status}
+                          </span>
+                        </div>
+                        {exemption.reason && (
+                          <p className="mt-2 text-xs leading-5 text-slate-600">
+                            {exemption.reason}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                    {!exemptions.length && (
+                      <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-12 text-center text-sm font-semibold text-slate-400">
+                        아직 부여된 면제권이 없습니다.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-3 py-5 backdrop-blur-sm">
