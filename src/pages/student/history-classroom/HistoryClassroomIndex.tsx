@@ -207,9 +207,7 @@ const HistoryClassroomIndex: React.FC = () => {
   const [resultsByAssignment, setResultsByAssignment] = useState<
     Record<string, HistoryClassroomResult[]>
   >({});
-  const [exemptions, setExemptions] = useState<HistoryClassroomExemption[]>(
-    [],
-  );
+  const [exemptions, setExemptions] = useState<HistoryClassroomExemption[]>([]);
   const [exemptionRequests, setExemptionRequests] = useState<
     HistoryClassroomExemptionRequest[]
   >([]);
@@ -225,8 +223,9 @@ const HistoryClassroomIndex: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     const loadData = async () => {
-      if (!userData?.uid) return;
+      if (!userData?.uid || !config) return;
       setLoading(true);
       try {
         const loadAssignedSnapshots = async (collectionPath: string) => {
@@ -285,6 +284,7 @@ const HistoryClassroomIndex: React.FC = () => {
             await loadAssignedSnapshots("history_classrooms"),
           );
         }
+        if (cancelled) return;
         setAssignments(loadedAssignments);
 
         const assignmentIds = loadedAssignments.map((item) => item.id);
@@ -341,12 +341,28 @@ const HistoryClassroomIndex: React.FC = () => {
           );
         };
 
-        let resultDocs = await readResultDocs(
-          getSemesterCollectionPath(config, "history_classroom_results"),
-        );
-        if (!resultDocs.length) {
-          resultDocs = await readResultDocs("history_classroom_results");
-        }
+        const [resultDocs, exemptionDocs, requestDocs] = await Promise.all([
+          (async () => {
+            let docs = await readResultDocs(
+              getSemesterCollectionPath(config, "history_classroom_results"),
+            );
+            if (!docs.length) {
+              docs = await readResultDocs("history_classroom_results");
+            }
+            return docs;
+          })(),
+          loadOwnSemesterDocs("history_classroom_exemptions", [
+            "uid",
+            "studentUid",
+            "ownerUid",
+            "recipientUid",
+          ]),
+          loadOwnSemesterDocs("history_classroom_exemption_requests", [
+            "uid",
+            "studentUid",
+            "requesterUid",
+          ]),
+        ]);
 
         const grouped: Record<string, HistoryClassroomResult[]> = {};
         resultDocs.forEach((docSnap) => {
@@ -362,21 +378,8 @@ const HistoryClassroomIndex: React.FC = () => {
         Object.keys(grouped).forEach((key) => {
           grouped[key].sort(compareResultCreatedAt);
         });
+        if (cancelled) return;
         setResultsByAssignment(grouped);
-
-        const [exemptionDocs, requestDocs] = await Promise.all([
-          loadOwnSemesterDocs("history_classroom_exemptions", [
-            "uid",
-            "studentUid",
-            "ownerUid",
-            "recipientUid",
-          ]),
-          loadOwnSemesterDocs("history_classroom_exemption_requests", [
-            "uid",
-            "studentUid",
-            "requesterUid",
-          ]),
-        ]);
         setExemptions(
           exemptionDocs
             .map((docSnap) =>
@@ -397,11 +400,14 @@ const HistoryClassroomIndex: React.FC = () => {
       } catch (error) {
         console.error("Failed to load history classroom assignments:", error);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     void loadData();
+    return () => {
+      cancelled = true;
+    };
   }, [config, userData?.uid]);
 
   const handleRequestExemption = async (
@@ -450,7 +456,9 @@ const HistoryClassroomIndex: React.FC = () => {
       ]);
     } catch (error) {
       console.error("Failed to request history classroom exemption:", error);
-      window.alert("면제권 사용 요청을 보내지 못했습니다. 잠시 후 다시 시도해 주세요.");
+      window.alert(
+        "면제권 사용 요청을 보내지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      );
     } finally {
       setRequestingAssignmentId(null);
     }
@@ -666,11 +674,11 @@ const HistoryClassroomIndex: React.FC = () => {
           {groupedItems.map((group) => (
             <div
               key={group.dateKey}
-              className="grid gap-4 md:grid-cols-[7.5rem_minmax(0,1fr)]"
+              className="grid gap-3 lg:grid-cols-[7.5rem_minmax(0,1fr)] lg:gap-4"
             >
-              <div className="relative pl-5 md:pt-4">
+              <div className="relative pl-5 lg:pt-4">
                 <div className="absolute bottom-0 left-[5px] top-0 w-px bg-slate-200" />
-                <div className="absolute left-0 top-2 h-3 w-3 rounded-full border-2 border-blue-500 bg-white shadow-sm md:top-6" />
+                <div className="absolute left-0 top-2 h-3 w-3 rounded-full border-2 border-blue-500 bg-white shadow-sm lg:top-6" />
                 <div className="text-lg font-black text-slate-950">
                   {group.dateKey === "unknown"
                     ? "날짜 없음"

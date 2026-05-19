@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useAppToast } from "../../../../components/common/AppToastProvider";
 import LessonFootnoteDialog from "../../../../components/common/LessonFootnoteDialog";
-import { LoadingOverlay } from "../../../../components/common/LoadingState";
+import { InlineLoading } from "../../../../components/common/LoadingState";
 import {
   deleteField,
   doc,
@@ -177,6 +177,12 @@ const LessonContent: React.FC<LessonContentProps> = ({
       if (!lessonOverride) setLesson(null);
       return;
     }
+    if (!config) {
+      setLoading(true);
+      return;
+    }
+
+    let cancelled = false;
     const fetchLesson = async () => {
       setLoading(true);
       setError(false);
@@ -184,6 +190,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
       setActiveWorksheetPage(null);
       try {
         const lessonData = await readStudentLesson(config, unitId);
+        if (cancelled) return;
         if (lessonData) {
           const data = normalizeLessonData(lessonData, {
             unitId,
@@ -209,13 +216,17 @@ const LessonContent: React.FC<LessonContentProps> = ({
         viewStartedAtRef.current = Date.now();
         interactedRef.current = false;
       } catch (fetchError) {
+        if (cancelled) return;
         console.error("Error fetching lesson:", fetchError);
         setError(true);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
     void fetchLesson();
+    return () => {
+      cancelled = true;
+    };
   }, [allowHiddenAccess, config, fallbackTitle, lessonOverride, unitId]);
 
   const getProgressRef = () => {
@@ -632,9 +643,10 @@ const LessonContent: React.FC<LessonContentProps> = ({
     );
   if (loading)
     return (
-      <LoadingOverlay
-        zIndexClassName="z-[80]"
+      <InlineLoading
+        className="min-h-[18rem] items-center"
         message="수업 자료를 불러오는 중입니다."
+        showWarning
       />
     );
   if (error || !lesson)

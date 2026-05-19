@@ -98,8 +98,9 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
   }, [filteredProducts]);
   const previewSelectedProduct = useMemo(
     () =>
-      previewProducts.find((product) => product.id === previewSelectedProductId) ||
-      null,
+      previewProducts.find(
+        (product) => product.id === previewSelectedProductId,
+      ) || null,
     [previewProducts, previewSelectedProductId],
   );
 
@@ -233,8 +234,8 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
             )}
           </div>
 
-          <div className="min-w-0 overflow-hidden">
-            <table className="w-full table-fixed text-sm text-left">
+          <div className="min-w-0 overflow-x-auto">
+            <table className="min-w-[720px] w-full table-fixed text-sm text-left">
               <colgroup>
                 <col className="w-[52px]" />
                 <col />
@@ -623,7 +624,9 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
                       product={product}
                       walletBalance={Math.max(0, Number(product.price || 0))}
                       previewOnly
-                      onCardClick={() => setPreviewSelectedProductId(product.id)}
+                      onCardClick={() =>
+                        setPreviewSelectedProductId(product.id)
+                      }
                       statusNote="클릭하면 학생 상세 화면을 확인합니다."
                     />
                   ))}

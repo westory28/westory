@@ -35,16 +35,16 @@ const LoadingCard: React.FC<LoadingStateProps> = ({
     aria-busy="true"
   >
     <LoadingMark />
-    <p className="mt-3 whitespace-nowrap text-[clamp(0.75rem,3.5vw,0.875rem)] font-bold text-gray-800">
+    <p className="mt-3 break-keep text-[clamp(0.75rem,3.5vw,0.875rem)] font-bold leading-6 text-gray-800">
       {message}
     </p>
     {detail && (
-      <p className="mt-1 whitespace-nowrap text-[clamp(0.625rem,3vw,0.75rem)] font-medium text-gray-500">
+      <p className="mt-1 break-keep text-[clamp(0.625rem,3vw,0.75rem)] font-medium leading-5 text-gray-500">
         {detail}
       </p>
     )}
     {showWarning && (
-      <p className="mt-2 whitespace-nowrap text-[clamp(0.625rem,3vw,0.75rem)] font-semibold text-amber-700">
+      <p className="mt-2 break-keep text-[clamp(0.625rem,3vw,0.75rem)] font-semibold leading-5 text-amber-700">
         {warning}
       </p>
     )}

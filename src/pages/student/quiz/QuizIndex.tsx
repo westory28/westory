@@ -1,10 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { InlineLoading } from "../../../components/common/LoadingState";
-import { db } from "../../../lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
 import { useAuth } from "../../../contexts/AuthContext";
-import { getSemesterDocPath } from "../../../lib/semesterScope";
+import { readStudentCurriculumTree } from "../../../lib/studentLessonReadCache";
 import {
   type AssessmentConfigEntry,
   getAssessmentConfigKey,
@@ -31,27 +29,32 @@ const QuizIndex: React.FC = () => {
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
 
   useEffect(() => {
+    let cancelled = false;
     const fetchData = async () => {
+      if (!config) return;
       try {
-        let treeDoc = await getDoc(doc(db, getSemesterDocPath(config, "curriculum", "tree")));
-        if (!treeDoc.exists()) {
-          treeDoc = await getDoc(doc(db, "curriculum", "tree"));
-        }
-        if (treeDoc.exists() && treeDoc.data().tree) {
-          setTree(treeDoc.data().tree);
-        }
-
-        const grade3ClassIds = await getGrade3ClassIdsFromSchoolConfig();
-        const nextConfig = await readAssessmentConfigMap(config, grade3ClassIds);
+        const [nextTree, grade3ClassIds] = await Promise.all([
+          readStudentCurriculumTree(config),
+          getGrade3ClassIdsFromSchoolConfig(),
+        ]);
+        const nextConfig = await readAssessmentConfigMap(
+          config,
+          grade3ClassIds,
+        );
+        if (cancelled) return;
+        setTree(nextTree);
         setAssessmentConfig(nextConfig);
       } catch (error) {
         console.error("Error fetching quiz data:", error);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     void fetchData();
+    return () => {
+      cancelled = true;
+    };
   }, [config]);
 
   const toggleAccordion = (index: number) => {

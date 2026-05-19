@@ -33,17 +33,26 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
   const [revealedUnitId, setRevealedUnitId] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!config) {
+      setLoading(true);
+      return;
+    }
+    let cancelled = false;
     const fetchTree = async () => {
       try {
-        setTree(await readStudentCurriculumTree(config));
+        const nextTree = await readStudentCurriculumTree(config);
+        if (!cancelled) setTree(nextTree);
       } catch (error) {
         console.error("Error fetching curriculum:", error);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     fetchTree();
+    return () => {
+      cancelled = true;
+    };
   }, [config]);
 
   const toggleGroup = (index: number) => {

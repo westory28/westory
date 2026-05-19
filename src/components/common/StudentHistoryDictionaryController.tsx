@@ -16,14 +16,17 @@ import type {
 } from "../../types";
 import { useAppToast } from "./AppToastProvider";
 
-const getFloatingOffsetClassName = (pathname: string) => {
+const getFloatingOffsetClassName = (pathname: string, search: string) => {
   if (pathname.startsWith("/student/lesson/history-dictionary")) {
     return "hidden";
   }
   if (pathname.startsWith("/student/lesson/note")) {
-    return "bottom-[calc(env(safe-area-inset-bottom,0px)+11.75rem)] right-[calc(env(safe-area-inset-right,0px)+1rem)] sm:bottom-[calc(env(safe-area-inset-bottom,0px)+12.25rem)] sm:right-[calc(env(safe-area-inset-right,0px)+1.5rem)]";
+    const hasSelectedUnit = Boolean(new URLSearchParams(search).get("id"));
+    return hasSelectedUnit
+      ? "bottom-[calc(env(safe-area-inset-bottom,0px)+18rem)] right-[calc(env(safe-area-inset-right,0px)+1rem)] lg:bottom-[calc(env(safe-area-inset-bottom,0px)+12.25rem)] lg:right-[calc(env(safe-area-inset-right,0px)+1.5rem)]"
+      : "bottom-[calc(env(safe-area-inset-bottom,0px)+6.5rem)] right-[calc(env(safe-area-inset-right,0px)+1rem)] lg:bottom-[calc(env(safe-area-inset-bottom,0px)+12.25rem)] lg:right-[calc(env(safe-area-inset-right,0px)+1.5rem)]";
   }
-  return "bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] right-[calc(env(safe-area-inset-right,0px)+1rem)] sm:bottom-[calc(env(safe-area-inset-bottom,0px)+1.5rem)] sm:right-[calc(env(safe-area-inset-right,0px)+1.5rem)]";
+  return "bottom-[calc(env(safe-area-inset-bottom,0px)+5.25rem)] right-[calc(env(safe-area-inset-right,0px)+1rem)] lg:bottom-[calc(env(safe-area-inset-bottom,0px)+1.5rem)] lg:right-[calc(env(safe-area-inset-right,0px)+1.5rem)]";
 };
 
 const formatStatusLabel = (status: StudentHistoryDictionaryWord["status"]) =>
@@ -47,7 +50,9 @@ const StudentHistoryDictionaryController: React.FC = () => {
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const isStudentRoute = location.pathname.startsWith("/student");
+  const isStudentRoute =
+    location.pathname.startsWith("/student") &&
+    !location.pathname.startsWith("/student/lesson/history-dictionary");
   const currentWord = word.trim();
   const normalizedCurrentWord = normalizeHistoryDictionaryWord(currentWord);
   const currentSavedWord = useMemo(
@@ -253,7 +258,7 @@ const StudentHistoryDictionaryController: React.FC = () => {
         ref={buttonRef}
         type="button"
         onClick={() => setOpen(true)}
-        className={`fixed z-[80] inline-flex h-14 w-14 items-center justify-center rounded-full border border-blue-100 bg-white text-blue-700 shadow-[0_18px_42px_rgba(37,99,235,0.22)] transition-colors hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 ${getFloatingOffsetClassName(location.pathname)}`}
+        className={`fixed z-[80] inline-flex h-14 w-14 items-center justify-center rounded-full border border-blue-100 bg-white text-blue-700 shadow-[0_18px_42px_rgba(37,99,235,0.22)] transition-colors hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 ${getFloatingOffsetClassName(location.pathname, location.search)}`}
         aria-label="역사 사전 열기"
         title="역사 사전"
       >

@@ -421,7 +421,10 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       .map((pair) => `${pair.left}${MATCHING_PAIR_DELIMITER}${pair.right}`)
       .join(ORDER_DELIMITER);
   const parseMatchingAnswer = (question: Question): MatchingPair[] => {
-    if (Array.isArray(question.matchingPairs) && question.matchingPairs.length) {
+    if (
+      Array.isArray(question.matchingPairs) &&
+      question.matchingPairs.length
+    ) {
       return question.matchingPairs.map((pair) => ({
         left: String(pair.left || ""),
         right: String(pair.right || ""),
@@ -615,7 +618,8 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
           return b.questions - a.questions;
         })[0] ||
       Array.from(groups.values()).find(
-        (group) => !targetCategory || group.category === targetCategory.category,
+        (group) =>
+          !targetCategory || group.category === targetCategory.category,
       ) ||
       Array.from(groups.values())[0];
 
@@ -2657,8 +2661,8 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                 {visibleSummary.totalQuestions}문항
               </div>
             </div>
-            <div className="overflow-hidden">
-              <table className="w-full table-fixed text-left text-sm">
+            <div className="overflow-x-auto">
+              <table className="min-w-[900px] w-full table-fixed text-left text-sm">
                 <colgroup>
                   <col className="w-[8%]" />
                   <col className="w-[14%]" />

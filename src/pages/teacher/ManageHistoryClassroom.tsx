@@ -390,11 +390,7 @@ type DashboardStatusFilter =
   | "passed";
 type DashboardSortOrder = "latest" | "oldest";
 type EditingResultStatusFilter = "all" | HistoryClassroomResult["status"];
-type EditingResultSortOrder =
-  | "latest"
-  | "oldest"
-  | "passedFirst"
-  | "scoreHigh";
+type EditingResultSortOrder = "latest" | "oldest" | "passedFirst" | "scoreHigh";
 
 const EDITING_RESULT_STATUS_FILTERS: {
   value: EditingResultStatusFilter;
@@ -488,8 +484,9 @@ const normalizeHistoryClassroomExemption = (
   uid: String(data.uid || data.studentUid || "").trim(),
   studentName: String(data.studentName || data.name || "").trim(),
   grade: String(data.grade || data.studentGrade || "").trim(),
-  className: String(data.className || data.class || data.studentClass || "")
-    .trim(),
+  className: String(
+    data.className || data.class || data.studentClass || "",
+  ).trim(),
   number: String(data.number || data.studentNumber || "").trim(),
   reason: String(data.reason || data.memo || "").trim(),
   status: String(data.status || "active").trim() || "active",
@@ -506,8 +503,9 @@ const normalizeHistoryClassroomExemptionRequest = (
   uid: String(data.uid || data.studentUid || "").trim(),
   studentName: String(data.studentName || data.name || "").trim(),
   grade: String(data.grade || data.studentGrade || "").trim(),
-  className: String(data.className || data.class || data.studentClass || "")
-    .trim(),
+  className: String(
+    data.className || data.class || data.studentClass || "",
+  ).trim(),
   number: String(data.number || data.studentNumber || "").trim(),
   assignmentTitle: String(data.assignmentTitle || "").trim(),
   reason: String(data.reason || data.exemptionReason || data.memo || "").trim(),
@@ -516,15 +514,13 @@ const normalizeHistoryClassroomExemptionRequest = (
   reviewedAt: data.reviewedAt || null,
 });
 
-const formatExemptionStudentLabel = (
-  item: {
-    studentName: string;
-    grade: string;
-    className: string;
-    number: string;
-    uid: string;
-  },
-) => {
+const formatExemptionStudentLabel = (item: {
+  studentName: string;
+  grade: string;
+  className: string;
+  number: string;
+  uid: string;
+}) => {
   const classLabel =
     item.grade && item.className ? `${item.grade}-${item.className}` : "";
   return [
@@ -536,17 +532,13 @@ const formatExemptionStudentLabel = (
     .join(" · ");
 };
 
-const formatExemptionRequestStatusLabel = (
-  status: ExemptionRequestStatus,
-) => {
+const formatExemptionRequestStatusLabel = (status: ExemptionRequestStatus) => {
   if (status === "approved") return "승인";
   if (status === "rejected") return "반려";
   return "대기";
 };
 
-const getExemptionRequestStatusClassName = (
-  status: ExemptionRequestStatus,
-) => {
+const getExemptionRequestStatusClassName = (status: ExemptionRequestStatus) => {
   if (status === "approved") {
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
   }
@@ -715,9 +707,7 @@ const ManageHistoryClassroom: React.FC = () => {
     Record<string, HistoryClassroomResult[]>
   >({});
   const [students, setStudents] = useState<StudentOption[]>([]);
-  const [exemptions, setExemptions] = useState<HistoryClassroomExemption[]>(
-    [],
-  );
+  const [exemptions, setExemptions] = useState<HistoryClassroomExemption[]>([]);
   const [exemptionRequests, setExemptionRequests] = useState<
     HistoryClassroomExemptionRequest[]
   >([]);
@@ -743,8 +733,10 @@ const ManageHistoryClassroom: React.FC = () => {
     useState<string[]>([]);
   const [exemptionTargetGrade, setExemptionTargetGrade] = useState("");
   const [exemptionTargetClass, setExemptionTargetClass] = useState("");
-  const [excludedClassExemptionStudentUids, setExcludedClassExemptionStudentUids] =
-    useState<string[]>([]);
+  const [
+    excludedClassExemptionStudentUids,
+    setExcludedClassExemptionStudentUids,
+  ] = useState<string[]>([]);
   const [exemptionReason, setExemptionReason] = useState("");
   const [grantingExemption, setGrantingExemption] = useState(false);
   const [revokingExemptionStudentKey, setRevokingExemptionStudentKey] =
@@ -1286,8 +1278,7 @@ const ManageHistoryClassroom: React.FC = () => {
           students
             .filter(
               (student) =>
-                !exemptionTargetGrade ||
-                student.grade === exemptionTargetGrade,
+                !exemptionTargetGrade || student.grade === exemptionTargetGrade,
             )
             .map((student) => student.className)
             .filter(Boolean),
@@ -1296,19 +1287,14 @@ const ManageHistoryClassroom: React.FC = () => {
     [exemptionTargetGrade, students],
   );
 
-  const exemptionClassStudents = useMemo(
-    () => {
-      const grade = String(exemptionTargetGrade || "").trim();
-      const className = String(exemptionTargetClass || "").trim();
-      if (!grade || !className) return [];
-      return students.filter(
-        (student) =>
-          student.grade === grade &&
-          student.className === className,
-      );
-    },
-    [exemptionTargetClass, exemptionTargetGrade, students],
-  );
+  const exemptionClassStudents = useMemo(() => {
+    const grade = String(exemptionTargetGrade || "").trim();
+    const className = String(exemptionTargetClass || "").trim();
+    if (!grade || !className) return [];
+    return students.filter(
+      (student) => student.grade === grade && student.className === className,
+    );
+  }, [exemptionTargetClass, exemptionTargetGrade, students]);
 
   const activeExemptionClassStudents = useMemo(
     () =>
@@ -1324,30 +1310,24 @@ const ManageHistoryClassroom: React.FC = () => {
     return grade && className ? `${grade}학년 ${className}반` : "담임 학급";
   }, [exemptionTargetClass, exemptionTargetGrade]);
 
-  useEffect(
-    () => {
-      setExcludedClassExemptionStudentUids((previous) =>
-        previous.filter((uid) =>
-          exemptionClassStudents.some((student) => student.uid === uid),
-        ),
-      );
-    },
-    [exemptionClassStudents],
-  );
+  useEffect(() => {
+    setExcludedClassExemptionStudentUids((previous) =>
+      previous.filter((uid) =>
+        exemptionClassStudents.some((student) => student.uid === uid),
+      ),
+    );
+  }, [exemptionClassStudents]);
 
-  useEffect(
-    () => {
-      const teacherGrade = String(userData?.grade || "").trim();
-      const teacherClass = String(userData?.class || "").trim();
-      if (teacherGrade) {
-        setExemptionTargetGrade(teacherGrade);
-      }
-      if (teacherClass) {
-        setExemptionTargetClass(teacherClass);
-      }
-    },
-    [userData?.class, userData?.grade],
-  );
+  useEffect(() => {
+    const teacherGrade = String(userData?.grade || "").trim();
+    const teacherClass = String(userData?.class || "").trim();
+    if (teacherGrade) {
+      setExemptionTargetGrade(teacherGrade);
+    }
+    if (teacherClass) {
+      setExemptionTargetClass(teacherClass);
+    }
+  }, [userData?.class, userData?.grade]);
 
   const sortedExemptionRequests = useMemo(
     () =>
@@ -1356,7 +1336,10 @@ const ManageHistoryClassroom: React.FC = () => {
           if (a.status === "pending") return -1;
           if (b.status === "pending") return 1;
         }
-        return (getTimestampMs(b.createdAt) || 0) - (getTimestampMs(a.createdAt) || 0);
+        return (
+          (getTimestampMs(b.createdAt) || 0) -
+          (getTimestampMs(a.createdAt) || 0)
+        );
       }),
     [exemptionRequests],
   );
@@ -1399,7 +1382,10 @@ const ManageHistoryClassroom: React.FC = () => {
           key,
           uid: exemption.uid,
           studentName:
-            exemption.studentName || matchedStudent?.name || exemption.uid || "학생",
+            exemption.studentName ||
+            matchedStudent?.name ||
+            exemption.uid ||
+            "학생",
           grade: exemption.grade || matchedStudent?.grade || "",
           className: exemption.className || matchedStudent?.className || "",
           number: exemption.number || matchedStudent?.number || "",
@@ -1501,15 +1487,26 @@ const ManageHistoryClassroom: React.FC = () => {
   );
 
   const filteredGrantedExemptionRows = useMemo(() => {
-    const keyword = grantedExemptionNameSearch.trim().toLocaleLowerCase("ko-KR");
+    const keyword = grantedExemptionNameSearch
+      .trim()
+      .toLocaleLowerCase("ko-KR");
     return grantedExemptionStudentRows.filter((row) => {
-      if (grantedExemptionGradeFilter && row.grade !== grantedExemptionGradeFilter) {
+      if (
+        grantedExemptionGradeFilter &&
+        row.grade !== grantedExemptionGradeFilter
+      ) {
         return false;
       }
-      if (grantedExemptionClassFilter && row.className !== grantedExemptionClassFilter) {
+      if (
+        grantedExemptionClassFilter &&
+        row.className !== grantedExemptionClassFilter
+      ) {
         return false;
       }
-      if (keyword && !row.studentName.toLocaleLowerCase("ko-KR").includes(keyword)) {
+      if (
+        keyword &&
+        !row.studentName.toLocaleLowerCase("ko-KR").includes(keyword)
+      ) {
         return false;
       }
       return true;
@@ -1523,7 +1520,9 @@ const ManageHistoryClassroom: React.FC = () => {
 
   const grantedExemptionPageCount = Math.max(
     1,
-    Math.ceil(filteredGrantedExemptionRows.length / GRANTED_EXEMPTIONS_PER_PAGE),
+    Math.ceil(
+      filteredGrantedExemptionRows.length / GRANTED_EXEMPTIONS_PER_PAGE,
+    ),
   );
   const grantedExemptionCurrentPage = Math.min(
     grantedExemptionPage,
@@ -1758,11 +1757,13 @@ const ManageHistoryClassroom: React.FC = () => {
           editingAssignment.mapTitle ||
           editingAssignment.title,
         description: "",
-        mapResourceId: editingSelectedMap?.id || editingAssignment.mapResourceId,
+        mapResourceId:
+          editingSelectedMap?.id || editingAssignment.mapResourceId,
         mapTitle: editingSelectedMap?.title || editingAssignment.mapTitle,
         pdfPageImages:
           editingSelectedMap?.pdfPageImages || editingAssignment.pdfPageImages,
-        pdfRegions: editingSelectedMap?.pdfRegions || editingAssignment.pdfRegions,
+        pdfRegions:
+          editingSelectedMap?.pdfRegions || editingAssignment.pdfRegions,
         blanks: previewBlanks,
         answerOptions: buildAnswerOptions(previewBlanks),
         targetStudentReasons: pickStudentReasons(
@@ -1833,7 +1834,9 @@ const ManageHistoryClassroom: React.FC = () => {
 
   useEffect(() => {
     if (!reviewResult || !editingPreviewAssignment) return;
-    setReviewCurrentPage(editingPreviewAssignment.pdfPageImages?.[0]?.page || 1);
+    setReviewCurrentPage(
+      editingPreviewAssignment.pdfPageImages?.[0]?.page || 1,
+    );
   }, [editingPreviewAssignment, reviewResult]);
 
   const editingAttemptStatusRows = useMemo(() => {
@@ -2423,17 +2426,18 @@ const ManageHistoryClassroom: React.FC = () => {
 
     setGrantingExemption(true);
     try {
-      const callable = httpsCallable(functions, "grantHistoryClassroomExemptions");
+      const callable = httpsCallable(
+        functions,
+        "grantHistoryClassroomExemptions",
+      );
       await callable({
         year,
         semester,
         mode: exemptionGrantMode,
         reason,
         studentUids: targetStudents.map((student) => student.uid),
-        targetGrade:
-          exemptionGrantMode === "class" ? exemptionTargetGrade : "",
-        targetClass:
-          exemptionGrantMode === "class" ? exemptionTargetClass : "",
+        targetGrade: exemptionGrantMode === "class" ? exemptionTargetGrade : "",
+        targetClass: exemptionGrantMode === "class" ? exemptionTargetClass : "",
       });
       setExemptionStudentSearch("");
       setExemptionSelectedStudentUids([]);
@@ -2518,7 +2522,10 @@ const ManageHistoryClassroom: React.FC = () => {
     const { year, semester } = getYearSemester(config);
     setRevokingExemptionStudentKey(row.key);
     try {
-      const callable = httpsCallable(functions, "revokeHistoryClassroomExemptions");
+      const callable = httpsCallable(
+        functions,
+        "revokeHistoryClassroomExemptions",
+      );
       await callable({
         year,
         semester,
@@ -2556,7 +2563,10 @@ const ManageHistoryClassroom: React.FC = () => {
     const { year, semester } = getYearSemester(config);
     setResettingGrantedExemptions(true);
     try {
-      const callable = httpsCallable(functions, "revokeHistoryClassroomExemptions");
+      const callable = httpsCallable(
+        functions,
+        "revokeHistoryClassroomExemptions",
+      );
       for (
         let index = 0;
         index < resettableGrantedExemptionIds.length;
@@ -2834,7 +2844,9 @@ const ManageHistoryClassroom: React.FC = () => {
           targetAssignment.updatedAt,
       });
       const nextMapTitle =
-        replacementMap?.title || targetAssignment.mapTitle || editingTitle.trim();
+        replacementMap?.title ||
+        targetAssignment.mapTitle ||
+        editingTitle.trim();
       const payload = sanitizeHistoryClassroomAssignmentForWrite({
         ...targetAssignment,
         title: nextMapTitle,
@@ -3424,7 +3436,9 @@ const ManageHistoryClassroom: React.FC = () => {
                 {value === "all" && (
                   <button
                     type="button"
-                    onClick={() => setDashboardRefreshKey((current) => current + 1)}
+                    onClick={() =>
+                      setDashboardRefreshKey((current) => current + 1)
+                    }
                     disabled={refreshingDashboard}
                     aria-label="새로고침"
                     title="새로고침"
@@ -3822,179 +3836,181 @@ const ManageHistoryClassroom: React.FC = () => {
         {pagedAssignmentGroups.map((group) => (
           <div
             key={group.dateKey}
-            className="relative flex w-full items-start gap-3"
+            className="relative flex w-full flex-col gap-3 lg:flex-row lg:items-start"
           >
-            <div className="relative w-28 shrink-0 sm:w-32 lg:w-32">
-                <div className="relative z-10">
-                  <div className="absolute left-0 top-2 h-3 w-3 rounded-full border-4 border-white bg-blue-600 shadow ring-1 ring-blue-200" />
-                  <div className="ml-6">
-                    <div className="whitespace-nowrap text-base font-black leading-6 text-gray-900 sm:text-lg">
-                      {group.timelineDate.date}
-                    </div>
-                    <div className="mt-1 text-xs font-semibold text-gray-500 sm:text-sm">
-                      {group.timelineDate.weekday}
-                    </div>
+            <div className="relative w-full shrink-0 pl-5 lg:w-32 lg:pl-0">
+              <div className="relative z-10">
+                <div className="absolute left-0 top-2 h-3 w-3 rounded-full border-4 border-white bg-blue-600 shadow ring-1 ring-blue-200" />
+                <div className="ml-6">
+                  <div className="whitespace-nowrap text-base font-black leading-6 text-gray-900 sm:text-lg">
+                    {group.timelineDate.date}
+                  </div>
+                  <div className="mt-1 text-xs font-semibold text-gray-500 sm:text-sm">
+                    {group.timelineDate.weekday}
                   </div>
                 </div>
               </div>
+            </div>
             <div className="min-w-0 flex-1 space-y-3">
               {group.rows.map((row) => {
                 const expanded = expandedAssignmentId === row.assignment.id;
                 return (
-              <article
-                key={row.assignment.id}
-                className="min-w-0 flex-1 cursor-pointer rounded-3xl border border-gray-200 bg-white p-3.5 shadow-sm transition hover:shadow-md"
-                onClick={() =>
-                  setExpandedAssignmentId((current) =>
-                    current === row.assignment.id ? "" : row.assignment.id,
-                  )
-                }
-              >
-                <div className="flex min-w-0 items-start gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-lg font-black text-gray-900">
-                        {row.assignment.mapTitle || row.assignment.title}
-                      </h2>
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs font-bold ${
-                          row.assignment.isPublished
-                            ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
-                            : "border border-gray-200 bg-gray-100 text-gray-600"
-                        }`}
-                      >
-                        {row.assignment.isPublished ? "공개" : "비공개"}
-                      </span>
-                      <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-600">
-                        {row.studentNamesLabel}
-                      </span>
-                    </div>
-                    <div className="mt-2 text-sm font-medium text-gray-500">
-                      통과 기준 {row.assignment.passThresholdPercent}% · 제한
-                      시간{" "}
-                      {row.assignment.timeLimitMinutes > 0
-                        ? `${row.assignment.timeLimitMinutes}분`
-                        : "없음"}{" "}
-                      · 재도전 제한 {row.assignment.cooldownMinutes}분
-                    </div>
-                  </div>
-                  <div className="-mr-1 flex max-w-[min(100%,31rem)] shrink-0 flex-nowrap items-center justify-end gap-1.5 overflow-x-auto pb-1 pr-1 sm:max-w-none sm:overflow-visible sm:pb-0 sm:pr-0">
-                    {[
-                      [
-                        "통과",
-                        row.passed,
-                        "border-emerald-200 bg-emerald-50 text-emerald-700",
-                      ],
-                      [
-                        "미통과",
-                        row.failed,
-                        "border-rose-200 bg-rose-50 text-rose-700",
-                      ],
-                      [
-                        "미제출",
-                        row.pendingCount + row.overdueAbsentCount,
-                        "border-gray-200 bg-gray-50 text-gray-700",
-                      ],
-                      [
-                        "자동 종료",
-                        row.cancelled,
-                        "border-amber-200 bg-amber-50 text-amber-700",
-                      ],
-                    ].map(([label, count, className]) => (
-                      <span
-                        key={label}
-                        className={`inline-flex h-9 min-w-[4.6rem] shrink-0 items-center justify-center gap-1.5 rounded-xl border px-2 text-[11px] font-black sm:h-10 sm:min-w-[5rem] sm:px-2.5 sm:text-xs ${className}`}
-                      >
-                        {label}
-                        <span>{count}</span>
-                      </span>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        openAssignmentEditor(row.assignment);
-                      }}
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 transition hover:bg-blue-100 sm:h-10 sm:w-10"
-                      aria-label={`${row.assignment.title} 설정 수정`}
-                    >
-                      <DashboardIcon name="edit" className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setExpandedAssignmentId((current) =>
-                          current === row.assignment.id
-                            ? ""
-                            : row.assignment.id,
-                        );
-                      }}
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 sm:h-10 sm:w-10"
-                      aria-label={expanded ? "상세 접기" : "상세 펼치기"}
-                      aria-expanded={expanded}
-                    >
-                      <DashboardIcon
-                        name={expanded ? "chevronUp" : "chevronDown"}
-                        className="h-4 w-4"
-                      />
-                    </button>
-                  </div>
-                </div>
-
-                {expanded && (
-                  <div className="mt-4 grid gap-3 xl:grid-cols-4">
-                    {[
-                      ["통과", row.statusGroups.passed, "text-emerald-700"],
-                      ["미통과", row.statusGroups.failed, "text-rose-700"],
-                      ["미제출", row.statusGroups.pending, "text-gray-700"],
-                      [
-                        "자동 종료",
-                        row.statusGroups.cancelled,
-                        "text-amber-700",
-                      ],
-                    ].map(([label, students, toneClassName]) => (
-                      <div
-                        key={label}
-                        className="rounded-2xl border border-gray-200 bg-white p-3"
-                      >
-                        <div className={`text-xs font-black ${toneClassName}`}>
-                          {label}
+                  <article
+                    key={row.assignment.id}
+                    className="min-w-0 flex-1 cursor-pointer rounded-3xl border border-gray-200 bg-white p-3.5 shadow-sm transition hover:shadow-md"
+                    onClick={() =>
+                      setExpandedAssignmentId((current) =>
+                        current === row.assignment.id ? "" : row.assignment.id,
+                      )
+                    }
+                  >
+                    <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h2 className="min-w-0 break-keep text-lg font-black leading-tight text-gray-900">
+                            {row.assignment.mapTitle || row.assignment.title}
+                          </h2>
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs font-bold ${
+                              row.assignment.isPublished
+                                ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
+                                : "border border-gray-200 bg-gray-100 text-gray-600"
+                            }`}
+                          >
+                            {row.assignment.isPublished ? "공개" : "비공개"}
+                          </span>
+                          <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-600">
+                            {row.studentNamesLabel}
+                          </span>
                         </div>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {(students as typeof row.studentSummaries).map(
-                            (student) => (
-                              <span
-                                key={`${row.assignment.id}-${label}-${student.uid}`}
-                                className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-700"
-                              >
-                                {student.name}
-                                <span className="ml-2 font-semibold text-gray-500">
-                                  {student.classLabel}{" "}
-                                  {student.number && `${student.number}번`}{" "}
-                                  {student.attemptLabel !== "시도 없음" &&
-                                    student.attemptLabel}
-                                </span>
-                                {student.reason && (
-                                  <span className="ml-2 font-semibold text-blue-600">
-                                    {student.reason}
-                                  </span>
-                                )}
-                              </span>
-                            ),
-                          )}
-                          {!(students as typeof row.studentSummaries)
-                            .length && (
-                            <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-bold text-gray-400">
-                              없음
-                            </span>
-                          )}
+                        <div className="mt-2 break-keep text-sm font-medium leading-6 text-gray-500">
+                          통과 기준 {row.assignment.passThresholdPercent}% ·
+                          제한 시간{" "}
+                          {row.assignment.timeLimitMinutes > 0
+                            ? `${row.assignment.timeLimitMinutes}분`
+                            : "없음"}{" "}
+                          · 재도전 제한 {row.assignment.cooldownMinutes}분
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </article>
+                      <div className="-mr-1 flex max-w-full flex-nowrap items-center justify-start gap-1.5 overflow-x-auto pb-1 pr-1 lg:max-w-none lg:shrink-0 lg:justify-end lg:overflow-visible lg:pb-0 lg:pr-0">
+                        {[
+                          [
+                            "통과",
+                            row.passed,
+                            "border-emerald-200 bg-emerald-50 text-emerald-700",
+                          ],
+                          [
+                            "미통과",
+                            row.failed,
+                            "border-rose-200 bg-rose-50 text-rose-700",
+                          ],
+                          [
+                            "미제출",
+                            row.pendingCount + row.overdueAbsentCount,
+                            "border-gray-200 bg-gray-50 text-gray-700",
+                          ],
+                          [
+                            "자동 종료",
+                            row.cancelled,
+                            "border-amber-200 bg-amber-50 text-amber-700",
+                          ],
+                        ].map(([label, count, className]) => (
+                          <span
+                            key={label}
+                            className={`inline-flex h-9 min-w-[4.6rem] shrink-0 items-center justify-center gap-1.5 rounded-xl border px-2 text-[11px] font-black sm:h-10 sm:min-w-[5rem] sm:px-2.5 sm:text-xs ${className}`}
+                          >
+                            {label}
+                            <span>{count}</span>
+                          </span>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openAssignmentEditor(row.assignment);
+                          }}
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 transition hover:bg-blue-100 sm:h-10 sm:w-10"
+                          aria-label={`${row.assignment.title} 설정 수정`}
+                        >
+                          <DashboardIcon name="edit" className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setExpandedAssignmentId((current) =>
+                              current === row.assignment.id
+                                ? ""
+                                : row.assignment.id,
+                            );
+                          }}
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 sm:h-10 sm:w-10"
+                          aria-label={expanded ? "상세 접기" : "상세 펼치기"}
+                          aria-expanded={expanded}
+                        >
+                          <DashboardIcon
+                            name={expanded ? "chevronUp" : "chevronDown"}
+                            className="h-4 w-4"
+                          />
+                        </button>
+                      </div>
+                    </div>
+
+                    {expanded && (
+                      <div className="mt-4 grid gap-3 xl:grid-cols-4">
+                        {[
+                          ["통과", row.statusGroups.passed, "text-emerald-700"],
+                          ["미통과", row.statusGroups.failed, "text-rose-700"],
+                          ["미제출", row.statusGroups.pending, "text-gray-700"],
+                          [
+                            "자동 종료",
+                            row.statusGroups.cancelled,
+                            "text-amber-700",
+                          ],
+                        ].map(([label, students, toneClassName]) => (
+                          <div
+                            key={label}
+                            className="rounded-2xl border border-gray-200 bg-white p-3"
+                          >
+                            <div
+                              className={`text-xs font-black ${toneClassName}`}
+                            >
+                              {label}
+                            </div>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {(students as typeof row.studentSummaries).map(
+                                (student) => (
+                                  <span
+                                    key={`${row.assignment.id}-${label}-${student.uid}`}
+                                    className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-700"
+                                  >
+                                    {student.name}
+                                    <span className="ml-2 font-semibold text-gray-500">
+                                      {student.classLabel}{" "}
+                                      {student.number && `${student.number}번`}{" "}
+                                      {student.attemptLabel !== "시도 없음" &&
+                                        student.attemptLabel}
+                                    </span>
+                                    {student.reason && (
+                                      <span className="ml-2 font-semibold text-blue-600">
+                                        {student.reason}
+                                      </span>
+                                    )}
+                                  </span>
+                                ),
+                              )}
+                              {!(students as typeof row.studentSummaries)
+                                .length && (
+                                <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-bold text-gray-400">
+                                  없음
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </article>
                 );
               })}
             </div>
@@ -4081,7 +4097,9 @@ const ManageHistoryClassroom: React.FC = () => {
                 <button
                   key={value}
                   type="button"
-                  onClick={() => setExemptionModalTab(value as ExemptionModalTab)}
+                  onClick={() =>
+                    setExemptionModalTab(value as ExemptionModalTab)
+                  }
                   className={`mb-2 flex w-full items-center justify-between rounded-2xl px-3 py-3 text-left text-sm font-black transition ${
                     exemptionModalTab === value
                       ? "bg-blue-600 text-white shadow-sm"
@@ -4111,7 +4129,8 @@ const ManageHistoryClassroom: React.FC = () => {
                     면제권 관리
                   </h2>
                   <p className="mt-1 text-sm text-slate-500">
-                    학생별·학급별 부여와 학생 사용 요청 처리를 한 곳에서 관리합니다.
+                    학생별·학급별 부여와 학생 사용 요청 처리를 한 곳에서
+                    관리합니다.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -4136,13 +4155,18 @@ const ManageHistoryClassroom: React.FC = () => {
               <div className="flex gap-2 overflow-x-auto border-b border-slate-200 px-4 py-3 md:hidden">
                 {[
                   ["grant", "면제권 부여"],
-                  ["requests", `면제권 사용 요청 ${pendingExemptionRequestCount}`],
+                  [
+                    "requests",
+                    `면제권 사용 요청 ${pendingExemptionRequestCount}`,
+                  ],
                   ["granted", `부여된 면제권 ${activeExemptionCount}`],
                 ].map(([value, label]) => (
                   <button
                     key={value}
                     type="button"
-                    onClick={() => setExemptionModalTab(value as ExemptionModalTab)}
+                    onClick={() =>
+                      setExemptionModalTab(value as ExemptionModalTab)
+                    }
                     className={`h-10 shrink-0 rounded-xl px-3 text-xs font-black ${
                       exemptionModalTab === value
                         ? "bg-blue-600 text-white"
@@ -4245,112 +4269,112 @@ const ManageHistoryClassroom: React.FC = () => {
                       </div>
                     ) : (
                       <>
-                      <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-3">
-                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                          <div className="text-xs font-black text-slate-600">
-                            {exemptionClassLabel}
+                        <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-3">
+                          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                            <div className="text-xs font-black text-slate-600">
+                              {exemptionClassLabel}
+                            </div>
+                            <div className="text-xs font-bold text-blue-700">
+                              부여 대상 {activeExemptionClassStudents.length}명
+                              {excludedClassExemptionStudentUids.length > 0
+                                ? ` · 제외 ${excludedClassExemptionStudentUids.length}명`
+                                : ""}
+                            </div>
                           </div>
-                          <div className="text-xs font-bold text-blue-700">
-                            부여 대상 {activeExemptionClassStudents.length}명
-                            {excludedClassExemptionStudentUids.length > 0
-                              ? ` · 제외 ${excludedClassExemptionStudentUids.length}명`
-                              : ""}
-                          </div>
-                        </div>
-                        <div className="flex max-h-40 flex-wrap gap-2 overflow-y-auto rounded-xl border border-slate-100 bg-slate-50 p-2">
-                          {exemptionClassStudents.map((student) => {
-                            const excluded =
-                              excludedClassExemptionStudentUids.includes(
-                                student.uid,
-                              );
-                            return (
-                              <span
-                                key={student.uid}
-                                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold ${
-                                  excluded
-                                    ? "border-slate-200 bg-white text-slate-400 line-through"
-                                    : "border-blue-100 bg-blue-50 text-blue-700"
-                                }`}
-                              >
-                                {student.number ? `${student.number}번 ` : ""}
-                                {student.name || "학생"}
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setExcludedClassExemptionStudentUids(
-                                      (prev) =>
-                                        excluded
-                                          ? prev.filter(
-                                              (uid) => uid !== student.uid,
-                                            )
-                                          : [...prev, student.uid],
-                                    )
-                                  }
-                                  className={`font-black ${
+                          <div className="flex max-h-40 flex-wrap gap-2 overflow-y-auto rounded-xl border border-slate-100 bg-slate-50 p-2">
+                            {exemptionClassStudents.map((student) => {
+                              const excluded =
+                                excludedClassExemptionStudentUids.includes(
+                                  student.uid,
+                                );
+                              return (
+                                <span
+                                  key={student.uid}
+                                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold ${
                                     excluded
-                                      ? "text-slate-400 hover:text-blue-600"
-                                      : "text-blue-400 hover:text-blue-700"
-                                  }`}
-                                  aria-label={`${student.name || "학생"} ${
-                                    excluded ? "제외 해제" : "제외"
+                                      ? "border-slate-200 bg-white text-slate-400 line-through"
+                                      : "border-blue-100 bg-blue-50 text-blue-700"
                                   }`}
                                 >
-                                  x
-                                </button>
+                                  {student.number ? `${student.number}번 ` : ""}
+                                  {student.name || "학생"}
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setExcludedClassExemptionStudentUids(
+                                        (prev) =>
+                                          excluded
+                                            ? prev.filter(
+                                                (uid) => uid !== student.uid,
+                                              )
+                                            : [...prev, student.uid],
+                                      )
+                                    }
+                                    className={`font-black ${
+                                      excluded
+                                        ? "text-slate-400 hover:text-blue-600"
+                                        : "text-blue-400 hover:text-blue-700"
+                                    }`}
+                                    aria-label={`${student.name || "학생"} ${
+                                      excluded ? "제외 해제" : "제외"
+                                    }`}
+                                  >
+                                    x
+                                  </button>
+                                </span>
+                              );
+                            })}
+                            {!exemptionClassStudents.length && (
+                              <span className="px-2 py-1 text-xs font-semibold text-slate-400">
+                                담임 학급 학생 명단을 찾지 못했습니다.
                               </span>
-                            );
-                          })}
-                          {!exemptionClassStudents.length && (
-                            <span className="px-2 py-1 text-xs font-semibold text-slate-400">
-                              담임 학급 학생 명단을 찾지 못했습니다.
+                            )}
+                          </div>
+                        </div>
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          <label className="block">
+                            <span className="mb-1 block text-xs font-bold text-slate-500">
+                              학년
                             </span>
-                          )}
+                            <select
+                              value={exemptionTargetGrade}
+                              onChange={(event) => {
+                                setExemptionTargetGrade(event.target.value);
+                                setExemptionTargetClass("");
+                              }}
+                              className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
+                            >
+                              <option value="">학년 선택</option>
+                              {gradeOptions.map((grade) => (
+                                <option key={grade} value={grade}>
+                                  {grade}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="block">
+                            <span className="mb-1 block text-xs font-bold text-slate-500">
+                              반
+                            </span>
+                            <select
+                              value={exemptionTargetClass}
+                              onChange={(event) =>
+                                setExemptionTargetClass(event.target.value)
+                              }
+                              className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
+                            >
+                              <option value="">반 선택</option>
+                              {exemptionClassOptions.map((className) => (
+                                <option key={className} value={className}>
+                                  {className}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <div className="rounded-2xl border border-blue-100 bg-white px-3 py-2 text-xs font-bold text-blue-700 sm:col-span-2">
+                            선택 대상 {exemptionClassStudents.length}명
+                          </div>
                         </div>
-                      </div>
-                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                        <label className="block">
-                          <span className="mb-1 block text-xs font-bold text-slate-500">
-                            학년
-                          </span>
-                          <select
-                            value={exemptionTargetGrade}
-                            onChange={(event) => {
-                              setExemptionTargetGrade(event.target.value);
-                              setExemptionTargetClass("");
-                            }}
-                            className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
-                          >
-                            <option value="">학년 선택</option>
-                            {gradeOptions.map((grade) => (
-                              <option key={grade} value={grade}>
-                                {grade}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="block">
-                          <span className="mb-1 block text-xs font-bold text-slate-500">
-                            반
-                          </span>
-                          <select
-                            value={exemptionTargetClass}
-                            onChange={(event) =>
-                              setExemptionTargetClass(event.target.value)
-                            }
-                            className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
-                          >
-                            <option value="">반 선택</option>
-                            {exemptionClassOptions.map((className) => (
-                              <option key={className} value={className}>
-                                {className}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <div className="rounded-2xl border border-blue-100 bg-white px-3 py-2 text-xs font-bold text-blue-700 sm:col-span-2">
-                          선택 대상 {exemptionClassStudents.length}명
-                        </div>
-                      </div>
                       </>
                     )}
 
@@ -4603,7 +4627,8 @@ const ManageHistoryClassroom: React.FC = () => {
                         <div className="text-center">회수</div>
                       </div>
                       {pagedGrantedExemptionRows.map((row) => {
-                        const expanded = expandedExemptionStudentKey === row.key;
+                        const expanded =
+                          expandedExemptionStudentKey === row.key;
                         const revoking =
                           revokingExemptionStudentKey === row.key;
                         return (
@@ -4680,7 +4705,9 @@ const ManageHistoryClassroom: React.FC = () => {
                                       className="grid grid-cols-[5rem_minmax(7rem,0.7fr)_minmax(10rem,1fr)] gap-2 rounded-lg bg-white px-3 py-2 text-xs"
                                     >
                                       <div className="font-black text-blue-700">
-                                        {formatExemptionStatusLabel(item.status)}
+                                        {formatExemptionStatusLabel(
+                                          item.status,
+                                        )}
                                       </div>
                                       <div className="font-semibold text-slate-500">
                                         {formatDateTimeLabel(item.createdAt)}
@@ -5613,7 +5640,8 @@ const ManageHistoryClassroom: React.FC = () => {
                             현재 배포 지도
                           </div>
                           <div className="mt-1 text-xs text-gray-500">
-                            선택한 배포 지도의 빈칸과 정답으로 과제를 교체합니다.
+                            선택한 배포 지도의 빈칸과 정답으로 과제를
+                            교체합니다.
                           </div>
                         </div>
                         <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-gray-600">
@@ -5639,9 +5667,11 @@ const ManageHistoryClassroom: React.FC = () => {
                         </select>
                       </label>
                       {editingSelectedMap &&
-                        editingSelectedMap.id !== editingAssignment.mapResourceId && (
+                        editingSelectedMap.id !==
+                          editingAssignment.mapResourceId && (
                           <div className="mt-2 rounded-xl border border-blue-100 bg-white px-3 py-2 text-xs font-bold text-blue-700">
-                            저장하면 {editingSelectedMap.title} 지도로 교체됩니다.
+                            저장하면 {editingSelectedMap.title} 지도로
+                            교체됩니다.
                           </div>
                         )}
                       <div className="mt-3 flex flex-wrap gap-2">
@@ -5838,9 +5868,7 @@ const ManageHistoryClassroom: React.FC = () => {
                                   {row.detailLabel}
                                 </div>
                               </div>
-                              <div className="sr-only">
-                                {row.detailLabel}
-                              </div>
+                              <div className="sr-only">{row.detailLabel}</div>
                             </div>
                             <span className="justify-self-center rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-bold">
                               {row.statusLabel}
@@ -5853,7 +5881,9 @@ const ManageHistoryClassroom: React.FC = () => {
                                     row.student,
                                   )
                                 }
-                                disabled={resettingAttemptUid === row.student.uid}
+                                disabled={
+                                  resettingAttemptUid === row.student.uid
+                                }
                                 className="justify-self-end whitespace-nowrap rounded-full border border-blue-200 bg-white px-2 py-0.5 text-[11px] font-bold text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
                               >
                                 {resettingAttemptUid === row.student.uid
@@ -5872,7 +5902,8 @@ const ManageHistoryClassroom: React.FC = () => {
                         결과
                       </div>
                       <div className="rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-bold text-gray-600">
-                        {editingResultRows.length}/{editingVisibleResults.length}건
+                        {editingResultRows.length}/
+                        {editingVisibleResults.length}건
                       </div>
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-2">

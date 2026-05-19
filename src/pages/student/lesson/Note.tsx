@@ -34,7 +34,11 @@ const Note: React.FC = () => {
             type="button"
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             aria-label={isSidebarOpen ? "수업 목차 닫기" : "수업 목차 열기"}
-            className="fixed bottom-6 left-6 z-20 flex h-12 w-12 items-center justify-center rounded-full bg-gray-800 text-white shadow-lg transition hover:bg-gray-700 lg:hidden"
+            className={`fixed right-[calc(env(safe-area-inset-right,0px)+1rem)] z-[75] flex h-14 w-14 items-center justify-center rounded-full bg-gray-800 text-white shadow-lg transition hover:bg-gray-700 lg:hidden ${
+              unitId
+                ? "bottom-[calc(env(safe-area-inset-bottom,0px)+13rem)]"
+                : "bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)]"
+            }`}
           >
             <i className="fas fa-list"></i>
           </button>
