@@ -4797,7 +4797,7 @@ const ManageHistoryClassroom: React.FC = () => {
 
                   <div className="grid gap-3 md:col-span-2 md:grid-cols-2 xl:col-span-2 xl:grid-cols-4">
                     <div>
-                      <label className="mb-1 block text-xs font-bold text-gray-500">
+                      <label className="mb-1 block whitespace-nowrap text-[11px] font-bold text-gray-500">
                         제한 시간(분)
                       </label>
                       <input
@@ -4811,7 +4811,7 @@ const ManageHistoryClassroom: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-bold text-gray-500">
+                      <label className="mb-1 block whitespace-nowrap text-[11px] font-bold text-gray-500">
                         재도전 제한 시간(분)
                       </label>
                       <input
@@ -4825,7 +4825,7 @@ const ManageHistoryClassroom: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-bold text-gray-500">
+                      <label className="mb-1 block whitespace-nowrap text-[11px] font-bold text-gray-500">
                         응시 제한 기간(일)
                       </label>
                       <input
@@ -4842,7 +4842,7 @@ const ManageHistoryClassroom: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-bold text-gray-500">
+                      <label className="mb-1 block whitespace-nowrap text-[11px] font-bold text-gray-500">
                         통과 기준 (%)
                       </label>
                       <input
@@ -5536,7 +5536,7 @@ const ManageHistoryClassroom: React.FC = () => {
                   <div className="space-y-4">
                     <div className="grid gap-3 md:grid-cols-4">
                       <div>
-                        <label className="mb-1 block text-xs font-bold text-gray-500">
+                        <label className="mb-1 block whitespace-nowrap text-[11px] font-bold text-gray-500">
                           제한 시간(분)
                         </label>
                         <input
@@ -5552,7 +5552,7 @@ const ManageHistoryClassroom: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <label className="mb-1 block text-xs font-bold text-gray-500">
+                        <label className="mb-1 block whitespace-nowrap text-[11px] font-bold text-gray-500">
                           재도전 제한(분)
                         </label>
                         <input
@@ -5568,7 +5568,7 @@ const ManageHistoryClassroom: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <label className="mb-1 block text-xs font-bold text-gray-500">
+                        <label className="mb-1 block whitespace-nowrap text-[11px] font-bold text-gray-500">
                           응시 제한 기간(일)
                         </label>
                         <input
@@ -5585,7 +5585,7 @@ const ManageHistoryClassroom: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <label className="mb-1 block text-xs font-bold text-gray-500">
+                        <label className="mb-1 block whitespace-nowrap text-[11px] font-bold text-gray-500">
                           통과 기준(%)
                         </label>
                         <input
