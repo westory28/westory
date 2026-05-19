@@ -4316,92 +4316,124 @@ const ManageHistoryClassroom: React.FC = () => {
                 )}
 
                 {exemptionModalTab === "requests" && (
-                  <div className="space-y-3">
-                    {sortedExemptionRequests.map((request) => {
-                      const isPending = request.status === "pending";
-                      const isHighlighted =
-                        highlightedExemptionRequestId === request.id;
-                      return (
-                        <div
-                          key={request.id}
-                          className={`rounded-2xl border p-4 ${
-                            isHighlighted
-                              ? "border-blue-300 bg-blue-50"
-                              : "border-slate-200 bg-white"
-                          }`}
-                        >
-                          <div className="flex flex-wrap items-start justify-between gap-2">
-                            <div>
-                              <div className="text-sm font-black text-slate-900">
-                                {formatExemptionStudentLabel(request)}
-                              </div>
-                              <div className="mt-1 text-xs font-semibold text-slate-500">
-                                요청 {formatDateTimeLabel(request.createdAt)}
-                              </div>
-                              {request.assignmentTitle && (
-                                <div className="mt-1 text-xs font-bold text-blue-700">
-                                  {request.assignmentTitle}
-                                </div>
-                              )}
-                            </div>
-                            <span
-                              className={`rounded-full border px-3 py-1 text-xs font-black ${getExemptionRequestStatusClassName(
-                                request.status,
-                              )}`}
-                            >
-                              {formatExemptionRequestStatusLabel(
-                                request.status,
-                              )}
-                            </span>
-                          </div>
-                          {request.reason && (
-                            <p className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
-                              {request.reason}
-                            </p>
-                          )}
-                          {isPending ? (
-                            <div className="mt-3 flex flex-wrap justify-end gap-2">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  void handleReviewExemptionRequest(
-                                    request.id,
-                                    "rejected",
-                                  )
-                                }
-                                disabled={
-                                  reviewingExemptionRequestId === request.id
-                                }
-                                className="rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-50"
-                              >
-                                반려
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  void handleReviewExemptionRequest(
-                                    request.id,
-                                    "approved",
-                                  )
-                                }
-                                disabled={
-                                  reviewingExemptionRequestId === request.id
-                                }
-                                className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
-                              >
-                                승인
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="mt-2 text-xs font-semibold text-slate-400">
-                              처리 {formatDateTimeLabel(request.reviewedAt)}
-                            </div>
-                          )}
+                  <div className="flex min-h-[18rem] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white p-3.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="text-sm font-black text-slate-800">
+                          면제권 사용 요청
                         </div>
-                      );
-                    })}
+                        <div className="mt-1 text-xs font-semibold text-slate-500">
+                          대기 {pendingExemptionRequestCount}건 · 전체{" "}
+                          {sortedExemptionRequests.length}건
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-3 max-h-[min(58vh,34rem)] min-h-0 flex-1 space-y-1.5 overflow-auto pr-1 [-webkit-overflow-scrolling:touch]">
+                      <div className="sticky top-0 z-10 grid min-w-[48rem] grid-cols-[3.5rem_3rem_minmax(6rem,1fr)_minmax(8rem,1.2fr)_6rem_4.5rem_7.5rem] items-center gap-2 border-b border-slate-200 bg-white px-3 pb-1.5 text-[11px] font-bold text-slate-400">
+                        <div>학급</div>
+                        <div className="text-center">번호</div>
+                        <div>학생</div>
+                        <div>과제</div>
+                        <div className="text-center">요청 일시</div>
+                        <div className="text-center">상태</div>
+                        <div className="text-center">처리</div>
+                      </div>
+                      {sortedExemptionRequests.map((request) => {
+                        const isPending = request.status === "pending";
+                        const isHighlighted =
+                          highlightedExemptionRequestId === request.id;
+                        const reviewing =
+                          reviewingExemptionRequestId === request.id;
+                        return (
+                          <div
+                            key={request.id}
+                            className={`min-w-[48rem] rounded-xl border bg-white px-3 py-2 transition ${
+                              isHighlighted
+                                ? "border-blue-300 bg-blue-50 ring-2 ring-blue-50"
+                                : "border-slate-200 hover:border-blue-100 hover:bg-blue-50/30"
+                            }`}
+                          >
+                            <div className="grid grid-cols-[3.5rem_3rem_minmax(6rem,1fr)_minmax(8rem,1.2fr)_6rem_4.5rem_7.5rem] items-center gap-2">
+                              <div className="truncate text-xs font-bold text-slate-500">
+                                {request.grade && request.className
+                                  ? `${request.grade}-${request.className}`
+                                  : "-"}
+                              </div>
+                              <div className="truncate text-center text-xs font-bold text-slate-500">
+                                {request.number || "-"}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="truncate text-sm font-black text-slate-900">
+                                  {request.studentName || request.uid || "학생"}
+                                </div>
+                              </div>
+                              <div className="min-w-0">
+                                <div className="truncate text-xs font-black text-blue-700">
+                                  {request.assignmentTitle || "역사교실"}
+                                </div>
+                                {request.reason && (
+                                  <div className="mt-0.5 truncate text-[11px] font-semibold text-slate-500">
+                                    {request.reason}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="truncate text-center text-[11px] font-semibold text-slate-500">
+                                {formatDateTimeLabel(request.createdAt)}
+                              </div>
+                              <div className="flex justify-center">
+                                <span
+                                  className={`rounded-full border px-2.5 py-1 text-[11px] font-black ${getExemptionRequestStatusClassName(
+                                    request.status,
+                                  )}`}
+                                >
+                                  {formatExemptionRequestStatusLabel(
+                                    request.status,
+                                  )}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-end gap-1.5">
+                                {isPending ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        void handleReviewExemptionRequest(
+                                          request.id,
+                                          "rejected",
+                                        )
+                                      }
+                                      disabled={reviewing}
+                                      className="h-8 rounded-lg border border-rose-200 bg-white px-2.5 text-xs font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+                                    >
+                                      반려
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        void handleReviewExemptionRequest(
+                                          request.id,
+                                          "approved",
+                                        )
+                                      }
+                                      disabled={reviewing}
+                                      className="h-8 rounded-lg bg-blue-600 px-2.5 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                                    >
+                                      승인
+                                    </button>
+                                  </>
+                                ) : (
+                                  <span className="truncate text-[11px] font-semibold text-slate-400">
+                                    {formatDateTimeLabel(request.reviewedAt)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                     {!sortedExemptionRequests.length && (
-                      <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-12 text-center text-sm font-semibold text-slate-400">
+                      <div className="mt-3 rounded-2xl border border-dashed border-slate-200 px-4 py-12 text-center text-sm font-semibold text-slate-400">
                         접수된 면제권 사용 요청이 없습니다.
                       </div>
                     )}
