@@ -102,6 +102,7 @@ type DashboardIconName =
   | "edit"
   | "map"
   | "plus"
+  | "refresh"
   | "chevronDown"
   | "chevronUp";
 
@@ -193,6 +194,14 @@ const DashboardIcon = ({
       <svg {...commonProps}>
         <path d="M12 5v14" />
         <path d="M5 12h14" />
+      </svg>
+    );
+  }
+  if (name === "refresh") {
+    return (
+      <svg {...commonProps}>
+        <path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 5v4h4" />
+        <path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4" />
       </svg>
     );
   }
@@ -3109,9 +3118,14 @@ const ManageHistoryClassroom: React.FC = () => {
                     type="button"
                     onClick={() => setDashboardRefreshKey((current) => current + 1)}
                     disabled={refreshingDashboard}
-                    className="h-10 rounded-xl border border-blue-200 bg-blue-50 px-3 text-xs font-bold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    aria-label="새로고침"
+                    title="새로고침"
+                    className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {refreshingDashboard ? "새로고침 중" : "새로고침"}
+                    <DashboardIcon
+                      name="refresh"
+                      className={`h-4 w-4 ${refreshingDashboard ? "animate-spin" : ""}`}
+                    />
                   </button>
                 )}
               </React.Fragment>
