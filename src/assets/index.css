@@ -1090,7 +1090,11 @@
   .wis-ranking-rank {
     grid-column: 1;
     grid-row: 1;
-    grid-template-columns: clamp(1.25rem, 2vw, 1.55rem) clamp(0.42rem, 0.7vw, 0.62rem) !important;
+    grid-template-columns: clamp(1.25rem, 2vw, 1.55rem) clamp(
+        0.42rem,
+        0.7vw,
+        0.62rem
+      ) !important;
     gap: 0.04rem !important;
     align-self: center;
   }
@@ -1220,7 +1224,8 @@
     min-height: 0;
   }
 
-  .teacher-dashboard-calendar .student-calendar-shell__body[data-calendar-view="dayGridMonth"] {
+  .teacher-dashboard-calendar
+    .student-calendar-shell__body[data-calendar-view="dayGridMonth"] {
     min-height: clamp(26rem, calc(100dvh - 15.5rem), 34rem);
     height: clamp(26rem, calc(100dvh - 15.5rem), 34rem);
   }

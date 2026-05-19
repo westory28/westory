@@ -230,17 +230,17 @@ const StudentDashboard: React.FC = () => {
       path,
       userClassStr,
       (loadedEvents) => {
-      void getKoreanPublicHolidays(currentYear)
-        .then((holidays) => {
-          if (!active) return;
-          setEvents(
-            mergeEventsWithKoreanPublicHolidays(loadedEvents, holidays),
-          );
-        })
-        .catch((error) => {
-          console.error("Failed to load Korean public holidays:", error);
-          if (active) setEvents(loadedEvents);
-        });
+        void getKoreanPublicHolidays(currentYear)
+          .then((holidays) => {
+            if (!active) return;
+            setEvents(
+              mergeEventsWithKoreanPublicHolidays(loadedEvents, holidays),
+            );
+          })
+          .catch((error) => {
+            console.error("Failed to load Korean public holidays:", error);
+            if (active) setEvents(loadedEvents);
+          });
       },
       (error) => console.error("Dashboard calendar fetch error:", error),
     );
